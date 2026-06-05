@@ -1,0 +1,71 @@
+"""quest_ai_runner.core — the domain-free orchestrator BRAIN.
+
+This is the package a host application (a chat backend or cockpit) imports IN-PROCESS for
+chat: construct an ``Orchestrator`` with adapters and call ``run``. It knows nothing about
+Quest, any database, or any org — only the four adapter interfaces.
+"""
+from .adapters import (
+    EVENT_DECISION,
+    EVENT_DONE,
+    EVENT_MILESTONE,
+    EVENT_PARTIAL,
+    EVENT_PLAN,
+    EVENT_READ,
+    EVENT_REPLAN,
+    EVENT_RESULT,
+    EVENT_STATUS,
+    SURFACING_EVENTS,
+    DeepResult,
+    DeepRunner,
+    DeepRunnerBase,
+    Escalation,
+    EscalationSink,
+    EscalationSinkBase,
+    FanoutSink,
+    MilestoneSink,
+    Mode,
+    ModelProvider,
+    ModelProviderBase,
+    Observation,
+    PlanDecision,
+    ProgressEvent,
+    ProgressSink,
+    ProgressSinkBase,
+    RetrievalAdapter,
+    RetrievalAdapterBase,
+    StreamSink,
+)
+from .goal_runner import (
+    GoalRunner,
+    SubprocessConfig,
+    SubprocessGoalRunner,
+    compose_goal_prompt,
+)
+from .model_registry import DEFAULT_FALLBACK_TOP, TIERS, ModelRegistry, bucket_top
+from .orchestrator import (
+    DECIDE_TOOL,
+    PLANNER_PROMPT,
+    Orchestrator,
+    OrchestratorConfig,
+    OrchestratorResult,
+    normalize_decision,
+)
+
+__all__ = [
+    # adapters / value objects
+    "RetrievalAdapter", "ModelProvider", "DeepRunner", "EscalationSink",
+    "RetrievalAdapterBase", "ModelProviderBase", "DeepRunnerBase", "EscalationSinkBase",
+    "Observation", "PlanDecision", "DeepResult", "Escalation",
+    # two product modes + streaming/progress interface
+    "Mode", "ProgressEvent", "ProgressSink", "ProgressSinkBase",
+    "StreamSink", "MilestoneSink", "FanoutSink", "SURFACING_EVENTS",
+    "EVENT_STATUS", "EVENT_PLAN", "EVENT_READ", "EVENT_REPLAN", "EVENT_PARTIAL",
+    "EVENT_RESULT", "EVENT_DECISION", "EVENT_MILESTONE", "EVENT_DONE",
+    # registry
+    "ModelRegistry", "bucket_top", "TIERS", "DEFAULT_FALLBACK_TOP",
+    # orchestrator
+    "Orchestrator", "OrchestratorConfig", "OrchestratorResult",
+    "PLANNER_PROMPT", "DECIDE_TOOL", "normalize_decision",
+    # goal runner
+    "GoalRunner", "SubprocessGoalRunner", "SubprocessConfig", "compose_goal_prompt",
+]

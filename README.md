@@ -1,0 +1,268 @@
+# quest-ai-runner
+
+[![CI](https://github.com/SpiritualData/quest-ai-runner/actions/workflows/ci.yml/badge.svg)](https://github.com/SpiritualData/quest-ai-runner/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
+
+> The orchestrator **brain** + the queued-task **executor** for Quest AI tasks — generic, with no
+> consumer-specific logic.
+
+`quest-ai-runner` is the executor Quest is missing: Quest can *enqueue* AI tasks for a team/org but
+cannot *run* them — no internal worker, no callback contract, no reference client. This library
+closes that gap, generically.
+
+It is **domain-free**. The brain knows how to ground, reason, run to a written `/goal` standard,
+confirm-before-act, and escalate. It does **not** know about any specific org, cockpit, or person.
+Those specifics are **config + adapters the consumer supplies** via
+`quest_ai_runner.config.RunnerConfig`.
+
+> Built and used in production by [Spiritual Data](https://spiritualdata.org); released as open
+> source for any team running Quest AI tasks.
+
+## Install
+
+```bash
+pip install -e .                       # core + runner are stdlib-only
+pip install -e '.[anthropic,dev]'      # add the Anthropic reference provider + pytest
+```
+
+## Quickstart
+
+```python
+from quest_ai_runner.config import RunnerConfig, build_orchestrator
+from quest_ai_runner.adapters import FilesAdapter, AnthropicProvider
+
+cfg = RunnerConfig(retrieval=FilesAdapter("/path/to/docs"),
+                   model_provider=AnthropicProvider())
+orch = build_orchestrator(cfg)
+print(orch.run("What does the pricing doc say?").text)   # grounded answer
+```
+
+To run the **executor** lane (poll Quest for due tasks and run them), see
+[`docs/quickstart.md`](docs/quickstart.md) and [`examples/`](examples/), or just:
+
+```bash
+QUEST_BASE_URL=... QUEST_API_KEY=qsk_... QAR_CORPUS_ROOT=... quest-ai-runner --once
+```
+
+## Documentation
+
+- [Quickstart tutorial](docs/quickstart.md) — install, ground the brain, run the executor lane.
+- [Architecture & naming](docs/architecture.md) — brain / runner / adapters, and why `core` is `core`.
+- [Writing a consumer](docs/writing-a-consumer.md) — wire the library to your own Quest backend.
+- [Implementing adapters](docs/adapters.md) — the four interfaces and how to build your own.
+- [Streaming & modes](docs/streaming-and-modes.md) — LIVE vs BACKGROUND, sinks, the handoff.
+- [Deployment](docs/deployment.md) — cron and systemd.
+- [Quest API contract](docs/quest-api-contract.md) — the endpoints the runner speaks.
+
+## The three consumers
+
+1. **Quest in-process chat (via `core`).** Quest's backend (or a standalone-team brain) imports
+   `quest_ai_runner.core`, constructs an `Orchestrator` with its adapters, and calls `run(...)`
+   per message. No poller, no network beyond the model — just the brain in-process.
+2. **An integrating org (via the `runner`).** An org that wants its system to execute Quest AI
+   tasks for its teams supplies its Quest API key + adapters (its corpus via `FilesAdapter`, its
+   live data via `CachedDbAdapter`) and runs the `Poller`. Spiritual Data's own cockpit is exactly
+   this: it grounds on its corpus + live Quest data and runs the same engine.
+3. **A single-user personal lane (via the `runner`).** The same engine runs for one person: a
+   personal Quest key + a personal corpus root, config-only. The pattern was proven by a bespoke
+   personal "watchdog" loop that generalized cleanly into the `Poller` — same poll → claim → run →
+   escalate → report loop, just different config.
+
+Because the same engine serves all three, maintenance happens once. Consumers differ only in
+*config* — which key, which adapters, which corpus.
+
+## Repo layout
+
+```
+quest_ai_runner/
+├── core/                      # the domain-free brain (import this in-process)
+│   ├── adapters.py            # the four INTERFACES (Protocol + ABC): RetrievalAdapter,
+│   │                          #   ModelProvider, DeepRunner, EscalationSink + value objects;
+│   │                          #   plus Mode, ProgressEvent/ProgressSink + StreamSink/MilestoneSink/FanoutSink
+│   ├── orchestrator.py        # the bounded loop: plan → gather → re-plan → answer/deep/confirm
+│   │                          #   emits events to a ProgressSink; run(mode,sink,...) + run_stream(...)
+│   ├── model_registry.py      # tier → live-top-model id (pluggable ModelProvider source)
+│   └── goal_runner.py         # the /goal --max-turns contract (GoalRunner + SubprocessGoalRunner)
+├── adapters/                  # reference RetrievalAdapter / ModelProvider implementations
+│   ├── files_adapter.py       # read_section/grep over a configured root (quest-docs + corpus)
+│   ├── cached_db_adapter.py   # live DB reads via short-TTL cache (the "no file sync" approach)
+│   └── anthropic_provider.py  # model calls + models.list bucketing
+├── runner/                    # the EXECUTOR (the watchdog generalized)
+│   ├── quest_client.py        # assistant-tasks + team-decisions API, qsk_ auth; QuestDecisionSink
+│   ├── poller.py              # event-driven, signature-deduped poll loop; bounded concurrency
+│   └── executor.py            # run one claimed task through the brain → report result/decision
+├── config.py                  # RunnerConfig (consumer supplies key, adapters, corpus, tuning)
+└── cli.py                     # `quest-ai-runner` console entry (poller, env-driven)
+examples/                      # runnable reference consumers (env-driven, no real data)
+docs/                          # tutorial, how-tos, architecture, deployment
+tests/                         # core loop, registry bucketing, runner + examples (offline)
+```
+
+## The four adapter interfaces (the generic boundary)
+
+| Interface | Role | Reference impl |
+|---|---|---|
+| `RetrievalAdapter` | GATHER — `read_section` / `grep` / `query` over the source | `FilesAdapter`, `CachedDbAdapter` |
+| `ModelProvider` | the LLM — `plan` / `answer` / `list_models` | `AnthropicProvider` |
+| `DeepRunner` | spawn a bounded, goal-driven run (`/goal --max-turns`) | `SubprocessGoalRunner` |
+| `EscalationSink` | raise a human-only confirm/decision, return its id | `QuestDecisionSink` |
+
+A consumer satisfies them structurally (they're `typing.Protocol`) or by subclassing the ABCs.
+
+## How a bespoke watchdog generalized
+
+The design was proven by a bespoke single-user "watchdog" poll loop, then generalized into the
+library. The mapping (useful if you're porting a similar loop of your own):
+
+| Bespoke watchdog mechanism | Generalized into |
+|---|---|
+| Poll personal Quest for DUE queued tasks | `Poller.run_once` → `QuestClient.discover_due` (poll-mode floor) |
+| `watchdog_state.json` signature dedup | `StateStore` (pluggable; same exactly-once guarantee) |
+| Only `queued` fires; assistant PATCHes `in_progress` | `Poller` claim step (`QuestClient.claim`; backend is source of truth) |
+| `subprocess.Popen` spawns without blocking | bounded `ThreadPoolExecutor` (`max_concurrent_tasks`) |
+| Loads creds, runs the worker with a skill | consumer-supplied `RunnerConfig` (the generic boundary) |
+| Priming baselines existing items | `StateStore` records handled signatures |
+| Unconfigured key → log + exit 0 | `Poller`/`cli` degrade visibly (never crash) |
+| systemd loop + `--once` cron | `Poller.run_forever()` + `quest-ai-runner --once` |
+
+## The Quest contract implemented (`runner/quest_client.py`)
+
+Auth: `Authorization: Bearer qsk_<hex>` (the executor identity).
+
+- **Discover**: `GET /api/assistant-tasks?status=queued&due_before=<ISO-now>`
+- **Claim**: `PATCH /api/assistant-tasks/{id}` `{status: in_progress}`
+- **Report**: `PATCH .../{id}` `{status: done|needs_you|failed, result, decision_id?}`
+- **Escalate** (human-only step): `POST /api/teams/{team_id}/decisions`
+  (`default_on_silence=hold`) → returns a `decision_id`, stamped on the task via `needs_you`.
+- **Loop-close**: `GET /api/teams/decisions/for-user`, `POST /api/teams/decisions/{id}/resolve`.
+- **Identity**: `GET /api/teams/whoami` (validate the key; `quest-ai-runner --check`).
+
+## How quest-backend / cockpit import `core` vs. run the `runner`
+
+- **In-process chat** (Quest backend, cockpit chat): import the brain and call it directly —
+  no poller, no Quest task API:
+
+  ```python
+  from quest_ai_runner.config import RunnerConfig, build_orchestrator
+  from quest_ai_runner.adapters import FilesAdapter, AnthropicProvider
+
+  cfg = RunnerConfig(retrieval=FilesAdapter("/path/to/quest-docs"),
+                     model_provider=AnthropicProvider())
+  orch = build_orchestrator(cfg)
+  result = orch.run("What does the pricing doc say?")   # OrchestratorResult(kind="answer", ...)
+  ```
+
+- **Executor lane** (an integrating org's task-runner, or a personal lane): run the poller.
+
+  ```python
+  from quest_ai_runner.config import RunnerConfig
+  from quest_ai_runner.adapters import FilesAdapter, AnthropicProvider
+  from quest_ai_runner.core.goal_runner import SubprocessGoalRunner, SubprocessConfig
+  from quest_ai_runner.runner.poller import Poller
+
+  cfg = RunnerConfig(
+      quest_base_url="https://api.example.org", quest_api_key="qsk_...", team_id="team_123",
+      retrieval=FilesAdapter("/path/to/corpus"),
+      model_provider=AnthropicProvider(),
+      deep_runner=SubprocessGoalRunner(SubprocessConfig(working_dir="/path/to/corpus")),
+  )
+  Poller(cfg, state_path="qar_state.json").run_forever()
+  ```
+
+  Or via the console entry (env-driven): `QUEST_BASE_URL=... QUEST_API_KEY=qsk_... \
+  QAR_CORPUS_ROOT=... quest-ai-runner --once` (cron) or `quest-ai-runner` (service).
+
+## The two product modes (one brain) — the frozen streaming interface
+
+Every run is one of two **modes** (`quest_ai_runner.core.Mode`). The brain emits the **same**
+events in both; a **`ProgressSink`** (chosen by mode) decides what surfaces. **The orchestrator
+never decides messaging policy** — it only emits `ProgressEvent`s; the sink applies the rule.
+
+| | **LIVE (attended)** | **BACKGROUND (sent-off / scheduled)** |
+|---|---|---|
+| Who's watching | a human, in real time | nobody |
+| Sink | `StreamSink` — forwards **every** event | `MilestoneSink` — surfaces **only** `result` / `decision` / `milestone` / `done` |
+| Surfaces | status ticks, plan/replan, reads, reply, confirm | result, decision-request, real milestone (planning/reading chatter **dropped**) |
+| Called by | quest-backend / cockpit **in-process** | the **poller's** poll-by-due lane |
+
+The surfacing rule lives **once**, in the sink (`SURFACING_EVENTS = {result, decision, milestone,
+done}`), so every consumer inherits identical policy.
+
+**Public API consumers import (this is frozen):**
+
+```python
+from quest_ai_runner.core import Mode, StreamSink, MilestoneSink, ProgressEvent
+# orch = Orchestrator(...)  (or build_orchestrator(cfg))
+
+# --- LIVE, in-process streaming (quest-backend chat / cockpit) ---
+sink = StreamSink(forward=lambda ev: websocket.send(ev))   # ev is a dict
+result = orch.run(user_message, mode=Mode.LIVE, sink=sink)  # streams as it works; returns the result
+# ...or iterate events as a generator (yields event dicts, then the terminal OrchestratorResult):
+for item in orch.run_stream(user_message, mode=Mode.LIVE):
+    render(item)            # OrchestratorResult last; dict events before it
+
+# --- BACKGROUND execution (the runner/executor does this for you) ---
+sink = MilestoneSink(on_result=..., on_decision=..., on_milestone=..., on_done=...)
+result = orch.run(task_text, mode=Mode.BACKGROUND, sink=sink)   # only milestones/result/decision surface
+
+# --- LIVE -> BACKGROUND handoff (consumer disconnected) ---
+result = orch.run(msg, mode=Mode.LIVE, sink=live_stream,
+                  background_sink=MilestoneSink(...), detach_check=lambda: consumer.disconnected)
+# if detach_check() turns True mid-run, the run CONTINUES; the rest of the events (incl. the
+# final result) are delivered via background_sink instead of the dropped live stream.
+```
+
+A plain `orch.run(msg)` with **no** mode/sink args still works (non-streaming; legacy `status`
+callback only). The `runner/executor.py` already runs BACKGROUND with a `MilestoneSink` whose
+`on_milestone` posts an optional progress note and whose result/decision flow through the
+existing Quest PATCH path — so live and background report **consistently**.
+
+**Live↔Background handoff (both directions):**
+- **Live → Background** is **core's** job: pass `background_sink` + `detach_check` to `run`; on
+  detach the run finishes and delivers its result via the background path (notify/PATCH), not the
+  dropped stream. (v1 mechanism: `core.FanoutSink` flips sinks mid-run.)
+- **Background → Live** ("a background result surfaces live when the user returns") is a
+  **consumer/UI** concern — the result is already persisted/reported by the background path; the
+  UI just reads it back. Core does nothing extra here.
+
+## Scheduling — Quest scheduling **is** the due time; the runner is timing-agnostic
+
+There is **no separate scheduling plumbing**. The poller discovers by
+`GET /api/assistant-tasks?status=queued&due_before=<now>`, so:
+
+- **Run now** = Quest stamps `due` = now → discovered on the next scan.
+- **Scheduled for T** = Quest stamps `due` = T → **not discovered/claimed until `now >= T`** (a
+  future due-time is simply not-yet-due, so it isn't returned by `due_before=now`).
+- **Recurring** = Quest re-stamps the next `due` after each completion → it surfaces each period.
+
+The runner only ever asks *"what's due?"*; **Quest scheduling is the timing layer.** (See the
+scheduling tests in `tests/test_runner.py`.)
+
+## Install & test
+
+```bash
+python3 -m venv .venv && . .venv/bin/activate
+pip install -e .            # core + runner are stdlib-only
+pip install -e '.[anthropic,dev]'   # add the Anthropic provider + pytest
+python -m pytest -q         # tests use stub adapters + a mock Quest client — no live network
+```
+
+The tests need no network and no API key: the core loop runs against a stub `ModelProvider` +
+stub `RetrievalAdapter`, and the runner runs against a mock `QuestClient`.
+
+## Contributing
+
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) and
+[CLAUDE.md](CLAUDE.md) first — the one rule that matters most: **keep the library generic**
+(no org names, ids, keys, emails, or absolute paths in the package). By participating you agree to
+the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Security
+
+Found a vulnerability? Please report it privately — see [SECURITY.md](SECURITY.md). Do not open a
+public issue for security problems.
+
+## License
+
+Licensed under the [Apache License 2.0](LICENSE). Copyright © Spiritual Data.

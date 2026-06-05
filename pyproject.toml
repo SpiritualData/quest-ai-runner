@@ -1,0 +1,50 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "quest-ai-runner"
+version = "0.1.0"
+description = "The orchestrator brain (importable core) plus the queued-task executor (runner) for Quest AI tasks. Generic, no consumer-specific logic."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Spiritual Data", email = "opensource@spiritualdata.org" }]
+keywords = ["quest", "orchestrator", "agent", "task-runner", "ai", "llm"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Typing :: Typed",
+]
+
+# The CORE brain + the RUNNER are stdlib-only (urllib for the Quest client). The Anthropic
+# reference provider is the only optional third-party dep — install the [anthropic] extra for it.
+dependencies = []
+
+[project.optional-dependencies]
+anthropic = ["anthropic>=0.40"]
+dev = ["pytest>=7.0"]
+
+[project.urls]
+Homepage = "https://github.com/SpiritualData/quest-ai-runner"
+Repository = "https://github.com/SpiritualData/quest-ai-runner"
+Issues = "https://github.com/SpiritualData/quest-ai-runner/issues"
+Changelog = "https://github.com/SpiritualData/quest-ai-runner/blob/main/CHANGELOG.md"
+
+[project.scripts]
+quest-ai-runner = "quest_ai_runner.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["quest_ai_runner*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

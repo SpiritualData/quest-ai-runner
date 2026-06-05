@@ -1,0 +1,202 @@
+"""Goal runner — the "run to a written /goal done-standard, bounded by --max-turns" contract.
+
+A generic goal-runner behind the ``DeepRunner`` interface. The contract (independent of WHICH
+worker executes it):
+
+  * The consumer (or the brain) authors a CONCRETE, CHECKABLE ``goal`` — a done-standard a human
+    could verify ("all tests in test_x.py pass", "the one-pager covers problem/solution/pricing").
+  * The run is BOUNDED by ``max_turns`` so it can't run away.
+  * On exit we distinguish GOAL-MET (clean, exit 0) from LIMIT/ERROR (non-zero) — surfaced as
+    ``DeepResult.met`` so the caller can report "done" vs "needs more".
+
+This module provides:
+
+  * ``GoalRunner`` — wraps any DeepRunner and adds the goal-contract bookkeeping (compose the
+    prompt with the /goal directive + brief, enforce max_turns, interpret met-vs-limit). The
+    brain/executor calls ``GoalRunner.run`` and gets a normalized DeepResult.
+  * ``SubprocessGoalRunner`` — a reference DeepRunner that spawns Claude Code headless with
+    ``/goal <goal>`` + ``--max-turns``, generalized: NO paths
+    baked in — the working dir, the claude binary, model, and a context preamble are all config.
+    A consumer that uses a different worker just implements DeepRunner instead.
+"""
+from __future__ import annotations
+
+import os
+import shutil
+import subprocess
+from dataclasses import dataclass
+from typing import List, Optional
+
+from .adapters import DeepResult, DeepRunner
+
+DEFAULT_DEEP_MAX_TURNS = 30
+
+
+def compose_goal_prompt(goal: str, brief: str, *, preamble: str = "") -> str:
+    """Compose the headless prompt: the ``/goal`` directive (single line) + an optional
+    consumer context preamble + the brief. The /goal directive is the canonical mechanism
+    that holds an autonomous run to a checkable done-standard."""
+    goal_line = " ".join((goal or "").split())
+    body_parts: List[str] = []
+    if preamble.strip():
+        body_parts.append(preamble.strip())
+    body_parts.append(f"TASK:\n{brief.strip()}")
+    body_parts.append(
+        "When complete, provide a clear summary of what you did. If you couldn't fully meet the "
+        "goal, say exactly what's left."
+    )
+    body = "\n\n".join(body_parts)
+    if goal_line:
+        return f"/goal {goal_line}\n\n{body}"
+    return body
+
+
+class GoalRunner:
+    """Adds the goal-contract bookkeeping around any DeepRunner.
+
+    The brain hands ``GoalRunner`` a goal + brief; it delegates execution to the wrapped
+    DeepRunner and returns a normalized DeepResult (met vs limit/error). The point of the
+    wrapper is that the met-vs-limit semantics live HERE, generically, regardless of worker.
+    """
+
+    def __init__(self, runner: DeepRunner, *, default_max_turns: int = DEFAULT_DEEP_MAX_TURNS):
+        self._runner = runner
+        self._default_max_turns = default_max_turns
+
+    def run(self, *, goal: str, brief: str, model: Optional[str] = None,
+            max_turns: Optional[int] = None) -> DeepResult:
+        turns = max_turns if max_turns is not None else self._default_max_turns
+        try:
+            res = self._runner.run_goal(goal=goal, brief=brief, model=model, max_turns=turns)
+        except Exception as e:  # noqa: BLE001 — the goal contract never raises to the caller
+            return DeepResult(met=False, error=f"deep runner failed: {type(e).__name__}")
+        # Normalize: a runner that forgot to set met but returned an error is "not met".
+        if res.error and res.met:
+            res.met = False
+        return res
+
+
+# The Claude Code web tools. Their PRESENCE in the spawned worker's tool set is exactly what makes
+# the deep-runner able to BROWSE/SEARCH the live internet — so the env can honestly advertise web.
+WEB_TOOLS = ("WebSearch", "WebFetch")
+
+
+@dataclass
+class SubprocessConfig:
+    """Config for the reference subprocess runner — all consumer-supplied, NO defaults baked in.
+
+    The spawned worker is Claude Code, which ships ``WebSearch``/``WebFetch`` — so by default
+    (``skip_permissions=True``, no tool restrictions) the deep-runner CAN browse the live web. The
+    ``allowed_tools``/``disallowed_tools`` fields make that explicit and constrainable: if a
+    consumer pins ``allowed_tools`` to a set without the web tools (or disallows them), web is OFF
+    and the env reports it honestly. ``web_enabled()`` is the single source of truth for that
+    derivation, read by the runner's capability heartbeat.
+    """
+    working_dir: str                          # where the worker runs (consumer's corpus root)
+    claude_path: str = "claude"               # the worker binary (looked up on PATH if bare)
+    context_preamble: str = ""                # optional org/persona context prepended to the brief
+    skip_permissions: bool = True             # --dangerously-skip-permissions for headless runs
+    extra_path_dirs: Optional[List[str]] = None   # dirs to prepend to PATH for the subprocess
+    timeout_seconds: Optional[float] = None   # hard wall-clock cap on the subprocess
+    # Tool gating for the spawned Claude Code worker (generic, optional):
+    #   * allowed_tools=None  → don't pass --allowed-tools; the worker has its DEFAULT tool set
+    #     (which includes WebSearch/WebFetch). With skip_permissions this is the full, web-capable set.
+    #   * allowed_tools=[...] → pass --allowed-tools; web is available only if a web tool is listed.
+    #   * disallowed_tools=[...] → pass --disallowed-tools; listing a web tool turns web OFF.
+    allowed_tools: Optional[List[str]] = None
+    disallowed_tools: Optional[List[str]] = None
+
+    def web_enabled(self) -> bool:
+        """Whether the spawned worker can BROWSE the live web (WebSearch/WebFetch reachable).
+
+        Honest derivation from the actual tool gating:
+          * If any web tool is explicitly disallowed → False.
+          * If allowed_tools is pinned → True only when it includes a web tool.
+          * Otherwise (default tool set) → True: Claude Code ships the web tools, and with
+            skip_permissions they're usable without a per-call prompt. (Even without
+            skip_permissions, the tools EXIST; a headless run just couldn't get interactive
+            approval — but the default headless contract here is skip_permissions=True.)
+        """
+        disallowed = {t.strip() for t in (self.disallowed_tools or [])}
+        if any(t in disallowed for t in WEB_TOOLS):
+            return False
+        if self.allowed_tools is not None:
+            allowed = {t.strip() for t in self.allowed_tools}
+            return any(t in allowed for t in WEB_TOOLS)
+        return True
+
+
+class SubprocessGoalRunner(DeepRunner):
+    """Reference DeepRunner: spawn Claude Code headless with ``/goal`` + ``--max-turns``.
+
+    The working dir, binary, model, and any context preamble are CONFIG, not hardcoded
+    paths. Exit code 0 = goal met cleanly; non-zero =
+    hit the turn/budget limit or errored (DeepResult.met=False with a clear message).
+    """
+
+    def __init__(self, config: SubprocessConfig):
+        self.cfg = config
+
+    def _build_env(self) -> dict:
+        env = os.environ.copy()
+        env["PYTHONUNBUFFERED"] = "1"
+        # Don't let a spawned headless run reuse our own session / API billing.
+        env.pop("CLAUDECODE", None)
+        env.pop("ANTHROPIC_API_KEY", None)
+        env.pop("ANTHROPIC_AUTH_TOKEN", None)
+        if self.cfg.extra_path_dirs:
+            cur = env.get("PATH", "")
+            for d in self.cfg.extra_path_dirs:
+                if d and d not in cur:
+                    cur = f"{d}:{cur}"
+            env["PATH"] = cur
+        return env
+
+    def run_goal(self, *, goal: str, brief: str, model: Optional[str] = None,
+                 max_turns: Optional[int] = None) -> DeepResult:
+        prompt = compose_goal_prompt(goal, brief, preamble=self.cfg.context_preamble)
+        binary = self.cfg.claude_path
+        if os.path.sep not in binary:
+            resolved = shutil.which(binary)
+            if resolved:
+                binary = resolved
+        cmd: List[str] = [binary]
+        if self.cfg.skip_permissions:
+            cmd.append("--dangerously-skip-permissions")
+        # Apply explicit tool gating when the consumer pinned it (kept in lock-step with
+        # web_enabled() so what the env ADVERTISES matches what the worker is actually allowed).
+        if self.cfg.allowed_tools:
+            cmd += ["--allowed-tools", ",".join(self.cfg.allowed_tools)]
+        if self.cfg.disallowed_tools:
+            cmd += ["--disallowed-tools", ",".join(self.cfg.disallowed_tools)]
+        if model:
+            cmd += ["--model", model]
+        turns = max_turns if max_turns is not None else DEFAULT_DEEP_MAX_TURNS
+        if goal.strip():
+            cmd += ["--max-turns", str(int(turns))]
+
+        try:
+            proc = subprocess.run(
+                cmd,
+                input=prompt.encode("utf-8"),
+                cwd=self.cfg.working_dir,
+                env=self._build_env(),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=self.cfg.timeout_seconds,
+            )
+        except FileNotFoundError:
+            return DeepResult(met=False, error=f"worker binary not found: {self.cfg.claude_path}")
+        except PermissionError as e:
+            return DeepResult(met=False, error=f"permission denied running worker: {e}")
+        except subprocess.TimeoutExpired:
+            return DeepResult(met=False, error="goal run exceeded the time limit before completing")
+
+        out = (proc.stdout or b"").decode("utf-8", errors="replace")
+        err = (proc.stderr or b"").decode("utf-8", errors="replace") or None
+        if proc.returncode == 0:
+            return DeepResult(met=True, output=out)
+        if not err:
+            err = (f"Goal run did not complete cleanly (exit {proc.returncode}) — likely hit the "
+                   "turn/budget limit before fully meeting the goal.")
+        return DeepResult(met=False, output=out, error=err)

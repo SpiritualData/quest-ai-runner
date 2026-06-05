@@ -1,0 +1,48 @@
+name: Bug report
+description: Report something that isn't working as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for filing a bug! Please do **not** include secrets, API keys, or private data
+        (Quest `qsk_` keys, user/team ids, internal paths) in any field below.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug and what you expected instead.
+      placeholder: "When I run the poller with ..., I expected ... but got ..."
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Minimal steps. Include a code snippet or command if relevant (redact secrets).
+      placeholder: |
+        1. Build a RunnerConfig with ...
+        2. Call ...
+        3. See error ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: quest-ai-runner version or git commit SHA.
+    validations:
+      required: true
+  - type: input
+    id: python
+    attributes:
+      label: Python version
+      placeholder: "3.12"
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / traceback
+      description: Paste relevant output. This is automatically formatted as code.
+      render: shell

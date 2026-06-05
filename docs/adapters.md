@@ -1,0 +1,105 @@
+# How to implement adapters
+
+The brain depends only on **four interfaces**, defined in `quest_ai_runner.core.adapters`. A
+consumer supplies concrete implementations via `RunnerConfig`. They are `typing.Protocol`s, so you
+can satisfy them structurally (just match the methods) or subclass the provided ABCs
+(`RetrievalAdapterBase`, etc.).
+
+| Interface | Role | Reference impl |
+|---|---|---|
+| `RetrievalAdapter` | GATHER — read/grep/query your source of truth | `FilesAdapter`, `CachedDbAdapter` |
+| `ModelProvider` | the LLM — plan / answer / list models | `AnthropicProvider` |
+| `DeepRunner` | run a bounded, goal-driven autonomous task | `SubprocessGoalRunner` |
+| `EscalationSink` | raise a human-only confirm/decision | `QuestDecisionSink` |
+
+## RetrievalAdapter
+
+How the brain gathers grounding. All three methods return an `Observation`.
+
+```python
+from quest_ai_runner.core.adapters import Observation
+
+class MyRetrieval:
+    def read_section(self, rel_path, *, start_line=None, end_line=None,
+                     heading=None, max_bytes=None) -> Observation:
+        ...  # Observation(kind="read", rel_path=..., text=...) or kind="error"
+
+    def grep(self, pattern, *, scope=None, max_hits=None) -> Observation:
+        ...  # Observation(kind="grep", pattern=..., hits=[{rel_path, line_no, line}, ...])
+
+    def query(self, spec) -> Observation:
+        ...  # structured query (e.g. a DB lookup); return kind="error" if unsupported
+```
+
+The brain's loop calls these; it never opens a file or socket itself. The reference `FilesAdapter`
+is read-only and hard-scoped inside a root, skipping secret-ish/binary/oversize files.
+`CachedDbAdapter` wraps a `query` callable (e.g. a Mongo `find`) with a short TTL so the brain
+grounds on **live** data without syncing it to files.
+
+## ModelProvider
+
+The LLM behind the brain.
+
+```python
+class MyProvider:
+    def plan(self, prompt, *, model, tool_schema) -> dict:
+        # ONE cheap structured decision: {"action": "read|answer|deep|confirm", "model_tier": ..., ...}
+        ...
+    def answer(self, messages, *, model, system=None) -> str:
+        ...
+    def list_models(self) -> list[str]:
+        # live model ids; the ModelRegistry buckets these into tiers (haiku/sonnet/opus, etc.)
+        ...
+```
+
+The reference `AnthropicProvider` wraps the Anthropic SDK and is installed via the `[anthropic]`
+extra. Swap in any provider (OpenAI, a local model, a deterministic stub for tests) by matching this
+shape — see the stub providers in `tests/conftest.py` and `examples/e2e_demo.py`.
+
+## DeepRunner
+
+Runs deep, goal-driven work to a checkable done-standard.
+
+```python
+from quest_ai_runner.core.adapters import DeepResult
+
+class MyDeepRunner:
+    def run_goal(self, *, goal, brief, model=None, max_turns=None) -> DeepResult:
+        # do the work bounded by max_turns; return whether the goal was MET
+        return DeepResult(met=True, output="...summary...")        # or met=False, error="..."
+```
+
+The reference `SubprocessGoalRunner` spawns Claude Code headless with `/goal <goal> --max-turns N`;
+exit code 0 = goal met, non-zero = limit/error. Working dir, binary, model, context preamble, and
+tool gating are all config (`SubprocessConfig`). Plug in a different agent by implementing this one
+method.
+
+## EscalationSink
+
+Where the brain raises a human-only step.
+
+```python
+class MyEscalation:
+    def escalate(self, escalation) -> str:
+        # create a decision/approval request somewhere; return its id (a string)
+        return "decision_123"
+```
+
+The reference `QuestDecisionSink` (in `runner/quest_client.py`) raises a Quest team decision-request
+with `default_on_silence="hold"` and returns the `decision_id`, which the executor stamps onto the
+task as `needs_you`.
+
+## Wiring them up
+
+```python
+cfg = RunnerConfig(
+    retrieval=MyRetrieval(),
+    model_provider=MyProvider(),
+    deep_runner=MyDeepRunner(),
+    escalation=MyEscalation(),     # optional; defaults to QuestDecisionSink in the runner
+    quest_base_url=..., quest_api_key=..., team_id=...,
+)
+```
+
+See [writing-a-consumer.md](writing-a-consumer.md) for the full config and
+[architecture.md](architecture.md) for how the brain calls these in its loop.

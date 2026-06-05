@@ -1,0 +1,24 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.log
+
+# Local runner state (signature dedup store)
+qar_state.json
+*_state.json
+
+# Local secrets / consumer config — never commit
+.env
+.env.*
+!.env.example
