@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **`ClaudeCliProvider`** — a keyless `ModelProvider` that drives the local `claude` CLI headless,
+  so the orchestrator's planner/answer calls run on the box's Claude Code **subscription login**
+  with no `ANTHROPIC_API_KEY` (the deep-runner already ran keyless this way; now the whole runner
+  can). The CLI can't force `tool_choice`, so `plan` instructs the model to emit the `decide`
+  tool's JSON and parses it leniently (degrading to a safe `answer` on any failure). `list_models`
+  returns `[]` so the `ModelRegistry` uses its fallback tier map; tier ids map to CLI family
+  aliases. The spawned process has API-key / session env vars stripped (subscription only).
+
+### Changed
+- **CLI** — `QAR_MODEL_BACKEND` (`anthropic` | `claude_cli`) selects the model backend; when unset
+  it auto-selects `claude_cli` (keyless) unless `ANTHROPIC_API_KEY` is present. The runner now
+  works out of the box on a subscription login with no API key.
+
 ## [0.1.0] - 2026-06-05
 
 Initial public release.

@@ -11,7 +11,12 @@ Env it reads:
   QAR_CLAUDE_PATH (optional)                     — the worker binary (default: claude on PATH)
   QAR_STATE_PATH (optional)                      — signature store path (default: ./qar_state.json)
   QAR_POLL_INTERVAL (optional, seconds)          — loop cadence (default 900)
-  ANTHROPIC_API_KEY                              — for the model provider (planner/answer/models)
+  QAR_MODEL_BACKEND (optional)                   — "anthropic" | "claude_cli". Default: auto —
+                                                   "anthropic" if ANTHROPIC_API_KEY is set, else
+                                                   "claude_cli" (keyless, via the subscription login).
+  ANTHROPIC_API_KEY (optional)                   — only for the "anthropic" backend (per-token
+                                                   billing). NOT needed for the keyless claude_cli
+                                                   backend, which runs on Claude Code's subscription.
 
 A consumer that wants finer control imports the library and builds RunnerConfig itself instead.
 """
@@ -22,10 +27,27 @@ import logging
 import os
 import sys
 
-from .adapters import AnthropicProvider, FilesAdapter
+from .adapters import AnthropicProvider, ClaudeCliProvider, FilesAdapter
 from .config import RunnerConfig
+from .core.adapters import ModelProvider
 from .core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 from .runner.poller import Poller
+
+
+def _model_provider_from_env() -> ModelProvider:
+    """Pick the model backend from env.
+
+    ``QAR_MODEL_BACKEND`` forces a backend; absent it, we AUTO-SELECT: the keyless ``claude_cli``
+    backend (planner/answer on the box's Claude Code subscription login) unless an
+    ``ANTHROPIC_API_KEY`` is present, in which case the SDK-based ``AnthropicProvider`` is used.
+    This means the runner works out of the box on a subscription login with NO API key.
+    """
+    backend = (os.getenv("QAR_MODEL_BACKEND") or "").strip().lower()
+    if not backend:
+        backend = "anthropic" if os.getenv("ANTHROPIC_API_KEY") else "claude_cli"
+    if backend == "claude_cli":
+        return ClaudeCliProvider(claude_path=os.getenv("QAR_CLAUDE_PATH", "claude"))
+    return AnthropicProvider()
 
 
 def _config_from_env() -> RunnerConfig:
@@ -43,7 +65,7 @@ def _config_from_env() -> RunnerConfig:
         quest_api_key=os.getenv("QUEST_API_KEY", ""),
         team_id=os.getenv("QUEST_TEAM_ID", ""),
         retrieval=retrieval,
-        model_provider=AnthropicProvider(),
+        model_provider=_model_provider_from_env(),
         deep_runner=deep_runner,
         corpus_root=corpus,
     )
