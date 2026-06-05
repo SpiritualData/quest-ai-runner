@@ -173,6 +173,7 @@ class QuestClient:
 
     def post_environment_heartbeat(self, capabilities: Dict[str, bool], *,
                                    runner_label: Optional[str] = None,
+                                   env_id: Optional[str] = None,
                                    team_id: Optional[str] = None) -> Dict[str, Any]:
         """Tell the backend this runner is ALIVE and what it can do (the env heartbeat).
 
@@ -182,8 +183,11 @@ class QuestClient:
         the env queryable by the routing classifier. Authed by THIS runner's qsk_ key (its user
         must be a member of the team). Returns the stored env state.
 
-        ``team_id`` defaults to the client's configured team. The CALLER (poller) keeps this
-        best-effort: a failed heartbeat must never break task execution.
+        ``env_id`` identifies WHICH of the team's environments this runner is — a team can attach
+        several runners, each its own environment. Omit it and this runner is the team's DEFAULT
+        environment (so a single-runner deployment needs no extra config). ``team_id`` defaults to
+        the client's configured team. The CALLER (poller) keeps this best-effort: a failed
+        heartbeat must never break task execution.
         """
         tid = team_id or self.team_id
         if not tid:
@@ -191,6 +195,8 @@ class QuestClient:
         body: Dict[str, Any] = {"capabilities": dict(capabilities)}
         if runner_label:
             body["runner_label"] = runner_label
+        if env_id:
+            body["env_id"] = env_id
         return self._request("POST", f"/api/teams/{tid}/environment/heartbeat", body=body) or {}
 
     # --- escalation (team decision-requests; the confirm-before-act surface) --

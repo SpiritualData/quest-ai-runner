@@ -15,10 +15,15 @@ All notable changes to this project are documented here. The format is based on
   returns `[]` so the `ModelRegistry` uses its fallback tier map; tier ids map to CLI family
   aliases. The spawned process has API-key / session env vars stripped (subscription only).
 
+- **Multi-environment heartbeat** — `RunnerConfig.env_id` (env var `QAR_ENV_ID`) is sent on the
+  environment heartbeat so a team can attach SEVERAL runners, each registering as its own
+  environment. Omitted = the team's default environment (single-runner deployments are unchanged).
+
 ### Changed
 - **CLI** — `QAR_MODEL_BACKEND` (`anthropic` | `claude_cli`) selects the model backend; when unset
   it auto-selects `claude_cli` (keyless) unless `ANTHROPIC_API_KEY` is present. The runner now
-  works out of the box on a subscription login with no API key.
+  works out of the box on a subscription login with no API key. The CLI also reads
+  `QAR_RUNNER_LABEL` and `QAR_ENV_ID` for the heartbeat.
 
 ## [0.1.0] - 2026-06-05
 

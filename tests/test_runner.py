@@ -62,8 +62,9 @@ class MockQuestClient:
         self.posts.append((conv_id, content, kind))
         return {"role": "assistant", "kind": kind, "content": content}
 
-    def post_environment_heartbeat(self, capabilities, *, runner_label=None, team_id=None):
+    def post_environment_heartbeat(self, capabilities, *, runner_label=None, env_id=None, team_id=None):
         self.heartbeats.append((team_id, dict(capabilities), runner_label))
+        self.last_env_id = env_id
         return {"team_id": team_id, "enabled": True, "reported_capabilities": dict(capabilities)}
 
     def whoami(self):
@@ -486,7 +487,7 @@ def test_poller_heartbeat_failure_never_breaks_task_execution():
     """If the heartbeat POST raises (endpoint down, network), the scan still discovers, claims,
     runs, and reports the due task. Best-effort, exactly like progress-posting."""
     class BoomHeartbeatClient(MockQuestClient):
-        def post_environment_heartbeat(self, capabilities, *, runner_label=None, team_id=None):
+        def post_environment_heartbeat(self, capabilities, *, runner_label=None, env_id=None, team_id=None):
             raise RuntimeError("heartbeat endpoint unavailable")
 
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])

@@ -11,6 +11,10 @@ Env it reads:
   QAR_CLAUDE_PATH (optional)                     — the worker binary (default: claude on PATH)
   QAR_STATE_PATH (optional)                      — signature store path (default: ./qar_state.json)
   QAR_POLL_INTERVAL (optional, seconds)          — loop cadence (default 900)
+  QAR_RUNNER_LABEL (optional)                    — human-readable tag sent on the env heartbeat
+  QAR_ENV_ID (optional)                          — which of the team's environments this runner is
+                                                   (omit = the team's default env; set a distinct id
+                                                   per runner when a team attaches SEVERAL)
   QAR_MODEL_BACKEND (optional)                   — "anthropic" | "claude_cli". Default: auto —
                                                    "anthropic" if ANTHROPIC_API_KEY is set, else
                                                    "claude_cli" (keyless, via the subscription login).
@@ -68,6 +72,8 @@ def _config_from_env() -> RunnerConfig:
         model_provider=_model_provider_from_env(),
         deep_runner=deep_runner,
         corpus_root=corpus,
+        runner_label=os.getenv("QAR_RUNNER_LABEL") or None,
+        env_id=os.getenv("QAR_ENV_ID") or None,
     )
     if os.getenv("QAR_POLL_INTERVAL"):
         cfg.poll_interval_seconds = float(os.environ["QAR_POLL_INTERVAL"])

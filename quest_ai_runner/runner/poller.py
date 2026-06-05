@@ -146,13 +146,15 @@ class Poller:
         """Best-effort env heartbeat: report this runner is live + its capabilities.
 
         Never raises — a heartbeat failure (no team_id, network, endpoint absent) is logged and
-        the poll proceeds. The team_id and runner_label come from the consumer's RunnerConfig."""
+        the poll proceeds. The team_id, runner_label, and env_id come from the consumer's
+        RunnerConfig (env_id distinguishes this runner when a team attaches several)."""
         if not self.cfg.team_id:
             return  # no team to attach the env to — nothing to heartbeat (still a valid poll)
         try:
             self.client.post_environment_heartbeat(
                 self._capabilities,
                 runner_label=self.cfg.runner_label,
+                env_id=self.cfg.env_id,
                 team_id=self.cfg.team_id,
             )
         except Exception as e:  # noqa: BLE001 — heartbeat is best-effort, never breaks the scan

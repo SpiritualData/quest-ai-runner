@@ -22,6 +22,9 @@ class RunnerConfig:
     quest_api_key: str = ""                  # qsk_<hex>, the executor identity
     team_id: str = ""                        # team/org the poller serves
     runner_label: Optional[str] = None       # human-readable tag sent on the env heartbeat (optional)
+    env_id: Optional[str] = None             # which of the team's environments this runner is
+                                             # (omit = the team's default env; set it when a team
+                                             # attaches SEVERAL runners so each is its own env)
 
     # --- adapters (consumer chooses which) ---
     retrieval: Optional[RetrievalAdapter] = None     # FilesAdapter / CachedDbAdapter / a composite
