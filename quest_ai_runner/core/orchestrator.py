@@ -691,7 +691,7 @@ class Orchestrator:
             plan.deep_brief = plan.deep_brief or user_message
 
         if final == "deep":
-            emit.status("this needs real work — running a goal-driven task")
+            emit.status("working on this now…")
             res = self._run_deep(plan, user_message, self._answer_model(plan, "opus"), emit=emit)
             return finish(res)
 

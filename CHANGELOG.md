@@ -29,6 +29,11 @@ All notable changes to this project are documented here. The format is based on
   environment. Omitted = the team's default environment (single-runner deployments are unchanged).
 
 ### Changed
+- **Deep-step status copy** — the live status emitted when the orchestrator enters the `deep`
+  action is now a neutral `"working on this now…"` instead of `"this needs real work — running a
+  goal-driven task"`. The old wording read as jargon (and conflated "task" with a consumer's own
+  goal objects) when surfaced verbatim in a chat; the neutral phrasing travels better across
+  consumers and drops the em dash.
 - **CLI** — `QAR_MODEL_BACKEND` (`anthropic` | `claude_cli`) selects the model backend; when unset
   it auto-selects `claude_cli` (keyless) unless `ANTHROPIC_API_KEY` is present. The runner now
   works out of the box on a subscription login with no API key. The CLI also reads
