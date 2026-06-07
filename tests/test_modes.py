@@ -242,6 +242,72 @@ def test_run_stream_yields_events_then_result():
     assert EVENT_RESULT in types and EVENT_DONE in types
 
 
+# --- deep-run EXECUTION-lifecycle streaming (emit) ------------------------------
+
+from quest_ai_runner.core.adapters import EVENT_EXEC, DeepResult  # noqa: E402
+
+
+class EmitDeepRunner:
+    """A DeepRunner whose run_goal accepts ``emit`` and reports an EXECUTION tick through it —
+    proving the orchestrator threads the live emitter to opt-in runners, and the sink's mode
+    policy then decides whether that texture surfaces."""
+
+    def __init__(self):
+        self.got_emit = False
+
+    def run_goal(self, *, goal, brief, model=None, max_turns=None, emit=None) -> DeepResult:
+        self.got_emit = emit is not None
+        if emit is not None:
+            emit(ProgressEvent(type=EVENT_EXEC, text="executing",
+                               data={"phase": "executing", "attempt": 1}))
+        return DeepResult(met=True, output="ran")
+
+
+def test_live_mode_streams_exec_events_to_opt_in_runner():
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "Do it", "deep_brief": "do", "rationale": "work"}])
+    runner = EmitDeepRunner()
+    forwarded = []
+    sink = StreamSink(lambda ev: forwarded.append(ev))
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run(
+        "do it", mode=Mode.LIVE, sink=sink)
+    assert res.kind == "deep" and runner.got_emit is True
+    exec_evs = [ev for ev in forwarded if ev["type"] == EVENT_EXEC]
+    assert exec_evs, f"LIVE stream missing exec event: {[e['type'] for e in forwarded]}"
+    assert exec_evs[0]["data"]["phase"] == "executing"
+
+
+def test_background_mode_drops_exec_texture():
+    """EVENT_EXEC is intermediate texture — a MilestoneSink (BACKGROUND) must drop it, like
+    plan/read/status chatter. The runner still gets the emitter; only surfacing differs."""
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "Do it", "deep_brief": "do", "rationale": "work"}])
+    runner = EmitDeepRunner()
+    surfaced = []
+    sink = MilestoneSink(on_result=lambda ev: surfaced.append(ev.type),
+                         on_milestone=lambda ev: surfaced.append(ev.type),
+                         on_done=lambda ev: surfaced.append(ev.type))
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run(
+        "do it", mode=Mode.BACKGROUND, sink=sink)
+    assert res.kind == "deep" and runner.got_emit is True
+    assert EVENT_EXEC not in surfaced
+    assert EVENT_RESULT in surfaced
+
+
+def test_runner_without_emit_param_is_not_passed_emit():
+    """A legacy run_goal(*, goal, brief, model, max_turns) must keep working — the orchestrator
+    inspects the signature and does NOT pass ``emit`` to it (no double-call, no TypeError)."""
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "Do it", "deep_brief": "do", "rationale": "work"}])
+    legacy = StubDeepRunner(met=True, output="ok")
+    sink = StreamSink(lambda ev: None)
+    res = _orch(provider, StubRetrieval(), deep_runner=legacy).run(
+        "do it", mode=Mode.LIVE, sink=sink)
+    assert res.kind == "deep" and res.deep_results[0].met is True
+    assert len(legacy.calls) == 1                 # called exactly once
+    assert "emit" not in legacy.calls[0]          # emit never forced onto a legacy signature
+
+
 # --- back-compat: run with no event args is unchanged ---------------------------
 
 def test_run_without_event_args_still_works():

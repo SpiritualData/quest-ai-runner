@@ -61,6 +61,12 @@ EVENT_PLAN = "plan"            # the planner chose a next step (planning/re-plan
 EVENT_READ = "read"            # a gather step ran (reading/grepping chatter)
 EVENT_REPLAN = "replan"        # the loop is re-planning with what it just gathered (chatter)
 EVENT_PARTIAL = "partial"      # a partial/streaming chunk of the reply (LIVE only)
+EVENT_EXEC = "exec"            # a deep-run EXECUTION-lifecycle tick — generated code, an
+                               # execution attempt, its raw output, a retry, done/error.
+                               # Carries structured ``data`` (phase/code/attempt/output/error).
+                               # LIVE-only texture: like the chatter types it is NOT in
+                               # SURFACING_EVENTS, so a BACKGROUND run drops it (the runner
+                               # still posts its own milestones/result); a LIVE run shows it.
 EVENT_RESULT = "result"        # the final answer / deep output (ALWAYS surfaces)
 EVENT_DECISION = "decision"    # a confirm / human decision-request was raised (ALWAYS surfaces)
 EVENT_MILESTONE = "milestone"  # an explicit, real milestone worth surfacing (ALWAYS surfaces)
@@ -212,10 +218,18 @@ class DeepRunner(Protocol):
     """Spawn a bounded, goal-driven autonomous run (the ``/goal --max-turns`` contract)."""
 
     def run_goal(
-        self, *, goal: str, brief: str, model: Optional[str] = None, max_turns: Optional[int] = None
+        self, *, goal: str, brief: str, model: Optional[str] = None, max_turns: Optional[int] = None,
+        emit: Optional[Callable[[ProgressEvent], None]] = None,
     ) -> DeepResult:
         """Run an autonomous worker toward ``goal`` (a written done-standard), bounded by
-        ``max_turns``. Return a DeepResult distinguishing met-vs-limit. Never raises."""
+        ``max_turns``. Return a DeepResult distinguishing met-vs-limit. Never raises.
+
+        ``emit`` (optional) lets a long-running deep runner report its EXECUTION LIFECYCLE as it
+        works — generated code, each execution attempt, its raw output, retries, done — by emitting
+        ``ProgressEvent(type=EVENT_EXEC, ...)``. The orchestrator routes these through the run's
+        sink, so they show live (LIVE) and are dropped as chatter (BACKGROUND), exactly like other
+        intermediate texture. Runners that don't stream may ignore it. The orchestrator only passes
+        ``emit`` to runners whose ``run_goal`` accepts it, so older signatures keep working."""
 
 
 @runtime_checkable
@@ -270,7 +284,7 @@ class ModelProviderBase(abc.ABC):
 
 class DeepRunnerBase(abc.ABC):
     @abc.abstractmethod
-    def run_goal(self, *, goal, brief, model=None, max_turns=None) -> DeepResult: ...
+    def run_goal(self, *, goal, brief, model=None, max_turns=None, emit=None) -> DeepResult: ...
 
 
 class EscalationSinkBase(abc.ABC):

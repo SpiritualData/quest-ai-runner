@@ -7,6 +7,15 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **`EVENT_EXEC` + `DeepRunner.run_goal(emit=...)`** — a deep runner can now stream its
+  EXECUTION LIFECYCLE (generated code, each execution attempt, its raw output, retries, done/error)
+  by emitting `ProgressEvent(type=EVENT_EXEC, data={"phase": ...})`. The orchestrator passes a live
+  `emit` callable to runners whose `run_goal` accepts it (decided by signature inspection, so older
+  `run_goal(*, goal, brief, model, max_turns)` signatures keep working and are never double-called).
+  `EVENT_EXEC` is intermediate texture — NOT in `SURFACING_EVENTS` — so a LIVE run shows it while a
+  BACKGROUND (`MilestoneSink`) run drops it, like the other chatter types. This lets an attended
+  chat surface live code-execution + retries while a queued task stays quiet.
+
 - **`ClaudeCliProvider`** — a keyless `ModelProvider` that drives the local `claude` CLI headless,
   so the orchestrator's planner/answer calls run on the box's Claude Code **subscription login**
   with no `ANTHROPIC_API_KEY` (the deep-runner already ran keyless this way; now the whole runner

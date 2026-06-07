@@ -25,6 +25,7 @@ message, a deep run, or a Quest decision-request.
 """
 from __future__ import annotations
 
+import inspect
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -307,6 +308,23 @@ def _grounding_block(context_view: str, gathered: List[Dict[str, Any]], partial:
 # The Orchestrator.
 # ---------------------------------------------------------------------------
 
+def _run_goal_accepts_emit(deep_runner: Any) -> bool:
+    """Whether a DeepRunner's ``run_goal`` accepts an ``emit`` keyword (directly or via **kwargs).
+
+    Lets the orchestrator stream EXECUTION-lifecycle events to runners that opt in, while leaving
+    older ``run_goal(*, goal, brief, model, max_turns)`` signatures untouched. Decided by signature
+    inspection rather than a try/except so a runner with a side effect is never invoked twice.
+    """
+    try:
+        sig = inspect.signature(deep_runner.run_goal)
+    except (ValueError, TypeError, AttributeError):
+        return False
+    for p in sig.parameters.values():
+        if p.name == "emit" or p.kind is inspect.Parameter.VAR_KEYWORD:
+            return True
+    return False
+
+
 class _Emitter:
     """Per-run event router. The orchestrator calls ``emit(...)`` / ``status(...)``; this
     forwards a ProgressEvent to the run's ProgressSink (chosen by Mode) and to the legacy
@@ -512,13 +530,21 @@ class Orchestrator:
             return OrchestratorResult(kind="deep", goals=goals, rationale=plan.rationale,
                                       deep_results=[])
 
+        # Pass the live emitter to the runner ONLY if its run_goal accepts an ``emit`` kwarg
+        # (or **kwargs). Decided by signature inspection — never by a try/except TypeError, which
+        # could re-invoke a runner that already ran a side effect (e.g. a data mutation).
+        wants_emit = emit is not None and _run_goal_accepts_emit(self.deep_runner)
+        emit_fn = (lambda ev: emit.emit(ev)) if wants_emit else None
+
         def run_one(st: Dict[str, Any]) -> DeepResult:
             goal = (st.get("goal") or "").strip() or f"Fully address: {user_message[:200]}"
             brief = (st.get("brief") or goal).strip()
             try:
-                res = self.deep_runner.run_goal(
-                    goal=goal, brief=brief, model=model, max_turns=self.cfg.deep_max_turns
-                )
+                kwargs = dict(goal=goal, brief=brief, model=model,
+                              max_turns=self.cfg.deep_max_turns)
+                if emit_fn is not None:
+                    kwargs["emit"] = emit_fn
+                res = self.deep_runner.run_goal(**kwargs)
             except Exception as e:  # noqa: BLE001
                 res = DeepResult(met=False, error=type(e).__name__)
             if emit is not None and res.met:

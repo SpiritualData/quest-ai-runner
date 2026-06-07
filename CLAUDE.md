@@ -47,8 +47,12 @@ New capabilities go **behind one of the four adapter interfaces** (`RetrievalAda
 `ModelProvider`, `DeepRunner`, `EscalationSink`) or into `RunnerConfig` — never as a special case
 inside the brain. The brain must stay ignorant of who is calling it.
 
-The public API in `quest_ai_runner.core` (`Mode`, `StreamSink`, `MilestoneSink`, `ProgressEvent`,
-`Orchestrator`) is **frozen** — don't break it without a discussed, documented reason.
+Nothing here is frozen. This is pre-release and single-consumer, so the public API in
+`quest_ai_runner.core` (`Mode`, `StreamSink`, `MilestoneSink`, `ProgressEvent`, `Orchestrator`) is
+free to evolve — change it whenever the design calls for it. Prefer additive, backward-compatible
+changes where they're just as clean, but a breaking change is fine when it's the right shape; just
+keep it generic (hard rule #2 above), update the `CHANGELOG.md` (Unreleased) and any affected docs,
+and keep the tests green.
 
 ## Before you commit or push
 

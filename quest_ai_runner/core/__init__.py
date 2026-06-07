@@ -7,6 +7,7 @@ Quest, any database, or any org — only the four adapter interfaces.
 from .adapters import (
     EVENT_DECISION,
     EVENT_DONE,
+    EVENT_EXEC,
     EVENT_MILESTONE,
     EVENT_PARTIAL,
     EVENT_PLAN,
@@ -60,7 +61,7 @@ __all__ = [
     "Mode", "ProgressEvent", "ProgressSink", "ProgressSinkBase",
     "StreamSink", "MilestoneSink", "FanoutSink", "SURFACING_EVENTS",
     "EVENT_STATUS", "EVENT_PLAN", "EVENT_READ", "EVENT_REPLAN", "EVENT_PARTIAL",
-    "EVENT_RESULT", "EVENT_DECISION", "EVENT_MILESTONE", "EVENT_DONE",
+    "EVENT_EXEC", "EVENT_RESULT", "EVENT_DECISION", "EVENT_MILESTONE", "EVENT_DONE",
     # registry
     "ModelRegistry", "bucket_top", "TIERS", "DEFAULT_FALLBACK_TOP",
     # orchestrator
