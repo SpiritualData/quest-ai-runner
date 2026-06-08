@@ -171,10 +171,39 @@ class Poller:
             # Already claimed by another worker, or transient — skip; the backend is the source of truth.
             log.info("could not claim task %s (%s) — skipping", task_id, e)
             return None
+        # Opt-in: refresh this rep's skill file from its Quest profile right before running, so the
+        # spawned agent reflects the latest persona + learned corrections. Best-effort: a sync
+        # failure is logged and the task still runs (it just uses the last-synced skill file).
+        self._sync_rep_for(task)
         executor = TaskExecutor(self.client, self._orch())
         outcome = executor.execute(task)
         log.info("task %s -> %s", task_id, outcome.status)
         return task_id
+
+    def _sync_rep_for(self, task: Dict[str, Any]) -> None:
+        """Best-effort: pull the rep's Quest profile into its local skill file before running.
+
+        Only fires when the consumer wired a ``rep_sync_resolver`` (OFF by default). The resolver
+        maps a task to ``(user_id, skill_dir)`` (or None to skip); we then ``pull_rep_to_skill`` so
+        the agent the executor spawns behaves as the current persona/corrections. Never raises — a
+        sync failure is logged and execution proceeds with the previously synced file."""
+        resolver = getattr(self.cfg, "rep_sync_resolver", None)
+        if resolver is None:
+            return
+        try:
+            target = resolver(task)
+        except Exception as e:  # noqa: BLE001 — a bad resolver must never break execution
+            log.info("rep_sync_resolver raised (%s) — skipping rep sync", e)
+            return
+        if not target:
+            return
+        user_id, skill_dir = target
+        team_id = task.get("team_id") or self.cfg.team_id
+        try:
+            from .rep_sync import pull_rep_to_skill
+            pull_rep_to_skill(self.client, team_id, user_id, skill_dir)
+        except Exception as e:  # noqa: BLE001 — best-effort, like progress posting/heartbeat
+            log.info("rep sync for %s failed (%s) — running with existing skill file", user_id, e)
 
     # --- run modes -----------------------------------------------------------
 

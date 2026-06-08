@@ -58,6 +58,18 @@ GET /api/teams/whoami
 ```
 Validates the key and returns the executor identity (`quest-ai-runner --check` uses this).
 
+### AI-rep profile (skill-file sync)
+```
+GET /api/teams/{team_id}/members/{user_id}/ai-profile
+  -> { user_id, display_name, persona, learned_notes: [{id, text, created_at, source, message_id?}], updated_at }
+PUT /api/teams/{team_id}/members/{user_id}/ai-profile    { display_name?, persona?, learned_notes? }
+POST /api/teams/{team_id}/members/{user_id}/corrections  { correction, message_id? }  -> updated learned_notes
+```
+The single source of truth for a team AI rep. `QuestClient.get_ai_profile` / `update_ai_profile` /
+`add_rep_correction` speak this; `runner.rep_sync` renders the profile into the rep's local Claude
+skill file and back, so `sync_rep(...)` keeps the two in sync with one call. The acting identity is
+the key's; `user_id` (the rep) is passed explicitly.
+
 ### Team-environment heartbeat (capabilities)
 The poller posts what the lane can honestly do (`web` / `corpus` / `code`, derived from the wired
 adapters) each cycle, so Quest's router only sends work the lane can handle.

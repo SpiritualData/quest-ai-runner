@@ -15,6 +15,8 @@ Endpoints implemented (the contract from integration_library_design.md §3):
   Escalate   : POST  /api/teams/{team_id}/decisions  (a HOLD-default decision-request)
   Loop-close : GET  /api/teams/decisions/for-user, POST /api/teams/decisions/{id}/resolve
   Identity   : GET  /api/teams/whoami  (validate the key)
+  AI-rep sync: GET/PUT /api/teams/{team_id}/members/{user_id}/ai-profile (all rep data),
+               POST     /api/teams/{team_id}/members/{user_id}/corrections (one learned note)
 
 ``QuestDecisionSink`` wraps a QuestClient as a core ``EscalationSink`` so the brain can raise a
 confirm/decision and get back a ``decision_id`` to report on the task.
@@ -223,6 +225,61 @@ class QuestClient:
     def resolve_decision(self, decision_id: str, resolution: str) -> Dict[str, Any]:
         return self._request("POST", f"/api/teams/decisions/{decision_id}/resolve",
                              body={"resolution": resolution})
+
+    # --- AI-rep profile (the rep <-> skill-file sync surface) -----------------
+
+    def get_ai_profile(self, user_id: str, *, team_id: Optional[str] = None) -> Dict[str, Any]:
+        """GET ALL data for a team member's AI rep.
+
+        Returns ``{user_id, display_name, persona, learned_notes: [{id, text, created_at,
+        source, message_id?}], updated_at}``. This is the single source of truth the runner
+        renders into the rep's local Claude skill file(s). ``team_id`` defaults to the client's
+        configured team.
+        """
+        tid = team_id or self.team_id
+        if not tid:
+            raise QuestNotConfigured("team_id is required to read an AI-rep profile")
+        return self._request("GET", f"/api/teams/{tid}/members/{user_id}/ai-profile") or {}
+
+    def update_ai_profile(self, user_id: str, *, display_name: Optional[str] = None,
+                          persona: Optional[str] = None,
+                          learned_notes: Optional[List[Dict[str, Any]]] = None,
+                          team_id: Optional[str] = None) -> Dict[str, Any]:
+        """PUT edits to a rep's profile (any subset of display_name / persona / learned_notes).
+
+        Only the fields you pass are sent, so a local edit to just the persona pushes up only the
+        persona. Returns the updated profile. ``team_id`` defaults to the client's configured team.
+        """
+        tid = team_id or self.team_id
+        if not tid:
+            raise QuestNotConfigured("team_id is required to update an AI-rep profile")
+        body: Dict[str, Any] = {}
+        if display_name is not None:
+            body["display_name"] = display_name
+        if persona is not None:
+            body["persona"] = persona
+        if learned_notes is not None:
+            body["learned_notes"] = learned_notes
+        return self._request(
+            "PUT", f"/api/teams/{tid}/members/{user_id}/ai-profile", body=body) or {}
+
+    def add_rep_correction(self, user_id: str, correction: str, *,
+                           message_id: Optional[str] = None,
+                           team_id: Optional[str] = None) -> Dict[str, Any]:
+        """POST a single correction (a learned note) for a rep; returns the updated learned_notes.
+
+        Use this for the incremental "the chat just corrected the rep" path; use
+        ``update_ai_profile`` to replace the whole notes list. ``team_id`` defaults to the
+        client's configured team.
+        """
+        tid = team_id or self.team_id
+        if not tid:
+            raise QuestNotConfigured("team_id is required to add a rep correction")
+        body: Dict[str, Any] = {"correction": correction}
+        if message_id is not None:
+            body["message_id"] = message_id
+        return self._request(
+            "POST", f"/api/teams/{tid}/members/{user_id}/corrections", body=body) or {}
 
 
 class QuestDecisionSink(EscalationSinkBase):

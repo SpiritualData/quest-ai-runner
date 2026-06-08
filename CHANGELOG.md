@@ -7,6 +7,32 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **AI-rep ↔ skill-file sync (`runner.rep_sync`)** — keep a team AI rep's Claude skill file in sync
+  with its Quest profile in ONE call: `sync_rep(client, team_id, user_id, skill_dir, direction=...)`
+  (and the underlying `pull_rep_to_skill` / `push_skill_to_rep`). Pull renders the rep's `persona`
+  and `learned_notes` into the skill file's runner-MANAGED sections (delimited by
+  `<!-- QAR:MANAGED:... -->` markers, so any human-authored content is preserved and re-render is
+  idempotent); push reads those sections back and PUTs them to the profile. `QuestClient` gained
+  `get_ai_profile` / `update_ai_profile` / `add_rep_correction` over
+  `GET|PUT /api/teams/{team_id}/members/{user_id}/ai-profile` and
+  `POST .../corrections` (reuses the existing urllib client + bearer auth; no new HTTP). The poller
+  has an OPT-IN `rep_sync_resolver` on `RunnerConfig`: when set, it pulls the rep's latest profile
+  into its skill file right before running that rep's task (best-effort — a sync failure never breaks
+  execution). Off by default, so existing lanes are unchanged.
+- **Discovery tools on `RetrievalAdapter`** — `list_sources()`, `describe_source(name, path=...)`,
+  `list_operations()`, and `describe_operation(name)` let the brain learn what a source of truth
+  CONTAINS (collections/doc-sets, their fields) and what OPERATIONS it can call, instead of needing
+  a static schema/operation blob pushed into the planner prompt. Each returns
+  `Observation(kind="query")`, so results flow into `gathered` through the same path as a read and
+  batch in parallel. Two levels each: a cheap LIST (names + one-liners) and a DESCRIBE drill-down.
+  Exposed to the planner as four new `reads[]` spec-shapes (`{"list_sources": true}`,
+  `{"describe_source": "<name>"}`, `{"list_operations": true}`, `{"describe_operation": "<name>"}`);
+  the planner prompt teaches the brain to DISCOVER before guessing, neutrally (no source/operation
+  is favored). `RetrievalAdapterBase` ships non-abstract defaults and the orchestrator dispatches
+  via `getattr`, so older structural adapters keep working (a discovery spec degrades to a benign
+  "not supported" Observation). `FilesAdapter` enumerates readable files + heading outlines;
+  `CachedDbAdapter` takes optional `sources`/`operations`/`describe` and otherwise infers fields
+  from a sample row.
 - **`EVENT_EXEC` + `DeepRunner.run_goal(emit=...)`** — a deep runner can now stream its
   EXECUTION LIFECYCLE (generated code, each execution attempt, its raw output, retries, done/error)
   by emitting `ProgressEvent(type=EVENT_EXEC, data={"phase": ...})`. The orchestrator passes a live

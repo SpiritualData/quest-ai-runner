@@ -8,7 +8,7 @@ hardcodes none of them. Build the wired-up brain + poller via the factory helper
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .core.adapters import DeepRunner, EscalationSink, ModelProvider, RetrievalAdapter
 from .core.model_registry import ModelRegistry
@@ -41,6 +41,15 @@ class RunnerConfig:
     poll_lookahead_minutes: float = 30.0
     max_concurrent_tasks: int = 2
     default_assignee_user_id: Optional[str] = None   # decision routing default
+
+    # --- AI-rep skill-file sync (opt-in; OFF by default) ---
+    # When set, the poller pulls the latest AI-rep profile from Quest into the rep's local Claude
+    # skill file RIGHT BEFORE running that rep's task, so the spawned agent behaves as the current
+    # persona + learned corrections. This is consumer-specific (only the consumer knows how a task
+    # maps to a (user_id, skill_dir)), so it's a resolver callable, not baked into the brain.
+    # Given a task dict, return ``(user_id, skill_dir)`` to sync that rep, or ``None`` to skip.
+    rep_sync_resolver: Optional[Callable[[Dict[str, Any]], Optional[Tuple[str, str]]]] = None
+
     extra: Dict[str, Any] = field(default_factory=dict)
 
     def validate(self) -> List[str]:
