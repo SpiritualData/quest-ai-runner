@@ -241,6 +241,86 @@ def test_executor_chat_post_failure_never_breaks_the_task():
     assert client.reports and client.reports[0][1] == "done"
 
 
+def test_executor_posts_progress_for_team_conv_id_verbatim():
+    """A team-chat-delegated task carries a ``team:{team_id}`` conv id (not a ``qaconv_`` id).
+
+    The runner must treat it like any other conversation id: post started → … → done into it,
+    passing the id VERBATIM (no prefix check, no rewrite). This is the executor-level proof that
+    the colon-prefixed team scope flows through to ``post_conversation_message`` unchanged."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _brain(provider))
+    out = ex.execute({"id": "t10", "text": "say hi to the team", "conv_id": "team:abc123"})
+    assert out.status == "done"
+    convs = {c for (c, _t, _k) in client.posts}
+    # Every post went to the team conversation id, verbatim (colon intact, no rewrite).
+    assert convs == {"team:abc123"}
+    kinds = [k for (_c, _t, k) in client.posts]
+    assert kinds[0] == "started"
+    assert kinds[-1] == "done"
+
+
+def test_quest_client_progress_url_keeps_colon_for_team_conv_id(monkeypatch):
+    """QuestClient.post_conversation_message must POST to
+    ``/api/quest-ai/conversations/{conv_id}/progress`` with the conv id placed in the path
+    VERBATIM — including a literal ``:`` for a ``team:{team_id}`` id (the Quest route accepts a
+    bare colon in a path segment). Prove the built URL keeps the colon and the body is unchanged,
+    by mocking the HTTP layer (no network)."""
+    import json
+    import urllib.request
+    from quest_ai_runner.runner.quest_client import QuestClient
+
+    captured = {}
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b'{"role": "assistant"}'
+
+    def _fake_urlopen(req, timeout=None):
+        captured["url"] = req.full_url
+        captured["method"] = req.get_method()
+        captured["body"] = req.data
+        return _Resp()
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    client = QuestClient("http://quest.example", "qsk_test")
+    out = client.post_conversation_message("team:abc123", "Started working on this", kind="started")
+
+    assert out == {"role": "assistant"}
+    # The colon survives in the path segment, exactly once, before /progress.
+    assert captured["url"] == "http://quest.example/api/quest-ai/conversations/team:abc123/progress"
+    assert "%3A" not in captured["url"]   # the colon is NOT percent-encoded
+    assert captured["method"] == "POST"
+    # Body shape is unchanged: {content, kind}.
+    assert json.loads(captured["body"]) == {"content": "Started working on this", "kind": "started"}
+
+
+def test_quest_client_progress_url_same_shape_for_qaconv_id(monkeypatch):
+    """Regression guard: the SAME method builds the SAME URL shape for a ``qaconv_`` id, so the
+    team-id path isn't a special case — both ids are simply interpolated verbatim."""
+    import urllib.request
+    from quest_ai_runner.runner.quest_client import QuestClient
+
+    captured = {}
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b''
+
+    def _fake_urlopen(req, timeout=None):
+        captured["url"] = req.full_url
+        return _Resp()
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    client = QuestClient("http://quest.example", "qsk_test")
+    client.post_conversation_message("qaconv_xyz", "progress", kind="progress")
+    assert captured["url"] == "http://quest.example/api/quest-ai/conversations/qaconv_xyz/progress"
+
+
 # --- poller integration tests ---------------------------------------------------
 
 def _poller_with(client, provider, *, team_id="team1", **kw):
