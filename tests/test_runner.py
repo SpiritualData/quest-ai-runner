@@ -780,3 +780,66 @@ def test_executor_progress_swallowed_when_client_lacks_method():
     out = ex.execute({"id": "tnp", "text": "say hi"})
     assert out.status == "done"
     assert client.reports and client.reports[0][1] == "done"
+
+
+# ---------------------------------------------------------------------------
+# Per-task model hint (task["model"] -> model_hint -> provider).
+# ---------------------------------------------------------------------------
+
+class _ModelCapturingProvider(StubProvider):
+    """StubProvider that records the model id passed to answer() and plan()."""
+    def __init__(self, decisions):
+        super().__init__(decisions)
+        self.answer_models: list = []
+
+    def answer(self, messages, *, model, system=None):
+        self.answer_models.append(model)
+        return super().answer(messages, model=model, system=system)
+
+
+def test_executor_task_model_field_reaches_provider():
+    """A task carrying ``model`` has that hint forwarded to the orchestrator and on to the
+    provider: the model id supplied to answer() corresponds to the hint, not the planner's tier."""
+    provider = _ModelCapturingProvider(decisions=[
+        # Planner picks haiku; the task hint should override this.
+        {"action": "answer", "model_tier": "haiku", "rationale": "ok"},
+    ])
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _brain(provider))
+    out = ex.execute({"id": "tmh1", "text": "say hi", "model": "opus"})
+    assert out.status == "done"
+    # The provider must have been called with the "opus" resolution, not "haiku".
+    from quest_ai_runner.core.model_registry import ModelRegistry
+    registry = ModelRegistry(provider)
+    expected_opus = registry.resolve_tier("opus")
+    assert provider.answer_models == [expected_opus]
+
+
+def test_executor_task_without_model_field_uses_planner_tier():
+    """A task without a ``model`` field leaves the existing planner-tier logic intact."""
+    provider = _ModelCapturingProvider(decisions=[
+        {"action": "answer", "model_tier": "haiku", "rationale": "ok"},
+    ])
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _brain(provider))
+    out = ex.execute({"id": "tmh2", "text": "say hi"})
+    assert out.status == "done"
+    from quest_ai_runner.core.model_registry import ModelRegistry
+    registry = ModelRegistry(provider)
+    expected_haiku = registry.resolve_tier("haiku")
+    assert provider.answer_models == [expected_haiku]
+
+
+def test_executor_task_model_none_is_same_as_absent():
+    """Explicit ``model=None`` on a task is the same as omitting it entirely."""
+    provider = _ModelCapturingProvider(decisions=[
+        {"action": "answer", "model_tier": "sonnet", "rationale": "ok"},
+    ])
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _brain(provider))
+    out = ex.execute({"id": "tmh3", "text": "say hi", "model": None})
+    assert out.status == "done"
+    from quest_ai_runner.core.model_registry import ModelRegistry
+    registry = ModelRegistry(provider)
+    expected_sonnet = registry.resolve_tier("sonnet")
+    assert provider.answer_models == [expected_sonnet]

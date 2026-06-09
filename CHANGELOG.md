@@ -7,6 +7,19 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Per-run model hint** — callers can now pass an opaque `model_hint` string to
+  `Orchestrator.run()` and `Orchestrator.run_stream()` to override the tier used for answer and
+  deep steps in that run. The hint is consumer-defined (a tier name, a model id, or any string the
+  consumer's `ModelProvider` and `ModelRegistry` understand); the registry resolves it exactly as
+  it resolves a planner-chosen tier, so unknown values degrade gracefully to the "sonnet" default
+  rather than raising. Absent/`None` means exactly the prior behavior. `TaskExecutor.execute()`
+  automatically surfaces a `"model"` field on the task document as the `model_hint`, so a stored
+  per-task model override reaches the orchestrator with no extra code in the consumer's poller.
+  Precedence inside one run: `model_hint` > `plan.model_tier` (planner's own choice) >
+  `default_tier` (compile-time default per step kind). Seven new offline unit tests cover: hint
+  reaches `provider.answer`, absent hint leaves planner tier unchanged, hint on a deep step,
+  unknown hint degrades gracefully, executor task-model field is forwarded, explicit `None` is
+  treated as absent, and the full poller path.
 - **Stop re-sending unchanged transcript + context to the planner on re-plan steps** — within a
   single run the recent `transcript` and the static `context_view` never change between steps, yet
   the loop re-sent BOTH in full to the cheap PLANNER on every re-plan step (the prior wave only

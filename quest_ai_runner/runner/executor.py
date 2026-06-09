@@ -48,6 +48,10 @@ class TaskExecutor:
         # present, we post LIVE progress (started → milestones → done) INTO that chat so the
         # conversation doesn't go silent after the hand-off.
         conv_id = task.get("conv_id") or None
+        # model_hint: an optional per-task model/tier string stored by the consumer on the task
+        # document (e.g. "quality", "opus", or any tier/id the consumer's ModelProvider knows).
+        # Threaded into the orchestrator so the provider can honor it. None = default behavior.
+        model_hint: Optional[str] = task.get("model") or None
         if not text:
             self._report_progress(task_id, "error", text="task had no instruction text to run")
             self._safe_report_failed(task_id, "task had no text/description to run")
@@ -71,7 +75,8 @@ class TaskExecutor:
 
         try:
             result: OrchestratorResult = self._orch.run(
-                text, quest_id=quest_id, mode=Mode.BACKGROUND, sink=sink)
+                text, quest_id=quest_id, mode=Mode.BACKGROUND, sink=sink,
+                model_hint=model_hint)
         except Exception as e:  # noqa: BLE001 — brain failure -> failed report, never crash poller
             msg = f"orchestrator error: {type(e).__name__}: {e}"
             self._report_progress(task_id, "error", text=msg)

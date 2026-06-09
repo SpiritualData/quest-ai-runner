@@ -276,3 +276,86 @@ def test_repeat_context_on_does_not_abbreviate_when_empty():
     assert res.kind == "answer"
     for p in provider.plan_prompts:
         assert "unchanged since step 1" not in p
+
+
+# ---------------------------------------------------------------------------
+# Per-run model hint (model_hint= kwarg on run / run_stream).
+# ---------------------------------------------------------------------------
+
+class _ModelCapturingProvider(StubProvider):
+    """StubProvider that records the exact model id passed to plan() and answer()."""
+    def __init__(self, decisions):
+        super().__init__(decisions)
+        self.answer_models: list = []
+        self.plan_models: list = []
+
+    def plan(self, prompt, *, model, tool_schema):
+        self.plan_models.append(model)
+        return super().plan(prompt, model=model, tool_schema=tool_schema)
+
+    def answer(self, messages, *, model, system=None):
+        self.answer_models.append(model)
+        return super().answer(messages, model=model, system=system)
+
+
+def test_model_hint_overrides_planner_tier_on_answer():
+    """model_hint flows through to provider.answer — the model id differs from the default."""
+    provider = _ModelCapturingProvider(decisions=[
+        {"action": "answer", "model_tier": "haiku", "rationale": "ok"},
+    ])
+    retrieval = StubRetrieval({"f.md": "x"})
+    # The hint "opus" should cause the registry to resolve "opus" instead of "haiku".
+    res = _orch(provider, retrieval).run("q", model_hint="opus")
+    assert res.kind == "answer"
+    # The model passed to provider.answer must be the registry's "opus" resolution.
+    from quest_ai_runner.core.model_registry import ModelRegistry
+    registry = ModelRegistry(provider)
+    expected_opus = registry.resolve_tier("opus")
+    assert provider.answer_models == [expected_opus]
+
+
+def test_model_hint_absent_leaves_planner_tier_unchanged():
+    """Without model_hint, the planner's model_tier is used exactly as before."""
+    provider = _ModelCapturingProvider(decisions=[
+        {"action": "answer", "model_tier": "haiku", "rationale": "ok"},
+    ])
+    retrieval = StubRetrieval({"f.md": "x"})
+    from quest_ai_runner.core.model_registry import ModelRegistry
+    registry = ModelRegistry(provider)
+    expected_haiku = registry.resolve_tier("haiku")
+
+    res = _orch(provider, retrieval).run("q")  # no model_hint
+    assert res.kind == "answer"
+    assert provider.answer_models == [expected_haiku]
+
+
+def test_model_hint_on_deep_step():
+    """model_hint flows into the model argument passed to deep runner."""
+    provider = _ModelCapturingProvider(decisions=[
+        {"action": "deep", "goal": "do work", "deep_brief": "work", "rationale": "needs it"},
+    ])
+    retrieval = StubRetrieval({})
+    deep = StubDeepRunner(met=True, output="done")
+    res = _orch(provider, retrieval, deep_runner=deep).run("do work", model_hint="haiku")
+    assert res.kind == "deep"
+    # The model passed to deep runner must be the registry's "haiku" resolution.
+    from quest_ai_runner.core.model_registry import ModelRegistry
+    registry = ModelRegistry(provider)
+    expected_haiku = registry.resolve_tier("haiku")
+    assert deep.calls[0]["model"] == expected_haiku
+
+
+def test_model_hint_unknown_value_degrades_gracefully():
+    """An unrecognised model_hint (neither tier name nor known model id) falls back to the
+    registry default (sonnet) and the run still completes normally."""
+    provider = _ModelCapturingProvider(decisions=[
+        {"action": "answer", "rationale": "ok"},
+    ])
+    retrieval = StubRetrieval({"f.md": "x"})
+    # "xyzzy" is not a known tier — resolve_tier falls back to "sonnet".
+    res = _orch(provider, retrieval).run("q", model_hint="xyzzy")
+    assert res.kind == "answer"
+    from quest_ai_runner.core.model_registry import ModelRegistry
+    registry = ModelRegistry(provider)
+    expected_fallback = registry.resolve_tier("xyzzy")  # == sonnet fallback
+    assert provider.answer_models == [expected_fallback]

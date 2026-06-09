@@ -614,8 +614,20 @@ class Orchestrator:
 
     # --- answer generation (grounded; optional parallel sub-questions) -------
 
-    def _answer_model(self, plan: PlanDecision, default_tier: str) -> str:
-        return self.registry.resolve_tier(plan.model_tier or default_tier)
+    def _answer_model(self, plan: PlanDecision, default_tier: str,
+                      hint: Optional[str] = None) -> str:
+        """Resolve the model id for an answer or deep step.
+
+        Precedence (highest to lowest):
+          1. ``hint`` — a per-run model string passed by the caller (e.g. from a task's stored
+             ``model`` field). Opaque: the consumer's ModelProvider and ModelRegistry interpret it.
+             Unknown tiers degrade gracefully to the registry's default (never raises).
+          2. ``plan.model_tier`` — the planner's own choice for this step.
+          3. ``default_tier`` — the caller's compile-time default (``"sonnet"`` for answers,
+             ``"opus"`` for deep runs).
+        """
+        tier = hint or plan.model_tier or default_tier
+        return self.registry.resolve_tier(tier)
 
     def _grounded_answer(self, user_message: str, transcript: str, context_view: str,
                          gathered: List[Dict[str, Any]], model: str, partial: bool) -> str:
@@ -748,7 +760,8 @@ class Orchestrator:
             mode: Mode = Mode.LIVE,
             sink: Optional[ProgressSink] = None,
             background_sink: Optional[ProgressSink] = None,
-            detach_check: Optional[Callable[[], bool]] = None) -> OrchestratorResult:
+            detach_check: Optional[Callable[[], bool]] = None,
+            model_hint: Optional[str] = None) -> OrchestratorResult:
         """Run the bounded loop for one request and return a terminal OrchestratorResult.
 
         Streaming/event interface (both lanes use the SAME emissions; the SINK decides policy):
@@ -764,6 +777,12 @@ class Orchestrator:
                             disconnected), the run CONTINUES to completion and the REST of its
                             events (incl. the final result) are delivered via ``background_sink``
                             (a ``MilestoneSink``) instead of the dropped live stream.
+        * ``model_hint``  — optional opaque model/tier string carried by the task or caller
+                            (e.g. from ``task.model``). When set, it overrides the planner's own
+                            tier choice and the compile-time default for answer and deep steps.
+                            The consumer's ``ModelProvider`` and ``ModelRegistry`` interpret the
+                            string (a tier name or a model id). Unknown values degrade gracefully
+                            to the registry's default. Absent/None means exactly today's behavior.
 
         ``run`` still works with NO event args (back-compat: same signature callers used before
         plus keyword-only extras), returning the terminal ``OrchestratorResult``.
@@ -842,7 +861,7 @@ class Orchestrator:
         if final not in ("answer", "deep", "confirm"):
             if gathered:
                 emit.status("wrapping up with a best-effort answer…")
-                model = self._answer_model(plan, "sonnet")
+                model = self._answer_model(plan, "sonnet", hint=model_hint)
                 text = self._grounded_answer(user_message, transcript, context_view, gathered, model, True)
                 return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
                                                  partial=True))
@@ -852,7 +871,8 @@ class Orchestrator:
 
         if final == "deep":
             emit.status("working on this now…")
-            res = self._run_deep(plan, user_message, self._answer_model(plan, "opus"), emit=emit)
+            res = self._run_deep(plan, user_message, self._answer_model(plan, "opus", hint=model_hint),
+                                 emit=emit)
             return finish(res)
 
         if final == "confirm":
@@ -860,7 +880,7 @@ class Orchestrator:
             return finish(res)
 
         # answer
-        model = self._answer_model(plan, "sonnet")
+        model = self._answer_model(plan, "sonnet", hint=model_hint)
         if len(plan.subquestions) >= 2:
             emit.status(f"answering {len(plan.subquestions)} parts in parallel…")
             text = self._answer_subquestions(user_message, transcript, context_view, gathered,
@@ -874,13 +894,16 @@ class Orchestrator:
 
     def run_stream(self, user_message: str, *, transcript: str = "", context_view: str = "",
                    quest_id: Optional[str] = None,
-                   mode: Mode = Mode.LIVE):
+                   mode: Mode = Mode.LIVE,
+                   model_hint: Optional[str] = None):
         """Generator form of ``run`` for a LIVE consumer that wants to iterate events.
 
         Yields each ``ProgressEvent`` (as emitted, post-sink-policy for the given mode) and,
         as the FINAL item, the terminal ``OrchestratorResult``. Implemented by feeding a
         ``StreamSink`` whose forward appends to a thread-safe queue while ``run`` executes in a
         worker thread, so the caller streams in real time and still gets the structured result.
+
+        ``model_hint`` is forwarded to ``run`` unchanged — see ``run`` for semantics.
 
         Example::
 
@@ -904,7 +927,7 @@ class Orchestrator:
         def _worker():
             try:
                 res = self.run(user_message, transcript=transcript, context_view=context_view,
-                               quest_id=quest_id, mode=mode, sink=sink)
+                               quest_id=quest_id, mode=mode, sink=sink, model_hint=model_hint)
                 result_box["result"] = res
             except Exception as e:  # noqa: BLE001
                 result_box["error"] = e
