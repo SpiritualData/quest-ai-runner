@@ -24,6 +24,7 @@ confirm/decision and get back a ``decision_id`` to report on the task.
 from __future__ import annotations
 
 import json
+import logging
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -31,6 +32,8 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from ..core.adapters import Escalation, EscalationSinkBase
+
+log = logging.getLogger("quest-ai-runner.quest_client")
 
 
 def _as_task_list(resp: Any) -> List[Dict[str, Any]]:
@@ -137,10 +140,17 @@ class QuestClient:
 
     # --- claim / report ------------------------------------------------------
 
-    def claim(self, task_id: str) -> Dict[str, Any]:
-        """PATCH -> in_progress (backend-aware dedup: a claimed task won't re-fire)."""
-        return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
-                             body={"status": "in_progress"})
+    def claim(self, task_id: str, handler: Optional[str] = None) -> Dict[str, Any]:
+        """PATCH -> in_progress (backend-aware dedup: a claimed task won't re-fire).
+
+        When ``handler`` is given (the slug of the AI representation/skill that will run this task,
+        e.g. ``"joshua"`` / ``"subham"``, or a runner label), it is stamped on the task so the
+        Quest task-detail modal can show "handled by X". Omit it and the claim body is unchanged
+        (fully backward compatible)."""
+        body: Dict[str, Any] = {"status": "in_progress"}
+        if handler:
+            body["handler"] = handler
+        return self._request("PATCH", f"/api/assistant-tasks/{task_id}", body=body)
 
     def report_done(self, task_id: str, result: str) -> Dict[str, Any]:
         return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
@@ -153,6 +163,34 @@ class QuestClient:
     def report_failed(self, task_id: str, result: str) -> Dict[str, Any]:
         return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
                              body={"status": "failed", "result": result})
+
+    # --- live execution progress onto the task (the task-detail stream) ------
+
+    def report_progress(self, task_id: str, kind: str, *, text: Optional[str] = None,
+                        output: Optional[str] = None,
+                        data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """POST a live execution-progress event onto a task, for the task-detail modal's stream.
+
+        ``kind`` is one of started|status|exec|output|done|error. Only the non-None fields are
+        sent (text/output/data), mirroring how ``post_conversation_message`` builds its body.
+
+        BEST-EFFORT BY CONTRACT: a dropped progress post must never fail the task, so this never
+        raises — any API/transport error is logged as a warning and an empty dict returned. (The
+        terminal result still goes via ``report_done`` / ``report_failed``, not this stream.)
+        """
+        body: Dict[str, Any] = {"kind": kind}
+        if text is not None:
+            body["text"] = text
+        if output is not None:
+            body["output"] = output
+        if data is not None:
+            body["data"] = data
+        try:
+            return self._request(
+                "POST", f"/api/assistant-tasks/{task_id}/progress", body=body) or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("progress post for task %s (%s) failed: %s", task_id, kind, e)
+            return {}
 
     # --- live progress into the originating chat -----------------------------
 

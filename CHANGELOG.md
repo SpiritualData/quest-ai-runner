@@ -7,6 +7,18 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Task handler stamp + live execution-progress stream** — the runner now records WHO ran a task
+  and streams its execution lifecycle to the task, so a Quest task-detail view can show "handled by
+  X" and a live progress feed. `QuestClient.claim(task_id, handler=None)` stamps the handler on the
+  in-progress PATCH (omitted when None → backward compatible), and the poller resolves the handler
+  as the rep slug (basename of the `rep_sync_resolver`'s `skill_dir`, e.g. `"joshua"`/`"subham"`),
+  falling back to `RunnerConfig.runner_label` or None. New `QuestClient.report_progress(task_id,
+  kind, text=, output=, data=)` POSTs `{kind, ...non-None}` to `/api/assistant-tasks/{id}/progress`
+  (kind in started|status|exec|output|done|error) and is best-effort: it never raises, logging a
+  warning on failure. `TaskExecutor` emits `started` on pickup, fans each real deep milestone to
+  BOTH the originating chat AND the progress stream (kind `exec`), and emits a terminal event from
+  the result (done→`done`, needs_you→`done` with a paused note, failed→`error`). All progress posts
+  are best-effort and degrade cleanly against an older client without `report_progress`.
 - **AI-rep ↔ skill-file sync (`runner.rep_sync`)** — keep a team AI rep's Claude skill file in sync
   with its Quest profile in ONE call: `sync_rep(client, team_id, user_id, skill_dir, direction=...)`
   (and the underlying `pull_rep_to_skill` / `push_skill_to_rep`). Pull renders the rep's `persona`

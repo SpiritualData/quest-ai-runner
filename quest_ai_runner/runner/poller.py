@@ -163,10 +163,14 @@ class Poller:
     def _handle_one(self, task: Dict[str, Any]) -> Optional[str]:
         sig = _task_signature(task)
         task_id = str(task.get("id") or task.get("task_id") or "")
+        # Resolve WHO will run this (the AI representation/skill) so we can stamp it on the claim:
+        # the rep slug if a rep_sync_resolver maps this task to a skill dir, else the runner label.
+        target = self._resolve_rep_target(task)
+        handler = self._handler_label(target)
         # Mark BEFORE running so a crash mid-run doesn't cause a re-fire loop (backend claim also guards).
         self.state.mark(sig)
         try:
-            self.client.claim(task_id)
+            self.client.claim(task_id, handler=handler)
         except QuestApiError as e:
             # Already claimed by another worker, or transient — skip; the backend is the source of truth.
             log.info("could not claim task %s (%s) — skipping", task_id, e)
@@ -174,27 +178,46 @@ class Poller:
         # Opt-in: refresh this rep's skill file from its Quest profile right before running, so the
         # spawned agent reflects the latest persona + learned corrections. Best-effort: a sync
         # failure is logged and the task still runs (it just uses the last-synced skill file).
-        self._sync_rep_for(task)
+        self._sync_rep_for(task, target)
         executor = TaskExecutor(self.client, self._orch())
         outcome = executor.execute(task)
         log.info("task %s -> %s", task_id, outcome.status)
         return task_id
 
-    def _sync_rep_for(self, task: Dict[str, Any]) -> None:
-        """Best-effort: pull the rep's Quest profile into its local skill file before running.
+    def _resolve_rep_target(self, task: Dict[str, Any]) -> Optional[tuple]:
+        """Map a task to ``(user_id, skill_dir)`` via the opt-in ``rep_sync_resolver`` (or None).
 
-        Only fires when the consumer wired a ``rep_sync_resolver`` (OFF by default). The resolver
-        maps a task to ``(user_id, skill_dir)`` (or None to skip); we then ``pull_rep_to_skill`` so
-        the agent the executor spawns behaves as the current persona/corrections. Never raises — a
-        sync failure is logged and execution proceeds with the previously synced file."""
+        Resolved ONCE per task and reused for both the handler label (stamped on claim) and the
+        rep skill-file sync. Never raises — a missing resolver or a bad one yields None."""
         resolver = getattr(self.cfg, "rep_sync_resolver", None)
         if resolver is None:
-            return
+            return None
         try:
-            target = resolver(task)
+            return resolver(task)
         except Exception as e:  # noqa: BLE001 — a bad resolver must never break execution
-            log.info("rep_sync_resolver raised (%s) — skipping rep sync", e)
-            return
+            log.info("rep_sync_resolver raised (%s) — skipping rep resolution", e)
+            return None
+
+    def _handler_label(self, target: Optional[tuple]) -> Optional[str]:
+        """Derive the handler label stamped on claim — WHO ran this task.
+
+        If the rep resolver mapped the task to a ``(user_id, skill_dir)``, the handler is the
+        basename of ``skill_dir`` (the rep slug, e.g. "joshua"/"subham"). Otherwise fall back to
+        the runner's configured ``runner_label`` (or None when neither is available)."""
+        if target:
+            _user_id, skill_dir = target
+            slug = Path(str(skill_dir)).name
+            if slug:
+                return slug
+        return self.cfg.runner_label or None
+
+    def _sync_rep_for(self, task: Dict[str, Any], target: Optional[tuple] = None) -> None:
+        """Best-effort: pull the rep's Quest profile into its local skill file before running.
+
+        Only fires when the consumer wired a ``rep_sync_resolver`` (OFF by default). ``target`` is
+        the already-resolved ``(user_id, skill_dir)`` (or None to skip); we then ``pull_rep_to_skill``
+        so the agent the executor spawns behaves as the current persona/corrections. Never raises —
+        a sync failure is logged and execution proceeds with the previously synced file."""
         if not target:
             return
         user_id, skill_dir = target

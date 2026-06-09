@@ -49,12 +49,15 @@ class TaskExecutor:
         # conversation doesn't go silent after the hand-off.
         conv_id = task.get("conv_id") or None
         if not text:
+            self._report_progress(task_id, "error", text="task had no instruction text to run")
             self._safe_report_failed(task_id, "task had no text/description to run")
             self._post_conv(conv_id, "I couldn't run this — the task had no instruction text.",
                             kind="done")
             return ExecutionOutcome(task_id, "failed", "task had no text/description")
 
-        # Announce the start into the chat as soon as we pick it up.
+        # Announce the start: a live progress event on the task (the task-detail stream) AND, when a
+        # conv_id links this task to a chat, a started message into that chat.
+        self._report_progress(task_id, "started", text=f"Started working on this: {text}")
         self._post_conv(conv_id, f"Started working on this: {text}", kind="started")
 
         # BACKGROUND lane: nobody is attending the run loop, so route it through a MilestoneSink.
@@ -71,6 +74,7 @@ class TaskExecutor:
                 text, quest_id=quest_id, mode=Mode.BACKGROUND, sink=sink)
         except Exception as e:  # noqa: BLE001 — brain failure -> failed report, never crash poller
             msg = f"orchestrator error: {type(e).__name__}: {e}"
+            self._report_progress(task_id, "error", text=msg)
             self._safe_report_failed(task_id, msg)
             self._post_conv(conv_id, f"I hit an error working on this: {msg}", kind="done")
             return ExecutionOutcome(task_id, "failed", msg)
@@ -91,16 +95,28 @@ class TaskExecutor:
         return self._report(task_id, result, conv_id)
 
     def _on_milestone(self, task_id: str, conv_id: Optional[str], event: ProgressEvent) -> None:
-        """Surface a real milestone: the optional Quest progress note AND the originating chat.
+        """Surface a real milestone: the live task-detail stream AND the originating chat.
 
         Background runs surface only real milestones/decisions/results (the MilestoneSink policy),
-        so this fires for genuine progress — never planning/reading chatter. Both posts are
-        best-effort: a dropped progress note or chat post must never affect the task outcome."""
-        report = getattr(self._client, "report_progress", None)
-        if callable(report) and event.text:
-            self._safe(lambda: report(task_id, event.text))
+        so this fires for genuine progress — never planning/reading chatter. We fan each milestone
+        to BOTH the task progress stream (kind="exec") and the chat (kind="progress"). Both posts
+        are best-effort: a dropped progress event must never affect the task outcome."""
         if event.text:
+            self._report_progress(task_id, "exec", text=event.text)
             self._post_conv(conv_id, event.text, kind="progress")
+
+    def _report_progress(self, task_id: str, kind: str, *, text: Optional[str] = None,
+                         output: Optional[str] = None) -> None:
+        """Best-effort: post a live execution-progress event onto the task (the task-detail stream).
+
+        No-ops when the client lacks ``report_progress`` (older clients / mocks), and never raises —
+        the client's own ``report_progress`` is best-effort, but we also guard the call here so a
+        progress event can never affect the task's success/failure."""
+        if not task_id:
+            return
+        report = getattr(self._client, "report_progress", None)
+        if callable(report):
+            self._safe(lambda: report(task_id, kind, text=text, output=output))
 
     def _post_conv(self, conv_id: Optional[str], content: str, *, kind: str) -> None:
         """Best-effort: append a live progress message into the originating chat, if one is linked.
@@ -119,12 +135,16 @@ class TaskExecutor:
                 conv_id: Optional[str] = None) -> ExecutionOutcome:
         if result.kind == "answer":
             text = result.text or "(no answer produced)"
+            self._report_progress(task_id, "done", text="Done.", output=text)
             self._safe(lambda: self._client.report_done(task_id, text))
             self._post_conv(conv_id, text, kind="done")
             return ExecutionOutcome(task_id, "done", text)
 
         if result.kind == "confirm":
             summary = result.question or "A human decision is required before proceeding."
+            # needs_you is a terminal-but-paused state; close the live stream with a 'done' tick
+            # noting it now needs a human, so the stream doesn't hang open.
+            self._report_progress(task_id, "done", text=f"Paused — needs you: {summary}")
             self._post_conv(conv_id, summary, kind="decision")
             if result.decision_id:
                 self._safe(lambda: self._client.report_needs_you(task_id, summary, result.decision_id))
@@ -137,6 +157,7 @@ class TaskExecutor:
         deep = result.deep_results
         if deep and all(d.met for d in deep):
             summary = "\n\n".join(d.output for d in deep if d.output) or "Goal(s) met."
+            self._report_progress(task_id, "done", text="Done.", output=summary)
             self._safe(lambda: self._client.report_done(task_id, summary))
             self._post_conv(conv_id, summary, kind="done")
             return ExecutionOutcome(task_id, "done", summary)
@@ -146,6 +167,7 @@ class TaskExecutor:
             summary = "A human decision is required to finish this task."
             # A confirm-before-act run carries the prepared output (e.g. the code awaiting review).
             chat_text = next((d.output for d in deep if d.output), None) or summary
+            self._report_progress(task_id, "done", text=f"Paused — needs you: {summary}")
             self._safe(lambda: self._client.report_needs_you(task_id, summary, decision_id))
             self._post_conv(conv_id, chat_text, kind="decision")
             return ExecutionOutcome(task_id, "needs_you", summary, decision_id)
@@ -153,6 +175,7 @@ class TaskExecutor:
         errs = "; ".join(d.error for d in deep if d.error) or "the goal was not met"
         if not deep:                 # deep requested but no runner wired -> needs human/runner
             errs = "deep work required but no deep-runner is configured: " + "; ".join(result.goals)
+        self._report_progress(task_id, "error", text=errs)
         self._safe(lambda: self._client.report_failed(task_id, errs))
         self._post_conv(conv_id, f"I couldn't complete this: {errs}", kind="done")
         return ExecutionOutcome(task_id, "failed", errs)

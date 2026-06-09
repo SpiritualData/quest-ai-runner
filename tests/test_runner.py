@@ -27,8 +27,10 @@ class MockQuestClient:
         self._due = list(due_tasks)
         self.configured = True
         self.claimed = []
+        self.claim_handlers = []   # list of (task_id, handler) — what each claim stamped
         self.reports = []          # list of (task_id, status, result, decision_id)
         self.posts = []            # list of (conv_id, content, kind) — live chat progress posts
+        self.progress = []         # list of (task_id, kind, text, output) — live task-detail stream
         self.heartbeats = []       # list of (team_id, capabilities, runner_label)
         self.discover_team_ids = []  # records the team_id each discovery scoped to
 
@@ -45,9 +47,14 @@ class MockQuestClient:
             out.append(t)
         return out
 
-    def claim(self, task_id):
+    def claim(self, task_id, handler=None):
         self.claimed.append(task_id)
-        return {"id": task_id, "status": "in_progress"}
+        self.claim_handlers.append((task_id, handler))
+        return {"id": task_id, "status": "in_progress", "handler": handler}
+
+    def report_progress(self, task_id, kind, *, text=None, output=None, data=None):
+        self.progress.append((task_id, kind, text, output))
+        return {"ok": True}
 
     def report_done(self, task_id, result):
         self.reports.append((task_id, "done", result, None))
@@ -591,3 +598,185 @@ def test_poller_no_team_id_skips_heartbeat_cleanly():
     poller = Poller(cfg, state_path=None, client=client)
     assert poller.run_once() == []
     assert client.heartbeats == []             # nothing heartbeated, no crash
+
+
+# --- handler stamping + live task-detail progress stream ------------------------
+
+def test_claim_includes_handler_in_patch_body(monkeypatch):
+    """QuestClient.claim(handler=...) must PATCH /api/assistant-tasks/{id} with the handler in the
+    body (alongside status), so the task records WHO ran it. Mock the HTTP layer (no network)."""
+    import json
+    import urllib.request
+    from quest_ai_runner.runner.quest_client import QuestClient
+
+    captured = {}
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b'{"id": "t1", "status": "in_progress"}'
+
+    def _fake_urlopen(req, timeout=None):
+        captured["url"] = req.full_url
+        captured["method"] = req.get_method()
+        captured["body"] = req.data
+        return _Resp()
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    client = QuestClient("http://quest.example", "qsk_test")
+    client.claim("t1", handler="joshua")
+
+    assert captured["url"] == "http://quest.example/api/assistant-tasks/t1"
+    assert captured["method"] == "PATCH"
+    assert json.loads(captured["body"]) == {"status": "in_progress", "handler": "joshua"}
+
+
+def test_claim_without_handler_omits_it(monkeypatch):
+    """Backward compatibility: claim() with no handler sends only {status} — body unchanged."""
+    import json
+    import urllib.request
+    from quest_ai_runner.runner.quest_client import QuestClient
+
+    captured = {}
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b''
+
+    def _fake_urlopen(req, timeout=None):
+        captured["body"] = req.data
+        return _Resp()
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    client = QuestClient("http://quest.example", "qsk_test")
+    client.claim("t1")
+    assert json.loads(captured["body"]) == {"status": "in_progress"}
+
+
+def test_report_progress_posts_to_right_path_and_body(monkeypatch):
+    """report_progress POSTs to /api/assistant-tasks/{id}/progress with only the non-None
+    fields ({kind, text?, output?, data?}), mirroring post_conversation_message's body build."""
+    import json
+    import urllib.request
+    from quest_ai_runner.runner.quest_client import QuestClient
+
+    captured = {}
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b'{"ok": true}'
+
+    def _fake_urlopen(req, timeout=None):
+        captured["url"] = req.full_url
+        captured["method"] = req.get_method()
+        captured["body"] = req.data
+        return _Resp()
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    client = QuestClient("http://quest.example", "qsk_test")
+    out = client.report_progress("t1", "exec", text="ran step 2", output="raw")
+
+    assert out == {"ok": True}
+    assert captured["url"] == "http://quest.example/api/assistant-tasks/t1/progress"
+    assert captured["method"] == "POST"
+    # Only the supplied non-None fields are sent; no data key when omitted.
+    assert json.loads(captured["body"]) == {"kind": "exec", "text": "ran step 2", "output": "raw"}
+
+
+def test_report_progress_swallows_http_errors(monkeypatch):
+    """A progress-post failure must NEVER raise (it can't be allowed to fail the task): an HTTP
+    error is logged and an empty dict returned."""
+    import urllib.error
+    import urllib.request
+    from quest_ai_runner.runner.quest_client import QuestClient
+
+    def _boom_urlopen(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 500, "boom", hdrs=None, fp=None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", _boom_urlopen)
+
+    client = QuestClient("http://quest.example", "qsk_test")
+    # Must not raise, and returns {} on failure.
+    assert client.report_progress("t1", "started", text="hi") == {}
+
+
+def test_poller_stamps_handler_from_rep_skill_dir():
+    """When a rep_sync_resolver maps a task to (user_id, skill_dir), the poller claims with the
+    handler = basename(skill_dir) (the rep slug)."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = MockQuestClient([{"id": "task-r", "text": "do it", "status": "queued", "team_id": "team1"}])
+    poller = _poller_with(
+        client, provider,
+        rep_sync_resolver=lambda task: ("user-123", "/somewhere/skills/subham"))
+    handled = poller.run_once()
+    assert handled == ["task-r"]
+    assert client.claim_handlers == [("task-r", "subham")]
+
+
+def test_poller_handler_falls_back_to_runner_label():
+    """With no rep_sync_resolver, the handler falls back to the configured runner_label."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = MockQuestClient([{"id": "task-l", "text": "do it", "status": "queued", "team_id": "team1"}])
+    poller = _poller_with(client, provider, runner_label="sd-team-runner")
+    poller.run_once()
+    assert client.claim_handlers == [("task-l", "sd-team-runner")]
+
+
+def test_poller_handler_none_when_no_resolver_no_label():
+    """No resolver and no runner_label -> handler is None (claim body omits it; backward compat)."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = MockQuestClient([{"id": "task-n", "text": "do it", "status": "queued", "team_id": "team1"}])
+    poller = _poller_with(client, provider)
+    poller.run_once()
+    assert client.claim_handlers == [("task-n", None)]
+
+
+def test_executor_emits_started_and_terminal_done_progress():
+    """The executor posts a 'started' progress event when it picks the task up and a terminal
+    'done' event mapped from a successful result — onto the task-detail stream (independent of any
+    conv_id chat linkage)."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _brain(provider))
+    out = ex.execute({"id": "tp", "text": "say hi"})
+    assert out.status == "done"
+    kinds = [k for (_tid, k, _t, _o) in client.progress]
+    assert kinds[0] == "started"
+    assert kinds[-1] == "done"
+    # Every progress event was stamped onto THIS task.
+    assert {tid for (tid, _k, _t, _o) in client.progress} == {"tp"}
+
+
+def test_executor_emits_error_progress_on_failed_deep():
+    """A deep run that isn't met maps to a terminal 'error' progress event."""
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "do X", "deep_brief": "x", "rationale": "work"},
+    ])
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _brain(provider,
+                      deep_runner=StubDeepRunner(met=False, error="hit turn limit")))
+    out = ex.execute({"id": "tpe", "text": "do X"})
+    assert out.status == "failed"
+    kinds = [k for (_tid, k, _t, _o) in client.progress]
+    assert kinds[0] == "started"
+    assert kinds[-1] == "error"
+
+
+def test_executor_progress_swallowed_when_client_lacks_method():
+    """An older client without report_progress is fine — the executor no-ops the stream and still
+    reports the result (backward compatible)."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+
+    class NoProgressClient(MockQuestClient):
+        report_progress = None     # not callable -> the helper must skip it
+
+    client = NoProgressClient([])
+    ex = TaskExecutor(client, _brain(provider))
+    out = ex.execute({"id": "tnp", "text": "say hi"})
+    assert out.status == "done"
+    assert client.reports and client.reports[0][1] == "done"
