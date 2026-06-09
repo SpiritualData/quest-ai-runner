@@ -38,13 +38,23 @@ def _canonical(filter_: Dict[str, Any]) -> str:
 
 class CachedDbAdapter(RetrievalAdapterBase):
     def __init__(self, fetch: FetchFn, *, ttl_seconds: float = 30.0, default_limit: int = 20,
-                 max_render_bytes: int = 6000):
+                 max_render_bytes: int = 6000,
+                 sources: Optional[Dict[str, str]] = None,
+                 operations: Optional[str] = None,
+                 describe: Optional[Callable[[str], str]] = None):
         self._fetch = fetch
         self.ttl = ttl_seconds
         self.default_limit = default_limit
         self.max_render_bytes = max_render_bytes
         self._cache: Dict[str, Any] = {}
         self._lock = threading.Lock()
+        # Optional discovery metadata the consumer supplies — kept generic (the adapter knows
+        # no schema by itself). ``sources``: {collection: one-line description}. ``operations``:
+        # a rendered listing of callable ops. ``describe``: name -> field/type detail. When a
+        # consumer omits these, discovery falls back to introspecting a sample row.
+        self._sources: Dict[str, str] = dict(sources or {})
+        self._operations: str = str(operations or "")
+        self._describe = describe
 
     def _cached_fetch(self, collection: str, filter_: Dict[str, Any]) -> List[Dict[str, Any]]:
         key = f"{collection}:{_canonical(filter_)}"
@@ -101,3 +111,53 @@ class CachedDbAdapter(RetrievalAdapterBase):
         return Observation(
             kind="error", pattern=pattern, scope=scope,
             error="grep is not supported on a DB source; use a structured query instead")
+
+    # --- discovery -----------------------------------------------------------
+
+    def list_sources(self) -> Observation:
+        if self._sources:
+            lines = [f"- {c}: {d}".rstrip() for c, d in self._sources.items()]
+        else:
+            # No advertised catalog: list whatever collections have been queried this run.
+            cached = sorted({k.split(":", 1)[0] for k in self._cache})
+            lines = [f"- {c}" for c in cached]
+        body = "\n".join(lines) or "(no sources advertised; issue a query to populate the cache)"
+        return Observation(kind="query", locator="list_sources",
+                           text=f"Queryable collections (read with "
+                                f"query({{\"collection\": ..., \"filter\": ...}})):\n{body}")
+
+    def describe_source(self, name, *, path=None) -> Observation:
+        nm = str(name or "").strip()
+        if self._describe:
+            try:
+                detail = self._describe(nm)
+                if detail:
+                    return Observation(kind="query", locator=f"describe_source({nm})", text=detail)
+            except Exception as e:  # noqa: BLE001
+                return Observation(kind="query", locator=f"describe_source({nm})",
+                                   text=f"describe failed: {type(e).__name__}")
+        # Fallback: infer fields/types from a sample row.
+        try:
+            rows = self._cached_fetch(nm, {})
+        except Exception as e:  # noqa: BLE001
+            return Observation(kind="query", locator=f"describe_source({nm})",
+                               text=f"could not sample {nm!r}: {type(e).__name__}")
+        if not rows:
+            return Observation(kind="query", locator=f"describe_source({nm})",
+                               text=f"No rows available to infer a schema for {nm!r}.")
+        fields = {k: type(v).__name__ for k, v in (rows[0] or {}).items()}
+        body = "\n".join(f"- {k}: {t}" for k, t in fields.items())
+        return Observation(kind="query", locator=f"describe_source({nm})",
+                           text=f"Inferred fields of {nm} (from a sample row):\n{body}")
+
+    def list_operations(self) -> Observation:
+        text = self._operations or (
+            "query({collection, filter, limit}) — structured read of a collection. "
+            "(No mutations are exposed by this adapter.)")
+        return Observation(kind="query", locator="list_operations", text=text)
+
+    def describe_operation(self, name: str) -> Observation:
+        # No structured per-op registry by default; point back to the listing.
+        return Observation(kind="query", locator=f"describe_operation({name})",
+                           text=self._operations or
+                                f"No per-operation detail for {name!r}. Call list_operations.")

@@ -198,6 +198,32 @@ class RetrievalAdapter(Protocol):
         """Optional structured lookup (e.g. a cached DB read). A RetrievalAdapter that
         only does files may return Observation(kind="error", error="query unsupported")."""
 
+    # --- DISCOVERY: let the brain learn what exists before it reads or acts -----------
+    # These four make the source self-describing so the brain never needs a static schema/
+    # operation blob pushed into its prompt — it asks. All return Observation(kind="query")
+    # so they flow into ``gathered`` through the SAME path as a read, and never raise.
+    # Two levels each: a cheap LIST (names + one-liners) and a DESCRIBE drill-down.
+
+    def list_sources(self) -> Observation:
+        """DISCOVERY (cheap): the readable sources that exist — collections, tables, doc-sets —
+        one short line each (name + what it holds). The brain calls this when the context does
+        not already name the source it needs. Never raises."""
+
+    def describe_source(self, name: str, *, path: Optional[str] = None) -> Observation:
+        """DISCOVERY (drill-down): the fields/types of ONE source named by ``list_sources``.
+        ``path`` optionally drills into a nested field/sub-document for multi-level detail.
+        Never raises."""
+
+    def list_operations(self) -> Observation:
+        """DISCOVERY (cheap): the operations the consumer makes callable — both reads
+        (e.g. "get latest insights") and mutations — one short line each (name + effect).
+        The brain calls this before authoring a change, so it acts via a real operation
+        instead of free-associating a shape. Never raises."""
+
+    def describe_operation(self, name: str) -> Observation:
+        """DISCOVERY (drill-down): the full signature/usage/example for ONE operation named
+        by ``list_operations``. Never raises."""
+
 
 @runtime_checkable
 class ModelProvider(Protocol):
@@ -271,6 +297,25 @@ class RetrievalAdapterBase(abc.ABC):
 
     def query(self, spec: Dict[str, Any]) -> Observation:  # optional default
         return Observation(kind="error", error="query not supported by this adapter")
+
+    # Discovery defaults — non-abstract so existing adapters keep satisfying the ABC. An
+    # adapter that can enumerate its sources/operations overrides these; one that can't
+    # returns a benign "nothing to discover" Observation (never an error that stalls the loop).
+    def list_sources(self) -> Observation:
+        return Observation(kind="query", locator="list_sources",
+                           text="No sources are enumerable for this adapter.")
+
+    def describe_source(self, name: str, *, path: Optional[str] = None) -> Observation:
+        return Observation(kind="query", locator=f"describe_source({name})",
+                           text=f"No schema available for source {name!r}.")
+
+    def list_operations(self) -> Observation:
+        return Observation(kind="query", locator="list_operations",
+                           text="No callable operations are advertised by this adapter.")
+
+    def describe_operation(self, name: str) -> Observation:
+        return Observation(kind="query", locator=f"describe_operation({name})",
+                           text=f"No detail available for operation {name!r}.")
 
 
 class ModelProviderBase(abc.ABC):

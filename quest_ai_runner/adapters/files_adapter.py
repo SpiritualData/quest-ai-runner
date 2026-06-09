@@ -183,3 +183,61 @@ class FilesAdapter(RetrievalAdapterBase):
             except OSError:
                 continue
         return Observation(kind="grep", pattern=pattern, scope=scope, hits=hits)
+
+    # --- discovery -----------------------------------------------------------
+
+    def _walk_readable(self, limit: int) -> List[str]:
+        names: List[str] = []
+        for dirpath, dirnames, filenames in os.walk(self.root):
+            dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS and not d.startswith(".")]
+            for fn in filenames:
+                p = Path(dirpath) / fn
+                if not fn.startswith(".") and self._readable(p):
+                    names.append(self._rel(p))
+                    if len(names) >= limit:
+                        names.sort()
+                        return names
+        names.sort()
+        return names
+
+    def list_sources(self) -> Observation:
+        names = self._walk_readable(limit=500)
+        body = "\n".join(f"- {n}" for n in names) or "(no readable files under the root)"
+        return Observation(kind="query", locator="list_sources",
+                           text=f"Readable doc files under the configured root "
+                                f"(read with read_section(rel_path, heading|lines), grep with a "
+                                f"pattern):\n{body}")
+
+    def describe_source(self, name, *, path=None) -> Observation:
+        resolved = self._resolve_in_tree(name)
+        if resolved is None or not resolved.is_file() or not self._readable(resolved):
+            return Observation(kind="query", locator=f"describe_source({name})",
+                               text=f"{name!r} is not a readable file under the root. "
+                                    f"Call list_sources to see what exists.")
+        try:
+            lines = resolved.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError as e:
+            return Observation(kind="query", locator=f"describe_source({name})",
+                               text=f"could not read {name!r}: {type(e).__name__}")
+        headings = [ln.rstrip() for ln in lines if re.match(r"^#{1,6}\s+", ln)]
+        outline = "\n".join(headings[:200]) or "(no markdown headings; read the file directly)"
+        return Observation(kind="query", locator=f"describe_source({name})",
+                           text=f"Outline of {self._rel(resolved)} "
+                                f"(read a section with read_section(rel_path, heading=...)):\n{outline}")
+
+    def list_operations(self) -> Observation:
+        return Observation(kind="query", locator="list_operations",
+                           text="This source is READ-ONLY documents. Operations:\n"
+                                "- read_section(rel_path, heading|start_line/end_line): read part of a file\n"
+                                "- grep(pattern, scope): locate a regex across files\n"
+                                "No mutations are available.")
+
+    def describe_operation(self, name: str) -> Observation:
+        ops = {
+            "read_section": "read_section(rel_path, *, heading=None, start_line=None, end_line=None) "
+                            "→ a specific part of a file.",
+            "grep": "grep(pattern, *, scope=None) → lines across files matching a regex.",
+        }
+        detail = ops.get((name or "").strip())
+        return Observation(kind="query", locator=f"describe_operation({name})",
+                           text=detail or f"Unknown operation {name!r}. Call list_operations to see them.")
