@@ -85,6 +85,87 @@ when the deep-runner can actually browse (the reference `SubprocessGoalRunner` d
 tool gating via `web_enabled()`). The runner sends this on its heartbeat so Quest's router only
 sends work the lane can honestly do. Don't claim a capability you haven't wired.
 
+## Bring your own LLM
+
+`ModelProvider` is a small, three-method `Protocol`:
+
+```python
+class ModelProvider(Protocol):
+    def plan(self, prompt: str, *, model: str, tool_schema: dict) -> dict: ...
+    def answer(self, messages: list[dict], *, model: str, system: str | None = None) -> str: ...
+    def list_models(self) -> list[str]: ...
+```
+
+Your provider can wrap any SDK. Because the library's `core` never imports a provider directly,
+you can add your own logging, analytics, or cost-triage inside the adapter without touching the
+brain. **The core ships with zero non-stdlib dependencies and never imports your LLM wrapper.**
+The only built-in provider (`AnthropicProvider`) lives in `quest_ai_runner/adapters/`, not in
+`core/`, and is installed via the optional `[anthropic]` extra.
+
+A minimal wrapper example:
+
+```python
+import your_llm_sdk as sdk
+
+class MyProvider:
+    def plan(self, prompt, *, model, tool_schema):
+        # Force the model to emit JSON matching tool_schema, then return the raw dict.
+        return sdk.complete(prompt, tools=[tool_schema], model=model)
+
+    def answer(self, messages, *, model, system=None):
+        return sdk.chat(messages, model=model, system=system)
+
+    def list_models(self) -> list[str]:
+        # Return a latest-first list; ModelRegistry buckets by "haiku"/"sonnet"/"opus" substring.
+        return sdk.list_models()
+```
+
+Pass it in via `RunnerConfig(model_provider=MyProvider())`.
+
+### ModelRegistry fallback: custom or internal model ids
+
+`ModelRegistry` maps tier names (`haiku`, `sonnet`, `opus`) to concrete model ids. It does this
+by calling `provider.list_models()` and finding the first id whose lowercase name contains the
+tier substring. The bucketed result is cached; re-bucketing happens only when the list changes.
+
+When `list_models()` returns an empty list (e.g. a keyless provider, an unreachable endpoint, or
+a provider that has no list API), the registry falls back to `DEFAULT_FALLBACK_TOP`:
+
+```python
+DEFAULT_FALLBACK_TOP = {
+    "opus":   "claude-opus-4-8",
+    "sonnet": "claude-sonnet-4-6",
+    "haiku":  "claude-haiku-4-5",
+}
+```
+
+To override the fallback map for custom or internal model ids, pass `fallback=` at construction:
+
+```python
+from quest_ai_runner.core.model_registry import ModelRegistry
+
+registry = ModelRegistry(
+    provider=my_provider,
+    fallback={
+        "opus":   "my-org/large-model-v2",
+        "sonnet": "my-org/medium-model-v2",
+        "haiku":  "my-org/small-model-v2",
+    },
+)
+```
+
+Or construct the `Orchestrator` directly with a custom registry:
+
+```python
+from quest_ai_runner.core.orchestrator import Orchestrator
+
+orch = Orchestrator(retrieval=..., provider=my_provider, registry=registry)
+```
+
+If your provider's `list_models()` returns ids that contain `"haiku"`, `"sonnet"`, or `"opus"`
+as substrings, the registry auto-buckets them and the fallback is never used. The fallback is only
+the last-resort when the live list is empty or unreachable.
+
 ## Next
 
 - Plug in a non-file source or a different model → [Implementing adapters](adapters.md)

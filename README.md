@@ -110,6 +110,39 @@ tests/                         # core loop, registry bucketing, runner + example
 
 A consumer satisfies them structurally (they're `typing.Protocol`) or by subclassing the ABCs.
 
+### Discovery: the brain learns source structure at runtime
+
+`RetrievalAdapter` includes four *discovery* methods that make the source self-describing, so
+the planner never needs a static schema blob pushed into its prompt. Instead it *asks*:
+
+| Method | Cost | What it returns |
+|---|---|---|
+| `list_sources()` | cheap | the collections/tables/doc-sets that exist, one line each |
+| `describe_source(name)` | drill-down | the fields/types (or heading outline) of ONE named source |
+| `list_operations()` | cheap | the callable operations (reads and mutations), one line each |
+| `describe_operation(name)` | drill-down | the full signature/usage of ONE named operation |
+
+The pattern is cheap-then-drill-down: the planner calls `list_sources` (or `list_operations`)
+first to see what exists, then `describe_*` on the one or two it needs. Both levels batch in
+parallel with the rest of the `reads[]` step, so there is no extra round-trip.
+
+The brain is taught *discover before guess*: when the planner does not already know which source
+or operation a request needs, it calls `list_sources` / `list_operations` rather than inventing a
+shape. This keeps the planner's knowledge current without the consumer having to maintain a static
+context blob.
+
+Reference implementations:
+
+- `FilesAdapter` enumerates readable files under the configured root and extracts a markdown
+  heading outline per file for `describe_source`.
+- `CachedDbAdapter` accepts optional `sources` (a `{name: description}` dict) and `operations`
+  (a rendered listing string) at construction time, falling back to schema inference from a
+  sample row when these are not supplied.
+
+Older adapters that predate the discovery methods continue to work: the orchestrator dispatches
+via `getattr` and returns a benign "discovery not supported" observation when the methods are
+absent, so the loop never stalls.
+
 ## How a bespoke watchdog generalized
 
 The design was proven by a bespoke single-user "watchdog" poll loop, then generalized into the

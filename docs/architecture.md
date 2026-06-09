@@ -68,3 +68,22 @@ A consumer supplies all specifics through `RunnerConfig`: which Quest key, which
 corpus, which deep-runner, which model provider, decision routing. The library hardcodes none of it.
 That's what lets the same engine serve in-process chat, an integrating org, and a single-user lane
 unchanged. See [writing-a-consumer.md](writing-a-consumer.md) and [adapters.md](adapters.md).
+
+## Glossary
+
+These two terms appear throughout the docs and are worth keeping distinct:
+
+**Brain** (`core/`, specifically `core/orchestrator.py`). The in-process, synchronous, domain-free
+reasoning loop. It takes adapters, runs the bounded `plan → gather → re-plan → answer/deep/confirm`
+cycle for a single request, and returns an `OrchestratorResult`. It knows nothing about tasks,
+polling, databases, or any specific org — that is the point. The brain can be imported and called
+directly by a backend or chat handler with no poller in the picture.
+
+**Runner** (`runner/`, the "lane"). The executor Quest is missing: a `poll → claim → run →
+escalate → report` loop that runs as a persistent service (or a one-shot `--once` cron). The
+runner uses the brain to handle each claimed task, then reports the result back to Quest. "Runner"
+and "lane" are used interchangeably: the lane is the deployment unit (a systemd service, a cron
+job) that executes the runner loop. The brain is what the runner calls; the runner is how
+the brain is deployed in the background.
+
+In short: the **brain** reasons; the **runner** executes and reports.
