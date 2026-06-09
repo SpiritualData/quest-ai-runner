@@ -24,9 +24,13 @@ class StubProvider:
         self.plan_calls = 0
         self.answer_calls = 0
         self.last_answer_messages: List[Dict[str, str]] = []
+        self.last_plan_prompt: str = ""
+        self.plan_prompts: List[str] = []
 
     def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
         self.plan_calls += 1
+        self.last_plan_prompt = prompt
+        self.plan_prompts.append(prompt)
         if self._decisions:
             return self._decisions.pop(0)
         return {"action": "answer", "rationale": "fallback", "model_tier": "sonnet"}

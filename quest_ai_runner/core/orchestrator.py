@@ -64,6 +64,13 @@ DEFAULT_MAX_SUBQUESTIONS = 4
 DEFAULT_MAX_DEEP_SUBTASKS = 4
 DEFAULT_DEEP_MAX_TURNS = 30
 DEFAULT_MAX_GATHER_CHARS = 6000
+# Lean re-plan view: the planner is re-fed the WHOLE cumulative ``gathered`` each step, which
+# bloats fast on multi-read runs. Instead, keep the most-recent observations in full and COMPRESS
+# older ones to one-line summaries (path/source + key finding) — but only once ``gathered`` has
+# grown past a threshold, so short runs are byte-for-byte unchanged. The full ``gathered`` is still
+# used verbatim for the final ANSWER synthesis; only the per-step PLANNER view is leaned out.
+DEFAULT_PLANNER_RECENT_FULL = 4      # newest N observations rendered in full to the planner
+DEFAULT_PLANNER_COMPRESS_OVER = 6    # leave gathered untouched until it exceeds this many obs
 
 
 # ===========================================================================
@@ -89,9 +96,20 @@ The four actions:
       * a section: {{"rel_path": "...", "heading": "Metrics"}} OR
                    {{"rel_path": "...", "start_line": 40, "end_line": 80}}, and/or
       * a grep:    {{"grep": "regex", "scope": "optional/subpath"}} to LOCATE content, and/or
-      * a query:   {{"query": {{...}}}} for a structured source lookup (if supported).
-    BATCH AGGRESSIVELY: reads in ONE step run IN PARALLEL — list ALL you'd plausibly want now
-    (up to {max_reads}). After the read you'll be re-invoked with the results in GATHERED.
+      * a query:   {{"query": {{...}}}} for a structured source lookup (if supported), and/or
+      * DISCOVERY, when you do not yet know what the source of truth contains:
+          {{"list_sources": true}}                       → the collections/tables/doc-sets that exist
+          {{"describe_source": "<name>", "describe_path": "<optional nested path>"}}
+                                                          → the fields/types of ONE source (drill down)
+          {{"list_operations": true}}                    → the operations you can call (reads AND changes)
+          {{"describe_operation": "<name>"}}             → the full signature/usage of ONE operation
+    DISCOVER BEFORE YOU GUESS: if you don't already know the exact source, field, or operation a
+    request needs, list_sources / list_operations first (then describe_* the few you'll use), rather
+    than inventing a shape. Discovery is the cheapest, most reliable way to honor what the user
+    literally asked for. It does NOT favor any particular source or operation — it just shows what
+    exists. BATCH AGGRESSIVELY: reads in ONE step run IN PARALLEL — list ALL you'd plausibly want now
+    (up to {max_reads}), including several describe_* calls at once. After the read you'll be
+    re-invoked with the results in GATHERED.
   - "answer": you have ENOUGH real content in GATHERED — or it's chit-chat needing no reading.
     Use "answer" ONLY to INFORM (explain, summarize, advise). If the user asked you to CHANGE
     something (create/add/update/edit/delete/mark/set/rename their data or artifacts), that is an
@@ -109,6 +127,11 @@ The four actions:
     author a concrete, specific `goal` + `deep_brief` yourself (a reasonable proposal the human can
     review and edit). A mutating proposal is surfaced for review BEFORE it takes effect, so
     proposing is safe and is strongly preferred over asking for more information OR describing it.
+    GROUND THE CHANGE IN A REAL OPERATION: if you are not already certain which source/operation
+    the change targets, do a "read" discovery step FIRST (list_operations / list_sources, then
+    describe the relevant one) so your proposal uses the actual operation the user named, not a
+    guessed shape. Match what the user literally asked for; do not substitute a different artifact
+    because it's easier to write.
   - "confirm": reserved for a genuine FORK you cannot ground past — the request is truly ambiguous
     (you cannot form a reasonable proposal even after reading), OR risky/irreversible enough that a
     human must approve the DIRECTION first. Prefer "deep" with a concrete proposal whenever the
@@ -160,6 +183,11 @@ DECIDE_TOOL: Dict[str, Any] = {
                         "grep": {"type": "string"},
                         "scope": {"type": "string"},
                         "query": {"type": "object"},
+                        "list_sources": {"type": "boolean"},
+                        "describe_source": {"type": "string"},
+                        "describe_path": {"type": "string"},
+                        "list_operations": {"type": "boolean"},
+                        "describe_operation": {"type": "string"},
                     },
                 },
             },
@@ -194,6 +222,10 @@ class OrchestratorConfig:
     deep_max_turns: int = DEFAULT_DEEP_MAX_TURNS
     max_gather_chars: int = DEFAULT_MAX_GATHER_CHARS
     planner_tier: str = "haiku"  # the cheap model that runs the planner step
+    # Per-step planner-view leaning (see DEFAULT_PLANNER_* above). The full ``gathered`` is always
+    # kept for the final answer; these only trim what the cheap PLANNER re-reads each re-plan step.
+    planner_recent_full: int = DEFAULT_PLANNER_RECENT_FULL
+    planner_compress_over: int = DEFAULT_PLANNER_COMPRESS_OVER
 
 
 @dataclass
@@ -224,7 +256,11 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
     clean_reads: List[Dict[str, Any]] = []
     if isinstance(reads_in, list):
         for r in reads_in[: cfg.max_reads_per_step]:
-            if isinstance(r, dict) and (r.get("grep") or r.get("rel_path") or r.get("query")):
+            if isinstance(r, dict) and (
+                r.get("grep") or r.get("rel_path") or r.get("query")
+                or r.get("list_sources") or r.get("describe_source")
+                or r.get("list_operations") or r.get("describe_operation")
+            ):
                 clean_reads.append(r)
 
     tier = raw.get("model_tier")
@@ -284,6 +320,60 @@ def _render_gathered(gathered: List[Dict[str, Any]]) -> str:
             parts.append(f"{kind.upper()} {obs.get('rel_path') or ''} [{loc}]:\n{obs.get('text', '')}")
         elif kind == "error":
             parts.append(f"(gather error: {obs.get('error')})")
+    return "\n\n".join(parts)
+
+
+def _summarize_observation(obs: Dict[str, Any]) -> str:
+    """One-line summary of a single gathered observation (source/path + key finding), for the
+    COMPRESSED older-context view fed to the planner on re-plan steps. Loses the verbatim body but
+    keeps WHAT was looked at and WHAT it turned up, so the planner still knows the ground it covered
+    and won't re-issue the same read. Never raises."""
+
+    def _oneline(s: Any, limit: int = 160) -> str:
+        text = " ".join(str(s or "").split())
+        return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
+
+    kind = obs.get("kind")
+    if kind == "grep":
+        hits = obs.get("hits") or []
+        where = f" in {obs.get('scope')}" if obs.get("scope") else ""
+        paths = sorted({h.get("rel_path") for h in hits if h.get("rel_path")})
+        files = "" if not paths else " across " + ", ".join(list(paths)[:5]) + (
+            f" (+{len(paths) - 5} more)" if len(paths) > 5 else "")
+        return f"GREP {obs.get('pattern')!r}{where} → {len(hits)} hit(s){files}"
+    if kind in ("read", "query"):
+        loc = obs.get("locator", "")
+        head = f"{kind.upper()} {obs.get('rel_path') or ''} [{loc}]".strip()
+        return f"{head}: {_oneline(obs.get('text', ''))}"
+    if kind == "error":
+        return f"(gather error: {obs.get('error')})"
+    return _oneline(kind)
+
+
+def _render_gathered_for_planner(gathered: List[Dict[str, Any]],
+                                 recent_full: int, compress_over: int) -> str:
+    """Leaner view of ``gathered`` for the PER-STEP PLANNER.
+
+    The newest ``recent_full`` observations are rendered in FULL (same as ``_render_gathered``);
+    everything older is collapsed to one-line summaries. To stay byte-for-byte identical for short
+    runs, compression only kicks in once ``len(gathered) > compress_over`` (and only ever when there
+    are genuinely older observations to compress, i.e. more than ``recent_full``). The full
+    ``gathered`` is unaffected and is what the final ANSWER is still synthesized from."""
+    if not gathered:
+        return "[]"
+    n = len(gathered)
+    recent_full = max(0, recent_full)
+    if n <= compress_over or n <= recent_full:
+        return _render_gathered(gathered)
+    older, recent = gathered[: n - recent_full], gathered[n - recent_full:]
+    parts: List[str] = [
+        f"--- EARLIER READS ({len(older)}), compressed to one line each "
+        "(already covered — re-read only if you need the full body) ---"
+    ]
+    parts.extend(f"  • {_summarize_observation(o)}" for o in older)
+    if recent:
+        parts.append(f"--- MOST RECENT READS ({len(recent)}), in full ---")
+        parts.append(_render_gathered(recent))
     return "\n\n".join(parts)
 
 
@@ -403,6 +493,31 @@ class Orchestrator:
         if not isinstance(spec, dict):
             return None
         try:
+            # Discovery specs first — dispatched via getattr so a structural adapter that
+            # predates the discovery methods degrades to a benign "unsupported" Observation
+            # instead of raising (back-compat: the four methods are optional on the Protocol).
+            if spec.get("list_sources"):
+                fn = getattr(self.retrieval, "list_sources", None)
+                return fn() if fn else Observation(
+                    kind="query", locator="list_sources",
+                    text="discovery not supported by this adapter")
+            if spec.get("describe_source"):
+                name = str(spec["describe_source"])
+                fn = getattr(self.retrieval, "describe_source", None)
+                return fn(name, path=spec.get("describe_path") or None) if fn else Observation(
+                    kind="query", locator=f"describe_source({name})",
+                    text="discovery not supported by this adapter")
+            if spec.get("list_operations"):
+                fn = getattr(self.retrieval, "list_operations", None)
+                return fn() if fn else Observation(
+                    kind="query", locator="list_operations",
+                    text="discovery not supported by this adapter")
+            if spec.get("describe_operation"):
+                name = str(spec["describe_operation"])
+                fn = getattr(self.retrieval, "describe_operation", None)
+                return fn(name) if fn else Observation(
+                    kind="query", locator=f"describe_operation({name})",
+                    text="discovery not supported by this adapter")
             if spec.get("grep"):
                 return self.retrieval.grep(
                     str(spec["grep"]), scope=spec.get("scope") or None
@@ -448,7 +563,8 @@ class Orchestrator:
             user_message=user_message,
             transcript=transcript or "(no prior messages)",
             context_view=context_view or "(no context)",
-            gathered=_render_gathered(gathered),
+            gathered=_render_gathered_for_planner(
+                gathered, self.cfg.planner_recent_full, self.cfg.planner_compress_over),
             max_reads=self.cfg.max_reads_per_step,
             max_subq=self.cfg.max_subquestions,
             max_deep=self.cfg.max_deep_subtasks,
@@ -664,7 +780,12 @@ class Orchestrator:
                 if not plan.reads:
                     plan.action = "answer"
                 else:
-                    emit.status("searching…" if any(r.get("grep") for r in plan.reads) else "reading…")
+                    if any(r.get("list_sources") or r.get("describe_source")
+                           or r.get("list_operations") or r.get("describe_operation")
+                           for r in plan.reads):
+                        emit.status("exploring…")
+                    else:
+                        emit.status("searching…" if any(r.get("grep") for r in plan.reads) else "reading…")
                     gathered.extend(self._do_reads(plan.reads))
                     emit.emit(ProgressEvent(type=EVENT_READ, step=steps,
                                             data={"reads": len(plan.reads)}))

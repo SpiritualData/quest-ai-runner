@@ -1,6 +1,12 @@
 """Core loop: plan -> read -> re-plan -> answer, plus deep / confirm / cap fallback."""
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.core.orchestrator import (
+    Orchestrator,
+    OrchestratorConfig,
+    _render_gathered,
+    _render_gathered_for_planner,
+    _summarize_observation,
+)
 
 from .conftest import StubDeepRunner, StubEscalation, StubProvider, StubRetrieval
 
@@ -131,3 +137,67 @@ def test_cap_with_nothing_gathered_escalates_to_deep():
     ).run("hard thing")
     assert res.kind == "deep"
     assert res.deep_results and res.deep_results[0].met is True
+
+
+# --- per-step planner-view leaning (compress older gathered) --------------------------------
+
+def _read_obs(path: str, body: str) -> dict:
+    return {"kind": "read", "rel_path": path, "locator": "head", "text": body}
+
+
+def test_planner_view_unchanged_below_threshold():
+    # With few observations the planner view is byte-for-byte the full render (back-compat).
+    gathered = [_read_obs(f"f{i}.md", f"body {i}") for i in range(3)]
+    full = _render_gathered(gathered)
+    lean = _render_gathered_for_planner(gathered, recent_full=4, compress_over=6)
+    assert lean == full
+    assert _render_gathered_for_planner([], recent_full=4, compress_over=6) == "[]"
+
+
+def test_planner_view_compresses_older_keeps_recent_full():
+    big = "X" * 500  # a long body so compression to a one-line summary is observable
+    gathered = [_read_obs(f"f{i}.md", f"unique-body-{i} " + big) for i in range(10)]
+    lean = _render_gathered_for_planner(gathered, recent_full=2, compress_over=6)
+    full = _render_gathered(gathered)
+    # Older observations collapse to one line (path + truncated head), so the verbose bodies drop.
+    assert "EARLIER READS (8)" in lean
+    assert len(lean) < len(full)
+    assert lean.count(big) == 2               # only the 2 newest keep their full body
+    assert full.count(big) == 10
+    assert "f0.md" in lean                     # ...but every older source is still listed by path
+    # The two newest are rendered in full (body visible).
+    assert "unique-body-8" in lean
+    assert "unique-body-9" in lean
+
+
+def test_summarize_observation_grep_and_read():
+    grep = {"kind": "grep", "pattern": "pricing", "scope": "docs",
+            "hits": [{"rel_path": "a.md", "line_no": 1, "line": "x"},
+                     {"rel_path": "b.md", "line_no": 2, "line": "y"}]}
+    s = _summarize_observation(grep)
+    assert "GREP 'pricing'" in s and "2 hit(s)" in s and "a.md" in s
+    read = _read_obs("doc.md", "the body text here")
+    assert "doc.md" in _summarize_observation(read)
+
+
+def test_loop_feeds_lean_view_to_planner_on_replan():
+    # Force a long read chain past the threshold, then assert the LAST plan prompt is the lean view
+    # (older bodies compressed) while the final ANSWER grounding still sees every body.
+    reads = [
+        {"action": "read", "reads": [{"rel_path": f"f{i}.md"}], "rationale": "r"}
+        for i in range(8)
+    ]
+    provider = StubProvider(decisions=reads + [{"action": "answer", "rationale": "done"}])
+    big = "Z" * 400
+    files = {f"f{i}.md": f"GROUNDING unique-body-{i} " + big for i in range(8)}
+    retrieval = StubRetrieval(files)
+    cfg = OrchestratorConfig(max_steps=12, planner_recent_full=2, planner_compress_over=4)
+    res = _orch(provider, retrieval, config=cfg).run("question")
+    assert res.kind == "answer"
+    last_prompt = provider.last_plan_prompt
+    assert "EARLIER READS" in last_prompt          # leaning engaged on later steps
+    # The oldest full bodies are compressed out of the planner view (only recent kept verbatim).
+    assert last_prompt.count(big) <= cfg.planner_recent_full
+    answer_grounding = "\n".join(m["content"] for m in provider.last_answer_messages)
+    assert "unique-body-0" in answer_grounding        # ...but the answer still sees all of it
+    assert answer_grounding.count(big) >= 7           # every read's full body is in the grounding

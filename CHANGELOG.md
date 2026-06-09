@@ -7,6 +7,17 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Leaner per-step planner view (older `gathered` compressed)** — the bounded plan→gather→re-plan
+  loop re-fed the cheap PLANNER the ENTIRE cumulative `gathered` blob verbatim on every step, which
+  grows fast on multi-read runs. The planner now sees a LEANER view: the newest
+  `OrchestratorConfig.planner_recent_full` observations in full, and everything older collapsed to a
+  one-line summary (source/path + key finding) so the planner still knows the ground it covered and
+  won't re-issue the same read. The full `gathered` is unchanged and is still what the final ANSWER
+  is synthesized from — only the planner's per-step input is trimmed. Two new config knobs (both
+  additive, defaulted): `planner_recent_full` (default 4) and `planner_compress_over` (default 6);
+  compression only engages once `gathered` exceeds `planner_compress_over` observations, so short
+  runs are byte-for-byte identical to before. New helpers `_render_gathered_for_planner` and
+  `_summarize_observation` in `core/orchestrator.py`; `_render_gathered` (full render) is untouched.
 - **Task handler stamp + live execution-progress stream** — the runner now records WHO ran a task
   and streams its execution lifecycle to the task, so a Quest task-detail view can show "handled by
   X" and a live progress feed. `QuestClient.claim(task_id, handler=None)` stamps the handler on the
