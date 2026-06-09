@@ -7,6 +7,16 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Stop re-sending unchanged transcript + context to the planner on re-plan steps** — within a
+  single run the recent `transcript` and the static `context_view` never change between steps, yet
+  the loop re-sent BOTH in full to the cheap PLANNER on every re-plan step (the prior wave only
+  leaned out `gathered`). New additive `OrchestratorConfig.planner_abbreviate_repeat_context`
+  (default `False` → byte-for-byte current behavior): when enabled, step 1 still sees the FULL
+  transcript + context_view, and later re-plan steps swap them for a short "(unchanged since step
+  1 — already provided)" reference note, so the planner focuses on the NEW `gathered` observations
+  it's there to react to. The final ANSWER path is untouched — it always grounds on the full
+  transcript + context_view, so answer grounding is never weakened. `_plan` gained a keyword-only
+  `step` argument; empty transcript/context are left as-is (no note injected).
 - **Resource-aware throttling (graceful pause under system overload)** — a long-running lane can
   now notice host overload and stop taking on NEW work instead of thrashing, resuming automatically
   once resources recover. New stdlib-only `quest_ai_runner/resources.py`: `ResourceLimits` (all

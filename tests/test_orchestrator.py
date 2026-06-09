@@ -201,3 +201,78 @@ def test_loop_feeds_lean_view_to_planner_on_replan():
     answer_grounding = "\n".join(m["content"] for m in provider.last_answer_messages)
     assert "unique-body-0" in answer_grounding        # ...but the answer still sees all of it
     assert answer_grounding.count(big) >= 7           # every read's full body is in the grounding
+
+
+# --- cross-step repeat-context leaning (abbreviate unchanged transcript + context_view) ----------
+
+_TRANSCRIPT = "USER: earlier thing\nASSISTANT: earlier reply\nUSER: the latest message"
+_CONTEXT = "CONTEXT-MARKER: a long static context block that locates lots of content"
+
+
+def _read_then_answer_provider():
+    return StubProvider(decisions=[
+        {"action": "read", "reads": [{"rel_path": "f.md"}], "rationale": "read"},
+        {"action": "answer", "rationale": "answer"},
+    ])
+
+
+def test_repeat_context_off_resends_full_on_replan():
+    # Default (knob off): every plan prompt — step 1 AND re-plan — carries the full transcript
+    # + context_view, byte-for-byte the prior behavior.
+    provider = _read_then_answer_provider()
+    retrieval = StubRetrieval({"f.md": "GROUNDING body"})
+    res = _orch(provider, retrieval).run(
+        "q", transcript=_TRANSCRIPT, context_view=_CONTEXT)
+    assert res.kind == "answer"
+    assert len(provider.plan_prompts) == 2
+    for p in provider.plan_prompts:
+        assert _CONTEXT in p
+        assert "the latest message" in p             # full transcript present each step
+    assert "unchanged since step 1" not in provider.plan_prompts[0]
+    assert "unchanged since step 1" not in provider.plan_prompts[1]
+
+
+def test_repeat_context_on_step1_full_replan_abbreviated():
+    # Knob on: step 1 sees the full transcript + context; later re-plan steps see only the
+    # reference notes, not the unchanged context again.
+    provider = _read_then_answer_provider()
+    retrieval = StubRetrieval({"f.md": "GROUNDING body"})
+    cfg = OrchestratorConfig(planner_abbreviate_repeat_context=True)
+    res = _orch(provider, retrieval, config=cfg).run(
+        "q", transcript=_TRANSCRIPT, context_view=_CONTEXT)
+    assert res.kind == "answer"
+    assert len(provider.plan_prompts) == 2
+    step1, replan = provider.plan_prompts[0], provider.plan_prompts[1]
+    # Step 1: full context + transcript.
+    assert _CONTEXT in step1
+    assert "the latest message" in step1
+    assert "unchanged since step 1" not in step1
+    # Re-plan: the unchanged context + transcript are replaced by reference notes.
+    assert _CONTEXT not in replan
+    assert "the latest message" not in replan
+    assert "unchanged since step 1" in replan
+
+
+def test_repeat_context_on_answer_still_gets_full_context():
+    # Even with the knob on, the final ANSWER grounding must carry the full transcript + context.
+    provider = _read_then_answer_provider()
+    retrieval = StubRetrieval({"f.md": "GROUNDING body"})
+    cfg = OrchestratorConfig(planner_abbreviate_repeat_context=True)
+    res = _orch(provider, retrieval, config=cfg).run(
+        "q", transcript=_TRANSCRIPT, context_view=_CONTEXT)
+    assert res.kind == "answer"
+    grounding = "\n".join(m["content"] for m in provider.last_answer_messages)
+    assert _CONTEXT in grounding                       # full context_view reaches the answer
+    assert "the latest message" in grounding           # full transcript reaches the answer
+    assert "unchanged since step 1" not in grounding   # no abbreviation leaks into the answer
+
+
+def test_repeat_context_on_does_not_abbreviate_when_empty():
+    # With no transcript/context, the knob is a no-op (no reference notes injected).
+    provider = _read_then_answer_provider()
+    retrieval = StubRetrieval({"f.md": "GROUNDING body"})
+    cfg = OrchestratorConfig(planner_abbreviate_repeat_context=True)
+    res = _orch(provider, retrieval, config=cfg).run("q")
+    assert res.kind == "answer"
+    for p in provider.plan_prompts:
+        assert "unchanged since step 1" not in p

@@ -71,6 +71,15 @@ DEFAULT_MAX_GATHER_CHARS = 6000
 # used verbatim for the final ANSWER synthesis; only the per-step PLANNER view is leaned out.
 DEFAULT_PLANNER_RECENT_FULL = 4      # newest N observations rendered in full to the planner
 DEFAULT_PLANNER_COMPRESS_OVER = 6    # leave gathered untouched until it exceeds this many obs
+# Cross-step repeat-context leaning: within a SINGLE run the transcript and the static
+# context_view never change between steps, yet the prior wave re-sent BOTH in full to the planner
+# on every re-plan step. On re-plan steps the planner's job is to REACT to the new ``gathered``
+# observations, not to re-read context it already saw on step 1. When enabled, steps after the
+# first replace the unchanged transcript + context_view with a short "already provided on step 1"
+# reference. This NEVER affects step 1 (the planner still sees both in full) and NEVER affects the
+# final ANSWER (which always gets the full transcript + context_view). Default off → byte-for-byte
+# current behavior unless a consumer opts in.
+DEFAULT_PLANNER_ABBREVIATE_REPEAT_CONTEXT = False
 
 
 # ===========================================================================
@@ -226,6 +235,10 @@ class OrchestratorConfig:
     # kept for the final answer; these only trim what the cheap PLANNER re-reads each re-plan step.
     planner_recent_full: int = DEFAULT_PLANNER_RECENT_FULL
     planner_compress_over: int = DEFAULT_PLANNER_COMPRESS_OVER
+    # On re-plan steps (step > 1), replace the unchanged transcript + static context_view with a
+    # short reference note (they were sent in full on step 1). Default off → unchanged behavior.
+    # The final ANSWER path is never affected — it always grounds on the full transcript/context.
+    planner_abbreviate_repeat_context: bool = DEFAULT_PLANNER_ABBREVIATE_REPEAT_CONTEXT
 
 
 @dataclass
@@ -375,6 +388,21 @@ def _render_gathered_for_planner(gathered: List[Dict[str, Any]],
         parts.append(f"--- MOST RECENT READS ({len(recent)}), in full ---")
         parts.append(_render_gathered(recent))
     return "\n\n".join(parts)
+
+
+# A re-plan step re-sends the SAME transcript + context_view it already sent on step 1 (neither
+# changes within one run). These reference notes stand in for them on later steps when
+# ``planner_abbreviate_repeat_context`` is on, so the planner focuses on the NEW gathered
+# observations without re-reading unchanged context. The wording tells the planner the content is
+# unchanged and was already provided, so it doesn't treat the absence as "no context".
+_REPLAN_TRANSCRIPT_REF = (
+    "(unchanged since step 1 — the full recent transcript was provided then; "
+    "nothing new has been added this turn)"
+)
+_REPLAN_CONTEXT_REF = (
+    "(unchanged since step 1 — the full CONTEXT was provided then and has not changed; "
+    "focus on the NEW gathered observations below)"
+)
 
 
 def _grounding_block(context_view: str, gathered: List[Dict[str, Any]], partial: bool) -> str:
@@ -558,11 +586,22 @@ class Orchestrator:
     # --- planner call --------------------------------------------------------
 
     def _plan(self, user_message: str, transcript: str, context_view: str,
-              gathered: List[Dict[str, Any]]) -> PlanDecision:
+              gathered: List[Dict[str, Any]], *, step: int = 0) -> PlanDecision:
+        # Step 1 (step == 0) always sees the FULL transcript + context_view. On later re-plan
+        # steps, if the consumer opted in, swap the (unchanged) transcript + context_view for a
+        # short reference note — the planner's job there is to react to the NEW gathered
+        # observations, not to re-read context it already saw. The ANSWER path is untouched.
+        plan_transcript = transcript
+        plan_context = context_view
+        if step > 0 and self.cfg.planner_abbreviate_repeat_context:
+            if transcript:
+                plan_transcript = _REPLAN_TRANSCRIPT_REF
+            if context_view:
+                plan_context = _REPLAN_CONTEXT_REF
         prompt = PLANNER_PROMPT.format(
             user_message=user_message,
-            transcript=transcript or "(no prior messages)",
-            context_view=context_view or "(no context)",
+            transcript=plan_transcript or "(no prior messages)",
+            context_view=plan_context or "(no context)",
             gathered=_render_gathered_for_planner(
                 gathered, self.cfg.planner_recent_full, self.cfg.planner_compress_over),
             max_reads=self.cfg.max_reads_per_step,
@@ -770,7 +809,7 @@ class Orchestrator:
             steps = step + 1
             emit.status("planning…" if step == 0 else "re-planning…")
             try:
-                plan = self._plan(user_message, transcript, context_view, gathered)
+                plan = self._plan(user_message, transcript, context_view, gathered, step=step)
             except Exception:  # noqa: BLE001 — planner failure -> grounded fallback answer
                 plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
             emit.emit(ProgressEvent(type=(EVENT_PLAN if step == 0 else EVENT_REPLAN),
