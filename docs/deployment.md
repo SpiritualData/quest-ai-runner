@@ -19,6 +19,11 @@ All configuration is environment-driven (see [`.env.example`](../.env.example)):
 | `QAR_CLAUDE_PATH` | optional | the deep-runner worker binary (default `claude`) |
 | `QAR_STATE_PATH` | optional | signature dedup store (default `qar_state.json`) |
 | `QAR_POLL_INTERVAL` | optional | loop cadence in seconds (default 900) |
+| `QAR_MAX_MEMORY_PERCENT` | optional | pause pickup when memory usage exceeds this % |
+| `QAR_MIN_FREE_MEMORY_MB` | optional | pause pickup when available memory drops below this MB |
+| `QAR_MAX_LOAD_PER_CORE` | optional | pause pickup when 1-min load per CPU core exceeds this |
+| `QAR_RESOURCE_RESUME_MARGIN` | optional | hysteresis % a tripped limit must clear to resume (default 10) |
+| `QAR_RESOURCE_CHECK_INTERVAL` | optional | seconds between re-checks while paused (default 30) |
 
 ## Validate first
 
@@ -81,6 +86,33 @@ There is no separate scheduling plumbing. The poller discovers via
 
 So the timing layer is Quest; the runner is timing-agnostic. See
 [quest-api-contract.md](quest-api-contract.md).
+
+## Resource-aware throttling (overload protection)
+
+The deep-runner spawns a coding agent per task, which is the heaviest thing the lane does. If the
+host can't take more (memory nearly exhausted, load climbing), the runner can pause gracefully
+instead of thrashing. Disabled by default; opt in by setting any of the `QAR_MAX_MEMORY_PERCENT`,
+`QAR_MIN_FREE_MEMORY_MB` (remaining-resource form), or `QAR_MAX_LOAD_PER_CORE` limits — or pass a
+`ResourceLimits` on `RunnerConfig.resource_limits` in code.
+
+How it behaves while a limit is tripped:
+
+- **New pickup pauses; nothing is lost.** The runner stops discovering/claiming. Queued tasks
+  stay queued on the backend and run on a later scan once resources recover. In-flight tasks are
+  never killed, and the heartbeat keeps firing so the backend still sees the env as live.
+- **It notices, loudly.** Entering overload logs a WARNING naming the tripped limits and the
+  measured values; recovery logs at INFO. Watch `journalctl` (or your log sink) for
+  `system overload detected`.
+- **It resumes promptly.** In loop mode the runner re-checks every `QAR_RESOURCE_CHECK_INTERVAL`
+  seconds (default 30) instead of waiting out a full poll interval. `QAR_RESOURCE_RESUME_MARGIN`
+  (default 10%) is the hysteresis: a tripped metric must clear its limit by that margin before
+  pickup resumes, so a value hovering at the boundary doesn't flap the lane on and off.
+- **Mid-scan protection.** Each task in a batch re-checks before being claimed, so a batch that
+  itself pushes the host over the limit defers its remaining tasks to a later scan.
+
+Sampling is stdlib-only (`/proc/meminfo` on Linux, `os.getloadavg` on Unix); installing `psutil`
+extends memory sampling to other platforms. A configured limit whose metric this host can't read
+is logged once and skipped, never enforced blind.
 
 ## Operational notes
 

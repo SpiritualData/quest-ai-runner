@@ -5,7 +5,7 @@ Generic, no consumer-specific logic. Three consumers:
   * Integrating orgs / a personal lane run ``quest_ai_runner.runner`` (the Poller).
 Consumers supply everything specific via ``quest_ai_runner.config.RunnerConfig``.
 """
-from . import adapters, config, core, runner
+from . import adapters, config, core, resources, runner
 
 __version__ = "0.1.0"
-__all__ = ["core", "adapters", "runner", "config", "__version__"]
+__all__ = ["core", "adapters", "runner", "config", "resources", "__version__"]

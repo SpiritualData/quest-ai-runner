@@ -13,6 +13,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from .core.adapters import DeepRunner, EscalationSink, ModelProvider, RetrievalAdapter
 from .core.model_registry import ModelRegistry
 from .core.orchestrator import Orchestrator, OrchestratorConfig
+from .resources import ResourceLimits
 
 
 @dataclass
@@ -41,6 +42,13 @@ class RunnerConfig:
     poll_lookahead_minutes: float = 30.0
     max_concurrent_tasks: int = 2
     default_assignee_user_id: Optional[str] = None   # decision routing default
+
+    # --- resource-aware throttling (opt-in; see quest_ai_runner/resources.py) ---
+    # None = read the limits from the QAR_* env vars at poller construction (all unset = guard
+    # disabled). Pass an explicit ResourceLimits to set them in code; ResourceLimits() disables
+    # the guard regardless of env. When enabled, the poller stops PICKING UP new tasks while the
+    # host is overloaded and resumes once resources recover — queued tasks just wait, unharmed.
+    resource_limits: Optional[ResourceLimits] = None
 
     # --- AI-rep skill-file sync (opt-in; OFF by default) ---
     # When set, the poller pulls the latest AI-rep profile from Quest into the rep's local Claude

@@ -7,6 +7,20 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Resource-aware throttling (graceful pause under system overload)** — a long-running lane can
+  now notice host overload and stop taking on NEW work instead of thrashing, resuming automatically
+  once resources recover. New stdlib-only `quest_ai_runner/resources.py`: `ResourceLimits` (all
+  limits OFF by default; set via `RunnerConfig.resource_limits` or env — `QAR_MAX_MEMORY_PERCENT`,
+  `QAR_MIN_FREE_MEMORY_MB` for the remaining-resource form, `QAR_MAX_LOAD_PER_CORE`, plus
+  `QAR_RESOURCE_RESUME_MARGIN` hysteresis (default 10%) and `QAR_RESOURCE_CHECK_INTERVAL` re-check
+  cadence while paused (default 30s)) and `ResourceGuard` (samples `/proc/meminfo` /
+  `os.getloadavg`, optional `psutil` fallback; logs a WARNING naming the tripped limits on entering
+  overload and INFO on recovery; an unreadable metric disables its limit, warned once). The pause is
+  LOSSLESS by design: the poller gates pickup before discovery (heartbeat still fires so the env
+  stays live), re-checks per task mid-batch (deferring before mark/claim so the task re-fires), and
+  `run_forever` waits at the guard's shorter re-check cadence while paused so the lane resumes
+  promptly. Unclaimed tasks stay queued on the backend; in-flight tasks are never killed. Nothing
+  configured → the guard is a no-op (backward compatible).
 - **Leaner per-step planner view (older `gathered` compressed)** — the bounded plan→gather→re-plan
   loop re-fed the cheap PLANNER the ENTIRE cumulative `gathered` blob verbatim on every step, which
   grows fast on multi-read runs. The planner now sees a LEANER view: the newest

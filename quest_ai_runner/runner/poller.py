@@ -11,6 +11,9 @@ This is the personal ``personal_watchdog.py`` made generic. The reusable essence
     is logged and the loop continues; a bad spawn never kills the poller.
   * BOUNDED CONCURRENCY — at most ``max_concurrent_tasks`` run at once (the async-spawn essence,
     bounded). The poller claims, hands each task to the TaskExecutor, and reports back.
+  * RESOURCE-AWARE PICKUP (opt-in) — when the host is overloaded (memory/load limits from
+    ``ResourceLimits``), the poller pauses NEW task pickup instead of thrashing: an unclaimed
+    task stays queued on the backend, so it simply runs on a later scan once resources recover.
 
 Run modes (like the watchdog): ``run_once()`` for cron, ``run_forever()`` for a service.
 """
@@ -25,6 +28,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..config import RunnerConfig, build_orchestrator, derive_capabilities
+from ..resources import ResourceGuard, ResourceLimits
 from .executor import TaskExecutor
 from .quest_client import QuestApiError, QuestClient, QuestDecisionSink, QuestNotConfigured
 
@@ -82,8 +86,16 @@ class StateStore:
 
 class Poller:
     def __init__(self, config: RunnerConfig, *, state_path: Optional[str] = None,
-                 client: Optional[QuestClient] = None):
+                 client: Optional[QuestClient] = None,
+                 resource_guard: Optional[ResourceGuard] = None):
         self.cfg = config
+        # Resource-aware pickup (opt-in): explicit guard > config limits > QAR_* env vars.
+        # With nothing configured the guard is disabled and every check is a cheap no-op.
+        if resource_guard is None:
+            limits = config.resource_limits if config.resource_limits is not None \
+                else ResourceLimits.from_env()
+            resource_guard = ResourceGuard(limits)
+        self.resources = resource_guard
         self.client = client or QuestClient(
             config.quest_base_url, config.quest_api_key, team_id=config.team_id)
         # Default the escalation sink to a Quest decision-request sink if the consumer didn't set one.
@@ -114,6 +126,14 @@ class Poller:
         # even on a scan that finds no due tasks. Best-effort, like progress-posting: a failed
         # heartbeat is logged and never blocks discovery/execution.
         self._emit_heartbeat()
+        # Resource gate AFTER the heartbeat (the backend should still see the env as live) but
+        # BEFORE discovery/claiming: an overloaded host takes on NO new work this scan. Skipping
+        # is lossless — unclaimed tasks stay queued and fire on a later scan once resources
+        # recover (in_progress work is never touched).
+        if self.resources.check():
+            log.info("host overloaded — skipping task pickup this scan; queued tasks will run "
+                     "once resources recover")
+            return []
         try:
             # Pass the lane's team_id so discovery is ISOLATED per team: two teams under the same
             # owner share one owner-scoped queue, and an unscoped poll would pull BOTH teams' tasks.
@@ -163,6 +183,12 @@ class Poller:
     def _handle_one(self, task: Dict[str, Any]) -> Optional[str]:
         sig = _task_signature(task)
         task_id = str(task.get("id") or task.get("task_id") or "")
+        # Re-check resources PER TASK: overload can begin mid-scan (earlier tasks in this very
+        # batch may be what pushed the host over). Defer BEFORE marking/claiming, so the task is
+        # re-discovered and runs on a later scan once resources recover.
+        if self.resources.check():
+            log.info("host overloaded — deferring task %s to a later scan", task_id)
+            return None
         # Resolve WHO will run this (the AI representation/skill) so we can stamp it on the claim:
         # the rep slug if a rep_sync_resolver maps this task to a skill dir, else the runner label.
         target = self._resolve_rep_target(task)
@@ -234,6 +260,10 @@ class Poller:
         import time
         interval = self.cfg.poll_interval_seconds
         while True:
+            # While the host is overloaded, wait at the guard's (shorter) re-check cadence rather
+            # than burning full poll cycles — so the lane RESUMES promptly when resources recover.
+            if not self.resources.wait_until_ok(stop_event=stop_event):
+                return  # stopped while paused
             try:
                 self.run_once()
             except Exception as e:  # noqa: BLE001 — a transient error must not kill the loop

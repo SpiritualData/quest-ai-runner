@@ -15,6 +15,14 @@ Env it reads:
   QAR_ENV_ID (optional)                          — which of the team's environments this runner is
                                                    (omit = the team's default env; set a distinct id
                                                    per runner when a team attaches SEVERAL)
+  QAR_MAX_MEMORY_PERCENT (optional)              — pause new task pickup when system memory usage
+                                                   exceeds this percent; resume when it recovers
+  QAR_MIN_FREE_MEMORY_MB (optional)              — pause when available memory drops below this MB
+  QAR_MAX_LOAD_PER_CORE (optional)               — pause when 1-min load average per CPU core
+                                                   exceeds this (e.g. 2.0)
+  QAR_RESOURCE_RESUME_MARGIN (optional, %)       — hysteresis: a tripped metric must clear its
+                                                   limit by this percent before resuming (default 10)
+  QAR_RESOURCE_CHECK_INTERVAL (optional, secs)   — re-check cadence while paused (default 30)
   QAR_MODEL_BACKEND (optional)                   — "anthropic" | "claude_cli". Default: auto —
                                                    "anthropic" if ANTHROPIC_API_KEY is set, else
                                                    "claude_cli" (keyless, via the subscription login).
