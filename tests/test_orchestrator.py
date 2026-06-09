@@ -314,6 +314,21 @@ def test_model_hint_overrides_planner_tier_on_answer():
     assert provider.answer_models == [expected_opus]
 
 
+def test_model_hint_does_not_touch_planner_calls():
+    """The hint applies to answer/deep steps ONLY: the planner's own structured calls stay on
+    the cheap configured planner tier (deliberate — a hint must not make planning expensive)."""
+    provider = _ModelCapturingProvider(decisions=[
+        {"action": "answer", "rationale": "ok"},
+    ])
+    retrieval = StubRetrieval({"f.md": "x"})
+    res = _orch(provider, retrieval).run("q", model_hint="opus")
+    assert res.kind == "answer"
+    from quest_ai_runner.core.model_registry import ModelRegistry
+    registry = ModelRegistry(provider)
+    expected_planner = registry.resolve_tier("haiku")  # OrchestratorConfig.planner_tier default
+    assert provider.plan_models == [expected_planner]
+
+
 def test_model_hint_absent_leaves_planner_tier_unchanged():
     """Without model_hint, the planner's model_tier is used exactly as before."""
     provider = _ModelCapturingProvider(decisions=[

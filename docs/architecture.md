@@ -76,7 +76,7 @@ These two terms appear throughout the docs and are worth keeping distinct:
 **Brain** (`core/`, specifically `core/orchestrator.py`). The in-process, synchronous, domain-free
 reasoning loop. It takes adapters, runs the bounded `plan → gather → re-plan → answer/deep/confirm`
 cycle for a single request, and returns an `OrchestratorResult`. It knows nothing about tasks,
-polling, databases, or any specific org — that is the point. The brain can be imported and called
+polling, databases, or any specific org: that is the point. The brain can be imported and called
 directly by a backend or chat handler with no poller in the picture.
 
 **Runner** (`runner/`, the "lane"). The executor Quest is missing: a `poll → claim → run →

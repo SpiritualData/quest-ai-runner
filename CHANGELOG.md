@@ -9,10 +9,12 @@ All notable changes to this project are documented here. The format is based on
 ### Added
 - **Per-run model hint** — callers can now pass an opaque `model_hint` string to
   `Orchestrator.run()` and `Orchestrator.run_stream()` to override the tier used for answer and
-  deep steps in that run. The hint is consumer-defined (a tier name, a model id, or any string the
-  consumer's `ModelProvider` and `ModelRegistry` understand); the registry resolves it exactly as
-  it resolves a planner-chosen tier, so unknown values degrade gracefully to the "sonnet" default
-  rather than raising. Absent/`None` means exactly the prior behavior. `TaskExecutor.execute()`
+  deep steps in that run. The hint is consumer-defined: a tier name, or any string the consumer's
+  `ModelRegistry` understands. The registry resolves it exactly as it resolves a planner-chosen
+  tier, so unknown values degrade gracefully to the "sonnet" default rather than raising (note: the
+  default registry resolves only the tier names, so a raw model id needs a registry that
+  understands it). The hint applies to answer and deep steps only; the planner's own cheap calls
+  stay on the configured planner tier. Absent/`None` means exactly the prior behavior. `TaskExecutor.execute()`
   automatically surfaces a `"model"` field on the task document as the `model_hint`, so a stored
   per-task model override reaches the orchestrator with no extra code in the consumer's poller.
   Precedence inside one run: `model_hint` > `plan.model_tier` (planner's own choice) >
@@ -20,6 +22,20 @@ All notable changes to this project are documented here. The format is based on
   reaches `provider.answer`, absent hint leaves planner tier unchanged, hint on a deep step,
   unknown hint degrades gracefully, executor task-model field is forwarded, explicit `None` is
   treated as absent, and the full poller path.
+- **Discovery contract on retrieval adapters** — `RetrievalAdapter` gains four optional discovery
+  methods (`list_sources`, `describe_source(name, path=None)`, `list_operations`,
+  `describe_operation(name)`) that make a source self-describing, so the planner asks what exists
+  instead of needing a static schema blob in its prompt. The pattern is cheap-then-drill-down: a
+  LIST call returns names plus one-liners, a DESCRIBE call returns detail for one item. All four
+  return `Observation(kind="query")` and never raise; `RetrievalAdapterBase` ships benign
+  "nothing to discover" defaults so existing subclasses keep working unchanged. The orchestrator
+  dispatches the four read specs via `getattr`, so a structural adapter that predates the methods
+  degrades to a "discovery not supported" observation (back-compat), and discovery specs fan out
+  in parallel with the rest of the `reads[]` step. Reference implementations: `FilesAdapter`
+  enumerates readable files (capped at 500) and returns a markdown heading outline per file;
+  `CachedDbAdapter` accepts optional `sources` / `operations` / `describe` metadata at
+  construction and falls back to inferring a schema from a sample row. 15 new offline tests in
+  `tests/test_discovery.py`.
 - **Stop re-sending unchanged transcript + context to the planner on re-plan steps** — within a
   single run the recent `transcript` and the static `context_view` never change between steps, yet
   the loop re-sent BOTH in full to the cheap PLANNER on every re-plan step (the prior wave only

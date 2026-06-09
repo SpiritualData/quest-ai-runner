@@ -49,8 +49,8 @@ class TaskExecutor:
         # conversation doesn't go silent after the hand-off.
         conv_id = task.get("conv_id") or None
         # model_hint: an optional per-task model/tier string stored by the consumer on the task
-        # document (e.g. "quality", "opus", or any tier/id the consumer's ModelProvider knows).
-        # Threaded into the orchestrator so the provider can honor it. None = default behavior.
+        # document (e.g. "opus", or any string the consumer's ModelRegistry understands).
+        # Threaded into the orchestrator so the registry can honor it. None = default behavior.
         model_hint: Optional[str] = task.get("model") or None
         if not text:
             self._report_progress(task_id, "error", text="task had no instruction text to run")

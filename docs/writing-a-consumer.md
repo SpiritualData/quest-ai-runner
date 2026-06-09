@@ -99,8 +99,9 @@ class ModelProvider(Protocol):
 Your provider can wrap any SDK. Because the library's `core` never imports a provider directly,
 you can add your own logging, analytics, or cost-triage inside the adapter without touching the
 brain. **The core ships with zero non-stdlib dependencies and never imports your LLM wrapper.**
-The only built-in provider (`AnthropicProvider`) lives in `quest_ai_runner/adapters/`, not in
-`core/`, and is installed via the optional `[anthropic]` extra.
+The built-in providers live in `quest_ai_runner/adapters/`, not in `core/`: `AnthropicProvider`
+(SDK-backed, installed via the optional `[anthropic]` extra) and `ClaudeCliProvider` (drives the
+local `claude` CLI headless and keyless, no extra dependency).
 
 A minimal wrapper example:
 
@@ -165,6 +166,26 @@ orch = Orchestrator(retrieval=..., provider=my_provider, registry=registry)
 If your provider's `list_models()` returns ids that contain `"haiku"`, `"sonnet"`, or `"opus"`
 as substrings, the registry auto-buckets them and the fallback is never used. The fallback is only
 the last-resort when the live list is empty or unreachable.
+
+### Per-run model override (`model_hint`)
+
+By default the planner picks a tier per step. To override that for one run, pass `model_hint` to
+`Orchestrator.run()` or `run_stream()`:
+
+```python
+res = orch.run("summarize the quarter", model_hint="opus")
+```
+
+The hint is an opaque string resolved by your `ModelRegistry` exactly like a planner-chosen tier,
+with precedence `model_hint` > `plan.model_tier` > the step's default tier. It applies to answer
+and deep steps only; the planner's own cheap structured calls stay on the configured planner tier.
+A value the registry does not understand degrades to the registry default ("sonnet") rather than
+raising. Note that the default registry resolves only the tier names (`haiku`/`sonnet`/`opus`); if
+you want hints to carry raw model ids, supply a registry whose `resolve_tier` understands them.
+
+The runner wires this up for you: `TaskExecutor` forwards a task document's optional `"model"`
+field as the `model_hint`, so a per-task model override stored on the task is honored at execution
+time with no extra code in your poller.
 
 ## Next
 
