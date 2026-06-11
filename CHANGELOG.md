@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Configurable planner tier + answer timeout (env)** — the CLI now reads two optional env vars so
+  a consumer can tune the brain without code: `QAR_PLANNER_TIER` sets the model tier for the planner
+  step that picks read/answer/deep (default stays the cheap `haiku`; raise to e.g. `sonnet` when
+  tasks are mostly real work so answer-vs-deep routing is decided by a more capable model), and
+  `QAR_ANSWER_TIMEOUT` raises the per-call wall-clock cap for the `claude_cli` planner/answer backend
+  above its conservative 180s default (headless completions over a large corpus can exceed it).
+  Both are plumbed through existing config (`RunnerConfig.orchestrator.planner_tier`,
+  `ClaudeCliProvider.timeout_seconds`); absent = prior behavior.
 - **Per-run model hint** — callers can now pass an opaque `model_hint` string to
   `Orchestrator.run()` and `Orchestrator.run_stream()` to override the tier used for answer and
   deep steps in that run. The hint is consumer-defined: a tier name, or any string the consumer's

@@ -9,6 +9,11 @@ Env it reads:
   QAR_CORPUS_ROOT                                — file root for the FilesAdapter (grounding)
   QAR_DEEP_WORKING_DIR                           — working dir for the subprocess deep-runner
   QAR_CLAUDE_PATH (optional)                     — the worker binary (default: claude on PATH)
+  QAR_ANSWER_TIMEOUT (optional, seconds)         — per-call cap for the claude_cli planner/answer
+                                                   backend (default 180; raise for large corpora)
+  QAR_PLANNER_TIER (optional)                    — model tier for the planner step that picks
+                                                   read/answer/deep (default haiku; raise to e.g.
+                                                   sonnet when tasks are mostly real work/edits)
   QAR_STATE_PATH (optional)                      — signature store path (default: ./qar_state.json)
   QAR_POLL_INTERVAL (optional, seconds)          — loop cadence (default 900)
   QAR_RUNNER_LABEL (optional)                    — human-readable tag sent on the env heartbeat
@@ -58,7 +63,12 @@ def _model_provider_from_env() -> ModelProvider:
     if not backend:
         backend = "anthropic" if os.getenv("ANTHROPIC_API_KEY") else "claude_cli"
     if backend == "claude_cli":
-        return ClaudeCliProvider(claude_path=os.getenv("QAR_CLAUDE_PATH", "claude"))
+        kwargs = {"claude_path": os.getenv("QAR_CLAUDE_PATH", "claude")}
+        # Headless completions over a large corpus can take a while; let the consumer raise the
+        # per-call wall-clock cap above the conservative default rather than failing the run.
+        if os.getenv("QAR_ANSWER_TIMEOUT"):
+            kwargs["timeout_seconds"] = float(os.environ["QAR_ANSWER_TIMEOUT"])
+        return ClaudeCliProvider(**kwargs)
     return AnthropicProvider()
 
 
@@ -85,6 +95,12 @@ def _config_from_env() -> RunnerConfig:
     )
     if os.getenv("QAR_POLL_INTERVAL"):
         cfg.poll_interval_seconds = float(os.environ["QAR_POLL_INTERVAL"])
+    # The planner step picks the next action (read/answer/deep/confirm). It defaults to a cheap
+    # tier; a consumer whose tasks are mostly real work (e.g. code edits) can raise it so the
+    # answer-vs-deep routing is decided by a more capable model.
+    planner_tier = (os.getenv("QAR_PLANNER_TIER") or "").strip().lower()
+    if planner_tier:
+        cfg.orchestrator.planner_tier = planner_tier
     return cfg
 
 
