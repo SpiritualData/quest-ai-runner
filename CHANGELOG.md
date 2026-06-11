@@ -7,6 +7,30 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Multimodal (image) + file-attachment support (the runner owns multimodal)** — the text
+  provider does not do multimodal, so the runner does. A new standard handler
+  `core/attachments.py` (`prepare_attachments(attachments, *, model, provider, vision_provider,
+  vision_model, max_attachment_bytes)`) takes in-memory attachment items
+  (`{filename, mime_type, data: bytes, kind: "image"|"file"}` — the SAME shape for chat uploads
+  and panel context-docs) and, per the answering model/provider, EITHER passes an image NATIVELY
+  (base64 content block) when the model is vision-capable and the provider can send blocks, OR
+  DESCRIBES it with a separate vision-capable provider (centralized `DESCRIBE_PROMPT`), OR
+  extracts a non-image file's text best-effort by type (txt/md/csv/json/code direct; pdf/docx via
+  an optional light extractor if installed; any other type accepted with a clear binary note —
+  never raises). Returns `native_blocks` (for the answer) and `text_context` (for the planner +
+  grounding). A new vision-capability seam `model_registry.is_vision_capable(model)` (keyed by
+  model FAMILY via `VISION_FAMILY_PATTERNS`: Claude 3.x/4.x, Gemini 1.5/2.x/3.x, gpt-4o/4.1/
+  o-series → vision; default False) is the ONE place capability is decided. `AnthropicProvider.
+  answer()` now passes a content-block LIST through to the SDK unflattened (plain-string path
+  unchanged); `ClaudeCliProvider` degrades a block list to text and never crashes (and declares
+  `supports_native_images = False`). `Orchestrator.run()`/`run_stream()` take a new optional
+  `attachments` list, fold the prepared text into the planner CONTEXT, and ride native image
+  blocks on the final answer message; the Orchestrator takes an optional `vision_provider` for the
+  describe-fallback (wired from `RunnerConfig.vision_provider`). Per-attachment 50 MB cap
+  (`config.MAX_ATTACHMENT_BYTES` / `attachments.DEFAULT_MAX_ATTACHMENT_BYTES`); attachments are
+  processed CONCURRENTLY. Offline tests cover the capability map, the SDK image passthrough, the
+  CLI degrade, native vs describe vs extract vs oversize vs unknown-binary, and the orchestrator
+  threading.
 - **Deep-run escalation marker (`QAR-ESCALATED: <decision_id>`)** — a spawned deep worker that
   raises a human-only decision mid-run (via whatever escalation mechanism its consumer preamble
   provides) can now report it back to the runner by printing `QAR-ESCALATED: <decision_id>` on its

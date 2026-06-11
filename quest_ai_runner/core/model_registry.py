@@ -14,12 +14,66 @@ the provider's list actually changes (the provider is expected to cache its own 
 """
 from __future__ import annotations
 
+import re
 from typing import Dict, List, Optional
 
 from .adapters import ModelProvider
 
 # Tier names in capability order (cheap -> expensive). The brain uses these names.
 TIERS = ("haiku", "sonnet", "opus")
+
+
+# ---------------------------------------------------------------------------
+# Vision-capability seam — the ONE place "can this model take images natively?"
+# is decided. The multimodal handler (core.attachments) and the orchestrator ask
+# HERE, never inline a model-name check of their own.
+#
+# Capability is keyed by MODEL FAMILY, not by pinned id, so newer dated/point
+# releases of a known-vision family resolve correctly without a registry edit:
+#   * Anthropic Claude 3.x / 4.x (opus | sonnet | haiku)   → vision
+#   * Google Gemini 1.5 / 2.x / 3.x                        → vision
+#   * OpenAI gpt-4o, gpt-4.1, and the o-series (o1/o3/o4)  → vision
+# Anything not matched (incl. unknown families and older text-only models) is
+# treated as NOT vision-capable, so we describe-fallback rather than send an
+# image to a model that would reject it. ``None``/empty → False.
+#
+# A consumer can extend this by appending to ``VISION_FAMILY_PATTERNS`` (e.g. to
+# teach the runner a new provider's vision family).
+# ---------------------------------------------------------------------------
+
+# Each entry is a compiled regex matched (case-insensitively) against the model id.
+VISION_FAMILY_PATTERNS = [
+    re.compile(p, re.IGNORECASE)
+    for p in (
+        # Anthropic Claude 3.x and 4.x — all tiers are vision-capable. Matches
+        # "claude-3-5-sonnet…", "claude-3-opus…", "claude-sonnet-4-6", "claude-opus-4-8",
+        # the family aliases ("opus"/"sonnet"/"haiku"), and Fable-style ids.
+        r"claude[-_]?3",
+        r"claude[-_]?(?:opus|sonnet|haiku)[-_]?4",
+        r"claude[-_]?4[-_]?(?:opus|sonnet|haiku)",
+        r"^(?:opus|sonnet|haiku)$",                 # bare CLI family aliases
+        # Google Gemini 1.5 / 2.x / 3.x — all vision-capable.
+        r"gemini[-_]?(?:1\.5|2|3)",
+        # OpenAI multimodal: gpt-4o, gpt-4.1, and the reasoning o-series (o1/o3/o4).
+        r"gpt[-_]?4o",
+        r"gpt[-_]?4\.1",
+        r"\bo[134]\b",
+        r"^o[134][-_]",
+    )
+]
+
+
+def is_vision_capable(model: Optional[str]) -> bool:
+    """Whether ``model`` can accept images as NATIVE input (vs. needing describe-fallback).
+
+    The single source of truth for vision capability. Keyed by model FAMILY (regex over the
+    id), so dated/point releases of a known family resolve without a registry change. Unknown
+    or text-only families → ``False``. Never raises.
+    """
+    mid = (model or "").strip()
+    if not mid:
+        return False
+    return any(p.search(mid) for p in VISION_FAMILY_PATTERNS)
 
 # LAST-KNOWN fallback ONLY — used when the live list is empty/unreachable. NOT the primary
 # source. A consumer can override this map via ModelRegistry(fallback=...).

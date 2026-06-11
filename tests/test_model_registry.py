@@ -1,8 +1,11 @@
 """model_registry bucketing — tier -> live top model id."""
+import pytest
+
 from quest_ai_runner.core.model_registry import (
     DEFAULT_FALLBACK_TOP,
     ModelRegistry,
     bucket_top,
+    is_vision_capable,
 )
 
 
@@ -62,3 +65,41 @@ def test_registry_survives_provider_exception():
     reg = ModelRegistry(Boom())
     # Must not raise; falls back.
     assert reg.resolve_tier("sonnet") == DEFAULT_FALLBACK_TOP["sonnet"]
+
+
+# --- vision-capability seam -------------------------------------------------
+
+@pytest.mark.parametrize("model", [
+    # Anthropic Claude 3.x / 4.x, all tiers + CLI aliases + the registry's fallbacks.
+    "claude-3-5-sonnet-20241022",
+    "claude-3-opus-20240229",
+    "claude-3-haiku-20240307",
+    "claude-sonnet-4-6",
+    "claude-opus-4-8",
+    "claude-haiku-4-5",
+    "opus", "sonnet", "haiku",
+    DEFAULT_FALLBACK_TOP["opus"],
+    DEFAULT_FALLBACK_TOP["sonnet"],
+    DEFAULT_FALLBACK_TOP["haiku"],
+    # Google Gemini 1.5 / 2.x / 3.x.
+    "gemini-1.5-pro", "gemini-2.0-flash", "gemini-3-pro",
+    # OpenAI multimodal families.
+    "gpt-4o", "gpt-4o-mini", "gpt-4.1", "o1", "o3-mini", "o4",
+])
+def test_is_vision_capable_true_for_known_vision_families(model):
+    assert is_vision_capable(model) is True
+
+
+@pytest.mark.parametrize("model", [
+    "",
+    None,
+    "claude-2.1",            # pre-3 Claude: text only
+    "claude-instant-1.2",
+    "gpt-3.5-turbo",
+    "gpt-4-0613",            # original gpt-4 (not 4o/4.1): text only here
+    "text-embedding-3-large",
+    "some-unknown-model",
+    "llama-3-70b",
+])
+def test_is_vision_capable_false_for_text_only_or_unknown(model):
+    assert is_vision_capable(model) is False

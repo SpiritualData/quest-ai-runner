@@ -44,7 +44,21 @@ from .goal_runner import (
     compose_goal_prompt,
     extract_escalation_id,
 )
-from .model_registry import DEFAULT_FALLBACK_TOP, TIERS, ModelRegistry, bucket_top
+from .attachments import (
+    DEFAULT_MAX_ATTACHMENT_BYTES,
+    DESCRIBE_PROMPT,
+    PreparedAttachment,
+    PreparedAttachments,
+    prepare_attachments,
+)
+from .model_registry import (
+    DEFAULT_FALLBACK_TOP,
+    TIERS,
+    VISION_FAMILY_PATTERNS,
+    ModelRegistry,
+    bucket_top,
+    is_vision_capable,
+)
 from .orchestrator import (
     DECIDE_TOOL,
     PLANNER_PROMPT,
@@ -66,6 +80,10 @@ __all__ = [
     "EVENT_EXEC", "EVENT_RESULT", "EVENT_DECISION", "EVENT_MILESTONE", "EVENT_DONE",
     # registry
     "ModelRegistry", "bucket_top", "TIERS", "DEFAULT_FALLBACK_TOP",
+    "is_vision_capable", "VISION_FAMILY_PATTERNS",
+    # attachments (multimodal handler)
+    "prepare_attachments", "PreparedAttachments", "PreparedAttachment",
+    "DESCRIBE_PROMPT", "DEFAULT_MAX_ATTACHMENT_BYTES",
     # orchestrator
     "Orchestrator", "OrchestratorConfig", "OrchestratorResult",
     "PLANNER_PROMPT", "DECIDE_TOOL", "normalize_decision",

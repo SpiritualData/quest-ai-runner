@@ -126,13 +126,57 @@ def extract_json_object(text: str) -> Dict[str, Any]:
     return {}
 
 
-def _flatten_messages(messages: List[Dict[str, str]]) -> str:
-    """Render a chat message list into a single headless prompt (role-prefixed)."""
+def _flatten_block(block: Any) -> str:
+    """Render ONE content block to text for the keyless CLI, which is text-only.
+
+    The CLI cannot send images natively, so the multimodal handler (core.attachments) is
+    expected to have already converted any image to a text DESCRIPTION when the answering
+    provider is this one. As a safety net this still degrades any block it is handed to text
+    and NEVER raises on an unexpected shape:
+      * a plain string → itself
+      * a text block ``{"type": "text", "text": ...}`` → its text
+      * an image block ``{"type": "image", ...}`` → a short placeholder note (we cannot inline
+        the bytes); if the block carries a ``text``/``description`` it is used instead
+      * anything else → its ``text``/``description`` if present, else a benign type note
+    """
+    if isinstance(block, str):
+        return block
+    if isinstance(block, dict):
+        btype = block.get("type")
+        if btype == "text" and block.get("text") is not None:
+            return str(block.get("text"))
+        # Some callers may attach a human-readable description alongside any block.
+        for key in ("text", "description", "desc"):
+            if block.get(key):
+                return str(block.get(key))
+        if btype == "image":
+            return "[image attachment not viewable in text-only mode]"
+        if btype:
+            return f"[{btype} content]"
+    # Last resort: stringify without raising.
+    try:
+        return str(block)
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _flatten_messages(messages: List[Dict[str, Any]]) -> str:
+    """Render a chat message list into a single headless prompt (role-prefixed).
+
+    ``content`` may be a plain string (the common path) OR a LIST of content blocks (text +
+    image), the multimodal shape the orchestrator can produce. The CLI is text-only, so a block
+    list is flattened block-by-block via ``_flatten_block`` — image blocks degrade to a short
+    note rather than crashing the keyless backend.
+    """
     parts: List[str] = []
     for m in messages or []:
         role = (m.get("role") or "user").upper()
-        content = m.get("content") or ""
-        parts.append(f"{role}:\n{content}")
+        content = m.get("content")
+        if isinstance(content, list):
+            rendered = "\n".join(_flatten_block(b) for b in content)
+        else:
+            rendered = content or ""
+        parts.append(f"{role}:\n{rendered}")
     return "\n\n".join(parts)
 
 
@@ -141,6 +185,11 @@ class ClaudeCliProvider(ModelProviderBase):
 
     Drop-in for :class:`AnthropicProvider` when the box has Claude Code logged in but no API key.
     """
+
+    # The keyless CLI is text-only over its print-mode interface — it cannot transmit native image
+    # content blocks. The multimodal handler reads this flag and routes images to describe-fallback
+    # (transcribe to text) instead of trying to send blocks the CLI would flatten to a placeholder.
+    supports_native_images = False
 
     def __init__(
         self,
@@ -243,7 +292,7 @@ class ClaudeCliProvider(ModelProviderBase):
             return {}
         return extract_json_object(text)
 
-    def answer(self, messages: List[Dict[str, str]], *, model: str, system: Optional[str] = None) -> str:
+    def answer(self, messages: List[Dict[str, Any]], *, model: str, system: Optional[str] = None) -> str:
         prompt = _flatten_messages(messages)
         return self._invoke(prompt, model=model, system=system)
 

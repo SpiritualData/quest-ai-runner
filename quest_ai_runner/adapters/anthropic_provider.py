@@ -52,8 +52,16 @@ class AnthropicProvider(ModelProviderBase):
                 return dict(block.input or {})
         raise RuntimeError("planner returned no structured decision")
 
-    def answer(self, messages: List[Dict[str, str]], *, model: str, system: Optional[str] = None) -> str:
+    def answer(self, messages: List[Dict[str, Any]], *, model: str, system: Optional[str] = None) -> str:
         client = self._get_client()
+        # A message's ``content`` may be a plain string (the common path, unchanged) OR a LIST of
+        # Anthropic content blocks (text + image), e.g.
+        #   {"role": "user", "content": [
+        #       {"type": "text", "text": "..."},
+        #       {"type": "image", "source": {"type": "base64", "media_type": "image/png",
+        #                                    "data": "<b64>"}}]}
+        # The SDK's messages.create already accepts both shapes, so we pass content THROUGH
+        # unflattened — the multimodal handler (core.attachments) produces the image blocks.
         kwargs: Dict[str, Any] = {
             "model": model,
             "max_tokens": self.max_answer_tokens,

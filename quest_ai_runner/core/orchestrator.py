@@ -519,6 +519,7 @@ class Orchestrator:
         escalation: Optional[EscalationSink] = None,
         config: Optional[OrchestratorConfig] = None,
         status: Optional[Callable[[str], None]] = None,
+        vision_provider: Optional[ModelProvider] = None,
     ):
         self.retrieval = retrieval
         self.provider = provider
@@ -527,6 +528,12 @@ class Orchestrator:
         self.escalation = escalation
         self.cfg = config or OrchestratorConfig()
         self._status = status or (lambda _msg: None)
+        # The describer used for the image describe-fallback path (a non-vision answering model, or
+        # a text-only provider like the keyless CLI). When None, ``prepare_attachments`` reuses the
+        # answering provider/model if that is itself vision-capable; otherwise images degrade to
+        # honest notes. A consumer wiring a keyless answering provider should pass a vision-capable
+        # ``vision_provider`` here so chat images are transcribed rather than dropped.
+        self.vision_provider = vision_provider
 
     # --- gather (parallel reads/greps/queries via the RetrievalAdapter) ------
 
@@ -643,29 +650,45 @@ class Orchestrator:
         return self.registry.resolve_tier(tier)
 
     def _grounded_answer(self, user_message: str, transcript: str, context_view: str,
-                         gathered: List[Dict[str, Any]], model: str, partial: bool) -> str:
+                         gathered: List[Dict[str, Any]], model: str, partial: bool,
+                         native_blocks: Optional[List[Dict[str, Any]]] = None) -> str:
         messages = []
         if transcript:
             messages.append({"role": "user", "content": transcript})
         messages.append({"role": "user", "content": _grounding_block(context_view, gathered, partial)})
-        messages.append({"role": "user", "content": user_message})
+        # The final user message carries the question; when native image blocks are present (an
+        # image attachment going to a vision-capable model/provider) they ride along in the SAME
+        # message as a content-block list, so the model sees the image alongside the question.
+        if native_blocks:
+            content: List[Dict[str, Any]] = list(native_blocks)
+            content.append({"type": "text", "text": user_message})
+            messages.append({"role": "user", "content": content})
+        else:
+            messages.append({"role": "user", "content": user_message})
         return self.provider.answer(messages, model=model)
 
     def _answer_subquestions(self, user_message: str, transcript: str, context_view: str,
                              gathered: List[Dict[str, Any]], model: str,
-                             subquestions: List[str]) -> str:
+                             subquestions: List[str],
+                             native_blocks: Optional[List[Dict[str, Any]]] = None) -> str:
         subs = [s for s in subquestions if s][: self.cfg.max_subquestions]
         if len(subs) < 2:
-            return self._grounded_answer(user_message, transcript, context_view, gathered, model, False)
+            return self._grounded_answer(user_message, transcript, context_view, gathered, model,
+                                         False, native_blocks=native_blocks)
         ground = _grounding_block(context_view, gathered, False)
 
         def answer_one(sub: str) -> Optional[Dict[str, str]]:
             try:
-                msgs = [
-                    {"role": "user", "content": ground},
-                    {"role": "user", "content": f"Focus ONLY on this sub-question, grounded in the "
-                                                 f"context above:\n\n{sub}"},
-                ]
+                # Each sub-question gets the native image blocks too, so any visual sub-question
+                # can see the image (the answering model is vision-capable on this path).
+                focus = f"Focus ONLY on this sub-question, grounded in the context above:\n\n{sub}"
+                if native_blocks:
+                    focus_content: List[Dict[str, Any]] = list(native_blocks)
+                    focus_content.append({"type": "text", "text": focus})
+                    sub_msg = {"role": "user", "content": focus_content}
+                else:
+                    sub_msg = {"role": "user", "content": focus}
+                msgs = [{"role": "user", "content": ground}, sub_msg]
                 return {"q": sub, "a": self.provider.answer(msgs, model=model)}
             except Exception:  # noqa: BLE001
                 return None
@@ -681,7 +704,8 @@ class Orchestrator:
                     out[futs[f]] = None
         ok = [a for a in out if a and (a.get("a") or "").strip()]
         if not ok:
-            return self._grounded_answer(user_message, transcript, context_view, gathered, model, False)
+            return self._grounded_answer(user_message, transcript, context_view, gathered, model,
+                                         False, native_blocks=native_blocks)
         if len(ok) == 1:
             return ok[0]["a"]
         merged = "\n\n".join(f"SUB-QUESTION: {a['q']}\nANSWER: {a['a']}" for a in ok)
@@ -774,7 +798,8 @@ class Orchestrator:
             sink: Optional[ProgressSink] = None,
             background_sink: Optional[ProgressSink] = None,
             detach_check: Optional[Callable[[], bool]] = None,
-            model_hint: Optional[str] = None) -> OrchestratorResult:
+            model_hint: Optional[str] = None,
+            attachments: Optional[List[Dict[str, Any]]] = None) -> OrchestratorResult:
         """Run the bounded loop for one request and return a terminal OrchestratorResult.
 
         Streaming/event interface (both lanes use the SAME emissions; the SINK decides policy):
@@ -796,6 +821,16 @@ class Orchestrator:
                             The consumer's ``ModelProvider`` and ``ModelRegistry`` interpret the
                             string (a tier name or a model id). Unknown values degrade gracefully
                             to the registry's default. Absent/None means exactly today's behavior.
+        * ``attachments`` — optional list of in-memory attachment items (chat file uploads AND/OR
+                            panel context-docs, the SAME generic shape; see
+                            ``core.attachments.prepare_attachments``). Each is a dict
+                            ``{filename, mime_type, data: bytes, kind: "image"|"file"}``. The
+                            runner OWNS multimodal (the text provider does not): images go NATIVELY
+                            to the answer when the answering model/provider is vision-capable, else
+                            they are described to text; non-image files are text-extracted. Their
+                            text descriptions/inventory join the PLANNER context (so planning is
+                            grounded in them), and native image blocks ride the final ANSWER
+                            message. Absent/None means exactly today's behavior.
 
         ``run`` still works with NO event args (back-compat: same signature callers used before
         plus keyword-only extras), returning the terminal ``OrchestratorResult``.
@@ -804,6 +839,25 @@ class Orchestrator:
         gathered: List[Dict[str, Any]] = []
         started = time.monotonic()
         cfg = self.cfg
+
+        # --- Attachments (multimodal): ONE path for chat uploads + panel context-docs ----------
+        # Prepare against the model that WILL answer (model_hint or the default answer tier), so
+        # native-vs-describe is decided by the real answering model's vision capability. The text
+        # context grounds the PLANNER; native image blocks are appended to the final answer call.
+        native_blocks: List[Dict[str, Any]] = []
+        if attachments:
+            from .attachments import prepare_attachments
+            answer_model = self.registry.resolve_tier(model_hint or "sonnet")
+            prepared = prepare_attachments(
+                attachments,
+                model=answer_model,
+                provider=self.provider,
+                vision_provider=self.vision_provider,
+            )
+            native_blocks = prepared.native_blocks
+            if prepared.text_context:
+                context_view = (context_view + "\n\n" + prepared.text_context if context_view
+                                else prepared.text_context)
 
         # If a handoff is configured, route events through a FanoutSink that flips live->bg on detach.
         on_detach = None
@@ -875,7 +929,8 @@ class Orchestrator:
             if gathered:
                 emit.status("wrapping up with a best-effort answer…")
                 model = self._answer_model(plan, "sonnet", hint=model_hint)
-                text = self._grounded_answer(user_message, transcript, context_view, gathered, model, True)
+                text = self._grounded_answer(user_message, transcript, context_view, gathered, model,
+                                             True, native_blocks=native_blocks)
                 return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
                                                  partial=True))
             plan.action = final = "deep"
@@ -897,10 +952,11 @@ class Orchestrator:
         if len(plan.subquestions) >= 2:
             emit.status(f"answering {len(plan.subquestions)} parts in parallel…")
             text = self._answer_subquestions(user_message, transcript, context_view, gathered,
-                                             model, plan.subquestions)
+                                             model, plan.subquestions, native_blocks=native_blocks)
         else:
             emit.status("answering")
-            text = self._grounded_answer(user_message, transcript, context_view, gathered, model, False)
+            text = self._grounded_answer(user_message, transcript, context_view, gathered, model,
+                                         False, native_blocks=native_blocks)
         return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale))
 
     # --- LIVE streaming convenience: a generator yielding events as they happen --------
@@ -908,7 +964,8 @@ class Orchestrator:
     def run_stream(self, user_message: str, *, transcript: str = "", context_view: str = "",
                    quest_id: Optional[str] = None,
                    mode: Mode = Mode.LIVE,
-                   model_hint: Optional[str] = None):
+                   model_hint: Optional[str] = None,
+                   attachments: Optional[List[Dict[str, Any]]] = None):
         """Generator form of ``run`` for a LIVE consumer that wants to iterate events.
 
         Yields each ``ProgressEvent`` (as emitted, post-sink-policy for the given mode) and,
@@ -940,7 +997,8 @@ class Orchestrator:
         def _worker():
             try:
                 res = self.run(user_message, transcript=transcript, context_view=context_view,
-                               quest_id=quest_id, mode=mode, sink=sink, model_hint=model_hint)
+                               quest_id=quest_id, mode=mode, sink=sink, model_hint=model_hint,
+                               attachments=attachments)
                 result_box["result"] = res
             except Exception as e:  # noqa: BLE001
                 result_box["error"] = e

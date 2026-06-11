@@ -374,3 +374,80 @@ def test_model_hint_unknown_value_degrades_gracefully():
     registry = ModelRegistry(provider)
     expected_fallback = registry.resolve_tier("xyzzy")  # == sonnet fallback
     assert provider.answer_models == [expected_fallback]
+
+
+# --- attachments threading (multimodal) -------------------------------------
+
+class _AttachmentCapturingProvider(StubProvider):
+    """Captures the planner prompts and the final answer message content (incl. list/native
+    blocks). Its answer() handles BOTH a string content and a content-block LIST."""
+
+    def __init__(self, decisions, models=None):
+        super().__init__(decisions, models=models)
+        self.answer_contents = []
+
+    def answer(self, messages, *, model, system=None):
+        self.answer_calls += 1
+        self.last_answer_messages = messages
+        self.answer_contents = [m.get("content") for m in messages]
+        return "ANSWER"
+
+
+def _png_attachment():
+    return {"filename": "chart.png", "mime_type": "image/png",
+            "data": b"\x89PNG\r\n\x1a\n fake", "kind": "image"}
+
+
+def test_attachments_native_image_reaches_answer_and_planner_context():
+    # Default models list includes claude-* (vision); the answering model is vision-capable, so the
+    # image goes NATIVE on the answer and a text note goes to the planner context.
+    provider = _AttachmentCapturingProvider(decisions=[
+        {"action": "answer", "model_tier": "sonnet", "rationale": "look at the chart"},
+    ])
+    res = _orch(provider, StubRetrieval()).run("what does this show?",
+                                               attachments=[_png_attachment()])
+    assert res.kind == "answer"
+    # The final answer message carried a content LIST with a native image block.
+    final = provider.answer_contents[-1]
+    assert isinstance(final, list)
+    assert any(isinstance(b, dict) and b.get("type") == "image" for b in final)
+    # The planner saw the attachment inventory in the CONTEXT block.
+    assert "chart.png" in provider.plan_prompts[0]
+    assert "ATTACHMENTS" in provider.plan_prompts[0]
+
+
+def test_attachments_described_when_provider_cannot_send_native():
+    # The answering provider declares it cannot transmit native image blocks (like the keyless
+    # CLI), so even with a vision-capable model id the image is DESCRIBED via the vision_provider
+    # and NO native block reaches the answer.
+    class _Describer(StubProvider):
+        def __init__(self):
+            super().__init__(decisions=[])
+            self.described = 0
+        def answer(self, messages, *, model, system=None):
+            self.described += 1
+            return "TRANSCRIBED: a line chart trending up."
+
+    describer = _Describer()
+    provider = _AttachmentCapturingProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    provider.supports_native_images = False             # text-only transport, like the CLI
+    orch = Orchestrator(retrieval=StubRetrieval(), provider=provider,
+                        registry=ModelRegistry(provider), vision_provider=describer)
+    res = orch.run("what does this show?", attachments=[_png_attachment()])
+    assert res.kind == "answer"
+    assert describer.described == 1                      # the image was transcribed
+    # No native image block on the answer (provider can't send them).
+    final = provider.answer_contents[-1]
+    assert isinstance(final, str)                        # plain-string answer message
+    assert "TRANSCRIBED" in provider.plan_prompts[0]     # description grounded the planner
+
+
+def test_no_attachments_is_unchanged_behavior():
+    provider = _AttachmentCapturingProvider(decisions=[
+        {"action": "answer", "rationale": "ok"},
+    ])
+    res = _orch(provider, StubRetrieval()).run("hi")
+    assert res.kind == "answer"
+    # Final answer message is a plain string (no content-block list when there are no attachments).
+    assert isinstance(provider.answer_contents[-1], str)
+    assert "ATTACHMENTS" not in provider.plan_prompts[0]

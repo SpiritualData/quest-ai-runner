@@ -15,6 +15,12 @@ from .core.model_registry import ModelRegistry
 from .core.orchestrator import Orchestrator, OrchestratorConfig
 from .resources import ResourceLimits
 
+# Per-attachment size cap for chat/file uploads and panel context-docs. Large by design so any
+# reasonable document or image is accepted; anything over this is rejected by the multimodal
+# handler (``core.attachments.prepare_attachments``) with a clear note rather than processed.
+# 50 MB. Centralized here so both the runner config and the handler read the same number.
+MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
+
 
 @dataclass
 class RunnerConfig:
@@ -32,6 +38,12 @@ class RunnerConfig:
     model_provider: Optional[ModelProvider] = None   # AnthropicProvider or another
     deep_runner: Optional[DeepRunner] = None         # SubprocessGoalRunner or another worker
     escalation: Optional[EscalationSink] = None      # QuestDecisionSink (defaults from quest client)
+    # The describer for image attachments the ANSWERING model can't view natively (a non-vision
+    # model, or a text-only provider like the keyless CLI). The runner OWNS multimodal because the
+    # text provider doesn't do it. When None and the answering provider is itself vision-capable,
+    # the brain reuses it; supply a vision-capable provider here when the answering provider is not
+    # (e.g. an AnthropicProvider alongside the keyless CLI) so chat images are transcribed.
+    vision_provider: Optional[ModelProvider] = None
 
     # --- the org's skills/corpus path (for orgs); generic, optional ---
     corpus_root: Optional[str] = None
@@ -144,4 +156,5 @@ def build_orchestrator(cfg: RunnerConfig, *, status=None) -> Orchestrator:
         escalation=cfg.escalation,
         config=cfg.orchestrator,
         status=status,
+        vision_provider=cfg.vision_provider,
     )
