@@ -73,15 +73,18 @@ class StubRetrieval:
 
 
 class StubDeepRunner:
-    def __init__(self, met: bool = True, output: str = "deep done", error: str | None = None):
+    def __init__(self, met: bool = True, output: str = "deep done", error: str | None = None,
+                 decision_id: str | None = None):
         self._met = met
         self._output = output
         self._error = error
+        self._decision_id = decision_id
         self.calls: List[Dict[str, Any]] = []
 
     def run_goal(self, *, goal, brief, model=None, max_turns=None) -> DeepResult:
         self.calls.append({"goal": goal, "brief": brief, "model": model, "max_turns": max_turns})
-        return DeepResult(met=self._met, output=self._output, error=self._error)
+        return DeepResult(met=self._met, output=self._output, error=self._error,
+                          decision_id=self._decision_id)
 
 
 class StubEscalation:

@@ -463,6 +463,69 @@ def test_subprocess_runner_passes_tool_flags_and_runs_web_goal(monkeypatch):
     assert "--max-turns" in cmd
 
 
+# --- the escalation-marker contract: a deep worker that raised a human decision --------------
+
+def test_extract_escalation_id():
+    from quest_ai_runner.core.goal_runner import extract_escalation_id
+
+    assert extract_escalation_id("no marker here") is None
+    assert extract_escalation_id("") is None
+    assert extract_escalation_id("did work\nQAR-ESCALATED: dec_42\n") == "dec_42"
+    # Whitespace-tolerant, and the LAST marker wins (a worker may quote an earlier one).
+    assert extract_escalation_id("  QAR-ESCALATED:   dec_a  \nmore\nQAR-ESCALATED: dec_b") == "dec_b"
+    # A bare marker with no id is not an escalation.
+    assert extract_escalation_id("QAR-ESCALATED:\n") is None
+
+
+def test_subprocess_runner_parses_escalation_marker(monkeypatch):
+    """A spawned worker that raised a human decision mid-run prints ``QAR-ESCALATED: <id>``; the
+    runner returns met=False + decision_id so the executor reports needs_you with the decision
+    linked — regardless of the worker's exit code (escalated-and-exited-clean is still paused)."""
+    import subprocess as _sp
+    from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+
+    class _Proc:
+        returncode = 0
+        stdout = b"Drafted the email; sending needs approval.\nQAR-ESCALATED: dec_99\n"
+        stderr = b""
+
+    monkeypatch.setattr(_sp, "run", lambda cmd, **kw: _Proc())
+    runner = SubprocessGoalRunner(SubprocessConfig(working_dir="/w", claude_path="/usr/bin/claude"))
+    res = runner.run_goal(goal="send the email", brief="draft + send", max_turns=3)
+    assert res.met is False
+    assert res.decision_id == "dec_99"
+    assert "Drafted the email" in res.output
+    assert res.error is None
+
+
+def test_goal_runner_normalizes_decision_to_not_met():
+    """GoalRunner never lets a runner report met=True alongside a decision_id — a paused-on-human
+    run must reach the executor as not-met so it reports needs_you, not done."""
+    from quest_ai_runner.core.goal_runner import GoalRunner
+
+    gr = GoalRunner(StubDeepRunner(met=True, output="staged", decision_id="dec_7"))
+    res = gr.run(goal="g", brief="b")
+    assert res.met is False
+    assert res.decision_id == "dec_7"
+
+
+def test_executor_deep_decision_reports_needs_you():
+    """A deep run that escalated (DeepResult.decision_id set) reports needs_you with that decision
+    id, and the prepared output is what lands in the originating chat."""
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "do X", "deep_brief": "x", "rationale": "work"},
+    ])
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _brain(provider, deep_runner=StubDeepRunner(
+        met=False, output="staged the order for approval", decision_id="dec_55")))
+    out = ex.execute({"id": "t9", "text": "order the part", "conv_id": "qaconv_1"})
+    assert out.status == "needs_you"
+    assert out.decision_id == "dec_55"
+    assert client.reports[0][1] == "needs_you"
+    assert client.reports[0][3] == "dec_55"
+    assert ("qaconv_1", "staged the order for approval", "decision") in client.posts
+
+
 def test_poller_discovery_is_team_scoped_to_the_lanes_team():
     """The lane passes its configured team_id into discovery so two teams under the SAME owner are
     isolated: the team-A lane discovers ONLY team-A tasks, never team-B's. (Backend enforces the

@@ -74,6 +74,17 @@ exit code 0 = goal met, non-zero = limit/error. Working dir, binary, model, cont
 tool gating are all config (`SubprocessConfig`). Plug in a different agent by implementing this one
 method.
 
+**Escalating from inside a deep run.** A spawned worker can itself hit a human-only step mid-run
+(an unapproved outward send, an irreversible commitment). If the consumer's context preamble gives
+the worker an escalation mechanism (e.g. "create a decision-request via X"), the worker reports the
+raised decision back to the runner by printing, on its own line, `QAR-ESCALATED: <decision_id>`
+(the `ESCALATION_MARKER` contract in `core/goal_runner.py`). `SubprocessGoalRunner` parses the
+marker and returns `DeepResult(met=False, decision_id=...)` regardless of exit code, so the
+executor reports the task as `needs_you` with the decision linked — the ask shows up in the
+consumer's UI attached to the paused task instead of the task closing as done. A custom
+`DeepRunner` can set `DeepResult.decision_id` directly; `GoalRunner` normalizes `met=True` +
+`decision_id` to not-met so a paused run never reports done.
+
 ## EscalationSink
 
 Where the brain raises a human-only step.

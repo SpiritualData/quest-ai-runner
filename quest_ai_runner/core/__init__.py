@@ -37,10 +37,12 @@ from .adapters import (
     StreamSink,
 )
 from .goal_runner import (
+    ESCALATION_MARKER,
     GoalRunner,
     SubprocessConfig,
     SubprocessGoalRunner,
     compose_goal_prompt,
+    extract_escalation_id,
 )
 from .model_registry import DEFAULT_FALLBACK_TOP, TIERS, ModelRegistry, bucket_top
 from .orchestrator import (
@@ -69,4 +71,5 @@ __all__ = [
     "PLANNER_PROMPT", "DECIDE_TOOL", "normalize_decision",
     # goal runner
     "GoalRunner", "SubprocessGoalRunner", "SubprocessConfig", "compose_goal_prompt",
+    "ESCALATION_MARKER", "extract_escalation_id",
 ]

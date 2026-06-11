@@ -31,6 +31,27 @@ from .adapters import DeepResult, DeepRunner
 
 DEFAULT_DEEP_MAX_TURNS = 30
 
+# The escalation-marker contract: a spawned worker that raised a human decision mid-run (via
+# whatever escalation mechanism its consumer preamble gave it) reports the decision back to the
+# runner by printing, on its own line, ``QAR-ESCALATED: <decision_id>``. SubprocessGoalRunner
+# parses the marker and returns ``DeepResult(met=False, decision_id=...)``, which the executor
+# reports as ``needs_you`` with the decision linked — so the ask surfaces in the consumer's UI
+# attached to the paused task instead of the task closing as done/failed. Workers that never
+# escalate are unaffected; the marker simply never appears.
+ESCALATION_MARKER = "QAR-ESCALATED:"
+
+
+def extract_escalation_id(output: str) -> Optional[str]:
+    """Return the decision id from the LAST ``QAR-ESCALATED: <id>`` marker line, or None."""
+    decision_id: Optional[str] = None
+    for line in (output or "").splitlines():
+        stripped = line.strip()
+        if stripped.startswith(ESCALATION_MARKER):
+            candidate = stripped[len(ESCALATION_MARKER):].strip()
+            if candidate:
+                decision_id = candidate
+    return decision_id
+
 
 def compose_goal_prompt(goal: str, brief: str, *, preamble: str = "") -> str:
     """Compose the headless prompt: the ``/goal`` directive (single line) + an optional
@@ -72,6 +93,10 @@ class GoalRunner:
             return DeepResult(met=False, error=f"deep runner failed: {type(e).__name__}")
         # Normalize: a runner that forgot to set met but returned an error is "not met".
         if res.error and res.met:
+            res.met = False
+        # A run that raised a human decision is paused, never "met" — the executor reports
+        # needs_you from decision_id, and "met" would short-circuit that to done.
+        if res.decision_id and res.met:
             res.met = False
         return res
 
@@ -194,6 +219,13 @@ class SubprocessGoalRunner(DeepRunner):
 
         out = (proc.stdout or b"").decode("utf-8", errors="replace")
         err = (proc.stderr or b"").decode("utf-8", errors="replace") or None
+        # The escalation-marker contract: the worker raised a human decision mid-run and printed
+        # ``QAR-ESCALATED: <decision_id>``. That overrides met-vs-limit — the run is PAUSED on a
+        # human, so the executor must report needs_you with the decision linked, regardless of
+        # the exit code.
+        decision_id = extract_escalation_id(out)
+        if decision_id:
+            return DeepResult(met=False, output=out, decision_id=decision_id)
         if proc.returncode == 0:
             return DeepResult(met=True, output=out)
         if not err:

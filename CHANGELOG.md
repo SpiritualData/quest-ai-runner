@@ -7,6 +7,18 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Deep-run escalation marker (`QAR-ESCALATED: <decision_id>`)** — a spawned deep worker that
+  raises a human-only decision mid-run (via whatever escalation mechanism its consumer preamble
+  provides) can now report it back to the runner by printing `QAR-ESCALATED: <decision_id>` on its
+  own line. `SubprocessGoalRunner` parses the marker (new `ESCALATION_MARKER` /
+  `extract_escalation_id` in `core/goal_runner.py`, exported from `core`) and returns
+  `DeepResult(met=False, decision_id=...)` regardless of exit code, so the executor reports the
+  task as `needs_you` with the decision linked — the ask surfaces in the consumer's UI attached to
+  the paused task instead of the task closing as done/failed. `GoalRunner.run` also normalizes
+  `met=True` + `decision_id` to not-met so a custom runner can never report a paused run as done.
+  Workers that never print the marker behave exactly as before. Offline tests cover marker parsing
+  (last-marker-wins, bare marker ignored), the subprocess runner, the normalization, and the
+  executor's `needs_you` report + chat post.
 - **Configurable planner tier + answer timeout (env)** — the CLI now reads two optional env vars so
   a consumer can tune the brain without code: `QAR_PLANNER_TIER` sets the model tier for the planner
   step that picks read/answer/deep (default stays the cheap `haiku`; raise to e.g. `sonnet` when
