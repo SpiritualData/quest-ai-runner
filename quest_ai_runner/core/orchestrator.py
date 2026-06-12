@@ -571,7 +571,7 @@ class Orchestrator:
                     str(spec["grep"]), scope=spec.get("scope") or None
                 )
             if spec.get("query") is not None:
-                return self.retrieval.query(spec["query"])
+                return self.retrieval.query(spec)
             if spec.get("rel_path"):
                 return self.retrieval.read_section(
                     str(spec["rel_path"]),
