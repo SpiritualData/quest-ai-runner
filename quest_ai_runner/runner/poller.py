@@ -204,10 +204,16 @@ class Poller:
         # Opt-in: refresh this rep's skill file from its Quest profile right before running, so the
         # spawned agent reflects the latest persona + learned corrections. Best-effort: a sync
         # failure is logged and the task still runs (it just uses the last-synced skill file).
-        self._sync_rep_for(task, target)
+        # The pre-run pull (when the direction calls for it) also yields the rep's per-run preamble,
+        # so the deep run executes AS that rep with no extra consumer glue.
+        rep_preamble = self._pull_rep_for(task, target)
         executor = TaskExecutor(self.client, self._orch())
-        outcome = executor.execute(task)
+        outcome = executor.execute(task, rep_preamble=rep_preamble)
         log.info("task %s -> %s", task_id, outcome.status)
+        # Opt-in push-back: after the run, write the local skill file back up to Quest when the
+        # configured direction asks for it. Best-effort and AFTER the task is reported — a sync
+        # failure here must never fail the task.
+        self._push_rep_for(task, target)
         return task_id
 
     def _resolve_rep_target(self, task: Dict[str, Any]) -> Optional[tuple]:
@@ -237,22 +243,81 @@ class Poller:
                 return slug
         return self.cfg.runner_label or None
 
-    def _sync_rep_for(self, task: Dict[str, Any], target: Optional[tuple] = None) -> None:
-        """Best-effort: pull the rep's Quest profile into its local skill file before running.
+    def _pull_rep_for(self, task: Dict[str, Any], target: Optional[tuple] = None) -> Optional[str]:
+        """Best-effort PRE-run pull, gated on direction; returns the rep's per-run preamble or None.
 
-        Only fires when the consumer wired a ``rep_sync_resolver`` (OFF by default). ``target`` is
-        the already-resolved ``(user_id, skill_dir)`` (or None to skip); we then ``pull_rep_to_skill``
-        so the agent the executor spawns behaves as the current persona/corrections. Never raises —
-        a sync failure is logged and execution proceeds with the previously synced file."""
+        Only fires when the consumer wired a ``rep_sync_resolver`` (OFF by default) AND the
+        configured ``rep_sync_direction`` includes a pull ("pull" or "both"). ``target`` is the
+        already-resolved ``(user_id, skill_dir)`` (or None to skip). We ``pull_rep_to_skill`` so
+        the local skill file reflects the current persona/corrections, then read its MANAGED
+        sections and compose them with the runner's context doctrine into a per-run preamble the
+        executor injects into the deep run — so the task runs AS that rep by default, no extra
+        consumer glue. Never raises: a sync failure is logged and the run proceeds (with the
+        previously synced file, and no preamble from this pull)."""
         if not target:
+            return None
+        if self.cfg.rep_sync_direction not in ("pull", "both"):
+            return None  # direction is push-only: do not pull before the run
+        user_id, skill_dir = target
+        team_id = task.get("team_id") or self.cfg.team_id
+        try:
+            from pathlib import Path as _Path
+
+            from ..core.context_doctrine import compose_deep_preamble
+            from .rep_sync import SKILL_FILE_NAME, parse_skill_file, pull_rep_to_skill
+            pull_rep_to_skill(self.client, team_id, user_id, skill_dir)
+            # Read the rep's persona + learned corrections back out of the just-pulled file and
+            # build the per-run preamble (doctrine + this rep's managed sections). The skill file's
+            # MANAGED sections are the source of the rep's identity for THIS run.
+            skill_text = (_Path(skill_dir) / SKILL_FILE_NAME).read_text(encoding="utf-8")
+            return self._build_rep_preamble(skill_text, compose_deep_preamble, parse_skill_file)
+        except Exception as e:  # noqa: BLE001 — best-effort, like progress posting/heartbeat
+            log.info("rep pull for %s failed (%s) — running with existing skill file", user_id, e)
+            return None
+
+    @staticmethod
+    def _build_rep_preamble(skill_text: str, compose_deep_preamble, parse_skill_file) -> Optional[str]:
+        """Compose a deep-run preamble from a skill file's MANAGED sections (persona + learned).
+
+        Generic: it only knows ``persona`` + ``learned_notes`` (the rep_sync managed shape) and the
+        runner's context doctrine. Returns None when the file carries no rep identity to inject."""
+        parsed = parse_skill_file(skill_text or "")
+        persona = (parsed.get("persona") or "").strip()
+        learned = parsed.get("learned_notes") or []
+        if not persona and not learned:
+            return None
+        parts: List[str] = []
+        if persona:
+            parts.append("=== ACT AS THIS PERSON (their persona) ===\n" + persona)
+        if learned:
+            bullets = "\n".join(f"- {str(n.get('text', '')).strip()}"
+                                for n in learned if str(n.get("text", "")).strip())
+            if bullets:
+                parts.append("=== LEARNED CORRECTIONS (apply these) ===\n" + bullets)
+        if not parts:
+            return None
+        # Combine the runner's doctrine with this rep's persona/learned via the existing composer,
+        # so deep agents obey the same disciplines AND adopt the rep's identity.
+        return compose_deep_preamble("\n\n".join(parts))
+
+    def _push_rep_for(self, task: Dict[str, Any], target: Optional[tuple] = None) -> None:
+        """Best-effort POST-run push, gated on direction.
+
+        Fires only when a ``rep_sync_resolver`` resolved a target AND ``rep_sync_direction`` is
+        "push" or "both": the rep's local skill file is written back up to its Quest profile after
+        the task ran. Never raises — a push failure is logged and the (already reported) task is
+        unaffected."""
+        if not target:
+            return
+        if self.cfg.rep_sync_direction not in ("push", "both"):
             return
         user_id, skill_dir = target
         team_id = task.get("team_id") or self.cfg.team_id
         try:
-            from .rep_sync import pull_rep_to_skill
-            pull_rep_to_skill(self.client, team_id, user_id, skill_dir)
-        except Exception as e:  # noqa: BLE001 — best-effort, like progress posting/heartbeat
-            log.info("rep sync for %s failed (%s) — running with existing skill file", user_id, e)
+            from .rep_sync import push_skill_to_rep
+            push_skill_to_rep(self.client, team_id, user_id, skill_dir)
+        except Exception as e:  # noqa: BLE001 — best-effort; a push failure never fails the task
+            log.info("rep push for %s failed (%s) — leaving Quest profile unchanged", user_id, e)
 
     # --- run modes -----------------------------------------------------------
 

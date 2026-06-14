@@ -40,7 +40,17 @@ class TaskExecutor:
     def _task_text(task: Dict[str, Any]) -> str:
         return (task.get("text") or task.get("title") or task.get("description") or "").strip()
 
-    def execute(self, task: Dict[str, Any]) -> ExecutionOutcome:
+    def execute(self, task: Dict[str, Any], *,
+                rep_preamble: Optional[str] = None) -> ExecutionOutcome:
+        """Run ONE claimed task and report its outcome.
+
+        ``rep_preamble`` (optional) is a per-task context preamble forwarded to the deep run so the
+        task executes AS a specific AI rep (its persona + learned corrections). When the poller has
+        resolved a rep and pulled its profile, it builds this preamble and passes it here; the
+        executor threads it straight into ``Orchestrator.run(rep_preamble=...)``, which forwards it
+        to a deep runner that accepts a per-call ``context_preamble``. When ``None`` (any existing
+        caller, or no rep resolved), behaviour is exactly as before.
+        """
         task_id = str(task.get("id") or task.get("task_id") or "")
         text = self._task_text(task)
         quest_id = task.get("goal_id") or task.get("quest_id")
@@ -76,7 +86,7 @@ class TaskExecutor:
         try:
             result: OrchestratorResult = self._orch.run(
                 text, quest_id=quest_id, mode=Mode.BACKGROUND, sink=sink,
-                model_hint=model_hint)
+                model_hint=model_hint, rep_preamble=rep_preamble)
         except Exception as e:  # noqa: BLE001 — brain failure -> failed report, never crash poller
             msg = f"orchestrator error: {type(e).__name__}: {e}"
             self._report_progress(task_id, "error", text=msg)

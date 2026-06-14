@@ -49,6 +49,8 @@ def build_config() -> RunnerConfig:
 | `deep_runner` | a `DeepRunner` — runs deep, goal-driven work |
 | `escalation` | an `EscalationSink` — where confirm/decision requests go (defaults from the Quest client) |
 | `corpus_root` | the org's files/skills root (generic, optional) |
+| `rep_sync_resolver` | OPT-IN: map a task to `(user_id, skill_dir)` to run it AS that AI rep (off by default) |
+| `rep_sync_direction` | `"pull"` (default) / `"push"` / `"both"`: controls Quest <-> skill-file sync for reps |
 | `default_assignee_user_id` | who human-only decisions route to by default |
 | `orchestrator`, `poll_interval_seconds`, `poll_lookahead_minutes`, `max_concurrent_tasks` | tuning |
 | `extra` | a free-form dict for your own needs |
@@ -186,6 +188,46 @@ you want hints to carry raw model ids, supply a registry whose `resolve_tier` un
 The runner wires this up for you: `TaskExecutor` forwards a task document's optional `"model"`
 field as the `model_hint`, so a per-task model override stored on the task is honored at execution
 time with no extra code in your poller.
+
+## AI reps: run a task AS a team member (opt-in)
+
+A team's AI reps each have a Quest profile (a persona plus learned corrections) and a local Claude
+skill file. The runner can execute a task AS the right rep, with NO extra glue beyond one resolver.
+
+Turn it on by supplying `rep_sync_resolver` on your `RunnerConfig`: given a task dict, return the
+`(user_id, skill_dir)` of the rep that should run it, or `None` to skip. That is the only required
+wiring. With it set, the DEFAULT does the complete, correct thing:
+
+1. The poller resolves the rep for the task.
+2. It PULLS the rep's Quest profile into the local skill file (Quest is the source of truth at
+   execution time), preserving any human-authored content outside the managed sections.
+3. It builds a per-run preamble from that file's persona and learned corrections (combined with the
+   runner's context doctrine) and injects it into the deep run, so the run behaves AS that rep.
+
+```python
+cfg = RunnerConfig(
+    ...,
+    rep_sync_resolver=lambda task: (task["assignee_user_id"], f"/skills/{task['assignee_slug']}"),
+    # rep_sync_direction defaults to "pull"
+)
+```
+
+`rep_sync_direction` controls the Quest <-> skill-file sync:
+
+- `"pull"` (default): pull Quest into the skill file before the run. No push-back. Use this when
+  Quest is the source of truth and you just want the rep to act as its current self.
+- `"push"`: push the local skill file UP to Quest AFTER the run only (no pre-run pull, so no persona
+  injection). Use this when the local file is the source of truth.
+- `"both"`: pull first (the run acts current), then push back after the run.
+
+Both the pre-run pull and the post-run push are best-effort: a sync failure is logged and never
+fails the task. This whole capability is OFF unless `rep_sync_resolver` is set, so a consumer that
+does not wire it sees exactly the prior behaviour. It does NOT require a `ContextAssembler`.
+
+Under the hood the executor accepts `execute(task, *, rep_preamble=...)` and threads the preamble
+into `Orchestrator.run(rep_preamble=...)`, which forwards it to the deep run only for a `DeepRunner`
+whose `run_goal` accepts a `context_preamble` kwarg (the reference `SubprocessGoalRunner` does).
+Older deep runners are left untouched.
 
 ## Next
 

@@ -93,6 +93,17 @@ class RunnerConfig:
     # maps to a (user_id, skill_dir)), so it's a resolver callable, not baked into the brain.
     # Given a task dict, return ``(user_id, skill_dir)`` to sync that rep, or ``None`` to skip.
     rep_sync_resolver: Optional[Callable[[Dict[str, Any]], Optional[Tuple[str, str]]]] = None
+    # Sync DIRECTION for the opt-in rep flow above (only consulted when ``rep_sync_resolver`` is
+    # set and resolves a target). Generic, with a sensible default:
+    #   * "pull" (default) — Quest -> local skill file BEFORE the run, so the rep behaves as its
+    #     current Quest self (persona + learned corrections) at execution time. No push-back.
+    #   * "push" — local skill file -> Quest AFTER the run only (do NOT pull first). Use when the
+    #     local file is the source of truth and Quest should be updated from it.
+    #   * "both" — pull first (rep acts current), then push back after the run.
+    # Pull (when in effect) ALSO feeds the rep's persona into the deep run automatically, so the
+    # task runs AS that rep with no extra consumer glue. Push-back is best-effort: a sync failure
+    # is logged and never fails the task. Validated by ``validate()`` (unknown value -> a problem).
+    rep_sync_direction: str = "pull"
 
     extra: Dict[str, Any] = field(default_factory=dict)
 
@@ -107,6 +118,10 @@ class RunnerConfig:
             problems.append("a retrieval adapter is required")
         if self.model_provider is None:
             problems.append("a model_provider is required")
+        if self.rep_sync_direction not in ("pull", "push", "both"):
+            problems.append(
+                "rep_sync_direction must be 'pull', 'push', or 'both' "
+                f"(got {self.rep_sync_direction!r})")
         return problems
 
 

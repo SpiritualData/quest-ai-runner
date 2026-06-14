@@ -487,6 +487,24 @@ def _run_goal_accepts_emit(deep_runner: Any) -> bool:
     return False
 
 
+def _run_goal_accepts_context_preamble(deep_runner: Any) -> bool:
+    """Whether a DeepRunner's ``run_goal`` accepts a ``context_preamble`` keyword (or **kwargs).
+
+    Same opt-in discipline as ``_run_goal_accepts_emit``: a per-task context preamble (e.g. an AI
+    rep's pulled persona) is forwarded ONLY to runners that accept the kwarg, so older
+    ``run_goal`` signatures keep working unchanged. Signature inspection, never try/except, so a
+    runner with a side effect is never invoked twice.
+    """
+    try:
+        sig = inspect.signature(deep_runner.run_goal)
+    except (ValueError, TypeError, AttributeError):
+        return False
+    for p in sig.parameters.values():
+        if p.name == "context_preamble" or p.kind is inspect.Parameter.VAR_KEYWORD:
+            return True
+    return False
+
+
 class _Emitter:
     """Per-run event router. The orchestrator calls ``emit(...)`` / ``status(...)``; this
     forwards a ProgressEvent to the run's ProgressSink (chosen by Mode) and to the legacy
@@ -759,7 +777,8 @@ class Orchestrator:
     # --- deep fan-out --------------------------------------------------------
 
     def _run_deep(self, plan: PlanDecision, user_message: str, model: str,
-                  emit: Optional[_Emitter] = None) -> OrchestratorResult:
+                  emit: Optional[_Emitter] = None,
+                  rep_preamble: Optional[str] = None) -> OrchestratorResult:
         subtasks = (plan.deep_subtasks or [])[: self.cfg.max_deep_subtasks]
         if not subtasks:
             subtasks = [{"goal": plan.goal or f"Fully address the request: {user_message[:200]}",
@@ -775,6 +794,12 @@ class Orchestrator:
         # could re-invoke a runner that already ran a side effect (e.g. a data mutation).
         wants_emit = emit is not None and _run_goal_accepts_emit(self.deep_runner)
         emit_fn = (lambda ev: emit.emit(ev)) if wants_emit else None
+        # A per-task ``rep_preamble`` (e.g. an AI rep's pulled persona) is forwarded to the deep
+        # run for THIS task only, and ONLY to a runner whose ``run_goal`` accepts ``context_preamble``
+        # (older signatures are untouched). The brain stays ignorant of what the string contains —
+        # it is just a context preamble it passes through.
+        wants_preamble = (rep_preamble is not None
+                          and _run_goal_accepts_context_preamble(self.deep_runner))
 
         def run_one(st: Dict[str, Any]) -> DeepResult:
             goal = (st.get("goal") or "").strip() or f"Fully address: {user_message[:200]}"
@@ -784,6 +809,8 @@ class Orchestrator:
                               max_turns=self.cfg.deep_max_turns)
                 if emit_fn is not None:
                     kwargs["emit"] = emit_fn
+                if wants_preamble:
+                    kwargs["context_preamble"] = rep_preamble
                 res = self.deep_runner.run_goal(**kwargs)
             except Exception as e:  # noqa: BLE001
                 res = DeepResult(met=False, error=type(e).__name__)
@@ -836,7 +863,8 @@ class Orchestrator:
             detach_check: Optional[Callable[[], bool]] = None,
             model_hint: Optional[str] = None,
             attachments: Optional[List[Dict[str, Any]]] = None,
-            context_meta: Optional[Dict[str, Any]] = None) -> OrchestratorResult:
+            context_meta: Optional[Dict[str, Any]] = None,
+            rep_preamble: Optional[str] = None) -> OrchestratorResult:
         """Run the bounded loop for one request and return a terminal OrchestratorResult.
 
         Streaming/event interface (both lanes use the SAME emissions; the SINK decides policy):
@@ -868,6 +896,11 @@ class Orchestrator:
                             text descriptions/inventory join the PLANNER context (so planning is
                             grounded in them), and native image blocks ride the final ANSWER
                             message. Absent/None means exactly today's behavior.
+        * ``rep_preamble`` — optional PER-RUN context preamble for the deep step only (e.g. an AI
+                            rep's persona + learned corrections, so a deep run executes AS that
+                            rep). The brain stays ignorant of its content — it forwards the string
+                            to a deep runner that accepts ``context_preamble`` and leaves older
+                            runners untouched. Absent/None means exactly today's behavior.
 
         ``run`` still works with NO event args (back-compat: same signature callers used before
         plus keyword-only extras), returning the terminal ``OrchestratorResult``.
@@ -1023,7 +1056,7 @@ class Orchestrator:
         if final == "deep":
             emit.status("working on this now…")
             res = self._run_deep(plan, user_message, self._answer_model(plan, "opus", hint=model_hint),
-                                 emit=emit)
+                                 emit=emit, rep_preamble=rep_preamble)
             return finish(res)
 
         if final == "confirm":

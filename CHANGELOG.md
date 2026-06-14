@@ -7,6 +7,26 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Opt-in reps run tasks AS their Quest persona by DEFAULT.** The rep-sync capability is still
+  OFF unless a consumer supplies `RunnerConfig.rep_sync_resolver`, but the moment it is on, the
+  default does the complete thing with NO extra glue: the poller resolves the rep, PULLS its Quest
+  profile into the local skill file before the run, builds a per-run preamble from that file's
+  MANAGED sections (persona + learned corrections, composed with the runner's context doctrine via
+  `core.context_doctrine.compose_deep_preamble`), and injects it into the deep run so the task runs
+  AS that rep. New `RunnerConfig.rep_sync_direction` (`"pull"` default | `"push"` | `"both"`) gates
+  the sync: `pull` = Quest -> skill file before the run (Quest is the source of truth at execution
+  time, no push-back); `push` = skill file -> Quest AFTER the run only (no pre-run pull, so no
+  persona injection); `both` = pull then push. `validate()` reports an unknown value. Push-back and
+  the pre-run pull are both best-effort: a sync failure is logged and NEVER fails the task.
+  `TaskExecutor.execute(task, *, rep_preamble=None)` threads the preamble into
+  `Orchestrator.run(rep_preamble=...)`, which forwards it to the deep run ONLY for a `DeepRunner`
+  whose `run_goal` accepts a `context_preamble` kwarg (older runners are untouched, mirroring the
+  `emit` opt-in). `SubprocessGoalRunner.run_goal` now accepts an optional per-call `context_preamble`
+  that overrides its configured base preamble for that run. The brain stays generic: it only passes
+  a string through; the persona content comes from the consumer's Quest profile. No
+  `ContextAssembler` is required: a consumer that sets only `rep_sync_resolver` gets the rep's
+  persona in the run. Fully additive: a consumer with no resolver, and any existing caller, sees
+  IDENTICAL behaviour to before.
 - **Context handling is ON BY DEFAULT.** `RunnerConfig.context_assembler` now defaults to an
   `_AUTO` sentinel: leaving it unset makes `build_orchestrator` wire a default `FileContextStore`
   (cards under `context_cards_dir`, or `<corpus_root|cwd>/.quest-context`) so the runner grounds on

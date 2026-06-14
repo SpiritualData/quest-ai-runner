@@ -21,15 +21,34 @@ This module provides:
 """
 from __future__ import annotations
 
+import inspect
 import os
 import shutil
 import subprocess
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from .adapters import DeepResult, DeepRunner
 
 DEFAULT_DEEP_MAX_TURNS = 30
+
+
+def _run_goal_accepts_context_preamble(runner: Any) -> bool:
+    """Whether a DeepRunner's ``run_goal`` accepts a ``context_preamble`` keyword (or **kwargs).
+
+    Mirrors the orchestrator's ``emit`` capability check: a per-call preamble is forwarded ONLY to
+    runners that opt in by accepting the kwarg, leaving older ``run_goal`` signatures untouched.
+    Decided by signature inspection rather than try/except so a runner with a side effect is never
+    invoked twice.
+    """
+    try:
+        sig = inspect.signature(runner.run_goal)
+    except (ValueError, TypeError, AttributeError):
+        return False
+    for p in sig.parameters.values():
+        if p.name == "context_preamble" or p.kind is inspect.Parameter.VAR_KEYWORD:
+            return True
+    return False
 
 # The escalation-marker contract: a spawned worker that raised a human decision mid-run (via
 # whatever escalation mechanism its consumer preamble gave it) reports the decision back to the
@@ -85,10 +104,16 @@ class GoalRunner:
         self._default_max_turns = default_max_turns
 
     def run(self, *, goal: str, brief: str, model: Optional[str] = None,
-            max_turns: Optional[int] = None) -> DeepResult:
+            max_turns: Optional[int] = None,
+            context_preamble: Optional[str] = None) -> DeepResult:
         turns = max_turns if max_turns is not None else self._default_max_turns
         try:
-            res = self._runner.run_goal(goal=goal, brief=brief, model=model, max_turns=turns)
+            kwargs = dict(goal=goal, brief=brief, model=model, max_turns=turns)
+            # Forward a per-call preamble ONLY to a wrapped runner that accepts it, so older
+            # DeepRunner signatures (no ``context_preamble`` kwarg) keep working unchanged.
+            if context_preamble is not None and _run_goal_accepts_context_preamble(self._runner):
+                kwargs["context_preamble"] = context_preamble
+            res = self._runner.run_goal(**kwargs)
         except Exception as e:  # noqa: BLE001 — the goal contract never raises to the caller
             return DeepResult(met=False, error=f"deep runner failed: {type(e).__name__}")
         # Normalize: a runner that forgot to set met but returned an error is "not met".
@@ -178,8 +203,14 @@ class SubprocessGoalRunner(DeepRunner):
         return env
 
     def run_goal(self, *, goal: str, brief: str, model: Optional[str] = None,
-                 max_turns: Optional[int] = None) -> DeepResult:
-        prompt = compose_goal_prompt(goal, brief, preamble=self.cfg.context_preamble)
+                 max_turns: Optional[int] = None,
+                 context_preamble: Optional[str] = None) -> DeepResult:
+        # ``context_preamble`` is an OPTIONAL PER-CALL override of ``self.cfg.context_preamble``.
+        # When the orchestrator forwards a per-task preamble (e.g. an AI rep's pulled persona), it
+        # is used for THIS run only; otherwise the runner's configured base preamble applies, so
+        # callers that pass nothing see exactly the prior behaviour.
+        preamble = self.cfg.context_preamble if context_preamble is None else context_preamble
+        prompt = compose_goal_prompt(goal, brief, preamble=preamble)
         binary = self.cfg.claude_path
         if os.path.sep not in binary:
             resolved = shutil.which(binary)

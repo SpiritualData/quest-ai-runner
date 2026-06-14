@@ -259,6 +259,7 @@ class DeepRunner(Protocol):
     def run_goal(
         self, *, goal: str, brief: str, model: Optional[str] = None, max_turns: Optional[int] = None,
         emit: Optional[Callable[[ProgressEvent], None]] = None,
+        context_preamble: Optional[str] = None,
     ) -> DeepResult:
         """Run an autonomous worker toward ``goal`` (a written done-standard), bounded by
         ``max_turns``. Return a DeepResult distinguishing met-vs-limit. Never raises.
@@ -268,7 +269,14 @@ class DeepRunner(Protocol):
         ``ProgressEvent(type=EVENT_EXEC, ...)``. The orchestrator routes these through the run's
         sink, so they show live (LIVE) and are dropped as chatter (BACKGROUND), exactly like other
         intermediate texture. Runners that don't stream may ignore it. The orchestrator only passes
-        ``emit`` to runners whose ``run_goal`` accepts it, so older signatures keep working."""
+        ``emit`` to runners whose ``run_goal`` accepts it, so older signatures keep working.
+
+        ``context_preamble`` (optional) is a PER-CALL context preamble for THIS run only. The
+        orchestrator forwards it (when the caller supplies one, e.g. an AI rep's pulled persona)
+        so the run executes with that context without mutating any shared runner state. A runner
+        that accepts it should prepend it ahead of its own configured preamble (or use it in
+        place of one). Like ``emit``, it is passed ONLY to runners whose ``run_goal`` accepts it,
+        so older signatures keep working and callers that pass nothing see prior behaviour."""
 
 
 @runtime_checkable
@@ -504,7 +512,8 @@ class ModelProviderBase(abc.ABC):
 
 class DeepRunnerBase(abc.ABC):
     @abc.abstractmethod
-    def run_goal(self, *, goal, brief, model=None, max_turns=None, emit=None) -> DeepResult: ...
+    def run_goal(self, *, goal, brief, model=None, max_turns=None, emit=None,
+                 context_preamble=None) -> DeepResult: ...
 
 
 class EscalationSinkBase(abc.ABC):
