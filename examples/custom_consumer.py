@@ -23,6 +23,11 @@ Optional env:
   QAR_DECISION_ASSIGNEE user id that human-only confirm/decision requests route to
   QAR_CONTEXT_PREAMBLE  org/persona context prepended to every deep-run brief
   QAR_RUNNER_LABEL      a human-readable tag sent on the env heartbeat
+  QAR_CONTEXT_CARDS_DIR directory for the optional ContextAssembler's cards (FileContextStore).
+                        When a corpus is set this defaults to `<corpus>/.quest-context`, so
+                        task-specific context is pre-assembled and reused across runs and goes
+                        stale when the pinned files change. Set empty to disable. Gitignore it
+                        (it is machine-written local state, not source).
 
 See `.env.example` at the repo root for the full list.
 """
@@ -31,7 +36,12 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from quest_ai_runner.adapters import AnthropicProvider, ClaudeCliProvider, FilesAdapter
+from quest_ai_runner.adapters import (
+    AnthropicProvider,
+    ClaudeCliProvider,
+    FileContextStore,
+    FilesAdapter,
+)
 from quest_ai_runner.config import RunnerConfig
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
@@ -67,6 +77,17 @@ def build_config(*, with_model_provider: bool = True) -> RunnerConfig:
             ),
         ))
 
+    # Optional ContextAssembler: pre-assemble task-specific context and reuse it across runs,
+    # invalidating cards when their pinned files change (git/mtime/sha256, no LLM). Cards dir comes
+    # from env, defaulting to `<corpus>/.quest-context` when a corpus is set; set the env to empty
+    # to disable. repo_root=corpus lets staleness also read git blob shas when the corpus is a repo.
+    cards_dir = os.getenv("QAR_CONTEXT_CARDS_DIR")
+    if cards_dir is None and corpus:
+        cards_dir = os.path.join(corpus, ".quest-context")
+    context_assembler = (
+        FileContextStore(cards_dir, repo_root=corpus) if cards_dir else None
+    )
+
     return RunnerConfig(
         quest_base_url=os.getenv("QUEST_BASE_URL", ""),
         quest_api_key=os.getenv("QUEST_API_KEY", ""),
@@ -76,6 +97,7 @@ def build_config(*, with_model_provider: bool = True) -> RunnerConfig:
         model_provider=_model_provider() if with_model_provider else None,
         deep_runner=deep,
         corpus_root=corpus,
+        context_assembler=context_assembler,
         default_assignee_user_id=os.getenv("QAR_DECISION_ASSIGNEE"),
     )
 
