@@ -16,15 +16,48 @@ misses semantics: a task phrased as "clean up the payment pipeline" may not
 contain the token ``billing`` even if ``billing/`` is exactly where the work
 lives.
 
-Vector search closes that gap.  The two retrieval modes are **complementary**:
+Vector search closes that gap.
 
-| Mode | Strengths | Weaknesses |
-|------|-----------|------------|
-| Keyword/IDF (``FileContextStore``) | exact identifiers, symbols, paths | paraphrase, semantics |
-| Vector (``VectorContextAssembler``) | semantics, paraphrase, cross-lingual | rare tokens, exact ids |
+---
 
-The ``HybridContextAssembler`` runs both in parallel and fuses the results,
-delivering higher recall than either alone.
+## Three arms: sparse-content + dense-summaries + keyword-IDF
+
+The library ships three complementary retrieval arms.  Use them together for
+the highest recall:
+
+| Arm | Indexes | Finds | Misses |
+|-----|---------|-------|--------|
+| **``FileContextStore``** (stdlib) | Card keyword summaries + symbol names (IDF) | Files whose path segments or symbols match the task | Exact phrases in file bodies; semantic paraphrase |
+| **``VectorContextAssembler``** (``[qdrant]``) | Summaries / topics as dense vectors | Semantic / paraphrase matches | **Full file content is NOT embedded** -- rare identifiers, exact strings |
+| **``BM25ContentStore``** (``[bm25]``) | **Actual file content** -- every token in every file | **Exact identifiers, rare tokens, specific phrases** in un-embedded content | Pure semantic paraphrase |
+
+**The key insight:** the dense vector arm embeds *summaries and topics*, not
+full file bodies.  A distinctive identifier like ``XFCALLBACK_7Q2`` or a
+legacy constant that never appears in any summary is invisible to the vector
+index.  ``BM25ContentStore`` (sparse BM25 over actual content) fills that gap
+and is the correct first responder for "find every file that uses identifier X."
+
+### Sparse BM25 over content -- parallel multi-query
+
+``BM25ContentStore`` walks the corpus root, reads each file's actual text, and
+builds a BM25 index over the content.  When a ``ModelProvider`` is wired, it
+generates diverse keyword queries IN PARALLEL for higher recall, then fuses
+hits across all queries (best score per file wins).
+
+```bash
+pip install 'quest-ai-runner[bm25]'
+```
+
+```python
+from quest_ai_runner.adapters.bm25_content_store import BM25ContentStore
+
+store = BM25ContentStore(root=".", confidence_threshold=0.0)
+ac = store.assemble("XFCALLBACK_7Q2")
+# ac.card_ids contains the files that mention that exact identifier
+```
+
+The two vector/sparse modes are **complementary**: use ``HybridContextAssembler``
+(or a custom composite) to run all arms in parallel and fuse their results.
 
 ---
 

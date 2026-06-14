@@ -15,6 +15,11 @@ These satisfy the core interfaces; a consumer wires the ones it needs into a Run
                                 Protocol only; heavy deps behind an optional extra.
   * HybridContextAssembler    — Fuses a keyword/IDF assembler and a vector assembler in parallel
                                 (RRF-style complementary fusion). Stdlib only.
+  * BM25ContentStore          — ContextAssembler using BM25 over ACTUAL FILE CONTENT (not summaries).
+                                Finds exact identifiers, rare tokens, and specific phrases that the
+                                dense vector arm (which only embeds summaries) cannot. Agentic
+                                parallel multi-query: generates diverse queries via an optional
+                                ModelProvider and searches IN PARALLEL. Requires the [bm25] extra.
   * QdrantVectorStore         — VectorStoreBase backed by a local-filesystem or remote Qdrant
                                 instance. Requires the [qdrant] optional extra.
 
@@ -28,6 +33,16 @@ from .file_context_store import FileContextStore
 from .files_adapter import FilesAdapter
 from .hybrid_context_assembler import HybridContextAssembler
 from .vector_context_assembler import VectorContextAssembler
+
+# BM25ContentStore requires the [bm25] optional extra (bm25s).
+# Guard the import so that ``import quest_ai_runner.adapters`` works even without
+# bm25s installed.  Consumers that want BM25ContentStore must install the extra.
+try:
+    from .bm25_content_store import BM25ContentStore
+    _BM25_AVAILABLE = True
+except ImportError:
+    _BM25_AVAILABLE = False
+    BM25ContentStore = None  # type: ignore[assignment,misc]
 
 # QdrantVectorStore requires the [qdrant] optional extra (qdrant-client + fastembed).
 # Guard the import so that ``import quest_ai_runner.adapters`` works even without
@@ -48,5 +63,6 @@ __all__ = [
     "FileContextStore",
     "VectorContextAssembler",
     "HybridContextAssembler",
+    "BM25ContentStore",
     "QdrantVectorStore",
 ]

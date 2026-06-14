@@ -102,7 +102,65 @@ runner's `context_preamble`.
   Opus for review/quality/ambiguity/irreversible — **and escalate one tier on a failed verification
   rather than re-running identically.**
 
-## Scope and the optional enrichment path
+## Three retrieval arms and how they divide the problem
+
+The library ships three complementary ``ContextAssembler`` implementations. Each arm covers a
+different retrieval need; together they form a complete sparse + dense + exact-content stack.
+
+| Arm | What it indexes | What it finds well | What it misses |
+|-----|----------------|--------------------|----------------|
+| **``FileContextStore``** (stdlib-only) | Card summaries + symbol names (IDF over keyword metadata) | Files whose path segments or exported symbol names overlap the task text | Rare tokens, exact phrases buried in file bodies; semantic paraphrase |
+| **``VectorContextAssembler``** (``[qdrant]`` extra) | Summaries / topics embedded as dense vectors | Semantic / paraphrase matches ("payment pipeline" → ``billing/``) | **Full file content is NOT embedded** -- rare identifiers, exact strings |
+| **``BM25ContentStore``** (``[bm25]`` extra) | **Actual file content** -- every token in every file body | **Exact identifiers, rare tokens, specific phrases** in un-embedded content | Pure semantic paraphrase (no embeddings) |
+
+### Why the sparse-content arm matters
+
+The dense vector arm embeds *summaries and topics*, not full documents. A distinctive identifier
+like ``XFCALLBACK_7Q2`` or a legacy constant that never appears in any summary is invisible to the
+vector index. The IDF arm only sees card metadata (keyword fields and symbol names), not the raw
+body of each file.
+
+``BM25ContentStore`` fills that gap: it walks the corpus root, reads each file's ACTUAL TEXT, and
+builds a BM25 index over the content. Any token that appears in a file body is searchable, making
+the sparse arm the correct first responder for "find every file that uses identifier X" or "locate
+the file containing this exact error string."
+
+### Agentic parallel multi-query (BM25ContentStore)
+
+When a ``ModelProvider`` is wired, ``BM25ContentStore.assemble()`` uses the LLM once to generate
+``num_queries`` diverse keyword/phrase queries from the task text, then runs a BM25 search for
+EACH query IN PARALLEL (``concurrent.futures.ThreadPoolExecutor``). Hits from all queries are
+deduplicated by file path (best score wins) and fused. This gives higher recall than a single
+query, because different phrasings surface different matching files.
+
+```
+Task text
+   │
+   ├─► [LLM, optional] Generate num_queries keyword/phrase queries (one cheap call)
+   │
+   ▼
+All queries (raw task + LLM-generated)
+   │
+   ├─► BM25-search each query IN PARALLEL (ThreadPoolExecutor)
+   │      ↓ deduplicate hits by file path, keep best score
+   ▼
+Candidate (path, score) pairs → confidence gate (score >= confidence_threshold)
+   │
+   ▼
+top max_in_view hits, rendered as path + best-matching snippet → AssembledContext
+```
+
+When no provider is given, only the raw task text is searched (no LLM call, fully offline).
+
+### Auto-update (content fingerprints)
+
+On every ``assemble()`` call the index is lazily built on first use. Subsequent calls run an
+auto-update pass: a cheap sha256 fingerprint check over every file determines which files changed
+since the last index; only changed/new files are re-tokenized and the BM25 index is rebuilt over
+the updated corpus. Unchanged files reuse their cached token lists. This keeps the index fresh
+with no manual re-index step.
+
+### Scope and the optional enrichment path
 
 The stdlib `FileContextStore` (cards + git/mtime staleness + the gates + guaranteed injection +
 write-back) is the complete default. **Richer retrieval is a separate, optional `ContextAssembler`
@@ -110,8 +168,9 @@ behind the same Protocol**, gated on optional extras, to add only when card volu
 justifies it (our survey's conclusion):
 
 - repo mapping: tree-sitter + PageRank (aider-style), zero-LLM, to pick load-bearing files;
-- retrieval: **bm25s** (pure-Python BM25) + **FlashRank** (4 MB ONNX reranker), both infra-free;
-  **Qdrant-native hybrid (dense + BM25 + RRF)** when a Qdrant deployment is already present;
+- retrieval: **bm25s** (pure-Python BM25, via ``BM25ContentStore``) + **FlashRank** (4 MB ONNX
+  reranker), both infra-free; **Qdrant-native hybrid (dense + BM25 + RRF)** when a Qdrant
+  deployment is already present;
 - index-time enrichment: Anthropic-style contextual retrieval (a one-line Haiku blurb per chunk).
 
 None of these enter `core` or the default install; they live behind the adapter, so the zero-dep
