@@ -1180,3 +1180,323 @@ class TestQdrantVectorStoreSmoke:
         from quest_ai_runner.adapters.qdrant_vector_store import QdrantVectorStore
         with pytest.raises(ImportError, match="quest-ai-runner\\[qdrant\\]"):
             QdrantVectorStore(path="/tmp/test")
+
+
+# ---------------------------------------------------------------------------
+# NEW: FileContextStore.export_for_embedding (cold-start bootstrap items)
+# ---------------------------------------------------------------------------
+
+class TestFileContextStoreExportForEmbedding:
+    """export_for_embedding returns id/text/payload/fingerprint for each card."""
+
+    def _make_tiny_repo(self, tmp_path) -> "FileContextStore":
+        """Bootstrap a small FileContextStore over a temp repo with one Python file."""
+        from quest_ai_runner.adapters.file_context_store import FileContextStore
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        # A Python file with a module docstring so description is populated.
+        (repo / "billing.py").write_text(
+            '"""Billing module: generates invoices for customers."""\n\n'
+            "def generate_invoice(cid):\n"
+            '    """Generate an invoice for customer cid."""\n'
+            "    pass\n",
+            encoding="utf-8",
+        )
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(
+            str(cards_dir), repo_root=str(repo),
+            auto_bootstrap=True, confidence_threshold=0.0,
+        )
+        # Trigger bootstrap by calling assemble (auto_bootstrap).
+        store.assemble("billing invoice")
+        return store
+
+    def test_returns_list_of_dicts(self, tmp_path):
+        store = self._make_tiny_repo(tmp_path)
+        items = store.export_for_embedding()
+        assert isinstance(items, list), "should return a list"
+        assert len(items) > 0, "should return at least one item"
+
+    def test_each_item_has_required_keys(self, tmp_path):
+        store = self._make_tiny_repo(tmp_path)
+        items = store.export_for_embedding()
+        for item in items:
+            assert "id" in item, f"missing 'id': {item}"
+            assert "text" in item, f"missing 'text': {item}"
+            assert "payload" in item, f"missing 'payload': {item}"
+            assert "fingerprint" in item, f"missing 'fingerprint': {item}"
+
+    def test_item_id_prefixed_with_card(self, tmp_path):
+        store = self._make_tiny_repo(tmp_path)
+        items = store.export_for_embedding()
+        for item in items:
+            assert item["id"].startswith("card:"), (
+                f"expected id to start with 'card:', got {item['id']!r}"
+            )
+
+    def test_text_uses_docstring_description(self, tmp_path):
+        store = self._make_tiny_repo(tmp_path)
+        items = store.export_for_embedding()
+        # The billing.py module docstring text should appear as embed text.
+        billing_item = next(
+            (it for it in items if "billing" in it["id"].lower()), None
+        )
+        assert billing_item is not None, "expected an item for billing.py"
+        assert "billing" in billing_item["text"].lower() or "invoice" in billing_item["text"].lower(), (
+            f"expected docstring content in text, got: {billing_item['text']!r}"
+        )
+
+    def test_payload_has_paths_symbols_summary_kind(self, tmp_path):
+        store = self._make_tiny_repo(tmp_path)
+        items = store.export_for_embedding()
+        billing_item = next(
+            (it for it in items if "billing" in it["id"].lower()), None
+        )
+        assert billing_item is not None, "expected a billing item"
+        payload = billing_item["payload"]
+        assert "paths" in payload, f"missing 'paths' in payload: {payload}"
+        assert "symbols" in payload, f"missing 'symbols' in payload: {payload}"
+        assert "summary" in payload, f"missing 'summary' in payload: {payload}"
+        assert payload.get("kind") == "bootstrap", (
+            f"expected kind='bootstrap', got {payload.get('kind')!r}"
+        )
+
+    def test_payload_paths_contains_source_file(self, tmp_path):
+        store = self._make_tiny_repo(tmp_path)
+        items = store.export_for_embedding()
+        billing_item = next(
+            (it for it in items if "billing" in it["id"].lower()), None
+        )
+        assert billing_item is not None
+        paths = billing_item["payload"].get("paths", [])
+        assert any("billing" in p for p in paths), (
+            f"expected billing.py in paths, got: {paths}"
+        )
+
+    def test_fingerprint_is_stable_for_unchanged_files(self, tmp_path):
+        store = self._make_tiny_repo(tmp_path)
+        items1 = store.export_for_embedding()
+        items2 = store.export_for_embedding()
+        fp1 = {it["id"]: it["fingerprint"] for it in items1}
+        fp2 = {it["id"]: it["fingerprint"] for it in items2}
+        assert fp1 == fp2, "fingerprints should be stable for unchanged files"
+
+    def test_empty_store_returns_empty_list(self, tmp_path):
+        from quest_ai_runner.adapters.file_context_store import FileContextStore
+        cards_dir = tmp_path / "empty_cards"
+        store = FileContextStore(str(cards_dir), auto_bootstrap=False)
+        items = store.export_for_embedding()
+        assert items == [], "empty store should return []"
+
+    def test_never_raises_on_corrupt_state(self, tmp_path):
+        """export_for_embedding must return [] rather than raising on any error."""
+        from quest_ai_runner.adapters.file_context_store import FileContextStore
+        # Point at a non-existent path for cards_dir and no repo_root.
+        store = FileContextStore(
+            str(tmp_path / "nonexistent_cards"),
+            auto_bootstrap=False,
+        )
+        result = store.export_for_embedding()
+        assert isinstance(result, list)
+
+
+# ---------------------------------------------------------------------------
+# NEW: VectorContextAssembler cold-start seeding via seed_source
+# ---------------------------------------------------------------------------
+
+class TestVectorContextAssemblerSeedSource:
+    """seed_source syncs bootstrap items into the store on first assemble()."""
+
+    def test_seed_source_called_on_first_assemble(self, tmp_path):
+        """The seed_source callable must be called on the first assemble()."""
+        call_log: List[int] = []
+
+        def my_seed() -> List[Dict[str, Any]]:
+            call_log.append(1)
+            return [{"id": "card:boot1", "text": "bootstrap billing module", "payload": {"kind": "bootstrap"}, "fingerprint": "fp1"}]
+
+        store = FakeVectorStore()
+        asm = VectorContextAssembler(store, seed_source=my_seed, confidence_min_score=0.0)
+        assert call_log == [], "seed_source should not be called at construction"
+        asm.assemble("billing module")
+        assert len(call_log) == 1, "seed_source should be called on first assemble()"
+
+    def test_seed_source_not_called_twice(self, tmp_path):
+        """The seed is guarded: must run at most once per instance."""
+        call_log: List[int] = []
+
+        def my_seed() -> List[Dict[str, Any]]:
+            call_log.append(1)
+            return [{"id": "card:boot1", "text": "some text", "payload": {}, "fingerprint": "fp1"}]
+
+        store = FakeVectorStore()
+        asm = VectorContextAssembler(store, seed_source=my_seed, confidence_min_score=0.0)
+        asm.assemble("task one")
+        asm.assemble("task two")
+        assert len(call_log) == 1, (
+            f"seed_source should only be called once, called {len(call_log)} times"
+        )
+
+    def test_seeded_item_is_searchable_after_first_assemble(self):
+        """After seeding, the vector store contains items and a search returns hits."""
+        store = FakeVectorStore()
+
+        def my_seed() -> List[Dict[str, Any]]:
+            return [{
+                "id": "card:boot-billing",
+                "text": "billing invoice generation module",
+                "payload": {"paths": ["billing.py"], "kind": "bootstrap"},
+                "fingerprint": "fp-billing",
+            }]
+
+        asm = VectorContextAssembler(store, seed_source=my_seed, confidence_min_score=0.0)
+        ac = asm.assemble("billing invoice")
+        assert "card:boot-billing" in ac.card_ids, (
+            f"seeded item should appear in results, card_ids={ac.card_ids!r}"
+        )
+
+    def test_seed_fingerprint_based_no_reembed_on_second_instance(self):
+        """sync() skips unchanged items: a second instance with same seed doesn't re-embed."""
+        call_log: List[int] = []
+        store = FakeVectorStore()
+
+        items = [{"id": "card:boot1", "text": "billing module", "payload": {}, "fingerprint": "fp-stable"}]
+
+        def my_seed() -> List[Dict[str, Any]]:
+            call_log.append(1)
+            return items
+
+        # First instance: seeds.
+        asm1 = VectorContextAssembler(store, seed_source=my_seed, confidence_min_score=0.0)
+        asm1.assemble("billing module")
+        assert len(call_log) == 1
+
+        # Manually verify the item is in the store with its fingerprint.
+        coll = store._data.get("_default", {})
+        assert "card:boot1" in coll, "item should be in store after first seed"
+        assert coll["card:boot1"]["fingerprint"] == "fp-stable"
+
+        # Second instance with same items: sync should report 0 re-embeds.
+        call_log2: List[int] = []
+
+        def my_seed2() -> List[Dict[str, Any]]:
+            call_log2.append(1)
+            return items
+
+        asm2 = VectorContextAssembler(store, seed_source=my_seed2, confidence_min_score=0.0)
+        asm2.assemble("billing module")
+        assert len(call_log2) == 1, "seed_source should still be called (to check)"
+        # But the store's item should still have the same fingerprint (not re-inserted with a
+        # different one), meaning sync() detected no change.
+        coll2 = store._data.get("_default", {})
+        assert coll2["card:boot1"]["fingerprint"] == "fp-stable"
+
+    def test_seed_source_none_no_seeding(self):
+        """Without seed_source, the store is NOT pre-populated."""
+        store = FakeVectorStore()
+        asm = VectorContextAssembler(store, seed_source=None, confidence_min_score=0.0)
+        asm.assemble("billing invoice")
+        # Store should be empty (no task associations written either since no record() called).
+        total = sum(len(c) for c in store._data.values())
+        assert total == 0, "store should remain empty without seed_source and without record()"
+
+    def test_seed_source_error_does_not_raise(self):
+        """A failing seed_source must be silently swallowed; assemble() must not raise."""
+        def bad_seed() -> List[Dict[str, Any]]:
+            raise RuntimeError("seed failed")
+
+        store = FakeVectorStore()
+        asm = VectorContextAssembler(store, seed_source=bad_seed, confidence_min_score=0.0)
+        # Must not raise.
+        ac = asm.assemble("any task")
+        assert isinstance(ac, AssembledContext)
+
+    def test_seed_with_real_file_context_store(self, tmp_path):
+        """Integration: FileContextStore.export_for_embedding wired as seed_source."""
+        from quest_ai_runner.adapters.file_context_store import FileContextStore
+
+        # Build a tiny repo.
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "payments.py").write_text(
+            '"""Payment processing: handles payment capture and refunds."""\n\n'
+            "def capture(amount):\n"
+            '    """Capture a payment."""\n'
+            "    pass\n",
+            encoding="utf-8",
+        )
+        cards_dir = tmp_path / "cards"
+        kw_store = FileContextStore(
+            str(cards_dir), repo_root=str(repo),
+            auto_bootstrap=True, confidence_threshold=0.0,
+        )
+        # Bootstrap the keyword store first so there are cards to export.
+        kw_store.bootstrap(root=str(repo))
+
+        vec_store = FakeVectorStore()
+        asm = VectorContextAssembler(
+            vec_store,
+            seed_source=kw_store.export_for_embedding,
+            confidence_min_score=0.0,
+        )
+        # First assemble triggers seeding.
+        ac = asm.assemble("payment capture processing")
+        # The vector store should now have items.
+        total_items = sum(len(c) for c in vec_store._data.values())
+        assert total_items > 0, "seeding should populate the vector store"
+        # And the assembly result should include a seeded card hit.
+        assert any("card:" in cid for cid in ac.card_ids), (
+            f"expected a seeded card in results, card_ids={ac.card_ids!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# NEW: resolve_context_assembler wires seed_source in hybrid mode
+# ---------------------------------------------------------------------------
+
+class TestResolveContextAssemblerSeedSourceWiring:
+    """resolve_context_assembler passes seed_source=keyword.export_for_embedding
+    when building the hybrid, so the vector arm is seeded on first use."""
+
+    def test_hybrid_vector_arm_has_seed_source_wired(self, tmp_path):
+        """When vector_store is set, the resolved vector arm has seed_source wired."""
+        from quest_ai_runner.config import RunnerConfig, resolve_context_assembler, _AUTO_CONTEXT
+        from quest_ai_runner.adapters.hybrid_context_assembler import HybridContextAssembler
+
+        # Build a minimal config with a vector store but no model_provider.
+        vec_store = FakeVectorStore()
+
+        # We need a tiny repo so FileContextStore can be built without crashing.
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "main.py").write_text(
+            '"""Main entry point: orchestrates the application startup."""\n\n'
+            "def run():\n"
+            '    """Run the application."""\n'
+            "    pass\n",
+            encoding="utf-8",
+        )
+
+        cfg = RunnerConfig(
+            quest_base_url="http://example.com",
+            quest_api_key="qsk_test",
+            retrieval=None,  # not needed for context wiring test
+            model_provider=None,
+            vector_store=vec_store,
+            corpus_root=str(repo),
+            context_cards_dir=str(tmp_path / "cards"),
+        )
+
+        assembler = resolve_context_assembler(cfg)
+        assert isinstance(assembler, HybridContextAssembler), (
+            f"expected HybridContextAssembler, got {type(assembler)!r}"
+        )
+
+        # Trigger first assemble — this should cause the vector arm to call sync().
+        assembler.assemble("main module")
+
+        # The vector store should have items from seeding.
+        total_items = sum(len(c) for c in vec_store._data.values())
+        assert total_items > 0, (
+            "vector store should be populated after first assemble() via seed_source"
+        )

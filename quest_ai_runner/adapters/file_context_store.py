@@ -1016,6 +1016,98 @@ class FileContextStore(ContextAssemblerBase):
         except Exception:  # noqa: BLE001
             return (0.0, 0)
 
+    def export_for_embedding(self) -> List[Dict[str, Any]]:
+        """Return one item per card suitable for ``VectorStore.sync()``.
+
+        Each item is::
+
+            {
+              "id": "card:<card_id>",
+              "text": <description when present, else summary>,
+              "payload": {
+                "paths": [file paths],
+                "symbols": [symbol names],
+                "summary": <summary>,
+                "kind": "bootstrap",
+              },
+              "fingerprint": <sha256 hash of the card's file fingerprints,
+                             changes only when file content changes>,
+            }
+
+        The ``fingerprint`` is a hash of the stored sha256 values for every file
+        pinned by the card. When files change the card is refreshed by
+        ``bootstrap()`` and the fingerprint changes, causing ``sync()`` to
+        re-embed only those cards (AUTO-UPDATE). Unchanged cards are skipped.
+
+        Builds the in-memory card cache if it has not been loaded yet. Returns
+        ``[]`` on any error. Never raises.
+        """
+        try:
+            import hashlib as _hl
+            # Ensure the store is populated before exporting. This is important when
+            # export_for_embedding is called from a parallel thread (e.g. by the vector
+            # arm of a HybridContextAssembler) before the keyword arm has had a chance
+            # to call assemble() and trigger its own auto-bootstrap.
+            self._maybe_auto_bootstrap()
+            cards = self._load_all()
+            result: List[Dict[str, Any]] = []
+            for card_id, card in cards.items():
+                try:
+                    # --- Text: prefer docstring-rich description, fall back to summary ---
+                    text = card.get("description") or card.get("summary") or ""
+                    if not text:
+                        continue
+
+                    # --- Payload ---
+                    paths: List[str] = [
+                        fe.get("path", "") for fe in card.get("files", []) if fe.get("path")
+                    ]
+                    symbols: List[str] = []
+                    for fe in card.get("files", []):
+                        symbols.extend(fe.get("symbols", []))
+                    # Deduplicate symbols preserving order.
+                    seen_syms: Set[str] = set()
+                    unique_syms: List[str] = []
+                    for s in symbols:
+                        if s not in seen_syms:
+                            seen_syms.add(s)
+                            unique_syms.append(s)
+
+                    payload: Dict[str, Any] = {
+                        "paths": paths,
+                        "symbols": unique_syms[:30],
+                        "summary": card.get("summary", ""),
+                        "kind": "bootstrap",
+                    }
+
+                    # --- Fingerprint: hash of all stored file sha256 values ---
+                    # If file content changes -> bootstrap() rewrites the card with new
+                    # sha256 values -> fingerprint changes -> sync() re-embeds.
+                    fp_parts: List[str] = []
+                    for fe in card.get("files", []):
+                        s = fe.get("sha256") or ""
+                        if s:
+                            fp_parts.append(s)
+                    if fp_parts:
+                        fingerprint = _hl.sha256(
+                            "|".join(sorted(fp_parts)).encode("utf-8")
+                        ).hexdigest()[:16]
+                    else:
+                        # No file shas: use a hash of the text so re-bootstrap changes it.
+                        fingerprint = _hl.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+                    result.append({
+                        "id": f"card:{card_id}",
+                        "text": text,
+                        "payload": payload,
+                        "fingerprint": fingerprint,
+                    })
+                except Exception:  # noqa: BLE001 — skip malformed card
+                    continue
+            return result
+        except Exception:  # noqa: BLE001
+            return []
+
     def _load_all(self) -> Dict[str, Dict[str, Any]]:
         """Load all card JSON files from cards_dir. Returns {card_id: card_dict}.
 

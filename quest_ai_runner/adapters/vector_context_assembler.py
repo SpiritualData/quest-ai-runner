@@ -48,6 +48,10 @@ from typing import Any, Callable, Dict, List, Optional
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase, VectorHit, VectorStore
 
+# Type alias for a seed source callable: returns a list of items suitable for
+# ``VectorStore.sync()`` (each has id/text/payload/fingerprint keys).
+_SeedSource = Callable[[], List[Dict[str, Any]]]
+
 logger = logging.getLogger(__name__)
 
 # Maximum number of parallel search workers.  Bounded so we don't spawn a
@@ -105,6 +109,19 @@ class VectorContextAssembler(ContextAssemblerBase):
         all hits.
     max_in_view:
         Maximum number of hits to include in the rendered context view.
+    seed_source:
+        Optional callable with no arguments that returns a list of items
+        suitable for ``VectorStore.sync()`` (each with id/text/payload/
+        fingerprint keys).  When set, the FIRST ``assemble()`` call in this
+        process seeds the vector store by calling
+        ``self._store.sync(seed_source(), scope=None)`` before searching.
+        This solves the cold-start problem: on a fresh repo the store is empty
+        and vector orientation does nothing until tasks accumulate. Providing a
+        ``FileContextStore.export_for_embedding`` as the seed source embeds the
+        docstring-card descriptions so semantic search works immediately.
+        Because ``sync`` is fingerprint-based, subsequent calls only re-embed
+        changed cards (AUTO-UPDATE). The seeding is best-effort: any error is
+        silently swallowed. The guard fires ONCE per process (instance flag).
     """
 
     def __init__(
@@ -119,6 +136,7 @@ class VectorContextAssembler(ContextAssemblerBase):
         max_in_view: int = 8,
         half_life_days: float = 30.0,
         max_associations: int = 500,
+        seed_source: Optional[_SeedSource] = None,
         _clock: Optional[Callable[[], float]] = None,
     ) -> None:
         self._store = vector_store
@@ -130,6 +148,9 @@ class VectorContextAssembler(ContextAssemblerBase):
         self._max_in_view = max_in_view
         self._half_life_days = half_life_days
         self._max_associations = max_associations
+        self._seed_source: Optional[_SeedSource] = seed_source
+        # Guard: cold-start seeding runs at most once per process (per instance).
+        self._seed_done: bool = False
         # Injectable clock for deterministic tests; defaults to time.time.
         self._clock: Callable[[], float] = _clock if _clock is not None else time.time
 
@@ -137,10 +158,33 @@ class VectorContextAssembler(ContextAssemblerBase):
     # ContextAssemblerBase implementation
     # ------------------------------------------------------------------
 
+    def _maybe_seed(self) -> None:
+        """Seed the vector store from ``seed_source`` on the first assemble call.
+
+        Uses ``VectorStore.sync()`` so only new or changed items are embedded
+        (fingerprint-based AUTO-UPDATE). Best-effort: any error is swallowed.
+        The guard fires at most once per instance.
+        """
+        if self._seed_done:
+            return
+        self._seed_done = True  # set before any work so a failure is still final
+        if self._seed_source is None:
+            return
+        try:
+            items = self._seed_source()
+            if items:
+                self._store.sync(items, scope=None)
+        except Exception:  # noqa: BLE001
+            pass
+
     def assemble(
         self, task_text: str, *, meta: Optional[Dict[str, Any]] = None
     ) -> AssembledContext:
         """Retrieve and render task-relevant context via vector search.  Never raises."""
+        try:
+            self._maybe_seed()
+        except Exception:  # noqa: BLE001
+            pass
         try:
             return self._assemble_inner(task_text, meta=meta)
         except Exception:

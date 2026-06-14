@@ -209,7 +209,24 @@ def resolve_context_assembler(cfg: RunnerConfig):
         # semantic vector search (the two are complementary). Otherwise keyword-only.
         if cfg.vector_store is not None:
             from .adapters import HybridContextAssembler, VectorContextAssembler
-            vector = VectorContextAssembler(cfg.vector_store, provider=cfg.model_provider)
+            # Pre-trigger keyword bootstrap so that export_for_embedding() has cards
+            # to export even when the vector arm's seeding runs in a parallel thread
+            # before the keyword arm's lazy assemble() bootstrap would fire.
+            # Best-effort: a bootstrap failure just means fewer seed items (never raises).
+            try:
+                keyword.bootstrap(root=root)
+            except Exception:  # noqa: BLE001
+                pass
+            # Wire seed_source so the vector arm is seeded from the keyword store's
+            # docstring cards on the first assemble() call (cold-start fix). Because
+            # sync() is fingerprint-based, subsequent calls only re-embed changed
+            # cards (AUTO-UPDATE). Never raises: errors in seed_source() are swallowed
+            # by VectorContextAssembler._maybe_seed().
+            vector = VectorContextAssembler(
+                cfg.vector_store,
+                provider=cfg.model_provider,
+                seed_source=keyword.export_for_embedding,
+            )
             return HybridContextAssembler(keyword=keyword, vector=vector)
         return keyword
     except Exception:  # noqa: BLE001 — never let context wiring break runner construction
