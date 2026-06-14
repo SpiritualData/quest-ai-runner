@@ -38,11 +38,30 @@ NEVER-RAISES CONTRACT
 ``search``, ``upsert``, and ``sync`` all catch every exception internally and
 return a safe default (``[]`` / ``0``).  The constructor raises ``ImportError``
 (clearly hinted) when the required packages are missing.
+
+VOYAGE AI EMBEDDER
+------------------
+Use ``make_voyage_embedder`` to build a Voyage AI-backed callable.  Pass
+separate ``embedder`` (for upsert/sync) and ``query_embedder`` (for search) to
+match quest-backend's production setup, which uses ``input_type="document"`` for
+stored items and ``input_type="query"`` for search queries::
+
+    from quest_ai_runner.adapters.qdrant_vector_store import (
+        QdrantVectorStore, make_voyage_embedder,
+    )
+
+    store = QdrantVectorStore(
+        url="http://localhost:6333",
+        vector_size=1024,
+        embedder=make_voyage_embedder(input_type="document"),
+        query_embedder=make_voyage_embedder(input_type="query"),
+    )
 """
 from __future__ import annotations
 
 import hashlib
 import logging
+import os
 from typing import Any, Callable, Dict, List, Optional
 
 from ..core.adapters import VectorHit, VectorStoreBase
@@ -52,6 +71,60 @@ logger = logging.getLogger(__name__)
 # Lazy imports: qdrant-client and fastembed are only imported INSIDE the
 # constructor so that *importing this module* does not fail when they are
 # absent.  Only CONSTRUCTING a QdrantVectorStore fails with a clear hint.
+
+
+def make_voyage_embedder(
+    *,
+    model: Optional[str] = None,
+    input_type: str = "document",
+    api_key: Optional[str] = None,
+) -> Callable[[List[str]], List[List[float]]]:
+    """Build a Voyage AI-backed embedding callable.
+
+    Parameters
+    ----------
+    model:
+        Voyage model name.  Falls back to the ``VOYAGE_MODEL`` env var, then
+        ``"voyage-3-lite"``.
+    input_type:
+        ``"document"`` for items being stored; ``"query"`` for search queries.
+        Pass a separate embedder per role so quest-backend's asymmetric
+        embedding is reproduced correctly.
+    api_key:
+        Voyage API key.  When omitted the ``VOYAGE_API_KEY`` env var (or the
+        ``voyageai`` library's own default lookup) is used.
+
+    Returns
+    -------
+    Callable[[List[str]], List[List[float]]]
+        A callable that embeds a list of strings and returns their vectors.
+        Errors propagate to the caller (``_embed_safe`` in ``QdrantVectorStore``
+        swallows them).
+
+    Raises
+    ------
+    ImportError
+        Raised immediately (at factory-call time) when ``voyageai`` is not
+        installed, with an install hint.
+    """
+    try:
+        import voyageai  # noqa: F401
+    except ImportError as exc:
+        raise ImportError(
+            "make_voyage_embedder requires the voyageai package. "
+            "Install with: pip install voyageai"
+        ) from exc
+
+    _model = model or os.getenv("VOYAGE_MODEL", "voyage-3-lite")
+    _input_type = input_type
+    _api_key = api_key
+
+    def _embed(texts: List[str]) -> List[List[float]]:
+        import voyageai as _va
+        client = _va.Client(api_key=_api_key)
+        return client.embed(texts, model=_model, input_type=_input_type).embeddings
+
+    return _embed
 
 
 def _scope_suffix(scope: Optional[Dict[str, Any]], prefix: str) -> str:
@@ -83,9 +156,15 @@ class QdrantVectorStore(VectorStoreBase):
         All collections created by this store are named
         ``{collection_prefix}_{scope-suffix}``.  Default: ``"qar_ctx"``.
     embedder:
-        Optional callable ``(texts: List[str]) -> List[List[float]]``.  When
-        given it is used for all embedding.  When omitted the store defaults to
-        ``fastembed.TextEmbedding`` (model ``BAAI/bge-small-en-v1.5``).
+        Optional callable ``(texts: List[str]) -> List[List[float]]``.  Used for
+        ``upsert`` and ``sync`` (items being stored).  When omitted the store
+        defaults to ``fastembed.TextEmbedding`` (model ``BAAI/bge-small-en-v1.5``).
+    query_embedder:
+        Optional callable for embedding search queries in ``search``.  When not
+        given, falls back to ``embedder`` so single-embedder callers are unchanged.
+        Pass a distinct callable here when the embedder distinguishes document vs
+        query input types (e.g. Voyage AI ``input_type="document"`` /
+        ``"query"``).
     vector_size:
         Dimensionality of the embedding vectors.  Must match whatever ``embedder``
         produces.  Default: 384 (matches the fastembed default model).
@@ -98,6 +177,7 @@ class QdrantVectorStore(VectorStoreBase):
         url: Optional[str] = None,
         collection_prefix: str = "qar_ctx",
         embedder: Optional[Callable[[List[str]], List[List[float]]]] = None,
+        query_embedder: Optional[Callable[[List[str]], List[List[float]]]] = None,
         vector_size: int = 384,
     ) -> None:
         # --- Lazy imports with a clear install hint --------------------------
@@ -124,7 +204,7 @@ class QdrantVectorStore(VectorStoreBase):
             _path = path or ".quest-context/qdrant"
             self._client = QdrantClient(path=_path)
 
-        # Resolve the embedder.
+        # Resolve the document embedder (used by upsert/sync).
         if embedder is not None:
             self._embed = embedder
         else:
@@ -142,6 +222,13 @@ class QdrantVectorStore(VectorStoreBase):
                     "QdrantVectorStore requires fastembed for default embedding. "
                     "Install with: pip install 'quest-ai-runner[qdrant]'"
                 ) from exc
+
+        # Resolve the query embedder (used by search).
+        # Falls back to the document embedder when not given so that single-
+        # embedder callers are completely unchanged.
+        self._query_embed: Callable[[List[str]], List[List[float]]] = (
+            query_embedder if query_embedder is not None else self._embed
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -165,11 +252,19 @@ class QdrantVectorStore(VectorStoreBase):
             )
 
     def _embed_safe(self, texts: List[str]) -> Optional[List[List[float]]]:
-        """Embed a list of texts; return None on any error."""
+        """Embed a list of texts (document path); return None on any error."""
         try:
             return self._embed(texts)
         except Exception:
             logger.debug("QdrantVectorStore: embedding failed", exc_info=True)
+            return None
+
+    def _query_embed_safe(self, texts: List[str]) -> Optional[List[List[float]]]:
+        """Embed a list of query texts; return None on any error."""
+        try:
+            return self._query_embed(texts)
+        except Exception:
+            logger.debug("QdrantVectorStore: query embedding failed", exc_info=True)
             return None
 
     # ------------------------------------------------------------------
@@ -185,7 +280,7 @@ class QdrantVectorStore(VectorStoreBase):
     ) -> List[VectorHit]:
         """Embed ``query`` and return the top-``top_k`` nearest hits.  Never raises."""
         try:
-            vecs = self._embed_safe([query])
+            vecs = self._query_embed_safe([query])
             if not vecs:
                 return []
             coll = self._collection_name(scope)

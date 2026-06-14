@@ -313,6 +313,57 @@ When used via ``VectorContextAssembler``, the ``meta`` dict passed to
 
 ---
 
+## Matching quest-backend (production Quest path)
+
+quest-backend stores embeddings produced by Voyage AI with
+``input_type="document"`` in a 1024-d Qdrant collection (model defaults to
+``voyage-3-lite`` from the ``VOYAGE_MODEL`` env var).  Voyage distinguishes
+document embeddings (for stored items) from query embeddings (for search
+queries); both land in the same 1024-d space.
+
+To share the same Qdrant collection and achieve cross-compatible similarity
+scores, wire ``QdrantVectorStore`` with **two separate Voyage embedders** — one
+per role:
+
+```python
+from quest_ai_runner.adapters.qdrant_vector_store import (
+    QdrantVectorStore,
+    make_voyage_embedder,
+)
+
+store = QdrantVectorStore(
+    url="http://localhost:6333",          # point at the backend's Qdrant
+    vector_size=1024,                     # must match the backend collection
+    embedder=make_voyage_embedder(input_type="document"),   # for upsert/sync
+    query_embedder=make_voyage_embedder(input_type="query"),  # for search
+)
+```
+
+``make_voyage_embedder`` reads ``VOYAGE_MODEL`` from the environment (default
+``"voyage-3-lite"``).  Install the dependency first:
+
+```bash
+pip install voyageai
+```
+
+**Embedder quality dial:**
+
+| Embedder | Dimensions | BEIR NDCG@10 | MS MARCO MRR@10 | Notes |
+|----------|-----------|-------------|-----------------|-------|
+| ``BAAI/bge-small-en-v1.5`` (fastembed default) | 384 | ~53 | ~80 | Zero-config, local ONNX |
+| ``BAAI/bge-base-en-v1.5`` (fastembed) | 768 | ~60 | ~86 | Larger local model |
+| Voyage AI / SOTA models | 1024 | Higher | Higher | Requires API key |
+
+The local ``bge-small`` / ``bge-base`` fastembed models are the **zero-config
+option** (no API key, no network at embed time).  Switch to Voyage for
+production-quality recall that matches quest-backend's embedding space.
+
+**Important:** the ``vector_size`` parameter must match the dimensionality
+produced by the embedder AND the dimension of the existing Qdrant collection.
+Mixing dimensions silently produces wrong similarity scores.
+
+---
+
 ## Quality notes
 
 Vector quality depends on the embedder.  The default ``fastembed`` model

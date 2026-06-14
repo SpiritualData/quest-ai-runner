@@ -1500,3 +1500,247 @@ class TestResolveContextAssemblerSeedSourceWiring:
         assert total_items > 0, (
             "vector store should be populated after first assemble() via seed_source"
         )
+
+
+# ---------------------------------------------------------------------------
+# NEW: make_voyage_embedder factory + query_embedder split
+# ---------------------------------------------------------------------------
+
+class TestMakeVoyageEmbedder:
+    """make_voyage_embedder returns a callable that calls the Voyage API."""
+
+    def test_returns_callable(self):
+        """make_voyage_embedder returns a callable when voyageai is importable."""
+        import sys
+        import types
+
+        # Build a minimal voyageai stub so we never need the real package.
+        va_stub = types.ModuleType("voyageai")
+
+        class _FakeResult:
+            embeddings = [[0.1, 0.2, 0.3]]
+
+        class _FakeClient:
+            def __init__(self, api_key=None):
+                self.api_key = api_key
+
+            def embed(self, texts, model, input_type):
+                return _FakeResult()
+
+        va_stub.Client = _FakeClient
+        sys.modules["voyageai"] = va_stub
+        try:
+            from quest_ai_runner.adapters.qdrant_vector_store import make_voyage_embedder
+            fn = make_voyage_embedder(model="voyage-3-lite", input_type="document")
+            assert callable(fn)
+        finally:
+            del sys.modules["voyageai"]
+
+    def test_callable_passes_correct_model_and_input_type(self):
+        """The returned callable passes model and input_type to the Voyage client."""
+        import sys
+        import types
+
+        calls: List[dict] = []
+
+        va_stub = types.ModuleType("voyageai")
+
+        class _FakeResult:
+            embeddings = [[0.5, 0.6]]
+
+        class _FakeClient:
+            def __init__(self, api_key=None):
+                pass
+
+            def embed(self, texts, model, input_type):
+                calls.append({"texts": texts, "model": model, "input_type": input_type})
+                return _FakeResult()
+
+        va_stub.Client = _FakeClient
+        sys.modules["voyageai"] = va_stub
+        try:
+            from quest_ai_runner.adapters.qdrant_vector_store import make_voyage_embedder
+            fn = make_voyage_embedder(model="voyage-3-lite", input_type="query")
+            result = fn(["what is billing?"])
+            assert len(calls) == 1
+            assert calls[0]["model"] == "voyage-3-lite"
+            assert calls[0]["input_type"] == "query"
+            assert calls[0]["texts"] == ["what is billing?"]
+            assert result == [[0.5, 0.6]]
+        finally:
+            del sys.modules["voyageai"]
+
+    def test_callable_uses_env_model_when_no_model_arg(self):
+        """When model is not given, VOYAGE_MODEL env var is used."""
+        import sys
+        import types
+
+        calls: List[dict] = []
+
+        va_stub = types.ModuleType("voyageai")
+
+        class _FakeResult:
+            embeddings = [[0.1]]
+
+        class _FakeClient:
+            def __init__(self, api_key=None):
+                pass
+
+            def embed(self, texts, model, input_type):
+                calls.append({"model": model})
+                return _FakeResult()
+
+        va_stub.Client = _FakeClient
+        sys.modules["voyageai"] = va_stub
+        try:
+            import os
+            from quest_ai_runner.adapters.qdrant_vector_store import make_voyage_embedder
+            os.environ["VOYAGE_MODEL"] = "voyage-env-model"
+            try:
+                fn = make_voyage_embedder(input_type="document")
+                fn(["text"])
+                assert calls[0]["model"] == "voyage-env-model"
+            finally:
+                del os.environ["VOYAGE_MODEL"]
+        finally:
+            del sys.modules["voyageai"]
+
+    def test_callable_defaults_to_voyage_3_lite_when_no_env(self):
+        """When model is not given and VOYAGE_MODEL is unset, voyage-3-lite is used."""
+        import sys
+        import types
+        import os
+
+        calls: List[dict] = []
+
+        va_stub = types.ModuleType("voyageai")
+
+        class _FakeResult:
+            embeddings = [[0.1]]
+
+        class _FakeClient:
+            def __init__(self, api_key=None):
+                pass
+
+            def embed(self, texts, model, input_type):
+                calls.append({"model": model})
+                return _FakeResult()
+
+        va_stub.Client = _FakeClient
+        sys.modules["voyageai"] = va_stub
+        # Ensure VOYAGE_MODEL is not set.
+        os.environ.pop("VOYAGE_MODEL", None)
+        try:
+            from quest_ai_runner.adapters.qdrant_vector_store import make_voyage_embedder
+            fn = make_voyage_embedder(input_type="document")
+            fn(["text"])
+            assert calls[0]["model"] == "voyage-3-lite"
+        finally:
+            del sys.modules["voyageai"]
+
+    def test_missing_voyageai_raises_import_error_at_factory_time(self):
+        """When voyageai is not installed, make_voyage_embedder raises ImportError immediately."""
+        import sys
+
+        # Forcibly hide voyageai from sys.modules.
+        original = sys.modules.pop("voyageai", None)
+        # Also remove the module from the qdrant_vector_store module's cache
+        # by reloading it after hiding voyageai.
+        import importlib
+        try:
+            import quest_ai_runner.adapters.qdrant_vector_store as _mod
+            importlib.reload(_mod)
+            with pytest.raises(ImportError, match="pip install voyageai"):
+                _mod.make_voyage_embedder(input_type="document")
+        finally:
+            # Restore voyageai if it was present.
+            if original is not None:
+                sys.modules["voyageai"] = original
+            # Reload the real module to restore the clean state.
+            importlib.reload(_mod)
+
+
+class TestQdrantVectorStoreQueryEmbedder:
+    """query_embedder is used in search; embedder is used in upsert/sync."""
+
+    def test_search_uses_query_embedder(self):
+        """search() calls query_embedder, not embedder."""
+        pytest.importorskip("qdrant_client")
+
+        doc_calls: List[List[str]] = []
+        query_calls: List[List[str]] = []
+
+        def doc_embedder(texts: List[str]) -> List[List[float]]:
+            doc_calls.append(texts)
+            return [[0.1, 0.2, 0.3, 0.4] for _ in texts]
+
+        def query_embedder(texts: List[str]) -> List[List[float]]:
+            query_calls.append(texts)
+            return [[0.9, 0.8, 0.7, 0.6] for _ in texts]
+
+        from quest_ai_runner.adapters.qdrant_vector_store import QdrantVectorStore
+
+        with tempfile.TemporaryDirectory() as td:
+            store = QdrantVectorStore(
+                path=os.path.join(td, "qdrant"),
+                embedder=doc_embedder,
+                query_embedder=query_embedder,
+                vector_size=4,
+            )
+            # search triggers query_embedder
+            store.search("some query")
+            assert len(query_calls) == 1, "query_embedder should be called once for search"
+            assert len(doc_calls) == 0, "doc embedder should NOT be called during search"
+
+    def test_upsert_uses_doc_embedder_not_query_embedder(self):
+        """upsert() calls embedder, not query_embedder."""
+        pytest.importorskip("qdrant_client")
+
+        doc_calls: List[List[str]] = []
+        query_calls: List[List[str]] = []
+
+        def doc_embedder(texts: List[str]) -> List[List[float]]:
+            doc_calls.append(texts)
+            return [[0.1, 0.2, 0.3, 0.4] for _ in texts]
+
+        def query_embedder(texts: List[str]) -> List[List[float]]:
+            query_calls.append(texts)
+            return [[0.9, 0.8, 0.7, 0.6] for _ in texts]
+
+        from quest_ai_runner.adapters.qdrant_vector_store import QdrantVectorStore
+
+        with tempfile.TemporaryDirectory() as td:
+            store = QdrantVectorStore(
+                path=os.path.join(td, "qdrant"),
+                embedder=doc_embedder,
+                query_embedder=query_embedder,
+                vector_size=4,
+            )
+            store.upsert([{"id": "item-1", "text": "hello world"}])
+            assert len(doc_calls) == 1, "doc embedder should be called once for upsert"
+            assert len(query_calls) == 0, "query_embedder should NOT be called during upsert"
+
+    def test_single_embedder_caller_backward_compatible(self):
+        """When query_embedder is omitted, search uses the same embedder (backward compat)."""
+        pytest.importorskip("qdrant_client")
+
+        all_calls: List[List[str]] = []
+
+        def single_embedder(texts: List[str]) -> List[List[float]]:
+            all_calls.append(texts)
+            return [[0.5, 0.5, 0.5, 0.5] for _ in texts]
+
+        from quest_ai_runner.adapters.qdrant_vector_store import QdrantVectorStore
+
+        with tempfile.TemporaryDirectory() as td:
+            store = QdrantVectorStore(
+                path=os.path.join(td, "qdrant"),
+                embedder=single_embedder,
+                vector_size=4,
+            )
+            store.upsert([{"id": "item-1", "text": "hello world"}])
+            store.search("hello")
+            # Both upsert and search should have used the single_embedder.
+            assert len(all_calls) == 2, (
+                f"expected 2 calls (upsert + search), got {len(all_calls)}"
+            )
