@@ -4,6 +4,8 @@ IMPORTANT: This script SPENDS TOKENS (Anthropic Haiku, small amounts).
 Run it deliberately, on a copy, NEVER in CI. It is opt-in by design.
 
 Measures for each task:
+  - wall-clock latency (milliseconds) — time around each ``claude`` CLI call,
+    reported per-arm and as an aggregate avg-cold-ms vs avg-warm-ms.
   - num_turns (tool-call rounds) — cold vs warm
   - token usage — cold vs warm
   - correctness: does the answer contain the expected target file?
@@ -12,6 +14,9 @@ Measures for each task:
   - LLM judge (opt-in, requires claude CLI): qualitative per-sample evaluation
     against four written principles (see JUDGE_PRINCIPLES). One cheap Haiku call
     per sample. Skip judging with --no-judge or if the claude CLI is unavailable.
+
+All three axes -- speed (wall-clock ms), tool-call rounds, and tokens -- are
+reported in the per-task table and the aggregate summary.
 
 The task set is small (6 tasks + 1 adversarial) to keep cost low.
 More tasks improve statistical significance; this set is a representative minimum.
@@ -180,8 +185,9 @@ def _run_claude(
 ) -> Dict[str, Any]:
     """Run claude headless and parse the JSON output.
 
-    Returns a dict with keys: num_turns, input_tokens, output_tokens, result, raw.
-    On error, returns a dict with key 'error'.
+    Returns a dict with keys: num_turns, input_tokens, output_tokens, result, raw,
+    latency_ms (wall-clock milliseconds for the full CLI call).
+    On error, returns a dict with key 'error' (latency_ms is still set on timeout).
     """
     cmd = [
         claude_bin,
@@ -189,6 +195,7 @@ def _run_claude(
         "--output-format", "json",
         "--model", "claude-haiku-4-5",
     ]
+    t0 = time.monotonic()
     try:
         proc = subprocess.run(
             cmd,
@@ -197,9 +204,11 @@ def _run_claude(
             text=True,
             timeout=timeout,
         )
+        latency_ms = (time.monotonic() - t0) * 1000.0
         if proc.returncode != 0:
             return {
-                "error": f"claude exited {proc.returncode}: {proc.stderr[:300]}"
+                "error": f"claude exited {proc.returncode}: {proc.stderr[:300]}",
+                "latency_ms": latency_ms,
             }
         raw = proc.stdout.strip()
         # The JSON output may be the last JSON object in the output (some versions
@@ -209,7 +218,7 @@ def _run_claude(
         for m in re.finditer(r"\{.*\}", raw, re.DOTALL):
             json_match = m
         if not json_match:
-            return {"error": f"no JSON in output: {raw[:200]}"}
+            return {"error": f"no JSON in output: {raw[:200]}", "latency_ms": latency_ms}
         data = json.loads(json_match.group())
         # Extract standard fields; field names may vary by CLI version.
         num_turns = data.get("num_turns", data.get("turns", 0))
@@ -223,15 +232,20 @@ def _run_claude(
             "output_tokens": output_tok,
             "result": result_text,
             "raw": raw[:500],
+            "latency_ms": latency_ms,
         }
     except subprocess.TimeoutExpired:
-        return {"error": f"claude timed out after {timeout}s"}
+        latency_ms = (time.monotonic() - t0) * 1000.0
+        return {"error": f"claude timed out after {timeout}s", "latency_ms": latency_ms}
     except json.JSONDecodeError as exc:
-        return {"error": f"JSON parse error: {exc}  raw={raw[:200]}"}
+        latency_ms = (time.monotonic() - t0) * 1000.0
+        return {"error": f"JSON parse error: {exc}  raw={raw[:200]}", "latency_ms": latency_ms}
     except FileNotFoundError:
-        return {"error": "claude binary not found"}
+        latency_ms = (time.monotonic() - t0) * 1000.0
+        return {"error": "claude binary not found", "latency_ms": latency_ms}
     except Exception as exc:
-        return {"error": str(exc)}
+        latency_ms = (time.monotonic() - t0) * 1000.0
+        return {"error": str(exc), "latency_ms": latency_ms}
 
 
 def _cold_prompt(task: str) -> str:
@@ -520,6 +534,7 @@ def main() -> None:
         cold_correct = _extract_path_from_result(cold_res["result"], target)
         print(f"turns={cold_res['num_turns']}  "
               f"tokens={cold_res['input_tokens']}+{cold_res['output_tokens']}  "
+              f"latency={cold_res.get('latency_ms', 0):.0f}ms  "
               f"correct={cold_correct}")
 
         # Warm arm: use wrong_hint for adversarial, otherwise get hint from store.
@@ -547,6 +562,7 @@ def main() -> None:
 
         print(f"turns={warm_res['num_turns']}  "
               f"tokens={warm_res['input_tokens']}+{warm_res['output_tokens']}  "
+              f"latency={warm_res.get('latency_ms', 0):.0f}ms  "
               f"correct={warm_correct}"
               + (f"  ADV_PASS={adversarial_pass}" if is_adversarial else ""))
 
@@ -581,10 +597,12 @@ def main() -> None:
             "cold_turns": cold_res["num_turns"],
             "cold_input_tok": cold_res["input_tokens"],
             "cold_output_tok": cold_res["output_tokens"],
+            "cold_latency_ms": cold_res.get("latency_ms", 0.0),
             "cold_correct": cold_correct,
             "warm_turns": warm_res["num_turns"],
             "warm_input_tok": warm_res["input_tokens"],
             "warm_output_tok": warm_res["output_tokens"],
+            "warm_latency_ms": warm_res.get("latency_ms", 0.0),
             "warm_correct": warm_correct,
             "adversarial_pass": adversarial_pass,
             "hint_used": hint,
@@ -605,7 +623,9 @@ def main() -> None:
     non_adv = [r for r in results if not r.get("is_adversarial") and "skipped" not in r]
     adv = [r for r in results if r.get("is_adversarial") and "skipped" not in r]
 
-    header = f"{'Label':<35} {'CT':>3} {'WT':>3} {'CC':>5} {'WC':>5}"
+    # CT=cold turns, WT=warm turns, C_ms=cold latency ms, W_ms=warm latency ms,
+    # CC=cold correct, WC=warm correct.
+    header = f"{'Label':<35} {'CT':>3} {'WT':>3} {'C_ms':>7} {'W_ms':>7} {'CC':>5} {'WC':>5}"
     print(header)
     print("-" * len(header))
     for r in results:
@@ -620,6 +640,8 @@ def main() -> None:
             f"  {r['label'] + adv_tag:<33} "
             f"{r['cold_turns']:>3} "
             f"{r['warm_turns']:>3} "
+            f"{r.get('cold_latency_ms', 0):>7.0f} "
+            f"{r.get('warm_latency_ms', 0):>7.0f} "
             f"{'Y' if r['cold_correct'] else 'N':>5} "
             f"{'Y' if r['warm_correct'] else 'N':>5}"
         )
@@ -628,16 +650,23 @@ def main() -> None:
     if non_adv:
         avg_cold_turns = sum(r["cold_turns"] for r in non_adv) / len(non_adv)
         avg_warm_turns = sum(r["warm_turns"] for r in non_adv) / len(non_adv)
+        avg_cold_ms = sum(r.get("cold_latency_ms", 0.0) for r in non_adv) / len(non_adv)
+        avg_warm_ms = sum(r.get("warm_latency_ms", 0.0) for r in non_adv) / len(non_adv)
         cold_correct_pct = sum(1 for r in non_adv if r["cold_correct"]) / len(non_adv)
         warm_correct_pct = sum(1 for r in non_adv if r["warm_correct"]) / len(non_adv)
 
         print()
         print("AGGREGATE (non-adversarial tasks)")
-        print(f"  Avg tool-call rounds  cold: {avg_cold_turns:.1f}  warm: {avg_warm_turns:.1f}")
+        print(f"  Avg wall-clock latency  cold: {avg_cold_ms:.0f}ms  warm: {avg_warm_ms:.0f}ms")
+        if avg_cold_ms > 0 and avg_warm_ms > 0:
+            latency_ratio = avg_cold_ms / avg_warm_ms
+            direction = "faster" if latency_ratio > 1 else "slower"
+            print(f"  Latency ratio:          {latency_ratio:.2f}x {direction} with context")
+        print(f"  Avg tool-call rounds    cold: {avg_cold_turns:.1f}  warm: {avg_warm_turns:.1f}")
         if avg_cold_turns > 0:
             speedup = avg_cold_turns / avg_warm_turns if avg_warm_turns > 0 else float("inf")
-            print(f"  Speedup factor:       {speedup:.1f}x fewer rounds with context")
-        print(f"  Correctness           cold: {cold_correct_pct:.0%}  warm: {warm_correct_pct:.0%}")
+            print(f"  Speedup factor:         {speedup:.1f}x fewer rounds with context")
+        print(f"  Correctness             cold: {cold_correct_pct:.0%}  warm: {warm_correct_pct:.0%}")
 
     # Judge aggregate (non-adversarial only).
     if enable_judge:

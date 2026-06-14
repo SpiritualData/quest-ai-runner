@@ -30,6 +30,7 @@ Card JSON schema (matches docs/context-assembly.md exactly):
 from __future__ import annotations
 
 import ast
+import concurrent.futures
 import hashlib
 import json
 import math
@@ -38,7 +39,7 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase
 
@@ -107,10 +108,10 @@ def _card_slug(task_text: str) -> str:
 
 
 def _path_slug(rel_path: str) -> str:
-    """Stable card id for a repo group derived from its relative path.
+    """Stable card id for a source file derived from its relative path.
 
-    Uses the group path itself (lowercased, non-alphanumeric chars replaced with
-    hyphens) plus a short digest so two groups whose names collapse identically
+    Uses the file path itself (lowercased, non-alphanumeric chars replaced with
+    hyphens) plus a short digest so two paths whose names collapse identically
     still get distinct ids.
     """
     clean = re.sub(r"[^a-z0-9]+", "-", rel_path.lower()).strip("-") or "root"
@@ -172,6 +173,26 @@ class FileContextStore(ContextAssemblerBase):
       auto_bootstrap    -- when True (default), the first ``assemble()`` call on an empty
                           store triggers ``bootstrap()`` once, best-effort, if a repo root is
                           known.  The guard fires only once per instance.
+
+    In-memory card cache
+    --------------------
+    ``_load_all()`` reads and JSON-parses every card on disk.  For large repos this
+    would make every ``assemble()`` call O(all-cards-from-disk).  To avoid that, the
+    store keeps a lazily-populated in-memory cache of ``{card_id: card_dict}``.
+
+    Invalidation is two-pronged:
+
+    1. **Write-path dirty flag** -- ``record()`` and ``bootstrap()`` set
+       ``_cache_dirty = True`` immediately after writing.  The next
+       ``_load_all()`` call notices the flag, clears it, and reloads from disk.
+       This guarantees that a ``record()`` followed by ``assemble()`` in the same
+       process always sees the newly written card.
+
+    2. **External-change detector** -- on every ``_load_all()`` call the store
+       checks two cheap stats: the maximum child mtime and the file count of
+       ``cards_dir``.  If either changed since the last load, the cache is
+       reloaded unconditionally.  This catches cards written by other processes
+       or agents sharing the same ``cards_dir``.
     """
 
     def __init__(
@@ -179,15 +200,30 @@ class FileContextStore(ContextAssemblerBase):
         cards_dir: str,
         *,
         repo_root: Optional[str] = None,
-        max_cards_in_view: int = 5,
+        max_cards_in_view: int = 8,
         auto_bootstrap: bool = True,
+        confidence_threshold: float = 3.0,
     ) -> None:
         self._cards_dir = Path(cards_dir)
         self._repo_root = Path(repo_root).resolve() if repo_root else None
         self._max_cards = max_cards_in_view
         self._auto_bootstrap = auto_bootstrap
+        # CONFIDENCE GATE (the never-worse-by-construction lever). A card is only injected when
+        # its IDF match score clears this floor AND it is fresh. A weak/ambiguous match injects
+        # NOTHING, so the run is plain Claude Code (the baseline). The system can therefore only
+        # ADD a confident grounding or stay equal to the baseline; it never asserts a low-
+        # confidence guess that could cost the agent a wasted glance. Set to 0.0 to inject any
+        # positive match (old behaviour).
+        self._confidence_threshold = confidence_threshold
         # Set to True once the lazy bootstrap has been attempted (success or failure).
         self._bootstrap_done: bool = False
+
+        # In-memory card cache: {card_id: card_dict} or None when not yet loaded.
+        self._cache: Optional[Dict[str, Dict[str, Any]]] = None
+        # Dirty flag: set after any write so next _load_all() reloads from disk.
+        self._cache_dirty: bool = False
+        # Snapshot of (max_child_mtime, file_count) at last cache load.
+        self._cache_dir_stamp: Tuple[float, int] = (0.0, 0)
 
     # ------------------------------------------------------------------
     # Public API: ContextAssemblerBase implementation
@@ -226,9 +262,9 @@ class FileContextStore(ContextAssemblerBase):
     def stale_cards_for(self, path: str) -> Set[str]:
         """Return card ids that pin ``path`` AND whose fingerprint for it is now stale.
 
-        The index is rebuilt on each call from the on-disk cards (no in-process cache so
-        concurrent writes from other agents are always reflected). Best-effort: returns an
-        empty set on any error.
+        The index is rebuilt on each call from the on-disk cards (bypasses the
+        in-memory cache so concurrent writes from other agents are always
+        reflected). Best-effort: returns an empty set on any error.
         """
         try:
             card_ids: Set[str] = set()
@@ -250,28 +286,30 @@ class FileContextStore(ContextAssemblerBase):
         self,
         root: Optional[str] = None,
         *,
-        max_files: int = 2000,
-        max_cards: int = 200,
+        max_files: int = 10000,
+        max_cards: int = 5000,
     ) -> int:
         """Seed the cards store by walking a source tree. Never raises. Returns cards written.
 
-        Groups files by their first meaningful 1-2 path segments under ``root``
-        (e.g. ``quest_ai_runner/core`` or ``tests``) and creates one card per
-        group.  Each card captures:
+        Creates ONE CARD PER SOURCE FILE found under ``root``.  Each card captures:
 
-        - ``id`` -- a stable slug derived from the group path.
+        - ``id``       -- a stable slug derived from the file's relative path.
         - ``keywords`` -- tokens from path segments plus extracted symbol names.
-        - ``summary`` -- a one-line description naming the group + a sample of
-          key files and symbols.
-        - ``files`` -- up to 8 notable files per group, each fingerprinted.
+        - ``summary``  -- ``"{rel_path}: {first ~12 symbols}"`` (or just rel_path).
+        - ``files``    -- that single file, fingerprinted, with its symbols attached.
         - ``provenance.created_by_task`` == "bootstrap".
+
+        File-granular cards give the IDF scorer precise routing: a query
+        containing a distinctive symbol or path term lands on exactly that
+        file's card rather than a coarse module-level card.
 
         Symbol extraction uses ``ast`` for ``.py`` files and a small regex set
         for other languages.  Never raises on a parse error (that file is
         skipped/included without symbols).
 
-        Idempotent: cards are upserted by id (existing cards for the same group
-        are overwritten).  Total cards written is capped at ``max_cards``.
+        Idempotent: cards are upserted by id (existing cards for the same file
+        are overwritten).  Total cards written is capped at ``max_cards``
+        (default 5000).
         """
         try:
             return self._bootstrap_inner(root=root, max_files=max_files, max_cards=max_cards)
@@ -303,23 +341,29 @@ class FileContextStore(ContextAssemblerBase):
         self,
         root: Optional[str] = None,
         *,
-        max_files: int = 2000,
-        max_cards: int = 200,
+        max_files: int = 10000,
+        max_cards: int = 5000,
     ) -> int:
         """Actual bootstrap logic. May raise; callers wrap in try/except."""
         walk_root = Path(root).resolve() if root else self._repo_root
         if walk_root is None or not walk_root.is_dir():
             return 0
 
-        # ---- 1. Walk and collect files, grouped by 1-2 segment prefix --------
-        # group_key -> list of (rel_path, Path)
-        groups: Dict[str, List[tuple]] = {}
-        file_count = 0
-
         # Resolve the cards_dir so we can skip it if it's inside the walk root.
         cards_dir_resolved = self._cards_dir.resolve()
 
+        self._cards_dir.mkdir(parents=True, exist_ok=True)
+        cards_written = 0
+        file_count = 0
+
+        # --- Pass 1: walk the tree and collect (rel_str, syms, keywords) for each file ---
+        # We separate the walk from fingerprinting so we can fingerprint in parallel.
+        # Each entry: (rel_str, syms, all_keywords)
+        walk_entries: List[tuple] = []
+
         for dirpath, dirnames, filenames in os.walk(walk_root):
+            if file_count >= max_files or len(walk_entries) >= max_cards:
+                break
             current_dir = Path(dirpath).resolve()
             # Skip the cards directory itself to avoid indexing stored card JSON files.
             if current_dir == cards_dir_resolved:
@@ -332,7 +376,7 @@ class FileContextStore(ContextAssemblerBase):
                 and (current_dir / d).resolve() != cards_dir_resolved
             ]
             for fname in filenames:
-                if file_count >= max_files:
+                if file_count >= max_files or len(walk_entries) >= max_cards:
                     break
                 fpath = Path(dirpath) / fname
                 if fpath.suffix not in _SOURCE_EXTS:
@@ -342,72 +386,68 @@ class FileContextStore(ContextAssemblerBase):
                         continue
                 except OSError:
                     continue
-                rel = fpath.relative_to(walk_root)
-                parts = rel.parts
-                # Group key: use the first 2 path segments when the file is nested
-                # at depth >= 3 (so "pkg/sub/foo.py" -> "pkg/sub"), which gives a
-                # meaningful sub-module grouping.  For files at depth 1 or 2 (i.e.
-                # "foo.py" or "pkg/foo.py"), use only the first segment so that all
-                # direct children of a package land in one card.
-                if len(parts) >= 3:
-                    group_key = "/".join(parts[:2])
-                else:
-                    group_key = parts[0]
-                groups.setdefault(group_key, []).append((str(rel), fpath))
+
                 file_count += 1
+                rel = fpath.relative_to(walk_root)
+                rel_str = str(rel)
 
-        if not groups:
-            return 0
+                # Extract symbols from this single file.
+                syms = _extract_symbols(fpath, max_symbols=30)
+                syms = list(dict.fromkeys(syms))[:30]  # deduplicate
 
-        # ---- 2. Build and write one card per group ----------------------------
-        self._cards_dir.mkdir(parents=True, exist_ok=True)
-        cards_written = 0
+                # Keywords: path segment tokens + symbol names.
+                seg_tokens = sorted(_tokenize(rel_str.replace("/", " ").replace("_", " ").replace(".", " ")))
+                sym_tokens = [s.lower() for s in syms if len(s) >= _MIN_TOKEN_LEN]
+                all_keywords = list(dict.fromkeys(seg_tokens + sym_tokens))[:50]
 
-        for group_key, file_entries in groups.items():
+                walk_entries.append((rel_str, syms, all_keywords))
+
+        # --- Pass 2: fingerprint all collected files in parallel ---
+        # sha256 reads release the GIL; threads give a real speedup when many files
+        # are being hashed.  Workers are bounded to min(8, n_files).  Order is preserved
+        # (enumerate index -> result dict).  A failed fingerprint yields {} (never raises).
+        fp_list: List[Dict[str, Any]] = [{}] * len(walk_entries)
+        if walk_entries:
+            n_workers = min(8, len(walk_entries))
+            try:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
+                    idx_futures = {
+                        pool.submit(self._fingerprint, rel_str): idx
+                        for idx, (rel_str, _, _) in enumerate(walk_entries)
+                    }
+                    for fut in concurrent.futures.as_completed(idx_futures):
+                        idx = idx_futures[fut]
+                        try:
+                            fp_list[idx] = fut.result()
+                        except Exception:  # noqa: BLE001
+                            fp_list[idx] = {}
+            except Exception:  # noqa: BLE001
+                # Fallback to serial if ThreadPoolExecutor fails unexpectedly.
+                for idx, (rel_str, _, _) in enumerate(walk_entries):
+                    try:
+                        fp_list[idx] = self._fingerprint(rel_str)
+                    except Exception:  # noqa: BLE001
+                        fp_list[idx] = {}
+
+        # --- Pass 3: write cards using the pre-computed fingerprints ---
+        for (rel_str, syms, all_keywords), fp in zip(walk_entries, fp_list):
             if cards_written >= max_cards:
                 break
 
-            # Extract symbols from all files in the group.
-            all_symbols: List[str] = []
-            for _rel, fpath in file_entries:
-                syms = _extract_symbols(fpath, max_symbols=10)
-                all_symbols.extend(syms)
-                if len(all_symbols) >= 30:
-                    break
-            all_symbols = list(dict.fromkeys(all_symbols))[:30]  # deduplicate, cap
-
-            # Keywords: path segment tokens + symbol names.
-            seg_tokens = sorted(_tokenize(group_key.replace("/", " ")))
-            sym_tokens = [s.lower() for s in all_symbols if len(s) >= _MIN_TOKEN_LEN]
-            all_keywords = list(dict.fromkeys(seg_tokens + sym_tokens))[:50]
-
-            # Select the most notable files: prefer shorter paths (closer to root of group),
-            # then alphabetical. Cap at 8.
-            sorted_entries = sorted(file_entries, key=lambda x: (len(x[0]), x[0]))
-            notable = sorted_entries[:8]
-
-            # Fingerprint notable files.
-            file_dicts: List[Dict[str, Any]] = []
-            for rel_str, fpath in notable:
-                fp = self._fingerprint(rel_str)
-                syms = _extract_symbols(fpath, max_symbols=10)
-                file_dicts.append({
-                    "path": rel_str,
-                    "sha256": fp.get("sha256", ""),
-                    "mtime": fp.get("mtime", 0.0),
-                    "git_sha": fp.get("git_sha", ""),
-                    "why": "",
-                    "symbols": syms,
-                })
+            file_dict: Dict[str, Any] = {
+                "path": rel_str,
+                "sha256": fp.get("sha256", ""),
+                "mtime": fp.get("mtime", 0.0),
+                "git_sha": fp.get("git_sha", ""),
+                "why": "",
+                "symbols": syms,
+            }
 
             # Short summary line.
-            sample_files = ", ".join(rel for rel, _ in notable[:3])
-            sample_syms = ", ".join(all_symbols[:5])
-            summary = f"Module: {group_key} | files: {sample_files}"
-            if sample_syms:
-                summary += f" | symbols: {sample_syms}"
+            sym_sample = ", ".join(syms[:12])
+            summary = f"{rel_str}: {sym_sample}" if sym_sample else rel_str
 
-            card_id = _path_slug(group_key)
+            card_id = _path_slug(rel_str)
 
             # Load existing card so we preserve usage_count / last_outcome if present.
             card_path = self._cards_dir / f"{card_id}.json"
@@ -423,7 +463,7 @@ class FileContextStore(ContextAssemblerBase):
                 "id": card_id,
                 "keywords": all_keywords,
                 "summary": summary,
-                "files": file_dicts,
+                "files": [file_dict],
                 "conventions": [],
                 "provenance": {
                     "created_by_task": "bootstrap",
@@ -451,6 +491,8 @@ class FileContextStore(ContextAssemblerBase):
                 except OSError:
                     pass
 
+        # Invalidate cache after all writes.
+        self._cache_dirty = True
         return cards_written
 
     # ------------------------------------------------------------------
@@ -503,7 +545,11 @@ class FileContextStore(ContextAssemblerBase):
         for cid, card in cards.items():
             card_terms = card_term_sets[cid]
             score = sum(_idf(t) for t in task_kws if t in card_terms)
-            if score > 0:
+            # CONFIDENCE GATE: only a match that clears the threshold is injected. A weak match
+            # contributes NOTHING, so an uncertain query yields an empty context view and the run
+            # falls back to plain Claude Code (never worse). This is what makes the layer dominate:
+            # it adds a grounding only when confident, and otherwise equals the baseline.
+            if score >= self._confidence_threshold:
                 usage = card.get("usage_count", 0)
                 verified_at = card.get("provenance", {}).get("last_verified_at", "") or ""
                 scored.append((-score, -usage, -len(verified_at), verified_at, card))
@@ -516,22 +562,57 @@ class FileContextStore(ContextAssemblerBase):
         scored.sort(key=lambda x: (x[0], x[1], x[2]))
         top_cards = [x[4] for x in scored[: self._max_cards]]
 
-        # Render each card, checking file freshness inline.
+        # Render each card, checking file freshness.
+        # Collect every (card_index, file_entry) pair that needs a fingerprint check, then
+        # compute all sha256 reads concurrently -- sha256 I/O releases the GIL so threads
+        # help whenever a card set pins many files.  Order is preserved; a failed
+        # fingerprint yields an empty dict (same as today, never raises).
+        #
+        # Build the flat list of (card_idx, fe) pairs to fingerprint.
+        fp_jobs: List[tuple] = []  # (card_idx, fe_idx, fpath)
+        for ci, card in enumerate(top_cards):
+            for fi, fe in enumerate(card.get("files", [])):
+                fp_jobs.append((ci, fi, fe.get("path", "")))
+
+        # Dispatch fingerprint reads in parallel.
+        fp_results: Dict[tuple, Dict[str, Any]] = {}  # (ci, fi) -> fp dict
+        if fp_jobs:
+            n_workers = min(8, len(fp_jobs))
+            try:
+                with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
+                    futures = {
+                        pool.submit(self._fingerprint, fpath): (ci, fi)
+                        for ci, fi, fpath in fp_jobs
+                    }
+                    for fut in concurrent.futures.as_completed(futures):
+                        key = futures[fut]
+                        try:
+                            fp_results[key] = fut.result()
+                        except Exception:  # noqa: BLE001
+                            fp_results[key] = {}
+            except Exception:  # noqa: BLE001
+                # ThreadPoolExecutor unavailable (shouldn't happen with stdlib, but guard anyway).
+                for ci, fi, fpath in fp_jobs:
+                    try:
+                        fp_results[(ci, fi)] = self._fingerprint(fpath)
+                    except Exception:  # noqa: BLE001
+                        fp_results[(ci, fi)] = {}
+
         view_parts: List[str] = []
         card_ids: List[str] = []
         stale_list: List[str] = []
 
-        for card in top_cards:
+        for ci, card in enumerate(top_cards):
             card_id = card.get("id", "")
             card_ids.append(card_id)
             summary = card.get("summary", "(no summary)")
             files = card.get("files", [])
 
             file_lines: List[str] = []
-            for fe in files:
+            for fi, fe in enumerate(files):
                 fpath = fe.get("path", "")
                 stored_sha = fe.get("sha256", "")
-                current_fp = self._fingerprint(fpath)
+                current_fp = fp_results.get((ci, fi), {})
                 current_sha = current_fp.get("sha256", "")
                 changed = (
                     (bool(stored_sha) and bool(current_sha) and current_sha != stored_sha)
@@ -636,6 +717,8 @@ class FileContextStore(ContextAssemblerBase):
                 json.dump(card, fh, indent=2, ensure_ascii=False)
                 fh.write("\n")
             os.replace(tmp_path, str(card_path))
+            # Invalidate the in-memory cache so the next assemble() sees the new card.
+            self._cache_dirty = True
         except Exception:  # noqa: BLE001
             try:
                 os.unlink(tmp_path)
@@ -684,10 +767,57 @@ class FileContextStore(ContextAssemblerBase):
 
         return result
 
+    def _dir_stamp(self) -> Tuple[float, int]:
+        """Cheap snapshot of cards_dir state: (max_child_mtime, file_count).
+
+        Used to detect external writes (other agents / processes) without
+        reading every card.  Returns (0.0, 0) if the directory does not exist
+        or cannot be stat-ed.
+        """
+        try:
+            if not self._cards_dir.exists():
+                return (0.0, 0)
+            max_mtime = 0.0
+            count = 0
+            for entry in self._cards_dir.iterdir():
+                if entry.suffix == ".json" and not entry.name.startswith("."):
+                    count += 1
+                    try:
+                        mt = entry.stat().st_mtime
+                        if mt > max_mtime:
+                            max_mtime = mt
+                    except OSError:
+                        pass
+            return (max_mtime, count)
+        except Exception:  # noqa: BLE001
+            return (0.0, 0)
+
     def _load_all(self) -> Dict[str, Dict[str, Any]]:
-        """Load all card JSON files from cards_dir. Returns {card_id: card_dict}."""
+        """Load all card JSON files from cards_dir. Returns {card_id: card_dict}.
+
+        Uses an in-memory cache to avoid re-reading every card on every call.
+        Invalidates the cache when:
+        - ``_cache_dirty`` is set (after any local write via ``record()`` or
+          ``bootstrap()``), OR
+        - the directory's max-child-mtime or file count changed (external write).
+        """
+        current_stamp = self._dir_stamp()
+        need_reload = (
+            self._cache is None
+            or self._cache_dirty
+            or current_stamp != self._cache_dir_stamp
+        )
+        if not need_reload:
+            return self._cache  # type: ignore[return-value]
+
+        # Reload from disk.
+        self._cache_dirty = False
+        self._cache_dir_stamp = current_stamp
+
         if not self._cards_dir.exists():
-            return {}
+            self._cache = {}
+            return self._cache
+
         cards: Dict[str, Dict[str, Any]] = {}
         for entry in self._cards_dir.iterdir():
             if entry.suffix != ".json" or entry.name.startswith("."):
@@ -699,4 +829,6 @@ class FileContextStore(ContextAssemblerBase):
                 cards[card_id] = card
             except Exception:  # noqa: BLE001 -- corrupt card: skip
                 continue
-        return cards
+
+        self._cache = cards
+        return self._cache

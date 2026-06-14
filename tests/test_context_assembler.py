@@ -264,7 +264,9 @@ class TestFileContextStoreAssemble:
             "chat-card", ["chat", "conversation", "message"],
             summary="The chat subsystem handles real-time conversation."
         ))
-        store = FileContextStore(str(cards_dir))
+        # confidence_threshold=0.0: tests ranking/matching on small synthetic sets
+        # where IDF scores are below the production gate of 3.0.
+        store = FileContextStore(str(cards_dir), confidence_threshold=0.0)
         ac = store.assemble("how does the chat conversation work?")
         assert "chat-card" in ac.card_ids
         assert "chat subsystem" in ac.context_view.lower()
@@ -801,7 +803,7 @@ class TestBootstrap:
         return tmp_path
 
     def test_bootstrap_creates_cards(self, tmp_path):
-        """bootstrap() over a temp repo produces at least one card per top-level group."""
+        """bootstrap() over a temp repo produces at least one card (one per source file)."""
         repo = self._make_repo(tmp_path)
         cards_dir = tmp_path / "cards"
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
@@ -811,6 +813,68 @@ class TestBootstrap:
         cards = list(cards_dir.glob("*.json"))
         assert len(cards) == n
 
+    def test_bootstrap_one_card_per_file(self, tmp_path):
+        """bootstrap() creates exactly one card per source file, not per module group."""
+        repo = self._make_repo(tmp_path)
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        n = store.bootstrap(root=str(repo))
+        # The repo has: mypackage/__init__.py, mypackage/models.py, mypackage/utils.py,
+        # tests/test_models.py  =>  4 source files -> 4 cards.
+        assert n == 4
+        assert len(list(cards_dir.glob("*.json"))) == 4
+
+    def test_bootstrap_card_has_single_pinned_file(self, tmp_path):
+        """Each bootstrapped card has exactly one pinned file -- the file it was created for."""
+        repo = self._make_repo(tmp_path)
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        store.bootstrap(root=str(repo))
+        for cp in cards_dir.glob("*.json"):
+            c = json.loads(cp.read_text())
+            assert len(c.get("files", [])) == 1, (
+                f"expected exactly 1 file per card, got {len(c['files'])} in {cp.name}"
+            )
+
+    def test_bootstrap_models_py_card_exists(self, tmp_path):
+        """There must be a card whose single pinned file is mypackage/models.py."""
+        repo = self._make_repo(tmp_path)
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        store.bootstrap(root=str(repo))
+        models_card = None
+        for cp in cards_dir.glob("*.json"):
+            c = json.loads(cp.read_text())
+            files = c.get("files", [])
+            if files and "mypackage/models.py" in files[0].get("path", ""):
+                models_card = c
+                break
+        assert models_card is not None, "expected a card whose single file is mypackage/models.py"
+
+    def test_bootstrap_symbol_query_ranks_file_card_first(self, tmp_path):
+        """A query containing a distinctive symbol from models.py should rank that file's
+        card #1 (symbol appears only in that file's card, so IDF pushes it to the top)."""
+        repo = self._make_repo(tmp_path)
+        cards_dir = tmp_path / "cards"
+        # confidence_threshold=0.0: tests ranking on small synthetic bootstrap where
+        # IDF scores are below the production gate of 3.0.
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False,
+                                 max_cards_in_view=10, confidence_threshold=0.0)
+        store.bootstrap(root=str(repo))
+
+        # "Order" is a class defined only in mypackage/models.py.
+        ac = store.assemble("Order class definition")
+        assert len(ac.card_ids) > 0, "expected at least one card"
+        top_card_path = None
+        for cp in cards_dir.glob("*.json"):
+            c = json.loads(cp.read_text())
+            if c.get("id") == ac.card_ids[0]:
+                top_card_path = c["files"][0]["path"] if c.get("files") else ""
+                break
+        assert top_card_path and "models.py" in top_card_path, (
+            f"expected models.py card ranked #1, got card pointing to: {top_card_path!r}"
+        )
+
     def test_bootstrap_card_has_extracted_symbols(self, tmp_path):
         """A bootstrapped card's keywords/summary includes symbol names from .py files."""
         repo = self._make_repo(tmp_path)
@@ -819,38 +883,32 @@ class TestBootstrap:
         store.bootstrap(root=str(repo))
 
         all_cards = list(cards_dir.glob("*.json"))
-        # Find the card for the mypackage group.
+        # Find the card for mypackage/models.py (contains User, Order).
         pkg_card = None
         for cp in all_cards:
             c = json.loads(cp.read_text())
-            if "mypackage" in c.get("summary", "") or any(
-                "mypackage" in k for k in c.get("keywords", [])
-            ):
+            files = c.get("files", [])
+            if files and "models.py" in files[0].get("path", ""):
                 pkg_card = c
                 break
-        assert pkg_card is not None, "expected a card for the mypackage group"
+        assert pkg_card is not None, "expected a card for mypackage/models.py"
         # keywords or summary must mention a known symbol
         combined = " ".join(pkg_card.get("keywords", [])) + " " + pkg_card.get("summary", "")
-        assert any(sym.lower() in combined.lower() for sym in ("User", "Order", "parse_date", "format_name"))
+        assert any(sym.lower() in combined.lower() for sym in ("user", "order"))
 
     def test_bootstrap_pins_module_files(self, tmp_path):
-        """The mypackage card must pin models.py or utils.py."""
+        """At least one bootstrapped card must pin a file matching models.py or utils.py."""
         repo = self._make_repo(tmp_path)
         cards_dir = tmp_path / "cards"
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
         store.bootstrap(root=str(repo))
 
-        all_cards = list(cards_dir.glob("*.json"))
-        pkg_files: List[str] = []
-        for cp in all_cards:
+        all_paths: List[str] = []
+        for cp in cards_dir.glob("*.json"):
             c = json.loads(cp.read_text())
-            if "mypackage" in c.get("summary", "") or any(
-                "mypackage" in k for k in c.get("keywords", [])
-            ):
-                pkg_files = [fe["path"] for fe in c.get("files", [])]
-                break
-        assert any("models.py" in p or "utils.py" in p for p in pkg_files), (
-            f"expected models.py or utils.py pinned, got: {pkg_files}"
+            all_paths.extend(fe["path"] for fe in c.get("files", []))
+        assert any("models.py" in p or "utils.py" in p for p in all_paths), (
+            f"expected models.py or utils.py pinned somewhere, got: {all_paths}"
         )
 
     def test_bootstrap_provenance_created_by_bootstrap(self, tmp_path):
@@ -931,15 +989,19 @@ class TestAutoBootstrap:
         )
 
         cards_dir = tmp_path / "cards"
+        # confidence_threshold=0.0: tests ranking on small synthetic auto-bootstrap
+        # where IDF scores for a one-card store are below the production gate of 3.0.
         store = FileContextStore(
             str(cards_dir),
             repo_root=str(repo),
             auto_bootstrap=True,
             max_cards_in_view=10,
+            confidence_threshold=0.0,
         )
         # No cards exist yet; first assemble should seed then match.
+        # File-granular bootstrap: billing/invoice.py gets its own card.
         ac = store.assemble("billing invoice generation")
-        # After auto-bootstrap, a card covering billing/invoice.py should appear.
+        # After auto-bootstrap, the card for billing/invoice.py should appear.
         assert len(ac.card_ids) > 0, "expected at least one card after auto-bootstrap"
         assert any("billing" in cid or "invoice" in cid for cid in ac.card_ids), (
             f"expected a billing/invoice card, got: {ac.card_ids}"
@@ -1032,7 +1094,10 @@ class TestIDFScoring:
             summary="card d: database migration rollback procedures",
         ))
 
-        store = FileContextStore(str(cards_dir), max_cards_in_view=4, auto_bootstrap=False)
+        # confidence_threshold=0.0: tests ranking logic on small synthetic card sets
+        # where IDF scores are below the production gate of 3.0.
+        store = FileContextStore(str(cards_dir), max_cards_in_view=4, auto_bootstrap=False,
+                                 confidence_threshold=0.0)
 
         # Query for the distinctive term: card-a must rank first.
         ac = store.assemble("xylophone database")
@@ -1099,3 +1164,272 @@ class TestIDFScoring:
         ac = store.assemble("completely unrelated zzzzzz")
         assert ac.context_view == ""
         assert ac.card_ids == []
+
+
+# ---------------------------------------------------------------------------
+# Confidence gate: the never-worse guarantee
+# ---------------------------------------------------------------------------
+
+class TestConfidenceGate:
+    """Verify the confidence gate (confidence_threshold) behaviour.
+
+    The gate is the never-worse-by-construction lever: a card is only injected
+    when its IDF score clears the threshold.  A weak/ambiguous match yields an
+    EMPTY AssembledContext, so the run equals plain Claude Code (the baseline).
+    A strong/confident match IS injected.  The system therefore can only ADD a
+    confident grounding or stay equal to the baseline -- it never makes things worse.
+    """
+
+    # ------------------------------------------------------------------
+    # 1. Weak/ambiguous match below threshold -> empty context (never worse)
+    # ------------------------------------------------------------------
+
+    def test_weak_match_yields_empty_context(self, tmp_path):
+        """A query whose best-matching card scores below the threshold injects NOTHING.
+
+        The run therefore equals plain Claude Code (the never-worse guarantee).
+        """
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        # Two cards with a single common term each.  With N=2 and df=1,
+        # IDF(term) = log(3/2)+1 ~= 1.405; that stays below the default 3.0 gate.
+        _write_card(cards_dir, _make_card(
+            "weak-card-a", ["python", "module"],
+            summary="weak card a: python module",
+        ))
+        _write_card(cards_dir, _make_card(
+            "weak-card-b", ["python", "package"],
+            summary="weak card b: python package",
+        ))
+
+        # Default threshold (3.0) -- scores ~1.4 per matching term never clear it.
+        store = FileContextStore(str(cards_dir), auto_bootstrap=False)
+        ac = store.assemble("python module package")
+
+        assert ac.context_view == "", (
+            f"expected empty context_view for weak match, got: {ac.context_view!r}"
+        )
+        assert ac.card_ids == [], (
+            f"expected no card_ids for weak match, got: {ac.card_ids}"
+        )
+
+    def test_weak_match_on_small_card_set_clears_with_zero_threshold(self, tmp_path):
+        """The same weak match that is gated out at 3.0 IS returned at 0.0.
+
+        This proves the gate is the only reason the match is suppressed,
+        and that confidence_threshold=0.0 restores old behaviour.
+        """
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        _write_card(cards_dir, _make_card(
+            "weak-card-a", ["python", "module"],
+            summary="weak card a: python module",
+        ))
+
+        store_gated = FileContextStore(str(cards_dir), auto_bootstrap=False)
+        store_open = FileContextStore(str(cards_dir), auto_bootstrap=False,
+                                      confidence_threshold=0.0)
+
+        ac_gated = store_gated.assemble("python module")
+        ac_open = store_open.assemble("python module")
+
+        assert ac_gated.card_ids == [], "expected gated store to suppress weak match"
+        assert len(ac_open.card_ids) > 0, "expected open store to return weak match"
+
+    # ------------------------------------------------------------------
+    # 2. Default threshold is 3.0
+    # ------------------------------------------------------------------
+
+    def test_default_threshold_is_3(self, tmp_path):
+        """FileContextStore default confidence_threshold must be 3.0."""
+        store = FileContextStore(str(tmp_path / "cards"), auto_bootstrap=False)
+        assert store._confidence_threshold == 3.0
+
+    # ------------------------------------------------------------------
+    # 3. Strong/confident match over a realistic ~30+ card bootstrap IS injected
+    # ------------------------------------------------------------------
+
+    def _make_large_repo(self, tmp_path: Path, n_noise_files: int = 35) -> Path:
+        """Create a repo with one distinctive module + many noise files.
+
+        The target file has a uniquely-named function (xfr_collate_payments_7q2) that
+        appears in NO other file.  The noise files share only generic path tokens so
+        their IDF contribution to any query is low.
+        """
+        repo = tmp_path / "repo"
+        repo.mkdir()
+
+        # Target file with a highly distinctive function name.
+        target_dir = repo / "billing"
+        target_dir.mkdir()
+        target_text = (
+            "def xfr_collate_payments_7q2(account_id):\n"
+            "    '''Collate outstanding payments for the given account.'''\n"
+            "    pass\n\n"
+            "class PaymentCollector:\n"
+            "    pass\n"
+        )
+        (target_dir / "collate.py").write_text(target_text, encoding="utf-8")
+
+        # Noise files: generic names with no overlap to the distinctive symbol.
+        noise_dir = repo / "common"
+        noise_dir.mkdir()
+        for i in range(n_noise_files):
+            code = (
+                f"# noise module {i}\n"
+                f"def helper_{i}():\n    pass\n"
+                f"class Util{i}:\n    pass\n"
+            )
+            (noise_dir / f"util_{i}.py").write_text(code, encoding="utf-8")
+
+        return repo
+
+    def test_strong_match_injected_over_large_bootstrap(self, tmp_path):
+        """A distinctive query term that appears in only ONE of ~36 bootstrapped cards
+        clears the 3.0 gate and is injected with the right card.
+
+        IDF for a term in 1/37 cards = log(38/2)+1 ~= 3.94, which exceeds 3.0.
+        """
+        repo = self._make_large_repo(tmp_path, n_noise_files=35)
+        cards_dir = tmp_path / "cards"
+
+        store = FileContextStore(
+            str(cards_dir),
+            repo_root=str(repo),
+            auto_bootstrap=False,
+        )
+        n = store.bootstrap(root=str(repo))
+        assert n >= 36, f"expected >= 36 cards from bootstrap, got {n}"
+
+        # Query uses the distinctive function name as the key term.
+        ac = store.assemble("xfr collate payments 7q2 billing account")
+
+        assert ac.context_view != "", (
+            f"expected non-empty context_view for distinctive strong match "
+            f"(N={n} cards, threshold=3.0)"
+        )
+        assert len(ac.card_ids) > 0, (
+            "expected at least one card_id for strong/distinctive match"
+        )
+        # The top card must be the billing/collate.py card.
+        top_id = ac.card_ids[0]
+        all_cards = store._load_all()
+        top_card = all_cards.get(top_id, {})
+        top_file = (top_card.get("files") or [{}])[0].get("path", "")
+        assert "collate" in top_file, (
+            f"expected top card to be billing/collate.py, got path: {top_file!r}"
+        )
+
+    def test_zero_threshold_injects_any_positive_match(self, tmp_path):
+        """confidence_threshold=0.0 means any positive-score match is injected
+        (old behaviour / disabled gate).  Even a single-card store with a single
+        overlapping term yields a non-empty context.
+        """
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        _write_card(cards_dir, _make_card(
+            "any-card", ["chatbot", "interface"],
+            summary="any card: chatbot interface module",
+        ))
+
+        store = FileContextStore(str(cards_dir), auto_bootstrap=False,
+                                 confidence_threshold=0.0)
+        ac = store.assemble("chatbot interface query")
+
+        assert ac.context_view != "", "expected non-empty context with threshold=0.0"
+        assert "any-card" in ac.card_ids
+
+
+# ---------------------------------------------------------------------------
+# In-memory card cache
+# ---------------------------------------------------------------------------
+
+class TestCardCache:
+    def test_two_assembles_return_consistent_results(self, tmp_path):
+        """Repeated assemble() calls on the same store return identical card_ids."""
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        _write_card(cards_dir, _make_card("alpha-card", ["alpha", "bravo", "charlie"]))
+        store = FileContextStore(str(cards_dir), auto_bootstrap=False)
+        ac1 = store.assemble("alpha bravo charlie")
+        ac2 = store.assemble("alpha bravo charlie")
+        assert ac1.card_ids == ac2.card_ids
+        assert ac1.context_view == ac2.context_view
+
+    def test_cache_reloads_after_record(self, tmp_path):
+        """After record() writes a new card, the next assemble() must see it."""
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), auto_bootstrap=False)
+        # First assemble: store is empty.
+        ac0 = store.assemble("zyzzyx special query")
+        assert ac0.card_ids == []
+
+        # record() writes a card with the query term.
+        store.record("zyzzyx special query", {"kind": "answer"})
+
+        # Next assemble() must return the new card (cache must have been invalidated).
+        ac1 = store.assemble("zyzzyx special query")
+        assert len(ac1.card_ids) > 0, "cache not invalidated after record()"
+
+    def test_cache_reloads_after_external_write(self, tmp_path):
+        """If another process writes a card file to cards_dir, the next assemble() sees it."""
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        store = FileContextStore(str(cards_dir), auto_bootstrap=False)
+
+        # Prime the cache with one assemble (finds nothing for this query).
+        ac0 = store.assemble("neptunium special element")
+        assert ac0.card_ids == []
+
+        # External write: another process drops a card directly (no store.record()).
+        new_card = _make_card("neptunium-card", ["neptunium", "special", "element"],
+                              summary="neptunium special element card")
+        # Write directly to disk, bypassing the store instance (simulates another agent).
+        import time
+        time.sleep(0.01)  # ensure mtime advances so the dir stamp changes
+        _write_card(cards_dir, new_card)
+
+        # The next assemble() should detect the changed dir stamp and reload.
+        ac1 = store.assemble("neptunium special element")
+        assert "neptunium-card" in ac1.card_ids, (
+            "external card write not detected; cache not invalidated"
+        )
+
+    def test_cache_not_reloaded_when_nothing_changed(self, tmp_path):
+        """When no writes occur, the cached data is reused (dir stamp unchanged)."""
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        _write_card(cards_dir, _make_card("stable-card", ["stable", "cache", "test"]))
+
+        store = FileContextStore(str(cards_dir), auto_bootstrap=False)
+        # First call loads the cache.
+        ac1 = store.assemble("stable cache test")
+        # Confirm cache is populated.
+        assert store._cache is not None
+        stamp1 = store._cache_dir_stamp
+
+        # Second call should NOT reload (stamp unchanged).
+        ac2 = store.assemble("stable cache test")
+        assert store._cache_dir_stamp == stamp1  # stamp didn't change
+        assert ac1.card_ids == ac2.card_ids
+
+    def test_bootstrap_then_assemble_sees_new_cards(self, tmp_path):
+        """After bootstrap() writes cards, assemble() on the same instance sees them."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "service.py").write_text("def handle_request(): pass\n", encoding="utf-8")
+
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+
+        # No cards yet.
+        ac0 = store.assemble("handle request service")
+        assert ac0.card_ids == []
+
+        # Bootstrap writes cards; cache dirty flag must be set.
+        n = store.bootstrap(root=str(repo))
+        assert n > 0
+
+        # Next assemble must see the bootstrapped cards.
+        ac1 = store.assemble("handle request service")
+        assert len(ac1.card_ids) > 0, "cache not invalidated after bootstrap()"
