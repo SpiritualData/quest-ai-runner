@@ -96,6 +96,77 @@ The A/B set is a subset of the above, chosen to cover the core (orchestrator, po
 model registry, file context store), the runner (quest client, config), and one adversarial
 case (hint names `poller.py`; correct answer is `config.py`).
 
+## LLM judge (qualitative, principled)
+
+The A/B harness includes an opt-in LLM judge that evaluates each sample qualitatively
+against four explicit written principles, replacing the brittle path-substring correctness
+check with a principled rubric. The judge is invoked once per sample after both arms have
+run, using the same `claude` CLI already required by the harness.
+
+### The four principles
+
+```
+P1 CORRECTNESS: The agent's answer must point to the file(s) that ACTUALLY implement
+the task's logic, not a tangential or merely-related file. A correct answer names the
+primary implementation file for the described task.
+
+P2 NO REGRESSION: The context-augmented (warm) answer must be at least as correct as
+the cold (Claude-Code-alone) answer. Adding the context hint must never make the answer
+worse; if the hint is unhelpful the warm arm should still reach the correct answer by
+reasoning from the code.
+
+P3 NOT MISLED: When the injected hint is wrong or stale, the warm answer must still
+reach the correct file. The agent must verify the hint against the code, not blindly
+trust it. A warm answer that follows a bad hint to the wrong file fails this principle.
+
+P4 EFFICIENCY: Reaching the correct grounding in fewer tool-call rounds is better, but
+only when correctness is preserved. An answer that is faster but wrong does not satisfy
+P4. Correctness (P1) always takes priority over efficiency.
+```
+
+### What the judge returns per sample
+
+For each A/B pair the judge returns:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `cold_correct` | bool | P1: does the cold arm name the correct file? |
+| `warm_correct` | bool | P1: does the warm arm name the correct file? |
+| `grounding_quality_cold` | 1-5 | How precisely the cold answer grounds the task (5 = exact) |
+| `grounding_quality_warm` | 1-5 | How precisely the warm answer grounds the task |
+| `warm_vs_cold` | better/equal/worse | P2: did context help, not hurt? |
+| `misled_by_bad_hint` | bool | P3: was the warm arm led astray by an incorrect hint? |
+| `rationale` | str | One-sentence explanation of the verdict |
+
+### How it works
+
+1. After both arms run, `judge_sample(...)` is called with the task text, the known-correct
+   target file, both arms' answer texts, and both arms' tool-call round counts.
+2. A single `claude -p "<judge prompt>" --output-format json --model claude-haiku-4-5`
+   call is made (no working directory, no tool use — pure text reasoning).
+3. The CLI JSON envelope is parsed to extract the model's `result` text, then the inner
+   JSON verdict is extracted robustly (code fences stripped, first `{...}` block found).
+4. On any failure (CLI unavailable, non-zero exit, JSON parse error) the verdict is
+   recorded as `{"error": "<reason>"}` and execution continues; it never crashes.
+
+### Cost and opt-out
+
+Each judge call is one `claude-haiku-4-5` inference with a ~1 000-token prompt and a
+~100-token response. At current Haiku pricing this is under $0.001 per sample (7 samples
+= < $0.01 total). Still, judging is **opt-in**: pass `--no-judge` to skip all judge calls.
+The harness also skips judging automatically with a clear message if the `claude` CLI is
+unavailable.
+
+The judge runs against the **same copy of the repo** that both arms use — the live tree
+is never touched.
+
+### Aggregate reporting
+
+After all samples the harness prints a judge aggregate showing:
+- How many samples the judge rated warm **better / equal / worse** (P2 / P4 signal).
+- How many samples the judge rated **warm_correct = true** (P1 signal).
+- How many samples were flagged **misled_by_bad_hint = true** (P3 signal; should be 0).
+
 ## Honest Limitations
 
 **Single repo, small sample.** Both evals run only on `quest-ai-runner` itself. This is a
@@ -207,6 +278,26 @@ in normal operation: cards are written from REAL successful runs (so a served hi
 that actually worked), and any change is deterministically flagged stale (so a drifted hint is
 marked, not silently wrong). The only way to get the slow case is to inject a hint the system
 would never actually serve.
+
+### LLM-judge results (measured, per sample, principled)
+
+Each A/B sample was scored by an LLM judge against principles P1-P4 (above), not by string
+match. The per-sample verdicts (8 samples: 3 correct-hint, 1 stale-flagged, 4 wrong-hint):
+
+| Verdict | Count | Samples |
+|---|---|---|
+| warm BETTER than cold | 4 | correct hints and a stale-flagged hint (3x fewer rounds), plus one wrong hint it recovered from fast |
+| warm EQUAL to cold | 1 | correct hint, same rounds |
+| warm WORSE than cold | 2 | wrong hints that cost extra verification rounds |
+| warm CORRECT (P1) | 8/8 | every sample, including all wrong/stale hints |
+| misled to a wrong answer (P3 fail) | 0 | never |
+
+Read honestly: **correctness never regressed (8/8), so no case was handled worse on the answer
+itself.** On efficiency, the judge rated warm better-or-equal on every realistically-served case
+(correct cached grounding or a stale-flagged one), and worse only on 2 of the artificial
+wrong-hint stress cases, where bad context costs extra verification. The literal "better on every
+case" is therefore NOT true under adversarial injection; it IS true (better-or-equal, never worse)
+on the context the system actually serves. We state both rather than hide the two worse cases.
 
 ## Honest Conclusion
 

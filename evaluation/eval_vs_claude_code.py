@@ -9,6 +9,9 @@ Measures for each task:
   - correctness: does the answer contain the expected target file?
   - adversarial case: a warm hint that points to the WRONG file must still return
     the CORRECT file (verifies the model is not misled by a bad hint).
+  - LLM judge (opt-in, requires claude CLI): qualitative per-sample evaluation
+    against four written principles (see JUDGE_PRINCIPLES). One cheap Haiku call
+    per sample. Skip judging with --no-judge or if the claude CLI is unavailable.
 
 The task set is small (6 tasks + 1 adversarial) to keep cost low.
 More tasks improve statistical significance; this set is a representative minimum.
@@ -19,7 +22,9 @@ Usage:
     .venv/bin/python evaluation/eval_vs_claude_code.py
 
 Guard: if the `claude` CLI is not on PATH or errors, each task is marked
-"skipped: claude CLI unavailable" rather than crashing.
+"skipped: claude CLI unavailable" rather than crashing. The judge similarly
+degrades gracefully: if unavailable or if JSON parsing fails, the verdict is
+recorded as {"error": "<reason>"} and execution continues.
 
 Dataset limitations (stated honestly):
   - Single repo, small sample, labels are one-file-each (real tasks span several files).
@@ -64,6 +69,35 @@ def _ensure_package_importable() -> None:
 _ensure_package_importable()
 
 from quest_ai_runner.adapters.file_context_store import FileContextStore  # noqa: E402
+
+# ---------------------------------------------------------------------------
+# LLM judge: four written principles used to evaluate each sample qualitatively.
+#
+# The judge is called once per sample (one cheap Haiku call) and scores both
+# arms against these principles. This replaces the brittle path-substring
+# correctness check with a principled qualitative rubric, while still keeping
+# the substring check as a fast pre-screen in the result record.
+# ---------------------------------------------------------------------------
+
+JUDGE_PRINCIPLES: str = """
+P1 CORRECTNESS: The agent's answer must point to the file(s) that ACTUALLY implement
+the task's logic, not a tangential or merely-related file. A correct answer names the
+primary implementation file for the described task.
+
+P2 NO REGRESSION: The context-augmented (warm) answer must be at least as correct as
+the cold (Claude-Code-alone) answer. Adding the context hint must never make the answer
+worse; if the hint is unhelpful the warm arm should still reach the correct answer by
+reasoning from the code.
+
+P3 NOT MISLED: When the injected hint is wrong or stale, the warm answer must still
+reach the correct file. The agent must verify the hint against the code, not blindly
+trust it. A warm answer that follows a bad hint to the wrong file fails this principle.
+
+P4 EFFICIENCY: Reaching the correct grounding in fewer tool-call rounds is better, but
+only when correctness is preserved. An answer that is faster but wrong does not satisfy
+P4. Correctness (P1) always takes priority over efficiency.
+""".strip()
+
 
 # ---------------------------------------------------------------------------
 # Task set: (label, task_text, target_file)
@@ -230,6 +264,167 @@ def _extract_path_from_result(result_text: str, target: str) -> bool:
     return target in result_text
 
 
+# ---------------------------------------------------------------------------
+# LLM judge
+# ---------------------------------------------------------------------------
+
+def _build_judge_prompt(
+    task: str,
+    target_file: str,
+    cold_answer: str,
+    cold_rounds: int,
+    warm_answer: str,
+    warm_rounds: int,
+) -> str:
+    """Construct the prompt sent to the judge model."""
+    return (
+        "You are an evaluation judge for an AI coding assistant benchmark.\n"
+        "You will be given a task, the known-correct target file, and two arms:\n"
+        "  - Cold arm: Claude Code alone, no context hint.\n"
+        "  - Warm arm: Claude Code with a pre-loaded context hint.\n\n"
+        "Evaluate both arms against the following PRINCIPLES:\n\n"
+        f"{JUDGE_PRINCIPLES}\n\n"
+        "---\n"
+        f"TASK: {task}\n\n"
+        f"KNOWN CORRECT FILE: {target_file}\n\n"
+        f"COLD ARM answer (tool-call rounds: {cold_rounds}):\n{cold_answer}\n\n"
+        f"WARM ARM answer (tool-call rounds: {warm_rounds}):\n{warm_answer}\n\n"
+        "---\n"
+        "Output ONLY a JSON object — no prose, no markdown fences, no explanation "
+        "before or after the JSON. The JSON must have exactly these fields:\n"
+        '  "cold_correct": true or false  '
+        '(P1: does cold_answer point to the correct file?)\n'
+        '  "warm_correct": true or false  '
+        '(P1: does warm_answer point to the correct file?)\n'
+        '  "grounding_quality_cold": integer 1-5  '
+        "(1=completely wrong, 5=exactly right)\n"
+        '  "grounding_quality_warm": integer 1-5  '
+        "(1=completely wrong, 5=exactly right)\n"
+        '  "warm_vs_cold": "better" or "equal" or "worse"  '
+        "(P2: did context help, not hurt?)\n"
+        '  "misled_by_bad_hint": true or false  '
+        "(P3: was the warm arm led astray by an incorrect hint?)\n"
+        '  "rationale": "one sentence explaining your verdict"\n\n'
+        "Example (do not copy verbatim):\n"
+        '{"cold_correct": true, "warm_correct": true, '
+        '"grounding_quality_cold": 4, "grounding_quality_warm": 5, '
+        '"warm_vs_cold": "better", "misled_by_bad_hint": false, '
+        '"rationale": "Both arms identified the correct file; warm arm reached '
+        'it in fewer rounds."}'
+    )
+
+
+def _parse_judge_json(raw_text: str) -> Dict[str, Any]:
+    """Extract and parse the JSON object from the judge's raw response text.
+
+    Handles responses that include code fences or surrounding prose by finding
+    the first complete {...} block. Returns the parsed dict or raises ValueError.
+    """
+    # Strip markdown code fences if present.
+    text = re.sub(r"```(?:json)?", "", raw_text).strip()
+    # Find the first {...} block (greedy — matches the outermost braces).
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        raise ValueError(f"no JSON object found in: {text[:300]!r}")
+    return json.loads(match.group())
+
+
+def judge_sample(
+    task: str,
+    target_file: str,
+    cold_answer: str,
+    cold_rounds: int,
+    warm_answer: str,
+    warm_rounds: int,
+    *,
+    model: str = "claude-haiku-4-5",
+) -> Dict[str, Any]:
+    """Call the claude CLI once to judge one A/B sample against JUDGE_PRINCIPLES.
+
+    Returns a dict with fields:
+        cold_correct, warm_correct,
+        grounding_quality_cold (1-5), grounding_quality_warm (1-5),
+        warm_vs_cold ("better"|"equal"|"worse"),
+        misled_by_bad_hint (bool),
+        rationale (str)
+
+    On any failure (CLI unavailable, non-zero exit, JSON parse error) returns a
+    dict with an "error" field describing the problem. Never raises.
+    """
+    claude_bin = _find_claude()
+    if not claude_bin:
+        return {"error": "claude CLI not found; judge skipped"}
+
+    prompt = _build_judge_prompt(
+        task=task,
+        target_file=target_file,
+        cold_answer=cold_answer,
+        cold_rounds=cold_rounds,
+        warm_answer=warm_answer,
+        warm_rounds=warm_rounds,
+    )
+
+    cmd = [
+        claude_bin,
+        "-p", prompt,
+        "--output-format", "json",
+        "--model", model,
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        if proc.returncode != 0:
+            return {"error": f"judge CLI exited {proc.returncode}: {proc.stderr[:300]}"}
+
+        raw_output = proc.stdout.strip()
+
+        # The CLI wraps the model's text in a JSON envelope:
+        # {"result": "<model output>", "num_turns": ..., "usage": {...}, ...}
+        # Parse the envelope first, then parse the model's inner JSON.
+        envelope: Dict[str, Any] = {}
+        env_match = None
+        for m in re.finditer(r"\{.*\}", raw_output, re.DOTALL):
+            env_match = m
+        if not env_match:
+            return {"error": f"no JSON envelope from judge CLI: {raw_output[:200]}"}
+        try:
+            envelope = json.loads(env_match.group())
+        except json.JSONDecodeError as exc:
+            return {"error": f"envelope JSON parse error: {exc}  raw={raw_output[:200]}"}
+
+        result_text: str = envelope.get("result", envelope.get("text", ""))
+        if not result_text:
+            return {"error": f"no result field in judge envelope: {list(envelope.keys())}"}
+
+        try:
+            verdict = _parse_judge_json(result_text)
+        except (json.JSONDecodeError, ValueError) as exc:
+            return {"error": f"inner JSON parse error: {exc}  result={result_text[:300]}"}
+
+        # Validate expected fields are present (not strict — extra fields are fine).
+        required = {
+            "cold_correct", "warm_correct",
+            "grounding_quality_cold", "grounding_quality_warm",
+            "warm_vs_cold", "misled_by_bad_hint", "rationale",
+        }
+        missing = required - set(verdict.keys())
+        if missing:
+            verdict["_missing_fields"] = sorted(missing)
+
+        return verdict
+
+    except subprocess.TimeoutExpired:
+        return {"error": "judge CLI timed out after 60s"}
+    except FileNotFoundError:
+        return {"error": "judge claude binary not found at runtime"}
+    except Exception as exc:  # noqa: BLE001
+        return {"error": f"unexpected judge error: {exc}"}
+
+
 def _copy_repo(src: Path) -> Path:
     dest = Path(tempfile.mkdtemp(prefix="qar_ab_eval_"))
 
@@ -269,6 +464,9 @@ def main() -> None:
     print("=" * 72)
     print()
 
+    # Opt-out flag: pass --no-judge to skip the LLM judge calls.
+    enable_judge = "--no-judge" not in sys.argv
+
     # Check for claude CLI.
     claude_bin = _find_claude()
     if not claude_bin:
@@ -277,6 +475,10 @@ def main() -> None:
         return
 
     print(f"claude CLI found at: {claude_bin}")
+    if enable_judge:
+        print("LLM judge: ENABLED (one extra Haiku call per sample; pass --no-judge to skip)")
+    else:
+        print("LLM judge: DISABLED (--no-judge flag set)")
     print()
 
     # Copy repo.
@@ -347,6 +549,30 @@ def main() -> None:
               f"correct={warm_correct}"
               + (f"  ADV_PASS={adversarial_pass}" if is_adversarial else ""))
 
+        # LLM judge: qualitative evaluation against JUDGE_PRINCIPLES.
+        judge_verdict: Dict[str, Any] = {}
+        if enable_judge:
+            print(f"    Judge...", end=" ", flush=True)
+            judge_verdict = judge_sample(
+                task=task,
+                target_file=target,
+                cold_answer=cold_res["result"],
+                cold_rounds=cold_res["num_turns"],
+                warm_answer=warm_res["result"],
+                warm_rounds=warm_res["num_turns"],
+            )
+            if "error" in judge_verdict:
+                print(f"SKIPPED ({judge_verdict['error'][:60]})")
+            else:
+                wvc = judge_verdict.get("warm_vs_cold", "?")
+                wc = judge_verdict.get("warm_correct", "?")
+                cc = judge_verdict.get("cold_correct", "?")
+                rationale = judge_verdict.get("rationale", "")
+                print(
+                    f"warm_vs_cold={wvc}  cold_correct={cc}  warm_correct={wc}"
+                    f"\n      rationale: {rationale}"
+                )
+
         results.append({
             "label": label,
             "target": target,
@@ -361,6 +587,7 @@ def main() -> None:
             "warm_correct": warm_correct,
             "adversarial_pass": adversarial_pass,
             "hint_used": hint,
+            "judge": judge_verdict,
         })
 
     # Clean up.
@@ -411,6 +638,28 @@ def main() -> None:
             print(f"  Speedup factor:       {speedup:.1f}x fewer rounds with context")
         print(f"  Correctness           cold: {cold_correct_pct:.0%}  warm: {warm_correct_pct:.0%}")
 
+    # Judge aggregate (non-adversarial only).
+    if enable_judge:
+        judged = [r for r in non_adv if r.get("judge") and "error" not in r.get("judge", {})]
+        if judged:
+            better = sum(1 for r in judged if r["judge"].get("warm_vs_cold") == "better")
+            equal = sum(1 for r in judged if r["judge"].get("warm_vs_cold") == "equal")
+            worse = sum(1 for r in judged if r["judge"].get("warm_vs_cold") == "worse")
+            warm_correct_judge = sum(1 for r in judged if r["judge"].get("warm_correct") is True)
+            misled_count = sum(1 for r in non_adv
+                               if r.get("judge") and r["judge"].get("misled_by_bad_hint") is True)
+            print()
+            print("JUDGE AGGREGATE (non-adversarial, LLM-rated against JUDGE_PRINCIPLES)")
+            print(f"  Samples judged: {len(judged)}")
+            print(f"  warm_vs_cold   better={better}  equal={equal}  worse={worse}")
+            print(f"  warm_correct (judge-rated): {warm_correct_judge}/{len(judged)}")
+            print(f"  misled_by_bad_hint: {misled_count} "
+                  f"({'none misled' if misled_count == 0 else 'WARNING: misled cases found'})")
+        else:
+            print()
+            print("JUDGE AGGREGATE: no samples successfully judged "
+                  "(CLI unavailable or all errored)")
+
     # Adversarial summary.
     if adv:
         print()
@@ -422,6 +671,11 @@ def main() -> None:
             print(f"  Target (CORRECT):   {r['target']}")
             print(f"  Warm arm returned target: {passed}  "
                   f"({'PASS: not misled by wrong hint' if passed else 'FAIL: misled by wrong hint'})")
+            j = r.get("judge", {})
+            if j and "error" not in j:
+                print(f"  Judge (P3 NOT MISLED): misled_by_bad_hint={j.get('misled_by_bad_hint')}  "
+                      f"warm_correct={j.get('warm_correct')}  "
+                      f"rationale: {j.get('rationale', '')}")
 
     print()
     print("Done. The live tree was NOT modified.")
