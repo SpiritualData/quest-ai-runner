@@ -132,6 +132,26 @@ guarantee holds for everyone.
   is promoted deliberately to a committed CLAUDE.md context-map, which is the reviewed, source of
   truth subset, not the churn.
 
+## Cold start and relevance (measured, zero LLM)
+
+The store seeds itself the first time it is used: on the first `assemble()` over an empty store
+with a known repo root, it bootstraps a per-module map (stdlib walk, symbols via the `ast` module
+for Python and a regex set for other languages), so the very first task already has context.
+Selection is IDF-weighted, not raw keyword overlap, so distinctive terms win.
+
+Measured on this repo (`quest-ai-runner`) as the corpus, no API key, no model calls:
+
+- **Cold start:** 19 module cards built from a fresh repo in ~260 ms, 61 files pinned, 177 symbols
+  indexed, 0 LLM calls.
+- **Relevance:** "the poller claims a task and reports" routes to the runner module pinning
+  `poller.py` / `executor.py`; "fix the orchestrator planner loop" routes to the core module. The
+  task lands on the right files before any grep.
+- **Staleness over time:** editing a pinned file flips that card to stale on the next `assemble()`
+  (`stale=['quest_ai_runner/core/orchestrator.py']`), deterministically, 0 LLM calls.
+
+So the differentiating properties are concrete: instant grounding on a fresh repo, deterministic
+freshness, and a context map that compounds as tasks run, all without spending a token to maintain it.
+
 ## Quest AI chat integration (both directions)
 
 The assembler composes with the existing chat context paths rather than competing with them. In

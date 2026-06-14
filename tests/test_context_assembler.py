@@ -769,3 +769,333 @@ class TestWriteBackCapturesGatheredFiles:
             config=OrchestratorConfig(max_steps=2), context_assembler=CapturingAssembler())
         orch.run("explain pkg/mod.py")
         assert "pkg/mod.py" in recorded.get("files", [])
+
+
+# ---------------------------------------------------------------------------
+# Bootstrap: cold-start seed from a repo tree
+# ---------------------------------------------------------------------------
+
+class TestBootstrap:
+    def _make_repo(self, tmp_path: Path) -> Path:
+        """Create a minimal fake repo with a couple of Python modules."""
+        # mypackage/models.py
+        pkg = tmp_path / "mypackage"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("", encoding="utf-8")
+        (pkg / "models.py").write_text(
+            "class User:\n    pass\n\nclass Order:\n    pass\n",
+            encoding="utf-8",
+        )
+        # mypackage/utils.py
+        (pkg / "utils.py").write_text(
+            "def parse_date(s):\n    pass\n\ndef format_name(n):\n    pass\n",
+            encoding="utf-8",
+        )
+        # tests/test_models.py
+        tests = tmp_path / "tests"
+        tests.mkdir()
+        (tests / "test_models.py").write_text(
+            "def test_user_create():\n    pass\n",
+            encoding="utf-8",
+        )
+        return tmp_path
+
+    def test_bootstrap_creates_cards(self, tmp_path):
+        """bootstrap() over a temp repo produces at least one card per top-level group."""
+        repo = self._make_repo(tmp_path)
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        n = store.bootstrap(root=str(repo))
+        assert n > 0
+        assert cards_dir.exists()
+        cards = list(cards_dir.glob("*.json"))
+        assert len(cards) == n
+
+    def test_bootstrap_card_has_extracted_symbols(self, tmp_path):
+        """A bootstrapped card's keywords/summary includes symbol names from .py files."""
+        repo = self._make_repo(tmp_path)
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        store.bootstrap(root=str(repo))
+
+        all_cards = list(cards_dir.glob("*.json"))
+        # Find the card for the mypackage group.
+        pkg_card = None
+        for cp in all_cards:
+            c = json.loads(cp.read_text())
+            if "mypackage" in c.get("summary", "") or any(
+                "mypackage" in k for k in c.get("keywords", [])
+            ):
+                pkg_card = c
+                break
+        assert pkg_card is not None, "expected a card for the mypackage group"
+        # keywords or summary must mention a known symbol
+        combined = " ".join(pkg_card.get("keywords", [])) + " " + pkg_card.get("summary", "")
+        assert any(sym.lower() in combined.lower() for sym in ("User", "Order", "parse_date", "format_name"))
+
+    def test_bootstrap_pins_module_files(self, tmp_path):
+        """The mypackage card must pin models.py or utils.py."""
+        repo = self._make_repo(tmp_path)
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        store.bootstrap(root=str(repo))
+
+        all_cards = list(cards_dir.glob("*.json"))
+        pkg_files: List[str] = []
+        for cp in all_cards:
+            c = json.loads(cp.read_text())
+            if "mypackage" in c.get("summary", "") or any(
+                "mypackage" in k for k in c.get("keywords", [])
+            ):
+                pkg_files = [fe["path"] for fe in c.get("files", [])]
+                break
+        assert any("models.py" in p or "utils.py" in p for p in pkg_files), (
+            f"expected models.py or utils.py pinned, got: {pkg_files}"
+        )
+
+    def test_bootstrap_provenance_created_by_bootstrap(self, tmp_path):
+        """All bootstrapped cards have provenance.created_by_task == 'bootstrap'."""
+        repo = self._make_repo(tmp_path)
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        store.bootstrap(root=str(repo))
+        for cp in cards_dir.glob("*.json"):
+            c = json.loads(cp.read_text())
+            assert c.get("provenance", {}).get("created_by_task") == "bootstrap"
+
+    def test_bootstrap_idempotent(self, tmp_path):
+        """Calling bootstrap() twice produces the same card count (upsert, no duplicates)."""
+        repo = self._make_repo(tmp_path)
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        n1 = store.bootstrap(root=str(repo))
+        n2 = store.bootstrap(root=str(repo))
+        assert n1 == n2
+        assert len(list(cards_dir.glob("*.json"))) == n1
+
+    def test_bootstrap_respects_max_cards(self, tmp_path):
+        """bootstrap() caps output at max_cards."""
+        repo = self._make_repo(tmp_path)
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        n = store.bootstrap(root=str(repo), max_cards=1)
+        assert n <= 1
+        assert len(list(cards_dir.glob("*.json"))) <= 1
+
+    def test_bootstrap_never_raises_on_bad_root(self, tmp_path):
+        """bootstrap() with a non-existent root returns 0 and does not raise."""
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), auto_bootstrap=False)
+        result = store.bootstrap(root=str(tmp_path / "nonexistent"))
+        assert result == 0
+
+    def test_bootstrap_skips_venv_and_git(self, tmp_path):
+        """bootstrap() must not index files inside .git or venv directories."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        # Real source file
+        (repo / "app.py").write_text("def main(): pass\n", encoding="utf-8")
+        # Files that should be skipped
+        (repo / ".git").mkdir()
+        (repo / ".git" / "config").write_text("[core]\n", encoding="utf-8")
+        venv = repo / "venv"
+        venv.mkdir()
+        (venv / "site_packages.py").write_text("# ignore me\n", encoding="utf-8")
+
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), auto_bootstrap=False)
+        store.bootstrap(root=str(repo))
+
+        for cp in cards_dir.glob("*.json"):
+            c = json.loads(cp.read_text())
+            for fe in c.get("files", []):
+                assert ".git" not in fe["path"], f"should not index .git: {fe['path']}"
+                assert "venv" not in fe["path"], f"should not index venv: {fe['path']}"
+
+
+# ---------------------------------------------------------------------------
+# Lazy auto-bootstrap: first assemble() seeds from an empty store
+# ---------------------------------------------------------------------------
+
+class TestAutoBootstrap:
+    def test_auto_bootstrap_on_first_assemble(self, tmp_path):
+        """FileContextStore with auto_bootstrap=True + repo_root seeds on first assemble()."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        # A module with a distinctive function that will appear as a keyword.
+        pkg = repo / "billing"
+        pkg.mkdir()
+        (pkg / "invoice.py").write_text(
+            "def generate_invoice(customer_id):\n    pass\n",
+            encoding="utf-8",
+        )
+
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(
+            str(cards_dir),
+            repo_root=str(repo),
+            auto_bootstrap=True,
+            max_cards_in_view=10,
+        )
+        # No cards exist yet; first assemble should seed then match.
+        ac = store.assemble("billing invoice generation")
+        # After auto-bootstrap, a card covering billing/invoice.py should appear.
+        assert len(ac.card_ids) > 0, "expected at least one card after auto-bootstrap"
+        assert any("billing" in cid or "invoice" in cid for cid in ac.card_ids), (
+            f"expected a billing/invoice card, got: {ac.card_ids}"
+        )
+
+    def test_auto_bootstrap_fires_only_once(self, tmp_path):
+        """The lazy bootstrap guard ensures bootstrap() is called at most once per instance."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "main.py").write_text("def run(): pass\n", encoding="utf-8")
+
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=True)
+        store.assemble("run the main module")
+        cards_after_first = len(list(cards_dir.glob("*.json")))
+
+        # Remove cards to see if a second assemble() re-bootstraps (it should not).
+        for p in cards_dir.glob("*.json"):
+            p.unlink()
+
+        store.assemble("run the main module again")
+        # Cards should still be gone -- bootstrap did NOT fire again.
+        cards_after_second = len(list(cards_dir.glob("*.json")))
+        assert cards_after_second == 0
+
+    def test_auto_bootstrap_false_does_not_seed(self, tmp_path):
+        """auto_bootstrap=False: first assemble() on an empty store returns empty."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "engine.py").write_text("class Engine: pass\n", encoding="utf-8")
+
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(
+            str(cards_dir), repo_root=str(repo), auto_bootstrap=False
+        )
+        ac = store.assemble("engine class")
+        assert ac.context_view == ""
+        assert not cards_dir.exists() or not any(cards_dir.glob("*.json"))
+
+    def test_auto_bootstrap_skipped_when_cards_exist(self, tmp_path):
+        """If cards already exist, auto-bootstrap does not run (idempotency guard)."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "service.py").write_text("def serve(): pass\n", encoding="utf-8")
+
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        # Pre-populate a card
+        _write_card(cards_dir, _make_card("pre-existing", ["preexisting", "card"]))
+
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=True)
+        store.assemble("something unrelated")
+
+        # Only the original card should be present; bootstrap did not add more.
+        card_files = list(cards_dir.glob("*.json"))
+        assert len(card_files) == 1
+        assert card_files[0].stem == "pre-existing"
+
+
+# ---------------------------------------------------------------------------
+# IDF scoring: distinctive terms rank the right card first
+# ---------------------------------------------------------------------------
+
+class TestIDFScoring:
+    def test_distinctive_term_ranks_correct_card_first(self, tmp_path):
+        """A card with a distinctive (low-DF) term is ranked above a card with only
+        common (high-DF) terms when querying the distinctive term."""
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+
+        # Card A: has a distinctive keyword + common keywords.
+        _write_card(cards_dir, _make_card(
+            "card-a",
+            ["database", "schema", "migration", "xylophone"],  # "xylophone" is unique
+            summary="card a: database schema migration xylophone utilities",
+        ))
+        # Card B: has only the common keywords.
+        _write_card(cards_dir, _make_card(
+            "card-b",
+            ["database", "schema", "migration"],
+            summary="card b: database schema migration utilities",
+        ))
+        # Card C, D: more cards containing the common terms (raises their DF).
+        _write_card(cards_dir, _make_card(
+            "card-c", ["database", "schema", "index"],
+            summary="card c: database schema index operations",
+        ))
+        _write_card(cards_dir, _make_card(
+            "card-d", ["database", "migration", "rollback"],
+            summary="card d: database migration rollback procedures",
+        ))
+
+        store = FileContextStore(str(cards_dir), max_cards_in_view=4, auto_bootstrap=False)
+
+        # Query for the distinctive term: card-a must rank first.
+        ac = store.assemble("xylophone database")
+        assert ac.card_ids[0] == "card-a", (
+            f"expected card-a first (distinctive term), got: {ac.card_ids}"
+        )
+
+    def test_common_term_alone_does_not_unfairly_crowd_distinctive_card(self, tmp_path):
+        """Querying only a common term should NOT push a card with ONLY that term
+        above a card that also has a distinctive match -- IDF penalises ubiquitous terms."""
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+
+        # Card A: has "common" + "unique_alpha"
+        _write_card(cards_dir, _make_card(
+            "card-specific",
+            ["common", "unique_alpha"],
+            summary="card specific: common term unique alpha feature",
+        ))
+        # Cards B-E: all have "common", so it becomes very high DF.
+        for i in range(4):
+            _write_card(cards_dir, _make_card(
+                f"card-common-{i}",
+                ["common", f"other{i}"],
+                summary=f"card common {i}: common term other feature",
+            ))
+
+        store = FileContextStore(str(cards_dir), max_cards_in_view=5, auto_bootstrap=False)
+
+        # Querying "unique_alpha" should put card-specific first.
+        ac = store.assemble("unique_alpha")
+        assert ac.card_ids[0] == "card-specific", (
+            f"expected card-specific first, got: {ac.card_ids}"
+        )
+
+    def test_idf_scoring_consistent_with_legacy_high_overlap_wins(self, tmp_path):
+        """A card matching more query terms is still preferred over one matching fewer,
+        all else equal (IDF doesn't break the basic overlap logic for fresh cards)."""
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+
+        # card-high matches 3 unique terms; card-low matches 1 unique term.
+        _write_card(cards_dir, _make_card(
+            "card-high",
+            ["alpha", "beta", "gamma"],
+            summary="card high: alpha beta gamma features",
+        ))
+        _write_card(cards_dir, _make_card(
+            "card-low",
+            ["alpha"],
+            summary="card low: alpha only feature",
+        ))
+
+        store = FileContextStore(str(cards_dir), max_cards_in_view=2, auto_bootstrap=False)
+        ac = store.assemble("alpha beta gamma query")
+        assert ac.card_ids[0] == "card-high"
+
+    def test_idf_no_match_returns_empty(self, tmp_path):
+        """A query with no term overlap after IDF still returns empty context."""
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        _write_card(cards_dir, _make_card("card-one", ["database", "schema"]))
+        store = FileContextStore(str(cards_dir), auto_bootstrap=False)
+        ac = store.assemble("completely unrelated zzzzzz")
+        assert ac.context_view == ""
+        assert ac.card_ids == []
