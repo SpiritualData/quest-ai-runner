@@ -295,7 +295,7 @@ Claude Code baseline. Key measured numbers:
 | Staleness detection | precision 1.00, recall 1.00, 0 LLM calls |
 | Tool-call rounds vs Claude Code alone (cold avg / warm avg) | 3.0 / 1.0 (3x fewer) |
 | Correctness cold / warm | 100% / 100% |
-| Adversarial (wrong hint) | PASS, model not misled |
+| Adversarial / stale robustness | 5/5 correct, wrong or stale hint never misleads |
 | Keyword routing (top-1 / top-3) | grep-ballpark, noisy, NOT the win |
 
 **The proven win is not retrieval quality.** Keyword routing is roughly grep level and

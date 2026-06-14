@@ -193,9 +193,20 @@ representative values.
 | Correctness | 100% | 100% |
 | Token delta | baseline | roughly flat |
 
-**Adversarial result:** the warm arm was given a hint pointing to `poller.py` (wrong).
-The correct answer was `config.py`. The warm arm returned `config.py` (correct). The
-model was NOT misled by the wrong context.
+**Adversarial / stale robustness (5 cases, all passed):** the warm arm was given a wrong or
+stale hint and still returned the CORRECT file every time (5/5): wrong hints pointing to
+`orchestrator.py`, `config.py`, `poller.py`, and `attachments.py` for tasks whose real answers
+were `model_registry.py`, `model_registry.py`, `executor.py`, and `files_adapter.py`; plus a
+stale-flagged hint that prompted a re-read and confirmed. The model treats the hint as a
+suggestion it verifies, so bad context never breaks correctness.
+
+**Honest efficiency caveat:** a WRONG hint can cost the warm arm MORE rounds than cold, because
+it verifies the bad hint and then searches anyway (one wrong-hint case took 6 tool rounds vs 3
+cold). So bad context is safe for correctness but not free on efficiency. The design avoids this
+in normal operation: cards are written from REAL successful runs (so a served hint is a grounding
+that actually worked), and any change is deterministically flagged stale (so a drifted hint is
+marked, not silently wrong). The only way to get the slow case is to inject a hint the system
+would never actually serve.
 
 ## Honest Conclusion
 
@@ -210,10 +221,12 @@ The measured wins are:
    The effect scales with repo size: larger repos require more search rounds cold; the warm
    arm stays at 1 if the hint is accurate.
 
-2. **Correctness never regresses.** Both cold and warm arms were 100% correct on this
-   dataset. A wrong or stale hint did not cause the warm arm to return a wrong answer
-   (adversarial test passed). The model treats the context hint as a suggestion it can
-   override, not a hard instruction.
+2. **Correctness never regresses, including under bad context.** Both arms were 100% correct,
+   and across 5 adversarial/stale cases the warm arm stayed correct every time (it verifies the
+   hint and overrides it when wrong). Caveat held honestly: a wrong hint can cost extra
+   verification rounds, so bad context is correctness-safe but not efficiency-free. In normal
+   operation the system only serves groundings from real successful runs and flags any drift as
+   stale, so the slow case does not arise unless a wrong hint is injected artificially.
 
 3. **Deterministic zero-token freshness.** The store detects content changes with sha256
    checksums immediately, without any LLM call. Claude Code on its own has no equivalent
