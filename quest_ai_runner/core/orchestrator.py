@@ -833,7 +833,8 @@ class Orchestrator:
             background_sink: Optional[ProgressSink] = None,
             detach_check: Optional[Callable[[], bool]] = None,
             model_hint: Optional[str] = None,
-            attachments: Optional[List[Dict[str, Any]]] = None) -> OrchestratorResult:
+            attachments: Optional[List[Dict[str, Any]]] = None,
+            context_meta: Optional[Dict[str, Any]] = None) -> OrchestratorResult:
         """Run the bounded loop for one request and return a terminal OrchestratorResult.
 
         Streaming/event interface (both lanes use the SAME emissions; the SINK decides policy):
@@ -882,10 +883,17 @@ class Orchestrator:
         # caller provided its own grounding. Panel context-docs / chat uploads (``attachments``)
         # append below, so a single run grounds on cards + caller context + Quest-panel docs.
         # Best-effort: any exception leaves the run unchanged.
+        # ``_ctx_meta`` carries the caller's identity/scope (quest_id, plus anything in
+        # ``context_meta`` such as user_id/team_id) so a multi-tenant assembler (e.g. a Quest-backed
+        # one in quest-backend serving all users) can scope its lookup to the right user/team/quest.
+        # The default FileContextStore ignores it. Threaded to both assemble() and record().
+        _ctx_meta: Dict[str, Any] = {**(context_meta or {})}
+        if quest_id is not None:
+            _ctx_meta.setdefault("quest_id", quest_id)
         _assembled = None
         if self.context_assembler is not None:
             try:
-                _assembled = self.context_assembler.assemble(user_message)
+                _assembled = self.context_assembler.assemble(user_message, meta=_ctx_meta or None)
                 if _assembled.context_view:
                     context_view = (_assembled.context_view + "\n\n" + context_view if context_view
                                     else _assembled.context_view)
@@ -931,11 +939,22 @@ class Orchestrator:
         def finish(res: OrchestratorResult) -> OrchestratorResult:
             res.steps = steps
             res.gathered = gathered
-            # Best-effort ContextAssembler write-back (learn from the outcome for next run).
+            # Best-effort ContextAssembler write-back (learn from the outcome for next run). Pass the
+            # files the brain ACTUALLY read this run (their rel_paths, from the gathered reads/greps)
+            # so the card PINS them: that is what makes the loop compound and what staleness later
+            # invalidates. Without this the card would pin nothing and never go stale.
             if self.context_assembler is not None:
                 try:
+                    used_files: List[str] = []
+                    _seen = set()
+                    for o in gathered:
+                        for rp in [o.get("rel_path")] + [h.get("rel_path") for h in (o.get("hits") or [])]:
+                            if rp and rp not in _seen:
+                                _seen.add(rp)
+                                used_files.append(rp)
                     self.context_assembler.record(
-                        user_message, {"kind": res.kind, "steps": res.steps}
+                        user_message,
+                        {"kind": res.kind, "steps": res.steps, "files": used_files, **_ctx_meta},
                     )
                 except Exception:  # noqa: BLE001 -- write-back must never break the run
                     pass

@@ -291,7 +291,12 @@ class FileContextStore(ContextAssemblerBase):
         """
         result: Dict[str, Any] = {"sha256": "", "mtime": 0.0, "git_sha": ""}
         try:
+            # Paths pinned from a run are relative to the corpus/repo root (that is what the
+            # RetrievalAdapter and deep runner work in), NOT the process cwd. Resolve a relative
+            # path against repo_root so freshness reads the real file rather than missing it.
             p = Path(path)
+            if not p.is_absolute() and self._repo_root is not None:
+                p = self._repo_root / path
             if not p.exists() or not p.is_file():
                 return result
             stat = p.stat()

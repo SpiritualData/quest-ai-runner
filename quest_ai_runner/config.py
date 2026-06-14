@@ -15,6 +15,11 @@ from .core.model_registry import ModelRegistry
 from .core.orchestrator import Orchestrator, OrchestratorConfig
 from .resources import ResourceLimits
 
+# Sentinel default for RunnerConfig.context_assembler: "build the default FileContextStore".
+# Distinct from None (which means context handling is explicitly disabled) and from an instance
+# (use that one). Lets context handling be ON BY DEFAULT while staying overridable and disableable.
+_AUTO_CONTEXT = object()
+
 # Per-attachment size cap for chat/file uploads and panel context-docs. Large by design so any
 # reasonable document or image is accepted; anything over this is rejected by the multimodal
 # handler (``core.attachments.prepare_attachments``) with a clear note rather than processed.
@@ -44,10 +49,19 @@ class RunnerConfig:
     # the brain reuses it; supply a vision-capable provider here when the answering provider is not
     # (e.g. an AnthropicProvider alongside the keyless CLI) so chat images are transcribed.
     vision_provider: Optional[ModelProvider] = None
-    # Optional PRE-FLIGHT CONTEXT adapter (the fifth adapter role). When set, the orchestrator
-    # calls assemble() once before the loop to inject task-specific context, and record() after
-    # the run as a best-effort write-back. Omit to get exactly today's reactive-gather behaviour.
-    context_assembler: Optional[ContextAssembler] = None
+    # PRE-FLIGHT CONTEXT adapter (the fifth adapter role) — ON BY DEFAULT. Context handling is
+    # core to running well, so a consumer that leaves this unset gets a default FileContextStore
+    # wired automatically by ``build_orchestrator`` (cards under ``context_cards_dir`` or
+    # ``<corpus_root|cwd>/.quest-context``). The orchestrator calls assemble() once before the loop
+    # to inject reusable, file-pinned context and record() after the run to accumulate it.
+    #   * leave UNSET (the _AUTO sentinel) → the default FileContextStore is built and used;
+    #   * pass an INSTANCE → that assembler is used (a Quest-backed or composite one, etc.);
+    #   * pass ``None`` explicitly → context handling is DISABLED (pure reactive-gather behaviour).
+    context_assembler: Any = _AUTO_CONTEXT
+    # Where the default FileContextStore writes its cards when context_assembler is left _AUTO.
+    # None → ``<corpus_root or cwd>/.quest-context``. Cards are machine-written local state; the
+    # consumer should gitignore this path (the runner repo gitignores ``.quest-context/``).
+    context_cards_dir: Optional[str] = None
 
     # --- the org's skills/corpus path (for orgs); generic, optional ---
     corpus_root: Optional[str] = None
@@ -147,6 +161,33 @@ def build_registry(cfg: RunnerConfig) -> ModelRegistry:
     return ModelRegistry(cfg.model_provider)
 
 
+def resolve_context_assembler(cfg: RunnerConfig):
+    """Resolve the context assembler from config — ON BY DEFAULT.
+
+    Tri-state on ``cfg.context_assembler``:
+      * ``_AUTO_CONTEXT`` (the field default, i.e. the consumer left it unset) → build the default
+        ``FileContextStore`` so context handling works out of the box. Cards live under
+        ``cfg.context_cards_dir`` or ``<corpus_root or cwd>/.quest-context``; ``repo_root`` is the
+        same root so staleness can also read git blob shas. Construction never raises (a bad path
+        just yields a store whose best-effort reads/writes no-op), so the runner still starts.
+      * an INSTANCE → use it as-is (a Quest-backed or composite assembler, etc.).
+      * ``None`` → context handling is explicitly DISABLED.
+    """
+    chosen = cfg.context_assembler
+    if chosen is not _AUTO_CONTEXT:
+        return chosen  # an explicit instance, or None to disable
+    # Default-on: build a FileContextStore. Local import avoids an adapters<->config import cycle.
+    try:
+        import os
+
+        from .adapters import FileContextStore
+        root = cfg.corpus_root or os.getcwd()
+        cards_dir = cfg.context_cards_dir or os.path.join(root, ".quest-context")
+        return FileContextStore(cards_dir, repo_root=root)
+    except Exception:  # noqa: BLE001 — never let context wiring break runner construction
+        return None
+
+
 def build_orchestrator(cfg: RunnerConfig, *, status=None) -> Orchestrator:
     """Wire a domain-free Orchestrator from the consumer's adapters."""
     problems = [p for p in cfg.validate() if "quest" not in p]  # the brain doesn't need Quest creds
@@ -161,5 +202,5 @@ def build_orchestrator(cfg: RunnerConfig, *, status=None) -> Orchestrator:
         config=cfg.orchestrator,
         status=status,
         vision_provider=cfg.vision_provider,
-        context_assembler=cfg.context_assembler,
+        context_assembler=resolve_context_assembler(cfg),
     )

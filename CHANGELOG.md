@@ -7,6 +7,13 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Context handling is ON BY DEFAULT.** `RunnerConfig.context_assembler` now defaults to an
+  `_AUTO` sentinel: leaving it unset makes `build_orchestrator` wire a default `FileContextStore`
+  (cards under `context_cards_dir`, or `<corpus_root|cwd>/.quest-context`) so the runner grounds on
+  reusable context out of the box. Pass an instance to customize, or `None` to disable. A new
+  `RunnerConfig.context_cards_dir` sets the default store's location. `Orchestrator.run()` gains a
+  `context_meta` parameter, and threads it plus `quest_id` to `assemble()`/`record()` so a
+  multi-tenant assembler (e.g. a Quest-backed one serving many users) can scope per user/team/quest.
 - **Fifth adapter role: `ContextAssembler` (PRE-FLIGHT CONTEXT)** -- an optional adapter that is
   called ONCE, guaranteed, before the plan->gather loop starts. `assemble(task_text)` returns an
   `AssembledContext` (context_view string + optional model_tier_hint + card_ids + stale list); the

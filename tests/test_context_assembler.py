@@ -714,3 +714,58 @@ class TestFileContextStoreRoundTrip:
         # stale_cards_for should detect it
         stale = store.stale_cards_for(str(real_file))
         assert len(stale) > 0
+
+    def test_relative_pinned_path_resolves_against_repo_root(self, tmp_path):
+        """A file pinned by a path RELATIVE to repo_root (what a run produces) stays fresh even
+        when the process cwd is elsewhere, and goes stale when the real file changes."""
+        repo = tmp_path / "corpus"
+        (repo / "sub").mkdir(parents=True)
+        code = repo / "sub" / "code.py"
+        code.write_text("x = 1\n", encoding="utf-8")
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo))
+        # Pin by a RELATIVE path (as gathered rel_paths are), not absolute.
+        store.record("work on the sub code module", {"kind": "answer", "files": ["sub/code.py"]})
+        # cwd here is the runner repo, not <repo>; resolution must use repo_root.
+        ac = store.assemble("the sub code module")
+        assert ac.card_ids and ac.stale == []          # fresh, resolved correctly
+        code.write_text("x = 2\n", encoding="utf-8")    # change the real file
+        ac2 = store.assemble("the sub code module")
+        assert "sub/code.py" in ac2.stale               # now detected stale
+
+
+class TestWriteBackCapturesGatheredFiles:
+    def test_record_pins_files_the_brain_read(self):
+        """After a run, the card pins the rel_paths the brain actually read this turn (from the
+        gathered reads/greps), so staleness has something to invalidate. This is the loop closing."""
+        from quest_ai_runner.core.adapters import Observation
+        from quest_ai_runner.core.model_registry import ModelRegistry
+
+        recorded = {}
+
+        class CapturingAssembler:
+            def assemble(self, task_text, *, meta=None):
+                return AssembledContext()
+            def record(self, task_text, outcome):
+                recorded.update(outcome)
+
+        # Provider: step 0 -> read a file, step 1 -> answer.
+        plans = iter([
+            {"action": "read", "rationale": "look", "model_tier": "haiku",
+             "reads": [{"rel_path": "pkg/mod.py"}]},
+            {"action": "answer", "rationale": "done", "model_tier": "haiku"},
+        ])
+        provider = MagicMock()
+        provider.list_models.return_value = []
+        provider.plan.side_effect = lambda prompt, **kw: next(plans)
+        provider.answer.return_value = "ok"
+
+        retrieval = MagicMock()
+        retrieval.read_section.return_value = Observation(
+            kind="read", rel_path="pkg/mod.py", locator="head", text="code")
+
+        orch = Orchestrator(
+            retrieval=retrieval, provider=provider, registry=ModelRegistry(provider),
+            config=OrchestratorConfig(max_steps=2), context_assembler=CapturingAssembler())
+        orch.run("explain pkg/mod.py")
+        assert "pkg/mod.py" in recorded.get("files", [])
