@@ -249,9 +249,10 @@ def _warm_prompt(task: str, hint_file: str) -> str:
     """Prompt for the warm (with context hint) arm."""
     return (
         f"{task}\n\n"
-        f"Context service hint: Files: {hint_file}\n\n"
-        "Use the context hint above if it is relevant. "
-        "If the hint points to the wrong file, reason from the code instead. "
+        f"Cached context hint (a cheap starting point, not ground truth): Files: {hint_file}\n\n"
+        "If the hint obviously fits, confirm it with one quick read and answer. If it does NOT "
+        "obviously fit, discard it immediately and search normally as if it were not there. Do "
+        "not spend extra effort verifying or working around a hint that does not fit. "
         "Answer with ONLY the repo-relative path "
         "(e.g. quest_ai_runner/core/orchestrator.py). "
         "Do not include any other text."

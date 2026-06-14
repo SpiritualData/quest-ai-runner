@@ -53,7 +53,7 @@ from .adapters import (
     ProgressSink,
     RetrievalAdapter,
 )
-from .context_doctrine import MODEL_TIER_GATE, SUFFICIENCY_GATE
+from .context_doctrine import CACHED_HINT_GATE, MODEL_TIER_GATE, SUFFICIENCY_GATE
 from .model_registry import TIERS, ModelRegistry
 
 # Defaults (all overridable via OrchestratorConfig).
@@ -211,6 +211,8 @@ PLANNER_PROMPT = (
     + _PLANNER_ACTIONS
     + "\n--- " + MODEL_TIER_GATE.split("\n")[0] + "\n"
     + "\n".join(MODEL_TIER_GATE.split("\n")[1:]) + "\n\n"
+    + "\n--- " + CACHED_HINT_GATE.split("\n")[0] + "\n"
+    + "\n".join(CACHED_HINT_GATE.split("\n")[1:]) + "\n\n"
     + _PLANNER_TAIL
 )
 

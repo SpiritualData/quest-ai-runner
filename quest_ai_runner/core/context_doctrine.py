@@ -40,7 +40,24 @@ MODEL TIER DISCIPLINE:
 """
 
 # ---------------------------------------------------------------------------
-# DEEP_CONTEXT_DOCTRINE -- compact block combining both gates.
+# CACHED HINT GATE -- how to use a pre-assembled context hint so it is never a cost.
+# A cached hint must be a cheap starting point, not ground truth: use it when it fits,
+# discard it cheaply when it does not. This is what keeps the context layer Pareto-better
+# (a wrong or stale hint costs a glance then a normal search, never expensive verification),
+# so adding context never makes a run worse than running with none.
+# ---------------------------------------------------------------------------
+CACHED_HINT_GATE: str = """\
+USING A CACHED CONTEXT HINT:
+  Any cached or pre-loaded file hint is a CHEAP STARTING POINT, not ground truth.
+  If it obviously fits the task, use it and confirm with ONE quick read, then proceed.
+  If it does NOT obviously fit, DISCARD it immediately and search normally as if it were not
+  there. Do NOT spend extra effort verifying, arguing with, or working around a hint that does
+  not fit: that is slower than just searching. A hint marked stale or changed must be re-read
+  before you rely on it. The hint can only save you work, it must never cost you work.\
+"""
+
+# ---------------------------------------------------------------------------
+# DEEP_CONTEXT_DOCTRINE -- compact block combining the gates.
 # Suitable to prepend to a deep runner's context_preamble so deep agents act the same way.
 # ---------------------------------------------------------------------------
 DEEP_CONTEXT_DOCTRINE: str = (
@@ -48,6 +65,8 @@ DEEP_CONTEXT_DOCTRINE: str = (
     + SUFFICIENCY_GATE
     + "\n\n"
     + MODEL_TIER_GATE
+    + "\n\n"
+    + CACHED_HINT_GATE
     + "\n\n=== END DOCTRINE ===\n"
 )
 

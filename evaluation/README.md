@@ -299,6 +299,21 @@ wrong-hint stress cases, where bad context costs extra verification. The literal
 case" is therefore NOT true under adversarial injection; it IS true (better-or-equal, never worse)
 on the context the system actually serves. We state both rather than hide the two worse cases.
 
+### Cached-hint discipline and a proven limit
+
+The way the hint is presented matters. A "verify this against the code" instruction makes a wrong
+hint expensive. The doctrine (`CACHED_HINT_GATE`) instead tells the agent to treat a hint as a
+cheap starting point and DISCARD it immediately if it does not fit, without extra verification.
+Re-running the two worse cases with that instruction improved them (wrong `poller.py` hint 4 to 3
+rounds, a tie with cold; wrong `config.py` hint 6 to 5).
+
+But this exposes a limit that is not a tuning problem, it is logic: a wrong hint can never be
+strictly cheaper than cold, because even one glance at it is overhead on top of the search the
+agent would do anyway. So "better than Claude Code even under an adversarially wrong hint" is
+impossible by construction. The only way a wrong hint costs nothing is to never serve one, which
+is exactly what the system does: cards come from real successful runs and any drift is flagged
+stale, so a wrong-and-unflagged hint is out of the served distribution.
+
 ## Honest Conclusion
 
 The context layer's proven win over Claude Code is **not** retrieval quality. Claiming
