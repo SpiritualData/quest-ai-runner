@@ -307,3 +307,73 @@ class QdrantVectorStore(VectorStoreBase):
         except Exception:
             logger.debug("QdrantVectorStore.sync failed", exc_info=True)
             return 0
+
+    def count(self, *, scope: Optional[Dict[str, Any]] = None) -> int:
+        """Return the number of stored points in the scope collection.  Never raises."""
+        try:
+            coll = self._collection_name(scope)
+            self._ensure_collection(coll)
+            info = self._client.get_collection(collection_name=coll)
+            return int(info.points_count or 0)
+        except Exception:
+            logger.debug("QdrantVectorStore.count failed", exc_info=True)
+            return 0
+
+    def evict_oldest(
+        self,
+        n: int,
+        *,
+        scope: Optional[Dict[str, Any]] = None,
+        ts_key: str = "ts",
+    ) -> int:
+        """Delete the ``n`` oldest points (sorted by ``ts_key`` payload field, asc).
+
+        Uses scroll to list all points with payload, sorts by the ``ts_key`` field
+        (ascending; missing ts treated as 0), then deletes the oldest ``n`` via
+        client.delete.  Returns the count actually deleted.  Never raises.
+        """
+        try:
+            if n <= 0:
+                return 0
+            from qdrant_client.models import PointIdsList
+
+            coll = self._collection_name(scope)
+            self._ensure_collection(coll)
+
+            # Scroll through ALL points to collect (numeric_id, ts).
+            all_points: List[tuple] = []  # list of (ts_value, numeric_id)
+            offset = None
+            while True:
+                scroll_result = self._client.scroll(
+                    collection_name=coll,
+                    limit=256,
+                    offset=offset,
+                    with_payload=True,
+                    with_vectors=False,
+                )
+                batch, next_offset = scroll_result
+                for pt in batch:
+                    ts_val = (pt.payload or {}).get(ts_key, 0) or 0
+                    all_points.append((float(ts_val), pt.id))
+                if next_offset is None:
+                    break
+                offset = next_offset
+
+            if not all_points:
+                return 0
+
+            # Sort ascending by ts (oldest first).
+            all_points.sort(key=lambda x: x[0])
+            to_delete = [pt_id for _, pt_id in all_points[:n]]
+
+            if not to_delete:
+                return 0
+
+            self._client.delete(
+                collection_name=coll,
+                points_selector=PointIdsList(points=to_delete),
+            )
+            return len(to_delete)
+        except Exception:
+            logger.debug("QdrantVectorStore.evict_oldest failed", exc_info=True)
+            return 0

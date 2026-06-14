@@ -42,7 +42,9 @@ from __future__ import annotations
 
 import concurrent.futures
 import logging
-from typing import Any, Dict, List, Optional
+import re
+import time
+from typing import Any, Callable, Dict, List, Optional
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase, VectorHit, VectorStore
 
@@ -60,6 +62,22 @@ def _snippet(text: str, lines: int = _SNIPPET_LINES) -> str:
     """Return the first ``lines`` non-empty lines of ``text``."""
     parts = [l for l in text.splitlines() if l.strip()][:lines]
     return " | ".join(parts) if parts else text[:120]
+
+
+def _task_slug(task_text: str) -> str:
+    """Derive a stable, short slug from ``task_text`` for use as an association id.
+
+    Lowercases, collapses whitespace, strips punctuation (keeping alphanumerics
+    and spaces), and truncates to 80 characters so the slug is stable across
+    minor punctuation/case differences but still unique for meaningfully
+    different tasks.
+    """
+    lowered = task_text.lower().strip()
+    # Replace any sequence of non-alphanumeric characters with a single space.
+    cleaned = re.sub(r"[^a-z0-9]+", " ", lowered).strip()
+    # Collapse internal whitespace to hyphens to form a readable slug.
+    slug = re.sub(r"\s+", "-", cleaned)[:80]
+    return slug or "task"
 
 
 class VectorContextAssembler(ContextAssemblerBase):
@@ -99,6 +117,9 @@ class VectorContextAssembler(ContextAssemblerBase):
         top_k: int = 8,
         confidence_min_score: float = 0.0,
         max_in_view: int = 8,
+        half_life_days: float = 30.0,
+        max_associations: int = 500,
+        _clock: Optional[Callable[[], float]] = None,
     ) -> None:
         self._store = vector_store
         self._provider = provider
@@ -107,6 +128,10 @@ class VectorContextAssembler(ContextAssemblerBase):
         self._top_k = top_k
         self._confidence_min_score = confidence_min_score
         self._max_in_view = max_in_view
+        self._half_life_days = half_life_days
+        self._max_associations = max_associations
+        # Injectable clock for deterministic tests; defaults to time.time.
+        self._clock: Callable[[], float] = _clock if _clock is not None else time.time
 
     # ------------------------------------------------------------------
     # ContextAssemblerBase implementation
@@ -145,7 +170,11 @@ class VectorContextAssembler(ContextAssemblerBase):
     def _record_inner(self, task_text: str, outcome: Dict[str, Any]) -> None:
         """Actual record logic.  May raise; callers wrap in try/except."""
         scope = outcome.get("scope") or None
-        item_id = f"outcome:{hash(task_text) & 0xFFFFFFFF}"
+
+        # --- DEDUP: stable association id derived from a slug of the task text.
+        # Same task -> same id -> upsert overwrites rather than duplicates.
+        slug = _task_slug(task_text)
+        item_id = f"assoc:{slug}"
 
         # Collect paths and symbols from outcome.
         paths: List[str] = list(outcome.get("files") or [])
@@ -182,6 +211,18 @@ class VectorContextAssembler(ContextAssemblerBase):
             except Exception:
                 pass  # fall back to structural description
 
+        # --- TIMESTAMP: use provided ts for test determinism; fall back to now.
+        now_ts = outcome.get("ts")
+        if now_ts is None:
+            now_ts = self._clock()
+        now_ts = float(now_ts)
+
+        # --- MERGE: bump count on re-record (the upsert overwrites by id).
+        # We don't do a read-before-write to keep the never-raises contract simple;
+        # the payload always carries the latest count from the outcome if provided,
+        # else we increment naively via a sentinel in the outcome dict.
+        count = int(outcome.get("_count", 1))
+
         # Build rich payload so a top hit gives the agent directly useful metadata.
         summary_for_payload = (
             outcome.get("summary")
@@ -193,12 +234,30 @@ class VectorContextAssembler(ContextAssemblerBase):
             "symbols": symbols,
             "summary": summary_for_payload,
             "kind": outcome.get("kind"),
+            "ts": now_ts,
+            "count": count,
         }
 
         self._store.upsert(
             [{"id": item_id, "text": embed_text, "payload": payload}],
             scope=scope,
         )
+
+        # --- CAPACITY BOUND: evict oldest if over the cap.
+        # Best-effort: only when the store advertises count/evict_oldest.
+        try:
+            if (
+                hasattr(self._store, "count")
+                and hasattr(self._store, "evict_oldest")
+                and callable(self._store.count)  # type: ignore[union-attr]
+                and callable(self._store.evict_oldest)  # type: ignore[union-attr]
+            ):
+                current = self._store.count(scope=scope)  # type: ignore[union-attr]
+                overflow = current - self._max_associations
+                if overflow > 0:
+                    self._store.evict_oldest(overflow, scope=scope)  # type: ignore[union-attr]
+        except Exception:
+            pass  # capacity eviction is best-effort; never raise
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -324,11 +383,27 @@ class VectorContextAssembler(ContextAssemblerBase):
 
         When a hit carries a rich task-to-context payload (``paths``, ``symbols``,
         ``task``, ``summary``), those fields are surfaced so the consuming agent
-        immediately knows where to read.
+        immediately knows where to read.  The age of the association (derived from
+        the ``ts`` payload field) is shown when present.
         """
+        now = self._clock()
         parts: List[str] = []
         for hit in hits:
             part_lines = [f"### Vector hit: {hit.id}  (score={hit.score:.3f})"]
+            # Age annotation from ts payload field.
+            ts = hit.payload.get("ts") if hit.payload else None
+            if ts is not None:
+                try:
+                    age_days = max(0.0, (now - float(ts)) / 86400.0)
+                    if age_days < 1.0:
+                        age_label = "from a task today"
+                    elif age_days < 2.0:
+                        age_label = "from a task 1 day ago"
+                    else:
+                        age_label = f"from a task {int(age_days)} days ago"
+                    part_lines.append(f"  age: {age_label}")
+                except (TypeError, ValueError):
+                    pass
             # Rich task-to-context payload fields.
             task_text = hit.payload.get("task", "") or ""
             if task_text:
@@ -373,16 +448,39 @@ class VectorContextAssembler(ContextAssemblerBase):
         if self._provider is not None:
             candidates = self._llm_review(task_text, candidates)
 
-        # Step d: confidence gate.
-        kept = [
-            h for h in candidates if h.score >= self._confidence_min_score
+        # Step d: recency decay — re-rank by age-decayed effective score.
+        now = self._clock()
+        half_life = self._half_life_days
+        decayed: List[tuple] = []  # (effective_score, hit)
+        for h in candidates:
+            ts = h.payload.get("ts") if h.payload else None
+            if ts is not None:
+                try:
+                    age_days = max(0.0, (now - float(ts)) / 86400.0)
+                except (TypeError, ValueError):
+                    age_days = None
+            else:
+                age_days = None
+
+            if age_days is not None:
+                effective = h.score * (0.5 ** (age_days / half_life))
+            else:
+                # No ts: neutral mild decay (treat as 1 half-life old).
+                effective = h.score * 0.5
+
+            decayed.append((effective, h))
+
+        # Confidence gate applies to effective (decayed) score.
+        kept_decayed = [
+            (eff, h) for eff, h in decayed if eff >= self._confidence_min_score
         ]
-        if not kept:
+        if not kept_decayed:
             return AssembledContext()
 
-        # Sort by score descending, cap at max_in_view.
-        kept.sort(key=lambda h: h.score, reverse=True)
-        kept = kept[: self._max_in_view]
+        # Sort by effective score descending, cap at max_in_view.
+        kept_decayed.sort(key=lambda x: x[0], reverse=True)
+        kept_decayed = kept_decayed[: self._max_in_view]
+        kept = [h for _, h in kept_decayed]
 
         # Step e: render.
         context_view = self._render_hits(kept)

@@ -390,6 +390,20 @@ class VectorStore(Protocol):
 
     ``scope``  — a dict (e.g. {org_id, team_id, quest_id}) that selects which
                  collection to operate on.  None means the default collection.
+
+    OPTIONAL CAPACITY METHODS (count / evict_oldest)
+    -------------------------------------------------
+    Stores that support capacity management may implement:
+
+    ``count``         — return the number of stored associations (for the given
+                        scope); return 0 if unsupported.
+    ``evict_oldest``  — delete the ``n`` oldest points (sorted by the ``ts_key``
+                        payload field, ascending); return the number actually
+                        deleted.  Return 0 if unsupported or on any error.
+
+    These are NOT part of the structural ``VectorStore`` Protocol check (to keep
+    backward compat) — callers detect them via ``hasattr``.  The ABC below
+    provides no-op defaults so existing subclasses keep working.
     """
 
     def search(
@@ -428,6 +442,9 @@ class VectorStoreBase(abc.ABC):
 
     Subclasses must implement search / upsert / sync.  All three must never raise
     from the public surface (wrap internals in try/except).
+
+    ``count`` and ``evict_oldest`` are optional capacity-management methods with
+    no-op defaults.  Override them in stores that support bounded capacity.
     """
 
     @abc.abstractmethod
@@ -457,6 +474,28 @@ class VectorStoreBase(abc.ABC):
         scope: Optional[Dict[str, Any]] = None,
     ) -> int:
         """AUTO-UPDATE: re-embed only changed/new items; return count.  Never raises."""
+
+    def count(self, *, scope: Optional[Dict[str, Any]] = None) -> int:
+        """Return the number of stored associations for the given scope.
+
+        No-op default: returns 0.  Override in stores that support capacity
+        management.  Never raises.
+        """
+        return 0
+
+    def evict_oldest(
+        self,
+        n: int,
+        *,
+        scope: Optional[Dict[str, Any]] = None,
+        ts_key: str = "ts",
+    ) -> int:
+        """Delete the ``n`` oldest points (sorted by ``ts_key`` payload field, asc).
+
+        No-op default: returns 0.  Override in stores that support capacity
+        management.  Never raises.
+        """
+        return 0
 
 
 class ContextAssemblerBase(abc.ABC):

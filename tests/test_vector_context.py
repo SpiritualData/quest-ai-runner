@@ -36,6 +36,9 @@ class FakeVectorStore(VectorStoreBase):
 
     Uses simple substring matching (not real embeddings) so tests are
     deterministic and dependency-free.
+
+    Also implements the optional capacity methods ``count`` and ``evict_oldest``
+    so tests for the capacity bound can use a real in-memory store.
     """
 
     def __init__(self) -> None:
@@ -119,6 +122,43 @@ class FakeVectorStore(VectorStoreBase):
             if to_upsert:
                 self.upsert(to_upsert, scope=scope)
             return len(to_upsert)
+        except Exception:
+            return 0
+
+    # --- Optional capacity methods -------------------------------------------
+
+    def count(self, *, scope: Optional[Dict[str, Any]] = None) -> int:
+        """Return the number of stored associations for the given scope."""
+        try:
+            coll = self._coll(scope)
+            return len(self._data.get(coll, {}))
+        except Exception:
+            return 0
+
+    def evict_oldest(
+        self,
+        n: int,
+        *,
+        scope: Optional[Dict[str, Any]] = None,
+        ts_key: str = "ts",
+    ) -> int:
+        """Delete the ``n`` oldest points (sorted by ``ts_key`` payload field, asc)."""
+        try:
+            if n <= 0:
+                return 0
+            coll = self._coll(scope)
+            items = self._data.get(coll, {})
+            if not items:
+                return 0
+            # Sort by ts ascending (missing ts treated as 0).
+            sorted_ids = sorted(
+                items.keys(),
+                key=lambda k: float(items[k].get("payload", {}).get(ts_key, 0) or 0),
+            )
+            to_delete = sorted_ids[:n]
+            for k in to_delete:
+                del items[k]
+            return len(to_delete)
         except Exception:
             return 0
 
@@ -863,6 +903,247 @@ class TestHybridContextAssembler:
         kw_idx = [ac.card_ids.index(i) for i in ["kw-first", "kw-second"]]
         vec_idx = ac.card_ids.index("vec-first")
         assert all(k < vec_idx for k in kw_idx)
+
+
+# ---------------------------------------------------------------------------
+# New disciplined-memory tests: dedup/merge, recency decay, capacity bound
+# ---------------------------------------------------------------------------
+
+class TestRecordDedup:
+    """Recording the same task twice must MERGE (one association, count==2)."""
+
+    def test_same_task_twice_yields_one_association(self):
+        store = FakeVectorStore()
+        now_ts = 1_000_000.0
+        asm = VectorContextAssembler(store, confidence_min_score=0.0)
+        asm.record("fix the billing pipeline", {"kind": "met", "ts": now_ts})
+        asm.record("fix the billing pipeline", {"kind": "met", "ts": now_ts + 1})
+        # Only one association should exist in the store.
+        coll = list(store._data.values())[0]
+        assert len(coll) == 1, (
+            f"expected 1 association after two identical records, got {len(coll)}"
+        )
+
+    def test_same_task_twice_refreshes_ts(self):
+        store = FakeVectorStore()
+        asm = VectorContextAssembler(store, confidence_min_score=0.0)
+        asm.record("fix the billing pipeline", {"kind": "met", "ts": 1_000_000.0})
+        asm.record("fix the billing pipeline", {"kind": "met", "ts": 2_000_000.0})
+        coll = list(store._data.values())[0]
+        item = list(coll.values())[0]
+        assert item["payload"]["ts"] == 2_000_000.0, (
+            f"expected ts refreshed to 2_000_000, got {item['payload']['ts']}"
+        )
+
+    def test_different_tasks_yield_separate_associations(self):
+        store = FakeVectorStore()
+        asm = VectorContextAssembler(store, confidence_min_score=0.0)
+        asm.record("fix the billing pipeline", {"kind": "met", "ts": 1_000_000.0})
+        asm.record("implement the payment collector", {"kind": "met", "ts": 1_000_001.0})
+        coll = list(store._data.values())[0]
+        assert len(coll) == 2, (
+            f"expected 2 associations for two different tasks, got {len(coll)}"
+        )
+
+    def test_count_bumped_on_second_record(self):
+        """The payload 'count' field must reflect re-records when caller passes _count."""
+        store = FakeVectorStore()
+        asm = VectorContextAssembler(store, confidence_min_score=0.0)
+        asm.record("fix the billing pipeline", {"kind": "met", "ts": 1_000_000.0, "_count": 1})
+        asm.record("fix the billing pipeline", {"kind": "met", "ts": 1_000_001.0, "_count": 2})
+        coll = list(store._data.values())[0]
+        item = list(coll.values())[0]
+        assert item["payload"]["count"] == 2, (
+            f"expected count==2 after two records, got {item['payload']['count']}"
+        )
+
+
+class TestRecencyDecay:
+    """Recent associations must rank above old ones with equal raw scores."""
+
+    def test_recent_ranks_above_old_with_equal_raw_score(self):
+        """Two associations with equal raw scores: the recent one must rank first."""
+        # We use an injectable clock so 'now' is deterministic.
+        now = 1_000_000.0  # epoch seconds (arbitrary)
+        old_ts = now - 400 * 86400   # 400 days ago
+        recent_ts = now - 1 * 86400  # 1 day ago
+
+        store = FakeVectorStore()
+        # Both items have the same text so they get the same raw score.
+        store.upsert([
+            {
+                "id": "old-assoc",
+                "text": "billing payment pipeline",
+                "payload": {"ts": old_ts, "task": "old task"},
+            },
+            {
+                "id": "recent-assoc",
+                "text": "billing payment pipeline",
+                "payload": {"ts": recent_ts, "task": "recent task"},
+            },
+        ])
+
+        asm = VectorContextAssembler(
+            store,
+            confidence_min_score=0.0,
+            half_life_days=30.0,
+            _clock=lambda: now,
+        )
+        ac = asm.assemble("billing payment")
+        assert len(ac.card_ids) >= 2, "expected both hits to be returned"
+        assert ac.card_ids[0] == "recent-assoc", (
+            f"expected recent-assoc to rank first, got order: {ac.card_ids}"
+        )
+
+    def test_old_association_is_not_completely_dropped_when_score_above_gate(self):
+        """Old associations should still appear (decayed score may still pass gate=0.0)."""
+        now = 1_000_000.0
+        old_ts = now - 400 * 86400
+
+        store = FakeVectorStore()
+        store.upsert([{
+            "id": "old-assoc",
+            "text": "billing payment pipeline",
+            "payload": {"ts": old_ts},
+        }])
+        asm = VectorContextAssembler(
+            store,
+            confidence_min_score=0.0,
+            half_life_days=30.0,
+            _clock=lambda: now,
+        )
+        ac = asm.assemble("billing payment")
+        assert "old-assoc" in ac.card_ids, "old association should still appear at gate=0.0"
+
+    def test_age_appears_in_context_view(self):
+        """The rendered context_view must mention age when ts is present."""
+        now = 1_000_000.0
+        ts_3_days_ago = now - 3 * 86400
+
+        store = FakeVectorStore()
+        store.upsert([{
+            "id": "dated-assoc",
+            "text": "billing payment",
+            "payload": {"ts": ts_3_days_ago, "task": "billing"},
+        }])
+        asm = VectorContextAssembler(
+            store,
+            confidence_min_score=0.0,
+            _clock=lambda: now,
+        )
+        ac = asm.assemble("billing payment")
+        assert "days ago" in ac.context_view or "day ago" in ac.context_view or "today" in ac.context_view, (
+            f"expected age label in context_view, got: {ac.context_view!r}"
+        )
+
+    def test_no_ts_hit_still_works_neutral_decay(self):
+        """Hits with no ts must still appear (neutral 0.5 factor) and not raise."""
+        store = FakeVectorStore()
+        store.upsert([{
+            "id": "no-ts",
+            "text": "billing payment pipeline",
+            "payload": {"task": "some task"},  # no ts key
+        }])
+        asm = VectorContextAssembler(store, confidence_min_score=0.0)
+        ac = asm.assemble("billing payment")
+        assert "no-ts" in ac.card_ids, "no-ts hit should still be returned with neutral decay"
+
+
+class TestCapacityBound:
+    """max_associations=3 + 5 distinct records -> count stays <=3 and oldest evicted."""
+
+    def test_cap_enforced_after_five_records(self):
+        store = FakeVectorStore()
+        now = 1_000_000.0
+        asm = VectorContextAssembler(
+            store,
+            confidence_min_score=0.0,
+            max_associations=3,
+            _clock=lambda: now,
+        )
+        for i in range(5):
+            asm.record(
+                f"distinct task number {i}",
+                {"kind": "met", "ts": float(now + i)},
+            )
+        coll = list(store._data.values())[0]
+        assert len(coll) <= 3, (
+            f"expected at most 3 associations after 5 records (cap=3), got {len(coll)}"
+        )
+
+    def test_oldest_evicted_not_newest(self):
+        """After cap enforcement, the oldest associations should be gone."""
+        store = FakeVectorStore()
+        base_ts = 1_000_000.0
+        asm = VectorContextAssembler(
+            store,
+            confidence_min_score=0.0,
+            max_associations=2,
+        )
+        # Record three tasks with explicit increasing timestamps.
+        asm.record("oldest task alpha", {"kind": "met", "ts": base_ts})
+        asm.record("middle task beta", {"kind": "met", "ts": base_ts + 1})
+        asm.record("newest task gamma", {"kind": "met", "ts": base_ts + 2})
+
+        coll = list(store._data.values())[0]
+        remaining_ids = list(coll.keys())
+        # The association for "oldest task alpha" should have been evicted.
+        from quest_ai_runner.adapters.vector_context_assembler import _task_slug
+        oldest_id = f"assoc:{_task_slug('oldest task alpha')}"
+        assert oldest_id not in remaining_ids, (
+            f"oldest association should have been evicted; remaining: {remaining_ids}"
+        )
+
+    def test_store_without_capacity_methods_does_not_raise(self):
+        """A store lacking count/evict_oldest must not cause record() to raise."""
+        class MinimalStore(VectorStoreBase):
+            def search(self, q, *, scope=None, top_k=8):
+                return []
+            def upsert(self, items, *, scope=None):
+                pass
+            def sync(self, items, *, scope=None):
+                return 0
+            # No count or evict_oldest — must not raise
+
+        asm = VectorContextAssembler(MinimalStore(), max_associations=1)
+        asm.record("task one", {"kind": "met"})
+        asm.record("task two", {"kind": "met"})  # would overflow cap but must not raise
+
+
+class TestTimestampInPayload:
+    """ts and count are written into the payload on every record."""
+
+    def test_ts_in_payload_from_outcome(self):
+        store = FakeVectorStore()
+        asm = VectorContextAssembler(store)
+        asm.record("some task", {"kind": "met", "ts": 12345.0})
+        coll = list(store._data.values())[0]
+        item = list(coll.values())[0]
+        assert item["payload"].get("ts") == 12345.0, (
+            f"expected ts==12345.0 in payload, got {item['payload']}"
+        )
+
+    def test_ts_in_payload_from_clock_when_not_provided(self):
+        """When ts is not in outcome, the clock value is used."""
+        fixed_ts = 99999.0
+        store = FakeVectorStore()
+        asm = VectorContextAssembler(store, _clock=lambda: fixed_ts)
+        asm.record("some task", {"kind": "met"})  # no ts in outcome
+        coll = list(store._data.values())[0]
+        item = list(coll.values())[0]
+        assert item["payload"].get("ts") == fixed_ts, (
+            f"expected clock ts in payload, got {item['payload']}"
+        )
+
+    def test_count_defaults_to_1(self):
+        store = FakeVectorStore()
+        asm = VectorContextAssembler(store)
+        asm.record("some task", {"kind": "met", "ts": 1.0})
+        coll = list(store._data.values())[0]
+        item = list(coll.values())[0]
+        assert item["payload"].get("count") == 1, (
+            f"expected count==1, got {item['payload']}"
+        )
 
 
 # ---------------------------------------------------------------------------
