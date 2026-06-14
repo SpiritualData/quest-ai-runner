@@ -1433,3 +1433,208 @@ class TestCardCache:
         # Next assemble must see the bootstrapped cards.
         ac1 = store.assemble("handle request service")
         assert len(ac1.card_ids) > 0, "cache not invalidated after bootstrap()"
+
+
+# ---------------------------------------------------------------------------
+# Richer no-LLM summaries: docstring extraction
+# ---------------------------------------------------------------------------
+
+class TestBootstrapDocstringExtraction:
+    """Thing 1: bootstrap extracts docstrings from .py files and builds richer summaries."""
+
+    def test_module_docstring_appears_in_summary(self, tmp_path):
+        """The module docstring first line must appear in the card summary."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "analyzer.py").write_text(
+            '"""Analyze user behaviour patterns for the recommendation engine."""\n'
+            "\n"
+            "class BehaviourAnalyzer:\n"
+            '    """Tracks and aggregates user events."""\n'
+            "    pass\n"
+            "\n"
+            "def compute_score(user_id):\n"
+            '    """Return a float score for the given user."""\n'
+            "    return 0.0\n",
+            encoding="utf-8",
+        )
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        store.bootstrap(root=str(repo))
+
+        all_cards = list(cards_dir.glob("*.json"))
+        assert len(all_cards) == 1
+        card = json.loads(all_cards[0].read_text())
+
+        # summary must contain the module docstring fragment.
+        assert "Analyze user behaviour" in card["summary"], (
+            f"module docstring not in summary: {card['summary']!r}"
+        )
+
+    def test_class_and_fn_docstrings_appear_in_summary(self, tmp_path):
+        """Class and function docstring first lines must appear in the card summary."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "engine.py").write_text(
+            '"""The scoring engine."""\n'
+            "\n"
+            "class ScoreEngine:\n"
+            '    """Computes recommendation scores."""\n'
+            "    pass\n"
+            "\n"
+            "def build_index(corpus):\n"
+            '    """Build a BM25 index over the corpus."""\n'
+            "    pass\n",
+            encoding="utf-8",
+        )
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        store.bootstrap(root=str(repo))
+
+        card = json.loads(list(cards_dir.glob("*.json"))[0].read_text())
+        combined = card["summary"] + " " + card.get("description", "")
+
+        # At least one of the def-level docstrings should appear.
+        assert (
+            "Computes recommendation scores" in combined
+            or "Build a BM25 index" in combined
+        ), f"def docstrings not in card text: {combined!r}"
+
+    def test_description_field_populated(self, tmp_path):
+        """The ``description`` field on a bootstrapped card must be non-empty for .py with docstrings."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "service.py").write_text(
+            '"""Service layer for handling API requests."""\n'
+            "\n"
+            "def dispatch(req):\n"
+            '    """Route the request to the right handler."""\n'
+            "    pass\n",
+            encoding="utf-8",
+        )
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        store.bootstrap(root=str(repo))
+
+        card = json.loads(list(cards_dir.glob("*.json"))[0].read_text())
+        assert card.get("description"), (
+            f"expected non-empty description field, got: {card.get('description')!r}"
+        )
+
+    def test_no_docstring_falls_back_to_symbol_list(self, tmp_path):
+        """When no docstrings exist the summary falls back to the symbol name list."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "nodoc.py").write_text(
+            "class WidgetFactory:\n    pass\n"
+            "\ndef make_widget(size):\n    pass\n",
+            encoding="utf-8",
+        )
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        store.bootstrap(root=str(repo))
+
+        card = json.loads(list(cards_dir.glob("*.json"))[0].read_text())
+        # summary should at least contain one of the class/function names.
+        assert "WidgetFactory" in card["summary"] or "make_widget" in card["summary"], (
+            f"expected symbol names in fallback summary: {card['summary']!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# Test file down-weighting
+# ---------------------------------------------------------------------------
+
+class TestTestFileDownweighting:
+    """Thing 1: test files are indexed with lower weight so source files rank first."""
+
+    def _make_source_and_test(self, tmp_path: Path) -> Path:
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "billing.py").write_text(
+            '"""Billing module for invoice generation."""\n'
+            "\ndef generate_invoice(customer_id):\n    pass\n",
+            encoding="utf-8",
+        )
+        tests = repo / "tests"
+        tests.mkdir()
+        (tests / "test_billing.py").write_text(
+            "def test_generate_invoice():\n    pass\n",
+            encoding="utf-8",
+        )
+        return repo
+
+    def test_test_file_has_is_test_true(self, tmp_path):
+        repo = self._make_source_and_test(tmp_path)
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        store.bootstrap(root=str(repo))
+
+        test_card = None
+        for cp in cards_dir.glob("*.json"):
+            c = json.loads(cp.read_text())
+            files = c.get("files", [])
+            if files and "tests/" in files[0].get("path", ""):
+                test_card = c
+                break
+        assert test_card is not None, "expected a card for tests/test_billing.py"
+        assert test_card.get("is_test") is True, (
+            f"expected is_test=True on test card, got: {test_card.get('is_test')!r}"
+        )
+
+    def test_test_file_has_lower_weight(self, tmp_path):
+        repo = self._make_source_and_test(tmp_path)
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        store.bootstrap(root=str(repo))
+
+        for cp in cards_dir.glob("*.json"):
+            c = json.loads(cp.read_text())
+            files = c.get("files", [])
+            if files and "tests/" in files[0].get("path", ""):
+                assert c.get("weight", 1.0) < 1.0, (
+                    f"expected weight < 1.0 on test card, got: {c.get('weight')!r}"
+                )
+                return
+        pytest.fail("test card not found")
+
+    def test_source_file_has_is_test_false(self, tmp_path):
+        repo = self._make_source_and_test(tmp_path)
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        store.bootstrap(root=str(repo))
+
+        for cp in cards_dir.glob("*.json"):
+            c = json.loads(cp.read_text())
+            files = c.get("files", [])
+            if files and files[0].get("path", "") == "billing.py":
+                assert c.get("is_test") is False, (
+                    f"expected is_test=False on source card, got: {c.get('is_test')!r}"
+                )
+                return
+        pytest.fail("source card for billing.py not found")
+
+    def test_source_ranks_before_test_on_same_query(self, tmp_path):
+        """A query that matches both billing.py and test_billing.py should rank source first."""
+        repo = self._make_source_and_test(tmp_path)
+        cards_dir = tmp_path / "cards"
+        store = FileContextStore(
+            str(cards_dir),
+            repo_root=str(repo),
+            auto_bootstrap=False,
+            confidence_threshold=0.0,
+        )
+        store.bootstrap(root=str(repo))
+
+        # 'billing invoice' matches both cards; source should rank first.
+        ac = store.assemble("billing invoice generate customer")
+        assert len(ac.card_ids) >= 2, (
+            f"expected >= 2 cards, got: {ac.card_ids}"
+        )
+        # Find paths for top card and second card.
+        all_cards = store._load_all()
+        top_card = all_cards.get(ac.card_ids[0], {})
+        top_path = (top_card.get("files") or [{}])[0].get("path", "")
+        assert "tests/" not in top_path, (
+            f"expected source file ranked first, got top card file: {top_path!r}"
+        )

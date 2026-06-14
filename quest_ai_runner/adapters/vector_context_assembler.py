@@ -123,16 +123,82 @@ class VectorContextAssembler(ContextAssemblerBase):
             return AssembledContext()
 
     def record(self, task_text: str, outcome: Dict[str, Any]) -> None:
-        """Upsert a grounding point so the store compounds over time.  Never raises."""
+        """Upsert a TASK-TO-CONTEXT ASSOCIATION so the store compounds over time.  Never raises.
+
+        The embedded text = ``task_text`` + a short structural description of the region used
+        (file paths + their summaries/symbols from ``outcome``).  This builds a searchable
+        mapping from "things this kind of task does" to "where the work lives", so a future
+        similar task retrieves the right region immediately via vector search.
+
+        The payload is rich: ``{paths, symbols, summary, task, kind}`` so a top hit gives
+        the retrieval agent directly actionable metadata.
+
+        If a ``ModelProvider`` (``provider``) is wired, one cheap LLM call generates a
+        one-line orientation summary to embed instead of the structural description.  This is
+        best-effort: if the call fails the structural description is used.
+        """
         try:
-            scope = outcome.get("scope") or None
-            item_id = f"outcome:{hash(task_text) & 0xFFFFFFFF}"
-            self._store.upsert(
-                [{"id": item_id, "text": task_text, "payload": outcome}],
-                scope=scope,
-            )
+            self._record_inner(task_text, outcome)
         except Exception:
             logger.debug("VectorContextAssembler.record failed", exc_info=True)
+
+    def _record_inner(self, task_text: str, outcome: Dict[str, Any]) -> None:
+        """Actual record logic.  May raise; callers wrap in try/except."""
+        scope = outcome.get("scope") or None
+        item_id = f"outcome:{hash(task_text) & 0xFFFFFFFF}"
+
+        # Collect paths and symbols from outcome.
+        paths: List[str] = list(outcome.get("files") or [])
+        symbols: List[str] = list(outcome.get("symbols") or [])
+
+        # Build a short structural description of the region used.
+        region_parts: List[str] = []
+        if paths:
+            region_parts.append("files: " + ", ".join(paths[:8]))
+        if symbols:
+            region_parts.append("symbols: " + ", ".join(symbols[:8]))
+        region_desc = "; ".join(region_parts) if region_parts else ""
+
+        # Build the text to embed: task + region.
+        embed_text = task_text
+        if region_desc:
+            embed_text = f"{task_text} {region_desc}"
+
+        # Optionally generate a one-line LLM summary (cheap, best-effort).
+        if self._provider is not None and region_desc:
+            try:
+                prompt = (
+                    f"Write ONE short sentence (max 20 words) describing what this task does "
+                    f"and which code region it touches.  No lists.\n\n"
+                    f"Task: {task_text}\nRegion: {region_desc}"
+                )
+                llm_summary = self._provider.answer(
+                    [{"role": "user", "content": prompt}],
+                    model=self._query_model,
+                )
+                llm_summary = llm_summary.strip()
+                if llm_summary:
+                    embed_text = llm_summary
+            except Exception:
+                pass  # fall back to structural description
+
+        # Build rich payload so a top hit gives the agent directly useful metadata.
+        summary_for_payload = (
+            outcome.get("summary")
+            or (f"{task_text[:80]} -> {region_desc[:80]}" if region_desc else task_text[:120])
+        )
+        payload: Dict[str, Any] = {
+            "task": task_text,
+            "paths": paths,
+            "symbols": symbols,
+            "summary": summary_for_payload,
+            "kind": outcome.get("kind"),
+        }
+
+        self._store.upsert(
+            [{"id": item_id, "text": embed_text, "payload": payload}],
+            scope=scope,
+        )
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -254,18 +320,37 @@ class VectorContextAssembler(ContextAssemblerBase):
             return candidates  # on failure keep all (best-effort)
 
     def _render_hits(self, hits: List[VectorHit]) -> str:
-        """Render a list of VectorHits into a human-readable context view string."""
+        """Render a list of VectorHits into a human-readable context view string.
+
+        When a hit carries a rich task-to-context payload (``paths``, ``symbols``,
+        ``task``, ``summary``), those fields are surfaced so the consuming agent
+        immediately knows where to read.
+        """
         parts: List[str] = []
         for hit in hits:
-            path = hit.payload.get("path", "") or ""
-            path_note = f"  path: {path}" if path else ""
-            snippet = _snippet(hit.text) if hit.text else ""
-            snippet_note = f"  text: {snippet}" if snippet else ""
             part_lines = [f"### Vector hit: {hit.id}  (score={hit.score:.3f})"]
-            if path_note:
-                part_lines.append(path_note)
-            if snippet_note:
-                part_lines.append(snippet_note)
+            # Rich task-to-context payload fields.
+            task_text = hit.payload.get("task", "") or ""
+            if task_text:
+                part_lines.append(f"  matched task: {task_text[:120]}")
+            summary = hit.payload.get("summary", "") or ""
+            if summary:
+                part_lines.append(f"  summary: {summary[:160]}")
+            hit_paths = hit.payload.get("paths") or []
+            if hit_paths:
+                part_lines.append(f"  read these files: {', '.join(hit_paths[:8])}")
+            hit_syms = hit.payload.get("symbols") or []
+            if hit_syms:
+                part_lines.append(f"  symbols: {', '.join(hit_syms[:8])}")
+            # Legacy single-path field.
+            path = hit.payload.get("path", "") or ""
+            if path and path not in hit_paths:
+                part_lines.append(f"  path: {path}")
+            # Text snippet (for non-association hits).
+            if hit.text and not task_text:
+                snippet = _snippet(hit.text)
+                if snippet:
+                    part_lines.append(f"  text: {snippet}")
             parts.append("\n".join(part_lines))
         return "\n\n---\n\n".join(parts)
 

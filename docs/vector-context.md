@@ -136,6 +136,43 @@ Wire it into ``VectorContextAssembler`` the same way as ``QdrantVectorStore``.
 
 ---
 
+## Task-to-context associations (record enrichment)
+
+``VectorContextAssembler.record(task_text, outcome)`` builds a **task-to-context
+association** and upserts it into the vector store.  This is the compounding loop:
+each completed task contributes a searchable mapping from "the kind of task" to
+"which code region it touched", so future similar tasks retrieve the right region
+immediately.
+
+### What is embedded
+
+The embedded text is: ``task_text`` + a structural description of the region used
+(file paths and symbol names from ``outcome``).  If a ``ModelProvider`` (``provider``)
+is wired, one cheap LLM call generates a one-line orientation summary instead (best-
+effort; falls back to structural description on any failure).
+
+**Corpus content is never embedded.**  The vector arm embeds only summaries and
+task-to-context associations.  BM25ContentStore covers exact-content search.
+
+### Payload shape
+
+The upserted payload is rich so a top hit gives the consuming agent directly useful
+metadata:
+
+```json
+{
+  "task":    "implement the billing collator",
+  "paths":   ["billing/collate.py", "billing/models.py"],
+  "symbols": ["PaymentCollector", "xfr_collate_payments_7q2"],
+  "summary": "billing collator touched billing/collate.py ...",
+  "kind":    "met"
+}
+```
+
+When a vector search retrieves this association the rendered context view shows:
+``matched task``, ``summary``, ``read these files``, and ``symbols`` so the agent
+knows exactly where to look without a grep pass.
+
 ## AUTO-UPDATE: sync re-embeds only changed items
 
 The ``sync(items)`` method is the zero-management auto-update entry point.

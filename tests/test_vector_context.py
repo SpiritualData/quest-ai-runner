@@ -485,6 +485,239 @@ class TestVectorContextAssemblerRecord:
 
 
 # ---------------------------------------------------------------------------
+# VectorContextAssembler: enriched record() -- Thing 2
+# ---------------------------------------------------------------------------
+
+class TestVectorContextAssemblerRecordEnrichment:
+    """Thing 2: record() upserts a rich task-to-context association."""
+
+    def test_record_embeds_task_text(self):
+        """The upserted text contains the task text so it is searchable by similar tasks."""
+        store = FakeVectorStore()
+        asm = VectorContextAssembler(store, confidence_min_score=0.0)
+        asm.record("implement the billing collator", {"kind": "met", "files": ["billing/collate.py"]})
+
+        # Searching with the task text should find the upserted item.
+        hits = store.search("billing collator")
+        assert len(hits) > 0, "upserted task association not found by vector search"
+
+    def test_record_payload_contains_paths(self):
+        """The payload must contain the file paths from the outcome."""
+        store = FakeVectorStore()
+        asm = VectorContextAssembler(store, confidence_min_score=0.0)
+        asm.record(
+            "fix the payment collector",
+            {
+                "kind": "met",
+                "files": ["billing/collate.py", "billing/models.py"],
+            },
+        )
+
+        # Find the upserted item in the store.
+        coll = list(store._data.values())[0]
+        item = list(coll.values())[0]
+        payload = item.get("payload") or {}
+        assert "billing/collate.py" in payload.get("paths", []), (
+            f"expected paths in payload, got: {payload}"
+        )
+        assert "billing/models.py" in payload.get("paths", []), (
+            f"expected second path in payload, got: {payload}"
+        )
+
+    def test_record_payload_contains_task(self):
+        """The payload must carry the original task text."""
+        store = FakeVectorStore()
+        asm = VectorContextAssembler(store, confidence_min_score=0.0)
+        task = "refactor the authentication middleware"
+        asm.record(task, {"kind": "met"})
+
+        coll = list(store._data.values())[0]
+        item = list(coll.values())[0]
+        payload = item.get("payload") or {}
+        assert payload.get("task") == task, (
+            f"expected task in payload, got: {payload}"
+        )
+
+    def test_record_payload_contains_kind(self):
+        """The payload must carry the outcome kind."""
+        store = FakeVectorStore()
+        asm = VectorContextAssembler(store, confidence_min_score=0.0)
+        asm.record("do something", {"kind": "met"})
+
+        coll = list(store._data.values())[0]
+        item = list(coll.values())[0]
+        payload = item.get("payload") or {}
+        assert payload.get("kind") == "met", (
+            f"expected kind='met' in payload, got: {payload}"
+        )
+
+    def test_record_with_symbols_in_payload(self):
+        """When outcome carries symbols, they appear in the payload."""
+        store = FakeVectorStore()
+        asm = VectorContextAssembler(store, confidence_min_score=0.0)
+        asm.record(
+            "use PaymentCollector to collate",
+            {
+                "kind": "met",
+                "files": ["billing/collate.py"],
+                "symbols": ["PaymentCollector", "xfr_collate"],
+            },
+        )
+
+        coll = list(store._data.values())[0]
+        item = list(coll.values())[0]
+        payload = item.get("payload") or {}
+        assert "PaymentCollector" in payload.get("symbols", []), (
+            f"expected symbols in payload, got: {payload}"
+        )
+
+    def test_record_with_provider_uses_llm_for_embed_text(self):
+        """When a provider is wired, the LLM summary is used as the embedded text."""
+        store = FakeVectorStore()
+        provider = MagicMock()
+        provider.answer.return_value = "Billing collator processes payment records in billing module."
+        asm = VectorContextAssembler(store, provider=provider, confidence_min_score=0.0)
+        asm.record(
+            "implement billing collator",
+            {"kind": "met", "files": ["billing/collate.py"]},
+        )
+
+        # The embedded text should be the LLM summary, not the raw task.
+        coll = list(store._data.values())[0]
+        item = list(coll.values())[0]
+        assert "Billing collator" in item.get("text", ""), (
+            f"expected LLM summary as embedded text, got: {item.get('text')!r}"
+        )
+
+    def test_record_with_provider_failure_falls_back_to_structural(self):
+        """When the LLM call fails, falls back to structural description without raising."""
+        store = FakeVectorStore()
+        provider = MagicMock()
+        provider.answer.side_effect = RuntimeError("LLM unavailable")
+        asm = VectorContextAssembler(store, provider=provider, confidence_min_score=0.0)
+        # Must not raise.
+        asm.record("fix the billing collator", {"kind": "met", "files": ["billing/collate.py"]})
+
+        # Item should still have been upserted.
+        coll = list(store._data.values())[0]
+        assert len(coll) == 1, "expected exactly one item upserted despite LLM failure"
+
+    def test_render_hits_shows_rich_payload_fields(self):
+        """Context view must surface task, paths, symbols, and summary from payload."""
+        store = FakeVectorStore()
+        store.upsert([{
+            "id": "outcome:12345",
+            "text": "billing collator payment records",
+            "payload": {
+                "task": "implement billing collator",
+                "paths": ["billing/collate.py"],
+                "symbols": ["PaymentCollector"],
+                "summary": "billing collator writes payment records",
+                "kind": "met",
+            },
+        }])
+        asm = VectorContextAssembler(store, confidence_min_score=0.0)
+        ac = asm.assemble("billing collator payment")
+        assert "billing/collate.py" in ac.context_view, (
+            f"expected file path in context_view: {ac.context_view!r}"
+        )
+        assert "PaymentCollector" in ac.context_view, (
+            f"expected symbol in context_view: {ac.context_view!r}"
+        )
+        assert "implement billing collator" in ac.context_view, (
+            f"expected task text in context_view: {ac.context_view!r}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# HybridContextAssembler: record forwarding to vector arm -- Thing 2
+# ---------------------------------------------------------------------------
+
+class TestHybridRecordForwarding:
+    """Thing 2: HybridContextAssembler.record forwards to the vector arm."""
+
+    def test_hybrid_record_forwards_to_vector_assembler(self):
+        """record() on the hybrid must forward to the vector assembler's record()."""
+        records_from_vector: list = []
+
+        class TrackingVectorAssembler:
+            def assemble(self, task_text, *, meta=None):
+                return AssembledContext()
+
+            def record(self, task_text, outcome):
+                records_from_vector.append((task_text, outcome))
+
+        class NullKeywordAssembler:
+            def assemble(self, task_text, *, meta=None):
+                return AssembledContext()
+
+            def record(self, task_text, outcome):
+                pass
+
+        hybrid = HybridContextAssembler(
+            keyword=NullKeywordAssembler(),  # type: ignore[arg-type]
+            vector=TrackingVectorAssembler(),  # type: ignore[arg-type]
+        )
+        hybrid.record("fix the billing pipeline", {"kind": "met", "files": ["billing/collate.py"]})
+
+        assert len(records_from_vector) == 1, (
+            f"expected 1 record forwarded to vector arm, got: {len(records_from_vector)}"
+        )
+        task, outcome = records_from_vector[0]
+        assert task == "fix the billing pipeline"
+        assert "billing/collate.py" in outcome.get("files", [])
+
+    def test_hybrid_record_forwards_to_both_arms(self):
+        """record() must forward to BOTH keyword and vector arms."""
+        kw_records: list = []
+        vec_records: list = []
+
+        class TrackingKeyword:
+            def assemble(self, task_text, *, meta=None):
+                return AssembledContext()
+            def record(self, task_text, outcome):
+                kw_records.append(task_text)
+
+        class TrackingVector:
+            def assemble(self, task_text, *, meta=None):
+                return AssembledContext()
+            def record(self, task_text, outcome):
+                vec_records.append(task_text)
+
+        hybrid = HybridContextAssembler(
+            keyword=TrackingKeyword(),  # type: ignore[arg-type]
+            vector=TrackingVector(),  # type: ignore[arg-type]
+        )
+        hybrid.record("some task", {"kind": "met"})
+        assert len(kw_records) == 1 and len(vec_records) == 1, (
+            f"expected both arms to receive record(), kw={kw_records}, vec={vec_records}"
+        )
+
+    def test_hybrid_record_with_real_vector_assembler_upserts(self):
+        """Integration: HybridContextAssembler.record reaches a real VectorContextAssembler."""
+        from quest_ai_runner.adapters.file_context_store import FileContextStore
+
+        store = FakeVectorStore()
+        vec_asm = VectorContextAssembler(store, confidence_min_score=0.0)
+
+        class NullKeyword:
+            def assemble(self, task_text, *, meta=None):
+                return AssembledContext()
+            def record(self, task_text, outcome):
+                pass
+
+        hybrid = HybridContextAssembler(
+            keyword=NullKeyword(),  # type: ignore[arg-type]
+            vector=vec_asm,
+        )
+        hybrid.record("implement payment processor", {"kind": "met", "files": ["payment/processor.py"]})
+
+        # The vector store should now have one item.
+        hits = store.search("payment processor")
+        assert len(hits) > 0, "expected record to reach vector store via hybrid"
+
+
+# ---------------------------------------------------------------------------
 # HybridContextAssembler
 # ---------------------------------------------------------------------------
 

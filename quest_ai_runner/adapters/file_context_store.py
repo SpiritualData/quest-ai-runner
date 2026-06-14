@@ -64,6 +64,22 @@ _SOURCE_EXTS: Set[str] = {
 # Max file size to fingerprint/parse during bootstrap (512 KB).
 _BOOTSTRAP_MAX_BYTES = 512 * 1024
 
+# Patterns that identify test files for down-weighting.
+_TEST_PATH_RE = re.compile(
+    r"(?:^|/)tests?/"                   # in a tests/ or test/ directory
+    r"|/test_[^/]+$"                    # filename starts with test_
+    r"|/_?test\.[^/]+$"                 # filename is test.<ext>
+    r"|[^/]+_test\.[^/]+$",            # filename ends with _test.<ext>
+    re.IGNORECASE,
+)
+
+# Weight given to test-file cards vs source-file cards (used in summary metadata).
+_TEST_FILE_WEIGHT = 0.5
+_SOURCE_FILE_WEIGHT = 1.0
+
+# Max length for a card summary built from docstrings/descriptions (~400 chars).
+_SUMMARY_MAX_CHARS = 400
+
 # Regex for non-Python symbol extraction (function/class names).
 _SYMBOL_RE = re.compile(
     r"""
@@ -159,6 +175,201 @@ def _extract_symbols(file_path: Path, max_symbols: int = 30) -> List[str]:
     except Exception:  # noqa: BLE001
         pass
     return symbols[:max_symbols]
+
+
+def _first_sentence(text: str, max_len: int = 120) -> str:
+    """Return the first non-empty sentence/line of ``text``, capped at ``max_len`` chars."""
+    for line in text.splitlines():
+        line = line.strip()
+        if line:
+            # Trim at the first sentence boundary (period + space) within the line.
+            dot = line.find(". ")
+            if 0 < dot < max_len:
+                return line[: dot + 1]
+            return line[:max_len]
+    return ""
+
+
+def _is_test_path(rel_path: str) -> bool:
+    """Return True when *rel_path* looks like a test file."""
+    return bool(_TEST_PATH_RE.search(rel_path))
+
+
+def _extract_docstrings(file_path: Path) -> Dict[str, Any]:
+    """Extract module docstring and top-level class/function docstrings from a .py file.
+
+    Returns a dict::
+
+        {
+          "module": "<first sentence of module docstring>",
+          "defs": [("ClassName", "<first sentence of docstring>"), ...],
+        }
+
+    Falls back to an empty dict on any error.  Never raises.
+    """
+    result: Dict[str, Any] = {"module": "", "defs": []}
+    try:
+        text = file_path.read_text(encoding="utf-8", errors="replace")
+        tree = ast.parse(text, filename=str(file_path))
+        # Module docstring.
+        mod_doc = ast.get_docstring(tree) or ""
+        result["module"] = _first_sentence(mod_doc)
+        # Top-level class and function docstrings (col_offset == 0).
+        for node in ast.iter_child_nodes(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                if getattr(node, "col_offset", -1) == 0:
+                    doc = ast.get_docstring(node) or ""
+                    first = _first_sentence(doc)
+                    result["defs"].append((node.name, first))
+    except Exception:  # noqa: BLE001
+        pass
+    return result
+
+
+def _extract_text_description(file_path: Path) -> str:
+    """Extract the first heading + first paragraph from a .md/.rst/.txt file.
+
+    Returns a single-line blurb, or an empty string on failure.  Never raises.
+    """
+    try:
+        lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        heading = ""
+        para_lines: List[str] = []
+        in_para = False
+        for line in lines:
+            stripped = line.strip()
+            # Detect heading: Markdown #/##/### or plain text ALL-CAPS / underline style.
+            if not heading:
+                if stripped.startswith("#"):
+                    heading = stripped.lstrip("#").strip()
+                    continue
+                if stripped and stripped == stripped.upper() and len(stripped) > 3:
+                    heading = stripped
+                    continue
+                if stripped and re.match(r"^[=\-]{3,}$", stripped):
+                    # Underline; the heading was the previous line.
+                    if para_lines:
+                        heading = para_lines[-1]
+                        para_lines = []
+                    continue
+            # First paragraph: non-empty lines after the heading.
+            if heading or in_para:
+                if stripped:
+                    in_para = True
+                    para_lines.append(stripped)
+                elif in_para:
+                    break  # end of first paragraph
+        blurb_parts = []
+        if heading:
+            blurb_parts.append(heading)
+        if para_lines:
+            first_para = " ".join(para_lines)
+            blurb_parts.append(_first_sentence(first_para, max_len=160))
+        return ". ".join(p for p in blurb_parts if p)
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _extract_leading_comment(file_path: Path) -> str:
+    """Extract leading block/line comments from non-Python, non-doc source files.
+
+    Returns a short blurb from the first comment block, or empty on failure.  Never raises.
+    """
+    try:
+        lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        comment_lines: List[str] = []
+        for line in lines[:20]:
+            stripped = line.strip()
+            # Skip blank lines at the top.
+            if not stripped and not comment_lines:
+                continue
+            # Single-line comment styles: //, #, --, *, /*, */
+            m = re.match(r"^(?://|#|--|/\*|\*/?)\s*(.*)", stripped)
+            if m:
+                content = m.group(1).strip()
+                if content:
+                    comment_lines.append(content)
+                    if len(comment_lines) >= 3:
+                        break
+            elif comment_lines:
+                break  # end of leading comment block
+            else:
+                break  # no comment at all
+        blurb = " ".join(comment_lines)
+        return _first_sentence(blurb, max_len=200) if blurb else ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _build_rich_summary(
+    rel_path: str,
+    file_path: Path,
+    syms: List[str],
+) -> Tuple[str, str]:
+    """Build a rich (summary, description) pair for a file card.
+
+    ``summary`` -- compact, readable blurb (~400 chars) for the card's ``summary`` field.
+    ``description`` -- the full orientation text to embed in the vector arm (module
+                       docstring + key symbol docstrings).
+
+    For ``.py`` files: module docstring first line + class/fn names with their
+    docstring first lines.  For ``.md/.rst/.txt``: first heading + first paragraph.
+    For other code: leading block comment.  Falls back to symbol-name list when
+    nothing richer is available.  Never raises.
+    """
+    suffix = file_path.suffix.lower()
+    description = ""
+    summary_parts: List[str] = [rel_path]
+
+    try:
+        if suffix == ".py":
+            ds = _extract_docstrings(file_path)
+            mod_doc = ds.get("module", "")
+            defs = ds.get("defs", [])
+            if mod_doc:
+                summary_parts.append(mod_doc)
+                description = mod_doc
+            # Build "Key: ClassName -- docstring, fn -- docstring" section.
+            def_notes: List[str] = []
+            for name, doc in defs[:8]:
+                if doc:
+                    def_notes.append(f"{name} -- {doc}")
+                else:
+                    def_notes.append(name)
+            if def_notes:
+                key_blurb = "Key: " + ", ".join(def_notes)
+                summary_parts.append(key_blurb)
+                description = (description + ". " + key_blurb).strip(". ")
+            elif syms:
+                # No docstrings: fall back to symbol list.
+                sym_list = ", ".join(syms[:12])
+                summary_parts.append(sym_list)
+                if not description:
+                    description = sym_list
+        elif suffix in (".md", ".rst", ".txt"):
+            blurb = _extract_text_description(file_path)
+            if blurb:
+                summary_parts.append(blurb)
+                description = blurb
+            elif syms:
+                summary_parts.append(", ".join(syms[:12]))
+        else:
+            blurb = _extract_leading_comment(file_path)
+            if blurb:
+                summary_parts.append(blurb)
+                description = blurb
+            elif syms:
+                summary_parts.append(", ".join(syms[:12]))
+    except Exception:  # noqa: BLE001
+        # Absolute fallback: just symbols.
+        if syms:
+            summary_parts.append(", ".join(syms[:12]))
+
+    # Assemble and cap.
+    summary = " -- ".join(p for p in summary_parts if p)
+    if len(summary) > _SUMMARY_MAX_CHARS:
+        summary = summary[: _SUMMARY_MAX_CHARS - 1] + "…"
+    return summary, description
 
 
 class FileContextStore(ContextAssemblerBase):
@@ -395,12 +606,19 @@ class FileContextStore(ContextAssemblerBase):
                 syms = _extract_symbols(fpath, max_symbols=30)
                 syms = list(dict.fromkeys(syms))[:30]  # deduplicate
 
+                # Build rich summary + description (docstrings / headings / comments).
+                rich_summary, description = _build_rich_summary(rel_str, fpath, syms)
+
+                # Test-file flag and weight.
+                is_test = _is_test_path(rel_str)
+                weight = _TEST_FILE_WEIGHT if is_test else _SOURCE_FILE_WEIGHT
+
                 # Keywords: path segment tokens + symbol names.
                 seg_tokens = sorted(_tokenize(rel_str.replace("/", " ").replace("_", " ").replace(".", " ")))
                 sym_tokens = [s.lower() for s in syms if len(s) >= _MIN_TOKEN_LEN]
                 all_keywords = list(dict.fromkeys(seg_tokens + sym_tokens))[:50]
 
-                walk_entries.append((rel_str, syms, all_keywords))
+                walk_entries.append((rel_str, syms, all_keywords, rich_summary, description, is_test, weight))
 
         # --- Pass 2: fingerprint all collected files in parallel ---
         # sha256 reads release the GIL; threads give a real speedup when many files
@@ -413,7 +631,7 @@ class FileContextStore(ContextAssemblerBase):
                 with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
                     idx_futures = {
                         pool.submit(self._fingerprint, rel_str): idx
-                        for idx, (rel_str, _, _) in enumerate(walk_entries)
+                        for idx, (rel_str, _, _, _, _, _, _) in enumerate(walk_entries)
                     }
                     for fut in concurrent.futures.as_completed(idx_futures):
                         idx = idx_futures[fut]
@@ -423,14 +641,14 @@ class FileContextStore(ContextAssemblerBase):
                             fp_list[idx] = {}
             except Exception:  # noqa: BLE001
                 # Fallback to serial if ThreadPoolExecutor fails unexpectedly.
-                for idx, (rel_str, _, _) in enumerate(walk_entries):
+                for idx, (rel_str, _, _, _, _, _, _) in enumerate(walk_entries):
                     try:
                         fp_list[idx] = self._fingerprint(rel_str)
                     except Exception:  # noqa: BLE001
                         fp_list[idx] = {}
 
         # --- Pass 3: write cards using the pre-computed fingerprints ---
-        for (rel_str, syms, all_keywords), fp in zip(walk_entries, fp_list):
+        for (rel_str, syms, all_keywords, rich_summary, description, is_test, weight), fp in zip(walk_entries, fp_list):
             if cards_written >= max_cards:
                 break
 
@@ -443,9 +661,7 @@ class FileContextStore(ContextAssemblerBase):
                 "symbols": syms,
             }
 
-            # Short summary line.
-            sym_sample = ", ".join(syms[:12])
-            summary = f"{rel_str}: {sym_sample}" if sym_sample else rel_str
+            summary = rich_summary
 
             card_id = _path_slug(rel_str)
 
@@ -463,6 +679,9 @@ class FileContextStore(ContextAssemblerBase):
                 "id": card_id,
                 "keywords": all_keywords,
                 "summary": summary,
+                "description": description,
+                "is_test": is_test,
+                "weight": weight,
                 "files": [file_dict],
                 "conventions": [],
                 "provenance": {
@@ -540,11 +759,16 @@ class FileContextStore(ContextAssemblerBase):
             return math.log((N + 1) / (df.get(term, 0) + 1)) + 1.0
 
         # Score each card: sum of IDF for each query term present in the card's term set.
+        # Test-file cards are down-weighted by their stored ``weight`` (default 0.5) so that
+        # a source file and its test file both match the same query, the source file ranks first.
         # Tie-break by (usage_count DESC, last_verified_at DESC).
         scored: List[tuple] = []  # (-score, -usage_count, -last_verified_ts, card_dict)
         for cid, card in cards.items():
             card_terms = card_term_sets[cid]
-            score = sum(_idf(t) for t in task_kws if t in card_terms)
+            base_score = sum(_idf(t) for t in task_kws if t in card_terms)
+            # Apply weight: test files stored with weight=0.5 are penalised.
+            card_weight = float(card.get("weight", _SOURCE_FILE_WEIGHT))
+            score = base_score * card_weight
             # CONFIDENCE GATE: only a match that clears the threshold is injected. A weak match
             # contributes NOTHING, so an uncertain query yields an empty context view and the run
             # falls back to plain Claude Code (never worse). This is what makes the layer dominate:

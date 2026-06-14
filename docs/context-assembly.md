@@ -63,6 +63,9 @@ Matches the repo's zero-dependency rule (core + runner import only the stdlib).
     "id": "subsystem-or-hash",
     "keywords": ["chat", "ai", "conversation"],
     "summary": "what this subsystem is + how it's wired (a few lines)",
+    "description": "full orientation text for the vector arm (module docstring + key defs)",
+    "is_test": false,
+    "weight": 1.0,
     "files": [
       {"path": "rel/path.py", "git_sha": "…", "mtime": 1700000000.0,
        "sha256": "…", "why": "entry point", "symbols": ["run", "execute"]}
@@ -74,9 +77,18 @@ Matches the repo's zero-dependency rule (core + runner import only the stdlib).
     "last_outcome": "met|failed|unknown"
   }
   ```
-- **`assemble(task)`:** select cards by keyword overlap with the task text → for each pinned file,
-  check freshness → render fresh cards' `summary` + file list into `context_view`, flag stale ones,
-  and (optionally) set `model_tier_hint` from a simple risk read of the task. No LLM call.
+- **No-LLM summary (initial pass).** Bootstrap extracts the code's **own docstrings** — no
+  LLM call.  For `.py` files: module docstring first line + top-level class/function names
+  with their docstring first lines (``ast`` module only).  For `.md`/`.rst`/`.txt`: first
+  heading + first paragraph.  For other code: leading block comment.  The result is stored
+  in `summary` (compact, ~400 chars) and `description` (full orientation text for the vector
+  arm to embed).  Test files (`tests/`, `test_*.py`, `*_test.py`) are stored with
+  `is_test: true` and `weight: 0.5` so they rank below source files when both match the
+  same query.
+- **`assemble(task)`:** select cards by IDF-weighted keyword overlap with the task text.
+  Test-file cards are down-weighted by their `weight` (0.5) so a source file ranks above its
+  test file when both match.  For each pinned file, check freshness, then render fresh cards'
+  `summary` + file list into `context_view`, flag stale ones.  No LLM call.
 - **Staleness (no LLM):** per file, compare a stored fingerprint to the current one —
   **git blob SHA** (`git hash-object <path>` / last-commit lookup) for committed state, **mtime**
   and **sha256** (`hashlib`) for the working tree (catches other agents' uncommitted edits git
