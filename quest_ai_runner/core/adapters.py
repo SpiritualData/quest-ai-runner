@@ -322,11 +322,24 @@ class AssembledContext:
                                default when the caller passed no explicit model_hint.
       ``card_ids``          -- the card ids that fed this view (for tracing / tests).
       ``stale``             -- cards or file paths found stale during assembly (re-derived).
+      ``sources``           -- OPTIONAL context-transparency list.  Each entry describes one
+                               contributing arm, e.g.::
+
+                                   {
+                                     "adapter": "keyword",       # "keyword|vector|bm25|task_memory|hybrid"
+                                     "label":   "docstring cards",
+                                     "items":   ["path/or/id", ...],
+                                   }
+
+                               Defaults to [] (backward compatible).  Populated by assemblers
+                               that opt in; the Orchestrator emits a human-readable STATUS
+                               event summarising the sources when the list is non-empty.
     """
     context_view: str = ""
     model_tier_hint: Optional[str] = None
     card_ids: List[str] = field(default_factory=list)
     stale: List[str] = field(default_factory=list)
+    sources: List[Dict[str, Any]] = field(default_factory=list)
 
 
 @runtime_checkable

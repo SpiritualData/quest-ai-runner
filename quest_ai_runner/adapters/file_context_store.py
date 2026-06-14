@@ -864,10 +864,26 @@ class FileContextStore(ContextAssemblerBase):
             view_parts.append(part)
 
         context_view = "\n\n---\n\n".join(view_parts)
+
+        # --- Context transparency: collect the file paths surfaced by this arm ----------------
+        # One source entry per arm (keyword/IDF), listing the pinned file paths so the
+        # orchestrator can emit "Context from: docstring cards (file1.py, file2.py)".
+        _source_items: List[str] = []
+        for card in top_cards:
+            for fe in card.get("files", []):
+                fp = fe.get("path", "")
+                if fp and fp not in _source_items:
+                    _source_items.append(fp)
+        _sources = (
+            [{"adapter": "keyword", "label": "docstring cards", "items": _source_items}]
+            if _source_items else []
+        )
+
         return AssembledContext(
             context_view=context_view,
             card_ids=card_ids,
             stale=list(dict.fromkeys(stale_list)),  # deduplicate, preserve order
+            sources=_sources,
         )
 
     def _record_inner(self, task_text: str, outcome: Dict[str, Any]) -> None:

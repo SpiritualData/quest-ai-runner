@@ -529,8 +529,50 @@ class VectorContextAssembler(ContextAssemblerBase):
         # Step e: render.
         context_view = self._render_hits(kept)
         card_ids = [h.id for h in kept]
+
+        # --- Context transparency: classify each hit as task_memory vs vector bootstrap --------
+        # Hits whose payload carries a "task" field are prior-task associations (task_memory);
+        # others are bootstrap card embeddings (vector).  Group them into per-type source entries
+        # so the orchestrator can emit a human-readable summary, e.g.
+        # "Context from: semantic match (model_registry.py), prior task 2 days ago."
+        now = self._clock()
+        _vector_items: List[str] = []
+        _task_memory_entries: List[dict] = []
+        for h in kept:
+            payload = h.payload or {}
+            if payload.get("task"):
+                # Task-memory hit: compute age label.
+                ts = payload.get("ts")
+                if ts is not None:
+                    try:
+                        age_days = max(0.0, (now - float(ts)) / 86400.0)
+                        if age_days < 1.0:
+                            age_label = "prior task today"
+                        elif age_days < 2.0:
+                            age_label = "prior task 1 day ago"
+                        else:
+                            age_label = f"prior task {int(age_days)} days ago"
+                    except (TypeError, ValueError):
+                        age_label = "prior task"
+                else:
+                    age_label = "prior task"
+                hit_paths = payload.get("paths") or []
+                _task_memory_entries.append(
+                    {"adapter": "task_memory", "label": age_label, "items": list(hit_paths)}
+                )
+            else:
+                # Bootstrap card hit: collect paths from payload.
+                hit_paths = payload.get("paths") or []
+                _vector_items.extend(p for p in hit_paths if p not in _vector_items)
+
+        _sources: List[dict] = []
+        if _vector_items:
+            _sources.append({"adapter": "vector", "label": "semantic match", "items": _vector_items})
+        _sources.extend(_task_memory_entries)
+
         return AssembledContext(
             context_view=context_view,
             card_ids=card_ids,
             stale=[],
+            sources=_sources,
         )

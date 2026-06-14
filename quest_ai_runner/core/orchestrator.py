@@ -35,6 +35,7 @@ from .adapters import (
     EVENT_DECISION,
     EVENT_DONE,
     EVENT_MILESTONE,
+    EVENT_PARTIAL,
     EVENT_PLAN,
     EVENT_READ,
     EVENT_REPLAN,
@@ -283,6 +284,12 @@ class OrchestratorConfig:
     # short reference note (they were sent in full on step 1). Default off → unchanged behavior.
     # The final ANSWER path is never affected — it always grounds on the full transcript/context.
     planner_abbreviate_repeat_context: bool = DEFAULT_PLANNER_ABBREVIATE_REPEAT_CONTEXT
+    # INSTANT ACK: when True, emit an immediate "Looking into this..." status at the top of run()
+    # and launch a cheap one-sentence acknowledgment LLM call IN A BACKGROUND THREAD so it runs
+    # CONCURRENTLY with context assembly + the first planner step.  The ack is emitted as an
+    # EVENT_PARTIAL when it returns (~1 s); a failure is swallowed silently.  Default False so
+    # existing callers see no behavior change.
+    instant_ack: bool = False
 
 
 @dataclass
@@ -910,6 +917,56 @@ class Orchestrator:
         started = time.monotonic()
         cfg = self.cfg
 
+        # If a handoff is configured, route events through a FanoutSink that flips live->bg on detach.
+        # We need to set up the emitter early so instant_ack can use it.
+        on_detach = None
+        active_sink = sink
+        if background_sink is not None and detach_check is not None:
+            from .adapters import FanoutSink
+            fan = FanoutSink(live=sink, background=background_sink) if sink is not None else \
+                FanoutSink(live=background_sink, background=background_sink)
+            active_sink = fan
+            on_detach = fan.detach
+        emit = _Emitter(active_sink, mode, self._status, detach_check=detach_check, on_detach=on_detach)
+
+        # --- INSTANT ACK (Feature 1): best-effort, no latency impact -------------------------
+        # When cfg.instant_ack is True:
+        #   1. Synchronously emit "Looking into this..." so the consumer gets an immediate tick.
+        #   2. Launch a CHEAP one-sentence ack call IN A BACKGROUND THREAD — it runs concurrently
+        #      with context assembly + the first planner step, so it adds ZERO wall-clock latency.
+        # The ack prompt explicitly forbids em dashes (brand rule). A failure is swallowed.
+        _ack_future = None
+        if cfg.instant_ack:
+            try:
+                emit.status("Looking into this...")
+            except Exception:  # noqa: BLE001
+                pass
+            if self.provider is not None:
+                try:
+                    _ack_msg = user_message  # capture for closure
+                    _ack_provider = self.provider
+                    _ack_model = self.registry.resolve_tier(cfg.planner_tier)
+
+                    def _do_ack() -> Optional[str]:
+                        try:
+                            _prompt = (
+                                "Write ONE sentence (max 20 words) that restates the following "
+                                "request in your own words and says you are looking into it. "
+                                "Do NOT use em dashes (--). Be natural and brief.\n\n"
+                                f"Request: {_ack_msg[:300]}"
+                            )
+                            return _ack_provider.answer(
+                                [{"role": "user", "content": _prompt}],
+                                model=_ack_model,
+                            )
+                        except Exception:  # noqa: BLE001
+                            return None
+
+                    _ack_executor = ThreadPoolExecutor(max_workers=1)
+                    _ack_future = _ack_executor.submit(_do_ack)
+                except Exception:  # noqa: BLE001
+                    _ack_future = None
+
         # --- ContextAssembler: pre-flight context injection (optional fifth adapter) -----------
         # When a ContextAssembler is wired, call assemble() once before the loop so task-specific
         # context is GUARANTEED applied, not left to the reactive gather. It COMPOSES with any
@@ -937,6 +994,48 @@ class Orchestrator:
             except Exception:  # noqa: BLE001 -- assembly failure must never break the run
                 _assembled = None
 
+        # --- CONTEXT TRANSPARENCY (Feature 2): emit a human-readable summary of sources ------
+        # Best-effort: emit a STATUS event naming the adapters + file items so the consumer/UI
+        # can show "Context from: ...". Only fires when the assembled context carries source
+        # attribution (assemblers opt in by populating AssembledContext.sources). Never raises.
+        if _assembled is not None:
+            try:
+                _sources = getattr(_assembled, "sources", None) or []
+                if _sources:
+                    _parts: List[str] = []
+                    for _src in _sources:
+                        _label = _src.get("label") or _src.get("adapter") or "unknown"
+                        _items = _src.get("items") or []
+                        if _items:
+                            _item_names = ", ".join(str(x).split("/")[-1] for x in _items[:5])
+                            _extra = f" (+{len(_items) - 5} more)" if len(_items) > 5 else ""
+                            _parts.append(f"{_label} ({_item_names}{_extra})")
+                        else:
+                            _parts.append(_label)
+                    if _parts:
+                        emit.status("Context from: " + ", ".join(_parts) + ".")
+            except Exception:  # noqa: BLE001
+                pass
+
+        # --- Instant-ack: emit the background ack text when it is ready -----------------------
+        # At this point context assembly + the ack call have been running concurrently.  We
+        # collect the ack result NOW (it should be ~done by the time we reach here) and emit it
+        # as an EVENT_PARTIAL so the consumer streams it.  If not yet done we wait briefly; if
+        # it failed the future result is None and we skip.  Joining here (before the planner
+        # loop) ensures the background thread is cleaned up before run() returns.
+        if _ack_future is not None:
+            try:
+                _ack_text = _ack_future.result(timeout=5.0)
+                if _ack_text and _ack_text.strip():
+                    emit.emit(ProgressEvent(type=EVENT_PARTIAL, text=_ack_text.strip()))
+            except Exception:  # noqa: BLE001 — timeout, cancelled, or provider error: skip
+                pass
+            finally:
+                try:
+                    _ack_executor.shutdown(wait=False)
+                except Exception:  # noqa: BLE001
+                    pass
+
         # --- Attachments (multimodal): ONE path for chat uploads + panel context-docs ----------
         # Prepare against the model that WILL answer (model_hint or the default answer tier), so
         # native-vs-describe is decided by the real answering model's vision capability. The text
@@ -955,17 +1054,6 @@ class Orchestrator:
             if prepared.text_context:
                 context_view = (context_view + "\n\n" + prepared.text_context if context_view
                                 else prepared.text_context)
-
-        # If a handoff is configured, route events through a FanoutSink that flips live->bg on detach.
-        on_detach = None
-        active_sink = sink
-        if background_sink is not None and detach_check is not None:
-            from .adapters import FanoutSink
-            fan = FanoutSink(live=sink, background=background_sink) if sink is not None else \
-                FanoutSink(live=background_sink, background=background_sink)
-            active_sink = fan
-            on_detach = fan.detach
-        emit = _Emitter(active_sink, mode, self._status, detach_check=detach_check, on_detach=on_detach)
 
         def budget_exhausted() -> bool:
             size = sum(len(o.get("text", "")) + len(str(o.get("hits", ""))) for o in gathered)

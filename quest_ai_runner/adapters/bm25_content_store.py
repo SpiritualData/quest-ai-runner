@@ -538,8 +538,16 @@ class BM25ContentStore(ContextAssemblerBase):
             view_parts.append("\n".join(part_lines))
 
         context_view = "\n\n---\n\n".join(view_parts)
+
+        # --- Context transparency: one source entry for the BM25 arm -------------------------
+        _sources = (
+            [{"adapter": "bm25", "label": "content match", "items": [p for p, _ in kept]}]
+            if kept else []
+        )
+
         return AssembledContext(
             context_view=context_view,
             card_ids=card_ids,
             stale=[],
+            sources=_sources,
         )

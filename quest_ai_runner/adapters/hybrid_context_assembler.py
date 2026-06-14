@@ -163,9 +163,20 @@ class HybridContextAssembler(ContextAssemblerBase):
         # Use the non-None model_tier_hint (keyword takes priority if both set).
         tier_hint = kw_result.model_tier_hint or vec_result.model_tier_hint
 
+        # Merge sources from both arms (keyword first, then vector), preserving order.
+        merged_sources: List[dict] = []
+        seen_source_keys: set = set()
+        for src in (getattr(kw_result, "sources", None) or []) + \
+                   (getattr(vec_result, "sources", None) or []):
+            key = (src.get("adapter"), src.get("label"))
+            if key not in seen_source_keys:
+                seen_source_keys.add(key)
+                merged_sources.append(src)
+
         return AssembledContext(
             context_view=combined_view,
             model_tier_hint=tier_hint,
             card_ids=merged_ids,
             stale=merged_stale,
+            sources=merged_sources,
         )
