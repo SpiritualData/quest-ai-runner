@@ -1,0 +1,257 @@
+# Vector context layer — semantic orientation for every run
+
+> Status: design-of-record for the vector search capability added alongside
+> the existing keyword/IDF ``FileContextStore``.  Implemented behind the
+> ``VectorStore`` Protocol (defined in ``core.adapters``) so the core stays
+> dependency-free.  Heavy deps (qdrant-client, fastembed) live behind the
+> optional ``[qdrant]`` extra.
+
+---
+
+## Why a vector layer?
+
+The keyword/IDF ``FileContextStore`` is excellent at routing tasks to the
+**exact files** they mention (symbol names, path segments, identifiers).  It
+misses semantics: a task phrased as "clean up the payment pipeline" may not
+contain the token ``billing`` even if ``billing/`` is exactly where the work
+lives.
+
+Vector search closes that gap.  The two retrieval modes are **complementary**:
+
+| Mode | Strengths | Weaknesses |
+|------|-----------|------------|
+| Keyword/IDF (``FileContextStore``) | exact identifiers, symbols, paths | paraphrase, semantics |
+| Vector (``VectorContextAssembler``) | semantics, paraphrase, cross-lingual | rare tokens, exact ids |
+
+The ``HybridContextAssembler`` runs both in parallel and fuses the results,
+delivering higher recall than either alone.
+
+---
+
+## Local-filesystem Qdrant (the default)
+
+``QdrantVectorStore`` defaults to an **embedded** Qdrant instance whose
+state lives on the local filesystem.  No server is needed; no Docker, no
+cloud account.
+
+```python
+from quest_ai_runner.adapters.qdrant_vector_store import QdrantVectorStore
+
+# Default: state under <cwd>/.quest-context/qdrant
+store = QdrantVectorStore()
+
+# Or specify a path
+store = QdrantVectorStore(path="/data/my-project/.quest-context/qdrant")
+```
+
+The default embedder is ``fastembed`` (``BAAI/bge-small-en-v1.5``, 384-d).
+It runs locally via ONNX — no API key, no network call at embed time.
+
+Install the extra:
+
+```bash
+pip install 'quest-ai-runner[qdrant]'
+```
+
+---
+
+## Remote / self-hosted Qdrant
+
+Pass a ``url`` to connect to any Qdrant deployment (cloud, self-hosted):
+
+```python
+store = QdrantVectorStore(url="http://localhost:6333")
+# or
+store = QdrantVectorStore(url="https://my-cluster.qdrant.io", ...)
+```
+
+---
+
+## Custom embedder (BYO)
+
+Any callable ``(texts: List[str]) -> List[List[float]]`` works:
+
+```python
+def my_embedder(texts):
+    # call your own model / API
+    return [[0.1, 0.2, ...]] * len(texts)
+
+store = QdrantVectorStore(embedder=my_embedder, vector_size=1536)
+```
+
+---
+
+## Custom VectorStore (fully pluggable)
+
+You do not have to use Qdrant at all.  Any class that satisfies the
+``VectorStore`` Protocol (defined in ``quest_ai_runner.core.adapters``)
+works as a drop-in:
+
+```python
+from quest_ai_runner.core.adapters import VectorStoreBase, VectorHit
+
+class MyStore(VectorStoreBase):
+    def search(self, query, *, scope=None, top_k=8):
+        ...  # return List[VectorHit]; never raise
+    def upsert(self, items, *, scope=None):
+        ...  # embed + store; never raise
+    def sync(self, items, *, scope=None):
+        ...  # auto-update; return count; never raise
+```
+
+Wire it into ``VectorContextAssembler`` the same way as ``QdrantVectorStore``.
+
+---
+
+## AUTO-UPDATE: sync re-embeds only changed items
+
+The ``sync(items)`` method is the zero-management auto-update entry point.
+It:
+
+1. Fetches the stored ``fingerprint`` for each item id.
+2. Compares it to the fingerprint in the incoming ``items``.
+3. Re-embeds and upserts **only** items whose fingerprint changed or are
+   missing from the index.
+4. Returns the count of items re-embedded.
+
+Unchanged items are not touched.  Callers call ``sync`` on every run
+(e.g. with a list of card summaries + their sha256 fingerprints from the
+repo) and the index stays fresh with no manual re-index step.
+
+```python
+store.sync([
+    {"id": "billing/collate.py", "text": "def xfr_collate...", "fingerprint": "abc123"},
+    {"id": "core/orchestrator.py", "text": "class Orchestrator...", "fingerprint": "def456"},
+])
+# Returns 0 if both fingerprints match what is already stored.
+# Returns 1 if only one changed.
+```
+
+---
+
+## Agentic retrieval flow
+
+``VectorContextAssembler`` implements a four-step agentic retrieval when a
+``ModelProvider`` is wired:
+
+```
+Task text
+   │
+   ├─► [LLM] Generate N diverse queries (parallel queries for better recall)
+   │
+   ▼
+All queries (raw task + LLM-generated)
+   │
+   ├─► vector-search each query IN PARALLEL (ThreadPoolExecutor)
+   │      ↓ deduplicate hits by id, keep best score
+   ▼
+Candidate hits
+   │
+   ├─► [LLM] Review: select only hits genuinely relevant to the task
+   │
+   ▼
+Reviewed hits → confidence gate (score >= confidence_min_score)
+   │
+   ▼
+context_view (rendered hits) → AssembledContext → Orchestrator
+```
+
+When no provider is given the LLM steps are skipped: only the raw task text
+is searched and all hits above the confidence gate are kept.
+
+### Query generation
+
+The LLM is asked for ``num_queries`` (default 3) short, diverse queries.
+These are issued alongside the raw task text, so a single vector search
+call becomes ``num_queries + 1`` parallel searches.  All results are
+deduplicated by hit id, keeping the best score from any query.
+
+### LLM review
+
+After deduplication the LLM is shown the candidate hits and asked to select
+only those genuinely relevant to the task.  Irrelevant results are filtered
+out before the confidence gate.  If the review call fails, all candidates
+are kept (best-effort).
+
+### Confidence gate
+
+Only hits with ``score >= confidence_min_score`` survive into the context
+view.  When nothing qualifies the returned ``AssembledContext`` is empty and
+the caller falls back to plain Claude Code (the never-worse guarantee).
+
+---
+
+## Hybrid keyword + vector fusion (recommended)
+
+``HybridContextAssembler`` runs both assemblers IN PARALLEL and fuses their
+results:
+
+```python
+from quest_ai_runner.adapters.file_context_store import FileContextStore
+from quest_ai_runner.adapters.vector_context_assembler import VectorContextAssembler
+from quest_ai_runner.adapters.hybrid_context_assembler import HybridContextAssembler
+from quest_ai_runner.adapters.qdrant_vector_store import QdrantVectorStore
+
+keyword_asm = FileContextStore(".quest-context/cards", repo_root=".")
+vector_asm  = VectorContextAssembler(QdrantVectorStore())
+hybrid      = HybridContextAssembler(keyword=keyword_asm, vector=vector_asm)
+
+# Wire into RunnerConfig:
+config = RunnerConfig(..., context_assembler=hybrid)
+```
+
+The fused ``context_view`` contains clearly labelled sections:
+
+```
+## Keyword context (IDF cards)
+
+### Card: billing-collate-...
+billing/collate.py: xfr_collate_payments_7q2, PaymentCollector
+...
+
+---
+
+## Vector context (semantic hits)
+
+### Vector hit: billing/collate.py  (score=0.843)
+  path: billing/collate.py
+  text: def xfr_collate_payments_7q2(account_id): ...
+```
+
+``card_ids`` and ``stale`` are the union of both assemblers' outputs.  If
+both return empty the hybrid returns empty (caller falls back to baseline).
+
+---
+
+## Multi-tenant scoping
+
+Every operation accepts an optional ``scope`` dict, e.g.:
+
+```python
+scope = {"org_id": "acme", "team_id": "platform", "quest_id": "q-42"}
+store.search("payment pipeline", scope=scope)
+store.upsert(items, scope=scope)
+store.sync(items, scope=scope)
+```
+
+The store hashes the sorted scope items to derive a Qdrant collection name,
+creating one collection per unique scope.  Searches are fully isolated between
+scopes.
+
+When used via ``VectorContextAssembler``, the ``meta`` dict passed to
+``assemble(task_text, meta=meta)`` is forwarded directly as the scope.
+
+---
+
+## Quality notes
+
+Vector quality depends on the embedder.  The default ``fastembed`` model
+(``BAAI/bge-small-en-v1.5``, 384-d) is a lightweight general-purpose English
+model.  For codebases with heavy domain-specific terminology, a code-tuned
+model (e.g. ``jinaai/jina-embeddings-v2-base-code``) may give better recall
+at the cost of a larger model download.
+
+The vector layer is a **semantic orientation** layer, not a precision
+retrieval tool.  It surfaces candidates; the LLM review step and the
+confidence gate prevent low-quality hits from reaching the context.  Pair it
+with keyword/IDF via ``HybridContextAssembler`` for the best coverage.

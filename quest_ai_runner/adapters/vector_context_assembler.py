@@ -1,0 +1,309 @@
+"""VectorContextAssembler — ContextAssembler backed by a VectorStore.
+
+This assembler uses semantic vector search to retrieve task-relevant context.
+It is complementary to ``FileContextStore`` (keyword/IDF): keyword search
+catches exact identifiers and symbols; vector search catches semantics and
+paraphrase.  Use ``HybridContextAssembler`` to fuse both.
+
+AGENTIC RETRIEVAL FLOW
+----------------------
+When a ``ModelProvider`` is wired (the ``provider`` constructor arg), the
+assembler performs a fully *agentic* retrieval that uses the LLM in two places:
+
+1. **Parallel query generation.** The LLM generates ``num_queries`` diverse
+   search queries from the task text (one cheap ``answer`` call).  These are
+   searched IN PARALLEL alongside the raw task text.
+
+2. **LLM review / relevance filter.** After deduplication, the LLM reviews the
+   candidate hits and selects only those that are genuinely relevant to the
+   task.  Irrelevant hits never reach the context_view.
+
+3. **Confidence gate.** Only reviewed-relevant hits whose score exceeds
+   ``confidence_min_score`` are injected.  When nothing qualifies the returned
+   ``AssembledContext`` is empty and the caller falls back to plain Claude Code
+   (the never-worse guarantee).
+
+When no provider is given the agentic steps are skipped: the raw task text is
+the only query and all hits above the confidence gate are kept.
+
+AUTO-UPDATE via sync()
+----------------------
+``record()`` upserts the task text + outcome into the vector store so it
+compounds over time: future runs benefit from the grounding accumulated in
+prior runs.
+
+MULTI-TENANT SCOPING
+--------------------
+The ``meta`` dict passed to ``assemble(task_text, meta=...)`` is forwarded as
+``scope`` to the vector store, so searches are automatically scoped to the
+relevant org / team / quest.
+"""
+from __future__ import annotations
+
+import concurrent.futures
+import logging
+from typing import Any, Dict, List, Optional
+
+from ..core.adapters import AssembledContext, ContextAssemblerBase, VectorHit, VectorStore
+
+logger = logging.getLogger(__name__)
+
+# Maximum number of parallel search workers.  Bounded so we don't spawn a
+# thread per query on a machine with a tiny thread pool.
+_MAX_WORKERS = 8
+
+# Number of lines to show as a text snippet in the context view.
+_SNIPPET_LINES = 3
+
+
+def _snippet(text: str, lines: int = _SNIPPET_LINES) -> str:
+    """Return the first ``lines`` non-empty lines of ``text``."""
+    parts = [l for l in text.splitlines() if l.strip()][:lines]
+    return " | ".join(parts) if parts else text[:120]
+
+
+class VectorContextAssembler(ContextAssemblerBase):
+    """ContextAssembler that retrieves context via vector (semantic) search.
+
+    Parameters
+    ----------
+    vector_store:
+        Any object satisfying the ``VectorStore`` Protocol.
+    provider:
+        Optional ``ModelProvider`` used for:
+        - LLM query generation (generate diverse queries for better recall)
+        - LLM review (filter candidates to only those relevant to the task)
+        When ``None`` both steps are skipped.
+    query_model:
+        Model tier to use for the LLM steps.  Defaults to ``"haiku"`` (cheap).
+    num_queries:
+        How many extra LLM-generated queries to issue alongside the raw task
+        text.  Only used when ``provider`` is given.
+    top_k:
+        How many nearest neighbours to retrieve per query.
+    confidence_min_score:
+        Minimum similarity score for a hit to be considered.  Applied after the
+        LLM review step (or directly when no provider).  Set to ``0.0`` to keep
+        all hits.
+    max_in_view:
+        Maximum number of hits to include in the rendered context view.
+    """
+
+    def __init__(
+        self,
+        vector_store: VectorStore,
+        *,
+        provider: Any = None,
+        query_model: str = "haiku",
+        num_queries: int = 3,
+        top_k: int = 8,
+        confidence_min_score: float = 0.0,
+        max_in_view: int = 8,
+    ) -> None:
+        self._store = vector_store
+        self._provider = provider
+        self._query_model = query_model
+        self._num_queries = num_queries
+        self._top_k = top_k
+        self._confidence_min_score = confidence_min_score
+        self._max_in_view = max_in_view
+
+    # ------------------------------------------------------------------
+    # ContextAssemblerBase implementation
+    # ------------------------------------------------------------------
+
+    def assemble(
+        self, task_text: str, *, meta: Optional[Dict[str, Any]] = None
+    ) -> AssembledContext:
+        """Retrieve and render task-relevant context via vector search.  Never raises."""
+        try:
+            return self._assemble_inner(task_text, meta=meta)
+        except Exception:
+            logger.debug("VectorContextAssembler.assemble failed", exc_info=True)
+            return AssembledContext()
+
+    def record(self, task_text: str, outcome: Dict[str, Any]) -> None:
+        """Upsert a grounding point so the store compounds over time.  Never raises."""
+        try:
+            scope = outcome.get("scope") or None
+            item_id = f"outcome:{hash(task_text) & 0xFFFFFFFF}"
+            self._store.upsert(
+                [{"id": item_id, "text": task_text, "payload": outcome}],
+                scope=scope,
+            )
+        except Exception:
+            logger.debug("VectorContextAssembler.record failed", exc_info=True)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _generate_queries(self, task_text: str) -> List[str]:
+        """Use the LLM to generate diverse search queries.
+
+        Returns a list of query strings (may be empty on failure).  Never raises.
+        """
+        if self._provider is None:
+            return []
+        try:
+            prompt = (
+                f"Generate {self._num_queries} short, diverse search queries that "
+                f"would help retrieve relevant context for the following task. "
+                f"Output one query per line, no numbering, no extra text.\n\n"
+                f"Task: {task_text}"
+            )
+            raw = self._provider.answer(
+                [{"role": "user", "content": prompt}],
+                model=self._query_model,
+            )
+            queries = [
+                line.strip()
+                for line in raw.splitlines()
+                if line.strip() and not line.strip().startswith("#")
+            ]
+            return queries[: self._num_queries]
+        except Exception:
+            logger.debug("VectorContextAssembler._generate_queries failed", exc_info=True)
+            return []
+
+    def _search_parallel(
+        self,
+        queries: List[str],
+        scope: Optional[Dict[str, Any]],
+    ) -> List[VectorHit]:
+        """Search all queries IN PARALLEL; dedupe hits by id keeping best score."""
+        if not queries:
+            return []
+
+        best: Dict[str, VectorHit] = {}
+
+        def _search_one(q: str) -> List[VectorHit]:
+            try:
+                return self._store.search(q, scope=scope, top_k=self._top_k)
+            except Exception:
+                return []
+
+        n_workers = min(_MAX_WORKERS, len(queries))
+        try:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
+                futures = [pool.submit(_search_one, q) for q in queries]
+                for fut in concurrent.futures.as_completed(futures):
+                    try:
+                        for hit in fut.result():
+                            existing = best.get(hit.id)
+                            if existing is None or hit.score > existing.score:
+                                best[hit.id] = hit
+                    except Exception:
+                        pass
+        except Exception:
+            # Fall back to serial search.
+            for q in queries:
+                for hit in _search_one(q):
+                    existing = best.get(hit.id)
+                    if existing is None or hit.score > existing.score:
+                        best[hit.id] = hit
+
+        return list(best.values())
+
+    def _llm_review(
+        self,
+        task_text: str,
+        candidates: List[VectorHit],
+    ) -> List[VectorHit]:
+        """Ask the LLM to select which candidates are relevant to the task.
+
+        Returns the filtered list (same objects, different subset).  If the
+        provider is unavailable or the call fails, returns all candidates.
+        """
+        if self._provider is None or not candidates:
+            return candidates
+        try:
+            items_text = "\n".join(
+                f"[{i}] id={h.id} | score={h.score:.3f} | {_snippet(h.text or str(h.payload))}"
+                for i, h in enumerate(candidates)
+            )
+            prompt = (
+                f"You are reviewing candidate context items for relevance to a task.\n\n"
+                f"Task: {task_text}\n\n"
+                f"Candidates:\n{items_text}\n\n"
+                f"Output ONLY the indices (comma-separated) of the items that are genuinely "
+                f"relevant to the task. If none are relevant, output 'none'."
+            )
+            raw = self._provider.answer(
+                [{"role": "user", "content": prompt}],
+                model=self._query_model,
+            )
+            raw = raw.strip().lower()
+            if raw == "none" or not raw:
+                return []
+            # Parse indices; ignore anything that doesn't parse as int.
+            kept_indices = set()
+            for part in raw.replace(";", ",").split(","):
+                part = part.strip()
+                try:
+                    idx = int(part)
+                    if 0 <= idx < len(candidates):
+                        kept_indices.add(idx)
+                except ValueError:
+                    pass
+            if not kept_indices:
+                return []
+            return [candidates[i] for i in sorted(kept_indices)]
+        except Exception:
+            logger.debug("VectorContextAssembler._llm_review failed", exc_info=True)
+            return candidates  # on failure keep all (best-effort)
+
+    def _render_hits(self, hits: List[VectorHit]) -> str:
+        """Render a list of VectorHits into a human-readable context view string."""
+        parts: List[str] = []
+        for hit in hits:
+            path = hit.payload.get("path", "") or ""
+            path_note = f"  path: {path}" if path else ""
+            snippet = _snippet(hit.text) if hit.text else ""
+            snippet_note = f"  text: {snippet}" if snippet else ""
+            part_lines = [f"### Vector hit: {hit.id}  (score={hit.score:.3f})"]
+            if path_note:
+                part_lines.append(path_note)
+            if snippet_note:
+                part_lines.append(snippet_note)
+            parts.append("\n".join(part_lines))
+        return "\n\n---\n\n".join(parts)
+
+    def _assemble_inner(
+        self, task_text: str, *, meta: Optional[Dict[str, Any]] = None
+    ) -> AssembledContext:
+        scope = meta or None
+
+        # Step a: build query list.
+        extra_queries = self._generate_queries(task_text)
+        all_queries = [task_text] + extra_queries
+
+        # Step b: vector-search all queries IN PARALLEL; dedupe.
+        candidates = self._search_parallel(all_queries, scope)
+
+        if not candidates:
+            return AssembledContext()
+
+        # Step c: LLM review when provider is available.
+        if self._provider is not None:
+            candidates = self._llm_review(task_text, candidates)
+
+        # Step d: confidence gate.
+        kept = [
+            h for h in candidates if h.score >= self._confidence_min_score
+        ]
+        if not kept:
+            return AssembledContext()
+
+        # Sort by score descending, cap at max_in_view.
+        kept.sort(key=lambda h: h.score, reverse=True)
+        kept = kept[: self._max_in_view]
+
+        # Step e: render.
+        context_view = self._render_hits(kept)
+        card_ids = [h.id for h in kept]
+        return AssembledContext(
+            context_view=context_view,
+            card_ids=card_ids,
+            stale=[],
+        )

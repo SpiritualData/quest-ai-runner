@@ -27,6 +27,14 @@ The five roles:
     ``run(context_view=...)`` before planning starts. Optional: consumers that omit it get
     exactly today's reactive-gather behaviour.
 
+  * ``VectorStore`` — OPTIONAL VECTOR ORIENTATION. Embeds items and queries, upserts points
+    into a collection scoped by org/team/quest, and retrieves semantically similar candidates.
+    Complements keyword/IDF (``FileContextStore``) rather than replacing it: keyword catches
+    exact identifiers; vectors catch semantics. The ``sync`` method is the AUTO-UPDATE entry
+    point: it re-embeds only items whose fingerprint changed, so the index stays fresh with
+    zero user management. Heavy deps (qdrant-client, fastembed) are optional; the Protocol is
+    defined here in stdlib so the core stays dependency-free.
+
 All five are ``typing.Protocol`` so a consumer can satisfy them structurally (duck typing) —
 no inheritance required — but ABCs (``RetrievalAdapterBase`` etc.) are also offered for
 implementers who prefer explicit subclassing. Keeping these tiny and dependency-free is the
@@ -332,9 +340,115 @@ class ContextAssembler(Protocol):
         """Best-effort write-back of the run outcome. Never raises."""
 
 
+# ---------------------------------------------------------------------------
+# VectorStore: optional VECTOR ORIENTATION role (Protocol + ABC, stdlib-only).
+# Heavy deps (qdrant-client, fastembed) live in adapters.qdrant_vector_store
+# behind the [qdrant] optional extra.  This Protocol is stdlib so the core
+# stays dependency-free.
+# ---------------------------------------------------------------------------
+
+@dataclass
+class VectorHit:
+    """One result returned by a VectorStore search.
+
+    Fields:
+      ``id``      -- the item id as given to ``upsert``/``sync``.
+      ``score``   -- similarity score (higher is more similar; range depends on metric).
+      ``text``    -- the item text (may be empty if the store did not return it).
+      ``payload`` -- arbitrary metadata attached at upsert time.
+    """
+    id: str
+    score: float
+    text: str = ""
+    payload: Dict[str, Any] = field(default_factory=dict)
+
+
+@runtime_checkable
+class VectorStore(Protocol):
+    """OPTIONAL VECTOR ORIENTATION.  Semantic search + auto-updating index.
+
+    Implementations embed items internally (they manage the embedder); callers
+    pass raw text.  All methods NEVER raise — return [] / 0 on any error so that
+    a missing or degraded vector store falls back gracefully to keyword search.
+
+    ``search`` — embed ``query`` and retrieve up to ``top_k`` nearest neighbours
+                 from the scope-derived collection.
+    ``upsert`` — embed item texts and upsert points keyed by item id, storing
+                 payload + fingerprint.  Each item dict: {id, text, payload?, fingerprint?}.
+    ``sync``   — AUTO-UPDATE: fetch stored fingerprints, re-embed+upsert ONLY items
+                 whose ``fingerprint`` differs from what is stored or are missing.
+                 Returns the count of items re-embedded.  This is the zero-management
+                 auto-update entry point: changed items are lazily re-indexed on use.
+
+    ``scope``  — a dict (e.g. {org_id, team_id, quest_id}) that selects which
+                 collection to operate on.  None means the default collection.
+    """
+
+    def search(
+        self,
+        query: str,
+        *,
+        scope: Optional[Dict[str, Any]] = None,
+        top_k: int = 8,
+    ) -> "List[VectorHit]":
+        """Embed ``query`` and return the top-``top_k`` nearest hits.  Never raises."""
+
+    def upsert(
+        self,
+        items: "List[Dict[str, Any]]",
+        *,
+        scope: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Embed item texts and upsert into the scope collection.  Never raises."""
+
+    def sync(
+        self,
+        items: "List[Dict[str, Any]]",
+        *,
+        scope: Optional[Dict[str, Any]] = None,
+    ) -> int:
+        """AUTO-UPDATE: re-embed only changed/new items; return count re-embedded.  Never raises."""
+
+
 # --- ABC variants for implementers who prefer explicit subclassing -----------
 
 import abc
+
+
+class VectorStoreBase(abc.ABC):
+    """ABC variant of VectorStore for explicit subclassing.
+
+    Subclasses must implement search / upsert / sync.  All three must never raise
+    from the public surface (wrap internals in try/except).
+    """
+
+    @abc.abstractmethod
+    def search(
+        self,
+        query: str,
+        *,
+        scope: Optional[Dict[str, Any]] = None,
+        top_k: int = 8,
+    ) -> "List[VectorHit]":
+        """Embed ``query`` and return top-``top_k`` nearest hits.  Never raises."""
+
+    @abc.abstractmethod
+    def upsert(
+        self,
+        items: "List[Dict[str, Any]]",
+        *,
+        scope: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Embed item texts and upsert into the scope collection.  Never raises."""
+
+    @abc.abstractmethod
+    def sync(
+        self,
+        items: "List[Dict[str, Any]]",
+        *,
+        scope: Optional[Dict[str, Any]] = None,
+    ) -> int:
+        """AUTO-UPDATE: re-embed only changed/new items; return count.  Never raises."""
 
 
 class ContextAssemblerBase(abc.ABC):
