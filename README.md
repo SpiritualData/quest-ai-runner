@@ -284,19 +284,36 @@ python -m pytest -q         # tests use stub adapters + a mock Quest client — 
 The tests need no network and no API key: the core loop runs against a stub `ModelProvider` +
 stub `RetrievalAdapter`, and the runner runs against a mock `QuestClient`.
 
+## The context engine, and the part that compounds
+
+The runner ships a context engine that orients an agent to the right place before it starts,
+across three complementary arms:
+
+- **Docstring cards** (zero-dependency): a no-LLM initial pass that indexes the code's **own
+  docstrings** (each file's written description), like the index at the back of a book.
+- **Semantic vectors** over those summaries (optional Qdrant): "which area is this about?"
+- **BM25 over actual content** (optional): "where does this exact identifier or phrase appear?"
+
+The part worth pitching is the one that **keeps getting better on its own**: a **semantic memory of
+past tasks and the context they used**. Every completed task records a `task -> context`
+association (the task, the files it touched, a short summary), embedded so a **future similar task
+retrieves it by meaning**. It compounds where work actually happens, never by summarizing the whole
+corpus, and it ages honestly: associations are **recency-weighted** (a similar task from yesterday
+outranks one from a year ago), **merged** instead of duplicated, and **capped** with oldest-first
+eviction. The longer the system runs, the better it orients, with no manual indexing.
+
 ## Evaluation
 
-The context layer (`FileContextStore`) is evaluated on a copy of this repo against a
-Claude Code baseline. Key measured numbers:
-
-Routing accuracy (target file in top-1 / top-3), 15 labeled tasks on a copy of this repo:
+Routing accuracy (target file in top-1 / top-3), 15 labeled tasks on a copy of this repo. The
+big jump is from extracting the code's own **docstrings** for the summaries (free, no LLM):
 
 | Retriever | top-1 | top-3 | notes |
 |---|---|---|---|
 | grep (term frequency) | 13% | 66% | weak baseline |
-| keyword / IDF cards | 13% | 53% | zero-dependency, lexical only, NOT ideal |
-| **vector (semantic)** | **40%** | **73%** | local Qdrant + `bge-small`, a SMALL-model FLOOR |
-| **hybrid (vector + keyword)** | union recall **86%** | | both candidate sets, agent reviews and picks |
+| keyword / IDF (symbol names only) | 13% | 53% | the old thin summaries |
+| keyword / IDF (**docstring-rich**) | **53%** | **93%** | extract the code's own docstrings, no LLM |
+| vector (semantic, `bge-small`) | 53% | 80% | small-model FLOOR; a SOTA embedder lifts it |
+| **hybrid (vector + keyword)** | union recall **93%** | | both candidate sets, agent reviews and picks |
 
 Other measured properties:
 
@@ -307,14 +324,13 @@ Other measured properties:
 | Tool-call rounds, Claude Code with a correct grounding vs alone | 1.0 vs 3.0 (3x fewer) |
 | Correctness (cold / warm, per-sample LLM judge) | 100% / 100%, 5/5 adversarial never misled |
 
-**What the numbers say honestly.** Keyword/IDF alone is weak (lexical, grep-ballpark).
-Semantic **vector search is the real orientation win** (40% / 73% top-1/top-3), and that is a
-floor: it uses a tiny local model (`bge-small`); a SOTA API embedder or a larger model raises it,
-and the embedder is a pluggable callable for exactly that. **Hybrid** (keyword + vectors, your
-research's complementarity) surfaces the right file in its candidates **86%** of the time, beating
-either alone, because an agent reviews both sets. With the right grounding surfaced, Claude Code
-confirms in 1 tool round instead of 3, correctness never regresses, and a confidence gate falls
-back to plain Claude Code when nothing is confident, so the layer never makes a run worse.
+**What the numbers say honestly.** The summaries are what matter: indexing the code's own
+docstrings took keyword routing from 13% / 53% to **53% / 93%** for free, and hybrid surfaces the
+right file **93%** of the time. The vector arm is a small-model floor (`bge-small`); a SOTA API
+embedder, or a larger one, raises it, and the embedder is a pluggable callable. With the right
+grounding surfaced, Claude Code confirms in 1 tool round instead of 3, correctness never regresses,
+and a confidence gate falls back to plain Claude Code when nothing is confident, so the layer never
+makes a run worse, and the task-memory makes it better over time.
 
 Full methodology, dataset, and honest limitations: see [evaluation/README.md](evaluation/README.md).
 Re-run: `python evaluation/eval_deterministic.py` (free) and
