@@ -284,6 +284,31 @@ python -m pytest -q         # tests use stub adapters + a mock Quest client — 
 The tests need no network and no API key: the core loop runs against a stub `ModelProvider` +
 stub `RetrievalAdapter`, and the runner runs against a mock `QuestClient`.
 
+## Evaluation
+
+The context layer (`FileContextStore`) is evaluated on a copy of this repo against a
+Claude Code baseline. Key measured numbers:
+
+| Metric | Value |
+|---|---|
+| Cold-start bootstrap | 65 cards, ~240 ms, 0 LLM calls |
+| Staleness detection | precision 1.00, recall 1.00, 0 LLM calls |
+| Tool-call rounds vs Claude Code alone (cold avg / warm avg) | 3.0 / 1.0 (3x fewer) |
+| Correctness cold / warm | 100% / 100% |
+| Adversarial (wrong hint) | PASS, model not misled |
+| Keyword routing (top-1 / top-3) | grep-ballpark, noisy, NOT the win |
+
+**The proven win is not retrieval quality.** Keyword routing is roughly grep level and
+Claude Code's own semantic search beats it, so we do not claim a routing win. The win is
+(a) 3x fewer tool-call rounds when a grounding is cached, (b) correctness never regresses and
+wrong or stale context does not mislead, and (c) deterministic zero-token freshness that Claude
+Code lacks. The honest limitation: the LLM sample is small and token savings scale with repo
+size. See the eval doc for the full, unvarnished numbers.
+
+Full methodology, dataset, and honest limitations: see [evaluation/README.md](evaluation/README.md).
+Re-run: `python evaluation/eval_deterministic.py` (free) and
+`python evaluation/eval_vs_claude_code.py` (spends a little Haiku token, runs on a repo copy).
+
 ## Contributing
 
 Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) and
