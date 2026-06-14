@@ -190,14 +190,15 @@ class QdrantVectorStore(VectorStoreBase):
                 return []
             coll = self._collection_name(scope)
             self._ensure_collection(coll)
-            results = self._client.search(
+            # Use query_points (the current Qdrant API; the old .search() was removed).
+            response = self._client.query_points(
                 collection_name=coll,
-                query_vector=vecs[0],
+                query=vecs[0],
                 limit=top_k,
                 with_payload=True,
             )
             hits: List[VectorHit] = []
-            for r in results:
+            for r in response.points:
                 payload = dict(r.payload) if r.payload else {}
                 text = payload.pop("_text", "") or ""
                 hits.append(
