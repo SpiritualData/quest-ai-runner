@@ -7,6 +7,23 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Three-arm context engine + compounding task memory.** Beyond the keyword `FileContextStore`,
+  the runner now orients an agent semantically. The bootstrap extracts the code's OWN docstrings
+  (no LLM) for rich summaries (measured: keyword routing 13/53 -> 53/93 on the eval set).
+  `VectorStore` is a new pluggable adapter with a default local-filesystem Qdrant
+  (`QdrantVectorStore`, `[qdrant]` extra, embedder pluggable: `bge-small` 53/80, `bge-base`
+  60/86, SOTA API higher); `BM25ContentStore` (`[bm25]` extra) searches the actual file CONTENT
+  (exact identifiers/phrases, parallel multi-query). `HybridContextAssembler` fuses keyword +
+  vectors (union recall 93). A `VectorContextAssembler` records `task -> context` associations
+  (the headline compounding memory): recency-weighted (yesterday outranks a year ago),
+  merged/deduped by task slug, capped with oldest-first eviction. Cold-start seeds docstring
+  cards into the vector store on first use, auto-updated (re-embed only changed). A confidence
+  gate falls back to plain Claude Code when nothing is confident (never-worse). `RunnerConfig`
+  gains `vector_store` (default becomes hybrid when set). UX: `OrchestratorConfig.instant_ack`
+  (a concurrent one-second acknowledgment, no added latency) and `AssembledContext.sources`
+  (transparency: which adapter surfaced what), emitted as a status. Multi-tenant `scope`
+  threaded for the Quest org/team/quest path. Honest eval (routing + Claude Code A/B + LLM
+  judge) on a repo copy, metrics in the README and `evaluation/`.
 - **Opt-in reps run tasks AS their Quest persona by DEFAULT.** The rep-sync capability is still
   OFF unless a consumer supplies `RunnerConfig.rep_sync_resolver`, but the moment it is on, the
   default does the complete thing with NO extra glue: the poller resolves the rep, PULLS its Quest

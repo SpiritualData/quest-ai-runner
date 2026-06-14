@@ -312,8 +312,13 @@ big jump is from extracting the code's own **docstrings** for the summaries (fre
 | grep (term frequency) | 13% | 66% | weak baseline |
 | keyword / IDF (symbol names only) | 13% | 53% | the old thin summaries |
 | keyword / IDF (**docstring-rich**) | **53%** | **93%** | extract the code's own docstrings, no LLM |
-| vector (semantic, `bge-small`) | 53% | 80% | small-model FLOOR; a SOTA embedder lifts it |
+| vector (`bge-small`, 384d) | 53% | 80% | zero-config local floor |
+| vector (`bge-base`, 768d) | **60%** | **86%** | a larger local model, still no API key |
 | **hybrid (vector + keyword)** | union recall **93%** | | both candidate sets, agent reviews and picks |
+
+The embedder is a pluggable callable: a bigger local model (`bge-base`) already lifts vector
+routing from 53/80 to 60/86 with no API key, and a SOTA API embedder lifts it further. The
+quality dial is config, not a redesign.
 
 Other measured properties:
 
