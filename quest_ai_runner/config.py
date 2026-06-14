@@ -62,6 +62,12 @@ class RunnerConfig:
     # None → ``<corpus_root or cwd>/.quest-context``. Cards are machine-written local state; the
     # consumer should gitignore this path (the runner repo gitignores ``.quest-context/``).
     context_cards_dir: Optional[str] = None
+    # Optional VECTOR STORE for semantic orientation. When set (e.g. a QdrantVectorStore, local
+    # by default or pointed at the backend's Qdrant), and context_assembler is left _AUTO, the
+    # default becomes a HYBRID: keyword/IDF cards FUSED with vector search (the two are
+    # complementary). The vector side runs agentic retrieval (LLM query-gen + parallel search +
+    # LLM review) when model_provider is set. Leave None for keyword-only (zero-dependency).
+    vector_store: Any = None
 
     # --- the org's skills/corpus path (for orgs); generic, optional ---
     corpus_root: Optional[str] = None
@@ -176,14 +182,21 @@ def resolve_context_assembler(cfg: RunnerConfig):
     chosen = cfg.context_assembler
     if chosen is not _AUTO_CONTEXT:
         return chosen  # an explicit instance, or None to disable
-    # Default-on: build a FileContextStore. Local import avoids an adapters<->config import cycle.
+    # Default-on: build a FileContextStore (keyword/IDF). Local import avoids a cycle.
     try:
         import os
 
         from .adapters import FileContextStore
         root = cfg.corpus_root or os.getcwd()
         cards_dir = cfg.context_cards_dir or os.path.join(root, ".quest-context")
-        return FileContextStore(cards_dir, repo_root=root)
+        keyword = FileContextStore(cards_dir, repo_root=root)
+        # If a vector store is configured, the default becomes a HYBRID: keyword/IDF FUSED with
+        # semantic vector search (the two are complementary). Otherwise keyword-only.
+        if cfg.vector_store is not None:
+            from .adapters import HybridContextAssembler, VectorContextAssembler
+            vector = VectorContextAssembler(cfg.vector_store, provider=cfg.model_provider)
+            return HybridContextAssembler(keyword=keyword, vector=vector)
+        return keyword
     except Exception:  # noqa: BLE001 — never let context wiring break runner construction
         return None
 
