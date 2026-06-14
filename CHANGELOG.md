@@ -7,6 +7,33 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Fifth adapter role: `ContextAssembler` (PRE-FLIGHT CONTEXT)** -- an optional adapter that is
+  called ONCE, guaranteed, before the plan->gather loop starts. `assemble(task_text)` returns an
+  `AssembledContext` (context_view string + optional model_tier_hint + card_ids + stale list); the
+  orchestrator injects `context_view` into the planner prompt and, when no explicit `model_hint`
+  was passed by the caller, applies `model_tier_hint` as the run's model override. `record(task_text,
+  outcome)` is called after the run as a best-effort write-back (never raises). The adapter is
+  wired via `RunnerConfig.context_assembler` and forwarded to `Orchestrator(context_assembler=...)`;
+  omitting it gives exactly the prior reactive-gather behaviour. The Protocol (`ContextAssembler`,
+  structural) and the ABC (`ContextAssemblerBase`, nominal) live in `core/adapters.py`; the value
+  object (`AssembledContext`) is a plain dataclass alongside them. Reference implementation:
+  `adapters.FileContextStore` -- a stdlib-only ContextAssembler backed by per-card JSON files
+  (one file per task slug); selects cards by keyword overlap with the task, checks pinned file
+  freshness via sha256 + mtime (and optionally git blob SHA), renders a context_view string, and
+  writes back an upserted card on each run. Atomic writes (tmp + os.replace). No third-party deps.
+- **Centralized prompt doctrine (`core/context_doctrine.py`)** -- `SUFFICIENCY_GATE` and
+  `MODEL_TIER_GATE` are module-level constants woven into `PLANNER_PROMPT` at module load, so the
+  sufficiency checklist (read-before-acting, cheap-pass discipline, context-dry signal) and
+  model-tier escalation rule (haiku/sonnet/opus; escalate one tier on a failed verification) are
+  always applied without duplicating text. Both constants contain NO literal `{`/`}` characters,
+  so they concatenate safely into the `.format()`-able prompt string. `DEEP_CONTEXT_DOCTRINE`
+  combines both gates into a block suitable for prepending to a deep-runner's `context_preamble`;
+  `compose_deep_preamble(base, assembled)` builds the full preamble in one call (doctrine + base +
+  optional assembled context_view), so spawned deep agents obey the same discipline as the
+  orchestrator. The `PLANNER_PROMPT` constant is now assembled at module load from named parts
+  (`_PLANNER_HEAD`, `_PLANNER_ACTIONS`, `_PLANNER_TAIL`) plus the two gate strings, keeping the
+  `.format()` call in `_plan()` unchanged.
+
 - **Multimodal (image) + file-attachment support (the runner owns multimodal)** — the text
   provider does not do multimodal, so the runner does. A new standard handler
   `core/attachments.py` (`prepare_attachments(attachments, *, model, provider, vision_provider,

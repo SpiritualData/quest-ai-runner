@@ -18,6 +18,12 @@ htmlcov/
 qar_state.json
 *_state.json
 
+# ContextAssembler cards (FileContextStore) — machine-written, mutate every run, rebuildable.
+# Treat as local state, not source: inspectable/diffable locally but not committed. Promote
+# durable knowledge to a committed CLAUDE.md context-map instead. A consumer may set cards_dir
+# elsewhere (e.g. from an env var) and gitignore that path in their own repo.
+.quest-context/
+
 # Local secrets / consumer config — never commit
 .env
 .env.*

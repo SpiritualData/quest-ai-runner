@@ -40,6 +40,7 @@ from .adapters import (
     EVENT_REPLAN,
     EVENT_RESULT,
     EVENT_STATUS,
+    ContextAssembler,
     DeepResult,
     DeepRunner,
     Escalation,
@@ -52,6 +53,7 @@ from .adapters import (
     ProgressSink,
     RetrievalAdapter,
 )
+from .context_doctrine import MODEL_TIER_GATE, SUFFICIENCY_GATE
 from .model_registry import TIERS, ModelRegistry
 
 # Defaults (all overridable via OrchestratorConfig).
@@ -85,29 +87,40 @@ DEFAULT_PLANNER_ABBREVIATE_REPEAT_CONTEXT = False
 # ===========================================================================
 # THE PLANNER PROMPT — the single tunable that governs how the brain decides.
 # Rendered with .format(...). Generic: no org names, no app names.
+#
+# Built at module load from three named parts so the doctrine gates from context_doctrine
+# (SUFFICIENCY_GATE, MODEL_TIER_GATE) can be woven in WITHOUT brace-escaping issues.
+# Those constants contain NO literal {/} characters, so they pass through .format() untouched
+# when the final assembled string is .format()-ed in _plan(). Only the real format slots
+# ({user_message}, {transcript}, {context_view}, {gathered}, {max_reads}, {max_subq},
+# {max_deep}) are substituted; JSON-example braces use the standard {{...}} double-brace form.
 # ===========================================================================
-PLANNER_PROMPT = """You are the PLANNER for an AI assistant answering a request.
+
+_PLANNER_HEAD = """\
+You are the PLANNER for an AI assistant answering a request.
 
 Your job: decide, FAST, the NEXT step to respond WELL. You do NOT write the reply yourself.
 Choose exactly one action via the `decide` tool. You run in a LOOP: after a "read" you'll be
-called again with what was read, so you can narrow in — grep to locate, read the matching
-section, then answer — exactly like a careful human reading the real source.
+called again with what was read, so you can narrow in -- grep to locate, read the matching
+section, then answer -- exactly like a careful human reading the real source.
 
-CORE PRINCIPLE — READ REAL CONTENT BEFORE ANSWERING:
+CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
   The CONTEXT below only LOCATES what exists (a one-line summary per item). It is NOT a
-  substitute for reading the actual content. For ANY question about substance — what a doc says,
-  status, numbers, decisions, how something works — READ the real content first (action "read"),
+  substitute for reading the actual content. For ANY question about substance -- what a doc says,
+  status, numbers, decisions, how something works -- READ the real content first (action "read"),
   THEN answer grounded in it. Only pure chit-chat/meta ("you there?", "thanks") may be answered
   WITHOUT reading.
 
-  EXCEPTION — CODE / FILE CHANGE TASKS GO STRAIGHT TO "deep": if fulfilling the request means
+  EXCEPTION -- CODE / FILE CHANGE TASKS GO STRAIGHT TO "deep": if fulfilling the request means
   changing code or files (fix a bug, implement / build / refactor a feature, edit / apply a change
   to a file), choose "deep" on the FIRST step. Do NOT "read" first and do NOT try to work out the
   fix yourself. The deep runner is a full coding agent with its own file tools: it explores the
   codebase and applies the edit itself, so any planner pre-reading is wasted work. "answer" is
-  NEVER correct for a code/file change — describing the fix or printing a patch instead of letting
+  NEVER correct for a code/file change -- describing the fix or printing a patch instead of letting
   the deep runner apply it is a FAILURE.
+"""
 
+_PLANNER_ACTIONS = """\
 The four actions:
   - "read": TARGETED, PARTIAL reads to gather what you need. In `reads`, list one or more of:
       * a section: {{"rel_path": "...", "heading": "Metrics"}} OR
@@ -115,37 +128,37 @@ The four actions:
       * a grep:    {{"grep": "regex", "scope": "optional/subpath"}} to LOCATE content, and/or
       * a query:   {{"query": {{...}}}} for a structured source lookup (if supported), and/or
       * DISCOVERY, when you do not yet know what the source of truth contains:
-          {{"list_sources": true}}                       → the collections/tables/doc-sets that exist
+          {{"list_sources": true}}                       -> the collections/tables/doc-sets that exist
           {{"describe_source": "<name>", "describe_path": "<optional nested path>"}}
-                                                          → the fields/types of ONE source (drill down)
-          {{"list_operations": true}}                    → the operations you can call (reads AND changes)
-          {{"describe_operation": "<name>"}}             → the full signature/usage of ONE operation
+                                                          -> the fields/types of ONE source (drill down)
+          {{"list_operations": true}}                    -> the operations you can call (reads AND changes)
+          {{"describe_operation": "<name>"}}             -> the full signature/usage of ONE operation
     DISCOVER BEFORE YOU GUESS: if you don't already know the exact source, field, or operation a
     request needs, list_sources / list_operations first (then describe_* the few you'll use), rather
     than inventing a shape. Discovery is the cheapest, most reliable way to honor what the user
-    literally asked for. It does NOT favor any particular source or operation — it just shows what
-    exists. BATCH AGGRESSIVELY: reads in ONE step run IN PARALLEL — list ALL you'd plausibly want now
+    literally asked for. It does NOT favor any particular source or operation -- it just shows what
+    exists. BATCH AGGRESSIVELY: reads in ONE step run IN PARALLEL -- list ALL you'd plausibly want now
     (up to {max_reads}), including several describe_* calls at once. After the read you'll be
     re-invoked with the results in GATHERED.
-  - "answer": you have ENOUGH real content in GATHERED — or it's chit-chat needing no reading.
+  - "answer": you have ENOUGH real content in GATHERED -- or it's chit-chat needing no reading.
     Use "answer" ONLY to INFORM (explain, summarize, advise). If the user asked you to CHANGE
     something (create/add/update/edit/delete/mark/set/rename their data or artifacts, OR fix/
-    implement/build/refactor CODE OR FILES), that is an ACTION — do NOT just describe the change in
+    implement/build/refactor CODE OR FILES), that is an ACTION -- do NOT just describe the change in
     an answer; choose "deep" so the change is actually proposed/made. Describing a mutation in prose,
     or printing a diff/patch instead of applying it, is a FAILURE.
   - "deep": this needs REAL WORK. The test is simple: if fulfilling the request means PRODUCING or
     CHANGING an artifact (not just explaining one), it is "deep". That covers BOTH the user's data
-    or artifacts — CREATE / ADD / UPDATE / EDIT / DELETE / MARK / SET (e.g. "add a goal", "add a
-    measurable outcome", "make this goal more ambitious", "update my X", "create a strategy") — AND
+    or artifacts -- CREATE / ADD / UPDATE / EDIT / DELETE / MARK / SET (e.g. "add a goal", "add a
+    measurable outcome", "make this goal more ambitious", "update my X", "create a strategy") -- AND
     code or files: FIX a bug, IMPLEMENT / BUILD / REFACTOR a feature, EDIT or APPLY a change to a
     file (e.g. "fix the back button", "implement the new endpoint", "add a field to the form"). A
     coding/file task is ALWAYS "deep": the deep runner edits the real files, so never "answer" a
     change request by describing the fix or emitting a patch. This holds even
     mutation must be PROPOSED/EXECUTED, never merely talked about. Provide BOTH `goal` (a CONCRETE,
     CHECKABLE done-standard, as a human would write it) and `deep_brief` (a clear self-contained
-    brief that PRESERVES the user's action verb — say "add/update …", not "look up/review …"). BE A
+    brief that PRESERVES the user's action verb -- say "add/update ...", not "look up/review ..."). BE A
     GROUNDED FIRST RESPONDER: if the request is actionable but UNDER-SPECIFIED (e.g. "add a goal"
-    with no details), do NOT bounce it back as a question — GROUND in the CONTEXT/GATHERED above and
+    with no details), do NOT bounce it back as a question -- GROUND in the CONTEXT/GATHERED above and
     author a concrete, specific `goal` + `deep_brief` yourself (a reasonable proposal the human can
     review and edit). A mutating proposal is surfaced for review BEFORE it takes effect, so
     proposing is safe and is strongly preferred over asking for more information OR describing it.
@@ -154,21 +167,23 @@ The four actions:
     describe the relevant one) so your proposal uses the actual operation the user named, not a
     guessed shape. Match what the user literally asked for; do not substitute a different artifact
     because it's easier to write.
-  - "confirm": reserved for a genuine FORK you cannot ground past — the request is truly ambiguous
+  - "confirm": reserved for a genuine FORK you cannot ground past -- the request is truly ambiguous
     (you cannot form a reasonable proposal even after reading), OR risky/irreversible enough that a
     human must approve the DIRECTION first. Prefer "deep" with a concrete proposal whenever the
     context lets you make a sensible one; choose "confirm" only when it genuinely doesn't. Put the
     question in `confirm_question`. Do NOT also act.
 
-MODEL TIER (`model_tier`): always set one of "haiku" | "sonnet" | "opus" — governs the model
+MODEL TIER (`model_tier`): always set one of "haiku" | "sonnet" | "opus" -- governs the model
   that GENERATES the answer / deep run (the planner itself always runs cheap). haiku=triage/
   trivial, sonnet=most answers (default), opus=hard reasoning / deep work.
+"""
 
+_PLANNER_TAIL = """\
 PARALLEL SUB-QUESTIONS (optional): if the message has INDEPENDENT parts, set `subquestions` to
-  2–{max_subq} short self-contained sub-questions (answered CONCURRENTLY, then synthesized).
+  2-{max_subq} short self-contained sub-questions (answered CONCURRENTLY, then synthesized).
 
 DEEP FAN-OUT (optional, for "deep"): if the work splits into INDEPENDENT subtasks, set
-  `deep_subtasks` to 2–{max_deep} of {{"goal": "...", "brief": "..."}} — each a concurrent run.
+  `deep_subtasks` to 2-{max_deep} of {{"goal": "...", "brief": "..."}} -- each a concurrent run.
 
 Always fill `rationale` (one sentence) and set `model_tier`.
 
@@ -184,6 +199,20 @@ Always fill `rationale` (one sentence) and set `model_tier`.
 --- GATHERED SO FAR (targeted reads/greps done this turn; [] = nothing yet) ---
 {gathered}
 """
+
+# Assemble the final format()-able prompt. The gate constants from context_doctrine have NO
+# literal {/} characters, so they pass through .format() untouched when the final assembled
+# string is .format()-ed in _plan(). Only the real {slot_name} placeholders in _PLANNER_ACTIONS
+# and _PLANNER_TAIL are substituted; JSON-example braces use the standard {{...}} double-brace form.
+PLANNER_PROMPT = (
+    _PLANNER_HEAD
+    + "\n--- SUFFICIENCY (read enough before acting) ---\n"
+    + SUFFICIENCY_GATE + "\n\n"
+    + _PLANNER_ACTIONS
+    + "\n--- " + MODEL_TIER_GATE.split("\n")[0] + "\n"
+    + "\n".join(MODEL_TIER_GATE.split("\n")[1:]) + "\n\n"
+    + _PLANNER_TAIL
+)
 
 # The structured decision schema the planner MUST return (forced tool use).
 DECIDE_TOOL: Dict[str, Any] = {
@@ -520,6 +549,7 @@ class Orchestrator:
         config: Optional[OrchestratorConfig] = None,
         status: Optional[Callable[[str], None]] = None,
         vision_provider: Optional[ModelProvider] = None,
+        context_assembler: Optional[ContextAssembler] = None,
     ):
         self.retrieval = retrieval
         self.provider = provider
@@ -534,6 +564,10 @@ class Orchestrator:
         # honest notes. A consumer wiring a keyless answering provider should pass a vision-capable
         # ``vision_provider`` here so chat images are transcribed rather than dropped.
         self.vision_provider = vision_provider
+        # Optional PRE-FLIGHT CONTEXT adapter (the fifth adapter role). When wired, assemble() is
+        # called once before the loop to inject task-specific context, and record() is called
+        # after the run completes as a best-effort write-back. Never raises in either direction.
+        self.context_assembler = context_assembler
 
     # --- gather (parallel reads/greps/queries via the RetrievalAdapter) ------
 
@@ -840,6 +874,26 @@ class Orchestrator:
         started = time.monotonic()
         cfg = self.cfg
 
+        # --- ContextAssembler: pre-flight context injection (optional fifth adapter) -----------
+        # When a ContextAssembler is wired, call assemble() once before the loop so task-specific
+        # context is GUARANTEED applied, not left to the reactive gather. It COMPOSES with any
+        # context_view the caller already supplied (e.g. a Quest AI chat's bound-quest context):
+        # the assembled cards go FIRST, then the caller's context, so cards apply even when the
+        # caller provided its own grounding. Panel context-docs / chat uploads (``attachments``)
+        # append below, so a single run grounds on cards + caller context + Quest-panel docs.
+        # Best-effort: any exception leaves the run unchanged.
+        _assembled = None
+        if self.context_assembler is not None:
+            try:
+                _assembled = self.context_assembler.assemble(user_message)
+                if _assembled.context_view:
+                    context_view = (_assembled.context_view + "\n\n" + context_view if context_view
+                                    else _assembled.context_view)
+                if model_hint is None and _assembled.model_tier_hint:
+                    model_hint = _assembled.model_tier_hint
+            except Exception:  # noqa: BLE001 -- assembly failure must never break the run
+                _assembled = None
+
         # --- Attachments (multimodal): ONE path for chat uploads + panel context-docs ----------
         # Prepare against the model that WILL answer (model_hint or the default answer tier), so
         # native-vs-describe is decided by the real answering model's vision capability. The text
@@ -877,6 +931,14 @@ class Orchestrator:
         def finish(res: OrchestratorResult) -> OrchestratorResult:
             res.steps = steps
             res.gathered = gathered
+            # Best-effort ContextAssembler write-back (learn from the outcome for next run).
+            if self.context_assembler is not None:
+                try:
+                    self.context_assembler.record(
+                        user_message, {"kind": res.kind, "steps": res.steps}
+                    )
+                except Exception:  # noqa: BLE001 -- write-back must never break the run
+                    pass
             # The terminal result + an explicit done event. RESULT/DONE always surface (both lanes).
             if res.kind == "answer":
                 emit.emit(ProgressEvent(type=EVENT_RESULT, text=res.text, result_kind="answer"))

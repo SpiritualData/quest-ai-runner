@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from .core.adapters import DeepRunner, EscalationSink, ModelProvider, RetrievalAdapter
+from .core.adapters import ContextAssembler, DeepRunner, EscalationSink, ModelProvider, RetrievalAdapter
 from .core.model_registry import ModelRegistry
 from .core.orchestrator import Orchestrator, OrchestratorConfig
 from .resources import ResourceLimits
@@ -44,6 +44,10 @@ class RunnerConfig:
     # the brain reuses it; supply a vision-capable provider here when the answering provider is not
     # (e.g. an AnthropicProvider alongside the keyless CLI) so chat images are transcribed.
     vision_provider: Optional[ModelProvider] = None
+    # Optional PRE-FLIGHT CONTEXT adapter (the fifth adapter role). When set, the orchestrator
+    # calls assemble() once before the loop to inject task-specific context, and record() after
+    # the run as a best-effort write-back. Omit to get exactly today's reactive-gather behaviour.
+    context_assembler: Optional[ContextAssembler] = None
 
     # --- the org's skills/corpus path (for orgs); generic, optional ---
     corpus_root: Optional[str] = None
@@ -157,4 +161,5 @@ def build_orchestrator(cfg: RunnerConfig, *, status=None) -> Orchestrator:
         config=cfg.orchestrator,
         status=status,
         vision_provider=cfg.vision_provider,
+        context_assembler=cfg.context_assembler,
     )

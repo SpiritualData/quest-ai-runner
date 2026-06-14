@@ -2,10 +2,10 @@
 
 The orchestrator BRAIN (``core.orchestrator``), the model registry, and the goal-runner
 know NOTHING about any specific org, Quest, a database, the filesystem layout, or any user.
-They only know these four Protocols. A consumer supplies concrete implementations via
+They only know these five Protocols. A consumer supplies concrete implementations via
 ``config.RunnerConfig`` — reference implementations live in ``quest_ai_runner.adapters``.
 
-The four roles:
+The five roles:
 
   * ``RetrievalAdapter`` — GATHER. ``read_section`` / ``grep`` / ``query`` over whatever
     the consumer's source of truth is (indexed files, a live DB, a dev server). This is what
@@ -22,10 +22,15 @@ The four roles:
   * ``EscalationSink`` — raise a human-only confirm/decision (the Quest team decision-request
     in production; a recording stub in tests). Returns a decision id the runner reports back.
 
-All four are ``typing.Protocol`` so a consumer can satisfy them structurally (duck typing) —
+  * ``ContextAssembler`` — PRE-FLIGHT CONTEXT. Called ONCE before the loop, guaranteed, when
+    wired. Assembles task-specific context from a card store / index and feeds it to
+    ``run(context_view=...)`` before planning starts. Optional: consumers that omit it get
+    exactly today's reactive-gather behaviour.
+
+All five are ``typing.Protocol`` so a consumer can satisfy them structurally (duck typing) —
 no inheritance required — but ABCs (``RetrievalAdapterBase`` etc.) are also offered for
 implementers who prefer explicit subclassing. Keeping these tiny and dependency-free is the
-whole point: a stranger's org can adopt the library by implementing four small surfaces.
+whole point: a stranger's org can adopt the library by implementing five small surfaces.
 """
 from __future__ import annotations
 
@@ -284,9 +289,65 @@ class ProgressSink(Protocol):
         """Receive one event. Decide whether/how it surfaces. Must never raise."""
 
 
+# ---------------------------------------------------------------------------
+# The fifth adapter role: ContextAssembler (PRE-FLIGHT CONTEXT).
+# ---------------------------------------------------------------------------
+
+@dataclass
+class AssembledContext:
+    """The pre-assembled context produced by a ContextAssembler before the loop starts.
+
+    Guaranteed injection: when a ContextAssembler is wired, the Orchestrator feeds
+    ``context_view`` and (optionally) ``model_tier_hint`` into ``run()`` automatically.
+
+    Fields:
+      ``context_view``      -- pre-assembled context string; fed to run(context_view=...).
+      ``model_tier_hint``   -- "haiku" | "sonnet" | "opus" | None; overrides the per-run
+                               default when the caller passed no explicit model_hint.
+      ``card_ids``          -- the card ids that fed this view (for tracing / tests).
+      ``stale``             -- cards or file paths found stale during assembly (re-derived).
+    """
+    context_view: str = ""
+    model_tier_hint: Optional[str] = None
+    card_ids: List[str] = field(default_factory=list)
+    stale: List[str] = field(default_factory=list)
+
+
+@runtime_checkable
+class ContextAssembler(Protocol):
+    """PRE-FLIGHT CONTEXT. Called ONCE before the loop, guaranteed, if wired.
+
+    ``assemble`` selects and renders task-relevant context (e.g. from a card store or a
+    vector index) into a string the Orchestrator feeds as ``context_view``. It NEVER raises
+    -- return an empty AssembledContext() on any failure. ``record`` is a best-effort
+    write-back after the run; it NEVER raises either.
+    """
+
+    def assemble(
+        self, task_text: str, *, meta: Optional[Dict[str, Any]] = None
+    ) -> "AssembledContext":
+        """Return pre-assembled context for ``task_text``. Never raises."""
+
+    def record(self, task_text: str, outcome: Dict[str, Any]) -> None:
+        """Best-effort write-back of the run outcome. Never raises."""
+
+
 # --- ABC variants for implementers who prefer explicit subclassing -----------
 
 import abc
+
+
+class ContextAssemblerBase(abc.ABC):
+    """ABC variant for implementers who prefer explicit subclassing."""
+
+    @abc.abstractmethod
+    def assemble(
+        self, task_text: str, *, meta: Optional[Dict[str, Any]] = None
+    ) -> "AssembledContext":
+        """Return pre-assembled context for ``task_text``. Never raises."""
+
+    def record(self, task_text: str, outcome: Dict[str, Any]) -> None:
+        """Best-effort write-back -- no-op default; override to persist outcomes."""
 
 
 class RetrievalAdapterBase(abc.ABC):
