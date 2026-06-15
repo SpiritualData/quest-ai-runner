@@ -150,6 +150,16 @@ class TaskExecutor:
                 conv_id: Optional[str] = None) -> ExecutionOutcome:
         if result.kind == "answer":
             text = result.text or "(no answer produced)"
+            # BROKEN-PROMISE GUARD: if the orchestrator rewrote this answer to be honest about a
+            # claimed action that did NOT actually complete (claim_corrected), the task is NOT done
+            # — surface it as needs_you so a human picks it up, rather than marking it complete on a
+            # reply that says the work was not finished. (A plain ``partial`` best-effort answer,
+            # from the read-budget cap, is still a legitimate informational answer and stays done.)
+            if getattr(result, "claim_corrected", False):
+                self._report_progress(task_id, "done", text="Paused — needs you.", output=text)
+                self._safe(lambda: self._client.report_needs_you(task_id, text, ""))
+                self._post_conv(conv_id, text, kind="done")
+                return ExecutionOutcome(task_id, "needs_you", text)
             self._report_progress(task_id, "done", text="Done.", output=text)
             self._safe(lambda: self._client.report_done(task_id, text))
             self._post_conv(conv_id, text, kind="done")

@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Broken-promise guard — post-turn honesty check (auto-remediate then verify).** The
+  `Orchestrator` now durably captures per-turn EXECUTION FACTS (which mutating deep actions ran and
+  whether each SUCCEEDED or FAILED, from `DeepResult.met` plus `EVENT_EXEC` phase ticks) onto
+  `OrchestratorResult.execution_record`. At turn finalization it guards ANSWER replies: a cheap
+  STRUCTURAL gate (`text_claims_action`) engages only when the reply asserts a completed or imminent
+  action (so plain informational turns pay ZERO model cost), then a focused verification call
+  (`verify_supported`) decides whether the execution record backs the claim. On a mismatch it
+  AUTO-REMEDIATES with ONE safe re-run, but ONLY when nothing actually executed this turn (no
+  success AND no failure recorded) — an action that already ran, succeeded or failed, is NEVER
+  re-run, since host actions are not guaranteed idempotent (the double-mutation safeguard). If still
+  unmet, the reply is rewritten to be honest (`honest_rewrite`, no false success, no em dashes) and
+  the result is flagged `claim_corrected` / `partial`. `TaskExecutor._report` maps a
+  `claim_corrected` background-task answer to `needs_you` instead of `done`. Tunable and ON by
+  default (`OrchestratorConfig.verify_claims=True`, `max_remediations=1`); the guard NEVER raises
+  (any failure leaves the turn unchanged). New module `quest_ai_runner.core.guard`
+  (`ExecutionRecord`, `ExecutionFact`, `text_claims_action`, `classify_exec_phase`,
+  `verify_supported`, `honest_rewrite`, and the centralized `VERIFY_CLAIM_PROMPT` /
+  `HONEST_REWRITE_PROMPT`). App-agnostic; shared by live chat and background tasks (one Orchestrator).
+
 ### Fixed
 - **Image describe-fallback could be handed a foreign model id.** `Orchestrator` now accepts a
   `vision_model` and threads it into `prepare_attachments`, so a consumer wiring a SEPARATE

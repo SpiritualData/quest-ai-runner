@@ -34,6 +34,7 @@ from typing import Any, Callable, Dict, List, Optional
 from .adapters import (
     EVENT_DECISION,
     EVENT_DONE,
+    EVENT_EXEC,
     EVENT_MILESTONE,
     EVENT_PARTIAL,
     EVENT_PLAN,
@@ -56,6 +57,14 @@ from .adapters import (
     RetrievalAdapter,
 )
 from .context_doctrine import CACHED_HINT_GATE, MODEL_TIER_GATE, SUFFICIENCY_GATE
+from .guard import (
+    ExecutionFact,
+    ExecutionRecord,
+    classify_exec_phase,
+    honest_rewrite,
+    text_claims_action,
+    verify_supported,
+)
 from .model_registry import TIERS, ModelRegistry
 
 # Defaults (all overridable via OrchestratorConfig).
@@ -302,6 +311,13 @@ class OrchestratorConfig:
     # wired GuidanceProvider to pre-select (via select()) for the "APPLICABLE GUIDANCE" block
     # before planning. Only consulted when a GuidanceProvider is wired; otherwise inert.
     guidance_topk: int = 3
+    # BROKEN-PROMISE GUARD (workstream 5). At turn finalization, verify that a reply CLAIMING a
+    # completed/imminent action is actually backed by what executed this turn; auto-remediate then
+    # re-verify, else rewrite the reply to be honest and flag the result partial (so a background
+    # task maps to needs_you/failed, not done). ON by default; the structural gate keeps it free on
+    # turns with no action claim. ``max_remediations`` caps SAFE re-runs (only when no action ran).
+    verify_claims: bool = True
+    max_remediations: int = 1
 
 
 @dataclass
@@ -317,6 +333,13 @@ class OrchestratorResult:
     steps: int = 0
     gathered: List[Dict[str, Any]] = field(default_factory=list)
     partial: bool = False              # answer assembled before fully exploring
+    # Durable per-turn EXECUTION FACTS (what mutating work ran + whether it succeeded/failed),
+    # populated by the loop from deep results + EVENT_EXEC ticks. Used by the broken-promise guard
+    # and available to consumers for their own auditing. None until the loop attaches it.
+    execution_record: Optional["ExecutionRecord"] = None
+    # Set True by the broken-promise guard when it rewrote the reply to be honest about an
+    # overstated/unfulfilled claim. Distinct from ``partial`` (which it also sets), purely for tracing.
+    claim_corrected: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -855,7 +878,8 @@ class Orchestrator:
 
     def _run_deep(self, plan: PlanDecision, user_message: str, model: str,
                   emit: Optional[_Emitter] = None,
-                  rep_preamble: Optional[str] = None) -> OrchestratorResult:
+                  rep_preamble: Optional[str] = None,
+                  exec_record: Optional[ExecutionRecord] = None) -> OrchestratorResult:
         subtasks = (plan.deep_subtasks or [])[: self.cfg.max_deep_subtasks]
         if not subtasks:
             subtasks = [{"goal": plan.goal or f"Fully address the request: {user_message[:200]}",
@@ -863,14 +887,20 @@ class Orchestrator:
         if self.deep_runner is None:
             # No runner configured: surface the goal(s) without executing (caller may spawn).
             goals = [(st.get("goal") or "").strip() or user_message for st in subtasks]
+            # Record each goal as REQUESTED-but-not-executed (neither success nor failure) so the
+            # guard knows a re-run is the SAFE remediation here (nothing actually mutated).
+            if exec_record is not None:
+                for g in goals:
+                    exec_record.facts.append(ExecutionFact(goal=g))
             return OrchestratorResult(kind="deep", goals=goals, rationale=plan.rationale,
                                       deep_results=[])
 
         # Pass the live emitter to the runner ONLY if its run_goal accepts an ``emit`` kwarg
         # (or **kwargs). Decided by signature inspection — never by a try/except TypeError, which
         # could re-invoke a runner that already ran a side effect (e.g. a data mutation).
+        # We also TEE the emitter so EVENT_EXEC phase ticks are recorded into ``exec_record``
+        # (per-subtask) for the broken-promise guard, while still streaming to the live sink.
         wants_emit = emit is not None and _run_goal_accepts_emit(self.deep_runner)
-        emit_fn = (lambda ev: emit.emit(ev)) if wants_emit else None
         # A per-task ``rep_preamble`` (e.g. an AI rep's pulled persona) is forwarded to the deep
         # run for THIS task only, and ONLY to a runner whose ``run_goal`` accepts ``context_preamble``
         # (older signatures are untouched). The brain stays ignorant of what the string contains —
@@ -881,16 +911,48 @@ class Orchestrator:
         def run_one(st: Dict[str, Any]) -> DeepResult:
             goal = (st.get("goal") or "").strip() or f"Fully address: {user_message[:200]}"
             brief = (st.get("brief") or goal).strip()
+            # Per-subtask execution fact — populated from EVENT_EXEC phase ticks (live) and finalized
+            # from the DeepResult.met below. Recording per-subtask keeps facts correct even when
+            # multiple subtasks run concurrently (each closure owns its own ``fact``).
+            fact = ExecutionFact(goal=goal) if exec_record is not None else None
+
+            def _emit_one(ev: ProgressEvent) -> None:
+                # TEE: classify any EVENT_EXEC phase into the fact, then forward to the live sink.
+                try:
+                    if fact is not None and getattr(ev, "type", None) == EVENT_EXEC:
+                        phase = (ev.data or {}).get("phase") if isinstance(ev.data, dict) else None
+                        cls = classify_exec_phase(phase)
+                        if phase:
+                            fact.phases.append(str(phase))
+                        if cls == "success":
+                            fact.succeeded = True
+                        elif cls == "failure":
+                            fact.failed = True
+                except Exception:  # noqa: BLE001 — recording must never break the run
+                    pass
+                if wants_emit and emit is not None:
+                    emit.emit(ev)
+
             try:
                 kwargs = dict(goal=goal, brief=brief, model=model,
                               max_turns=self.cfg.deep_max_turns)
-                if emit_fn is not None:
-                    kwargs["emit"] = emit_fn
+                if wants_emit:
+                    kwargs["emit"] = _emit_one
                 if wants_preamble:
                     kwargs["context_preamble"] = rep_preamble
                 res = self.deep_runner.run_goal(**kwargs)
             except Exception as e:  # noqa: BLE001
                 res = DeepResult(met=False, error=type(e).__name__)
+            # DeepResult.met is the AUTHORITATIVE outcome — a met run is a confirmed success; a
+            # not-met run that actually executed is a confirmed failure. This is what makes a re-run
+            # UNSAFE (a real attempt happened), so the guard will prefer honest correction.
+            if fact is not None:
+                if res.met:
+                    fact.succeeded = True
+                else:
+                    fact.failed = True
+                    fact.error = fact.error or res.error
+                exec_record.facts.append(fact)
             if emit is not None and res.met:
                 # A completed subtask is a real milestone — surfaces even in BACKGROUND.
                 emit.emit(ProgressEvent(type=EVENT_MILESTONE, text=f"Completed: {goal}",
@@ -914,6 +976,89 @@ class Orchestrator:
             goals=[(st.get("goal") or "").strip() or user_message for st in subtasks],
             rationale=plan.rationale,
         )
+
+    # --- broken-promise guard (post-turn honesty check) ----------------------
+
+    def _guard_turn(self, res: OrchestratorResult, exec_record: ExecutionRecord, *,
+                    user_message: str, plan: Optional[PlanDecision],
+                    model_hint: Optional[str], emit: Optional[_Emitter],
+                    rep_preamble: Optional[str]) -> None:
+        """AUTO-REMEDIATE THEN VERIFY (workstream 5). Mutates ``res`` in place when it corrects an
+        overstated claim. Never raises (the caller also wraps it, belt-and-suspenders).
+
+        Only ``answer`` results are guarded: a ``deep`` result already maps its truth via
+        ``DeepResult.met`` (a not-met deep run reports failed/needs_you, never done), and ``confirm``
+        makes no completion claim. The risk this addresses is an ANSWER that asserts it did/ will do
+        something the turn did not actually execute.
+        """
+        if not self.cfg.verify_claims:
+            return
+        if res.kind != "answer":
+            return
+        reply = res.text or ""
+        # CHEAP STRUCTURAL GATE: only engage when the reply asserts a completed/imminent action.
+        # No claim signal -> pass through unchanged, ZERO model cost (the verification call is not made).
+        if not text_claims_action(reply):
+            return
+
+        verify_model = self.registry.resolve_tier(self.cfg.planner_tier)
+        if verify_supported(self.provider, verify_model, reply, exec_record):
+            return  # claim MATCHES reality -> leave the reply and status exactly as-is.
+
+        # --- MISMATCH: the reply overstates what happened. -------------------------------------
+        # SAFE REMEDIATION (re-run) is allowed ONLY when NOTHING actually executed this turn:
+        #   - any_success  -> the action already ran successfully; re-running risks a DOUBLE mutation.
+        #   - any_failure  -> a real attempt was made; host actions aren't guaranteed idempotent, so a
+        #                     blind re-run could still double-apply a partially-applied change.
+        # So we re-run ONLY when an action was REQUESTED but produced NO recorded outcome (e.g. the
+        # planner answered without ever executing, or no deep runner was wired). Otherwise we go
+        # straight to honest correction. This is the core double-mutation safeguard.
+        remediations = 0
+        can_remediate = (
+            self.deep_runner is not None
+            and plan is not None
+            and not exec_record.any_success
+            and not exec_record.any_failure
+        )
+        while (can_remediate and remediations < max(0, self.cfg.max_remediations)
+               and not exec_record.any_success):
+            remediations += 1
+            if emit is not None:
+                emit.status("That did not go through. Retrying it now...")
+            # Re-run the intended action. Reuse the planner's deep goal/brief; if the planner did not
+            # author one (it had chosen "answer"), synthesize a concrete one from the request.
+            remediate_plan = plan
+            if not (plan.goal or plan.deep_brief or plan.deep_subtasks):
+                remediate_plan = PlanDecision(
+                    action="deep",
+                    goal=f"Fully carry out the user's request: {user_message[:200]}",
+                    deep_brief=user_message,
+                    model_tier=plan.model_tier,
+                    rationale="remediation: the prior turn claimed this action without executing it",
+                )
+            deep_model = self._answer_model(remediate_plan, "opus", hint=model_hint)
+            redo = self._run_deep(remediate_plan, user_message, deep_model,
+                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record)
+            # If the re-run met the goal, the claim is now TRUE: keep the original reply, surface the
+            # newly-produced output as a milestone, and stop. Status stays "done".
+            if redo.deep_results and all(d.met for d in redo.deep_results):
+                if emit is not None:
+                    emit.emit(ProgressEvent(type=EVENT_MILESTONE,
+                                            text="Completed on retry.", data={"remediated": True}))
+                return
+            break  # re-run did not succeed -> fall through to honest correction.
+
+        # STILL UNMET (or remediation was unsafe/not attempted): rewrite the reply to be HONEST and
+        # flag the result so a background task maps to needs_you/failed instead of done.
+        rewrite_model = self.registry.resolve_tier(model_hint or "sonnet")
+        honest = honest_rewrite(self.provider, rewrite_model, reply, exec_record)
+        res.text = honest
+        res.partial = True
+        res.claim_corrected = True
+        if emit is not None:
+            emit.emit(ProgressEvent(type=EVENT_MILESTONE,
+                                    text="Corrected the reply to reflect what actually happened.",
+                                    data={"claim_corrected": True}))
 
     # --- confirm -------------------------------------------------------------
 
@@ -984,6 +1129,10 @@ class Orchestrator:
         """
         user_message = (user_message or "").strip()
         gathered: List[Dict[str, Any]] = []
+        # Run-local durable EXECUTION FACTS (the broken-promise guard's evidence): each deep
+        # subtask that actually executes records its outcome (success/failure) here, threaded like
+        # ``gathered``. Attached to the OrchestratorResult in finish().
+        exec_record = ExecutionRecord()
         started = time.monotonic()
         cfg = self.cfg
 
@@ -1163,6 +1312,16 @@ class Orchestrator:
         def finish(res: OrchestratorResult) -> OrchestratorResult:
             res.steps = steps
             res.gathered = gathered
+            res.execution_record = exec_record
+            # --- BROKEN-PROMISE GUARD (workstream 5): post-turn honesty check. ----------------
+            # Verify a reply that CLAIMS a completed/imminent action against what actually executed;
+            # auto-remediate (one safe re-run) then re-verify; else rewrite the reply to be honest
+            # and flag the result partial. Never raises (degrades to leaving the turn unchanged).
+            try:
+                self._guard_turn(res, exec_record, user_message=user_message, plan=plan,
+                                 model_hint=model_hint, emit=emit, rep_preamble=rep_preamble)
+            except Exception:  # noqa: BLE001 — the guard must never break a turn
+                pass
             # Best-effort ContextAssembler write-back (learn from the outcome for next run). Pass the
             # files the brain ACTUALLY read this run (their rel_paths, from the gathered reads/greps)
             # so the card PINS them: that is what makes the loop compound and what staleness later
@@ -1246,7 +1405,7 @@ class Orchestrator:
         if final == "deep":
             emit.status("working on this now…")
             res = self._run_deep(plan, user_message, self._answer_model(plan, "opus", hint=model_hint),
-                                 emit=emit, rep_preamble=rep_preamble)
+                                 emit=emit, rep_preamble=rep_preamble, exec_record=exec_record)
             return finish(res)
 
         if final == "confirm":
