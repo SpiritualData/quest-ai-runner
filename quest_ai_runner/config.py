@@ -10,7 +10,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from .core.adapters import ContextAssembler, DeepRunner, EscalationSink, ModelProvider, RetrievalAdapter
+from .core.adapters import (
+    ContextAssembler,
+    DeepRunner,
+    EscalationSink,
+    GuidanceProvider,
+    ModelProvider,
+    RetrievalAdapter,
+)
 from .core.model_registry import ModelRegistry
 from .core.orchestrator import Orchestrator, OrchestratorConfig
 from .resources import ResourceLimits
@@ -68,6 +75,13 @@ class RunnerConfig:
     # complementary). The vector side runs agentic retrieval (LLM query-gen + parallel search +
     # LLM review) when model_provider is set. Leave None for keyword-only (zero-dependency).
     vector_store: Any = None
+    # OPTIONAL USE-CASE-SPECIFIC INSTRUCTIONS provider (the GuidanceProvider role). When set, the
+    # host app supplies a retrievable corpus of guidance cards (opaque text to the runner). The
+    # orchestrator pre-selects the cards most relevant to each message into an "APPLICABLE
+    # GUIDANCE" block before planning, and the planner can list_guidance / read_guidance on demand.
+    # This lets a host app shrink its ALWAYS-ON core prompt to only what applies to every input.
+    # Left None → no guidance, exactly today's behavior (purely additive).
+    guidance_provider: Optional[GuidanceProvider] = None
 
     # --- the org's skills/corpus path (for orgs); generic, optional ---
     corpus_root: Optional[str] = None
@@ -248,4 +262,5 @@ def build_orchestrator(cfg: RunnerConfig, *, status=None) -> Orchestrator:
         status=status,
         vision_provider=cfg.vision_provider,
         context_assembler=resolve_context_assembler(cfg),
+        guidance=cfg.guidance_provider,
     )

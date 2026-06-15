@@ -6,7 +6,34 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Image describe-fallback could be handed a foreign model id.** `Orchestrator` now accepts a
+  `vision_model` and threads it into `prepare_attachments`, so a consumer wiring a SEPARATE
+  vision describer (a vision-capable `vision_provider` distinct from a text-only answering
+  provider) can name the model that describer should use. Previously the describe-fallback reused
+  the ANSWERING model id, which is foreign to a distinct describer (e.g. a tier-alias or Gemini
+  answer id passed to an Anthropic describer would fail), so images degraded to "could not be
+  transcribed" notes instead of being read. Backward compatible: when `vision_model` is unset the
+  prior behavior (reuse the answering model id) is unchanged, which is correct when the describer
+  IS the answering provider.
+
 ### Added
+- **Optional `GuidanceProvider` adapter — retrievable USE-CASE-SPECIFIC instructions.** A host app
+  can now keep its ALWAYS-ON core prompt small by moving instructions that apply to only SOME inputs
+  (product facts, feature-flow guides, behavior policies) out of the static prompt and into a
+  retrievable corpus of opaque "guidance cards" (`GuidanceCard{id, title, relevance, body}`). The
+  new `GuidanceProvider` role (Protocol + `GuidanceProviderBase` ABC, all methods "never raise")
+  exposes `list()` (cheap catalog: id+title+relevance, no body), `read(id)` (one card with body, or
+  None), and an optional `select(user_message, *, k, meta)` for semantic pre-selection. When wired
+  via `RunnerConfig.guidance_provider` (or `Orchestrator(guidance=...)`), the orchestrator calls
+  `select()` ONCE before planning and PREPENDS the chosen cards as an "APPLICABLE GUIDANCE" block to
+  `context_view` (the same compose order the `ContextAssembler` uses), and the planner gains two
+  discovery verbs, `list_guidance` / `read_guidance`, that flow through the SAME observation
+  machinery as a read. A `read_guidance` for a card already pre-selected this turn returns a short
+  de-dupe note instead of re-injecting the body. Cards are OPAQUE to the brain — it stays
+  app-agnostic. Purely additive: a consumer that supplies no `GuidanceProvider` sees byte-for-byte
+  today's behavior (no block, no new verbs in effect). `OrchestratorConfig.guidance_topk` (default
+  3) tunes how many cards are pre-selected.
 - **Three-arm context engine + compounding task memory.** Beyond the keyword `FileContextStore`,
   the runner now orients an agent semantically. The bootstrap extracts the code's OWN docstrings
   (no LLM) for rich summaries (measured: keyword routing 13/53 -> 53/93 on the eval set).

@@ -46,6 +46,7 @@ from .adapters import (
     DeepRunner,
     Escalation,
     EscalationSink,
+    GuidanceProvider,
     Mode,
     ModelProvider,
     Observation,
@@ -134,6 +135,11 @@ The four actions:
                                                           -> the fields/types of ONE source (drill down)
           {{"list_operations": true}}                    -> the operations you can call (reads AND changes)
           {{"describe_operation": "<name>"}}             -> the full signature/usage of ONE operation
+          {{"list_guidance": true}}                      -> the catalog of use-case-specific guidance
+          {{"read_guidance": "<id>"}}                    -> the full instructions of ONE guidance card
+    APPLICABLE GUIDANCE: the most relevant use-case-specific instructions may ALREADY be injected in
+    the CONTEXT under "APPLICABLE GUIDANCE"; when the request matches a kind of work not covered
+    there, list_guidance then read_guidance the matching card BEFORE you answer or act.
     DISCOVER BEFORE YOU GUESS: if you don't already know the exact source, field, or operation a
     request needs, list_sources / list_operations first (then describe_* the few you'll use), rather
     than inventing a shape. Discovery is the cheapest, most reliable way to honor what the user
@@ -242,6 +248,8 @@ DECIDE_TOOL: Dict[str, Any] = {
                         "describe_path": {"type": "string"},
                         "list_operations": {"type": "boolean"},
                         "describe_operation": {"type": "string"},
+                        "list_guidance": {"type": "boolean"},
+                        "read_guidance": {"type": "string"},
                     },
                 },
             },
@@ -290,6 +298,10 @@ class OrchestratorConfig:
     # EVENT_PARTIAL when it returns (~1 s); a failure is swallowed silently.  Default False so
     # existing callers see no behavior change.
     instant_ack: bool = False
+    # GUIDANCE PRE-SELECTION: how many use-case-specific guidance cards the orchestrator asks a
+    # wired GuidanceProvider to pre-select (via select()) for the "APPLICABLE GUIDANCE" block
+    # before planning. Only consulted when a GuidanceProvider is wired; otherwise inert.
+    guidance_topk: int = 3
 
 
 @dataclass
@@ -324,6 +336,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
                 r.get("grep") or r.get("rel_path") or r.get("query")
                 or r.get("list_sources") or r.get("describe_source")
                 or r.get("list_operations") or r.get("describe_operation")
+                or r.get("list_guidance") or r.get("read_guidance")
             ):
                 clean_reads.append(r)
 
@@ -576,7 +589,9 @@ class Orchestrator:
         config: Optional[OrchestratorConfig] = None,
         status: Optional[Callable[[str], None]] = None,
         vision_provider: Optional[ModelProvider] = None,
+        vision_model: Optional[str] = None,
         context_assembler: Optional[ContextAssembler] = None,
+        guidance: Optional[GuidanceProvider] = None,
     ):
         self.retrieval = retrieval
         self.provider = provider
@@ -591,17 +606,70 @@ class Orchestrator:
         # honest notes. A consumer wiring a keyless answering provider should pass a vision-capable
         # ``vision_provider`` here so chat images are transcribed rather than dropped.
         self.vision_provider = vision_provider
+        # The model id the ``vision_provider`` should use to DESCRIBE images. Required whenever the
+        # vision_provider is a DIFFERENT provider from the answering one: the answering model id is
+        # foreign to the describer (e.g. a Gemini/tier-alias answer id handed to an Anthropic
+        # describer would 404), so a consumer must name the describer's own model here. When None,
+        # ``prepare_attachments`` falls back to the answering model id (correct only when the
+        # describer IS the answering provider).
+        self.vision_model = vision_model
         # Optional PRE-FLIGHT CONTEXT adapter (the fifth adapter role). When wired, assemble() is
         # called once before the loop to inject task-specific context, and record() is called
         # after the run completes as a best-effort write-back. Never raises in either direction.
         self.context_assembler = context_assembler
+        # Optional USE-CASE-SPECIFIC INSTRUCTIONS adapter (the GuidanceProvider role). When wired,
+        # the orchestrator pre-selects the cards most relevant to the user's message into an
+        # "APPLICABLE GUIDANCE" block before planning, and the planner may list_guidance /
+        # read_guidance on demand. Cards are opaque text. Never raises. None = today's behavior.
+        self.guidance = guidance
 
     # --- gather (parallel reads/greps/queries via the RetrievalAdapter) ------
 
-    def _exec_one_read(self, spec: Dict[str, Any]) -> Optional[Observation]:
+    def _exec_one_read(self, spec: Dict[str, Any],
+                       guidance_selected_ids: Optional[set] = None) -> Optional[Observation]:
         if not isinstance(spec, dict):
             return None
         try:
+            # GUIDANCE discovery (the GuidanceProvider role) — dispatched via getattr/None-guard so
+            # an orchestrator with guidance=None returns a benign Observation, never raises. Both
+            # flow into ``gathered`` as Observation(kind="query"), the SAME path as any read.
+            if spec.get("list_guidance"):
+                if self.guidance is None:
+                    return Observation(kind="query", locator="list_guidance",
+                                       text="No guidance is available for this assistant.")
+                try:
+                    cards = self.guidance.list() or []
+                except Exception:  # noqa: BLE001 — a provider must never break the loop
+                    cards = []
+                if not cards:
+                    return Observation(kind="query", locator="list_guidance",
+                                       text="No guidance cards are available.")
+                lines = [f"- {c.id}: {c.title} — applies when: {c.relevance}" for c in cards]
+                return Observation(kind="query", locator="list_guidance",
+                                   text="AVAILABLE GUIDANCE (read_guidance by id for the full "
+                                        "instructions):\n" + "\n".join(lines))
+            if spec.get("read_guidance"):
+                card_id = str(spec["read_guidance"])
+                if self.guidance is None:
+                    return Observation(kind="query", locator=f"read_guidance({card_id})",
+                                       text="No guidance is available for this assistant.")
+                # De-dupe: a card already pre-selected into APPLICABLE GUIDANCE this turn is
+                # already in front of the model — point back to it instead of re-injecting it.
+                if guidance_selected_ids and card_id in guidance_selected_ids:
+                    return Observation(
+                        kind="query", locator=f"read_guidance({card_id})",
+                        text=f"Guidance {card_id!r} was already provided above under "
+                             "APPLICABLE GUIDANCE; refer to it there.")
+                try:
+                    card = self.guidance.read(card_id)
+                except Exception:  # noqa: BLE001
+                    card = None
+                if card is None:
+                    return Observation(kind="query", locator=f"read_guidance({card_id})",
+                                       text=f"No guidance card with id {card_id!r}.")
+                return Observation(
+                    kind="query", locator=f"read_guidance({card_id})",
+                    text=f"GUIDANCE: {card.title}\n(applies when: {card.relevance})\n\n{card.body}")
             # Discovery specs first — dispatched via getattr so a structural adapter that
             # predates the discovery methods degrades to a benign "unsupported" Observation
             # instead of raising (back-compat: the four methods are optional on the Protocol).
@@ -645,17 +713,19 @@ class Orchestrator:
             return Observation(kind="error", error=type(e).__name__)
         return None
 
-    def _do_reads(self, reads: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    def _do_reads(self, reads: List[Dict[str, Any]],
+                  guidance_selected_ids: Optional[set] = None) -> List[Dict[str, Any]]:
         specs = [s for s in (reads or [])[: self.cfg.max_reads_per_step] if isinstance(s, dict)]
         if not specs:
             return []
         if len(specs) == 1:
-            obs = self._exec_one_read(specs[0])
+            obs = self._exec_one_read(specs[0], guidance_selected_ids)
             return [obs.to_dict()] if obs is not None else []
         workers = min(self.cfg.max_parallel, len(specs))
         results: List[Optional[Observation]] = [None] * len(specs)
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(self._exec_one_read, s): i for i, s in enumerate(specs)}
+            futures = {pool.submit(self._exec_one_read, s, guidance_selected_ids): i
+                       for i, s in enumerate(specs)}
             for fut in futures:
                 i = futures[fut]
                 try:
@@ -994,6 +1064,36 @@ class Orchestrator:
             except Exception:  # noqa: BLE001 -- assembly failure must never break the run
                 _assembled = None
 
+        # --- GuidanceProvider: use-case-specific instruction PRE-SELECTION (optional) ----------
+        # When a GuidanceProvider is wired, ask it for the cards most relevant to THIS message and
+        # render them into an "APPLICABLE GUIDANCE" block, PREPENDED to context_view (so it leads,
+        # ahead of any assembled/caller context — the same compose order the ContextAssembler uses
+        # for its own output). The planner is told this block may already cover the request, and to
+        # list_guidance/read_guidance for anything it doesn't. ``guidance_selected_ids`` records
+        # what was pre-selected so a later read_guidance of the same id returns a de-dupe note.
+        # Best-effort: any failure leaves the run exactly as if no guidance were wired.
+        guidance_selected_ids: set = set()
+        if self.guidance is not None:
+            try:
+                _cards = self.guidance.select(
+                    user_message, k=cfg.guidance_topk, meta=_ctx_meta or None) or []
+            except Exception:  # noqa: BLE001 -- a provider must never break the run
+                _cards = []
+            if _cards:
+                _blocks = ["--- APPLICABLE GUIDANCE ---"]
+                for _c in _cards:
+                    guidance_selected_ids.add(_c.id)
+                    _blocks.append(f"[{_c.id}] {_c.title}\n(applies when: {_c.relevance})\n{_c.body}")
+                _guidance_view = "\n\n".join(_blocks)
+                context_view = (_guidance_view + "\n\n" + context_view if context_view
+                                else _guidance_view)
+                # Transparency: a STATUS tick naming the guidance applied this turn.
+                try:
+                    emit.status("Applied guidance: "
+                                + ", ".join(c.title for c in _cards) + ".")
+                except Exception:  # noqa: BLE001
+                    pass
+
         # --- CONTEXT TRANSPARENCY (Feature 2): emit a human-readable summary of sources ------
         # Best-effort: emit a STATUS event naming the adapters + file items so the consumer/UI
         # can show "Context from: ...". Only fires when the assembled context carries source
@@ -1049,6 +1149,7 @@ class Orchestrator:
                 model=answer_model,
                 provider=self.provider,
                 vision_provider=self.vision_provider,
+                vision_model=self.vision_model,
             )
             native_blocks = prepared.native_blocks
             if prepared.text_context:
@@ -1111,11 +1212,12 @@ class Orchestrator:
                 else:
                     if any(r.get("list_sources") or r.get("describe_source")
                            or r.get("list_operations") or r.get("describe_operation")
+                           or r.get("list_guidance") or r.get("read_guidance")
                            for r in plan.reads):
                         emit.status("exploring…")
                     else:
                         emit.status("searching…" if any(r.get("grep") for r in plan.reads) else "reading…")
-                    gathered.extend(self._do_reads(plan.reads))
+                    gathered.extend(self._do_reads(plan.reads, guidance_selected_ids))
                     emit.emit(ProgressEvent(type=EVENT_READ, step=steps,
                                             data={"reads": len(plan.reads)}))
                     if budget_exhausted():

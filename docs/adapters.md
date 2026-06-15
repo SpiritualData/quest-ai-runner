@@ -100,6 +100,36 @@ The reference `QuestDecisionSink` (in `runner/quest_client.py`) raises a Quest t
 with `default_on_silence="hold"` and returns the `decision_id`, which the executor stamps onto the
 task as `needs_you`.
 
+## GuidanceProvider (optional)
+
+A sixth, OPTIONAL role: retrievable **use-case-specific instructions**. It lets a host app shrink
+its ALWAYS-ON core prompt to only what applies to *every* input, moving everything else (product
+facts, feature-flow guides, behavior policies) into a corpus of opaque **guidance cards** the brain
+retrieves on demand. Cards are opaque text to the runner — it stays app-agnostic.
+
+```python
+from quest_ai_runner.core.adapters import GuidanceCard, GuidanceProviderBase
+
+class MyGuidance(GuidanceProviderBase):
+    def list(self):                      # cheap catalog: id + title + relevance, body EMPTY
+        return [GuidanceCard(id="quest_creation", title="Creating a quest",
+                             relevance="the user wants to start a new quest")]
+
+    def read(self, card_id):             # one card WITH body, or None if unknown
+        ...
+
+    def select(self, user_message, *, k=3, meta=None):  # optional semantic pre-selection; may be []
+        ...
+```
+
+When wired (`RunnerConfig.guidance_provider=...`, or `Orchestrator(guidance=...)`), the orchestrator
+calls `select()` ONCE before planning and prepends the chosen cards as an `--- APPLICABLE GUIDANCE
+---` block to the context. The planner also gains two discovery verbs, `list_guidance` and
+`read_guidance` (id), that flow through the same observation path as a read; a `read_guidance` of a
+card already pre-selected this turn returns a short de-dupe note. All three methods must NEVER raise.
+Leave `guidance_provider` unset for exactly today's behavior (no guidance). `OrchestratorConfig.guidance_topk`
+(default 3) tunes how many cards are pre-selected.
+
 ## Wiring them up
 
 ```python
