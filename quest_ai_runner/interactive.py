@@ -419,14 +419,34 @@ class _TurnRenderer:
 
 # ── Input prompt ──────────────────────────────────────────────────────────────
 
-def _make_prompt_session():
+_CTRL_C_WINDOW = 2.0   # seconds: second Ctrl+C within this window exits
+
+
+def _make_prompt_session(last_ctrl_c: list):
+    """Build a PromptSession with Claude-Code-style Ctrl+C behaviour.
+
+    ``last_ctrl_c`` is a one-element list holding the monotonic time of the
+    most recent Ctrl+C (or 0.0). It is mutated by the key binding so the REPL
+    loop can decide whether to exit on a ``KeyboardInterrupt``.
+
+    First Ctrl+C: clears the input buffer, prints the hint, records the time.
+    Second Ctrl+C within ``_CTRL_C_WINDOW`` seconds: raises ``KeyboardInterrupt``
+    so prompt_toolkit surfaces it to the caller — the REPL loop then exits.
+    """
     if not _HAS_PROMPT_TOOLKIT:
         return None
     kb = KeyBindings()
 
     @kb.add("c-c")
     def _cc(event):
+        now = time.monotonic()
+        if now - last_ctrl_c[0] < _CTRL_C_WINDOW:
+            # Second Ctrl+C: raise so the REPL loop's except catches it → exit.
+            raise KeyboardInterrupt
+        last_ctrl_c[0] = now
         event.app.current_buffer.reset()
+        # Print the hint below the current prompt line.
+        print(f"\n{_DIM}  (press Ctrl+C again to exit){_RESET}", flush=True)
 
     return PromptSession(history=InMemoryHistory(), key_bindings=kb,
                          enable_history_search=True)
@@ -454,9 +474,9 @@ Commands:
   /quit  /q          exit
 
 Keys:
-  ESC        cancel the current turn while it is streaming
-  Ctrl+C     clear the input line (stays in the session)
-  Ctrl+D     exit
+  ESC          cancel the current turn while it is streaming
+  Ctrl+C       clear the input line  (press twice within 2s to exit)
+  Ctrl+D       exit
 """
 
 _BANNER = """\
@@ -581,7 +601,8 @@ class InteractiveSession:
 
     def run(self) -> None:
         self._print_header()
-        session = _make_prompt_session()
+        last_ctrl_c: list = [0.0]   # shared with the prompt_toolkit key binding
+        session = _make_prompt_session(last_ctrl_c)
 
         while True:
             try:
@@ -591,7 +612,18 @@ class InteractiveSession:
                 else:
                     line = _read_line(session, "  ❯ ")
             except KeyboardInterrupt:
-                self._console.line(""); continue
+                # prompt_toolkit raises this on the second Ctrl+C (via the binding).
+                # Plain input() raises it on every Ctrl+C — apply the same two-strike
+                # logic here for the fallback path.
+                now = time.monotonic()
+                if not _HAS_PROMPT_TOOLKIT:
+                    if now - last_ctrl_c[0] < _CTRL_C_WINDOW:
+                        break   # second strike → exit
+                    last_ctrl_c[0] = now
+                    self._console.line("")
+                    self._console.dim("  (press Ctrl+C again to exit)")
+                    continue
+                break   # prompt_toolkit already applied the two-strike logic → exit
 
             if line is None:
                 break
