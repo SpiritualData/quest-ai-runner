@@ -7,6 +7,26 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **`quest-ai-runner chat` — a polished interactive (attended) session.** A multi-turn REPL over
+  the orchestrator brain that streams every `ProgressEvent` to the terminal in real time, keeps a
+  rolling transcript so follow-ups share context, and attaches results to a Quest goal with
+  `--goal-id` (or `/goal <id>` mid-session). The UX is built for daily use: an animated spinner runs
+  on a background thread while the brain works; "chatter" (plan/read/replan/status/exec) collapses
+  onto that ONE updating line so it stays subtle instead of scrolling; partial reply chunks type out
+  in place under a bold `AI` label; the user's message is echoed under a `You` label; and a faint
+  rule separates turns so history stays scannable. Key handling matches what people expect: ESC
+  cancels the current turn while it streams (a raw-stdin watcher flips a `threading.Event` the stream
+  loop checks), Ctrl+C clears the input line without exiting, and Ctrl+D exits. A short header shows
+  the goal id (when set) and the shortcuts. The session lives in `quest_ai_runner.interactive`
+  (`start_interactive` / `InteractiveSession`). The `[tui]` extra now also pulls in `rich` (alongside
+  `prompt_toolkit`) for the rendering; both are OPTIONAL — the session degrades to plain
+  `input()`/`print()` (no spinner animation, best-effort keys) when neither is installed, via the
+  `_HAS_PROMPT_TOOLKIT` / `_HAS_RICH` pattern. Generic and consumer-free: it only talks to the brain
+  through `run_stream`.
+- **`quest-ai-runner send "<task text>"`** — enqueue a new AI task from the CLI and print its id.
+  Routes to `QUEST_TEAM_ID` by default (override with `--team-id`), optionally attaches to a goal
+  (`--goal-id`) and schedules a future run (`--at <ISO-8601 UTC>`); omit `--at` to run at the next
+  poll.
 - **Broken-promise guard — post-turn honesty check (auto-remediate then verify).** The
   `Orchestrator` now durably captures per-turn EXECUTION FACTS (which mutating deep actions ran and
   whether each SUCCEEDED or FAILED, from `DeepResult.met` plus `EVENT_EXEC` phase ticks) onto

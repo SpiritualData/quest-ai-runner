@@ -110,6 +110,10 @@ def main(argv=None) -> int:
     parser.add_argument("-v", "--verbose", action="store_true")
     sub = parser.add_subparsers(dest="command")
 
+    # --- chat subcommand: interactive attended session ------------------------
+    chat_p = sub.add_parser("chat", help="start an interactive session with the brain")
+    chat_p.add_argument("--goal-id", default=None, help="attach session to this Quest goal id")
+
     # --- send subcommand: enqueue a new AI task -------------------------------
     send_p = sub.add_parser("send", help="enqueue a new AI task and print its id")
     send_p.add_argument("text", help="the task instruction")
@@ -135,6 +139,18 @@ def main(argv=None) -> int:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
     log = logging.getLogger("quest-ai-runner")
+
+    # --- chat -----------------------------------------------------------------
+    if args.command == "chat":
+        from .interactive import start_interactive
+        cfg = _config_from_env()
+        problems = [p for p in cfg.validate() if "team_id" not in p and "quest_api" not in p.lower()]
+        if problems:
+            for p in problems:
+                log.error("config error: %s", p)
+            return 1
+        start_interactive(cfg, goal_id=args.goal_id)
+        return 0
 
     # --- send -----------------------------------------------------------------
     if args.command == "send":
