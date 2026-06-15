@@ -654,6 +654,13 @@ class Orchestrator:
                        guidance_selected_ids: Optional[set] = None) -> Optional[Observation]:
         if not isinstance(spec, dict):
             return None
+        # No retrieval adapter: gracefully report unsupported rather than crashing. The brain
+        # can still answer from transcript/context_view; it just cannot ground on a corpus.
+        if self.retrieval is None and not (
+            spec.get("list_guidance") or spec.get("read_guidance")
+        ):
+            return Observation(kind="query", locator="corpus",
+                               text="No retrieval adapter configured — corpus grounding unavailable.")
         try:
             # GUIDANCE discovery (the GuidanceProvider role) — dispatched via getattr/None-guard so
             # an orchestrator with guidance=None returns a benign Observation, never raises. Both

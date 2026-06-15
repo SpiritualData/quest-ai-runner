@@ -39,7 +39,11 @@ class RunnerConfig:
     # --- Quest connection (per-consumer) ---
     quest_base_url: str = ""                 # e.g. https://api.example.org
     quest_api_key: str = ""                  # qsk_<hex>, the executor identity
-    team_id: str = ""                        # team/org the poller serves
+    team_id: str = ""                        # team/org the poller serves (heartbeat + escalation)
+    # Separate team_id for task discovery. When None, falls back to team_id. Set to "" to use
+    # owner-scoped discovery (picks up null-team tasks) while still using team_id for heartbeat
+    # and escalation — needed for personal/single-user lanes where tasks are owner-scoped.
+    discovery_team_id: Optional[str] = None
     runner_label: Optional[str] = None       # human-readable tag sent on the env heartbeat (optional)
     env_id: Optional[str] = None             # which of the team's environments this runner is
                                              # (omit = the team's default env; set it when a team
@@ -248,8 +252,16 @@ def resolve_context_assembler(cfg: RunnerConfig):
 
 
 def build_orchestrator(cfg: RunnerConfig, *, status=None) -> Orchestrator:
-    """Wire a domain-free Orchestrator from the consumer's adapters."""
-    problems = [p for p in cfg.validate() if "quest" not in p]  # the brain doesn't need Quest creds
+    """Wire a domain-free Orchestrator from the consumer's adapters.
+
+    Quest credentials and a retrieval adapter are NOT required here — they are
+    needed only for the poller/runner lane. The brain works without a corpus
+    (it simply won't do grounded read steps), making ``quest-ai-runner chat``
+    usable without any Quest API key or corpus configured.
+    """
+    _skip = {"quest", "retrieval adapter"}
+    problems = [p for p in cfg.validate()
+                if not any(kw in p for kw in _skip)]
     if problems:
         raise ValueError("RunnerConfig invalid for the brain: " + "; ".join(problems))
     return Orchestrator(

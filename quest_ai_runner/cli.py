@@ -158,7 +158,11 @@ def main(argv=None) -> int:
     if args.command == "chat":
         from .interactive import start_interactive
         cfg = _config_from_env()
-        problems = [p for p in cfg.validate() if "team_id" not in p and "quest_api" not in p.lower()]
+        # chat only needs a model provider — Quest credentials and a retrieval
+        # adapter are optional (no corpus = no grounding, but still works).
+        _skip = {"quest", "retrieval adapter", "team_id"}
+        problems = [p for p in cfg.validate()
+                    if not any(kw in p for kw in _skip)]
         if problems:
             for p in problems:
                 log.error("config error: %s", p)
@@ -197,7 +201,8 @@ def main(argv=None) -> int:
             log.error("failed to enqueue task: %s", e)
             return 1
         task_id = task.get("id") or task.get("task_id") or "?"
-        print(task_id)
+        task_text = task.get("text") or args.text
+        print(f"{task_id}  {task_text}")
         return 0
 
     # --- poll (default when no subcommand given) ------------------------------
