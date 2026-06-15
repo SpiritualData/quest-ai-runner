@@ -35,6 +35,14 @@ Env it reads:
                                                    billing). NOT needed for the keyless claude_cli
                                                    backend, which runs on Claude Code's subscription.
 
+chat-specific env vars (all optional):
+  QAR_REP_NAME (optional)                        — display name for the AI representative shown in
+                                                   the interactive session (e.g. "Joshua's AI").
+                                                   Overridden by --rep on the command line.
+  QAR_REP_PERSONA_FILE (optional)                — path to a persona/skill file whose content is
+                                                   injected as rep_preamble into every chat turn.
+                                                   Overridden by --persona-file on the command line.
+
 A consumer that wants finer control imports the library and builds RunnerConfig itself instead.
 """
 from __future__ import annotations
@@ -112,6 +120,12 @@ def main(argv=None) -> int:
 
     # --- chat subcommand: interactive attended session ------------------------
     chat_p = sub.add_parser("chat", help="start an interactive session with the brain")
+    chat_p.add_argument("--rep", default=None, metavar="NAME",
+                        help="AI representative display name shown in the session "
+                             "(default: QAR_REP_NAME env var, else 'AI')")
+    chat_p.add_argument("--persona-file", default=None, metavar="PATH",
+                        help="path to a persona/skill file injected into every turn "
+                             "(default: QAR_REP_PERSONA_FILE env var)")
     chat_p.add_argument("--goal-id", default=None, help="attach session to this Quest goal id")
 
     # --- send subcommand: enqueue a new AI task -------------------------------
@@ -149,7 +163,17 @@ def main(argv=None) -> int:
             for p in problems:
                 log.error("config error: %s", p)
             return 1
-        start_interactive(cfg, goal_id=args.goal_id)
+        rep_name = args.rep or os.getenv("QAR_REP_NAME") or "AI"
+        persona = None
+        persona_path = args.persona_file or os.getenv("QAR_REP_PERSONA_FILE")
+        if persona_path:
+            try:
+                with open(persona_path) as fh:
+                    persona = fh.read()
+            except OSError as e:
+                log.error("could not read persona file %r: %s", persona_path, e)
+                return 1
+        start_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id)
         return 0
 
     # --- send -----------------------------------------------------------------

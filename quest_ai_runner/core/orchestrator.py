@@ -340,6 +340,8 @@ class OrchestratorResult:
     # Set True by the broken-promise guard when it rewrote the reply to be honest about an
     # overstated/unfulfilled claim. Distinct from ``partial`` (which it also sets), purely for tracing.
     claim_corrected: bool = False
+    # The model id used for the final answer/deep step (set by the loop; None for confirm turns).
+    model: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -1378,9 +1380,13 @@ class Orchestrator:
                         emit.status("exploring…")
                     else:
                         emit.status("searching…" if any(r.get("grep") for r in plan.reads) else "reading…")
-                    gathered.extend(self._do_reads(plan.reads, guidance_selected_ids))
+                    new_obs = self._do_reads(plan.reads, guidance_selected_ids)
+                    gathered.extend(new_obs)
+                    _sources = [o.get("rel_path") or o.get("pattern") or o.get("query")
+                                for o in new_obs if isinstance(o, dict)]
                     emit.emit(ProgressEvent(type=EVENT_READ, step=steps,
-                                            data={"reads": len(plan.reads)}))
+                                            data={"reads": len(plan.reads),
+                                                  "sources": [s for s in _sources if s][:8]}))
                     if budget_exhausted():
                         break
                     continue
@@ -1399,7 +1405,7 @@ class Orchestrator:
                 text = self._grounded_answer(user_message, transcript, context_view, gathered, model,
                                              True, native_blocks=native_blocks)
                 return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
-                                                 partial=True))
+                                                 partial=True, model=model))
             plan.action = final = "deep"
             plan.goal = plan.goal or f"Fully address the request: {user_message[:200]}"
             plan.deep_brief = plan.deep_brief or user_message
@@ -1424,7 +1430,8 @@ class Orchestrator:
             emit.status("answering")
             text = self._grounded_answer(user_message, transcript, context_view, gathered, model,
                                          False, native_blocks=native_blocks)
-        return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale))
+        return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
+                                         model=model))
 
     # --- LIVE streaming convenience: a generator yielding events as they happen --------
 
