@@ -142,9 +142,18 @@ _CLAIM_ANNOUNCE_RE = re.compile(
     r"\b(?:done|all set|that's done|successfully|i['’]ve gone ahead|here you go)\b",
     re.IGNORECASE,
 )
-# "I will / I'll / I'm going to / I am <verb>ing" — an imminent-commitment claim.
+# Progressive ("-ing") stems of the mutate verbs, so "I'm adding/creating/updating" is caught but
+# benign progressives ("I'm thinking", "I am wondering") are not.
+_PROGRESSIVE_VERBS = (
+    r"add|creat|updat|sav|sett|schedul|mark|send|delet|remov|chang|edit|"
+    r"apply|post|submitt|complet|renam|mov|configur|enabl|disabl|fix|implement"
+)
+# "I will / I'll / I'm going to <mutate-verb>" or "I'm <mutate-verb>ing" — an imminent-commitment
+# claim. Requires an actual mutate verb so benign futures ("I'll note that", "I am thinking") do NOT
+# fire the verification call.
 _CLAIM_FUTURE_RE = re.compile(
-    r"\bI(?:'ll| will| am going to| am about to)\s+\w+|\bI(?:'m| am)\s+\w+ing\b",
+    r"\bI(?:'ll| will| am going to| am about to)\s+(?:go ahead and\s+|now\s+)?(?:" + _DONE_VERBS + r")\b"
+    r"|\bI(?:'m| am)\s+(?:now\s+)?(?:" + _PROGRESSIVE_VERBS + r")ing\b",
     re.IGNORECASE,
 )
 

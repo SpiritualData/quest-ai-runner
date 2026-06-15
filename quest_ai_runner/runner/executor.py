@@ -156,7 +156,7 @@ class TaskExecutor:
             # reply that says the work was not finished. (A plain ``partial`` best-effort answer,
             # from the read-budget cap, is still a legitimate informational answer and stays done.)
             if getattr(result, "claim_corrected", False):
-                self._report_progress(task_id, "done", text="Paused — needs you.", output=text)
+                self._report_progress(task_id, "done", text="Paused. Needs you.", output=text)
                 self._safe(lambda: self._client.report_needs_you(task_id, text, ""))
                 self._post_conv(conv_id, text, kind="done")
                 return ExecutionOutcome(task_id, "needs_you", text)
@@ -169,7 +169,7 @@ class TaskExecutor:
             summary = result.question or "A human decision is required before proceeding."
             # needs_you is a terminal-but-paused state; close the live stream with a 'done' tick
             # noting it now needs a human, so the stream doesn't hang open.
-            self._report_progress(task_id, "done", text=f"Paused — needs you: {summary}")
+            self._report_progress(task_id, "done", text=f"Paused, needs you: {summary}")
             self._post_conv(conv_id, summary, kind="decision")
             if result.decision_id:
                 self._safe(lambda: self._client.report_needs_you(task_id, summary, result.decision_id))
@@ -192,7 +192,7 @@ class TaskExecutor:
             summary = "A human decision is required to finish this task."
             # A confirm-before-act run carries the prepared output (e.g. the code awaiting review).
             chat_text = next((d.output for d in deep if d.output), None) or summary
-            self._report_progress(task_id, "done", text=f"Paused — needs you: {summary}")
+            self._report_progress(task_id, "done", text=f"Paused, needs you: {summary}")
             self._safe(lambda: self._client.report_needs_you(task_id, summary, decision_id))
             self._post_conv(conv_id, chat_text, kind="decision")
             return ExecutionOutcome(task_id, "needs_you", summary, decision_id)

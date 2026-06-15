@@ -1039,9 +1039,11 @@ class Orchestrator:
             deep_model = self._answer_model(remediate_plan, "opus", hint=model_hint)
             redo = self._run_deep(remediate_plan, user_message, deep_model,
                                   emit=emit, rep_preamble=rep_preamble, exec_record=exec_record)
-            # If the re-run met the goal, the claim is now TRUE: keep the original reply, surface the
-            # newly-produced output as a milestone, and stop. Status stays "done".
-            if redo.deep_results and all(d.met for d in redo.deep_results):
+            # Keep the original reply ONLY if the re-run met its goal AND the original claim is now
+            # actually supported by what executed. Re-verifying (not just trusting ``met`` on a
+            # possibly-vague synthesized goal) protects the honesty guarantee for specific claims.
+            if (redo.deep_results and all(d.met for d in redo.deep_results)
+                    and verify_supported(self.provider, verify_model, reply, exec_record)):
                 if emit is not None:
                     emit.emit(ProgressEvent(type=EVENT_MILESTONE,
                                             text="Completed on retry.", data={"remediated": True}))
