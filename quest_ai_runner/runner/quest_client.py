@@ -264,6 +264,30 @@ class QuestClient:
         return self._request("POST", f"/api/teams/decisions/{decision_id}/resolve",
                              body={"resolution": resolution})
 
+    # --- task creation (enqueue a new AI task) --------------------------------
+
+    def create_task(self, text: str, *,
+                    team_id: Optional[str] = None,
+                    goal_id: Optional[str] = None,
+                    scheduled_at: Optional[str] = None,
+                    source: str = "cli") -> Dict[str, Any]:
+        """POST a new queued AI task to /api/assistant-tasks.
+
+        ``team_id`` routes the task to a specific team's runner (defaults to the client's
+        configured team). ``goal_id`` attaches the task to a goal so results appear on it.
+        ``scheduled_at`` is an ISO-8601 UTC datetime string; omit it to run as soon as the
+        runner's next poll picks it up. Returns the created task dict (includes its ``id``).
+        """
+        body: Dict[str, Any] = {"text": text, "source": source}
+        tid = team_id if team_id is not None else self.team_id
+        if tid:
+            body["team_id"] = tid
+        if goal_id is not None:
+            body["goal_id"] = goal_id
+        if scheduled_at is not None:
+            body["scheduled_at"] = scheduled_at
+        return self._request("POST", "/api/assistant-tasks", body=body) or {}
+
     # --- AI-rep profile (the rep <-> skill-file sync surface) -----------------
 
     def get_ai_profile(self, user_id: str, *, team_id: Optional[str] = None) -> Dict[str, Any]:

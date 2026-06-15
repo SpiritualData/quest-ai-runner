@@ -107,39 +107,84 @@ def _config_from_env() -> RunnerConfig:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="quest-ai-runner",
                                      description="Poll Quest for due AI tasks and execute them.")
-    parser.add_argument("--once", action="store_true", help="one scan then exit (cron mode)")
-    parser.add_argument("--check", action="store_true", help="validate config + key, then exit")
     parser.add_argument("-v", "--verbose", action="store_true")
+    sub = parser.add_subparsers(dest="command")
+
+    # --- send subcommand: enqueue a new AI task -------------------------------
+    send_p = sub.add_parser("send", help="enqueue a new AI task and print its id")
+    send_p.add_argument("text", help="the task instruction")
+    send_p.add_argument("--team-id", default=None,
+                        help="route to this team (default: QUEST_TEAM_ID env var)")
+    send_p.add_argument("--goal-id", default=None, help="attach to this goal id")
+    send_p.add_argument("--at", dest="scheduled_at", default=None,
+                        help="ISO-8601 UTC datetime to schedule (omit = run at next poll)")
+
+    # --- poll subcommand (and legacy flat flags, kept for back-compat) --------
+    poll_p = sub.add_parser("poll", help="poll Quest for due tasks and run them")
+    poll_p.add_argument("--once", action="store_true", help="one scan then exit (cron mode)")
+    poll_p.add_argument("--check", action="store_true", help="validate config + key, then exit")
+
+    # Legacy: flags directly on the root command (no subcommand given) stay working.
+    parser.add_argument("--once", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--check", action="store_true", help=argparse.SUPPRESS)
+
     args = parser.parse_args(argv)
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    log = logging.getLogger("quest-ai-runner")
 
+    # --- send -----------------------------------------------------------------
+    if args.command == "send":
+        from .runner.quest_client import QuestClient, QuestApiError, QuestNotConfigured
+        base_url = os.getenv("QUEST_BASE_URL", "")
+        api_key = os.getenv("QUEST_API_KEY", "")
+        team_id = args.team_id or os.getenv("QUEST_TEAM_ID", "")
+        if not base_url or not api_key:
+            log.error("QUEST_BASE_URL and QUEST_API_KEY must be set")
+            return 1
+        client = QuestClient(base_url, api_key, team_id=team_id)
+        try:
+            task = client.create_task(
+                args.text,
+                team_id=args.team_id,
+                goal_id=args.goal_id,
+                scheduled_at=args.scheduled_at,
+            )
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.error("failed to enqueue task: %s", e)
+            return 1
+        task_id = task.get("id") or task.get("task_id") or "?"
+        print(task_id)
+        return 0
+
+    # --- poll (default when no subcommand given) ------------------------------
     cfg = _config_from_env()
     problems = cfg.validate()
     if problems:
-        # Degrade visibly: print the problems and exit 0 so cron/systemd don't error-spam while
-        # a key is still pending (the watchdog's "not configured -> exit 0" behavior).
         for p in problems:
-            logging.getLogger("quest-ai-runner").info("config incomplete: %s", p)
+            log.info("config incomplete: %s", p)
         return 0
 
     poller = Poller(cfg, state_path=os.getenv("QAR_STATE_PATH", "qar_state.json"))
 
-    if args.check:
+    once = args.once or (args.command == "poll" and getattr(args, "once", False))
+    check = args.check or (args.command == "poll" and getattr(args, "check", False))
+
+    if check:
         try:
             who = poller.client.whoami()
-            logging.getLogger("quest-ai-runner").info("key OK: %s", who)
+            log.info("key OK: %s", who)
             return 0
         except Exception as e:  # noqa: BLE001
-            logging.getLogger("quest-ai-runner").error("key check failed: %s", e)
+            log.error("key check failed: %s", e)
             return 1
 
-    if args.once:
+    if once:
         handled = poller.run_once()
-        logging.getLogger("quest-ai-runner").info("handled %d task(s)", len(handled))
+        log.info("handled %d task(s)", len(handled))
         return 0
 
     poller.run_forever()
