@@ -718,7 +718,21 @@ class InteractiveSession:
 
         elapsed = time.monotonic() - t0
 
-        if not self._cancelled.is_set() and final is not None:
+        if self._cancelled.is_set() and user_text:
+            # Cancelled turn: still remember what the user asked so the next turn
+            # ("try again", follow-up, etc.) has the prior question as context.
+            self._last_user = user_text
+            self._last_assistant = "[cancelled by user]"
+            # Also persist to TurnContextStore so it survives across more turns.
+            _ctx = getattr(self._orch, "context_assembler", None)
+            if _ctx is not None:
+                try:
+                    _ctx.record(user_text, {"kind": "cancelled",
+                                            "response": "[turn was cancelled by user]"})
+                except Exception:  # noqa: BLE001
+                    pass
+
+        elif not self._cancelled.is_set() and final is not None:
             # Deep result with no text = no deep_runner configured. The planner
             # chose "deep" (it sees a code/fix request) but nobody ran it. Show
             # the planned goal so the user knows what the AI intended.
