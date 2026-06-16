@@ -442,6 +442,7 @@ _SLASH_COMMANDS = [
     "/help", "/clear", "/reps", "/rep ", "/file ",
     "/quests", "/goal ", "/whoami", "/quit", "/q",
 ]
+# /goal with a space triggers search; bare /goal (no arg) also works as a browse
 
 
 class _SlashCompleter(Completer):
@@ -511,8 +512,8 @@ Commands:
   /reps              list and select an AI representative for this session
   /rep <name>        set a custom representative name directly
   /file <path>       load any file as the persona for this session
-  /quests            list and attach to a Quest goal
-  /goal <id>         attach to a goal id directly (if you know it)
+  /quests            browse and attach to a Quest goal
+  /goal <search>     search goals by name and pick one  (or pass an id directly)
   /whoami            show what this AI knows about itself and this session
   /quit  /q          exit
 
@@ -752,9 +753,8 @@ class InteractiveSession:
                 except OSError as e:
                     self._console.dim(f"  could not read {path!r}: {e}")
                 continue
-            if line.startswith("/goal "):
-                self._goal_id = line[6:].strip()
-                self._console.dim(f"  goal: {self._goal_id!r}"); continue
+            if line.startswith("/goal"):
+                self._cmd_goal(line[5:].strip(), session); continue
             if line == "/whoami":
                 self._print_whoami(); continue
             if line == "/quests":
@@ -805,6 +805,56 @@ class InteractiveSession:
         if n <= 0 or n > len(items):
             return None
         return n - 1
+
+    def _cmd_goal(self, arg: str, session) -> None:
+        """Attach to a goal by name search (or bare id if arg looks like one)."""
+        c = self._console
+        if not arg:
+            self._cmd_quests(session); return
+        # If it looks like an id (no spaces, shortish) just use it directly.
+        if " " not in arg and len(arg) < 60:
+            client = self._quest_client()
+            if client is not None:
+                # Try to resolve the name via the goals list first; fall back to treating it as an id.
+                try:
+                    goals = client.list_goals()
+                    exact = [g for g in goals if (g.get("id") or g.get("goal_id") or "") == arg]
+                    if exact:
+                        self._goal_id = arg
+                        c.dim(f"  goal: {exact[0].get('title') or arg!r}"); return
+                except Exception:  # noqa: BLE001
+                    pass
+            self._goal_id = arg
+            c.dim(f"  goal: {arg!r}"); return
+        # Treat arg as a search term: filter the goals list by name.
+        client = self._quest_client()
+        if client is None:
+            c.dim("  Quest credentials not configured — set QUEST_BASE_URL, QUEST_API_KEY, QUEST_TEAM_ID")
+            return
+        try:
+            goals = client.list_goals()
+        except Exception as e:  # noqa: BLE001
+            c.dim(f"  could not fetch goals: {e}"); return
+        query = arg.lower()
+        matches = [g for g in goals
+                   if query in (g.get("title") or g.get("name") or "").lower()]
+        if not matches:
+            c.dim(f"  no goals matching {arg!r} — try /quests to browse all")
+            return
+        if len(matches) == 1:
+            g = matches[0]
+            self._goal_id = g.get("id") or g.get("goal_id") or ""
+            c.dim(f"  goal: {g.get('title') or self._goal_id!r}"); return
+        def _label(g):
+            title = g.get("title") or g.get("name") or "untitled"
+            status = g.get("status") or ""
+            return f"{title}  [{status}]" if status else title
+        idx = self._pick_from_list(matches, _label, session)
+        if idx is None:
+            c.dim("  cancelled"); return
+        g = matches[idx]
+        self._goal_id = g.get("id") or g.get("goal_id") or ""
+        c.dim(f"  goal: {g.get('title') or self._goal_id!r}")
 
     def _cmd_quests(self, session) -> None:
         """List the team's Quest goals and let the user attach one."""
