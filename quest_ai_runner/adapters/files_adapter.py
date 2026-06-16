@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from ..core.adapters import Observation, RetrievalAdapterBase
-from ._walk import effective_skip_dirs
+from ._walk import effective_skip_dirs, prune_dirnames
 _BINARY_EXTS = {
     ".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip", ".gz", ".tar", ".mp4", ".mov",
     ".woff", ".woff2", ".ttf", ".ico", ".so", ".pyc", ".bin", ".db", ".sqlite",
@@ -152,7 +152,7 @@ class FilesAdapter(RetrievalAdapterBase):
             files = [search_root]
         else:
             for dirpath, dirnames, filenames in os.walk(search_root):
-                dirnames[:] = [d for d in dirnames if d not in self._skip_dirs and not d.startswith(".")]
+                prune_dirnames(dirnames, current=Path(dirpath), base_skip=self._skip_dirs)
                 for fn in filenames:
                     if not fn.startswith("."):
                         files.append(Path(dirpath) / fn)
@@ -186,7 +186,7 @@ class FilesAdapter(RetrievalAdapterBase):
     def _walk_readable(self, limit: int) -> List[str]:
         names: List[str] = []
         for dirpath, dirnames, filenames in os.walk(self.root):
-            dirnames[:] = [d for d in dirnames if d not in self._skip_dirs and not d.startswith(".")]
+            prune_dirnames(dirnames, current=Path(dirpath), base_skip=self._skip_dirs)
             for fn in filenames:
                 p = Path(dirpath) / fn
                 if not fn.startswith(".") and self._readable(p):

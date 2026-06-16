@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase
-from ._walk import effective_skip_dirs
+from ._walk import effective_skip_dirs, prune_dirnames
 
 # ---------------------------------------------------------------------------
 # Bootstrap constants
@@ -585,11 +585,11 @@ class FileContextStore(ContextAssemblerBase):
                 dirnames[:] = []
                 continue
             # Prune skip dirs in-place so os.walk doesn't recurse into them.
+            prune_dirnames(dirnames, current=current_dir, base_skip=skip_dirs)
+            # Also exclude the cards dir itself (it's internal state, not source).
             dirnames[:] = [
                 d for d in dirnames
-                if d not in skip_dirs
-                and not d.startswith(".")
-                and (current_dir / d).resolve() != cards_dir_resolved
+                if (current_dir / d).resolve() != cards_dir_resolved
             ]
             for fname in filenames:
                 if file_count >= max_files or len(walk_entries) >= max_cards:

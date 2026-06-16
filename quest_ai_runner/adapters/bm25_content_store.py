@@ -51,7 +51,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase
-from ._walk import effective_skip_dirs
+from ._walk import effective_skip_dirs, prune_dirnames
 
 logger = logging.getLogger(__name__)
 
@@ -262,11 +262,7 @@ class BM25ContentStore(ContextAssemblerBase):
         for dirpath, dirnames, filenames in os.walk(self._root):
             if len(paths) >= _MAX_FILES:
                 break
-            # Prune skip dirs in-place.
-            dirnames[:] = [
-                d for d in dirnames
-                if d not in self._skip_dirs and not d.startswith(".")
-            ]
+            prune_dirnames(dirnames, current=Path(dirpath), base_skip=self._skip_dirs)
             for fname in filenames:
                 if len(paths) >= _MAX_FILES:
                     break
@@ -335,10 +331,7 @@ class BM25ContentStore(ContextAssemblerBase):
         # Walk root to collect the current file set.
         current_files: Dict[str, Path] = {}
         for dirpath, dirnames, filenames in os.walk(self._root):
-            dirnames[:] = [
-                d for d in dirnames
-                if d not in self._skip_dirs and not d.startswith(".")
-            ]
+            prune_dirnames(dirnames, current=Path(dirpath), base_skip=self._skip_dirs)
             for fname in filenames:
                 fpath = Path(dirpath) / fname
                 if fpath.suffix not in _SOURCE_EXTS:
