@@ -264,6 +264,36 @@ class QuestClient:
         return self._request("POST", f"/api/teams/decisions/{decision_id}/resolve",
                              body={"resolution": resolution})
 
+    # --- quest and goal browsing (for interactive chat context selection) ------
+
+    def list_quests(self, *, team_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """GET /api/teams/{team_id}/quests — all quests attached to the team.
+
+        Returns a list of dicts with keys: quest_id, outcome, completed, owner_user_ids.
+        Requires team_id either here or on the client instance.
+        """
+        self._require()
+        tid = team_id or self.team_id
+        if not tid:
+            raise QuestNotConfigured("team_id is required to list quests")
+        resp = self._request("GET", f"/api/teams/{tid}/quests") or []
+        return resp if isinstance(resp, list) else []
+
+    def list_quest_goals(self, quest_id: str, *,
+                         team_id: Optional[str] = None) -> Dict[str, Any]:
+        """GET /api/teams/{team_id}/quests/{quest_id}/goals — goals grouped by time period.
+
+        Returns {quest_id, outcome, period_groups: [{time_scope, period, period_label, goals: [{id,
+        name, time_scope, period, period_label, deadline, completed, parent_goal_id}]}]}.
+        Groups are ordered year → quarter → month → week → day → custom, then chronologically.
+        Requires team_id either here or on the client instance.
+        """
+        self._require()
+        tid = team_id or self.team_id
+        if not tid:
+            raise QuestNotConfigured("team_id is required to list quest goals")
+        return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}/goals") or {}
+
     # --- task creation (enqueue a new AI task) --------------------------------
 
     def create_task(self, text: str, *,

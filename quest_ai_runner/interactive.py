@@ -807,79 +807,119 @@ class InteractiveSession:
         return n - 1
 
     def _cmd_goal(self, arg: str, session) -> None:
-        """Attach to a goal by name search (or bare id if arg looks like one)."""
+        """Attach to a goal. With no arg or a name: open the quest→goal picker.
+        With a bare id (no spaces, short): set it directly without an API call."""
         c = self._console
         if not arg:
             self._cmd_quests(session); return
-        # If it looks like an id (no spaces, shortish) just use it directly.
-        if " " not in arg and len(arg) < 60:
-            client = self._quest_client()
-            if client is not None:
-                # Try to resolve the name via the goals list first; fall back to treating it as an id.
-                try:
-                    goals = client.list_goals()
-                    exact = [g for g in goals if (g.get("id") or g.get("goal_id") or "") == arg]
-                    if exact:
-                        self._goal_id = arg
-                        c.dim(f"  goal: {exact[0].get('title') or arg!r}"); return
-                except Exception:  # noqa: BLE001
-                    pass
+        # Bare id — attach directly, no network call needed.
+        if " " not in arg and len(arg) < 80:
             self._goal_id = arg
-            c.dim(f"  goal: {arg!r}"); return
-        # Treat arg as a search term: filter the goals list by name.
-        client = self._quest_client()
-        if client is None:
-            c.dim("  Quest credentials not configured — set QUEST_BASE_URL, QUEST_API_KEY, QUEST_TEAM_ID")
-            return
-        try:
-            goals = client.list_goals()
-        except Exception as e:  # noqa: BLE001
-            c.dim(f"  could not fetch goals: {e}"); return
-        query = arg.lower()
-        matches = [g for g in goals
-                   if query in (g.get("title") or g.get("name") or "").lower()]
-        if not matches:
-            c.dim(f"  no goals matching {arg!r} — try /quests to browse all")
-            return
-        if len(matches) == 1:
-            g = matches[0]
-            self._goal_id = g.get("id") or g.get("goal_id") or ""
-            c.dim(f"  goal: {g.get('title') or self._goal_id!r}"); return
-        def _label(g):
-            title = g.get("title") or g.get("name") or "untitled"
-            status = g.get("status") or ""
-            return f"{title}  [{status}]" if status else title
-        idx = self._pick_from_list(matches, _label, session)
-        if idx is None:
-            c.dim("  cancelled"); return
-        g = matches[idx]
-        self._goal_id = g.get("id") or g.get("goal_id") or ""
-        c.dim(f"  goal: {g.get('title') or self._goal_id!r}")
+            c.dim(f"  goal: {arg!r} (set directly — use /quests to browse)"); return
+        # Name search — open picker then filter within the chosen quest.
+        self._cmd_quests(session)
 
     def _cmd_quests(self, session) -> None:
-        """List the team's Quest goals and let the user attach one."""
+        """Show all goals across all team quests organized by time period, then let the user pick one."""
         c = self._console
         client = self._quest_client()
         if client is None:
             c.dim("  Quest credentials not configured — set QUEST_BASE_URL, QUEST_API_KEY, QUEST_TEAM_ID")
             return
-        c.dim("  fetching goals…")
-        goals = client.list_goals()
-        if not goals:
-            c.dim("  no goals found on this team (or Quest not reachable)")
-            return
-        def _label(g):
-            title = g.get("title") or g.get("name") or g.get("id") or "untitled"
-            status = g.get("status") or ""
-            gid = g.get("id") or g.get("goal_id") or ""
-            suffix = f"  [{status}]" if status else ""
-            return f"{title}{suffix}  (id: {gid})"
-        idx = self._pick_from_list(goals, _label, session)
-        if idx is None:
+
+        c.dim("  fetching quests and goals…")
+        try:
+            quests = client.list_quests()
+        except Exception as e:  # noqa: BLE001
+            c.dim(f"  could not fetch quests: {e}"); return
+        if not quests:
+            c.dim("  no quests found on this team (or Quest not reachable)"); return
+
+        # Fetch goals for each quest and merge into time-period buckets
+        # bucket key: (time_scope, period) → {period_label, time_scope, period, goals: [...]}
+        SCOPE_ORDER = ["year", "quarter", "month", "week", "day", "custom", "quest", ""]
+        def _scope_rank(s):
+            try:
+                return SCOPE_ORDER.index(str(s or ""))
+            except ValueError:
+                return len(SCOPE_ORDER)
+
+        buckets: dict = {}
+        for quest in quests:
+            quest_id = quest.get("quest_id") or ""
+            quest_outcome = quest.get("outcome") or quest_id or "untitled"
+            if not quest_id:
+                continue
+            try:
+                data = client.list_quest_goals(quest_id)
+            except Exception:  # noqa: BLE001
+                continue
+            for group in (data.get("period_groups") or []):
+                scope = group.get("time_scope") or "custom"
+                period = group.get("period") or ""
+                period_label = group.get("period_label") or period or scope
+                key = (scope, period)
+                if key not in buckets:
+                    buckets[key] = {"time_scope": scope, "period": period,
+                                    "period_label": period_label, "goals": []}
+                for g in (group.get("goals") or []):
+                    g["_quest_outcome"] = quest_outcome
+                    buckets[key]["goals"].append(g)
+
+        if not buckets:
+            c.dim("  no goals found on this team"); return
+
+        sorted_groups = sorted(buckets.values(),
+                               key=lambda p: (_scope_rank(p["time_scope"]), p.get("period") or ""))
+
+        # Build display: period headers (non-selectable) + numbered goal rows
+        flat_goals = []
+        display_rows = []  # (num_or_none, label)
+        entry_num = 0
+        for group in sorted_groups:
+            goals_in_group = group.get("goals") or []
+            if not goals_in_group:
+                continue
+            display_rows.append((None, f"── {group['period_label']} ──"))
+            for g in goals_in_group:
+                entry_num += 1
+                name = g.get("name") or g.get("title") or g.get("id") or "untitled"
+                quest_ctx = g.get("_quest_outcome") or ""
+                done = "  ✓" if g.get("completed") else ""
+                suffix = f"  ({quest_ctx}){done}" if quest_ctx else done
+                flat_goals.append(g)
+                display_rows.append((entry_num, f"{name}{suffix}"))
+
+        if not flat_goals:
+            c.dim("  no goals found on this team"); return
+
+        c.line("")
+        for num, label in display_rows:
+            if num is None:
+                c.dim(f"       {label}")
+            else:
+                c.dim(f"  {num:2d}.  {label}")
+        c.dim("   0.  cancel")
+        c.line("")
+
+        try:
+            if session is not None:
+                raw = session.prompt(ANSI(f"{_CYAN}  select › {_RESET}"))
+            else:
+                raw = input("  select › ")
+        except (EOFError, KeyboardInterrupt):
             c.dim("  cancelled"); return
-        g = goals[idx]
+
+        try:
+            n = int((raw or "").strip())
+        except ValueError:
+            c.dim("  cancelled"); return
+        if n <= 0 or n > len(flat_goals):
+            c.dim("  cancelled"); return
+
+        g = flat_goals[n - 1]
         self._goal_id = g.get("id") or g.get("goal_id") or ""
-        title = g.get("title") or g.get("name") or self._goal_id
+        title = g.get("name") or g.get("title") or self._goal_id
         c.dim(f"  attached to: {title}")
 
     def _cmd_reps(self, session) -> None:
@@ -931,18 +971,17 @@ class InteractiveSession:
         c = self._console
         c.line("")
         c.speaker(self._rep_name, "cyan", "")
-        corpus = getattr(self._cfg, "corpus_root", None)
-        if corpus:
-            c.dim(f"  corpus:    {corpus}")
         if self._persona:
             kb = max(1, len(self._persona.encode()) // 1024)
-            c.dim(f"  persona:   {kb}KB loaded")
+            c.dim(f"  representative:  {self._rep_name}  ({kb}KB skill file loaded)")
         else:
-            c.dim("  persona:   none  "
-                  "(use /file <path> or --persona-file to load one)")
+            c.dim(f"  representative:  {self._rep_name}  (no skill file — use /reps to pick one)")
+        corpus = getattr(self._cfg, "corpus_root", None)
+        if corpus:
+            c.dim(f"  corpus:          {corpus}")
         if self._goal_id:
-            c.dim(f"  goal:      {self._goal_id}")
-        c.dim(f"  turns:     {self._turn_count} in this session")
+            c.dim(f"  goal:            {self._goal_id}")
+        c.dim(f"  turns:           {self._turn_count} in this session")
         c.line("")
 
 
