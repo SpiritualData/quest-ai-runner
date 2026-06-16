@@ -557,6 +557,14 @@ class InteractiveSession:
 
     def __init__(self, cfg: "RunnerConfig", *, rep_name: str = "Assistant",
                  persona: Optional[str] = None, goal_id: Optional[str] = None) -> None:
+        # Silence background-scanning INFO logs during interactive use.
+        # The context panel already shows what's being gathered turn by turn;
+        # raw log lines from background threads corrupt the prompt display because
+        # Python's logging writes to stderr, which patch_stdout() does not intercept.
+        import logging as _logging
+        _bg_log = _logging.getLogger("quest-ai-runner.context")
+        if _bg_log.level == _logging.NOTSET or _bg_log.level <= _logging.INFO:
+            _bg_log.setLevel(_logging.WARNING)
         from .config import build_orchestrator
         self._orch: "Orchestrator" = build_orchestrator(cfg)
         self._orch.cfg.instant_ack = True
