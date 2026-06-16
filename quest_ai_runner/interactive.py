@@ -833,7 +833,8 @@ class InteractiveSession:
         except Exception as e:  # noqa: BLE001
             c.dim(f"  could not fetch quests: {e}"); return
         if not quests:
-            c.dim("  no quests found on this team (or Quest not reachable)"); return
+            c.dim("  no quests attached to this team (QUEST_TEAM_ID=%s)" % getattr(self._cfg, "team_id", "?"))
+            c.dim("  quests must be attached to the team before they appear here"); return
 
         # Fetch goals for each quest and merge into time-period buckets
         # bucket key: (time_scope, period) → {period_label, time_scope, period, goals: [...]}
@@ -845,6 +846,7 @@ class InteractiveSession:
                 return len(SCOPE_ORDER)
 
         buckets: dict = {}
+        goals_errors = []
         for quest in quests:
             quest_id = quest.get("quest_id") or ""
             quest_outcome = quest.get("outcome") or quest_id or "untitled"
@@ -852,7 +854,8 @@ class InteractiveSession:
                 continue
             try:
                 data = client.list_quest_goals(quest_id)
-            except Exception:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
+                goals_errors.append(f"    {quest_outcome}: {e}")
                 continue
             for group in (data.get("period_groups") or []):
                 scope = group.get("time_scope") or "custom"
@@ -866,8 +869,12 @@ class InteractiveSession:
                     g["_quest_outcome"] = quest_outcome
                     buckets[key]["goals"].append(g)
 
+        if goals_errors:
+            c.dim("  could not fetch goals for some quests:")
+            for err in goals_errors:
+                c.dim(err)
         if not buckets:
-            c.dim("  no goals found on this team"); return
+            c.dim("  no goals found across %d quest(s)" % len(quests)); return
 
         sorted_groups = sorted(buckets.values(),
                                key=lambda p: (_scope_rank(p["time_scope"]), p.get("period") or ""))

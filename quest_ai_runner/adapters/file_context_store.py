@@ -647,32 +647,25 @@ class FileContextStore(ContextAssemblerBase):
         root: Optional[str] = None,
         *,
         provider=None,
-        max_files: int = 10000,
-        max_cards: int = 5000,
     ) -> int:
         """Seed the cards store by walking a source tree. Never raises. Returns cards written.
 
-        When ``provider`` is given, uses a 3-stage LLM fan-out
-        (``_llm_topic_cards``) to produce semantic topic cards rather than
-        per-file cards.  Each topic card captures a coherent subsystem with its
-        associated files, keywords, and a one-sentence summary.
+        Topic cards are SEMANTIC, not structural: a single card can span files from completely
+        separate directories. An LLM (the wired ``provider``) analyses the corpus file list and
+        identifies the natural topics; the number of cards reflects the actual structure of the
+        codebase, never a preset range. Each card captures:
 
-        Without ``provider`` (or when the LLM call returns no cards), falls back
-        to the original per-file mode: one card per source file, with keywords
-        from path tokens and extracted symbols plus a rich docstring-based summary.
+        - ``id``       -- a short slug for the topic (from the LLM).
+        - ``keywords`` -- 5-15 search keywords for the topic (from the LLM).
+        - ``summary``  -- a one-sentence description of the topic (from the LLM).
+        - ``files``    -- every file the topic references, fingerprinted (sha256/mtime/git_sha).
+        - ``provenance.created_by_task`` == "bootstrap".
 
-        File-granular cards give the IDF scorer precise routing: a query
-        containing a distinctive symbol or path term lands on exactly that
-        file's card rather than a coarse module-level card.
-
-        Idempotent: cards are upserted by id (existing cards for the same file
-        are overwritten).  Total cards written is capped at ``max_cards``
-        (default 5000).
+        Without a ``provider`` this is a NO-OP returning 0: topic cards require semantic
+        understanding, so cards accumulate via ``record()`` instead.
         """
         try:
-            return self._bootstrap_inner(
-                root=root, provider=provider, max_files=max_files, max_cards=max_cards
-            )
+            return self._bootstrap_inner(root=root, provider=provider)
         except Exception:  # noqa: BLE001
             return 0
 
@@ -723,7 +716,20 @@ class FileContextStore(ContextAssemblerBase):
         max_cards: int = 5000,
         skip_unchanged: bool = False,
     ) -> int:
-        """Actual bootstrap logic. May raise; callers wrap in try/except."""
+        """Actual bootstrap logic. May raise; callers wrap in try/except.
+
+        Topic cards are semantic: the LLM (``provider``) decides what the topics are and which
+        files belong to each, so a card can span unrelated directories. Three passes:
+
+          1. Walk the corpus (with the existing skip logic) into a flat list of qualifying
+             source file paths. No symbol extraction or fingerprinting yet.
+          2. Ask the LLM for the topic cards. Collect every referenced file and fingerprint
+             them in parallel into a ``{rel_str: fp}`` map.
+          3. For each topic card build the final JSON (filling fingerprints per file), apply the
+             ``skip_unchanged`` check against the existing card's files, and write atomically.
+
+        With no ``provider`` no cards can be identified, so this returns 0 (a no-op).
+        """
         walk_root = Path(root).resolve() if root else self._repo_root
         if walk_root is None or not walk_root.is_dir():
             return 0
@@ -732,19 +738,11 @@ class FileContextStore(ContextAssemblerBase):
         cards_dir_resolved = self._cards_dir.resolve()
         skip_dirs = effective_skip_dirs(walk_root)
 
-        self._cards_dir.mkdir(parents=True, exist_ok=True)
-        cards_written = 0
+        # --- Pass 1: walk the tree and collect qualifying source file paths (flat list) ---
+        file_paths: List[str] = []
         file_count = 0
-
-        # --- Pass 1: walk the tree and collect file paths ---
-        # When an LLM provider is available, we only need the relative paths for topic
-        # identification.  When falling back to per-file mode we also need symbols,
-        # keywords, summary, etc., so we collect the full tuple in that branch.
-        file_paths: List[str] = []   # relative paths (used by LLM path)
-        walk_entries: List[tuple] = []  # full per-file tuples (used by per-file path)
-
         for dirpath, dirnames, filenames in os.walk(walk_root):
-            if file_count >= max_files or (provider is None and len(walk_entries) >= max_cards):
+            if file_count >= max_files:
                 break
             current_dir = Path(dirpath).resolve()
             # Skip the cards directory itself to avoid indexing stored card JSON files.
@@ -759,7 +757,7 @@ class FileContextStore(ContextAssemblerBase):
                 if (current_dir / d).resolve() != cards_dir_resolved
             ]
             for fname in filenames:
-                if file_count >= max_files or (provider is None and len(walk_entries) >= max_cards):
+                if file_count >= max_files:
                     break
                 fpath = Path(dirpath) / fname
                 if fpath.suffix not in _SOURCE_EXTS:
@@ -769,153 +767,78 @@ class FileContextStore(ContextAssemblerBase):
                         continue
                 except OSError:
                     continue
-
                 file_count += 1
-                rel = fpath.relative_to(walk_root)
-                rel_str = str(rel)
-                file_paths.append(rel_str)
+                file_paths.append(str(fpath.relative_to(walk_root)))
 
-                # Only build the per-file metadata when falling back to per-file mode.
-                if provider is None:
-                    # Extract symbols from this single file.
-                    syms = _extract_symbols(fpath, max_symbols=30)
-                    syms = list(dict.fromkeys(syms))[:30]  # deduplicate
+        if not file_paths:
+            return 0
 
-                    # Build rich summary + description (docstrings / headings / comments).
-                    rich_summary, description = _build_rich_summary(rel_str, fpath, syms)
+        # Topic cards require semantic understanding. Without a provider, do nothing.
+        if provider is None:
+            _log.warning(
+                "context index: bootstrap skipped — no model provider wired, so no semantic "
+                "topic cards can be identified (cards accumulate via record() instead)"
+            )
+            return 0
 
-                    # Test-file flag and weight.
-                    is_test = _is_test_path(rel_str)
-                    weight = _TEST_FILE_WEIGHT if is_test else _SOURCE_FILE_WEIGHT
+        # --- LLM: identify the natural semantic topic cards across the corpus ---
+        topic_cards = _llm_topic_cards(file_paths, provider)
+        if not topic_cards:
+            return 0
 
-                    # Keywords: path segment tokens + symbol names.
-                    seg_tokens = sorted(_tokenize(rel_str.replace("/", " ").replace("_", " ").replace(".", " ")))
-                    sym_tokens = [s.lower() for s in syms if len(s) >= _MIN_TOKEN_LEN]
-                    all_keywords = list(dict.fromkeys(seg_tokens + sym_tokens))[:50]
+        self._cards_dir.mkdir(parents=True, exist_ok=True)
 
-                    walk_entries.append((rel_str, syms, all_keywords, rich_summary, description, is_test, weight))
+        # --- Pass 2: fingerprint every file referenced by any topic card, in parallel ---
+        referenced: List[str] = []
+        seen: Set[str] = set()
+        for tc in topic_cards:
+            for rel in tc.get("files", []):
+                if rel not in seen:
+                    seen.add(rel)
+                    referenced.append(rel)
 
-        # --- LLM path: ask the provider to identify semantic topic cards ---
-        if provider is not None and file_paths:
-            # Trim to the LLM path limit before calling.
-            llm_paths = file_paths[:_MAX_LLM_PATHS]
-            topic_cards = _llm_topic_cards(llm_paths, provider)
-            if topic_cards:
-                # Fingerprint all referenced files and write one card per topic.
-                for topic in topic_cards:
-                    if cards_written >= max_cards:
-                        break
-                    topic_files = topic.get("files", [])
-                    if not topic_files:
-                        continue
-
-                    # Fingerprint each file referenced by this topic.
-                    file_entries: List[Dict[str, Any]] = []
-                    for rel_str in topic_files:
-                        fp = self._fingerprint(rel_str)
-                        file_entries.append({
-                            "path": rel_str,
-                            "sha256": fp.get("sha256", ""),
-                            "mtime": fp.get("mtime", 0.0),
-                            "git_sha": fp.get("git_sha", ""),
-                            "why": "",
-                            "symbols": [],
-                        })
-
-                    card_id = topic.get("id") or _path_slug(topic_files[0])
-                    card_path = self._cards_dir / f"{card_id}.json"
-
-                    # Preserve usage_count / last_outcome from an existing card.
-                    existing: Dict[str, Any] = {}
-                    if card_path.exists():
-                        try:
-                            with open(card_path, "r", encoding="utf-8") as fh:
-                                existing = json.load(fh)
-                        except Exception:  # noqa: BLE001
-                            existing = {}
-
-                    card: Dict[str, Any] = {
-                        "id": card_id,
-                        "keywords": topic.get("keywords", []),
-                        "summary": topic.get("summary", ""),
-                        "description": topic.get("summary", ""),
-                        "files": file_entries,
-                        "conventions": [],
-                        "provenance": {
-                            "created_by_task": "bootstrap",
-                            "model": "",
-                            "created_at": "",
-                            "last_verified_at": "",
-                        },
-                        "usage_count": existing.get("usage_count", 0),
-                        "last_outcome": existing.get("last_outcome", "unknown"),
-                    }
-
-                    # Atomic write.
-                    tmp_fd, tmp_path = tempfile.mkstemp(
-                        dir=str(self._cards_dir), prefix=".tmp_", suffix=".json"
-                    )
-                    try:
-                        with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
-                            json.dump(card, fh, indent=2, ensure_ascii=False)
-                            fh.write("\n")
-                        os.replace(tmp_path, str(card_path))
-                        cards_written += 1
-                    except Exception:  # noqa: BLE001
-                        try:
-                            os.unlink(tmp_path)
-                        except OSError:
-                            pass
-
-                # Invalidate cache after all writes.
-                self._cache_dirty = True
-                return cards_written
-
-        # --- Per-file fallback path (provider is None, or LLM returned no cards) ---
-        # --- Pass 2: fingerprint all collected files in parallel ---
-        # sha256 reads release the GIL; threads give a real speedup when many files
-        # are being hashed.  Workers are bounded to min(8, n_files).  Order is preserved
-        # (enumerate index -> result dict).  A failed fingerprint yields {} (never raises).
-        fp_list: List[Dict[str, Any]] = [{}] * len(walk_entries)
-        if walk_entries:
-            n_workers = min(8, len(walk_entries))
+        fp_map: Dict[str, Dict[str, Any]] = {rel: {} for rel in referenced}
+        if referenced:
+            n_workers = min(8, len(referenced))
             try:
                 with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
-                    idx_futures = {
-                        pool.submit(self._fingerprint, rel_str): idx
-                        for idx, (rel_str, _, _, _, _, _, _) in enumerate(walk_entries)
+                    rel_futures = {
+                        pool.submit(self._fingerprint, rel): rel for rel in referenced
                     }
-                    for fut in concurrent.futures.as_completed(idx_futures):
-                        idx = idx_futures[fut]
+                    for fut in concurrent.futures.as_completed(rel_futures):
+                        rel = rel_futures[fut]
                         try:
-                            fp_list[idx] = fut.result()
+                            fp_map[rel] = fut.result()
                         except Exception:  # noqa: BLE001
-                            fp_list[idx] = {}
+                            fp_map[rel] = {}
             except Exception:  # noqa: BLE001
                 # Fallback to serial if ThreadPoolExecutor fails unexpectedly.
-                for idx, (rel_str, _, _, _, _, _, _) in enumerate(walk_entries):
+                for rel in referenced:
                     try:
-                        fp_list[idx] = self._fingerprint(rel_str)
+                        fp_map[rel] = self._fingerprint(rel)
                     except Exception:  # noqa: BLE001
-                        fp_list[idx] = {}
+                        fp_map[rel] = {}
 
-        # --- Pass 3: write cards using the pre-computed fingerprints ---
-        for (rel_str, syms, all_keywords, rich_summary, description, is_test, weight), fp in zip(walk_entries, fp_list):
+        # --- Pass 3: build and write one card per topic ---
+        cards_written = 0
+        for tc in topic_cards:
             if cards_written >= max_cards:
                 break
 
-            file_dict: Dict[str, Any] = {
-                "path": rel_str,
-                "sha256": fp.get("sha256", ""),
-                "mtime": fp.get("mtime", 0.0),
-                "git_sha": fp.get("git_sha", ""),
-                "why": "",
-                "symbols": syms,
-            }
+            card_id = tc["id"]
+            rels = tc.get("files", [])
 
-            summary = rich_summary
-
-            card_id = _path_slug(rel_str)
+            file_dicts: List[Dict[str, Any]] = []
+            for rel in rels:
+                fp = fp_map.get(rel, {})
+                file_dicts.append({
+                    "path": rel,
+                    "sha256": fp.get("sha256", ""),
+                    "mtime": fp.get("mtime", 0.0),
+                    "git_sha": fp.get("git_sha", ""),
+                    "why": "",
+                    "symbols": [],
+                })
 
             # Load existing card so we preserve usage_count / last_outcome if present.
             card_path = self._cards_dir / f"{card_id}.json"
@@ -927,21 +850,27 @@ class FileContextStore(ContextAssemblerBase):
                 except Exception:  # noqa: BLE001
                     existing = {}
 
-            # Incremental refresh: skip files whose content hasn't changed.
+            # Incremental refresh: skip a topic whose every file's sha256 is unchanged.
             if skip_unchanged and existing:
-                old_sha = (existing.get("files") or [{}])[0].get("sha256", "")
-                new_sha = fp.get("sha256", "")
-                if old_sha and new_sha and old_sha == new_sha:
+                old_shas = {
+                    fe.get("path", ""): fe.get("sha256", "")
+                    for fe in existing.get("files", [])
+                }
+                unchanged = bool(file_dicts) and all(
+                    fd["sha256"]
+                    and old_shas.get(fd["path"]) == fd["sha256"]
+                    for fd in file_dicts
+                ) and len(old_shas) == len(file_dicts)
+                if unchanged:
                     continue
 
             card: Dict[str, Any] = {
                 "id": card_id,
-                "keywords": all_keywords,
-                "summary": summary,
-                "description": description,
-                "is_test": is_test,
-                "weight": weight,
-                "files": [file_dict],
+                "name": tc.get("name", ""),
+                "keywords": tc.get("keywords", []),
+                "summary": tc.get("summary", ""),
+                "description": tc.get("summary", ""),
+                "files": file_dicts,
                 "conventions": [],
                 "provenance": {
                     "created_by_task": "bootstrap",

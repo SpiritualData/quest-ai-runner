@@ -1190,11 +1190,13 @@ class TestFileContextStoreExportForEmbedding:
     """export_for_embedding returns id/text/payload/fingerprint for each card."""
 
     def _make_tiny_repo(self, tmp_path) -> "FileContextStore":
-        """Bootstrap a small FileContextStore over a temp repo with one Python file."""
+        """Bootstrap a small FileContextStore over a temp repo with one Python file.
+
+        Bootstrap is LLM-driven, so we wire a fake provider that returns a 'billing' topic
+        card pinning billing.py with a billing/invoice summary."""
         from quest_ai_runner.adapters.file_context_store import FileContextStore
         repo = tmp_path / "repo"
         repo.mkdir()
-        # A Python file with a module docstring so description is populated.
         (repo / "billing.py").write_text(
             '"""Billing module: generates invoices for customers."""\n\n'
             "def generate_invoice(cid):\n"
@@ -1205,10 +1207,18 @@ class TestFileContextStoreExportForEmbedding:
         cards_dir = tmp_path / "cards"
         store = FileContextStore(
             str(cards_dir), repo_root=str(repo),
-            auto_bootstrap=True, confidence_threshold=0.0,
+            auto_bootstrap=False, confidence_threshold=0.0,
         )
-        # Trigger bootstrap by calling assemble (auto_bootstrap).
-        store.assemble("billing invoice")
+        provider = MagicMock()
+        provider.list_models.return_value = []
+        provider.answer.return_value = json.dumps([{
+            "id": "billing",
+            "name": "Billing",
+            "keywords": ["billing", "invoice", "customer", "generate"],
+            "summary": "Billing module: generates invoices for customers.",
+            "files": ["billing.py"],
+        }])
+        store.bootstrap(root=str(repo), provider=provider)
         return store
 
     def test_returns_list_of_dicts(self, tmp_path):
@@ -1428,10 +1438,20 @@ class TestVectorContextAssemblerSeedSource:
         cards_dir = tmp_path / "cards"
         kw_store = FileContextStore(
             str(cards_dir), repo_root=str(repo),
-            auto_bootstrap=True, confidence_threshold=0.0,
+            auto_bootstrap=False, confidence_threshold=0.0,
         )
-        # Bootstrap the keyword store first so there are cards to export.
-        kw_store.bootstrap(root=str(repo))
+        # Bootstrap the keyword store first so there are cards to export. Bootstrap is
+        # LLM-driven, so wire a fake provider that returns a payments topic for payments.py.
+        provider = MagicMock()
+        provider.list_models.return_value = []
+        provider.answer.return_value = json.dumps([{
+            "id": "payments",
+            "name": "Payments",
+            "keywords": ["payment", "capture", "refund", "processing"],
+            "summary": "Payment processing: handles payment capture and refunds.",
+            "files": ["payments.py"],
+        }])
+        kw_store.bootstrap(root=str(repo), provider=provider)
 
         vec_store = FakeVectorStore()
         asm = VectorContextAssembler(
@@ -1477,11 +1497,23 @@ class TestResolveContextAssemblerSeedSourceWiring:
             encoding="utf-8",
         )
 
+        # Bootstrap is LLM-driven, so wire a fake provider that returns a topic for main.py.
+        # The provider feeds both the registry and the bootstrap topic identification.
+        provider = MagicMock()
+        provider.list_models.return_value = []
+        provider.answer.return_value = json.dumps([{
+            "id": "main",
+            "name": "Main",
+            "keywords": ["main", "entry", "startup", "run", "application"],
+            "summary": "Main entry point: orchestrates the application startup.",
+            "files": ["main.py"],
+        }])
+
         cfg = RunnerConfig(
             quest_base_url="http://example.com",
             quest_api_key="qsk_test",
             retrieval=None,  # not needed for context wiring test
-            model_provider=None,
+            model_provider=provider,
             vector_store=vec_store,
             corpus_root=str(repo),
             context_cards_dir=str(tmp_path / "cards"),

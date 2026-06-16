@@ -32,6 +32,7 @@ _BASE_SKIP_DIRS: Set[str] = {
     ".next", ".turbo", ".svelte-kit", "storybook-static", ".parcel-cache",
     # Python
     "__pycache__", ".venv", "venv", ".eggs", ".mypy_cache", ".pytest_cache",
+    "site-packages",
     # Build & distribution (language-agnostic)
     "dist", "build", "_build",
     "target",          # Rust (cargo), Maven, SBT — can be enormous

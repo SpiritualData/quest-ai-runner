@@ -7,6 +7,10 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- `FileContextStore.bootstrap()`: now uses an LLM (via the wired `ModelProvider`) to identify semantic topic cards across the codebase — a topic can span files from completely separate directories. The number of cards reflects the natural structure of the codebase, not a preset range. Without a provider, bootstrap is a no-op (cards accumulate via `record()` instead).
+- `_walk.py`: add `site-packages` to `_BASE_SKIP_DIRS`
+- Orchestrator: context assembly now runs in a background thread concurrent with the instant-ack; collected with a 3 s timeout so corpus search never blocks interactive responses
+- Orchestrator: emits `"searching corpus…"` status when a context assembler is wired
 - **`TurnMemory` replaced by `TurnContextStore` + `CompositeContextAssembler`.**
   Conversation turns are now stored as card files (the same format as `FileContextStore` file
   cards) under `.quest-context/turns/` and retrieved by the same IDF keyword-overlap stack.

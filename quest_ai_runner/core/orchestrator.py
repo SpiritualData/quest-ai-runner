@@ -1221,20 +1221,37 @@ class Orchestrator:
         # ``context_meta`` such as user_id/team_id) so a multi-tenant assembler (e.g. a Quest-backed
         # one in quest-backend serving all users) can scope its lookup to the right user/team/quest.
         # The default FileContextStore ignores it. Threaded to both assemble() and record().
+        # Context assembly (a corpus search) can be slow, so it runs in a BACKGROUND THREAD
+        # concurrently with the ack call and guidance selection — the same pattern as the
+        # instant-ack above.  We start it here, do the fast synchronous work below, then
+        # collect the result with a short timeout so corpus search never blocks the turn.
+        # ``_ctx_meta`` carries the caller's identity/scope (quest_id, plus anything in
+        # ``context_meta`` such as user_id/team_id) so a multi-tenant assembler (e.g. a Quest-backed
+        # one in quest-backend serving all users) can scope its lookup to the right user/team/quest.
+        # The default FileContextStore ignores it. Threaded to both assemble() and record().
         _ctx_meta: Dict[str, Any] = {**(context_meta or {})}
         if quest_id is not None:
             _ctx_meta.setdefault("quest_id", quest_id)
         _assembled = None
+        _ctx_future = None
+        _ctx_executor = None
         if self.context_assembler is not None:
             try:
-                _assembled = self.context_assembler.assemble(user_message, meta=_ctx_meta or None)
-                if _assembled.context_view:
-                    context_view = (_assembled.context_view + "\n\n" + context_view if context_view
-                                    else _assembled.context_view)
-                if model_hint is None and _assembled.model_tier_hint:
-                    model_hint = _assembled.model_tier_hint
-            except Exception:  # noqa: BLE001 -- assembly failure must never break the run
-                _assembled = None
+                _ctx_assembler = self.context_assembler
+                _ctx_msg = user_message
+
+                def _do_assemble() -> Any:
+                    return _ctx_assembler.assemble(_ctx_msg, meta=_ctx_meta or None)
+
+                _ctx_executor = ThreadPoolExecutor(max_workers=1)
+                _ctx_future = _ctx_executor.submit(_do_assemble)
+                try:
+                    emit.status("searching corpus…")
+                except Exception:  # noqa: BLE001
+                    pass
+            except Exception:  # noqa: BLE001 -- assembly setup failure must never break the run
+                _ctx_future = None
+                _ctx_executor = None
 
         # --- GuidanceProvider: use-case-specific instruction PRE-SELECTION (optional) ----------
         # When a GuidanceProvider is wired, ask it for the cards most relevant to THIS message and
@@ -1266,6 +1283,51 @@ class Orchestrator:
                 except Exception:  # noqa: BLE001
                     pass
 
+        # --- Instant-ack: emit the background ack text when it is ready -----------------------
+        # At this point context assembly + the ack call have been running concurrently.  We
+        # collect the ack result NOW (it should be ~done by the time we reach here) and emit it
+        # as an EVENT_PARTIAL so the consumer streams it.  If not yet done we wait briefly; if
+        # it failed the future result is None and we skip.  Joining here (before the planner
+        # loop) ensures the background thread is cleaned up before run() returns.
+        if _ack_future is not None:
+            try:
+                _ack_text = _ack_future.result(timeout=5.0)
+                if _ack_text and _ack_text.strip():
+                    emit.status(_ack_text.strip())
+            except Exception:  # noqa: BLE001 — timeout, cancelled, or provider error: skip
+                pass
+            finally:
+                try:
+                    _ack_executor.shutdown(wait=False)
+                except Exception:  # noqa: BLE001
+                    pass
+
+        # --- ContextAssembler: collect the background assemble() result -----------------------
+        # The assemble() call has been running concurrently with the ack + guidance.  Collect it
+        # NOW with a short timeout so corpus search never blocks the interactive turn.  On timeout
+        # or error we proceed with no assembled context (the reactive gather still runs in-loop).
+        # The assembled cards go FIRST, then the caller's context, so cards apply even when the
+        # caller provided its own grounding (panel docs / chat uploads append below).
+        if _ctx_future is not None:
+            try:
+                _assembled = _ctx_future.result(timeout=3.0)
+            except Exception:  # noqa: BLE001 — timeout, cancelled, or assembler error: skip
+                _assembled = None
+            finally:
+                try:
+                    _ctx_executor.shutdown(wait=False)
+                except Exception:  # noqa: BLE001
+                    pass
+            if _assembled is not None:
+                try:
+                    if _assembled.context_view:
+                        context_view = (_assembled.context_view + "\n\n" + context_view if context_view
+                                        else _assembled.context_view)
+                    if model_hint is None and _assembled.model_tier_hint:
+                        model_hint = _assembled.model_tier_hint
+                except Exception:  # noqa: BLE001
+                    pass
+
         # --- CONTEXT TRANSPARENCY (Feature 2): emit a human-readable summary of sources ------
         # Best-effort: emit a STATUS event naming the adapters + file items so the consumer/UI
         # can show "Context from: ...". Only fires when the assembled context carries source
@@ -1288,25 +1350,6 @@ class Orchestrator:
                         emit.status("Context from: " + ", ".join(_parts) + ".")
             except Exception:  # noqa: BLE001
                 pass
-
-        # --- Instant-ack: emit the background ack text when it is ready -----------------------
-        # At this point context assembly + the ack call have been running concurrently.  We
-        # collect the ack result NOW (it should be ~done by the time we reach here) and emit it
-        # as an EVENT_PARTIAL so the consumer streams it.  If not yet done we wait briefly; if
-        # it failed the future result is None and we skip.  Joining here (before the planner
-        # loop) ensures the background thread is cleaned up before run() returns.
-        if _ack_future is not None:
-            try:
-                _ack_text = _ack_future.result(timeout=5.0)
-                if _ack_text and _ack_text.strip():
-                    emit.status(_ack_text.strip())
-            except Exception:  # noqa: BLE001 — timeout, cancelled, or provider error: skip
-                pass
-            finally:
-                try:
-                    _ack_executor.shutdown(wait=False)
-                except Exception:  # noqa: BLE001
-                    pass
 
         # --- Attachments (multimodal): ONE path for chat uploads + panel context-docs ----------
         # Prepare against the model that WILL answer (model_hint or the default answer tier), so

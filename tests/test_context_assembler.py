@@ -50,6 +50,19 @@ def _write_card(cards_dir: Path, card: Dict[str, Any]) -> Path:
     return p
 
 
+def _topic_provider(topics: List[Dict[str, Any]]):
+    """A minimal fake ModelProvider whose answer() returns ``topics`` as a JSON array string.
+
+    ``topics`` is a list of topic-card dicts, each with keys id/name/keywords/summary/files.
+    The bootstrap LLM path calls ``provider.answer(messages, model=None)`` and parses the JSON
+    array out of the returned text. ``list_models`` returns [] so a ModelRegistry can be built.
+    """
+    provider = MagicMock()
+    provider.list_models.return_value = []
+    provider.answer.return_value = json.dumps(topics)
+    return provider
+
+
 # ---------------------------------------------------------------------------
 # AssembledContext dataclass
 # ---------------------------------------------------------------------------
@@ -802,106 +815,117 @@ class TestBootstrap:
         )
         return tmp_path
 
+    def _topics_for_repo(self):
+        """Topic cards the fake LLM returns for ``_make_repo``: a 'models' topic spanning
+        models.py + __init__.py and a 'utils' topic. A topic can span files from separate
+        directories. The test file is folded into the models topic to show cross-cutting."""
+        return [
+            {
+                "id": "models",
+                "name": "Models",
+                "keywords": ["models", "user", "order", "schema", "entity"],
+                "summary": "Data models: the User and Order entities.",
+                "files": ["mypackage/__init__.py", "mypackage/models.py", "tests/test_models.py"],
+            },
+            {
+                "id": "utils",
+                "name": "Utilities",
+                "keywords": ["utils", "parse", "date", "format", "name", "helpers"],
+                "summary": "Utility helpers for parsing dates and formatting names.",
+                "files": ["mypackage/utils.py"],
+            },
+        ]
+
     def test_bootstrap_creates_cards(self, tmp_path):
-        """bootstrap() over a temp repo produces at least one card (one per source file)."""
+        """bootstrap() with a provider produces one card per LLM-identified topic."""
         repo = self._make_repo(tmp_path)
         cards_dir = tmp_path / "cards"
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
-        n = store.bootstrap(root=str(repo))
+        n = store.bootstrap(root=str(repo), provider=_topic_provider(self._topics_for_repo()))
         assert n > 0
         assert cards_dir.exists()
         cards = list(cards_dir.glob("*.json"))
         assert len(cards) == n
 
-    def test_bootstrap_one_card_per_file(self, tmp_path):
-        """bootstrap() creates exactly one card per source file, not per module group."""
+    def test_bootstrap_writes_one_card_per_topic(self, tmp_path):
+        """Topic cards are semantic, so bootstrap() writes one card per LLM topic (not per file)."""
+        repo = self._make_repo(tmp_path)
+        cards_dir = tmp_path / "cards"
+        topics = self._topics_for_repo()
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        n = store.bootstrap(root=str(repo), provider=_topic_provider(topics))
+        assert n == len(topics)
+        assert len(list(cards_dir.glob("*.json"))) == len(topics)
+
+    def test_bootstrap_no_provider_writes_nothing(self, tmp_path):
+        """Without a provider, bootstrap() is a no-op: it returns 0 and writes no cards."""
         repo = self._make_repo(tmp_path)
         cards_dir = tmp_path / "cards"
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
         n = store.bootstrap(root=str(repo))
-        # The repo has: mypackage/__init__.py, mypackage/models.py, mypackage/utils.py,
-        # tests/test_models.py  =>  4 source files -> 4 cards.
-        assert n == 4
-        assert len(list(cards_dir.glob("*.json"))) == 4
+        assert n == 0
+        assert not cards_dir.exists() or not any(cards_dir.glob("*.json"))
 
-    def test_bootstrap_card_has_single_pinned_file(self, tmp_path):
-        """Each bootstrapped card has exactly one pinned file -- the file it was created for."""
+    def test_bootstrap_card_can_span_directories(self, tmp_path):
+        """A single topic card can pin files from completely separate directories."""
         repo = self._make_repo(tmp_path)
         cards_dir = tmp_path / "cards"
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
-        store.bootstrap(root=str(repo))
-        for cp in cards_dir.glob("*.json"):
-            c = json.loads(cp.read_text())
-            assert len(c.get("files", [])) == 1, (
-                f"expected exactly 1 file per card, got {len(c['files'])} in {cp.name}"
-            )
+        store.bootstrap(root=str(repo), provider=_topic_provider(self._topics_for_repo()))
+        models_card = json.loads((cards_dir / "models.json").read_text())
+        paths = {fe["path"] for fe in models_card.get("files", [])}
+        # The models topic spans mypackage/ and tests/.
+        assert "mypackage/models.py" in paths
+        assert "tests/test_models.py" in paths
 
     def test_bootstrap_models_py_card_exists(self, tmp_path):
-        """There must be a card whose single pinned file is mypackage/models.py."""
+        """There must be a card that pins mypackage/models.py."""
         repo = self._make_repo(tmp_path)
         cards_dir = tmp_path / "cards"
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
-        store.bootstrap(root=str(repo))
+        store.bootstrap(root=str(repo), provider=_topic_provider(self._topics_for_repo()))
         models_card = None
         for cp in cards_dir.glob("*.json"):
             c = json.loads(cp.read_text())
-            files = c.get("files", [])
-            if files and "mypackage/models.py" in files[0].get("path", ""):
+            if any("mypackage/models.py" in fe.get("path", "") for fe in c.get("files", [])):
                 models_card = c
                 break
-        assert models_card is not None, "expected a card whose single file is mypackage/models.py"
+        assert models_card is not None, "expected a card that pins mypackage/models.py"
 
-    def test_bootstrap_symbol_query_ranks_file_card_first(self, tmp_path):
-        """A query containing a distinctive symbol from models.py should rank that file's
-        card #1 (symbol appears only in that file's card, so IDF pushes it to the top)."""
+    def test_bootstrap_topic_query_ranks_right_card_first(self, tmp_path):
+        """A query containing a distinctive topic keyword ranks that topic's card #1."""
         repo = self._make_repo(tmp_path)
         cards_dir = tmp_path / "cards"
-        # confidence_threshold=0.0: tests ranking on small synthetic bootstrap where
-        # IDF scores are below the production gate of 3.0.
+        # confidence_threshold=0.0: tests ranking on a small synthetic store where IDF
+        # scores are below the production gate of 3.0.
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False,
                                  max_cards_in_view=10, confidence_threshold=0.0)
-        store.bootstrap(root=str(repo))
+        store.bootstrap(root=str(repo), provider=_topic_provider(self._topics_for_repo()))
 
-        # "Order" is a class defined only in mypackage/models.py.
-        ac = store.assemble("Order class definition")
+        # "order" is a keyword only on the models topic.
+        ac = store.assemble("Order entity schema")
         assert len(ac.card_ids) > 0, "expected at least one card"
-        top_card_path = None
-        for cp in cards_dir.glob("*.json"):
-            c = json.loads(cp.read_text())
-            if c.get("id") == ac.card_ids[0]:
-                top_card_path = c["files"][0]["path"] if c.get("files") else ""
-                break
-        assert top_card_path and "models.py" in top_card_path, (
-            f"expected models.py card ranked #1, got card pointing to: {top_card_path!r}"
+        assert ac.card_ids[0] == "models", (
+            f"expected the models topic ranked #1, got: {ac.card_ids}"
         )
 
-    def test_bootstrap_card_has_extracted_symbols(self, tmp_path):
-        """A bootstrapped card's keywords/summary includes symbol names from .py files."""
+    def test_bootstrap_card_has_llm_keywords(self, tmp_path):
+        """A bootstrapped card carries the keywords/summary supplied by the LLM topic."""
         repo = self._make_repo(tmp_path)
         cards_dir = tmp_path / "cards"
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
-        store.bootstrap(root=str(repo))
+        store.bootstrap(root=str(repo), provider=_topic_provider(self._topics_for_repo()))
 
-        all_cards = list(cards_dir.glob("*.json"))
-        # Find the card for mypackage/models.py (contains User, Order).
-        pkg_card = None
-        for cp in all_cards:
-            c = json.loads(cp.read_text())
-            files = c.get("files", [])
-            if files and "models.py" in files[0].get("path", ""):
-                pkg_card = c
-                break
-        assert pkg_card is not None, "expected a card for mypackage/models.py"
-        # keywords or summary must mention a known symbol
-        combined = " ".join(pkg_card.get("keywords", [])) + " " + pkg_card.get("summary", "")
-        assert any(sym.lower() in combined.lower() for sym in ("user", "order"))
+        models_card = json.loads((cards_dir / "models.json").read_text())
+        combined = " ".join(models_card.get("keywords", [])) + " " + models_card.get("summary", "")
+        assert any(kw in combined.lower() for kw in ("user", "order"))
 
     def test_bootstrap_pins_module_files(self, tmp_path):
         """At least one bootstrapped card must pin a file matching models.py or utils.py."""
         repo = self._make_repo(tmp_path)
         cards_dir = tmp_path / "cards"
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
-        store.bootstrap(root=str(repo))
+        store.bootstrap(root=str(repo), provider=_topic_provider(self._topics_for_repo()))
 
         all_paths: List[str] = []
         for cp in cards_dir.glob("*.json"):
@@ -916,7 +940,7 @@ class TestBootstrap:
         repo = self._make_repo(tmp_path)
         cards_dir = tmp_path / "cards"
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
-        store.bootstrap(root=str(repo))
+        store.bootstrap(root=str(repo), provider=_topic_provider(self._topics_for_repo()))
         for cp in cards_dir.glob("*.json"):
             c = json.loads(cp.read_text())
             assert c.get("provenance", {}).get("created_by_task") == "bootstrap"
@@ -925,30 +949,26 @@ class TestBootstrap:
         """Calling bootstrap() twice produces the same card count (upsert, no duplicates)."""
         repo = self._make_repo(tmp_path)
         cards_dir = tmp_path / "cards"
+        topics = self._topics_for_repo()
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
-        n1 = store.bootstrap(root=str(repo))
-        n2 = store.bootstrap(root=str(repo))
+        n1 = store.bootstrap(root=str(repo), provider=_topic_provider(topics))
+        n2 = store.bootstrap(root=str(repo), provider=_topic_provider(topics))
         assert n1 == n2
         assert len(list(cards_dir.glob("*.json"))) == n1
-
-    def test_bootstrap_respects_max_cards(self, tmp_path):
-        """bootstrap() caps output at max_cards."""
-        repo = self._make_repo(tmp_path)
-        cards_dir = tmp_path / "cards"
-        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
-        n = store.bootstrap(root=str(repo), max_cards=1)
-        assert n <= 1
-        assert len(list(cards_dir.glob("*.json"))) <= 1
 
     def test_bootstrap_never_raises_on_bad_root(self, tmp_path):
         """bootstrap() with a non-existent root returns 0 and does not raise."""
         cards_dir = tmp_path / "cards"
         store = FileContextStore(str(cards_dir), auto_bootstrap=False)
-        result = store.bootstrap(root=str(tmp_path / "nonexistent"))
+        result = store.bootstrap(
+            root=str(tmp_path / "nonexistent"),
+            provider=_topic_provider([]),
+        )
         assert result == 0
 
     def test_bootstrap_skips_venv_and_git(self, tmp_path):
-        """bootstrap() must not index files inside .git or venv directories."""
+        """bootstrap() must not feed files inside .git or venv to the LLM, so they can never
+        end up pinned on a card (filtered to the walked file list by exact match)."""
         repo = tmp_path / "repo"
         repo.mkdir()
         # Real source file
@@ -962,7 +982,16 @@ class TestBootstrap:
 
         cards_dir = tmp_path / "cards"
         store = FileContextStore(str(cards_dir), auto_bootstrap=False)
-        store.bootstrap(root=str(repo))
+        # A malicious/confused LLM that tries to pin skipped files: they must be filtered out
+        # because they were never in the walked path list.
+        topics = [{
+            "id": "app",
+            "name": "App",
+            "keywords": ["app", "main", "entry"],
+            "summary": "Application entry point.",
+            "files": ["app.py", ".git/config", "venv/site_packages.py"],
+        }]
+        store.bootstrap(root=str(repo), provider=_topic_provider(topics))
 
         for cp in cards_dir.glob("*.json"):
             c = json.loads(cp.read_text())
@@ -976,11 +1005,12 @@ class TestBootstrap:
 # ---------------------------------------------------------------------------
 
 class TestAutoBootstrap:
-    def test_auto_bootstrap_on_first_assemble(self, tmp_path):
-        """FileContextStore with auto_bootstrap=True + repo_root seeds on first assemble()."""
+    def test_auto_bootstrap_on_first_assemble_is_noop_without_provider(self, tmp_path):
+        """Lazy auto-bootstrap has no model provider, so semantic topic cards cannot be
+        identified: the first assemble() on an empty store writes nothing and returns empty.
+        Cards accumulate via record() instead."""
         repo = tmp_path / "repo"
         repo.mkdir()
-        # A module with a distinctive function that will appear as a keyword.
         pkg = repo / "billing"
         pkg.mkdir()
         (pkg / "invoice.py").write_text(
@@ -989,8 +1019,6 @@ class TestAutoBootstrap:
         )
 
         cards_dir = tmp_path / "cards"
-        # confidence_threshold=0.0: tests ranking on small synthetic auto-bootstrap
-        # where IDF scores for a one-card store are below the production gate of 3.0.
         store = FileContextStore(
             str(cards_dir),
             repo_root=str(repo),
@@ -998,14 +1026,9 @@ class TestAutoBootstrap:
             max_cards_in_view=10,
             confidence_threshold=0.0,
         )
-        # No cards exist yet; first assemble should seed then match.
-        # File-granular bootstrap: billing/invoice.py gets its own card.
         ac = store.assemble("billing invoice generation")
-        # After auto-bootstrap, the card for billing/invoice.py should appear.
-        assert len(ac.card_ids) > 0, "expected at least one card after auto-bootstrap"
-        assert any("billing" in cid or "invoice" in cid for cid in ac.card_ids), (
-            f"expected a billing/invoice card, got: {ac.card_ids}"
-        )
+        assert ac.card_ids == [], "auto-bootstrap without a provider must write no cards"
+        assert not cards_dir.exists() or not any(cards_dir.glob("*.json"))
 
     def test_auto_bootstrap_fires_only_once(self, tmp_path):
         """The lazy bootstrap guard ensures bootstrap() is called at most once per instance."""
@@ -1284,13 +1307,34 @@ class TestConfidenceGate:
 
         return repo
 
-    def test_strong_match_injected_over_large_bootstrap(self, tmp_path):
-        """A distinctive query term that appears in only ONE of ~36 bootstrapped cards
-        clears the 3.0 gate and is injected with the right card.
+    def _large_repo_topics(self, n_noise_files: int = 35):
+        """One topic per file for the large repo: a distinctive 'collate' topic plus generic
+        noise topics. The distinctive keywords land on only one card so its IDF is high."""
+        topics = [{
+            "id": "collate",
+            "name": "Payment collation",
+            "keywords": ["xfr", "collate", "payments", "7q2", "billing", "account"],
+            "summary": "Collate outstanding payments for an account.",
+            "files": ["billing/collate.py"],
+        }]
+        for i in range(n_noise_files):
+            topics.append({
+                "id": f"util-{i}",
+                "name": f"Util {i}",
+                "keywords": ["util", "helper", "common"],
+                "summary": f"Generic helper module {i}.",
+                "files": [f"common/util_{i}.py"],
+            })
+        return topics
 
-        IDF for a term in 1/37 cards = log(38/2)+1 ~= 3.94, which exceeds 3.0.
+    def test_strong_match_injected_over_large_bootstrap(self, tmp_path):
+        """A distinctive query term that appears in only ONE of ~36 topic cards clears the
+        3.0 gate and is injected with the right card.
+
+        IDF for a term in 1/36 cards = log(37/2)+1 ~= 3.92, which exceeds 3.0.
         """
-        repo = self._make_large_repo(tmp_path, n_noise_files=35)
+        n_noise = 35
+        repo = self._make_large_repo(tmp_path, n_noise_files=n_noise)
         cards_dir = tmp_path / "cards"
 
         store = FileContextStore(
@@ -1298,8 +1342,11 @@ class TestConfidenceGate:
             repo_root=str(repo),
             auto_bootstrap=False,
         )
-        n = store.bootstrap(root=str(repo))
-        assert n >= 36, f"expected >= 36 cards from bootstrap, got {n}"
+        n = store.bootstrap(
+            root=str(repo),
+            provider=_topic_provider(self._large_repo_topics(n_noise)),
+        )
+        assert n >= 36, f"expected >= 36 topic cards from bootstrap, got {n}"
 
         # Query uses the distinctive function name as the key term.
         ac = store.assemble("xfr collate payments 7q2 billing account")
@@ -1311,7 +1358,7 @@ class TestConfidenceGate:
         assert len(ac.card_ids) > 0, (
             "expected at least one card_id for strong/distinctive match"
         )
-        # The top card must be the billing/collate.py card.
+        # The top card must be the billing/collate.py topic.
         top_id = ac.card_ids[0]
         all_cards = store._load_all()
         top_card = all_cards.get(top_id, {})
@@ -1427,7 +1474,14 @@ class TestCardCache:
         assert ac0.card_ids == []
 
         # Bootstrap writes cards; cache dirty flag must be set.
-        n = store.bootstrap(root=str(repo))
+        provider = _topic_provider([{
+            "id": "service",
+            "name": "Service",
+            "keywords": ["service", "handle", "request", "handler"],
+            "summary": "Request handling service.",
+            "files": ["service.py"],
+        }])
+        n = store.bootstrap(root=str(repo), provider=provider)
         assert n > 0
 
         # Next assemble must see the bootstrapped cards.
@@ -1439,43 +1493,37 @@ class TestCardCache:
 # Richer no-LLM summaries: docstring extraction
 # ---------------------------------------------------------------------------
 
-class TestBootstrapDocstringExtraction:
-    """Thing 1: bootstrap extracts docstrings from .py files and builds richer summaries."""
+# ---------------------------------------------------------------------------
+# Docstring/heading extraction HELPERS (still used by record() and the vector arm).
+# Bootstrap no longer extracts docstrings (topic summaries come from the LLM), but the
+# helper functions remain part of the module, so we exercise them directly here.
+# ---------------------------------------------------------------------------
 
-    def test_module_docstring_appears_in_summary(self, tmp_path):
-        """The module docstring first line must appear in the card summary."""
-        repo = tmp_path / "repo"
-        repo.mkdir()
-        (repo / "analyzer.py").write_text(
+class TestRichSummaryHelpers:
+    """The _build_rich_summary / _extract_docstrings helpers extract docstrings from .py files."""
+
+    def test_module_docstring_in_rich_summary(self, tmp_path):
+        from quest_ai_runner.adapters.file_context_store import _build_rich_summary
+
+        p = tmp_path / "analyzer.py"
+        p.write_text(
             '"""Analyze user behaviour patterns for the recommendation engine."""\n'
             "\n"
             "class BehaviourAnalyzer:\n"
             '    """Tracks and aggregates user events."""\n'
-            "    pass\n"
-            "\n"
-            "def compute_score(user_id):\n"
-            '    """Return a float score for the given user."""\n'
-            "    return 0.0\n",
+            "    pass\n",
             encoding="utf-8",
         )
-        cards_dir = tmp_path / "cards"
-        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
-        store.bootstrap(root=str(repo))
-
-        all_cards = list(cards_dir.glob("*.json"))
-        assert len(all_cards) == 1
-        card = json.loads(all_cards[0].read_text())
-
-        # summary must contain the module docstring fragment.
-        assert "Analyze user behaviour" in card["summary"], (
-            f"module docstring not in summary: {card['summary']!r}"
+        summary, description = _build_rich_summary("analyzer.py", p, ["BehaviourAnalyzer"])
+        assert "Analyze user behaviour" in summary, (
+            f"module docstring not in summary: {summary!r}"
         )
 
-    def test_class_and_fn_docstrings_appear_in_summary(self, tmp_path):
-        """Class and function docstring first lines must appear in the card summary."""
-        repo = tmp_path / "repo"
-        repo.mkdir()
-        (repo / "engine.py").write_text(
+    def test_class_and_fn_docstrings_in_rich_summary(self, tmp_path):
+        from quest_ai_runner.adapters.file_context_store import _build_rich_summary
+
+        p = tmp_path / "engine.py"
+        p.write_text(
             '"""The scoring engine."""\n'
             "\n"
             "class ScoreEngine:\n"
@@ -1487,24 +1535,18 @@ class TestBootstrapDocstringExtraction:
             "    pass\n",
             encoding="utf-8",
         )
-        cards_dir = tmp_path / "cards"
-        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
-        store.bootstrap(root=str(repo))
-
-        card = json.loads(list(cards_dir.glob("*.json"))[0].read_text())
-        combined = card["summary"] + " " + card.get("description", "")
-
-        # At least one of the def-level docstrings should appear.
+        summary, description = _build_rich_summary("engine.py", p, ["ScoreEngine", "build_index"])
+        combined = summary + " " + description
         assert (
             "Computes recommendation scores" in combined
             or "Build a BM25 index" in combined
-        ), f"def docstrings not in card text: {combined!r}"
+        ), f"def docstrings not in helper text: {combined!r}"
 
-    def test_description_field_populated(self, tmp_path):
-        """The ``description`` field on a bootstrapped card must be non-empty for .py with docstrings."""
-        repo = tmp_path / "repo"
-        repo.mkdir()
-        (repo / "service.py").write_text(
+    def test_description_populated_for_py_with_docstring(self, tmp_path):
+        from quest_ai_runner.adapters.file_context_store import _build_rich_summary
+
+        p = tmp_path / "service.py"
+        p.write_text(
             '"""Service layer for handling API requests."""\n'
             "\n"
             "def dispatch(req):\n"
@@ -1512,129 +1554,21 @@ class TestBootstrapDocstringExtraction:
             "    pass\n",
             encoding="utf-8",
         )
-        cards_dir = tmp_path / "cards"
-        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
-        store.bootstrap(root=str(repo))
-
-        card = json.loads(list(cards_dir.glob("*.json"))[0].read_text())
-        assert card.get("description"), (
-            f"expected non-empty description field, got: {card.get('description')!r}"
-        )
+        summary, description = _build_rich_summary("service.py", p, ["dispatch"])
+        assert description, f"expected non-empty description, got: {description!r}"
 
     def test_no_docstring_falls_back_to_symbol_list(self, tmp_path):
-        """When no docstrings exist the summary falls back to the symbol name list."""
-        repo = tmp_path / "repo"
-        repo.mkdir()
-        (repo / "nodoc.py").write_text(
+        from quest_ai_runner.adapters.file_context_store import _build_rich_summary
+
+        p = tmp_path / "nodoc.py"
+        p.write_text(
             "class WidgetFactory:\n    pass\n"
             "\ndef make_widget(size):\n    pass\n",
             encoding="utf-8",
         )
-        cards_dir = tmp_path / "cards"
-        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
-        store.bootstrap(root=str(repo))
-
-        card = json.loads(list(cards_dir.glob("*.json"))[0].read_text())
-        # summary should at least contain one of the class/function names.
-        assert "WidgetFactory" in card["summary"] or "make_widget" in card["summary"], (
-            f"expected symbol names in fallback summary: {card['summary']!r}"
+        summary, description = _build_rich_summary(
+            "nodoc.py", p, ["WidgetFactory", "make_widget"]
         )
-
-
-# ---------------------------------------------------------------------------
-# Test file down-weighting
-# ---------------------------------------------------------------------------
-
-class TestTestFileDownweighting:
-    """Thing 1: test files are indexed with lower weight so source files rank first."""
-
-    def _make_source_and_test(self, tmp_path: Path) -> Path:
-        repo = tmp_path / "repo"
-        repo.mkdir()
-        (repo / "billing.py").write_text(
-            '"""Billing module for invoice generation."""\n'
-            "\ndef generate_invoice(customer_id):\n    pass\n",
-            encoding="utf-8",
-        )
-        tests = repo / "tests"
-        tests.mkdir()
-        (tests / "test_billing.py").write_text(
-            "def test_generate_invoice():\n    pass\n",
-            encoding="utf-8",
-        )
-        return repo
-
-    def test_test_file_has_is_test_true(self, tmp_path):
-        repo = self._make_source_and_test(tmp_path)
-        cards_dir = tmp_path / "cards"
-        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
-        store.bootstrap(root=str(repo))
-
-        test_card = None
-        for cp in cards_dir.glob("*.json"):
-            c = json.loads(cp.read_text())
-            files = c.get("files", [])
-            if files and "tests/" in files[0].get("path", ""):
-                test_card = c
-                break
-        assert test_card is not None, "expected a card for tests/test_billing.py"
-        assert test_card.get("is_test") is True, (
-            f"expected is_test=True on test card, got: {test_card.get('is_test')!r}"
-        )
-
-    def test_test_file_has_lower_weight(self, tmp_path):
-        repo = self._make_source_and_test(tmp_path)
-        cards_dir = tmp_path / "cards"
-        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
-        store.bootstrap(root=str(repo))
-
-        for cp in cards_dir.glob("*.json"):
-            c = json.loads(cp.read_text())
-            files = c.get("files", [])
-            if files and "tests/" in files[0].get("path", ""):
-                assert c.get("weight", 1.0) < 1.0, (
-                    f"expected weight < 1.0 on test card, got: {c.get('weight')!r}"
-                )
-                return
-        pytest.fail("test card not found")
-
-    def test_source_file_has_is_test_false(self, tmp_path):
-        repo = self._make_source_and_test(tmp_path)
-        cards_dir = tmp_path / "cards"
-        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
-        store.bootstrap(root=str(repo))
-
-        for cp in cards_dir.glob("*.json"):
-            c = json.loads(cp.read_text())
-            files = c.get("files", [])
-            if files and files[0].get("path", "") == "billing.py":
-                assert c.get("is_test") is False, (
-                    f"expected is_test=False on source card, got: {c.get('is_test')!r}"
-                )
-                return
-        pytest.fail("source card for billing.py not found")
-
-    def test_source_ranks_before_test_on_same_query(self, tmp_path):
-        """A query that matches both billing.py and test_billing.py should rank source first."""
-        repo = self._make_source_and_test(tmp_path)
-        cards_dir = tmp_path / "cards"
-        store = FileContextStore(
-            str(cards_dir),
-            repo_root=str(repo),
-            auto_bootstrap=False,
-            confidence_threshold=0.0,
-        )
-        store.bootstrap(root=str(repo))
-
-        # 'billing invoice' matches both cards; source should rank first.
-        ac = store.assemble("billing invoice generate customer")
-        assert len(ac.card_ids) >= 2, (
-            f"expected >= 2 cards, got: {ac.card_ids}"
-        )
-        # Find paths for top card and second card.
-        all_cards = store._load_all()
-        top_card = all_cards.get(ac.card_ids[0], {})
-        top_path = (top_card.get("files") or [{}])[0].get("path", "")
-        assert "tests/" not in top_path, (
-            f"expected source file ranked first, got top card file: {top_path!r}"
+        assert "WidgetFactory" in summary or "make_widget" in summary, (
+            f"expected symbol names in fallback summary: {summary!r}"
         )
