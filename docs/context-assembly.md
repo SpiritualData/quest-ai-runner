@@ -299,49 +299,76 @@ planner must re-read, many of them irrelevant to the current question, at real t
 cost. The planner is cheap, but the waste compounds: a long chat about varied topics sends the
 whole history of unrelated topics on every single turn.
 
-### The solution: relevant-turn selection (no compression)
+### The solution: turn cards + the same hybrid retrieval stack
 
-`quest_ai_runner.core.turn_memory.TurnMemory` replaces raw accumulation. On each new turn it
-builds the transcript from exactly two groups:
+`quest_ai_runner.core.turn_context_store.TurnContextStore` stores conversation turns as JSON
+card files (under `.quest-context/turns/` by default) using the SAME card format as
+`FileContextStore`. It is a full `ContextAssembler` implementation: its `record()` writes a card
+after each turn, and its `assemble()` retrieves relevant past turns by IDF keyword overlap --
+the same algorithm as file cards. Because turn cards are real cards, any `VectorContextAssembler`
+wired alongside them will also embed and semantically rank turn history.
 
-1. **Always-recent turns** (default: last 1). The immediately preceding exchange provides the
-   conversational continuity that a reply always needs -- what was just said. These are included
-   unconditionally. Raise ``always_recent`` if the consumer needs more guaranteed continuity.
+**What a turn card contains:**
+- `user` -- the verbatim user message
+- `assistant_summary` -- the AI response, truncated to `max_assistant_chars` (default 400)
+  with a trailing ``"…"``; only the rendered form is truncated, the full text drives indexing
+- `description` -- the full ``User: ... / Assistant: ...`` text, for the vector arm to embed
+- `keywords` -- deduplicated keywords extracted from both sides (stopwords stripped, length > 2)
+- `files_consulted` -- the `rel_path` list from `outcome["files"]` (what the brain read)
+- `created_at` -- ISO-8601 UTC timestamp
 
-2. **Relevant older turns** (default: up to 4). Each older turn is scored by keyword overlap
-   with the current message (stopwords stripped, IDF not required). Turns with no overlap are
-   excluded entirely -- they are not compressed, summarized, or truncated; they simply do not
-   appear. The top-scoring older turns are included, restored to chronological order so the
-   planner sees a coherent narrative.
+**Retrieval policy.** On each `assemble()` call:
+1. The most recently stored card is always returned (floor of 1 recent), providing immediate
+   conversational continuity regardless of keyword overlap.
+2. Up to `max_older` (default 4) additional cards are selected by keyword overlap with the
+   current message; cards with zero overlap are excluded entirely (not compressed -- just not
+   sent).
+3. Selected cards are restored to chronological order.
 
-There is no LLM call. There is no compression. Excluded turns are dropped clean, not degraded.
-This is the right trade-off: a turn with zero keyword overlap with the current question is very
-unlikely to be relevant, so excluding it is almost always correct; the cost of including an
-irrelevant turn (wasted planner tokens, diluted context) is much higher than the cost of missing
-a marginally relevant one (the planner still has the current context_view and gathered reads).
+**Durable memory.** Unlike the old in-memory `TurnMemory`, turn cards survive across sessions.
+They are stored on disk under the configured `turns_dir` and are NOT cleared by `/clear` -- they
+are long-horizon memory, not a per-session transcript. `/clear` resets only the single-turn
+buffer that supplies the `transcript=` argument (the immediately preceding exchange); the card
+store continues to grow across all sessions.
 
-**Assistant-response truncation.** AI responses are often long, but the planner only needs to
-know the gist of what was said -- not the full answer text. ``TurnMemory`` truncates the
-assistant side of each rendered turn to ``max_assistant_chars`` characters (default 400) in the
-transcript string, appending ``"…"`` when trimmed. The full text is still stored internally and
-used for keyword extraction (so older turns remain discoverable by the relevance scorer). Pass
-``max_assistant_chars=0`` to disable truncation.
+### Immediate-turn buffer
 
-### How to wire it
-
-`InteractiveSession` uses `TurnMemory` by default. For a custom consumer:
+For the single pair "what I just said / what the AI just replied," `InteractiveSession` also
+maintains `_last_user` / `_last_assistant` instance variables. This provides guaranteed
+continuity for the next turn WITHOUT waiting for the card to be written and retrieved. The
+`transcript=` parameter to `orch.run_stream()` is built from this buffer:
 
 ```python
-from quest_ai_runner.core.turn_memory import TurnMemory
-
-mem = TurnMemory(always_recent=1, max_older=4)
-
-while True:
-    user_text = input()
-    transcript = mem.relevant_transcript(user_text)
-    result = orch.run(user_text, transcript=transcript, ...)
-    mem.add(user_text, result.text or "")
+def _last_transcript(self) -> str:
+    if not self._last_user:
+        return ""
+    asst = self._last_assistant
+    if len(asst) > 400:
+        asst = asst[:400].rstrip() + "..."
+    return f"User: {self._last_user}\nAssistant: {asst}"
 ```
 
-`TurnMemory` is stdlib-only, has no external dependencies, and never calls a model. Construct it
-once per session; call `clear()` to reset (e.g. on a `/clear` command).
+### CompositeContextAssembler
+
+`quest_ai_runner.core.composite_assembler.CompositeContextAssembler` wraps multiple
+`ContextAssembler` instances into one. It calls each on `assemble()` (concatenating non-empty
+`context_view` strings with a double newline separator), merges `card_ids` and `stale` lists,
+and calls each on `record()` best-effort (never raises). This is how turn cards compose with
+file cards or any other assembler:
+
+```python
+from quest_ai_runner.core.turn_context_store import TurnContextStore
+from quest_ai_runner.core.composite_assembler import CompositeContextAssembler
+from quest_ai_runner.adapters.file_context_store import FileContextStore
+
+file_store = FileContextStore(cards_dir=".quest-context/cards")
+turn_store = TurnContextStore(turns_dir=".quest-context/turns")
+assembler = CompositeContextAssembler([file_store, turn_store])
+
+cfg = RunnerConfig(..., context_assembler=assembler)
+```
+
+`InteractiveSession` wires the turn store automatically: if a `context_assembler` is already set
+in `RunnerConfig`, the session wraps it with `CompositeContextAssembler([existing, turn_store])`;
+otherwise it sets the `TurnContextStore` directly. A consumer that never calls
+`InteractiveSession` can wire both explicitly, as above.

@@ -1361,7 +1361,9 @@ class Orchestrator:
                                 used_files.append(rp)
                     self.context_assembler.record(
                         user_message,
-                        {"kind": res.kind, "steps": res.steps, "files": used_files, **_ctx_meta},
+                        {"kind": res.kind, "steps": res.steps, "files": used_files,
+                         "response": res.text,
+                         **_ctx_meta},
                     )
                 except Exception:  # noqa: BLE001 -- write-back must never break the run
                     pass

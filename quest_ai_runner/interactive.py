@@ -43,7 +43,8 @@ if TYPE_CHECKING:
     from .config import RunnerConfig
     from .core.orchestrator import Orchestrator, OrchestratorResult, ProgressEvent
 
-from .core.turn_memory import TurnMemory
+from .core.turn_context_store import TurnContextStore
+from .core.composite_assembler import CompositeContextAssembler
 
 # ── Optional [tui] dependencies ───────────────────────────────────────────────
 
@@ -518,7 +519,18 @@ class InteractiveSession:
         self._rep_name = rep_name
         self._persona = persona
         self._goal_id = goal_id
-        self._memory = TurnMemory()
+        # Single-turn buffer for immediate transcript context.
+        self._last_user: str = ""
+        self._last_assistant: str = ""
+        self._turn_count: int = 0
+        # Wire TurnContextStore into the orchestrator's context_assembler.
+        turn_store = TurnContextStore()
+        existing = self._orch.context_assembler
+        if existing is not None:
+            self._orch.context_assembler = CompositeContextAssembler([existing, turn_store])
+        else:
+            self._orch.context_assembler = turn_store
+        self._turn_store = turn_store
         self._console = _Console()
         self._cancelled = threading.Event()
 
@@ -542,6 +554,15 @@ class InteractiveSession:
 
     # -- one turn --------------------------------------------------------------
 
+    def _last_transcript(self) -> str:
+        """Return a single-turn transcript of the immediately preceding exchange."""
+        if not self._last_user:
+            return ""
+        asst = self._last_assistant
+        if len(asst) > 400:
+            asst = asst[:400].rstrip() + "…"
+        return f"User: {self._last_user}\nAssistant: {asst}"
+
     def _run_turn(self, user_text: str) -> None:
         from .core.orchestrator import OrchestratorResult
 
@@ -560,7 +581,7 @@ class InteractiveSession:
             with _EscWatcher(self._cancelled):
                 for item in self._orch.run_stream(
                     user_text,
-                    transcript=self._memory.relevant_transcript(user_text),
+                    transcript=self._last_transcript(),
                     quest_id=self._goal_id,
                     rep_preamble=self._persona,
                 ):
@@ -578,7 +599,9 @@ class InteractiveSession:
         elapsed = time.monotonic() - t0
 
         if not self._cancelled.is_set() and final is not None:
-            self._memory.add(user_text, final.text or "")
+            self._last_user = user_text
+            self._last_assistant = final.text or ""
+            self._turn_count += 1
             self._console.line("")
             self._print_turn_footer(final, panel, elapsed)
 
@@ -644,7 +667,8 @@ class InteractiveSession:
             if line == "/help":
                 self._console.line(_HELP); continue
             if line == "/clear":
-                self._memory.clear()
+                self._last_user = ""
+                self._last_assistant = ""
                 self._console.dim("  transcript cleared"); continue
             if line.startswith("/rep "):
                 self._rep_name = line[5:].strip()
@@ -785,7 +809,7 @@ class InteractiveSession:
                   "(use /persona <file> or --persona-file to load one)")
         if self._goal_id:
             c.dim(f"  goal:      {self._goal_id}")
-        c.dim(f"  turns:     {self._memory.turn_count} in this session")
+        c.dim(f"  turns:     {self._turn_count} in this session")
         c.line("")
 
 

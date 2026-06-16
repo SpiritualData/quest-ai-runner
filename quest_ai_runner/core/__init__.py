@@ -79,7 +79,8 @@ from .guard import (
     text_claims_action,
     verify_supported,
 )
-from .turn_memory import TurnMemory
+from .turn_context_store import TurnContextStore
+from .composite_assembler import CompositeContextAssembler
 
 __all__ = [
     # adapters / value objects
@@ -107,6 +108,6 @@ __all__ = [
     # goal runner
     "GoalRunner", "SubprocessGoalRunner", "SubprocessConfig", "compose_goal_prompt",
     "ESCALATION_MARKER", "extract_escalation_id",
-    # turn memory
-    "TurnMemory",
+    # turn context store + composite assembler (replace TurnMemory)
+    "TurnContextStore", "CompositeContextAssembler",
 ]
