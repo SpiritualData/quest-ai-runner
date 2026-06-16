@@ -1481,11 +1481,31 @@ class Orchestrator:
                         emit.status("searching…" if any(r.get("grep") for r in plan.reads) else "reading…")
                     new_obs = self._do_reads(plan.reads, guidance_selected_ids)
                     gathered.extend(new_obs)
-                    _sources = [o.get("rel_path") or o.get("pattern") or o.get("query")
-                                for o in new_obs if isinstance(o, dict)]
+                    _sources: List[str] = []
+                    for _o in new_obs:
+                        if not isinstance(_o, dict):
+                            continue
+                        _kind = _o.get("kind", "")
+                        if _kind == "grep":
+                            # Show matched file paths; on empty show a "(no matches)" marker
+                            _hits = _o.get("hits") or []
+                            _seen_rp: set = set()
+                            for _h in _hits:
+                                _rp = _h.get("rel_path")
+                                if _rp and _rp not in _seen_rp:
+                                    _seen_rp.add(_rp)
+                                    _sources.append(_rp)
+                            if not _hits:
+                                _pat = _o.get("pattern") or ""
+                                if _pat:
+                                    _sources.append(f"(searched {_pat!r} — nothing found)")
+                        else:
+                            _rp = _o.get("rel_path") or _o.get("pattern")
+                            if _rp:
+                                _sources.append(_rp)
                     emit.emit(ProgressEvent(type=EVENT_READ, step=steps,
                                             data={"reads": len(plan.reads),
-                                                  "sources": [s for s in _sources if s][:8]}))
+                                                  "sources": _sources[:8]}))
                     if budget_exhausted():
                         break
                     continue

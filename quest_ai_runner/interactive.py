@@ -459,7 +459,9 @@ class _TurnRenderer:
             if paths:
                 self._panel.stop()
                 for p in paths:
-                    self._print_step("↗", p)
+                    # "(searched ...)" markers use a search glyph; real paths use ↗
+                    prefix = "⌕" if p.startswith("(searched ") else "↗"
+                    self._print_step(prefix, p)
                 self._panel.start()
             total = self._panel._total_sources
             self._panel.set_phase(
