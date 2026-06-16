@@ -49,11 +49,13 @@ except ImportError:
 # those packages installed.  Consumers that want QdrantVectorStore must install the
 # extra and then either import it directly from this module or from its own module.
 try:
-    from .qdrant_vector_store import QdrantVectorStore
+    from .qdrant_vector_store import QdrantVectorStore, make_voyage_embedder, make_openai_embedder
     _QDRANT_AVAILABLE = True
 except ImportError:
     _QDRANT_AVAILABLE = False
     QdrantVectorStore = None  # type: ignore[assignment,misc]
+    make_voyage_embedder = None  # type: ignore[assignment]
+    make_openai_embedder = None  # type: ignore[assignment]
 
 __all__ = [
     "FilesAdapter",
@@ -65,4 +67,6 @@ __all__ = [
     "HybridContextAssembler",
     "BM25ContentStore",
     "QdrantVectorStore",
+    "make_voyage_embedder",
+    "make_openai_embedder",
 ]

@@ -56,6 +56,23 @@ stored items and ``input_type="query"`` for search queries::
         embedder=make_voyage_embedder(input_type="document"),
         query_embedder=make_voyage_embedder(input_type="query"),
     )
+
+OPENAI EMBEDDER
+---------------
+Use ``make_openai_embedder`` for OpenAI-backed embeddings (symmetric -- same
+callable for both document and query roles)::
+
+    from quest_ai_runner.adapters.qdrant_vector_store import (
+        QdrantVectorStore, make_openai_embedder,
+    )
+
+    embedder = make_openai_embedder()   # reads OPENAI_API_KEY + QAR_OPENAI_EMBEDDING_MODEL
+    store = QdrantVectorStore(
+        url="http://localhost:6333",
+        vector_size=1536,               # text-embedding-3-small default
+        embedder=embedder,
+        query_embedder=embedder,        # same callable -- OpenAI embeddings are symmetric
+    )
 """
 from __future__ import annotations
 
@@ -123,6 +140,54 @@ def make_voyage_embedder(
         import voyageai as _va
         client = _va.Client(api_key=_api_key)
         return client.embed(texts, model=_model, input_type=_input_type).embeddings
+
+    return _embed
+
+
+def make_openai_embedder(
+    *,
+    model: Optional[str] = None,
+    api_key: Optional[str] = None,
+) -> Callable[[List[str]], List[List[float]]]:
+    """Build an OpenAI-backed embedding callable.
+
+    Parameters
+    ----------
+    model:
+        OpenAI embedding model name.  Falls back to the ``QAR_OPENAI_EMBEDDING_MODEL``
+        env var, then ``"text-embedding-3-small"``.
+    api_key:
+        OpenAI API key.  When omitted the ``OPENAI_API_KEY`` env var is used.
+
+    Returns
+    -------
+    Callable[[List[str]], List[List[float]]]
+        A callable that embeds a list of strings and returns their vectors.
+        OpenAI embeddings are symmetric (no ``input_type`` distinction), so the
+        same callable can be passed as both ``embedder`` and ``query_embedder``.
+
+    Raises
+    ------
+    ImportError
+        Raised immediately (at factory-call time) when the ``openai`` package is
+        not installed, with an install hint.
+    """
+    try:
+        import openai  # noqa: F401
+    except ImportError as exc:
+        raise ImportError(
+            "make_openai_embedder requires the openai package. "
+            "Install with: pip install openai"
+        ) from exc
+
+    _model = model or os.getenv("QAR_OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+    _api_key = api_key or os.getenv("OPENAI_API_KEY")
+
+    def _embed(texts: List[str]) -> List[List[float]]:
+        import openai as _oa
+        client = _oa.OpenAI(api_key=_api_key)
+        response = client.embeddings.create(input=texts, model=_model)
+        return [item.embedding for item in response.data]
 
     return _embed
 

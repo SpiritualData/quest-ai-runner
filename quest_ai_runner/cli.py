@@ -33,6 +33,15 @@ Env it reads:
   QAR_MODEL_BACKEND (optional)                   — "anthropic" | "claude_cli". Default: auto —
                                                    "anthropic" if ANTHROPIC_API_KEY is set, else
                                                    "claude_cli" (keyless, via the subscription login).
+  QAR_EMBEDDER_BACKEND (optional)                — embedding backend for the auto-built context
+                                                   vector store: "voyage" (Voyage AI, needs voyageai
+                                                   package + VOYAGE_API_KEY / VOYAGE_MODEL),
+                                                   "openai" (OpenAI, needs openai package +
+                                                   OPENAI_API_KEY; model via QAR_OPENAI_EMBEDDING_MODEL,
+                                                   default text-embedding-3-small), or "fastembed"
+                                                   / unset (default, local ONNX, no API key).
+                                                   Falls back to fastembed if the chosen backend's
+                                                   package is missing.
   ANTHROPIC_API_KEY (optional)                   — only for the "anthropic" backend (per-token
                                                    billing). NOT needed for the keyless claude_cli
                                                    backend, which runs on Claude Code's subscription.

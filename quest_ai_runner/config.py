@@ -25,6 +25,13 @@ from .core.adapters import (
     ModelProvider,
     RetrievalAdapter,
 )
+# Bootstrap algorithm version + meta reader. file_context_store imports only from .core and
+# ._walk (never from .config), so this top-level import carries no circular-import risk.
+from .adapters.file_context_store import (
+    _BOOTSTRAP_META_FILE,
+    _BOOTSTRAP_VERSION,
+    _read_bootstrap_meta,
+)
 from .core.model_registry import ModelRegistry
 from .core.orchestrator import Orchestrator, OrchestratorConfig
 from .resources import ResourceLimits
@@ -208,11 +215,15 @@ def build_registry(cfg: RunnerConfig) -> ModelRegistry:
 
 
 def _cards_exist(cards_dir: str) -> bool:
-    """True if the cards directory already holds at least one card file."""
+    """True if the cards directory already holds at least one card file.
+
+    Excludes the ``bootstrap_meta.json`` sidecar (algorithm metadata, not a card).
+    """
     try:
         p = Path(cards_dir)
         return p.is_dir() and any(
             e.suffix == ".json" and not e.name.startswith(".")
+            and e.name != _BOOTSTRAP_META_FILE
             for e in p.iterdir()
         )
     except OSError:
@@ -239,22 +250,37 @@ def _bootstrap_if_needed(keyword, *, root: str, cards_dir: str,
       but the keyword default never blocks.
     """
     if _cards_exist(cards_dir):
-        _log.info(
-            "context index: scanning %s for changes (background)", root
-        )
+        # VERSION MISMATCH check: if the stored cards were built by an older bootstrap algorithm,
+        # they are stale and we re-bootstrap in the background (the user can chat immediately
+        # against whatever cards exist). Otherwise we just refresh stale cards.
+        meta = _read_bootstrap_meta(cards_dir)
+        stored_version = meta.get("version", 0)
+        if stored_version < _BOOTSTRAP_VERSION:
+            _log.info(
+                "context index: re-indexing corpus (algorithm updated v%d -> v%d) — "
+                "this runs in background, chat is available immediately",
+                stored_version, _BOOTSTRAP_VERSION,
+            )
+            # Fall through to the background bootstrap path below (don't return early). The
+            # incremental bootstrap dedups new/refreshed cards against the existing ones.
+        else:
+            # Version matches: just refresh stale cards.
+            _log.info(
+                "context index: scanning %s for changes (background)", root
+            )
 
-        def _bg_refresh() -> None:
-            try:
-                n = keyword.refresh_stale(root=root, provider=provider)
-                if n > 0:
-                    _log.info("context index: refreshed %d card(s)", n)
-                else:
-                    _log.debug("context index: all cards up to date")
-            except Exception:  # noqa: BLE001
-                _log.debug("context index: refresh failed", exc_info=True)
+            def _bg_refresh() -> None:
+                try:
+                    n = keyword.refresh_stale(root=root, provider=provider)
+                    if n > 0:
+                        _log.info("context index: refreshed %d card(s)", n)
+                    else:
+                        _log.debug("context index: all cards up to date")
+                except Exception:  # noqa: BLE001
+                    _log.debug("context index: refresh failed", exc_info=True)
 
-        threading.Thread(target=_bg_refresh, daemon=True, name="qar-refresh").start()
-        return
+            threading.Thread(target=_bg_refresh, daemon=True, name="qar-refresh").start()
+            return
 
     # First run — no cards yet.
     if block:
@@ -341,7 +367,44 @@ def resolve_context_assembler(cfg: RunnerConfig):
                 from .adapters import QdrantVectorStore as _QdrantVS
                 if _QdrantVS is not None:
                     qdrant_path = os.path.join(cards_dir, "qdrant")
-                    vector_store = _QdrantVS(path=qdrant_path)
+                    # QAR_EMBEDDER_BACKEND selects the embedding backend for the auto-built
+                    # vector store: "voyage" uses Voyage AI (asymmetric document/query embedders,
+                    # matching the backend's production setup), anything else (unset or
+                    # "fastembed") uses the bare store's default local fastembed embedder.
+                    backend = (os.getenv("QAR_EMBEDDER_BACKEND") or "").strip().lower()
+                    if backend == "voyage":
+                        try:
+                            from .adapters.qdrant_vector_store import make_voyage_embedder
+                            vector_store = _QdrantVS(
+                                path=qdrant_path,
+                                embedder=make_voyage_embedder(input_type="document"),
+                                query_embedder=make_voyage_embedder(input_type="query"),
+                            )
+                        except Exception:  # noqa: BLE001 — voyageai missing/misconfigured
+                            _log.warning(
+                                "context index: QAR_EMBEDDER_BACKEND=voyage but the voyageai "
+                                "embedder could not be built — falling back to fastembed",
+                                exc_info=True,
+                            )
+                            vector_store = _QdrantVS(path=qdrant_path)
+                    elif backend == "openai":
+                        try:
+                            from .adapters.qdrant_vector_store import make_openai_embedder
+                            embedder = make_openai_embedder()
+                            vector_store = _QdrantVS(
+                                path=qdrant_path,
+                                embedder=embedder,
+                                query_embedder=embedder,
+                            )
+                        except Exception:  # noqa: BLE001 — openai missing/misconfigured
+                            _log.warning(
+                                "context index: QAR_EMBEDDER_BACKEND=openai but the openai "
+                                "embedder could not be built — falling back to fastembed",
+                                exc_info=True,
+                            )
+                            vector_store = _QdrantVS(path=qdrant_path)
+                    else:
+                        vector_store = _QdrantVS(path=qdrant_path)
             except (ImportError, Exception):  # noqa: BLE001
                 # qdrant-client / fastembed not installed, or construction failed: keyword-only.
                 vector_store = None
