@@ -6,11 +6,21 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **`TurnMemory` defaults tightened; assistant responses truncated in transcript.**
+  `always_recent` default changed from 2 to **1** (only the immediately preceding exchange is
+  guaranteed; raise if the consumer needs more continuity). New `max_assistant_chars` parameter
+  (default **400**): the assistant side of each rendered turn is truncated to this many
+  characters with a trailing `"…"` when trimmed, so a long prior answer does not bloat the
+  planner's per-turn context. The full assistant text is still stored internally and used for
+  keyword-overlap scoring, so older turns remain discoverable. Pass `max_assistant_chars=0` to
+  disable truncation. `docs/context-assembly.md` updated to match.
+
 ### Added
 - **`TurnMemory` -- relevant-turn transcript selection.** `quest_ai_runner.core.TurnMemory`
   replaces raw `"User: X / Assistant: Y"` string accumulation in interactive sessions. On each
   new turn it builds the transcript from: (a) always the most recent `always_recent` turns
-  (default 2) for conversational continuity, and (b) up to `max_older` (default 4) older turns
+  (default 1) for conversational continuity, and (b) up to `max_older` (default 4) older turns
   scored by keyword overlap with the current message -- irrelevant older turns are excluded
   entirely (not compressed, just not sent). No LLM call; stdlib only. `InteractiveSession` now
   uses `TurnMemory` internally instead of a raw list, so long conversations stop paying for

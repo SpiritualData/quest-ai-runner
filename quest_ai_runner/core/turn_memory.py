@@ -33,6 +33,23 @@ class TurnMemory:
     Irrelevant turns are excluded -- their content is not compressed or summarized,
     just not included. No LLM call; stdlib only.
 
+    Parameters
+    ----------
+    always_recent:
+        Number of most-recent turns always included regardless of keyword overlap.
+        Default 1 -- only the immediately preceding exchange is guaranteed. Raise if
+        the consumer needs more guaranteed continuity.
+    max_older:
+        Maximum number of older (non-recent) turns to include, selected by keyword
+        overlap with the current message. Default 4.
+    max_assistant_chars:
+        Truncate the assistant side of each rendered turn to this many characters in
+        the transcript string. AI responses are long; the excerpt gives the AI enough
+        context about what it said without re-reading the full answer. Default 400.
+        Pass 0 to disable truncation. The full assistant text is still stored
+        internally and used for keyword extraction -- only the rendered output is
+        truncated.
+
     Usage::
 
         mem = TurnMemory()
@@ -43,10 +60,11 @@ class TurnMemory:
         result = orch.run(new_user_message, transcript=transcript, ...)
     """
 
-    def __init__(self, always_recent: int = 2, max_older: int = 4):
+    def __init__(self, always_recent: int = 1, max_older: int = 4, max_assistant_chars: int = 400):
         self._turns: List[_Turn] = []
         self._always_recent = max(1, always_recent)
         self._max_older = max(0, max_older)
+        self._max_assistant_chars = max_assistant_chars
 
     # ------------------------------------------------------------------
 
@@ -80,8 +98,11 @@ class TurnMemory:
         all_selected = selected_older + [t for t in recent if id(t) not in {id(x) for x in selected_older}]
         parts: List[str] = []
         for t in all_selected:
+            assistant_text = t.assistant
+            if self._max_assistant_chars and len(assistant_text) > self._max_assistant_chars:
+                assistant_text = assistant_text[:self._max_assistant_chars].rstrip() + "…"
             parts.append(f"User: {t.user}")
-            parts.append(f"Assistant: {t.assistant}")
+            parts.append(f"Assistant: {assistant_text}")
         return "\n".join(parts)
 
     def clear(self) -> None:

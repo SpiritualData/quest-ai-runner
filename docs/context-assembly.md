@@ -304,8 +304,9 @@ whole history of unrelated topics on every single turn.
 `quest_ai_runner.core.turn_memory.TurnMemory` replaces raw accumulation. On each new turn it
 builds the transcript from exactly two groups:
 
-1. **Always-recent turns** (default: last 2). The most recent turns provide the conversational
-   continuity that a reply always needs -- what was just said. These are included unconditionally.
+1. **Always-recent turns** (default: last 1). The immediately preceding exchange provides the
+   conversational continuity that a reply always needs -- what was just said. These are included
+   unconditionally. Raise ``always_recent`` if the consumer needs more guaranteed continuity.
 
 2. **Relevant older turns** (default: up to 4). Each older turn is scored by keyword overlap
    with the current message (stopwords stripped, IDF not required). Turns with no overlap are
@@ -319,6 +320,13 @@ unlikely to be relevant, so excluding it is almost always correct; the cost of i
 irrelevant turn (wasted planner tokens, diluted context) is much higher than the cost of missing
 a marginally relevant one (the planner still has the current context_view and gathered reads).
 
+**Assistant-response truncation.** AI responses are often long, but the planner only needs to
+know the gist of what was said -- not the full answer text. ``TurnMemory`` truncates the
+assistant side of each rendered turn to ``max_assistant_chars`` characters (default 400) in the
+transcript string, appending ``"…"`` when trimmed. The full text is still stored internally and
+used for keyword extraction (so older turns remain discoverable by the relevance scorer). Pass
+``max_assistant_chars=0`` to disable truncation.
+
 ### How to wire it
 
 `InteractiveSession` uses `TurnMemory` by default. For a custom consumer:
@@ -326,7 +334,7 @@ a marginally relevant one (the planner still has the current context_view and ga
 ```python
 from quest_ai_runner.core.turn_memory import TurnMemory
 
-mem = TurnMemory(always_recent=2, max_older=4)
+mem = TurnMemory(always_recent=1, max_older=4)
 
 while True:
     user_text = input()

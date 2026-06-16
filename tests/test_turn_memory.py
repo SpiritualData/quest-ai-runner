@@ -81,3 +81,52 @@ def test_turn_count():
     assert mem.turn_count == 2
     mem.clear()
     assert mem.turn_count == 0
+
+
+def test_default_always_recent_is_one():
+    """Default TurnMemory() includes exactly 1 recent turn (always_recent=1)."""
+    mem = TurnMemory(max_older=0)  # disable older selection to isolate always-recent behavior
+    mem.add("first question", "first answer")
+    mem.add("second question", "second answer")
+    mem.add("third question", "third answer")
+    # With always_recent=1 and max_older=0, only the last turn should be present.
+    transcript = mem.relevant_transcript("zzz unrelated xyz")
+    assert "third question" in transcript
+    assert "second question" not in transcript
+    assert "first question" not in transcript
+
+
+def test_max_assistant_chars_truncates():
+    """Rendered transcript truncates assistant text to max_assistant_chars with ellipsis."""
+    mem = TurnMemory(max_assistant_chars=10)
+    mem.add("question", "a" * 50)
+    transcript = mem.relevant_transcript("question")
+    # The assistant line should be truncated to 10 chars + ellipsis
+    assert "Assistant: " + "a" * 10 + "…" in transcript
+    # The full 50-char response must NOT appear in the rendered transcript
+    assert "a" * 50 not in transcript
+
+
+def test_max_assistant_chars_zero_disables_truncation():
+    """max_assistant_chars=0 disables truncation and the full text appears."""
+    long_answer = "b" * 1000
+    mem = TurnMemory(max_assistant_chars=0)
+    mem.add("question", long_answer)
+    transcript = mem.relevant_transcript("question")
+    assert long_answer in transcript
+    assert "…" not in transcript
+
+
+def test_max_assistant_chars_keyword_extraction_uses_full_text():
+    """Keyword extraction for relevance scoring uses the full assistant text, not the truncated form."""
+    mem = TurnMemory(always_recent=1, max_older=2, max_assistant_chars=10)
+    # Turn 1: assistant answer contains a keyword buried past char 10
+    mem.add("something unrelated", "short" + " " * 20 + "pythonkeyword extra text here")
+    # Turn 2 is the always-recent anchor
+    mem.add("anchor turn", "anchor answer")
+
+    # Query with the keyword that appears after position 10 in turn 1's assistant text.
+    # If keyword extraction used the truncated form (only first 10 chars), this turn
+    # would score 0 overlap. With the full text it should score > 0 and be included.
+    transcript = mem.relevant_transcript("pythonkeyword")
+    assert "something unrelated" in transcript
