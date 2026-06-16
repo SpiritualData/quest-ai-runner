@@ -833,36 +833,49 @@ class InteractiveSession:
         c.dim(f"  attached to: {title}")
 
     def _cmd_reps(self, session) -> None:
-        """List the team's AI representatives and let the user select one."""
+        """List locally-synced AI reps (SKILL.md files) and let the user select one."""
+        import os
         c = self._console
-        client = self._quest_client()
-        if client is None:
-            c.dim("  Quest credentials not configured — set QUEST_BASE_URL, QUEST_API_KEY, QUEST_TEAM_ID")
-            c.dim("  You can still set a name with /rep <name> and a skill file with /persona <file>")
+        skills_dir = self._skills_dir()
+        if not skills_dir or not os.path.isdir(skills_dir):
+            c.dim(f"  no skills directory found (set QAR_SKILLS_DIR, or QAR_CORPUS_ROOT/.claude/skills/)")
+            c.dim("  you can still use /rep <name> and /persona <file> to set one manually")
             return
-        c.dim("  fetching reps…")
-        reps = client.list_reps()
+        reps = []
+        for entry in sorted(os.scandir(skills_dir), key=lambda e: e.name):
+            if not entry.is_dir():
+                continue
+            skill_file = os.path.join(entry.path, "SKILL.md")
+            if not os.path.isfile(skill_file):
+                continue
+            reps.append({"name": entry.name, "skill_file": skill_file})
         if not reps:
-            c.dim("  no AI reps found on this team")
-            c.dim("  You can still set a name with /rep <name> and a skill file with /persona <file>")
+            c.dim(f"  no SKILL.md files found under {skills_dir}")
             return
         def _label(r):
-            name = r.get("display_name") or r.get("name") or "unnamed"
-            area = r.get("area") or ""
-            has_persona = bool(r.get("persona"))
-            tag = f"  [{area}]" if area else ""
-            pmark = "  has persona" if has_persona else ""
-            return f"{name}{tag}{pmark}"
+            return r["name"]
         idx = self._pick_from_list(reps, _label, session)
         if idx is None:
             c.dim("  cancelled"); return
         r = reps[idx]
-        self._rep_name = r.get("display_name") or r.get("name") or "AI"
-        if r.get("persona"):
-            self._persona = r["persona"]
-            c.dim(f"  AI: {self._rep_name}  (persona loaded)")
-        else:
-            c.dim(f"  AI: {self._rep_name}")
+        self._rep_name = r["name"]
+        try:
+            self._persona = open(r["skill_file"]).read()
+            kb = max(1, len(self._persona.encode()) // 1024)
+            c.dim(f"  AI: {self._rep_name}  (persona loaded from {r['skill_file']}, {kb}KB)")
+        except OSError as e:
+            c.dim(f"  could not read {r['skill_file']!r}: {e}")
+
+    def _skills_dir(self) -> Optional[str]:
+        """Resolve the local skills directory: QAR_SKILLS_DIR > corpus_root/.claude/skills."""
+        import os
+        explicit = os.getenv("QAR_SKILLS_DIR")
+        if explicit:
+            return explicit
+        corpus = getattr(self._cfg, "corpus_root", None)
+        if corpus:
+            return os.path.join(corpus, ".claude", "skills")
+        return None
 
     def _print_whoami(self) -> None:
         c = self._console
