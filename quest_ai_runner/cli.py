@@ -6,8 +6,10 @@ variables (so a stranger's org can run it with no code) and starts the Poller in
 
 Env it reads:
   QUEST_BASE_URL, QUEST_API_KEY, QUEST_TEAM_ID   — the Quest connection (key is qsk_...)
-  QAR_CORPUS_ROOT                                — file root for the FilesAdapter (grounding)
-  QAR_DEEP_WORKING_DIR                           — working dir for the subprocess deep-runner
+  QAR_CORPUS_ROOT                                — file root for the FilesAdapter (grounding);
+                                                   also the default for QAR_DEEP_WORKING_DIR
+  QAR_DEEP_WORKING_DIR (optional)               — working dir for the subprocess deep-runner;
+                                                   defaults to QAR_CORPUS_ROOT when unset
   QAR_CLAUDE_PATH (optional)                     — the worker binary (default: claude on PATH)
   QAR_ANSWER_TIMEOUT (optional, seconds)         — per-call cap for the claude_cli planner/answer
                                                    backend (default 180; raise for large corpora)
@@ -83,7 +85,8 @@ def _model_provider_from_env() -> ModelProvider:
 def _config_from_env() -> RunnerConfig:
     corpus = os.getenv("QAR_CORPUS_ROOT")
     retrieval = FilesAdapter(corpus) if corpus else None
-    deep_dir = os.getenv("QAR_DEEP_WORKING_DIR")
+    # QAR_DEEP_WORKING_DIR defaults to QAR_CORPUS_ROOT so only one env var is needed.
+    deep_dir = os.getenv("QAR_DEEP_WORKING_DIR") or corpus
     deep_runner = None
     if deep_dir:
         deep_runner = SubprocessGoalRunner(SubprocessConfig(
@@ -167,7 +170,7 @@ def main(argv=None) -> int:
             for p in problems:
                 log.error("config error: %s", p)
             return 1
-        rep_name = args.rep or os.getenv("QAR_REP_NAME") or "AI"
+        rep_name = args.rep or os.getenv("QAR_REP_NAME") or "Assistant"
         persona = None
         persona_path = args.persona_file or os.getenv("QAR_REP_PERSONA_FILE")
         if persona_path:
