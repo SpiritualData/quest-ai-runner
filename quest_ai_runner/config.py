@@ -230,24 +230,15 @@ def _cards_exist(cards_dir: str) -> bool:
         return False
 
 
-def _bootstrap_if_needed(keyword, *, root: str, cards_dir: str,
-                         block: bool = False, provider=None) -> None:
-    """Bootstrap or refresh the keyword store at startup.
+def _bootstrap_if_needed(keyword, *, root: str, cards_dir: str, provider=None) -> None:
+    """Bootstrap or refresh the keyword store at startup. Always runs in the background.
 
-    Two cases:
+    * **Cards exist**: launch a background thread calling ``refresh_stale()`` — re-indexes
+      only changed/new files and skips everything unchanged.
 
-    * **Cards exist** (any run after the first): launch a background thread that
-      calls ``refresh_stale()`` — re-indexes only files whose sha256 changed,
-      adds new files, and skips everything unchanged.  The caller is never blocked.
-
-    * **No cards** (first ever run): bootstrap the full tree.  When a ``provider``
-      is supplied, bootstrap uses the LLM to identify semantic topic cards and
-      runs in the BACKGROUND — the user can chat immediately and the LLM responds
-      with whatever context currently exists (even empty); cards accumulate over
-      time.  Without a ``provider``, bootstrap falls back to the per-file mode
-      (one card per source file, keywords from path tokens and symbols).
-      ``block=True`` is honoured (run synchronously) only for the vector-seed path,
-      but the keyword default never blocks.
+    * **No cards** (first run): bootstrap the full tree in a background thread. The LLM
+      identifies semantic topic cards; the user can chat immediately against whatever cards
+      exist so far (even none). The vector arm seeds lazily on first assemble() call.
     """
     if _cards_exist(cards_dir):
         # VERSION MISMATCH check: if the stored cards were built by an older bootstrap algorithm,
@@ -283,15 +274,6 @@ def _bootstrap_if_needed(keyword, *, root: str, cards_dir: str,
             return
 
     # First run — no cards yet.
-    if block:
-        _log.info("context index: building for the first time under %s", root)
-        try:
-            n = keyword.bootstrap(root=root, provider=provider)
-            _log.info("context index: ready — %d cards written to %s", n, cards_dir)
-        except Exception:  # noqa: BLE001
-            _log.debug("context index: bootstrap failed", exc_info=True)
-        return
-
     _log.info(
         "context index: building for the first time under %s "
         "(runs in background — the AI can answer with whatever context exists so far)",
@@ -410,11 +392,9 @@ def resolve_context_assembler(cfg: RunnerConfig):
                 vector_store = None
 
         # Bootstrap (first run) or refresh stale cards (subsequent runs).
-        # block=True when a vector store is present: the vector arm must seed
-        # from keyword cards synchronously before its first assemble() call.
-        # keyword-only: always background so the chat REPL is never blocked.
+        # Always runs in the background — the vector arm seeds lazily on first
+        # assemble() via seed_source, so blocking startup is never needed.
         _bootstrap_if_needed(keyword, root=root, cards_dir=cards_dir,
-                             block=vector_store is not None,
                              provider=cfg.model_provider)
 
         if vector_store is not None:

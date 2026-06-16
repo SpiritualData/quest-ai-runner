@@ -1497,8 +1497,9 @@ class TestResolveContextAssemblerSeedSourceWiring:
             encoding="utf-8",
         )
 
+        # Pre-bootstrap the card store synchronously (simulates a prior bootstrap run).
         # Bootstrap is LLM-driven, so wire a fake provider that returns a topic for main.py.
-        # The provider feeds both the registry and the bootstrap topic identification.
+        from quest_ai_runner.adapters.file_context_store import FileContextStore
         provider = MagicMock()
         provider.list_models.return_value = []
         provider.answer.return_value = json.dumps([{
@@ -1508,7 +1509,12 @@ class TestResolveContextAssemblerSeedSourceWiring:
             "summary": "Main entry point: orchestrates the application startup.",
             "files": ["main.py"],
         }])
+        cards_dir = str(tmp_path / "cards")
+        pre_store = FileContextStore(cards_dir, repo_root=str(repo), auto_bootstrap=False)
+        pre_store.bootstrap(root=str(repo), provider=provider)
 
+        # Now build the config — cards already exist so resolve_context_assembler
+        # triggers a background refresh (non-blocking) rather than a fresh bootstrap.
         cfg = RunnerConfig(
             quest_base_url="http://example.com",
             quest_api_key="qsk_test",
@@ -1516,7 +1522,7 @@ class TestResolveContextAssemblerSeedSourceWiring:
             model_provider=provider,
             vector_store=vec_store,
             corpus_root=str(repo),
-            context_cards_dir=str(tmp_path / "cards"),
+            context_cards_dir=cards_dir,
         )
 
         assembler = resolve_context_assembler(cfg)
