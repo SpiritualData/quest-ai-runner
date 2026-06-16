@@ -203,9 +203,26 @@ def main(argv=None) -> int:
         except (QuestApiError, QuestNotConfigured) as e:
             log.error("failed to enqueue task: %s", e)
             return 1
+        # Immediate ack: fire a cheap one-sentence restatement so the user sees feedback
+        # right away, then exit.  The queued task runs in the background via the poller.
+        try:
+            provider = _model_provider_from_env()
+            from .core.model_registry import ModelRegistry
+            ack_model = ModelRegistry(provider).resolve_tier("haiku")
+            ack_prompt = (
+                "Write ONE sentence (max 20 words) that restates the following "
+                "request in your own words and says you are looking into it. "
+                "Do NOT use em dashes (--). Be natural and brief.\n\n"
+                f"Request: {args.text[:300]}"
+            )
+            ack = provider.answer([{"role": "user", "content": ack_prompt}], model=ack_model)
+            if ack and ack.strip():
+                print(ack.strip())
+                return 0
+        except Exception:  # noqa: BLE001 — ack failure is non-fatal
+            pass
         task_id = task.get("id") or task.get("task_id") or "?"
-        task_text = task.get("text") or args.text
-        print(f"{task_id}  {task_text}")
+        print(f"Queued — {args.text[:80]}  ({task_id})")
         return 0
 
     # --- poll (default when no subcommand given) ------------------------------
