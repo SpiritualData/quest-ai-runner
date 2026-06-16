@@ -33,6 +33,7 @@ import ast
 import concurrent.futures
 import hashlib
 import json
+import logging
 import math
 import os
 import re
@@ -43,6 +44,12 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase
 from ._walk import effective_skip_dirs, prune_dirnames
+
+_log = logging.getLogger("quest-ai-runner.context")
+
+# Max number of file paths fed to the LLM topic-identification prompt. Beyond this the list is
+# trimmed (with a note) so the prompt stays bounded for very large corpora.
+_MAX_LLM_PATHS = 3000
 
 # ---------------------------------------------------------------------------
 # Bootstrap constants
@@ -375,6 +382,145 @@ def _build_rich_summary(
     return summary, description
 
 
+def _extract_json_array(text: str) -> str:
+    """Pull a JSON array substring out of an LLM response. Returns "" if none found.
+
+    Handles markdown code fences (```json ... ```), leading prose, and trailing prose by
+    slicing from the first ``[`` to its matching closing ``]``. Never raises.
+    """
+    if not text:
+        return ""
+    try:
+        # Strip a fenced code block first if present.
+        fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
+        if fence:
+            text = fence.group(1)
+        start = text.find("[")
+        if start < 0:
+            return ""
+        # Walk to the matching closing bracket, ignoring brackets inside strings.
+        depth = 0
+        in_str = False
+        esc = False
+        for i in range(start, len(text)):
+            ch = text[i]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch == "[":
+                depth += 1
+            elif ch == "]":
+                depth -= 1
+                if depth == 0:
+                    return text[start : i + 1]
+        return ""
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+# Prompt template for LLM topic-card identification. NOTE: no em dashes in any model-facing or
+# user-facing text per the project brand-voice rule; this is internal, but kept consistent.
+_TOPIC_PROMPT = """You are analyzing a codebase to identify its natural semantic topics.
+
+Below is the list of source files in the codebase, one path per line:
+
+{file_tree}
+
+A "topic" is a coherent area of functionality. A single topic can span files from completely
+separate directories (for example, a chat feature might touch a backend file, a runner file, and
+a frontend file). Identify the natural topics that actually exist in THIS codebase. The number of
+topics should reflect what is really there: a small focused codebase might have 3 topics, a large
+one might have 50. Let the structure of the code determine the count; do not target a fixed range.
+
+For each topic produce:
+  - id: a short slug (lowercase, hyphens), unique among the topics
+  - name: a short human-readable name
+  - keywords: 5 to 15 lowercase keywords someone might use to search for this topic
+  - summary: one sentence describing what this topic is
+  - files: the list of file paths (taken EXACTLY from the list above) that belong to this topic
+
+A file may appear in more than one topic. Every path you list must be copied exactly from the
+list above.
+
+Respond with ONLY a JSON array, no prose and no markdown fences, in this shape:
+[{{"id": "...", "name": "...", "keywords": ["..."], "summary": "...", "files": ["rel/path.py"]}}]
+"""
+
+
+def _llm_topic_cards(file_paths, provider, model=None):
+    """Ask an LLM to identify semantic topic cards across ``file_paths``. Never raises.
+
+    ``file_paths`` is a flat list of relative source paths. ``provider`` is a ModelProvider whose
+    ``answer(messages, model=...)`` is used. ``model`` is passed through unchanged (the caller may
+    leave it None to use the provider's own default tier).
+
+    Returns a list of validated topic-card dicts, each with keys ``id``, ``name``, ``keywords``,
+    ``summary`` and ``files`` (filtered to paths present in ``file_paths``). On ANY error (API
+    failure, JSON parse error, etc.) returns ``[]``.
+    """
+    if provider is None or not file_paths:
+        return []
+    try:
+        allowed = set(file_paths)
+        listed = list(file_paths)
+        if len(listed) > _MAX_LLM_PATHS:
+            note = f"... ({len(listed) - _MAX_LLM_PATHS} more files omitted)"
+            listed = listed[:_MAX_LLM_PATHS] + [note]
+        file_tree = "\n".join(listed)
+        prompt = _TOPIC_PROMPT.format(file_tree=file_tree)
+
+        raw = provider.answer([{"role": "user", "content": prompt}], model=model)
+        payload = _extract_json_array(raw or "")
+        if not payload:
+            return []
+        parsed = json.loads(payload)
+        if not isinstance(parsed, list):
+            return []
+
+        cards: List[Dict[str, Any]] = []
+        for entry in parsed:
+            if not isinstance(entry, dict):
+                continue
+            cid = entry.get("id")
+            name = entry.get("name")
+            keywords = entry.get("keywords")
+            summary = entry.get("summary")
+            files = entry.get("files")
+            if not (isinstance(cid, str) and cid.strip()):
+                continue
+            if not (isinstance(name, str) and name.strip()):
+                continue
+            if not isinstance(keywords, list):
+                continue
+            if not (isinstance(summary, str) and summary.strip()):
+                continue
+            if not isinstance(files, list):
+                continue
+            # Keep only paths that were in the provided list (exact match).
+            kept_files = [f for f in files if isinstance(f, str) and f in allowed]
+            if not kept_files:
+                continue
+            kw_clean = [str(k).strip() for k in keywords if str(k).strip()]
+            cards.append({
+                "id": cid.strip(),
+                "name": name.strip(),
+                "keywords": kw_clean,
+                "summary": summary.strip(),
+                "files": list(dict.fromkeys(kept_files)),
+            })
+        return cards
+    except Exception:  # noqa: BLE001 -- any failure: no cards, the store stays empty
+        _log.debug("context index: LLM topic identification failed", exc_info=True)
+        return []
+
+
 class FileContextStore(ContextAssemblerBase):
     """Stdlib-only ContextAssembler backed by per-card JSON files.
 
@@ -500,33 +646,33 @@ class FileContextStore(ContextAssemblerBase):
         self,
         root: Optional[str] = None,
         *,
+        provider=None,
         max_files: int = 10000,
         max_cards: int = 5000,
     ) -> int:
         """Seed the cards store by walking a source tree. Never raises. Returns cards written.
 
-        Creates ONE CARD PER SOURCE FILE found under ``root``.  Each card captures:
+        When ``provider`` is given, uses a 3-stage LLM fan-out
+        (``_llm_topic_cards``) to produce semantic topic cards rather than
+        per-file cards.  Each topic card captures a coherent subsystem with its
+        associated files, keywords, and a one-sentence summary.
 
-        - ``id``       -- a stable slug derived from the file's relative path.
-        - ``keywords`` -- tokens from path segments plus extracted symbol names.
-        - ``summary``  -- ``"{rel_path}: {first ~12 symbols}"`` (or just rel_path).
-        - ``files``    -- that single file, fingerprinted, with its symbols attached.
-        - ``provenance.created_by_task`` == "bootstrap".
+        Without ``provider`` (or when the LLM call returns no cards), falls back
+        to the original per-file mode: one card per source file, with keywords
+        from path tokens and extracted symbols plus a rich docstring-based summary.
 
         File-granular cards give the IDF scorer precise routing: a query
         containing a distinctive symbol or path term lands on exactly that
         file's card rather than a coarse module-level card.
-
-        Symbol extraction uses ``ast`` for ``.py`` files and a small regex set
-        for other languages.  Never raises on a parse error (that file is
-        skipped/included without symbols).
 
         Idempotent: cards are upserted by id (existing cards for the same file
         are overwritten).  Total cards written is capped at ``max_cards``
         (default 5000).
         """
         try:
-            return self._bootstrap_inner(root=root, max_files=max_files, max_cards=max_cards)
+            return self._bootstrap_inner(
+                root=root, provider=provider, max_files=max_files, max_cards=max_cards
+            )
         except Exception:  # noqa: BLE001
             return 0
 
@@ -551,19 +697,20 @@ class FileContextStore(ContextAssemblerBase):
         except Exception:  # noqa: BLE001
             pass
 
-    def refresh_stale(self, root: Optional[str] = None) -> int:
+    def refresh_stale(self, root: Optional[str] = None, *, provider=None) -> int:
         """Re-index only files whose content changed since the last bootstrap.
 
-        Walks the source tree but skips writing any card whose file sha256 still
-        matches the stored fingerprint.  New files get a card; changed files get
-        an updated card; deleted files keep their old card (stale but harmless).
+        Existing cards are refreshed purely by a fingerprint check, so no LLM re-call is needed
+        (``provider`` defaults to None and is threaded through unchanged). A card whose every
+        pinned file's sha256 still matches is skipped; a card with any changed/missing file is
+        rewritten with fresh fingerprints.
 
         Designed to be called from a background thread at startup so the context
         index stays warm without blocking the caller.  Never raises; returns the
         number of cards written (0 = everything was already up to date).
         """
         try:
-            return self._bootstrap_inner(root=root, skip_unchanged=True)
+            return self._bootstrap_inner(root=root, provider=provider, skip_unchanged=True)
         except Exception:  # noqa: BLE001
             return 0
 
@@ -571,6 +718,7 @@ class FileContextStore(ContextAssemblerBase):
         self,
         root: Optional[str] = None,
         *,
+        provider=None,
         max_files: int = 10000,
         max_cards: int = 5000,
         skip_unchanged: bool = False,
@@ -588,13 +736,15 @@ class FileContextStore(ContextAssemblerBase):
         cards_written = 0
         file_count = 0
 
-        # --- Pass 1: walk the tree and collect (rel_str, syms, keywords) for each file ---
-        # We separate the walk from fingerprinting so we can fingerprint in parallel.
-        # Each entry: (rel_str, syms, all_keywords)
-        walk_entries: List[tuple] = []
+        # --- Pass 1: walk the tree and collect file paths ---
+        # When an LLM provider is available, we only need the relative paths for topic
+        # identification.  When falling back to per-file mode we also need symbols,
+        # keywords, summary, etc., so we collect the full tuple in that branch.
+        file_paths: List[str] = []   # relative paths (used by LLM path)
+        walk_entries: List[tuple] = []  # full per-file tuples (used by per-file path)
 
         for dirpath, dirnames, filenames in os.walk(walk_root):
-            if file_count >= max_files or len(walk_entries) >= max_cards:
+            if file_count >= max_files or (provider is None and len(walk_entries) >= max_cards):
                 break
             current_dir = Path(dirpath).resolve()
             # Skip the cards directory itself to avoid indexing stored card JSON files.
@@ -609,7 +759,7 @@ class FileContextStore(ContextAssemblerBase):
                 if (current_dir / d).resolve() != cards_dir_resolved
             ]
             for fname in filenames:
-                if file_count >= max_files or len(walk_entries) >= max_cards:
+                if file_count >= max_files or (provider is None and len(walk_entries) >= max_cards):
                     break
                 fpath = Path(dirpath) / fname
                 if fpath.suffix not in _SOURCE_EXTS:
@@ -623,25 +773,105 @@ class FileContextStore(ContextAssemblerBase):
                 file_count += 1
                 rel = fpath.relative_to(walk_root)
                 rel_str = str(rel)
+                file_paths.append(rel_str)
 
-                # Extract symbols from this single file.
-                syms = _extract_symbols(fpath, max_symbols=30)
-                syms = list(dict.fromkeys(syms))[:30]  # deduplicate
+                # Only build the per-file metadata when falling back to per-file mode.
+                if provider is None:
+                    # Extract symbols from this single file.
+                    syms = _extract_symbols(fpath, max_symbols=30)
+                    syms = list(dict.fromkeys(syms))[:30]  # deduplicate
 
-                # Build rich summary + description (docstrings / headings / comments).
-                rich_summary, description = _build_rich_summary(rel_str, fpath, syms)
+                    # Build rich summary + description (docstrings / headings / comments).
+                    rich_summary, description = _build_rich_summary(rel_str, fpath, syms)
 
-                # Test-file flag and weight.
-                is_test = _is_test_path(rel_str)
-                weight = _TEST_FILE_WEIGHT if is_test else _SOURCE_FILE_WEIGHT
+                    # Test-file flag and weight.
+                    is_test = _is_test_path(rel_str)
+                    weight = _TEST_FILE_WEIGHT if is_test else _SOURCE_FILE_WEIGHT
 
-                # Keywords: path segment tokens + symbol names.
-                seg_tokens = sorted(_tokenize(rel_str.replace("/", " ").replace("_", " ").replace(".", " ")))
-                sym_tokens = [s.lower() for s in syms if len(s) >= _MIN_TOKEN_LEN]
-                all_keywords = list(dict.fromkeys(seg_tokens + sym_tokens))[:50]
+                    # Keywords: path segment tokens + symbol names.
+                    seg_tokens = sorted(_tokenize(rel_str.replace("/", " ").replace("_", " ").replace(".", " ")))
+                    sym_tokens = [s.lower() for s in syms if len(s) >= _MIN_TOKEN_LEN]
+                    all_keywords = list(dict.fromkeys(seg_tokens + sym_tokens))[:50]
 
-                walk_entries.append((rel_str, syms, all_keywords, rich_summary, description, is_test, weight))
+                    walk_entries.append((rel_str, syms, all_keywords, rich_summary, description, is_test, weight))
 
+        # --- LLM path: ask the provider to identify semantic topic cards ---
+        if provider is not None and file_paths:
+            # Trim to the LLM path limit before calling.
+            llm_paths = file_paths[:_MAX_LLM_PATHS]
+            topic_cards = _llm_topic_cards(llm_paths, provider)
+            if topic_cards:
+                # Fingerprint all referenced files and write one card per topic.
+                for topic in topic_cards:
+                    if cards_written >= max_cards:
+                        break
+                    topic_files = topic.get("files", [])
+                    if not topic_files:
+                        continue
+
+                    # Fingerprint each file referenced by this topic.
+                    file_entries: List[Dict[str, Any]] = []
+                    for rel_str in topic_files:
+                        fp = self._fingerprint(rel_str)
+                        file_entries.append({
+                            "path": rel_str,
+                            "sha256": fp.get("sha256", ""),
+                            "mtime": fp.get("mtime", 0.0),
+                            "git_sha": fp.get("git_sha", ""),
+                            "why": "",
+                            "symbols": [],
+                        })
+
+                    card_id = topic.get("id") or _path_slug(topic_files[0])
+                    card_path = self._cards_dir / f"{card_id}.json"
+
+                    # Preserve usage_count / last_outcome from an existing card.
+                    existing: Dict[str, Any] = {}
+                    if card_path.exists():
+                        try:
+                            with open(card_path, "r", encoding="utf-8") as fh:
+                                existing = json.load(fh)
+                        except Exception:  # noqa: BLE001
+                            existing = {}
+
+                    card: Dict[str, Any] = {
+                        "id": card_id,
+                        "keywords": topic.get("keywords", []),
+                        "summary": topic.get("summary", ""),
+                        "description": topic.get("summary", ""),
+                        "files": file_entries,
+                        "conventions": [],
+                        "provenance": {
+                            "created_by_task": "bootstrap",
+                            "model": "",
+                            "created_at": "",
+                            "last_verified_at": "",
+                        },
+                        "usage_count": existing.get("usage_count", 0),
+                        "last_outcome": existing.get("last_outcome", "unknown"),
+                    }
+
+                    # Atomic write.
+                    tmp_fd, tmp_path = tempfile.mkstemp(
+                        dir=str(self._cards_dir), prefix=".tmp_", suffix=".json"
+                    )
+                    try:
+                        with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
+                            json.dump(card, fh, indent=2, ensure_ascii=False)
+                            fh.write("\n")
+                        os.replace(tmp_path, str(card_path))
+                        cards_written += 1
+                    except Exception:  # noqa: BLE001
+                        try:
+                            os.unlink(tmp_path)
+                        except OSError:
+                            pass
+
+                # Invalidate cache after all writes.
+                self._cache_dirty = True
+                return cards_written
+
+        # --- Per-file fallback path (provider is None, or LLM returned no cards) ---
         # --- Pass 2: fingerprint all collected files in parallel ---
         # sha256 reads release the GIL; threads give a real speedup when many files
         # are being hashed.  Workers are bounded to min(8, n_files).  Order is preserved
