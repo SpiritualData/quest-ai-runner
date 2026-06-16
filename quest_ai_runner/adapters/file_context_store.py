@@ -42,12 +42,15 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase
+from ._walk import effective_skip_dirs
 
 # ---------------------------------------------------------------------------
 # Bootstrap constants
 # ---------------------------------------------------------------------------
 
-# Directories to skip entirely during repo walk.
+# Kept for backwards-compat: external code that imported _SKIP_DIRS directly
+# still works, but the walk now uses effective_skip_dirs() which also reads
+# the project's .gitignore.  Do not add entries here — update _walk.py instead.
 _SKIP_DIRS: Set[str] = {
     ".git", "node_modules", ".venv", "venv", "__pycache__",
     "dist", "build", ".eggs", ".mypy_cache", ".pytest_cache", ".quest-context",
@@ -562,6 +565,7 @@ class FileContextStore(ContextAssemblerBase):
 
         # Resolve the cards_dir so we can skip it if it's inside the walk root.
         cards_dir_resolved = self._cards_dir.resolve()
+        skip_dirs = effective_skip_dirs(walk_root)
 
         self._cards_dir.mkdir(parents=True, exist_ok=True)
         cards_written = 0
@@ -583,7 +587,8 @@ class FileContextStore(ContextAssemblerBase):
             # Prune skip dirs in-place so os.walk doesn't recurse into them.
             dirnames[:] = [
                 d for d in dirnames
-                if d not in _SKIP_DIRS
+                if d not in skip_dirs
+                and not d.startswith(".")
                 and (current_dir / d).resolve() != cards_dir_resolved
             ]
             for fname in filenames:

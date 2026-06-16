@@ -51,19 +51,9 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase
+from ._walk import effective_skip_dirs
 
 logger = logging.getLogger(__name__)
-
-# ---------------------------------------------------------------------------
-# Re-use the same walk constants as FileContextStore so the two arms index
-# the same corpus consistently.
-# ---------------------------------------------------------------------------
-
-_SKIP_DIRS: Set[str] = {
-    ".git", "node_modules", ".venv", "venv", "__pycache__",
-    "dist", "build", ".eggs", ".mypy_cache", ".pytest_cache", ".quest-context",
-    "Android",  # Android SDK/NDK toolchain — never source code
-}
 
 _SOURCE_EXTS: Set[str] = {
     ".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs",
@@ -225,6 +215,9 @@ class BM25ContentStore(ContextAssemblerBase):
         self._top_k = top_k
         self._max_in_view = max_in_view
         self._confidence_threshold = confidence_threshold
+        # Computed once from the baseline + root/.gitignore so the walk never
+        # crawls SDK trees, build artifacts, or anything the project ignores.
+        self._skip_dirs: Set[str] = effective_skip_dirs(self._root)
 
         # Internal index state.  None until first build.
         self._bm25_index: Any = None  # bm25s.BM25 instance
@@ -269,11 +262,10 @@ class BM25ContentStore(ContextAssemblerBase):
         for dirpath, dirnames, filenames in os.walk(self._root):
             if len(paths) >= _MAX_FILES:
                 break
-            current_dir = Path(dirpath).resolve()
             # Prune skip dirs in-place.
             dirnames[:] = [
                 d for d in dirnames
-                if d not in _SKIP_DIRS
+                if d not in self._skip_dirs and not d.startswith(".")
             ]
             for fname in filenames:
                 if len(paths) >= _MAX_FILES:
@@ -343,7 +335,10 @@ class BM25ContentStore(ContextAssemblerBase):
         # Walk root to collect the current file set.
         current_files: Dict[str, Path] = {}
         for dirpath, dirnames, filenames in os.walk(self._root):
-            dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
+            dirnames[:] = [
+                d for d in dirnames
+                if d not in self._skip_dirs and not d.startswith(".")
+            ]
             for fname in filenames:
                 fpath = Path(dirpath) / fname
                 if fpath.suffix not in _SOURCE_EXTS:

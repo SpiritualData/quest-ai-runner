@@ -13,12 +13,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from ..core.adapters import Observation, RetrievalAdapterBase
-
-_SKIP_DIRS = {
-    ".git", "node_modules", "__pycache__", ".venv", "venv", ".mypy_cache",
-    ".pytest_cache", "dist", "build", ".next", ".cache",
-    "Android",  # Android SDK/NDK toolchain — never source code
-}
+from ._walk import effective_skip_dirs
 _BINARY_EXTS = {
     ".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip", ".gz", ".tar", ".mp4", ".mov",
     ".woff", ".woff2", ".ttf", ".ico", ".so", ".pyc", ".bin", ".db", ".sqlite",
@@ -41,6 +36,7 @@ class FilesAdapter(RetrievalAdapterBase):
         self.default_read_max_bytes = default_read_max_bytes
         self.default_grep_max_hits = default_grep_max_hits
         self.grep_max_file_bytes = grep_max_file_bytes
+        self._skip_dirs = effective_skip_dirs(self.root)
 
     # --- scope helpers -------------------------------------------------------
 
@@ -156,7 +152,7 @@ class FilesAdapter(RetrievalAdapterBase):
             files = [search_root]
         else:
             for dirpath, dirnames, filenames in os.walk(search_root):
-                dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS and not d.startswith(".")]
+                dirnames[:] = [d for d in dirnames if d not in self._skip_dirs and not d.startswith(".")]
                 for fn in filenames:
                     if not fn.startswith("."):
                         files.append(Path(dirpath) / fn)
@@ -190,7 +186,7 @@ class FilesAdapter(RetrievalAdapterBase):
     def _walk_readable(self, limit: int) -> List[str]:
         names: List[str] = []
         for dirpath, dirnames, filenames in os.walk(self.root):
-            dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS and not d.startswith(".")]
+            dirnames[:] = [d for d in dirnames if d not in self._skip_dirs and not d.startswith(".")]
             for fn in filenames:
                 p = Path(dirpath) / fn
                 if not fn.startswith(".") and self._readable(p):
