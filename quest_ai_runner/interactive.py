@@ -49,6 +49,7 @@ if TYPE_CHECKING:
 
 try:
     from prompt_toolkit import PromptSession
+    from prompt_toolkit.completion import Completer, Completion
     from prompt_toolkit.formatted_text import ANSI
     from prompt_toolkit.history import InMemoryHistory
     from prompt_toolkit.key_binding import KeyBindings
@@ -437,6 +438,21 @@ class _TurnRenderer:
 
 _CTRL_C_WINDOW = 2.0   # seconds: second Ctrl+C within this window exits
 
+_SLASH_COMMANDS = [
+    "/help", "/clear", "/reps", "/rep ", "/persona ",
+    "/quests", "/goal ", "/whoami", "/quit", "/q",
+]
+
+
+class _SlashCompleter(Completer):
+    def get_completions(self, document, complete_event):
+        text = document.text_before_cursor
+        if not text.startswith("/"):
+            return
+        for cmd in _SLASH_COMMANDS:
+            if cmd.startswith(text):
+                yield Completion(cmd[len(text):], display=cmd.rstrip())
+
 
 def _make_prompt_session(last_ctrl_c: list):
     """Build a PromptSession with Claude-Code-style Ctrl+C behaviour.
@@ -467,8 +483,10 @@ def _make_prompt_session(last_ctrl_c: list):
         sys.__stdout__.flush()
 
     style = Style.from_dict({'': '#ffffff'})  # user input text is white
+    completer = _SlashCompleter() if _HAS_PROMPT_TOOLKIT else None
     return PromptSession(history=InMemoryHistory(), key_bindings=kb,
-                         enable_history_search=True, style=style)
+                         enable_history_search=True, style=style,
+                         completer=completer, complete_while_typing=True)
 
 
 def _read_line(session, prompt_str: str) -> Optional[str]:
@@ -520,6 +538,7 @@ class InteractiveSession:
                  persona: Optional[str] = None, goal_id: Optional[str] = None) -> None:
         from .config import build_orchestrator
         self._orch: "Orchestrator" = build_orchestrator(cfg)
+        self._orch.cfg.instant_ack = True
         self._cfg = cfg
         self._rep_name = rep_name
         self._persona = persona

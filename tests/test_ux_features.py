@@ -128,8 +128,8 @@ class TestInstantAck:
         first_status = next(e for e in events if e["type"] == EVENT_STATUS)
         assert "looking" in first_status.get("text", "").lower()
 
-    def test_instant_ack_emits_partial_with_restatement(self):
-        """The ack text is emitted as EVENT_PARTIAL and restates the user's request."""
+    def test_instant_ack_emits_status_with_restatement(self):
+        """The ack text is emitted as EVENT_STATUS and restates the user's request."""
         cfg = OrchestratorConfig(instant_ack=True)
         ack_text = "I am looking into your question about pricing."
 
@@ -156,11 +156,12 @@ class TestInstantAck:
         sink = StreamSink(lambda ev: events.append(ev))
         orch.run("What is the pricing?", mode=Mode.LIVE, sink=sink)
 
-        # An EVENT_PARTIAL with the ack text should have been emitted.
-        partial_events = [e for e in events if e["type"] == EVENT_PARTIAL]
-        assert partial_events, "Expected at least one EVENT_PARTIAL with the ack"
-        ack_partial = partial_events[0]
-        assert ack_partial.get("text") == ack_text
+        # The ack text should be emitted as EVENT_STATUS (so it shows in the spinner panel
+        # without blocking the result from printing via the _partial_started guard).
+        from quest_ai_runner.core.adapters import EVENT_STATUS
+        status_events = [e for e in events if e["type"] == EVENT_STATUS]
+        ack_statuses = [e for e in status_events if e.get("text") == ack_text]
+        assert ack_statuses, f"Expected EVENT_STATUS with ack text {ack_text!r}; got: {[e.get('text') for e in status_events]}"
 
         # The ack prompt should mention the original request.
         assert provider.ack_prompt_captured is not None
@@ -224,7 +225,7 @@ class TestInstantAck:
 
         # Run completes normally.
         assert result.kind == "answer"
-        # No partial event since the ack failed.
+        # No partial events (ack is now EVENT_STATUS, not PARTIAL; and this ack failed anyway).
         partial_events = [e for e in events if e["type"] == EVENT_PARTIAL]
         assert not partial_events
 

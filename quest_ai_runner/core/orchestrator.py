@@ -1299,7 +1299,7 @@ class Orchestrator:
             try:
                 _ack_text = _ack_future.result(timeout=5.0)
                 if _ack_text and _ack_text.strip():
-                    emit.emit(ProgressEvent(type=EVENT_PARTIAL, text=_ack_text.strip()))
+                    emit.status(_ack_text.strip())
             except Exception:  # noqa: BLE001 — timeout, cancelled, or provider error: skip
                 pass
             finally:
