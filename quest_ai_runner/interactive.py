@@ -34,6 +34,7 @@ Usage:
 """
 from __future__ import annotations
 
+import queue as _queue
 import sys
 import threading
 import time
@@ -355,7 +356,11 @@ class _TurnRenderer:
 
     def _ensure_ai_label(self) -> None:
         if not self._ai_label_printed:
-            self._c.speaker(self._rep_name, "cyan", "")
+            # Write inline (no newline) so the response flows after the label on the same line.
+            if self._c._color or self._c._rich:
+                self._c.write(f"{_BOLD}{_CYAN}{self._rep_name}{_RESET}  ")
+            else:
+                self._c.write(f"{self._rep_name}  ")
             self._ai_label_printed = True
 
     def render(self, event) -> None:
@@ -446,6 +451,7 @@ def _make_prompt_session(last_ctrl_c: list):
     """
     if not _HAS_PROMPT_TOOLKIT:
         return None
+    from prompt_toolkit.styles import Style
     kb = KeyBindings()
 
     @kb.add("c-c")
@@ -460,8 +466,9 @@ def _make_prompt_session(last_ctrl_c: list):
         sys.__stdout__.write(f"\n{_DIM}  (press Ctrl+C again to exit){_RESET}\n")
         sys.__stdout__.flush()
 
+    style = Style.from_dict({'': '#ffffff'})  # user input text is white
     return PromptSession(history=InMemoryHistory(), key_bindings=kb,
-                         enable_history_search=True)
+                         enable_history_search=True, style=style)
 
 
 def _read_line(session, prompt_str: str) -> Optional[str]:
@@ -559,8 +566,7 @@ class InteractiveSession:
         from .core.orchestrator import OrchestratorResult
 
         self._cancelled.clear()
-        self._console.speaker("You", "green", user_text)
-        self._console.line("")
+        # Do NOT echo user_text — prompt_toolkit already shows it at the ❯ prompt.
 
         panel = _ContextPanel(self._console)
         renderer = _TurnRenderer(self._console, panel, self._rep_name)
@@ -569,14 +575,42 @@ class InteractiveSession:
         t0 = time.monotonic()
         final: Optional[OrchestratorResult] = None
 
-        try:
-            with _EscWatcher(self._cancelled):
-                for item in self._orch.run_stream(
+        # Feed run_stream() into a queue so the main thread can poll with a short
+        # timeout and respond to ESC within ~50 ms (instead of blocking on q.get()
+        # until the next event arrives, which may be many seconds away during an API call).
+        _iq: "_queue.Queue" = _queue.Queue()
+        _DONE_ITEM = object()
+
+        def _feed() -> None:
+            try:
+                for it in self._orch.run_stream(
                     user_text,
                     transcript=self._last_transcript(),
                     quest_id=self._goal_id,
                     rep_preamble=self._persona,
                 ):
+                    _iq.put(it)
+            except Exception as e:  # noqa: BLE001
+                _iq.put(e)
+            finally:
+                _iq.put(_DONE_ITEM)
+
+        feed = threading.Thread(target=_feed, daemon=True)
+        feed.start()
+
+        try:
+            with _EscWatcher(self._cancelled):
+                while True:
+                    try:
+                        item = _iq.get(timeout=0.05)
+                    except _queue.Empty:
+                        if self._cancelled.is_set():
+                            break
+                        continue
+                    if item is _DONE_ITEM:
+                        break
+                    if isinstance(item, Exception):
+                        raise item
                     if self._cancelled.is_set():
                         break
                     if isinstance(item, OrchestratorResult):
@@ -591,8 +625,29 @@ class InteractiveSession:
         elapsed = time.monotonic() - t0
 
         if not self._cancelled.is_set() and final is not None:
+            # Deep result with no text = no deep_runner configured. The planner
+            # chose "deep" (it sees a code/fix request) but nobody ran it. Show
+            # the planned goal so the user knows what the AI intended.
+            if final.kind == "deep" and not (final.text or "").strip():
+                goals = final.goals or []
+                if goals:
+                    panel.stop()
+                    if self._console._color or self._console._rich:
+                        self._console.write(f"{_BOLD}{_CYAN}{self._rep_name}{_RESET}  ")
+                    else:
+                        self._console.write(f"{self._rep_name}  ")
+                    self._console.line(
+                        "I can see what needs to be done here. "
+                        "Code execution is not set up for this session, so I can't apply "
+                        "the fix directly. Planned: " + goals[0]
+                    )
+                    for g in goals[1:]:
+                        self._console.dim(f"  Also: {g}")
+
             self._last_user = user_text
-            self._last_assistant = final.text or ""
+            self._last_assistant = final.text or (
+                "; ".join(final.goals) if final.goals else ""
+            )
             self._turn_count += 1
             self._console.line("")
             self._print_turn_footer(final, panel, elapsed)
