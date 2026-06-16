@@ -612,7 +612,11 @@ class InteractiveSession:
         if _bg_log.level == _logging.NOTSET or _bg_log.level <= _logging.INFO:
             _bg_log.setLevel(_logging.WARNING)
         from .config import build_orchestrator
-        self._orch: "Orchestrator" = build_orchestrator(cfg)
+        # Collect bootstrap/index notices to emit as system messages after the header.
+        self._startup_notices: List[str] = []
+        self._orch: "Orchestrator" = build_orchestrator(
+            cfg, notify=self._startup_notices.append
+        )
         self._orch.cfg.instant_ack = True
         self._cfg = cfg
         self._rep_name = rep_name
@@ -643,6 +647,8 @@ class InteractiveSession:
         if self._goal_id:
             parts.append(f"goal: {self._goal_id}")
         c.dim("  " + "  ·  ".join(parts))
+        for notice in self._startup_notices:
+            c.dim(f"  {notice}")
         c.line("")
 
     # -- one turn --------------------------------------------------------------

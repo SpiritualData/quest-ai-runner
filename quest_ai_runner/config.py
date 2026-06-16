@@ -230,7 +230,10 @@ def _cards_exist(cards_dir: str) -> bool:
         return False
 
 
-def _bootstrap_if_needed(keyword, *, root: str, cards_dir: str, provider=None) -> None:
+def _bootstrap_if_needed(
+    keyword, *, root: str, cards_dir: str, provider=None,
+    notify: Optional[Callable[[str], None]] = None,
+) -> None:
     """Bootstrap or refresh the keyword store at startup. Always runs in the background.
 
     * **Cards exist**: launch a background thread calling ``refresh_stale()`` — re-indexes
@@ -239,7 +242,20 @@ def _bootstrap_if_needed(keyword, *, root: str, cards_dir: str, provider=None) -
     * **No cards** (first run): bootstrap the full tree in a background thread. The LLM
       identifies semantic topic cards; the user can chat immediately against whatever cards
       exist so far (even none). The vector arm seeds lazily on first assemble() call.
+
+    ``notify`` (optional): a callable that receives a user-visible status string. Callers
+    that have a console (e.g. the interactive CLI) pass ``console.dim`` so bootstrap events
+    appear as system messages; background-only callers leave it ``None`` and events are
+    logged instead.
     """
+
+    def _tell(msg: str) -> None:
+        """Emit msg to the notify callback when set, else to the log."""
+        if notify is not None:
+            notify(msg)
+        else:
+            _log.info(msg)
+
     if _cards_exist(cards_dir):
         # VERSION MISMATCH check: if the stored cards were built by an older bootstrap algorithm,
         # they are stale and we re-bootstrap in the background (the user can chat immediately
@@ -247,18 +263,15 @@ def _bootstrap_if_needed(keyword, *, root: str, cards_dir: str, provider=None) -
         meta = _read_bootstrap_meta(cards_dir)
         stored_version = meta.get("version", 0)
         if stored_version < _BOOTSTRAP_VERSION:
-            _log.info(
-                "context index: re-indexing corpus (algorithm updated v%d -> v%d) — "
-                "this runs in background, chat is available immediately",
-                stored_version, _BOOTSTRAP_VERSION,
+            _tell(
+                f"Context index: algorithm updated (v{stored_version} -> v{_BOOTSTRAP_VERSION}),"
+                " re-indexing in background. Chat is ready now."
             )
             # Fall through to the background bootstrap path below (don't return early). The
             # incremental bootstrap dedups new/refreshed cards against the existing ones.
         else:
-            # Version matches: just refresh stale cards.
-            _log.info(
-                "context index: scanning %s for changes (background)", root
-            )
+            # Version matches: just refresh stale cards in the background.
+            _log.debug("context index: scanning %s for changes (background)", root)
 
             def _bg_refresh() -> None:
                 try:
@@ -273,12 +286,12 @@ def _bootstrap_if_needed(keyword, *, root: str, cards_dir: str, provider=None) -
             threading.Thread(target=_bg_refresh, daemon=True, name="qar-refresh").start()
             return
 
-    # First run — no cards yet.
-    _log.info(
-        "context index: building for the first time under %s "
-        "(runs in background — the AI can answer with whatever context exists so far)",
-        root,
-    )
+    else:
+        # First run — no cards yet.
+        _tell(
+            "Context index: building for the first time in background."
+            " Chat is ready now; context improves as indexing completes."
+        )
 
     # A lock file prevents duplicate bootstraps when multiple sessions start simultaneously.
     lock_path = os.path.join(cards_dir, ".bootstrap.lock")
@@ -290,7 +303,7 @@ def _bootstrap_if_needed(keyword, *, root: str, cards_dir: str, provider=None) -
             try:
                 fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except OSError:
-                _log.info("context index: bootstrap already running in another session, skipping")
+                _tell("Context index: another session is already building the index, skipping.")
                 lock_fd.close()
                 return
             try:
@@ -305,7 +318,11 @@ def _bootstrap_if_needed(keyword, *, root: str, cards_dir: str, provider=None) -
     threading.Thread(target=_bg, daemon=True, name="qar-bootstrap").start()
 
 
-def resolve_context_assembler(cfg: RunnerConfig):
+def resolve_context_assembler(
+    cfg: RunnerConfig,
+    *,
+    notify: Optional[Callable[[str], None]] = None,
+):
     """Resolve the context assembler from config — ON BY DEFAULT.
 
     Tri-state on ``cfg.context_assembler``:
@@ -395,7 +412,7 @@ def resolve_context_assembler(cfg: RunnerConfig):
         # Always runs in the background — the vector arm seeds lazily on first
         # assemble() via seed_source, so blocking startup is never needed.
         _bootstrap_if_needed(keyword, root=root, cards_dir=cards_dir,
-                             provider=cfg.model_provider)
+                             provider=cfg.model_provider, notify=notify)
 
         if vector_store is not None:
             from .adapters import HybridContextAssembler, VectorContextAssembler
@@ -417,13 +434,23 @@ def resolve_context_assembler(cfg: RunnerConfig):
         return None
 
 
-def build_orchestrator(cfg: RunnerConfig, *, status=None) -> Orchestrator:
+def build_orchestrator(
+    cfg: RunnerConfig,
+    *,
+    status=None,
+    notify: Optional[Callable[[str], None]] = None,
+) -> Orchestrator:
     """Wire a domain-free Orchestrator from the consumer's adapters.
 
     Quest credentials and a retrieval adapter are NOT required here — they are
     needed only for the poller/runner lane. The brain works without a corpus
     (it simply won't do grounded read steps), making ``quest-ai-runner chat``
     usable without any Quest API key or corpus configured.
+
+    ``notify`` (optional): forwarded to ``resolve_context_assembler`` and then to
+    ``_bootstrap_if_needed``. Interactive callers (e.g. the CLI session) pass a
+    console-print callback so bootstrap events appear as visible system messages
+    rather than silent log entries.
     """
     _skip = {"quest", "retrieval adapter"}
     problems = [p for p in cfg.validate()
@@ -439,6 +466,6 @@ def build_orchestrator(cfg: RunnerConfig, *, status=None) -> Orchestrator:
         config=cfg.orchestrator,
         status=status,
         vision_provider=cfg.vision_provider,
-        context_assembler=resolve_context_assembler(cfg),
+        context_assembler=resolve_context_assembler(cfg, notify=notify),
         guidance=cfg.guidance_provider,
     )
