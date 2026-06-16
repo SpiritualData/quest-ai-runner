@@ -7,6 +7,7 @@ hardcodes none of them. Build the wired-up brain + poller via the factory helper
 """
 from __future__ import annotations
 
+import fcntl
 import logging
 import os
 import threading
@@ -271,10 +272,25 @@ def _bootstrap_if_needed(keyword, *, root: str, cards_dir: str,
         root,
     )
 
+    # A lock file prevents duplicate bootstraps when multiple sessions start simultaneously.
+    lock_path = os.path.join(cards_dir, ".bootstrap.lock")
+
     def _bg() -> None:
         try:
-            n = keyword.bootstrap(root=root, provider=provider)
-            _log.info("context index: ready — %d cards written to %s", n, cards_dir)
+            Path(cards_dir).mkdir(parents=True, exist_ok=True)
+            lock_fd = open(lock_path, "w")  # noqa: WPS515 — intentional file-descriptor lifetime
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError:
+                _log.info("context index: bootstrap already running in another session, skipping")
+                lock_fd.close()
+                return
+            try:
+                n = keyword.bootstrap(root=root, provider=provider)
+                _log.info("context index: ready — %d cards written to %s", n, cards_dir)
+            finally:
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                lock_fd.close()
         except Exception:  # noqa: BLE001
             _log.debug("context index: bootstrap failed", exc_info=True)
 

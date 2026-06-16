@@ -47,9 +47,15 @@ from ._walk import effective_skip_dirs, prune_dirnames
 
 _log = logging.getLogger("quest-ai-runner.context")
 
-# Max number of file paths fed to the LLM topic-identification prompt. Beyond this the list is
-# trimmed (with a note) so the prompt stays bounded for very large corpora.
-_MAX_LLM_PATHS = 3000
+# Max file paths per area-discovery chunk. Keeping each chunk small means the LLM call finishes
+# quickly and many chunks can run in parallel, so total wall-clock is bounded.
+_CHUNK_SIZE = 150
+
+# Max parallel LLM workers for bootstrap (area discovery and topic extraction).
+_BOOTSTRAP_WORKERS = 8
+
+# Jaccard file-overlap threshold above which two topic cards are considered duplicates and merged.
+_MERGE_JACCARD = 0.7
 
 # ---------------------------------------------------------------------------
 # Bootstrap constants
@@ -425,99 +431,219 @@ def _extract_json_array(text: str) -> str:
         return ""
 
 
-# Prompt template for LLM topic-card identification. NOTE: no em dashes in any model-facing or
-# user-facing text per the project brand-voice rule; this is internal, but kept consistent.
-_TOPIC_PROMPT = """You are analyzing a codebase to identify its natural semantic topics.
+# Prompt for stage 1: given a chunk of file paths, identify top-level areas.
+_AREA_PROMPT = """You are analyzing a slice of a codebase to identify its top-level areas.
 
-Below is the list of source files in the codebase, one path per line:
+Source files (one path per line):
 
 {file_tree}
 
-A "topic" is a coherent area of functionality. A single topic can span files from completely
-separate directories (for example, a chat feature might touch a backend file, a runner file, and
-a frontend file). Identify the natural topics that actually exist in THIS codebase. The number of
-topics should reflect what is really there: a small focused codebase might have 3 topics, a large
-one might have 50. Let the structure of the code determine the count; do not target a fixed range.
+Group these files into 2 to 8 high-level areas, modules, or subsystems. An area is a cohesive
+cluster of files that work together. The number of areas should reflect what is really there.
 
-For each topic produce:
-  - id: a short slug (lowercase, hyphens), unique among the topics
-  - name: a short human-readable name
-  - keywords: 5 to 15 lowercase keywords someone might use to search for this topic
-  - summary: one sentence describing what this topic is
-  - files: the list of file paths (taken EXACTLY from the list above) that belong to this topic
+For each area produce:
+  - name: a short label (2-5 words)
+  - description: one sentence describing what this area does
+  - files: which of the given paths belong here (exact copies from the list above)
 
-A file may appear in more than one topic. Every path you list must be copied exactly from the
-list above.
+Respond with ONLY a JSON array, no prose, no markdown fences:
+[{{"name": "...", "description": "...", "files": ["path1", "path2"]}}]
+"""
 
-Respond with ONLY a JSON array, no prose and no markdown fences, in this shape:
-[{{"id": "...", "name": "...", "keywords": ["..."], "summary": "...", "files": ["rel/path.py"]}}]
+# Prompt for stage 2: given an area with its files, extract topic cards.
+_TOPIC_PROMPT = """You are analyzing files from the "{area_name}" area of a codebase.
+{area_description}
+
+Source files:
+
+{file_tree}
+
+Identify 2 to 8 specific topic cards. A topic card groups files that work together around a
+specific concept or feature. A card may include files from different directories. The number of
+cards should reflect what is really there in these files.
+
+For each topic card produce:
+  - id: a short unique slug (lowercase, hyphens only)
+  - name: a short human-readable name (3-6 words)
+  - keywords: 5 to 12 lowercase keywords someone might use to find this topic
+  - summary: one sentence describing what this group of files does
+  - files: which of the given paths belong here (exact copies from the list above)
+
+A file may appear in multiple cards. Every path you list must be an exact copy from the list above.
+
+Respond with ONLY a JSON array, no prose, no markdown fences:
+[{{"id": "...", "name": "...", "keywords": ["..."], "summary": "...", "files": ["path"]}}]
 """
 
 
+def _parse_raw_entries(raw: str, allowed: Set[str]) -> List[Dict[str, Any]]:
+    """Parse a JSON array from ``raw`` and validate each entry. Returns [] on any failure."""
+    payload = _extract_json_array(raw or "")
+    if not payload:
+        return []
+    try:
+        parsed = json.loads(payload)
+    except (ValueError, TypeError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+    out = []
+    for entry in parsed:
+        if not isinstance(entry, dict):
+            continue
+        out.append({k: v for k, v in entry.items()})
+    return out
+
+
+def _discover_areas(chunk: List[str], provider, model) -> List[Dict[str, Any]]:
+    """Stage 1: ask the LLM to identify top-level areas in ``chunk``. Never raises."""
+    try:
+        file_tree = "\n".join(chunk)
+        prompt = _AREA_PROMPT.format(file_tree=file_tree)
+        raw = provider.answer([{"role": "user", "content": prompt}], model=model)
+        allowed = set(chunk)
+        areas = []
+        for entry in _parse_raw_entries(raw, allowed):
+            name = entry.get("name", "").strip()
+            desc = entry.get("description", "").strip()
+            files = [f for f in (entry.get("files") or []) if isinstance(f, str) and f in allowed]
+            if name and files:
+                areas.append({"name": name, "description": desc, "files": files})
+        return areas
+    except Exception:  # noqa: BLE001
+        _log.debug("context index: area discovery failed for chunk", exc_info=True)
+        return []
+
+
+def _extract_topic_cards(area: Dict[str, Any], allowed: Set[str], provider, model) -> List[Dict[str, Any]]:
+    """Stage 2: given an area dict, ask the LLM for topic cards. Never raises."""
+    try:
+        file_tree = "\n".join(area["files"])
+        prompt = _TOPIC_PROMPT.format(
+            area_name=area["name"],
+            area_description=area.get("description", ""),
+            file_tree=file_tree,
+        )
+        raw = provider.answer([{"role": "user", "content": prompt}], model=model)
+        cards = []
+        for entry in _parse_raw_entries(raw, allowed):
+            cid = (entry.get("id") or "").strip()
+            name = (entry.get("name") or "").strip()
+            keywords = entry.get("keywords")
+            summary = (entry.get("summary") or "").strip()
+            files = entry.get("files")
+            if not (cid and name and summary):
+                continue
+            if not isinstance(keywords, list):
+                continue
+            if not isinstance(files, list):
+                continue
+            kept = [f for f in files if isinstance(f, str) and f in allowed]
+            if not kept:
+                continue
+            cards.append({
+                "id": cid,
+                "name": name,
+                "keywords": [str(k).strip() for k in keywords if str(k).strip()],
+                "summary": summary,
+                "files": list(dict.fromkeys(kept)),
+            })
+        return cards
+    except Exception:  # noqa: BLE001
+        _log.debug("context index: topic extraction failed for area %r", area.get("name"), exc_info=True)
+        return []
+
+
+def _jaccard(a: Set[str], b: Set[str]) -> float:
+    """File-set Jaccard similarity. Returns 0.0 when both sets are empty."""
+    if not a and not b:
+        return 0.0
+    union = a | b
+    return len(a & b) / len(union)
+
+
+def _merge_topic_cards(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Merge near-duplicate topic cards (Jaccard file-overlap >= _MERGE_JACCARD).
+
+    Cards are merged greedily in order. The first card in a cluster is the representative;
+    its keywords and files are expanded with the union of the cluster. Returns the merged list.
+    """
+    merged: List[Dict[str, Any]] = []
+    for card in cards:
+        files_a = set(card["files"])
+        matched = False
+        for rep in merged:
+            if _jaccard(files_a, set(rep["files"])) >= _MERGE_JACCARD:
+                # Merge into representative: expand files and keywords.
+                combined = list(dict.fromkeys(rep["files"] + card["files"]))
+                rep["files"] = combined
+                rep["keywords"] = list(dict.fromkeys(rep["keywords"] + card["keywords"]))
+                matched = True
+                break
+        if not matched:
+            merged.append({**card})
+    return merged
+
+
 def _llm_topic_cards(file_paths, provider, model=None):
-    """Ask an LLM to identify semantic topic cards across ``file_paths``. Never raises.
+    """3-stage parallel LLM fan-out to identify semantic topic cards.
 
-    ``file_paths`` is a flat list of relative source paths. ``provider`` is a ModelProvider whose
-    ``answer(messages, model=...)`` is used. ``model`` is passed through unchanged (the caller may
-    leave it None to use the provider's own default tier).
+    Stage 1 -- chunk the path list and run area-discovery calls in parallel (each chunk
+    is small so each call is fast). Stage 2 -- for each discovered area, run a topic-
+    extraction call in parallel. Stage 3 -- merge near-duplicate cards (Jaccard >= 0.7).
 
-    Returns a list of validated topic-card dicts, each with keys ``id``, ``name``, ``keywords``,
-    ``summary`` and ``files`` (filtered to paths present in ``file_paths``). On ANY error (API
-    failure, JSON parse error, etc.) returns ``[]``.
+    Never raises. Returns [] on any unrecoverable error.
     """
     if provider is None or not file_paths:
         return []
     try:
         allowed = set(file_paths)
-        listed = list(file_paths)
-        if len(listed) > _MAX_LLM_PATHS:
-            note = f"... ({len(listed) - _MAX_LLM_PATHS} more files omitted)"
-            listed = listed[:_MAX_LLM_PATHS] + [note]
-        file_tree = "\n".join(listed)
-        prompt = _TOPIC_PROMPT.format(file_tree=file_tree)
+        paths = list(file_paths)
 
-        raw = provider.answer([{"role": "user", "content": prompt}], model=model)
-        payload = _extract_json_array(raw or "")
-        if not payload:
+        # Stage 1: chunk paths and discover areas in parallel.
+        chunks = [paths[i:i + _CHUNK_SIZE] for i in range(0, len(paths), _CHUNK_SIZE)]
+        _log.info(
+            "context index: bootstrap stage 1 — %d file(s) across %d chunk(s)",
+            len(paths), len(chunks),
+        )
+        areas: List[Dict[str, Any]] = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=_BOOTSTRAP_WORKERS) as ex:
+            futures = {ex.submit(_discover_areas, chunk, provider, model): i
+                       for i, chunk in enumerate(chunks)}
+            for fut in concurrent.futures.as_completed(futures):
+                result = fut.result()
+                if result:
+                    areas.extend(result)
+
+        if not areas:
+            _log.warning("context index: bootstrap stage 1 returned no areas")
             return []
-        parsed = json.loads(payload)
-        if not isinstance(parsed, list):
+        _log.info("context index: bootstrap stage 2 — extracting topics from %d area(s)", len(areas))
+
+        # Stage 2: extract topic cards per area in parallel.
+        raw_cards: List[Dict[str, Any]] = []
+        with concurrent.futures.ThreadPoolExecutor(max_workers=_BOOTSTRAP_WORKERS) as ex:
+            futures2 = {ex.submit(_extract_topic_cards, area, allowed, provider, model): area["name"]
+                        for area in areas}
+            for fut in concurrent.futures.as_completed(futures2):
+                result = fut.result()
+                if result:
+                    raw_cards.extend(result)
+
+        if not raw_cards:
+            _log.warning("context index: bootstrap stage 2 returned no topic cards")
             return []
 
-        cards: List[Dict[str, Any]] = []
-        for entry in parsed:
-            if not isinstance(entry, dict):
-                continue
-            cid = entry.get("id")
-            name = entry.get("name")
-            keywords = entry.get("keywords")
-            summary = entry.get("summary")
-            files = entry.get("files")
-            if not (isinstance(cid, str) and cid.strip()):
-                continue
-            if not (isinstance(name, str) and name.strip()):
-                continue
-            if not isinstance(keywords, list):
-                continue
-            if not (isinstance(summary, str) and summary.strip()):
-                continue
-            if not isinstance(files, list):
-                continue
-            # Keep only paths that were in the provided list (exact match).
-            kept_files = [f for f in files if isinstance(f, str) and f in allowed]
-            if not kept_files:
-                continue
-            kw_clean = [str(k).strip() for k in keywords if str(k).strip()]
-            cards.append({
-                "id": cid.strip(),
-                "name": name.strip(),
-                "keywords": kw_clean,
-                "summary": summary.strip(),
-                "files": list(dict.fromkeys(kept_files)),
-            })
-        return cards
-    except Exception:  # noqa: BLE001 -- any failure: no cards, the store stays empty
-        _log.debug("context index: LLM topic identification failed", exc_info=True)
+        # Stage 3: merge near-duplicate cards.
+        merged = _merge_topic_cards(raw_cards)
+        _log.info(
+            "context index: bootstrap stage 3 — merged %d raw cards into %d unique cards",
+            len(raw_cards), len(merged),
+        )
+        return merged
+
+    except Exception as exc:  # noqa: BLE001
+        _log.warning("context index: LLM topic identification failed: %s", exc, exc_info=True)
         return []
 
 

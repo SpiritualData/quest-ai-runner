@@ -241,8 +241,12 @@ class ClaudeCliProvider(ModelProviderBase):
         Uses ``--output-format json`` and returns the envelope's ``result`` field. Raises
         RuntimeError on a non-zero exit or unparseable envelope so callers can decide how to
         degrade (plan() swallows it to a safe default; answer() propagates).
+
+        The prompt is piped via stdin (not passed as a CLI argument) so large prompts do not
+        hit the OS ARG_MAX limit.
         """
-        cmd: List[str] = [self._resolve_binary(), "-p", prompt, "--output-format", "json"]
+        # Pass "-p" with no inline prompt — the CLI reads from stdin when no prompt arg follows.
+        cmd: List[str] = [self._resolve_binary(), "-p", "--output-format", "json"]
         cli_m = cli_model(model)
         if cli_m:
             cmd += ["--model", cli_m]
@@ -253,6 +257,7 @@ class ClaudeCliProvider(ModelProviderBase):
 
         proc = subprocess.run(
             cmd,
+            input=prompt.encode("utf-8"),
             env=self._build_env(),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
