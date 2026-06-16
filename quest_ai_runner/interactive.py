@@ -364,16 +364,28 @@ class _TurnRenderer:
                 self._c.write(f"{self._rep_name}  ")
             self._ai_label_printed = True
 
+    def _print_step(self, prefix: str, message: str) -> None:
+        """Print a dim step line (call while panel is stopped)."""
+        c = self._c
+        if c._rich:
+            c._rich.print(f"  [dim]{prefix}  {message}[/]", highlight=False)
+        elif c._color:
+            c.line(f"  {_DIM}{prefix}  {message}{_RESET}")
+        else:
+            c.line(f"  {prefix}  {message}")
+
     def render(self, event) -> None:
         # run_stream() yields dicts (via ProgressEvent.to_dict()); support both.
         if isinstance(event, dict):
-            t    = event.get("type", "")
-            text = (event.get("text") or "").rstrip()
-            data = event.get("data") or {}
+            t      = event.get("type", "")
+            text   = (event.get("text") or "").rstrip()
+            action = event.get("action") or ""
+            data   = event.get("data") or {}
         else:
-            t    = event.type
-            text = (event.text or "").rstrip()
-            data = event.data or {}
+            t      = event.type
+            text   = (event.text or "").rstrip()
+            action = getattr(event, "action", None) or ""
+            data   = event.data or {}
         ev = self._types()
 
         if t == ev["partial"]:
@@ -405,16 +417,30 @@ class _TurnRenderer:
             self._c.line(""); self._in_partial = False
 
         if t == ev["plan"]:
+            if text:
+                self._panel.stop()
+                label = f"▸ {action}" if action else "▸"
+                self._print_step(label, text)
+                self._panel.start()
             self._panel.set_phase("planning…")
         elif t == ev["replan"]:
             self._panel.inc_replans()
-            self._panel.set_phase("replanning with context…")
+            if text:
+                self._panel.stop()
+                self._print_step("↺", text)
+                self._panel.start()
+            self._panel.set_phase("re-planning…")
         elif t == ev["status"]:
             self._panel.set_phase(text or "thinking…")
         elif t == ev["read"]:
             paths = data.get("sources") or []
             count = data.get("reads", len(paths))
             self._panel.add_sources(paths, count or len(paths))
+            if paths:
+                self._panel.stop()
+                for p in paths:
+                    self._print_step("↗", p)
+                self._panel.start()
             total = self._panel._total_sources
             self._panel.set_phase(
                 f"gathering context  "
