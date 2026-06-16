@@ -22,6 +22,44 @@ The missing middle is **task-specific context that is also guaranteed and not re
 runner owns the one place that can deliver it: it assembles the prompt, so it — not the agent's
 discretion — can pre-load the right context and pin the model tier before the loop starts.
 
+## Why this is the right shape: Shannon's Data Processing Inequality
+
+The `ContextAssembler` design follows directly from a constraint in information theory. Shannon's
+**Data Processing Inequality** (DPI, 1948) states that for any Markov chain X → Y → Z:
+
+```
+I(X ; Z) ≤ I(X ; Y)
+```
+
+Processing can only destroy information; it cannot create it. Applied to agents: if an intermediate
+agent summarizes a corpus and hands that summary to a reasoning agent, the reasoning agent is
+strictly less informed than if it had seen the corpus directly — regardless of how good the
+summarizer is.
+
+The naive alternative to a context engine is a **"context finder" agent** that reads the corpus and
+passes a summary forward. This is a lossy chain, and every handoff is a tax:
+
+```
+corpus → [context-finder agent → compressed summary] → reasoning agent
+```
+
+The context engine eliminates that agent-to-agent handoff entirely. Context delivery is library
+code, not an agent call, so no information is lost at the retrieval seam:
+
+```
+corpus → [context engine (library code) → full relevant context] → reasoning agent
+```
+
+This also explains why **parallel fan-out is safe but sequential chaining is expensive**. When the
+orchestrator fans out sub-questions, each branch receives the SAME original context (no handoff
+loss). When it chains (plan → gather → re-plan), it accumulates original-content observations — it
+never asks one step to summarize another step's findings for the next hop. Both patterns hold
+because the raw sources are preserved at every step.
+
+The practical consequence (verified empirically in `evaluation/`): Claude Code with correct
+grounding confirms in 1 tool round instead of 3. Fewer rounds means less opportunity for the loop
+to diverge from the original task's context.
+
 ## The shape
 
 A `ContextAssembler` is a fifth, **optional** adapter role (alongside Retrieval / Model / Deep /

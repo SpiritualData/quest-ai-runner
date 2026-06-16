@@ -286,8 +286,17 @@ stub `RetrievalAdapter`, and the runner runs against a mock `QuestClient`.
 
 ## The context engine, and the part that compounds
 
-The runner ships a context engine that orients an agent to the right place before it starts,
-across three complementary arms:
+The core design decision behind the context engine is information-theoretic. Shannon's **Data
+Processing Inequality** (1948) proves that every agent-to-agent handoff can only destroy
+information, never create it. The naive alternative — a "context finder" agent that summarizes the
+corpus and hands a compressed summary to the reasoning agent — is a lossy chain by construction,
+regardless of how good the summarizer is. The context engine eliminates that handoff: context
+delivery is library code, not an agent call, so the reasoning agent sees the full relevant context,
+not a compressed version of it. Under equal compute, a single well-contextualized agent matches or
+beats a multi-agent pipeline on every tested model family (Tran & Kiela, Stanford 2026,
+arXiv:2604.02460).
+
+The runner orients an agent to the right place before it starts, across three complementary arms:
 
 - **Docstring cards** (zero-dependency): a no-LLM initial pass that indexes the code's **own
   docstrings** (each file's written description), like the index at the back of a book.
