@@ -42,6 +42,7 @@ from .adapters import (
     EVENT_REPLAN,
     EVENT_RESULT,
     EVENT_STATUS,
+    EVENT_TOKENS,
     ContextAssembler,
     DeepResult,
     DeepRunner,
@@ -1429,6 +1430,13 @@ class Orchestrator:
                     )
                 except Exception:  # noqa: BLE001 -- write-back must never break the run
                     pass
+            # Final token event so consumers get the definitive total alongside the result.
+            _fti = res.tokens_in
+            _fto = res.tokens_out
+            if _fti or _fto:
+                emit.emit(ProgressEvent(type=EVENT_TOKENS,
+                                        data={"tokens_in": _fti, "tokens_out": _fto,
+                                              "total": _fti + _fto, "final": True}))
             # The terminal result + an explicit done event. RESULT/DONE always surface (both lanes).
             if res.kind == "answer":
                 emit.emit(ProgressEvent(type=EVENT_RESULT, text=res.text, result_kind="answer"))
@@ -1452,6 +1460,13 @@ class Orchestrator:
                 plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
             emit.emit(ProgressEvent(type=(EVENT_PLAN if step == 0 else EVENT_REPLAN),
                                     action=plan.action, step=steps, text=plan.rationale or None))
+            # Emit cumulative token counts so live consumers see usage grow in real time.
+            _ti = getattr(self.provider, 'tokens_in', 0)
+            _to = getattr(self.provider, 'tokens_out', 0)
+            if _ti or _to:
+                emit.emit(ProgressEvent(type=EVENT_TOKENS,
+                                        data={"tokens_in": _ti, "tokens_out": _to,
+                                              "total": _ti + _to}))
 
             if plan.action == "read":
                 if not plan.reads:
@@ -1515,6 +1530,11 @@ class Orchestrator:
             emit.status("answering")
             text = self._grounded_answer(user_message, transcript, context_view, gathered, model,
                                          False, native_blocks=native_blocks)
+        _ti = getattr(self.provider, 'tokens_in', 0)
+        _to = getattr(self.provider, 'tokens_out', 0)
+        if _ti or _to:
+            emit.emit(ProgressEvent(type=EVENT_TOKENS,
+                                    data={"tokens_in": _ti, "tokens_out": _to, "total": _ti + _to}))
         return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
                                          model=model))
 

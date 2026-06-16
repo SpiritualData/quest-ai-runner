@@ -17,9 +17,9 @@ it can be unit-tested against a mock Quest client + stub brain with no network.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
-from ..core.adapters import Mode, MilestoneSink, ProgressEvent
+from ..core.adapters import Mode, ProgressEvent
 from ..core.orchestrator import Orchestrator, OrchestratorResult
 
 
@@ -29,6 +29,35 @@ class ExecutionOutcome:
     status: str                       # "done" | "needs_you" | "failed"
     result: str = ""
     decision_id: Optional[str] = None
+
+
+class _TaskProgressSink:
+    """Routes orchestrator events to the task's live progress stream.
+
+    Forwards all events EXCEPT raw streaming partials to report_progress, so the
+    task-detail SSE stream shows step-by-step what the AI is doing (plan -> read ->
+    answer) and live token counts. Milestones additionally post into the originating
+    chat (same behavior as the old MilestoneSink path).
+    """
+    _SKIP = frozenset({"partial"})
+
+    def __init__(self, task_id: str, report_fn: Callable, on_milestone: Optional[Callable]):
+        self._task_id = task_id
+        self._report = report_fn
+        self._on_milestone = on_milestone
+
+    def update(self, event: ProgressEvent, mode) -> None:
+        if event.type in self._SKIP:
+            return
+        try:
+            self._report(self._task_id, event.type, text=event.text, data=event.data)
+        except Exception:  # noqa: BLE001
+            pass
+        try:
+            if event.type == "milestone" and self._on_milestone:
+                self._on_milestone(event)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 class TaskExecutor:
@@ -74,14 +103,14 @@ class TaskExecutor:
         self._report_progress(task_id, "started", text=f"Started working on this: {text}")
         self._post_conv(conv_id, f"Started working on this: {text}", kind="started")
 
-        # BACKGROUND lane: nobody is attending the run loop, so route it through a MilestoneSink.
-        # The sink (NOT the brain) drops planning/reading/re-planning chatter and surfaces only
-        # real milestones / decisions / the result — the "inform along the way" discipline. The
-        # SAME MilestoneSink both keeps the optional Quest progress note AND (when a conv_id is
-        # present) posts each milestone into the originating chat. Final result + decision still go
-        # through the established _report path below, which also posts the closing chat message.
-        sink = MilestoneSink(
-            on_milestone=lambda ev: self._on_milestone(task_id, conv_id, ev))
+        # Route all orchestrator events (except raw streaming partials) to the task's live progress
+        # stream so the task-detail SSE shows step-by-step what the AI is doing (plan, read, replan,
+        # tokens). Milestones additionally post into the originating chat (same as MilestoneSink).
+        sink = _TaskProgressSink(
+            task_id,
+            self._report_progress,
+            on_milestone=lambda ev: self._on_milestone(task_id, conv_id, ev),
+        )
 
         try:
             result: OrchestratorResult = self._orch.run(
@@ -121,7 +150,8 @@ class TaskExecutor:
             self._post_conv(conv_id, event.text, kind="progress")
 
     def _report_progress(self, task_id: str, kind: str, *, text: Optional[str] = None,
-                         output: Optional[str] = None) -> None:
+                         output: Optional[str] = None,
+                         data: Optional[Dict[str, Any]] = None) -> None:
         """Best-effort: post a live execution-progress event onto the task (the task-detail stream).
 
         No-ops when the client lacks ``report_progress`` (older clients / mocks), and never raises —
@@ -131,7 +161,7 @@ class TaskExecutor:
             return
         report = getattr(self._client, "report_progress", None)
         if callable(report):
-            self._safe(lambda: report(task_id, kind, text=text, output=output))
+            self._safe(lambda _d=data: report(task_id, kind, text=text, output=output, data=_d))
 
     def _post_conv(self, conv_id: Optional[str], content: str, *, kind: str) -> None:
         """Best-effort: append a live progress message into the originating chat, if one is linked.
