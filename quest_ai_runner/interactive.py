@@ -151,7 +151,8 @@ class _ContextPanel:
         self._thread: Optional[threading.Thread] = None
         self._frame = 0
         self._phase = "thinking…"
-        self._sources: List[str] = []    # visible (most recent)
+        self._sources: List[str] = []    # visible (most recent, deduplicated)
+        self._seen_sources: set = set()  # all source paths ever added (for dedup)
         self._overflow = 0               # folded off the top
         self._total_sources = 0          # total sources seen (for footer)
         self._replans = 0
@@ -174,17 +175,21 @@ class _ContextPanel:
 
     def add_sources(self, paths: List[str], count: int) -> None:
         """Called when a READ event arrives with its source paths."""
+        new_paths: List[str] = []
         with self._lock:
             self._total_sources += count
             for p in paths:
-                self._sources.append(p)
+                if p not in self._seen_sources:
+                    self._seen_sources.add(p)
+                    self._sources.append(p)
+                    new_paths.append(p)
             # Keep only the most recent _MAX_SOURCES_SHOWN visible.
             if len(self._sources) > _MAX_SOURCES_SHOWN:
                 dropped = len(self._sources) - _MAX_SOURCES_SHOWN
                 self._overflow += dropped
                 self._sources = self._sources[dropped:]
         if not self._tty:
-            for p in paths:
+            for p in new_paths:
                 self._c.line(f"  ↗  {p}")
 
     def stop(self) -> None:
@@ -297,8 +302,23 @@ class _EscWatcher:
                 r, _, _ = select.select([sys.stdin], [], [], 0.1)
             except Exception:  # noqa: BLE001
                 return
-            if r and sys.stdin.read(1) == "\x1b":
+            if not r:
+                continue
+            ch = sys.stdin.read(1)
+            if ch != "\x1b":
+                continue
+            # Bare ESC cancels the turn.  Arrow keys and function keys also start with ESC
+            # but are immediately followed by more bytes ("\x1b[C" for →, etc.).  Peek for
+            # those extra bytes within 20 ms; if any arrive this is an escape sequence —
+            # drain and ignore it rather than firing a false cancel.
+            try:
+                more, _, _ = select.select([sys.stdin], [], [], 0.02)
+            except Exception:  # noqa: BLE001
                 self._cancelled.set(); return
+            if more:
+                sys.stdin.read(2)  # consume the "[X" tail of the sequence
+                continue
+            self._cancelled.set(); return
 
     def stop(self) -> None:
         self._stop.set()
