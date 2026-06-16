@@ -439,7 +439,7 @@ class _TurnRenderer:
 _CTRL_C_WINDOW = 2.0   # seconds: second Ctrl+C within this window exits
 
 _SLASH_COMMANDS = [
-    "/help", "/clear", "/reps", "/rep ", "/persona ",
+    "/help", "/clear", "/reps", "/rep ", "/file ",
     "/quests", "/goal ", "/whoami", "/quit", "/q",
 ]
 
@@ -510,7 +510,7 @@ Commands:
   /clear             reset the conversation transcript
   /reps              list and select an AI representative for this session
   /rep <name>        set a custom representative name directly
-  /persona <file>    load a persona/skill file  (overrides prior persona)
+  /file <path>       load any file as the persona for this session
   /quests            list and attach to a Quest goal
   /goal <id>         attach to a goal id directly (if you know it)
   /whoami            show what this AI knows about itself and this session
@@ -743,12 +743,12 @@ class InteractiveSession:
             if line.startswith("/rep "):
                 self._rep_name = line[5:].strip()
                 self._console.dim(f"  AI: {self._rep_name}"); continue
-            if line.startswith("/persona "):
-                path = line[9:].strip()
+            if line.startswith("/file "):
+                path = line[6:].strip()
                 try:
                     self._persona = open(path).read()  # noqa: WPS515
                     kb = max(1, len(self._persona.encode()) // 1024)
-                    self._console.dim(f"  persona loaded: {path} ({kb}KB)")
+                    self._console.dim(f"  loaded: {path} ({kb}KB)")
                 except OSError as e:
                     self._console.dim(f"  could not read {path!r}: {e}")
                 continue
@@ -839,7 +839,7 @@ class InteractiveSession:
         skills_dir = self._skills_dir()
         if not skills_dir or not os.path.isdir(skills_dir):
             c.dim(f"  no skills directory found (set QAR_SKILLS_DIR, or QAR_CORPUS_ROOT/.claude/skills/)")
-            c.dim("  you can still use /rep <name> and /persona <file> to set one manually")
+            c.dim("  you can still use /rep <name> and /file <path> to set one manually")
             return
         reps = []
         for entry in sorted(os.scandir(skills_dir), key=lambda e: e.name):
@@ -889,7 +889,7 @@ class InteractiveSession:
             c.dim(f"  persona:   {kb}KB loaded")
         else:
             c.dim("  persona:   none  "
-                  "(use /persona <file> or --persona-file to load one)")
+                  "(use /file <path> or --persona-file to load one)")
         if self._goal_id:
             c.dim(f"  goal:      {self._goal_id}")
         c.dim(f"  turns:     {self._turn_count} in this session")
