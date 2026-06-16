@@ -342,6 +342,10 @@ class OrchestratorResult:
     claim_corrected: bool = False
     # The model id used for the final answer/deep step (set by the loop; None for confirm turns).
     model: Optional[str] = None
+    # Total token counts across all LLM calls this turn (plan + answer). Populated by finish()
+    # from provider.tokens_in / tokens_out when the provider supports tracking.
+    tokens_in: int = 0
+    tokens_out: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -1159,6 +1163,14 @@ class Orchestrator:
         started = time.monotonic()
         cfg = self.cfg
 
+        # Reset per-turn token counters on the provider (if it tracks them).
+        try:
+            if hasattr(self.provider, "tokens_in"):
+                self.provider.tokens_in = 0
+                self.provider.tokens_out = 0
+        except Exception:  # noqa: BLE001
+            pass
+
         # If a handoff is configured, route events through a FanoutSink that flips live->bg on detach.
         # We need to set up the emitter early so instant_ack can use it.
         on_detach = None
@@ -1293,7 +1305,7 @@ class Orchestrator:
             try:
                 _ack_text = _ack_future.result(timeout=5.0)
                 if _ack_text and _ack_text.strip():
-                    emit.status(_ack_text.strip())
+                    emit.emit(ProgressEvent(type=EVENT_PARTIAL, text=_ack_text.strip(), data={"ack": True}))
             except Exception:  # noqa: BLE001 — timeout, cancelled, or provider error: skip
                 pass
             finally:
@@ -1379,6 +1391,13 @@ class Orchestrator:
             res.steps = steps
             res.gathered = gathered
             res.execution_record = exec_record
+            # Collect token counts from the provider if it tracks them.
+            try:
+                if hasattr(self.provider, "tokens_in"):
+                    res.tokens_in = self.provider.tokens_in
+                    res.tokens_out = self.provider.tokens_out
+            except Exception:  # noqa: BLE001
+                pass
             # --- BROKEN-PROMISE GUARD (workstream 5): post-turn honesty check. ----------------
             # Verify a reply that CLAIMS a completed/imminent action against what actually executed;
             # auto-remediate (one safe re-run) then re-verify; else rewrite the reply to be honest

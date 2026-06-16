@@ -377,6 +377,22 @@ class _TurnRenderer:
         ev = self._types()
 
         if t == ev["partial"]:
+            is_ack = isinstance(data, dict) and data.get("ack")
+            if is_ack:
+                # Instant ack: show as a dim note above the spinner, then restart it.
+                # Do NOT set _partial_started/_in_partial — the real result still shows normally.
+                self._panel.stop()
+                if text:
+                    c = self._c
+                    if c._rich:
+                        c._rich.print(f"  [dim]{text}[/]", highlight=False)
+                    elif c._color:
+                        c.line(f"  {_DIM}{text}{_RESET}")
+                    else:
+                        c.line(f"  {text}")
+                self._panel.start()
+                return
+            # Regular streaming token path (unchanged).
             if not self._partial_started:
                 self._panel.stop()
                 self._ensure_ai_label()
@@ -695,6 +711,12 @@ class InteractiveSession:
         model_lbl = _model_label(getattr(result, "model", None))
         if model_lbl:
             parts.append(model_lbl)
+        tok_in = getattr(result, "tokens_in", 0) or 0
+        tok_out = getattr(result, "tokens_out", 0) or 0
+        if tok_in or tok_out:
+            def _k(n):
+                return f"{n/1000:.1f}k" if n >= 1000 else str(n)
+            parts.append(f"{_k(tok_in)} in / {_k(tok_out)} out")
         parts.append(f"{elapsed:.1f}s")
         self._console.dim("  " + "  ·  ".join(parts))
 

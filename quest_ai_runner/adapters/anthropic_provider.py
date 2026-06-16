@@ -29,6 +29,10 @@ class AnthropicProvider(ModelProviderBase):
         self._client = None
         self._models_cache: Optional[List[str]] = None
         self._models_cached_at = 0.0
+        # Accumulated token counts for the current turn; reset by Orchestrator.run() at the
+        # start of each turn and read by finish() to populate OrchestratorResult.tokens_in/out.
+        self.tokens_in: int = 0
+        self.tokens_out: int = 0
 
     def _get_client(self):
         if self._client is None:
@@ -47,6 +51,9 @@ class AnthropicProvider(ModelProviderBase):
             tool_choice={"type": "tool", "name": tool_schema["name"]},
             messages=[{"role": "user", "content": prompt}],
         )
+        if hasattr(resp, "usage"):
+            self.tokens_in += getattr(resp.usage, "input_tokens", 0) or 0
+            self.tokens_out += getattr(resp.usage, "output_tokens", 0) or 0
         for block in resp.content:
             if getattr(block, "type", None) == "tool_use" and getattr(block, "name", None) == tool_schema["name"]:
                 return dict(block.input or {})
@@ -70,6 +77,9 @@ class AnthropicProvider(ModelProviderBase):
         if system:
             kwargs["system"] = system
         resp = client.messages.create(**kwargs)
+        if hasattr(resp, "usage"):
+            self.tokens_in += getattr(resp.usage, "input_tokens", 0) or 0
+            self.tokens_out += getattr(resp.usage, "output_tokens", 0) or 0
         return "".join(getattr(b, "text", "") for b in resp.content if getattr(b, "type", None) == "text")
 
     def list_models(self) -> List[str]:
