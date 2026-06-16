@@ -431,7 +431,7 @@ class _TurnRenderer:
             self._c.line(""); self._in_partial = False
         self._panel.stop()
         if cancelled:
-            self._c.dim("  cancelled.")
+            self._c.dim("  Cancelled.")
 
 
 # ── Input prompt ──────────────────────────────────────────────────────────────
@@ -507,20 +507,20 @@ def _read_line(session, prompt_str: str) -> Optional[str]:
 
 _HELP = """\
 Commands:
-  /help              show this help
-  /clear             reset the conversation transcript
-  /reps              list and select an AI representative for this session
-  /rep <name>        set a custom representative name directly
-  /file <path>       load any file as the persona for this session
-  /quests            browse and attach to a Quest goal
-  /goal <search>     search goals by name and pick one  (or pass an id directly)
-  /whoami            show what this AI knows about itself and this session
-  /quit  /q          exit
+  /help              Show this help
+  /clear             Reset the conversation transcript
+  /reps              List and select an AI representative for this session
+  /rep <name>        Set a custom representative name directly
+  /file <path>       Load any file as the persona for this session
+  /quests            Browse and attach to a Quest goal
+  /goal <search>     Search goals by name and pick one  (or pass an id directly)
+  /whoami            Show what this AI knows about itself and this session
+  /quit  /q          Exit
 
 Keys:
-  ESC          cancel the current turn while it is streaming
-  Ctrl+C       clear the input line  (press twice within 2s to exit)
-  Ctrl+D       exit
+  ESC          Cancel the current turn while it is streaming
+  Ctrl+C       Clear the input line  (press twice within 2s to exit)
+  Ctrl+D       Exit
 """
 
 _BANNER = """\
@@ -722,7 +722,7 @@ class InteractiveSession:
                         break   # second strike → exit
                     last_ctrl_c[0] = now
                     self._console.line("")
-                    self._console.dim("  (press Ctrl+C again to exit)")
+                    self._console.dim("  (Press Ctrl+C again to exit)")
                     continue
                 break   # prompt_toolkit already applied the two-strike logic → exit
 
@@ -740,18 +740,18 @@ class InteractiveSession:
             if line == "/clear":
                 self._last_user = ""
                 self._last_assistant = ""
-                self._console.dim("  transcript cleared"); continue
+                self._console.dim("  Transcript cleared."); continue
             if line.startswith("/rep "):
                 self._rep_name = line[5:].strip()
-                self._console.dim(f"  AI: {self._rep_name}"); continue
+                self._console.dim(f"  Representative: {self._rep_name}"); continue
             if line.startswith("/file "):
                 path = line[6:].strip()
                 try:
                     self._persona = open(path).read()  # noqa: WPS515
                     kb = max(1, len(self._persona.encode()) // 1024)
-                    self._console.dim(f"  loaded: {path} ({kb}KB)")
+                    self._console.dim(f"  Loaded: {path} ({kb}KB)")
                 except OSError as e:
-                    self._console.dim(f"  could not read {path!r}: {e}")
+                    self._console.dim(f"  Could not read {path!r}: {e}")
                 continue
             if line.startswith("/goal"):
                 self._cmd_goal(line[5:].strip(), session); continue
@@ -762,11 +762,11 @@ class InteractiveSession:
             if line == "/reps":
                 self._cmd_reps(session); continue
             if line.startswith("/"):
-                self._console.dim(f"  unknown: {line!r}  (/help for list)"); continue
+                self._console.dim(f"  Unknown command: {line!r}  (/help for list)"); continue
 
             self._run_turn(line)
 
-        self._console.dim("Bye.")
+        self._console.dim("Goodbye.")
 
     # -- Quest client (lazy, only when credentials are configured) -------------
 
@@ -789,7 +789,7 @@ class InteractiveSession:
         c.line("")
         for i, item in enumerate(items, 1):
             c.dim(f"  {i}.  {label_fn(item)}")
-        c.dim("  0.  cancel")
+        c.dim("  0.  Cancel")
         c.line("")
         try:
             if session is not None:
@@ -815,7 +815,7 @@ class InteractiveSession:
         # Bare id — attach directly, no network call needed.
         if " " not in arg and len(arg) < 80:
             self._goal_id = arg
-            c.dim(f"  goal: {arg!r} (set directly — use /quests to browse)"); return
+            c.dim(f"  Goal set to {arg!r} — use /quests to browse by name."); return
         # Name search — open picker then filter within the chosen quest.
         self._cmd_quests(session)
 
@@ -824,17 +824,17 @@ class InteractiveSession:
         c = self._console
         client = self._quest_client()
         if client is None:
-            c.dim("  Quest credentials not configured — set QUEST_BASE_URL, QUEST_API_KEY, QUEST_TEAM_ID")
+            c.dim("  Quest credentials not configured. Set QUEST_BASE_URL, QUEST_API_KEY, QUEST_TEAM_ID.")
             return
 
-        c.dim("  fetching quests and goals…")
+        c.dim("  Fetching quests and goals…")
         try:
             quests = client.list_quests()
         except Exception as e:  # noqa: BLE001
-            c.dim(f"  could not fetch quests: {e}"); return
+            c.dim(f"  Could not fetch quests: {e}"); return
         if not quests:
-            c.dim("  no quests attached to this team (QUEST_TEAM_ID=%s)" % getattr(self._cfg, "team_id", "?"))
-            c.dim("  quests must be attached to the team before they appear here"); return
+            c.dim("  No quests attached to this team (QUEST_TEAM_ID=%s)." % getattr(self._cfg, "team_id", "?"))
+            c.dim("  Quests must be attached to the team before they appear here."); return
 
         # Fetch goals for each quest and merge into time-period buckets
         # bucket key: (time_scope, period) → {period_label, time_scope, period, goals: [...]}
@@ -870,11 +870,11 @@ class InteractiveSession:
                     buckets[key]["goals"].append(g)
 
         if goals_errors:
-            c.dim("  could not fetch goals for some quests:")
+            c.dim("  Could not fetch goals for some quests:")
             for err in goals_errors:
                 c.dim(err)
         if not buckets:
-            c.dim("  no goals found across %d quest(s)" % len(quests)); return
+            c.dim("  No goals found across %d quest(s)." % len(quests)); return
 
         sorted_groups = sorted(buckets.values(),
                                key=lambda p: (_scope_rank(p["time_scope"]), p.get("period") or ""))
@@ -898,7 +898,7 @@ class InteractiveSession:
                 display_rows.append((entry_num, f"{name}{suffix}"))
 
         if not flat_goals:
-            c.dim("  no goals found on this team"); return
+            c.dim("  No goals found."); return
 
         c.line("")
         for num, label in display_rows:
@@ -915,19 +915,19 @@ class InteractiveSession:
             else:
                 raw = input("  select › ")
         except (EOFError, KeyboardInterrupt):
-            c.dim("  cancelled"); return
+            c.dim("  Cancelled."); return
 
         try:
             n = int((raw or "").strip())
         except ValueError:
-            c.dim("  cancelled"); return
+            c.dim("  Cancelled."); return
         if n <= 0 or n > len(flat_goals):
-            c.dim("  cancelled"); return
+            c.dim("  Cancelled."); return
 
         g = flat_goals[n - 1]
         self._goal_id = g.get("id") or g.get("goal_id") or ""
         title = g.get("name") or g.get("title") or self._goal_id
-        c.dim(f"  attached to: {title}")
+        c.dim(f"  Attached to: {title}")
 
     def _cmd_reps(self, session) -> None:
         """List locally-synced AI reps (SKILL.md files) and let the user select one."""
@@ -935,8 +935,8 @@ class InteractiveSession:
         c = self._console
         skills_dir = self._skills_dir()
         if not skills_dir or not os.path.isdir(skills_dir):
-            c.dim(f"  no skills directory found (set QAR_SKILLS_DIR, or QAR_CORPUS_ROOT/.claude/skills/)")
-            c.dim("  you can still use /rep <name> and /file <path> to set one manually")
+            c.dim(f"  No skills directory found (set QAR_SKILLS_DIR, or QAR_CORPUS_ROOT/.claude/skills/).")
+            c.dim("  You can still use /rep <name> and /file <path> to set a representative manually.")
             return
         reps = []
         for entry in sorted(os.scandir(skills_dir), key=lambda e: e.name):
@@ -947,21 +947,21 @@ class InteractiveSession:
                 continue
             reps.append({"name": entry.name, "skill_file": skill_file})
         if not reps:
-            c.dim(f"  no SKILL.md files found under {skills_dir}")
+            c.dim(f"  No SKILL.md files found under {skills_dir}.")
             return
         def _label(r):
             return r["name"]
         idx = self._pick_from_list(reps, _label, session)
         if idx is None:
-            c.dim("  cancelled"); return
+            c.dim("  Cancelled."); return
         r = reps[idx]
         self._rep_name = r["name"]
         try:
             self._persona = open(r["skill_file"]).read()
             kb = max(1, len(self._persona.encode()) // 1024)
-            c.dim(f"  AI: {self._rep_name}  (persona loaded from {r['skill_file']}, {kb}KB)")
+            c.dim(f"  Representative: {self._rep_name}  (skill file loaded: {r['skill_file']}, {kb}KB)")
         except OSError as e:
-            c.dim(f"  could not read {r['skill_file']!r}: {e}")
+            c.dim(f"  Could not read {r['skill_file']!r}: {e}")
 
     def _skills_dir(self) -> Optional[str]:
         """Resolve the local skills directory: QAR_SKILLS_DIR > corpus_root/.claude/skills."""
@@ -982,7 +982,7 @@ class InteractiveSession:
             kb = max(1, len(self._persona.encode()) // 1024)
             c.dim(f"  representative:  {self._rep_name}  ({kb}KB skill file loaded)")
         else:
-            c.dim(f"  representative:  {self._rep_name}  (no skill file — use /reps to pick one)")
+            c.dim(f"  representative:  {self._rep_name}  (no skill file loaded — use /reps to pick one)")
         corpus = getattr(self._cfg, "corpus_root", None)
         if corpus:
             c.dim(f"  corpus:          {corpus}")
