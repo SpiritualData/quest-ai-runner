@@ -296,6 +296,7 @@ class _EscWatcher:
         self._thread.start()
 
     def _watch(self) -> None:
+        import os
         import select
         while not self._stop.is_set():
             try:
@@ -304,21 +305,35 @@ class _EscWatcher:
                 return
             if not r:
                 continue
-            ch = sys.stdin.read(1)
-            if ch != "\x1b":
-                continue
-            # Bare ESC cancels the turn.  Arrow keys and function keys also start with ESC
-            # but are immediately followed by more bytes ("\x1b[C" for →, etc.).  Peek for
-            # those extra bytes within 20 ms; if any arrive this is an escape sequence —
-            # drain and ignore it rather than firing a false cancel.
+            # Read directly from the fd (bypassing Python's buffered text I/O) so we
+            # get ALL bytes that arrived together in one shot.  Arrow keys and function
+            # keys send multi-byte escape sequences (\x1b[C, \x1bOP, \x1b[15~, …).
+            # Reading up to 16 bytes captures the full sequence in a single read(),
+            # so we can distinguish "bare ESC" (exactly 1 byte) from "escape sequence"
+            # (the \x1b plus at least one more byte) without a timing-based peek.
             try:
-                more, _, _ = select.select([sys.stdin], [], [], 0.02)
+                data = os.read(self._fd, 16)
+            except OSError:
+                return
+            if not data:
+                continue
+            if data[0:1] != b"\x1b":
+                continue                        # ordinary key (a, enter, …) — ignore
+            if len(data) > 1:
+                continue                        # multi-byte sequence (arrow / fn key) — ignore
+            # Exactly one byte (b"\x1b").  Could still be the first byte of a sequence
+            # that arrived in two reads; peek for 50 ms to be sure.
+            try:
+                r2, _, _ = select.select([sys.stdin], [], [], 0.05)
             except Exception:  # noqa: BLE001
                 self._cancelled.set(); return
-            if more:
-                sys.stdin.read(2)  # consume the "[X" tail of the sequence
-                continue
-            self._cancelled.set(); return
+            if r2:
+                try:
+                    os.read(self._fd, 16)       # drain the trailing sequence bytes
+                except OSError:
+                    pass
+                continue                        # was an escape sequence — keep watching
+            self._cancelled.set(); return       # bare ESC confirmed — cancel
 
     def stop(self) -> None:
         self._stop.set()
