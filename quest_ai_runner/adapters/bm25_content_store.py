@@ -62,6 +62,7 @@ logger = logging.getLogger(__name__)
 _SKIP_DIRS: Set[str] = {
     ".git", "node_modules", ".venv", "venv", "__pycache__",
     "dist", "build", ".eggs", ".mypy_cache", ".pytest_cache", ".quest-context",
+    "Android",  # Android SDK/NDK toolchain — never source code
 }
 
 _SOURCE_EXTS: Set[str] = {
@@ -260,6 +261,7 @@ class BM25ContentStore(ContextAssemblerBase):
         Populates ``_file_paths``, ``_file_contents``, ``_fingerprints``, and
         ``_bm25_index``.  May raise; callers wrap in try/except.
         """
+        logger.info("BM25 context index: building for the first time under %s", self._root)
         paths: List[str] = []
         contents: List[str] = []
         fingerprints: Dict[str, str] = {}
@@ -318,6 +320,7 @@ class BM25ContentStore(ContextAssemblerBase):
         self._file_contents = contents
         self._fingerprints = fingerprints
         self._bm25_index = retriever
+        logger.info("BM25 context index: ready — %d files indexed", len(paths))
 
     def _auto_update(self) -> None:
         """Re-index files whose sha256 changed since the last build.
@@ -408,6 +411,7 @@ class BM25ContentStore(ContextAssemblerBase):
         self._file_contents = new_contents
         self._fingerprints = new_fps
         self._bm25_index = retriever
+        logger.info("BM25 context index: updated — %d files indexed", len(new_paths))
 
     # ------------------------------------------------------------------
     # Query generation (agentic, with provider)

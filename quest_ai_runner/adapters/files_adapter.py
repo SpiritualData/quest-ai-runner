@@ -17,6 +17,7 @@ from ..core.adapters import Observation, RetrievalAdapterBase
 _SKIP_DIRS = {
     ".git", "node_modules", "__pycache__", ".venv", "venv", ".mypy_cache",
     ".pytest_cache", "dist", "build", ".next", ".cache",
+    "Android",  # Android SDK/NDK toolchain — never source code
 }
 _BINARY_EXTS = {
     ".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip", ".gz", ".tar", ".mp4", ".mov",
