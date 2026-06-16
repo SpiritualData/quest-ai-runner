@@ -482,11 +482,15 @@ def _make_prompt_session(last_ctrl_c: list):
         sys.__stdout__.write(f"\n{_DIM}  (press Ctrl+C again to exit){_RESET}\n")
         sys.__stdout__.flush()
 
-    style = Style.from_dict({'': '#ffffff'})  # user input text is white
+    style = Style.from_dict({
+        '': '#ffffff',
+        'completion-menu.completion': 'bg:#1a1a2e #aaaaaa',
+        'completion-menu.completion.current': 'bg:#4444aa #ffffff bold',
+    })
     completer = _SlashCompleter() if _HAS_PROMPT_TOOLKIT else None
     return PromptSession(history=InMemoryHistory(), key_bindings=kb,
-                         enable_history_search=True, style=style,
-                         completer=completer, complete_while_typing=True)
+                         style=style, completer=completer,
+                         complete_while_typing=True)
 
 
 def _read_line(session, prompt_str: str) -> Optional[str]:
