@@ -164,7 +164,7 @@ class TurnContextStore:
                 asst_summary = asst_summary[: self._max_assistant_chars].rstrip() + "…"
 
             card_id = (
-                f"turn-{int(time.time() * 1000)}-"
+                f"turn-{time.time_ns()}-"
                 f"{hashlib.sha1(task_text.encode()).hexdigest()[:8]}"
             )
             card: Dict[str, Any] = {

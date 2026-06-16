@@ -1488,9 +1488,16 @@ class TestResolveContextAssemblerSeedSourceWiring:
         )
 
         assembler = resolve_context_assembler(cfg)
-        assert isinstance(assembler, HybridContextAssembler), (
-            f"expected HybridContextAssembler, got {type(assembler)!r}"
+        # resolve_context_assembler now returns a CompositeContextAssembler wrapping
+        # [HybridContextAssembler, TurnContextStore]. Unwrap to find the hybrid arm.
+        from quest_ai_runner.core.composite_assembler import CompositeContextAssembler
+        assert isinstance(assembler, CompositeContextAssembler), (
+            f"expected CompositeContextAssembler, got {type(assembler)!r}"
         )
+        hybrid = next(
+            (a for a in assembler._assemblers if isinstance(a, HybridContextAssembler)), None
+        )
+        assert hybrid is not None, "CompositeContextAssembler should contain a HybridContextAssembler"
 
         # Trigger first assemble — this should cause the vector arm to call sync().
         assembler.assemble("main module")
@@ -1641,21 +1648,22 @@ class TestMakeVoyageEmbedder:
     def test_missing_voyageai_raises_import_error_at_factory_time(self):
         """When voyageai is not installed, make_voyage_embedder raises ImportError immediately."""
         import sys
-
-        # Forcibly hide voyageai from sys.modules.
-        original = sys.modules.pop("voyageai", None)
-        # Also remove the module from the qdrant_vector_store module's cache
-        # by reloading it after hiding voyageai.
         import importlib
+
+        # Setting sys.modules["voyageai"] = None makes Python raise ImportError
+        # on any subsequent `import voyageai`, even if the package is installed on disk.
+        original = sys.modules.get("voyageai", _SENTINEL := object())
+        sys.modules["voyageai"] = None  # type: ignore[assignment]
         try:
             import quest_ai_runner.adapters.qdrant_vector_store as _mod
             importlib.reload(_mod)
             with pytest.raises(ImportError, match="pip install voyageai"):
                 _mod.make_voyage_embedder(input_type="document")
         finally:
-            # Restore voyageai if it was present.
-            if original is not None:
-                sys.modules["voyageai"] = original
+            if original is _SENTINEL:
+                del sys.modules["voyageai"]
+            else:
+                sys.modules["voyageai"] = original  # type: ignore[assignment]
             # Reload the real module to restore the clean state.
             importlib.reload(_mod)
 

@@ -43,8 +43,6 @@ if TYPE_CHECKING:
     from .config import RunnerConfig
     from .core.orchestrator import Orchestrator, OrchestratorResult, ProgressEvent
 
-from .core.turn_context_store import TurnContextStore
-from .core.composite_assembler import CompositeContextAssembler
 
 # ── Optional [tui] dependencies ───────────────────────────────────────────────
 
@@ -523,14 +521,8 @@ class InteractiveSession:
         self._last_user: str = ""
         self._last_assistant: str = ""
         self._turn_count: int = 0
-        # Wire TurnContextStore into the orchestrator's context_assembler.
-        turn_store = TurnContextStore()
-        existing = self._orch.context_assembler
-        if existing is not None:
-            self._orch.context_assembler = CompositeContextAssembler([existing, turn_store])
-        else:
-            self._orch.context_assembler = turn_store
-        self._turn_store = turn_store
+        # TurnContextStore is wired automatically by resolve_context_assembler in config.py,
+        # at <corpus_root>/.quest-context/turns/ — same root as file cards.
         self._console = _Console()
         self._cancelled = threading.Event()
 

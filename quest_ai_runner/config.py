@@ -225,6 +225,14 @@ def resolve_context_assembler(cfg: RunnerConfig):
         keyword = FileContextStore(cards_dir, repo_root=root)
         # If a vector store is configured, the default becomes a HYBRID: keyword/IDF FUSED with
         # semantic vector search (the two are complementary). Otherwise keyword-only.
+        # Turn-history cards live alongside file cards: same root, subdir "turns".
+        # This ensures turns are always at <corpus_root>/.quest-context/turns/ —
+        # consistent regardless of cwd, and shared across CLI, chat, and the executor lane.
+        from .core.turn_context_store import TurnContextStore
+        from .core.composite_assembler import CompositeContextAssembler
+        turns_dir = os.path.join(cards_dir, "turns")
+        turn_store = TurnContextStore(turns_dir=turns_dir)
+
         if cfg.vector_store is not None:
             from .adapters import HybridContextAssembler, VectorContextAssembler
             # Pre-trigger keyword bootstrap so that export_for_embedding() has cards
@@ -245,8 +253,10 @@ def resolve_context_assembler(cfg: RunnerConfig):
                 provider=cfg.model_provider,
                 seed_source=keyword.export_for_embedding,
             )
-            return HybridContextAssembler(keyword=keyword, vector=vector)
-        return keyword
+            file_assembler = HybridContextAssembler(keyword=keyword, vector=vector)
+        else:
+            file_assembler = keyword
+        return CompositeContextAssembler([file_assembler, turn_store])
     except Exception:  # noqa: BLE001 — never let context wiring break runner construction
         return None
 
