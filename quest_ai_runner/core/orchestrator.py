@@ -888,7 +888,8 @@ class Orchestrator:
     def _run_deep(self, plan: PlanDecision, user_message: str, model: str,
                   emit: Optional[_Emitter] = None,
                   rep_preamble: Optional[str] = None,
-                  exec_record: Optional[ExecutionRecord] = None) -> OrchestratorResult:
+                  exec_record: Optional[ExecutionRecord] = None,
+                  gathered: Optional[List[Dict[str, Any]]] = None) -> OrchestratorResult:
         subtasks = (plan.deep_subtasks or [])[: self.cfg.max_deep_subtasks]
         if not subtasks:
             subtasks = [{"goal": plan.goal or f"Fully address the request: {user_message[:200]}",
@@ -910,12 +911,12 @@ class Orchestrator:
         # We also TEE the emitter so EVENT_EXEC phase ticks are recorded into ``exec_record``
         # (per-subtask) for the broken-promise guard, while still streaming to the live sink.
         wants_emit = emit is not None and _run_goal_accepts_emit(self.deep_runner)
-        # A per-task ``rep_preamble`` (e.g. an AI rep's pulled persona) is forwarded to the deep
-        # run for THIS task only, and ONLY to a runner whose ``run_goal`` accepts ``context_preamble``
-        # (older signatures are untouched). The brain stays ignorant of what the string contains —
-        # it is just a context preamble it passes through.
-        wants_preamble = (rep_preamble is not None
-                          and _run_goal_accepts_context_preamble(self.deep_runner))
+        # A per-task ``rep_preamble`` (e.g. an AI rep's pulled persona) and the brain's specific
+        # ``gathered`` reads are both forwarded to the deep run as a combined ``context_preamble``,
+        # ONLY to a runner whose ``run_goal`` accepts that kwarg (older signatures are untouched).
+        # We check capability regardless of whether rep_preamble or gathered are set — either alone
+        # is enough to build a useful context_preamble for the deep runner.
+        wants_preamble = _run_goal_accepts_context_preamble(self.deep_runner)
 
         def run_one(st: Dict[str, Any]) -> DeepResult:
             goal = (st.get("goal") or "").strip() or f"Fully address: {user_message[:200]}"
@@ -948,7 +949,16 @@ class Orchestrator:
                 if wants_emit:
                     kwargs["emit"] = _emit_one
                 if wants_preamble:
-                    kwargs["context_preamble"] = rep_preamble
+                    preamble_parts = []
+                    if rep_preamble:
+                        preamble_parts.append(rep_preamble)
+                    if gathered:
+                        preamble_parts.append(
+                            "--- RELEVANT CONTENT FOUND BY THE BRAIN ---\n"
+                            + _render_gathered(gathered)
+                        )
+                    if preamble_parts:
+                        kwargs["context_preamble"] = "\n\n".join(preamble_parts)
                 res = self.deep_runner.run_goal(**kwargs)
             except Exception as e:  # noqa: BLE001
                 res = DeepResult(met=False, error=type(e).__name__)
@@ -991,7 +1001,8 @@ class Orchestrator:
     def _guard_turn(self, res: OrchestratorResult, exec_record: ExecutionRecord, *,
                     user_message: str, plan: Optional[PlanDecision],
                     model_hint: Optional[str], emit: Optional[_Emitter],
-                    rep_preamble: Optional[str]) -> None:
+                    rep_preamble: Optional[str],
+                    gathered: Optional[List[Dict[str, Any]]] = None) -> None:
         """AUTO-REMEDIATE THEN VERIFY (workstream 5). Mutates ``res`` in place when it corrects an
         overstated claim. Never raises (the caller also wraps it, belt-and-suspenders).
 
@@ -1047,7 +1058,8 @@ class Orchestrator:
                 )
             deep_model = self._answer_model(remediate_plan, "opus", hint=model_hint)
             redo = self._run_deep(remediate_plan, user_message, deep_model,
-                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record)
+                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
+                                  gathered=gathered)
             # Keep the original reply ONLY if the re-run met its goal AND the original claim is now
             # actually supported by what executed. Re-verifying (not just trusting ``met`` on a
             # possibly-vague synthesized goal) protects the honesty guarantee for specific claims.
@@ -1330,7 +1342,8 @@ class Orchestrator:
             # and flag the result partial. Never raises (degrades to leaving the turn unchanged).
             try:
                 self._guard_turn(res, exec_record, user_message=user_message, plan=plan,
-                                 model_hint=model_hint, emit=emit, rep_preamble=rep_preamble)
+                                 model_hint=model_hint, emit=emit, rep_preamble=rep_preamble,
+                                 gathered=gathered)
             except Exception:  # noqa: BLE001 — the guard must never break a turn
                 pass
             # Best-effort ContextAssembler write-back (learn from the outcome for next run). Pass the
@@ -1420,7 +1433,8 @@ class Orchestrator:
         if final == "deep":
             emit.status("working on this now…")
             res = self._run_deep(plan, user_message, self._answer_model(plan, "opus", hint=model_hint),
-                                 emit=emit, rep_preamble=rep_preamble, exec_record=exec_record)
+                                 emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
+                                 gathered=gathered)
             return finish(res)
 
         if final == "confirm":
@@ -1446,7 +1460,8 @@ class Orchestrator:
                    quest_id: Optional[str] = None,
                    mode: Mode = Mode.LIVE,
                    model_hint: Optional[str] = None,
-                   attachments: Optional[List[Dict[str, Any]]] = None):
+                   attachments: Optional[List[Dict[str, Any]]] = None,
+                   rep_preamble: Optional[str] = None):
         """Generator form of ``run`` for a LIVE consumer that wants to iterate events.
 
         Yields each ``ProgressEvent`` (as emitted, post-sink-policy for the given mode) and,
@@ -1479,7 +1494,7 @@ class Orchestrator:
             try:
                 res = self.run(user_message, transcript=transcript, context_view=context_view,
                                quest_id=quest_id, mode=mode, sink=sink, model_hint=model_hint,
-                               attachments=attachments)
+                               attachments=attachments, rep_preamble=rep_preamble)
                 result_box["result"] = res
             except Exception as e:  # noqa: BLE001
                 result_box["error"] = e

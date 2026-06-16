@@ -288,3 +288,52 @@ ways, both already supported by the seam:
   (file cards for code + Quest context for org/team/rep) via a small composite assembler that
   concatenates their views. The brain stays unchanged: it calls one `assemble`, and the composition
   lives in the consumer.
+
+## Transcript management across turns
+
+### The problem: full history on every turn
+
+A naive interactive session appends every "User: X / Assistant: Y" pair to a list and sends the
+entire list as `transcript` on every new turn. After 20 turns that is 18 turns of context the
+planner must re-read, many of them irrelevant to the current question, at real token and latency
+cost. The planner is cheap, but the waste compounds: a long chat about varied topics sends the
+whole history of unrelated topics on every single turn.
+
+### The solution: relevant-turn selection (no compression)
+
+`quest_ai_runner.core.turn_memory.TurnMemory` replaces raw accumulation. On each new turn it
+builds the transcript from exactly two groups:
+
+1. **Always-recent turns** (default: last 2). The most recent turns provide the conversational
+   continuity that a reply always needs -- what was just said. These are included unconditionally.
+
+2. **Relevant older turns** (default: up to 4). Each older turn is scored by keyword overlap
+   with the current message (stopwords stripped, IDF not required). Turns with no overlap are
+   excluded entirely -- they are not compressed, summarized, or truncated; they simply do not
+   appear. The top-scoring older turns are included, restored to chronological order so the
+   planner sees a coherent narrative.
+
+There is no LLM call. There is no compression. Excluded turns are dropped clean, not degraded.
+This is the right trade-off: a turn with zero keyword overlap with the current question is very
+unlikely to be relevant, so excluding it is almost always correct; the cost of including an
+irrelevant turn (wasted planner tokens, diluted context) is much higher than the cost of missing
+a marginally relevant one (the planner still has the current context_view and gathered reads).
+
+### How to wire it
+
+`InteractiveSession` uses `TurnMemory` by default. For a custom consumer:
+
+```python
+from quest_ai_runner.core.turn_memory import TurnMemory
+
+mem = TurnMemory(always_recent=2, max_older=4)
+
+while True:
+    user_text = input()
+    transcript = mem.relevant_transcript(user_text)
+    result = orch.run(user_text, transcript=transcript, ...)
+    mem.add(user_text, result.text or "")
+```
+
+`TurnMemory` is stdlib-only, has no external dependencies, and never calls a model. Construct it
+once per session; call `clear()` to reset (e.g. on a `/clear` command).

@@ -43,6 +43,8 @@ if TYPE_CHECKING:
     from .config import RunnerConfig
     from .core.orchestrator import Orchestrator, OrchestratorResult, ProgressEvent
 
+from .core.turn_memory import TurnMemory
+
 # ── Optional [tui] dependencies ───────────────────────────────────────────────
 
 try:
@@ -221,14 +223,14 @@ class _ContextPanel:
             if overflow:
                 lines.append(f"     … and {overflow} more")
 
-        # Erase previous render then draw new lines.
+        # Each render ends with \n after every line, so the cursor sits one line
+        # BELOW the last spinner line.  On the next render we move up by n lines
+        # to land exactly on the first spinner line and overwrite from there.
         n = self._last_line_count
         if n:
             sys.stdout.write(f"\033[{n}A")
-        for i, ln in enumerate(lines):
-            sys.stdout.write(f"\r\033[2K{_DIM}{ln}{_RESET}")
-            if i < len(lines) - 1:
-                sys.stdout.write("\n")
+        for ln in lines:
+            sys.stdout.write(f"\r\033[2K{_DIM}{ln}{_RESET}\n")
         sys.stdout.flush()
         self._last_line_count = len(lines)
 
@@ -236,11 +238,15 @@ class _ContextPanel:
         n = self._last_line_count
         if not n:
             return
+        # Cursor is one line below the last spinner line; move up n to reach the first.
         sys.stdout.write(f"\033[{n}A")
         for i in range(n):
             sys.stdout.write("\r\033[2K")
             if i < n - 1:
                 sys.stdout.write("\n")
+        # After the loop cursor is on the last cleared line; move back to the first.
+        if n > 1:
+            sys.stdout.write(f"\033[{n-1}A")
         sys.stdout.write("\r")
         sys.stdout.flush()
         self._last_line_count = 0
@@ -353,10 +359,17 @@ class _TurnRenderer:
             self._c.speaker(self._rep_name, "cyan", "")
             self._ai_label_printed = True
 
-    def render(self, event: "ProgressEvent") -> None:
+    def render(self, event) -> None:
+        # run_stream() yields dicts (via ProgressEvent.to_dict()); support both.
+        if isinstance(event, dict):
+            t    = event.get("type", "")
+            text = (event.get("text") or "").rstrip()
+            data = event.get("data") or {}
+        else:
+            t    = event.type
+            text = (event.text or "").rstrip()
+            data = event.data or {}
         ev = self._types()
-        t = event.type
-        text = (event.text or "").rstrip()
 
         if t == ev["partial"]:
             if not self._partial_started:
@@ -378,7 +391,6 @@ class _TurnRenderer:
         elif t == ev["status"]:
             self._panel.set_phase(text or "thinking…")
         elif t == ev["read"]:
-            data = event.data or {}
             paths = data.get("sources") or []
             count = data.get("reads", len(paths))
             self._panel.add_sources(paths, count or len(paths))
@@ -445,8 +457,9 @@ def _make_prompt_session(last_ctrl_c: list):
             raise KeyboardInterrupt
         last_ctrl_c[0] = now
         event.app.current_buffer.reset()
-        # Print the hint below the current prompt line.
-        print(f"\n{_DIM}  (press Ctrl+C again to exit){_RESET}", flush=True)
+        # Write the hint directly to the real stdout (patch_stdout corrupts \033 bytes).
+        sys.__stdout__.write(f"\n{_DIM}  (press Ctrl+C again to exit){_RESET}\n")
+        sys.__stdout__.flush()
 
     return PromptSession(history=InMemoryHistory(), key_bindings=kb,
                          enable_history_search=True)
@@ -467,9 +480,11 @@ _HELP = """\
 Commands:
   /help              show this help
   /clear             reset the conversation transcript
-  /rep <name>        change the AI representative for this session
+  /reps              list and select an AI representative for this session
+  /rep <name>        set a custom representative name directly
   /persona <file>    load a persona/skill file  (overrides prior persona)
-  /goal <id>         attach session to a Quest goal id
+  /quests            list and attach to a Quest goal
+  /goal <id>         attach to a goal id directly (if you know it)
   /whoami            show what this AI knows about itself and this session
   /quit  /q          exit
 
@@ -480,13 +495,13 @@ Keys:
 """
 
 _BANNER = """\
-{B}{C}quest-ai-runner{R}  grounded AI that acts like a colleague
+{B}{C}quest-ai-runner{R}  Grounded AI that acts like a colleague
 
   What makes this different from a plain chat window:
-  · reads your corpus for every request — no "look at this file" needed
-  · routes to the right model automatically  (haiku → sonnet → opus)
-  · each turn retrieves context, never accumulates — conversation runs forever
-  · runs AS a named AI rep with its own persona and learned knowledge
+  · finds just the right context efficiently for every request; no "look at this file" needed
+  · routes to the right model automatically, bringing in higher models for review (haiku → sonnet → opus)
+  · optimal token usage; can run the same conversation forever
+  · named AI representatives learn how to act like their associated human over time
 
   {D}ESC cancel turn  ·  Ctrl+D exit  ·  /help for commands{R}
 """
@@ -495,7 +510,7 @@ _BANNER = """\
 class InteractiveSession:
     """Multi-turn interactive session over a RunnerConfig's orchestrator."""
 
-    def __init__(self, cfg: "RunnerConfig", *, rep_name: str = "AI",
+    def __init__(self, cfg: "RunnerConfig", *, rep_name: str = "Assistant",
                  persona: Optional[str] = None, goal_id: Optional[str] = None) -> None:
         from .config import build_orchestrator
         self._orch: "Orchestrator" = build_orchestrator(cfg)
@@ -503,34 +518,27 @@ class InteractiveSession:
         self._rep_name = rep_name
         self._persona = persona
         self._goal_id = goal_id
-        self._transcript: List[str] = []
+        self._memory = TurnMemory()
         self._console = _Console()
         self._cancelled = threading.Event()
-
-    @property
-    def _transcript_text(self) -> str:
-        return "\n".join(self._transcript)
 
     # -- header ----------------------------------------------------------------
 
     def _print_header(self) -> None:
         c = self._console
-        banner = _BANNER.format(B=_BOLD, C=_CYAN, R=_RESET, D=_DIM)
-        c.line(banner)
-        # Session identity line.
-        rep_line = f"  rep: {self._rep_name}"
-        if self._persona:
-            kb = max(1, len(self._persona.encode()) // 1024)
-            rep_line += f"  ·  persona: {kb}KB loaded"
+        # Banner already ends with \n; use write() to avoid a double blank line.
+        c.write(_BANNER.format(B=_BOLD, C=_CYAN, R=_RESET, D=_DIM))
+        parts = [f"AI: {self._rep_name}"]
         corpus = getattr(self._cfg, "corpus_root", None)
         if corpus:
-            rep_line += f"  ·  corpus: {corpus}"
+            parts.append(f"corpus: {corpus}")
+        if self._persona:
+            kb = max(1, len(self._persona.encode()) // 1024)
+            parts.append(f"persona: {kb}KB")
         if self._goal_id:
-            rep_line += f"  ·  goal: {self._goal_id}"
-        c.dim(rep_line)
+            parts.append(f"goal: {self._goal_id}")
+        c.dim("  " + "  ·  ".join(parts))
         c.line("")
-        if not _HAS_PROMPT_TOOLKIT:
-            c.dim("  tip: pip install quest-ai-runner[tui] for history + key handling\n")
 
     # -- one turn --------------------------------------------------------------
 
@@ -552,7 +560,7 @@ class InteractiveSession:
             with _EscWatcher(self._cancelled):
                 for item in self._orch.run_stream(
                     user_text,
-                    transcript=self._transcript_text,
+                    transcript=self._memory.relevant_transcript(user_text),
                     quest_id=self._goal_id,
                     rep_preamble=self._persona,
                 ):
@@ -570,8 +578,7 @@ class InteractiveSession:
         elapsed = time.monotonic() - t0
 
         if not self._cancelled.is_set() and final is not None:
-            self._transcript.append(f"User: {user_text}")
-            self._transcript.append(f"Assistant: {final.text or ''}")
+            self._memory.add(user_text, final.text or "")
             self._console.line("")
             self._print_turn_footer(final, panel, elapsed)
 
@@ -637,11 +644,11 @@ class InteractiveSession:
             if line == "/help":
                 self._console.line(_HELP); continue
             if line == "/clear":
-                self._transcript.clear()
+                self._memory.clear()
                 self._console.dim("  transcript cleared"); continue
             if line.startswith("/rep "):
                 self._rep_name = line[5:].strip()
-                self._console.dim(f"  rep: {self._rep_name!r}"); continue
+                self._console.dim(f"  AI: {self._rep_name}"); continue
             if line.startswith("/persona "):
                 path = line[9:].strip()
                 try:
@@ -656,12 +663,112 @@ class InteractiveSession:
                 self._console.dim(f"  goal: {self._goal_id!r}"); continue
             if line == "/whoami":
                 self._print_whoami(); continue
+            if line == "/quests":
+                self._cmd_quests(session); continue
+            if line == "/reps":
+                self._cmd_reps(session); continue
             if line.startswith("/"):
                 self._console.dim(f"  unknown: {line!r}  (/help for list)"); continue
 
             self._run_turn(line)
 
         self._console.dim("Bye.")
+
+    # -- Quest client (lazy, only when credentials are configured) -------------
+
+    def _quest_client(self):
+        """Return a QuestClient if Quest credentials are configured, else None."""
+        try:
+            from .runner.quest_client import QuestClient
+            url = getattr(self._cfg, "quest_base_url", "") or ""
+            key = getattr(self._cfg, "quest_api_key", "") or ""
+            if not url or not key:
+                return None
+            return QuestClient(url, key,
+                               team_id=getattr(self._cfg, "team_id", None) or None)
+        except Exception:  # noqa: BLE001
+            return None
+
+    def _pick_from_list(self, items: list, label_fn, session) -> Optional[int]:
+        """Print a numbered list and return the user's 0-based choice, or None for cancel."""
+        c = self._console
+        c.line("")
+        for i, item in enumerate(items, 1):
+            c.dim(f"  {i}.  {label_fn(item)}")
+        c.dim("  0.  cancel")
+        c.line("")
+        try:
+            if session is not None:
+                raw = session.prompt(ANSI(f"{_CYAN}  select › {_RESET}"))
+            else:
+                raw = input("  select › ")
+        except (EOFError, KeyboardInterrupt):
+            return None
+        try:
+            n = int((raw or "").strip())
+        except ValueError:
+            return None
+        if n <= 0 or n > len(items):
+            return None
+        return n - 1
+
+    def _cmd_quests(self, session) -> None:
+        """List the team's Quest goals and let the user attach one."""
+        c = self._console
+        client = self._quest_client()
+        if client is None:
+            c.dim("  Quest credentials not configured — set QUEST_BASE_URL, QUEST_API_KEY, QUEST_TEAM_ID")
+            return
+        c.dim("  fetching goals…")
+        goals = client.list_goals()
+        if not goals:
+            c.dim("  no goals found on this team (or Quest not reachable)")
+            return
+        def _label(g):
+            title = g.get("title") or g.get("name") or g.get("id") or "untitled"
+            status = g.get("status") or ""
+            gid = g.get("id") or g.get("goal_id") or ""
+            suffix = f"  [{status}]" if status else ""
+            return f"{title}{suffix}  (id: {gid})"
+        idx = self._pick_from_list(goals, _label, session)
+        if idx is None:
+            c.dim("  cancelled"); return
+        g = goals[idx]
+        self._goal_id = g.get("id") or g.get("goal_id") or ""
+        title = g.get("title") or g.get("name") or self._goal_id
+        c.dim(f"  attached to: {title}")
+
+    def _cmd_reps(self, session) -> None:
+        """List the team's AI representatives and let the user select one."""
+        c = self._console
+        client = self._quest_client()
+        if client is None:
+            c.dim("  Quest credentials not configured — set QUEST_BASE_URL, QUEST_API_KEY, QUEST_TEAM_ID")
+            c.dim("  You can still set a name with /rep <name> and a skill file with /persona <file>")
+            return
+        c.dim("  fetching reps…")
+        reps = client.list_reps()
+        if not reps:
+            c.dim("  no AI reps found on this team")
+            c.dim("  You can still set a name with /rep <name> and a skill file with /persona <file>")
+            return
+        def _label(r):
+            name = r.get("display_name") or r.get("name") or "unnamed"
+            area = r.get("area") or ""
+            has_persona = bool(r.get("persona"))
+            tag = f"  [{area}]" if area else ""
+            pmark = "  has persona" if has_persona else ""
+            return f"{name}{tag}{pmark}"
+        idx = self._pick_from_list(reps, _label, session)
+        if idx is None:
+            c.dim("  cancelled"); return
+        r = reps[idx]
+        self._rep_name = r.get("display_name") or r.get("name") or "AI"
+        if r.get("persona"):
+            self._persona = r["persona"]
+            c.dim(f"  AI: {self._rep_name}  (persona loaded)")
+        else:
+            c.dim(f"  AI: {self._rep_name}")
 
     def _print_whoami(self) -> None:
         c = self._console
@@ -678,8 +785,7 @@ class InteractiveSession:
                   "(use /persona <file> or --persona-file to load one)")
         if self._goal_id:
             c.dim(f"  goal:      {self._goal_id}")
-        turns = sum(1 for t in self._transcript if t.startswith("User:"))
-        c.dim(f"  turns:     {turns} in this session")
+        c.dim(f"  turns:     {self._memory.turn_count} in this session")
         c.line("")
 
 

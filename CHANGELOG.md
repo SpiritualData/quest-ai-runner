@@ -7,6 +7,25 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **`TurnMemory` -- relevant-turn transcript selection.** `quest_ai_runner.core.TurnMemory`
+  replaces raw `"User: X / Assistant: Y"` string accumulation in interactive sessions. On each
+  new turn it builds the transcript from: (a) always the most recent `always_recent` turns
+  (default 2) for conversational continuity, and (b) up to `max_older` (default 4) older turns
+  scored by keyword overlap with the current message -- irrelevant older turns are excluded
+  entirely (not compressed, just not sent). No LLM call; stdlib only. `InteractiveSession` now
+  uses `TurnMemory` internally instead of a raw list, so long conversations stop paying for
+  every unrelated prior turn. Exported from `quest_ai_runner.core`.
+- **`_run_deep` now receives `gathered` and includes the brain's specific reads in
+  `context_preamble`.** When the orchestrator reads files before deciding to go deep, those
+  reads (in `gathered`) are now forwarded into the deep runner's `context_preamble` alongside
+  any `rep_preamble`, so the subprocess does not have to re-discover what the brain already
+  found. The preamble is built as `rep_preamble` (if any) followed by a `--- RELEVANT CONTENT
+  FOUND BY THE BRAIN ---` section rendered from `gathered`. The `wants_preamble` gate now fires
+  whenever the runner accepts `context_preamble` (not only when `rep_preamble` is set), so
+  gathered-only runs also benefit. `_guard_turn` also threads `gathered` through to its
+  remediation `_run_deep` call.
+
+### Added
 - **`quest-ai-runner chat` — a polished interactive (attended) session.** A multi-turn REPL over
   the orchestrator brain that streams every `ProgressEvent` to the terminal in real time, keeps a
   rolling transcript so follow-ups share context, and attaches results to a Quest goal with
