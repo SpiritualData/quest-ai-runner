@@ -149,6 +149,13 @@ def main(argv=None) -> int:
     send_p.add_argument("--at", dest="scheduled_at", default=None,
                         help="ISO-8601 UTC datetime to schedule (omit = run at next poll)")
 
+    # --- bootstrap subcommand: build/refresh the context card store ----------
+    boot_p = sub.add_parser("bootstrap", help="build or refresh the context card store for the corpus")
+    boot_p.add_argument("--corpus", default=None, metavar="PATH",
+                        help="corpus root (default: QAR_CORPUS_ROOT env var)")
+    boot_p.add_argument("--cards-dir", default=None, metavar="PATH",
+                        help="cards directory (default: <corpus>/.quest-context or QAR_CONTEXT_CARDS_DIR)")
+
     # --- poll subcommand (and legacy flat flags, kept for back-compat) --------
     poll_p = sub.add_parser("poll", help="poll Quest for due tasks and run them")
     poll_p.add_argument("--once", action="store_true", help="one scan then exit (cron mode)")
@@ -232,6 +239,18 @@ def main(argv=None) -> int:
             pass
         task_id = task.get("id") or task.get("task_id") or "?"
         print(f"Queued — {args.text[:80]}  ({task_id})")
+        return 0
+
+    # --- bootstrap ------------------------------------------------------------
+    if args.command == "bootstrap":
+        from .adapters.file_context_store import FileContextStore
+        corpus = args.corpus or os.getenv("QAR_CORPUS_ROOT") or os.getcwd()
+        cards_dir = args.cards_dir or os.getenv("QAR_CONTEXT_CARDS_DIR") or os.path.join(corpus, ".quest-context")
+        provider = _model_provider_from_env()
+        store = FileContextStore(cards_dir, repo_root=corpus)
+        log.info("bootstrapping context store for %s", corpus)
+        n = store.bootstrap(root=corpus, provider=provider)
+        log.info("done: %d cards in %s", n, cards_dir)
         return 0
 
     # --- poll (default when no subcommand given) ------------------------------

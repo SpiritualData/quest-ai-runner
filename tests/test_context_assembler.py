@@ -50,6 +50,11 @@ def _write_card(cards_dir: Path, card: Dict[str, Any]) -> Path:
     return p
 
 
+def _card_files(cards_dir: Path) -> List[Path]:
+    """Card JSON files, excluding the ``bootstrap_meta.json`` sidecar bootstrap() writes."""
+    return [p for p in cards_dir.glob("*.json") if p.name != "bootstrap_meta.json"]
+
+
 def _topic_provider(topics: List[Dict[str, Any]]):
     """A minimal fake ModelProvider whose answer() returns ``topics`` as a JSON array string.
 
@@ -844,7 +849,7 @@ class TestBootstrap:
         n = store.bootstrap(root=str(repo), provider=_topic_provider(self._topics_for_repo()))
         assert n > 0
         assert cards_dir.exists()
-        cards = list(cards_dir.glob("*.json"))
+        cards = _card_files(cards_dir)
         assert len(cards) == n
 
     def test_bootstrap_writes_one_card_per_topic(self, tmp_path):
@@ -855,7 +860,7 @@ class TestBootstrap:
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
         n = store.bootstrap(root=str(repo), provider=_topic_provider(topics))
         assert n == len(topics)
-        assert len(list(cards_dir.glob("*.json"))) == len(topics)
+        assert len(_card_files(cards_dir)) == len(topics)
 
     def test_bootstrap_no_provider_writes_nothing(self, tmp_path):
         """Without a provider, bootstrap() is a no-op: it returns 0 and writes no cards."""
@@ -885,7 +890,7 @@ class TestBootstrap:
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
         store.bootstrap(root=str(repo), provider=_topic_provider(self._topics_for_repo()))
         models_card = None
-        for cp in cards_dir.glob("*.json"):
+        for cp in _card_files(cards_dir):
             c = json.loads(cp.read_text())
             if any("mypackage/models.py" in fe.get("path", "") for fe in c.get("files", [])):
                 models_card = c
@@ -928,7 +933,7 @@ class TestBootstrap:
         store.bootstrap(root=str(repo), provider=_topic_provider(self._topics_for_repo()))
 
         all_paths: List[str] = []
-        for cp in cards_dir.glob("*.json"):
+        for cp in _card_files(cards_dir):
             c = json.loads(cp.read_text())
             all_paths.extend(fe["path"] for fe in c.get("files", []))
         assert any("models.py" in p or "utils.py" in p for p in all_paths), (
@@ -941,20 +946,23 @@ class TestBootstrap:
         cards_dir = tmp_path / "cards"
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
         store.bootstrap(root=str(repo), provider=_topic_provider(self._topics_for_repo()))
-        for cp in cards_dir.glob("*.json"):
+        for cp in _card_files(cards_dir):
             c = json.loads(cp.read_text())
             assert c.get("provenance", {}).get("created_by_task") == "bootstrap"
 
     def test_bootstrap_idempotent(self, tmp_path):
-        """Calling bootstrap() twice produces the same card count (upsert, no duplicates)."""
+        """bootstrap() is incremental: a second run over an unchanged corpus writes no new cards
+        (every file is already covered and up to date) and leaves the card count unchanged."""
         repo = self._make_repo(tmp_path)
         cards_dir = tmp_path / "cards"
         topics = self._topics_for_repo()
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
         n1 = store.bootstrap(root=str(repo), provider=_topic_provider(topics))
         n2 = store.bootstrap(root=str(repo), provider=_topic_provider(topics))
-        assert n1 == n2
-        assert len(list(cards_dir.glob("*.json"))) == n1
+        assert n1 > 0
+        assert n2 == 0, "second bootstrap over an unchanged corpus must be a no-op"
+        # No duplicates: the card count on disk is still the first run's count.
+        assert len(_card_files(cards_dir)) == n1
 
     def test_bootstrap_never_raises_on_bad_root(self, tmp_path):
         """bootstrap() with a non-existent root returns 0 and does not raise."""
@@ -993,7 +1001,7 @@ class TestBootstrap:
         }]
         store.bootstrap(root=str(repo), provider=_topic_provider(topics))
 
-        for cp in cards_dir.glob("*.json"):
+        for cp in _card_files(cards_dir):
             c = json.loads(cp.read_text())
             for fe in c.get("files", []):
                 assert ".git" not in fe["path"], f"should not index .git: {fe['path']}"

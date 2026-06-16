@@ -1537,11 +1537,23 @@ class TestResolveContextAssemblerSeedSourceWiring:
         )
         assert hybrid is not None, "CompositeContextAssembler should contain a HybridContextAssembler"
 
-        # Trigger first assemble — this should cause the vector arm to call sync().
-        assembler.assemble("main module")
+        # Bootstrap now always runs in a background thread (the brain stays responsive), so wait
+        # for it to finish before asserting the seed. The vector arm's seed guard only latches
+        # once the keyword source actually had items, so the first non-empty assemble seeds it.
+        import threading
+        import time
+        for t in threading.enumerate():
+            if t.name in ("qar-bootstrap", "qar-refresh"):
+                t.join(timeout=10)
+        total_items = 0
+        for _ in range(20):
+            assembler.assemble("main module")
+            total_items = sum(len(c) for c in vec_store._data.values())
+            if total_items > 0:
+                break
+            time.sleep(0.1)
 
         # The vector store should have items from seeding.
-        total_items = sum(len(c) for c in vec_store._data.values())
         assert total_items > 0, (
             "vector store should be populated after first assemble() via seed_source"
         )

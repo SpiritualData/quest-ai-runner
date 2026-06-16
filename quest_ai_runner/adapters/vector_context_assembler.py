@@ -167,15 +167,22 @@ class VectorContextAssembler(ContextAssemblerBase):
         """
         if self._seed_done:
             return
-        self._seed_done = True  # set before any work so a failure is still final
         if self._seed_source is None:
+            self._seed_done = True
             return
         try:
             items = self._seed_source()
             if items:
                 self._store.sync(items, scope=None)
+                # Only consider seeding DONE once we actually had items to seed. The keyword
+                # bootstrap runs in a background thread, so an early assemble() can see an empty
+                # source; in that case leave the guard unset so a later assemble() (after
+                # bootstrap finishes) seeds. sync() is fingerprint-based, so re-running it after
+                # items exist is cheap and idempotent.
+                self._seed_done = True
         except Exception:  # noqa: BLE001
-            pass
+            # A hard failure is final (don't retry a broken source forever).
+            self._seed_done = True
 
     def assemble(
         self, task_text: str, *, meta: Optional[Dict[str, Any]] = None

@@ -39,6 +39,7 @@ import os
 import re
 import subprocess
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -47,15 +48,60 @@ from ._walk import effective_skip_dirs, prune_dirnames
 
 _log = logging.getLogger("quest-ai-runner.context")
 
+# Bootstrap ALGORITHM version. Bump this when the bootstrap/dedup logic changes in a way that
+# makes previously-written cards stale (a re-index is warranted). ``config._bootstrap_if_needed``
+# compares this against the stored ``bootstrap_meta.json`` version and re-bootstraps when the
+# stored version is older. v2: LLM-based keyword-cluster dedup (replaced Jaccard file-overlap).
+_BOOTSTRAP_VERSION = 2
+
+# Name of the meta file written to cards_dir after a successful bootstrap.
+_BOOTSTRAP_META_FILE = "bootstrap_meta.json"
+
+
+def _read_bootstrap_meta(cards_dir: str) -> dict:
+    """Read ``bootstrap_meta.json`` from ``cards_dir``. Returns {} on any error. Never raises."""
+    try:
+        meta_path = Path(cards_dir) / _BOOTSTRAP_META_FILE
+        with open(meta_path, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        return data if isinstance(data, dict) else {}
+    except Exception:  # noqa: BLE001 — missing/corrupt/unreadable: treat as no meta
+        return {}
+
+
+def _write_bootstrap_meta(cards_dir: str, count: int) -> None:
+    """Write ``bootstrap_meta.json`` atomically (temp file + replace). Never raises.
+
+    Records the algorithm ``version`` (so a future runner can detect a stale index), the
+    ``card_count`` just written, and a UTC ``completed_at`` timestamp.
+    """
+    try:
+        Path(cards_dir).mkdir(parents=True, exist_ok=True)
+        payload = {
+            "version": _BOOTSTRAP_VERSION,
+            "card_count": int(count),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+        }
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=str(cards_dir), prefix=".tmp_meta_", suffix=".json")
+        try:
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, indent=2, ensure_ascii=False)
+                fh.write("\n")
+            os.replace(tmp_path, str(Path(cards_dir) / _BOOTSTRAP_META_FILE))
+        except Exception:  # noqa: BLE001
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+    except Exception:  # noqa: BLE001 — meta is best-effort; never fail the bootstrap
+        pass
+
 # Max file paths per area-discovery chunk. Keeping each chunk small means the LLM call finishes
 # quickly and many chunks can run in parallel, so total wall-clock is bounded.
 _CHUNK_SIZE = 150
 
 # Max parallel LLM workers for bootstrap (area discovery and topic extraction).
 _BOOTSTRAP_WORKERS = 8
-
-# Jaccard file-overlap threshold above which two topic cards are considered duplicates and merged.
-_MERGE_JACCARD = 0.7
 
 # ---------------------------------------------------------------------------
 # Bootstrap constants
@@ -562,22 +608,170 @@ def _jaccard(a: Set[str], b: Set[str]) -> float:
     return len(a & b) / len(union)
 
 
-def _merge_topic_cards(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Merge near-duplicate topic cards (Jaccard file-overlap >= _MERGE_JACCARD).
+# Two cards are dedup CANDIDATES when they share at least this many keywords.
+_DEDUP_MIN_SHARED_KEYWORDS = 2
 
-    Cards are merged greedily in order. The first card in a cluster is the representative;
-    its keywords and files are expanded with the union of the cluster. Returns the merged list.
+# Auto-merge Jaccard threshold for the no-LLM fallback (lower than the old 0.7 so the keyword-
+# only path still collapses obvious duplicates when no provider is available to judge).
+_DEDUP_FALLBACK_JACCARD = 0.30
+
+
+# Prompt for stage 3: given a cluster of possibly-overlapping cards, ask the LLM which to merge.
+_DEDUP_PROMPT = """These topic cards may overlap. Decide which describe the same concept and \
+should be merged.
+
+{card_lines}
+
+Return a JSON array of arrays of 1-based card numbers to group together.
+Cards in the same inner array will be merged. Each card must appear exactly once.
+Example: [[1,2],[3]] merges cards 1+2, keeps 3 separate.
+Return ONLY the JSON array, no prose."""
+
+
+class _UnionFind:
+    """Tiny union-find over integer indices for transitive keyword clustering."""
+
+    def __init__(self, n: int) -> None:
+        self._parent = list(range(n))
+
+    def find(self, x: int) -> int:
+        root = x
+        while self._parent[root] != root:
+            root = self._parent[root]
+        # Path compression.
+        while self._parent[x] != root:
+            self._parent[x], x = root, self._parent[x]
+        return root
+
+    def union(self, a: int, b: int) -> None:
+        ra, rb = self.find(a), self.find(b)
+        if ra != rb:
+            self._parent[rb] = ra
+
+    def clusters(self) -> List[List[int]]:
+        groups: Dict[int, List[int]] = {}
+        for i in range(len(self._parent)):
+            groups.setdefault(self.find(i), []).append(i)
+        return list(groups.values())
+
+
+def _card_keyword_set(card: Dict[str, Any]) -> Set[str]:
+    """Lowercased keyword set for a card (used to find shared-keyword candidates)."""
+    return {str(k).strip().lower() for k in card.get("keywords", []) if str(k).strip()}
+
+
+def _keyword_clusters(cards: List[Dict[str, Any]]) -> List[List[int]]:
+    """Cluster card indices that share >= _DEDUP_MIN_SHARED_KEYWORDS keywords (transitive).
+
+    Uses union-find so a chain A~B~C clusters together even if A and C don't directly overlap.
+    Returns a list of index lists (singletons included).
     """
+    n = len(cards)
+    uf = _UnionFind(n)
+    kw_sets = [_card_keyword_set(c) for c in cards]
+    for i in range(n):
+        for j in range(i + 1, n):
+            if len(kw_sets[i] & kw_sets[j]) >= _DEDUP_MIN_SHARED_KEYWORDS:
+                uf.union(i, j)
+    return uf.clusters()
+
+
+def _merge_card_group(group: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Merge a group of cards into one. The first card keeps its id/name/summary; keywords and
+    files are unioned across the group (order-preserving)."""
+    rep = {**group[0]}
+    keywords = list(rep.get("keywords", []))
+    files = list(rep.get("files", []))
+    for card in group[1:]:
+        for k in card.get("keywords", []):
+            if k not in keywords:
+                keywords.append(k)
+        for f in card.get("files", []):
+            if f not in files:
+                files.append(f)
+    rep["keywords"] = keywords
+    rep["files"] = files
+    return rep
+
+
+def _parse_groupings(raw: str, n_cards: int) -> Optional[List[List[int]]]:
+    """Parse an LLM dedup response into 0-based index groups, or None if invalid.
+
+    Expects a JSON array of arrays of 1-based card numbers covering each card exactly once.
+    Returns None (caller keeps the cluster unchanged) on any parse/validation failure — this is
+    what keeps a mocked provider that returns non-grouping JSON from corrupting the cards.
+    """
+    payload = _extract_json_array(raw or "")
+    if not payload:
+        return None
+    try:
+        parsed = json.loads(payload)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(parsed, list) or not parsed:
+        return None
+    groups: List[List[int]] = []
+    seen: Set[int] = set()
+    for inner in parsed:
+        if not isinstance(inner, list) or not inner:
+            return None
+        idxs: List[int] = []
+        for num in inner:
+            if not isinstance(num, int) or isinstance(num, bool):
+                return None
+            idx = num - 1  # 1-based -> 0-based
+            if idx < 0 or idx >= n_cards or idx in seen:
+                return None
+            seen.add(idx)
+            idxs.append(idx)
+        groups.append(idxs)
+    # Every card must appear exactly once.
+    if len(seen) != n_cards:
+        return None
+    return groups
+
+
+def _dedup_cluster_llm(cluster: List[Dict[str, Any]], provider, model) -> List[Dict[str, Any]]:
+    """Make ONE LLM call to decide merges within a candidate cluster. Never raises.
+
+    On any failure (no provider, bad response, parse failure) returns the cluster unchanged.
+    """
+    if provider is None or len(cluster) < 2:
+        return cluster
+    try:
+        card_lines = "\n".join(
+            'Card {n}: "{name}" — keywords: [{kws}] — {fc} files'.format(
+                n=i + 1,
+                name=c.get("name", c.get("id", "")),
+                kws=", ".join(str(k) for k in c.get("keywords", [])),
+                fc=len(c.get("files", [])),
+            )
+            for i, c in enumerate(cluster)
+        )
+        prompt = _DEDUP_PROMPT.format(card_lines=card_lines)
+        raw = provider.answer([{"role": "user", "content": prompt}], model=model)
+        groups = _parse_groupings(raw, len(cluster))
+        if groups is None:
+            return cluster
+        return [_merge_card_group([cluster[i] for i in g]) for g in groups]
+    except Exception:  # noqa: BLE001
+        _log.debug("context index: LLM dedup failed for cluster, keeping it unchanged",
+                   exc_info=True)
+        return cluster
+
+
+def _dedup_fallback(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """No-LLM fallback: greedily merge cards with file-overlap Jaccard >= _DEDUP_FALLBACK_JACCARD."""
     merged: List[Dict[str, Any]] = []
     for card in cards:
-        files_a = set(card["files"])
+        files_a = set(card.get("files", []))
         matched = False
         for rep in merged:
-            if _jaccard(files_a, set(rep["files"])) >= _MERGE_JACCARD:
-                # Merge into representative: expand files and keywords.
-                combined = list(dict.fromkeys(rep["files"] + card["files"]))
-                rep["files"] = combined
-                rep["keywords"] = list(dict.fromkeys(rep["keywords"] + card["keywords"]))
+            if _jaccard(files_a, set(rep.get("files", []))) >= _DEDUP_FALLBACK_JACCARD:
+                rep["files"] = list(dict.fromkeys(rep.get("files", []) + card.get("files", [])))
+                rep["keywords"] = list(
+                    dict.fromkeys(rep.get("keywords", []) + card.get("keywords", []))
+                )
                 matched = True
                 break
         if not matched:
@@ -585,12 +779,85 @@ def _merge_topic_cards(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return merged
 
 
-def _llm_topic_cards(file_paths, provider, model=None):
+def _dedup_topic_cards(
+    raw_cards: List[Dict[str, Any]],
+    provider,
+    model=None,
+    existing_cards: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, Any]]:
+    """Stage 3: dedup topic cards by keyword-clustering + an LLM merge decision.
+
+    Step 1 — cluster cards (new + existing) by shared keywords (>= 2 shared keywords, transitive
+             via union-find). Singletons pass through unchanged.
+    Step 2 — for each cluster of 2+ NEW cards (no existing card in it), one LLM call decides the
+             merge groupings; on parse failure the cluster is kept unchanged.
+    Step 3 — for any cluster that contains an EXISTING card, merge the new cards INTO the existing
+             one (keeping the existing card's id) rather than emitting a new card with a new id.
+
+    When ``provider is None`` falls back to a keyword-union merge (Jaccard >= 30%).
+
+    Returns the deduplicated list of NEW/updated cards to write. Existing-only clusters (no new
+    card) contribute nothing new to write here unless a new card merged into them.
+    """
+    if not raw_cards:
+        return []
+
+    existing_cards = existing_cards or []
+
+    if provider is None:
+        # No LLM: keyword-union fallback over the new cards only. (Existing-card dedup needs the
+        # LLM's judgment; without it we keep new cards distinct and let id-collision upsert handle
+        # exact-id matches downstream.)
+        return _dedup_fallback(raw_cards)
+
+    # Combine new + existing for clustering so a new card that duplicates an existing one lands in
+    # the same cluster. Tag each with its origin so we can route the result correctly.
+    combined: List[Dict[str, Any]] = list(raw_cards) + list(existing_cards)
+    is_existing = [False] * len(raw_cards) + [True] * len(existing_cards)
+
+    clusters = _keyword_clusters(combined)
+    out: List[Dict[str, Any]] = []
+    for cluster_idx in clusters:
+        has_existing = any(is_existing[i] for i in cluster_idx)
+        new_members = [combined[i] for i in cluster_idx if not is_existing[i]]
+
+        if not new_members:
+            # Cluster of only existing cards — nothing new to write.
+            continue
+
+        if has_existing:
+            # Merge the new cards INTO the first existing card in the cluster, preserving its id.
+            existing_member = next(combined[i] for i in cluster_idx if is_existing[i])
+            merged = _merge_card_group([existing_member] + new_members)
+            out.append(merged)
+            continue
+
+        if len(new_members) == 1:
+            out.append({**new_members[0]})
+            continue
+
+        # Pure-new cluster of 2+: let the LLM decide the merge groupings.
+        out.extend(_dedup_cluster_llm(new_members, provider, model))
+
+    # Guard against an existing id colliding with a fresh id we keep: dedup by id, first wins.
+    seen_ids: Set[str] = set()
+    deduped: List[Dict[str, Any]] = []
+    for card in out:
+        cid = card.get("id")
+        if cid in seen_ids:
+            continue
+        seen_ids.add(cid)
+        deduped.append(card)
+    return deduped
+
+
+def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None):
     """3-stage parallel LLM fan-out to identify semantic topic cards.
 
     Stage 1 -- chunk the path list and run area-discovery calls in parallel (each chunk
     is small so each call is fast). Stage 2 -- for each discovered area, run a topic-
-    extraction call in parallel. Stage 3 -- merge near-duplicate cards (Jaccard >= 0.7).
+    extraction call in parallel. Stage 3 -- dedup via keyword-clustering + an LLM merge
+    decision (``_dedup_topic_cards``), also folding new cards into duplicate ``existing_cards``.
 
     Never raises. Returns [] on any unrecoverable error.
     """
@@ -634,10 +901,10 @@ def _llm_topic_cards(file_paths, provider, model=None):
             _log.warning("context index: bootstrap stage 2 returned no topic cards")
             return []
 
-        # Stage 3: merge near-duplicate cards.
-        merged = _merge_topic_cards(raw_cards)
+        # Stage 3: dedup via keyword-clustering + LLM merge decision (folding into existing cards).
+        merged = _dedup_topic_cards(raw_cards, provider, model, existing_cards=existing_cards)
         _log.info(
-            "context index: bootstrap stage 3 — merged %d raw cards into %d unique cards",
+            "context index: bootstrap stage 3 — deduped %d raw cards into %d unique cards",
             len(raw_cards), len(merged),
         )
         return merged
@@ -789,11 +1056,18 @@ class FileContextStore(ContextAssemblerBase):
 
         Without a ``provider`` this is a NO-OP returning 0: topic cards require semantic
         understanding, so cards accumulate via ``record()`` instead.
+
+        On success (``n > 0``) a ``bootstrap_meta.json`` sidecar is written recording the
+        algorithm version + card count, so a later run can detect a stale index and re-build.
         """
         try:
-            return self._bootstrap_inner(root=root, provider=provider)
+            n = self._bootstrap_inner(root=root, provider=provider)
         except Exception:  # noqa: BLE001
             return 0
+        if n > 0:
+            # Record the algorithm version so a future run can detect a stale index.
+            _write_bootstrap_meta(str(self._cards_dir), self._count_cards_on_disk())
+        return n
 
     def _maybe_auto_bootstrap(self) -> None:
         """Trigger bootstrap once if auto_bootstrap is on and the store is empty. Never raises."""
@@ -808,6 +1082,7 @@ class FileContextStore(ContextAssemblerBase):
         # Only bootstrap when there are no existing cards.
         if self._cards_dir.exists() and any(
             e.suffix == ".json" and not e.name.startswith(".")
+            and e.name != _BOOTSTRAP_META_FILE
             for e in self._cards_dir.iterdir()
         ):
             return
@@ -845,14 +1120,18 @@ class FileContextStore(ContextAssemblerBase):
         """Actual bootstrap logic. May raise; callers wrap in try/except.
 
         Topic cards are semantic: the LLM (``provider``) decides what the topics are and which
-        files belong to each, so a card can span unrelated directories. Three passes:
+        files belong to each, so a card can span unrelated directories. The pass is INCREMENTAL:
 
           1. Walk the corpus (with the existing skip logic) into a flat list of qualifying
              source file paths. No symbol extraction or fingerprinting yet.
-          2. Ask the LLM for the topic cards. Collect every referenced file and fingerprint
-             them in parallel into a ``{rel_str: fp}`` map.
-          3. For each topic card build the final JSON (filling fingerprints per file), apply the
-             ``skip_unchanged`` check against the existing card's files, and write atomically.
+          2. Diff against the existing cards: ``uncovered`` files are referenced by NO card;
+             ``stale_covered`` files are referenced by a card but their sha256 has changed. Only
+             these drive LLM work. If both are empty the store is up to date (return 0).
+          3. Run the 3-stage LLM fan-out over just the uncovered files, deduping against the
+             existing cards. Separately regenerate the cards that reference stale files.
+          4. Fingerprint every referenced file in parallel, build the final JSON, apply the
+             ``skip_unchanged`` check, and write atomically. Write ``bootstrap_meta.json`` at the
+             end when any card was written.
 
         With no ``provider`` no cards can be identified, so this returns 0 (a no-op).
         """
@@ -907,8 +1186,99 @@ class FileContextStore(ContextAssemblerBase):
             )
             return 0
 
-        # --- LLM: identify the natural semantic topic cards across the corpus ---
-        topic_cards = _llm_topic_cards(file_paths, provider)
+        # --- Incremental diff: what is uncovered (in no card) vs stale (covered but changed) ---
+        existing = self._load_all()
+        existing_cards = list(existing.values())
+        covered: Set[str] = set()
+        for card in existing_cards:
+            for fe in card.get("files", []):
+                p = fe.get("path", "") if isinstance(fe, dict) else fe
+                if p:
+                    covered.add(p)
+
+        uncovered = [p for p in file_paths if p not in covered]
+        # A covered file is stale when its current sha256 differs from any card's stored sha.
+        stale_covered: List[str] = []
+        if covered:
+            walked = set(file_paths)
+            for card in existing_cards:
+                for fe in card.get("files", []):
+                    if not isinstance(fe, dict):
+                        continue
+                    p = fe.get("path", "")
+                    if not p or p not in walked:
+                        continue
+                    stored = fe.get("sha256", "")
+                    if not stored:
+                        continue
+                    fp = self._fingerprint(p)
+                    cur = fp.get("sha256", "")
+                    if cur and cur != stored and p not in stale_covered:
+                        stale_covered.append(p)
+
+        # On the very first bootstrap (no existing cards) everything is "uncovered".
+        if not existing_cards:
+            uncovered = list(file_paths)
+
+        if not uncovered and not stale_covered:
+            _log.info("context index: all files covered and up to date")
+            return 0
+
+        _log.info(
+            "context index: %d new file(s) found (not in any existing card), %d stale file(s) "
+            "— processing", len(uncovered), len(stale_covered),
+        )
+
+        # --- LLM: identify topic cards for the NEW (uncovered) files, deduping vs existing ---
+        topic_cards: List[Dict[str, Any]] = []
+        if uncovered:
+            topic_cards = _llm_topic_cards(
+                uncovered, provider, existing_cards=existing_cards
+            )
+
+        # --- Stale-covered: regenerate the cards that reference any stale file ---
+        # Identify the cards touching a stale file and re-run topic extraction over each card's
+        # file set so its summary/keywords/files reflect the current code, keeping the card id.
+        if stale_covered:
+            stale_set = set(stale_covered)
+            regen_ids = {
+                card.get("id")
+                for card in existing_cards
+                for fe in card.get("files", [])
+                if isinstance(fe, dict) and fe.get("path", "") in stale_set
+            }
+            existing_ids_new = {tc.get("id") for tc in topic_cards}
+            for card in existing_cards:
+                cid = card.get("id")
+                if cid not in regen_ids or cid in existing_ids_new:
+                    continue
+                files = [
+                    fe.get("path", "") for fe in card.get("files", [])
+                    if isinstance(fe, dict) and fe.get("path", "")
+                ]
+                files = [f for f in files if f]
+                if not files:
+                    continue
+                area = {
+                    "name": card.get("name", cid),
+                    "description": card.get("summary", ""),
+                    "files": files,
+                }
+                regenerated = _extract_topic_cards(area, set(files), provider, None)
+                if regenerated:
+                    # Keep the original card id on the first regenerated card so we upsert in place.
+                    regenerated[0]["id"] = cid
+                    topic_cards.extend(regenerated)
+                else:
+                    # Extraction failed: keep the card but re-pin (rebuild from its own fields).
+                    topic_cards.append({
+                        "id": cid,
+                        "name": card.get("name", ""),
+                        "keywords": card.get("keywords", []),
+                        "summary": card.get("summary", ""),
+                        "files": files,
+                    })
+
         if not topic_cards:
             return 0
 
@@ -1321,6 +1691,19 @@ class FileContextStore(ContextAssemblerBase):
 
         return result
 
+    def _count_cards_on_disk(self) -> int:
+        """Count card JSON files on disk (excludes the meta sidecar). Never raises."""
+        try:
+            if not self._cards_dir.exists():
+                return 0
+            return sum(
+                1 for e in self._cards_dir.iterdir()
+                if e.suffix == ".json" and not e.name.startswith(".")
+                and e.name != _BOOTSTRAP_META_FILE
+            )
+        except Exception:  # noqa: BLE001
+            return 0
+
     def _dir_stamp(self) -> Tuple[float, int]:
         """Cheap snapshot of cards_dir state: (max_child_mtime, file_count).
 
@@ -1334,7 +1717,8 @@ class FileContextStore(ContextAssemblerBase):
             max_mtime = 0.0
             count = 0
             for entry in self._cards_dir.iterdir():
-                if entry.suffix == ".json" and not entry.name.startswith("."):
+                if (entry.suffix == ".json" and not entry.name.startswith(".")
+                        and entry.name != _BOOTSTRAP_META_FILE):
                     count += 1
                     try:
                         mt = entry.stat().st_mtime
@@ -1466,7 +1850,8 @@ class FileContextStore(ContextAssemblerBase):
 
         cards: Dict[str, Dict[str, Any]] = {}
         for entry in self._cards_dir.iterdir():
-            if entry.suffix != ".json" or entry.name.startswith("."):
+            if (entry.suffix != ".json" or entry.name.startswith(".")
+                    or entry.name == _BOOTSTRAP_META_FILE):
                 continue
             try:
                 with open(entry, "r", encoding="utf-8") as fh:
