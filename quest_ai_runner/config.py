@@ -7,8 +7,14 @@ hardcodes none of them. Build the wired-up brain + poller via the factory helper
 """
 from __future__ import annotations
 
+import logging
+import os
+import threading
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
+
+_log = logging.getLogger("quest-ai-runner.context")
 
 from .core.adapters import (
     ContextAssembler,
@@ -200,6 +206,57 @@ def build_registry(cfg: RunnerConfig) -> ModelRegistry:
     return ModelRegistry(cfg.model_provider)
 
 
+def _cards_exist(cards_dir: str) -> bool:
+    """True if the cards directory already holds at least one card file."""
+    try:
+        p = Path(cards_dir)
+        return p.is_dir() and any(
+            e.suffix == ".json" and not e.name.startswith(".")
+            for e in p.iterdir()
+        )
+    except OSError:
+        return False
+
+
+def _bootstrap_if_needed(keyword, *, root: str, cards_dir: str,
+                         block: bool = False) -> None:
+    """Bootstrap the keyword store unless cards already exist.
+
+    ``block=True`` runs synchronously (used when a vector store is about to seed
+    from the keyword cards and needs them to be present).  ``block=False``
+    (default) runs in a background thread so the caller is not blocked.
+
+    Logs what it is doing so the user is never left wondering why startup is slow.
+    """
+    if _cards_exist(cards_dir):
+        _log.debug("context index: cards found in %s — skipping bootstrap", cards_dir)
+        return
+
+    if block:
+        _log.info("context index: building for the first time under %s", root)
+        try:
+            n = keyword.bootstrap(root=root)
+            _log.info("context index: ready — %d cards written to %s", n, cards_dir)
+        except Exception:  # noqa: BLE001
+            _log.debug("context index: bootstrap failed", exc_info=True)
+        return
+
+    _log.info(
+        "context index: building for the first time under %s "
+        "(runs in background — first response may arrive before indexing completes)",
+        root,
+    )
+
+    def _bg() -> None:
+        try:
+            n = keyword.bootstrap(root=root)
+            _log.info("context index: ready — %d cards written to %s", n, cards_dir)
+        except Exception:  # noqa: BLE001
+            _log.debug("context index: bootstrap failed", exc_info=True)
+
+    threading.Thread(target=_bg, daemon=True, name="qar-bootstrap").start()
+
+
 def resolve_context_assembler(cfg: RunnerConfig):
     """Resolve the context assembler from config — ON BY DEFAULT.
 
@@ -217,8 +274,6 @@ def resolve_context_assembler(cfg: RunnerConfig):
         return chosen  # an explicit instance, or None to disable
     # Default-on: build a FileContextStore (keyword/IDF). Local import avoids a cycle.
     try:
-        import os
-
         from .adapters import FileContextStore
         root = cfg.corpus_root or os.getcwd()
         cards_dir = cfg.context_cards_dir or os.path.join(root, ".quest-context")
@@ -251,14 +306,12 @@ def resolve_context_assembler(cfg: RunnerConfig):
 
         if vector_store is not None:
             from .adapters import HybridContextAssembler, VectorContextAssembler
-            # Pre-trigger keyword bootstrap so that export_for_embedding() has cards
-            # to export even when the vector arm's seeding runs in a parallel thread
-            # before the keyword arm's lazy assemble() bootstrap would fire.
-            # Best-effort: a bootstrap failure just means fewer seed items (never raises).
-            try:
-                keyword.bootstrap(root=root)
-            except Exception:  # noqa: BLE001
-                pass
+            # Bootstrap the keyword store so export_for_embedding() has cards to seed
+            # the vector arm.  Skip if cards already exist — incremental updates happen
+            # lazily per assemble() call.  On first run with a vector store, bootstrap
+            # blocks (the vector arm needs cards before it seeds); on keyword-only first
+            # runs, bootstrap is in the background and the chat REPL is not blocked.
+            _bootstrap_if_needed(keyword, root=root, cards_dir=cards_dir, block=True)
             # Wire seed_source so the vector arm is seeded from the keyword store's
             # docstring cards on the first assemble() call (cold-start fix). Because
             # sync() is fingerprint-based, subsequent calls only re-embed changed
