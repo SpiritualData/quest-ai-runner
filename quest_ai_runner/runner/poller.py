@@ -135,11 +135,13 @@ class Poller:
                      "once resources recover")
             return []
         try:
-            # Pass the lane's team_id so discovery is ISOLATED per team: two teams under the same
-            # owner share one owner-scoped queue, and an unscoped poll would pull BOTH teams' tasks.
-            # team_id="" (a teamless/personal lane) keeps owner-scoped discovery — the prior contract.
+            # Use discovery_team_id when set (allows owner-scoped discovery on a personal lane while
+            # still using team_id for heartbeat/escalation); otherwise fall back to team_id.
+            disc_tid = (self.cfg.discovery_team_id
+                        if self.cfg.discovery_team_id is not None
+                        else (self.cfg.team_id or ""))
             due = self.client.discover_due(
-                now=datetime.now(timezone.utc), team_id=self.cfg.team_id or "")
+                now=datetime.now(timezone.utc), team_id=disc_tid)
         except (QuestApiError, QuestNotConfigured) as e:
             log.info("discovery unavailable (%s) — will retry next scan", e)
             return []
@@ -214,6 +216,8 @@ class Poller:
         # configured direction asks for it. Best-effort and AFTER the task is reported — a sync
         # failure here must never fail the task.
         self._push_rep_for(task, target)
+        # Opt-in: record this task's outcome into the rep's turn store so future runs can recall it.
+        self._record_rep_turn(task, target, outcome)
         return task_id
 
     def _resolve_rep_target(self, task: Dict[str, Any]) -> Optional[tuple]:
@@ -243,6 +247,19 @@ class Poller:
                 return slug
         return self.cfg.runner_label or None
 
+    def _rep_context_dirs(self, user_id: str) -> tuple:
+        """Return ``(cards_dir, rep_notes_dir, rep_turns_dir)`` for a given rep.
+
+        Deterministic from ``(user_id, cfg)`` so callers can reconstruct it cheaply without
+        storing extra state.
+        """
+        import os as _os
+        root = self.cfg.corpus_root or _os.getcwd()
+        cards_dir = self.cfg.context_cards_dir or _os.path.join(root, ".quest-context")
+        rep_notes_dir = _os.path.join(cards_dir, "reps", user_id, "notes")
+        rep_turns_dir = _os.path.join(cards_dir, "reps", user_id, "turns")
+        return cards_dir, rep_notes_dir, rep_turns_dir
+
     def _pull_rep_for(self, task: Dict[str, Any], target: Optional[tuple] = None) -> Optional[str]:
         """Best-effort PRE-run pull, gated on direction; returns the rep's per-run preamble or None.
 
@@ -252,8 +269,14 @@ class Poller:
         the local skill file reflects the current persona/corrections, then read its MANAGED
         sections and compose them with the runner's context doctrine into a per-run preamble the
         executor injects into the deep run — so the task runs AS that rep by default, no extra
-        consumer glue. Never raises: a sync failure is logged and the run proceeds (with the
-        previously synced file, and no preamble from this pull)."""
+        consumer glue.
+
+        Also builds rep-specific NoteContextStore and TurnContextStore instances, syncs the
+        note store from the just-pulled profile, assembles both into context blocks, and appends
+        them to the preamble.
+
+        Never raises: a sync failure is logged and the run proceeds (with the previously synced
+        file, and no preamble from this pull)."""
         if not target:
             return None
         if self.cfg.rep_sync_direction not in ("pull", "both"):
@@ -264,27 +287,47 @@ class Poller:
             from pathlib import Path as _Path
 
             from ..core.context_doctrine import compose_deep_preamble
+            from ..core.note_context_store import NoteContextStore
+            from ..core.turn_context_store import TurnContextStore
             from .rep_sync import SKILL_FILE_NAME, parse_skill_file, pull_rep_to_skill
-            pull_rep_to_skill(self.client, team_id, user_id, skill_dir)
-            # Read the rep's persona + learned corrections back out of the just-pulled file and
-            # build the per-run preamble (doctrine + this rep's managed sections). The skill file's
-            # MANAGED sections are the source of the rep's identity for THIS run.
+
+            _cards_dir, rep_notes_dir, rep_turns_dir = self._rep_context_dirs(user_id)
+
+            # Build the note store and pass it to pull so the sync happens in one call.
+            note_store = NoteContextStore(rep_notes_dir)
+            pull_rep_to_skill(self.client, team_id, user_id, skill_dir, note_store=note_store)
+
+            # Read the rep's persona + learned corrections back out of the just-pulled file.
             skill_text = (_Path(skill_dir) / SKILL_FILE_NAME).read_text(encoding="utf-8")
-            return self._build_rep_preamble(skill_text, compose_deep_preamble, parse_skill_file)
+
+            # Assemble rep-specific note and turn context for the preamble.
+            task_text = task.get("text") or task.get("title") or ""
+            note_ctx = note_store.assemble(task_text)
+            rep_turn_store = TurnContextStore(turns_dir=rep_turns_dir)
+            turn_ctx = rep_turn_store.assemble(task_text)
+
+            return self._build_rep_preamble(
+                skill_text, compose_deep_preamble, parse_skill_file,
+                note_ctx_view=note_ctx.context_view,
+                turn_ctx_view=turn_ctx.context_view,
+            )
         except Exception as e:  # noqa: BLE001 — best-effort, like progress posting/heartbeat
             log.info("rep pull for %s failed (%s) — running with existing skill file", user_id, e)
             return None
 
     @staticmethod
-    def _build_rep_preamble(skill_text: str, compose_deep_preamble, parse_skill_file) -> Optional[str]:
+    def _build_rep_preamble(skill_text: str, compose_deep_preamble, parse_skill_file,
+                            *, note_ctx_view: str = "", turn_ctx_view: str = "") -> Optional[str]:
         """Compose a deep-run preamble from a skill file's MANAGED sections (persona + learned).
 
         Generic: it only knows ``persona`` + ``learned_notes`` (the rep_sync managed shape) and the
-        runner's context doctrine. Returns None when the file carries no rep identity to inject."""
+        runner's context doctrine. Optionally appends rep-specific note context (learned corrections
+        from the NoteContextStore) and turn context (past task history from the TurnContextStore).
+        Returns None when the file carries no rep identity to inject."""
         parsed = parse_skill_file(skill_text or "")
         persona = (parsed.get("persona") or "").strip()
         learned = parsed.get("learned_notes") or []
-        if not persona and not learned:
+        if not persona and not learned and not note_ctx_view and not turn_ctx_view:
             return None
         parts: List[str] = []
         if persona:
@@ -294,6 +337,10 @@ class Poller:
                                 for n in learned if str(n.get("text", "")).strip())
             if bullets:
                 parts.append("=== LEARNED CORRECTIONS (apply these) ===\n" + bullets)
+        if note_ctx_view:
+            parts.append(note_ctx_view)
+        if turn_ctx_view:
+            parts.append(turn_ctx_view)
         if not parts:
             return None
         # Combine the runner's doctrine with this rep's persona/learned via the existing composer,
@@ -318,6 +365,26 @@ class Poller:
             push_skill_to_rep(self.client, team_id, user_id, skill_dir)
         except Exception as e:  # noqa: BLE001 — best-effort; a push failure never fails the task
             log.info("rep push for %s failed (%s) — leaving Quest profile unchanged", user_id, e)
+
+    def _record_rep_turn(self, task: Dict[str, Any], target: Optional[tuple],
+                         outcome: Any) -> None:
+        """Best-effort POST-run: record this task's outcome into the rep's per-rep turn store.
+
+        Only fires when a rep resolver returned a target.  The rep's TurnContextStore lives at
+        ``<cards_dir>/reps/<user_id>/turns/`` so it stays namespaced per rep and doesn't pollute
+        the org-wide turn store.  Never raises."""
+        if not target:
+            return
+        user_id, _skill_dir = target
+        try:
+            from ..core.turn_context_store import TurnContextStore
+            _cards_dir, _rep_notes_dir, rep_turns_dir = self._rep_context_dirs(user_id)
+            task_text = task.get("text") or task.get("title") or ""
+            result_text = (getattr(outcome, "result", None) or "").strip()
+            rep_turn_store = TurnContextStore(turns_dir=rep_turns_dir)
+            rep_turn_store.record(task_text, {"response": result_text})
+        except Exception as e:  # noqa: BLE001 — best-effort; never fails the task
+            log.info("rep turn record for %s failed (%s) — continuing", user_id, e)
 
     # --- run modes -----------------------------------------------------------
 

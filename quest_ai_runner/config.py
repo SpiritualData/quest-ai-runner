@@ -233,7 +233,23 @@ def resolve_context_assembler(cfg: RunnerConfig):
         turns_dir = os.path.join(cards_dir, "turns")
         turn_store = TurnContextStore(turns_dir=turns_dir)
 
-        if cfg.vector_store is not None:
+        # Resolve the vector store: explicit instance > auto-build local Qdrant > None.
+        # When the [qdrant] extra is installed and no explicit store is configured, we auto-build
+        # an embedded QdrantVectorStore (local filesystem, no server) so hybrid search is ON by
+        # default without any consumer config.  Keyword-only is the fallback when the extra is
+        # missing.
+        vector_store = cfg.vector_store
+        if vector_store is None:
+            try:
+                from .adapters import QdrantVectorStore as _QdrantVS
+                if _QdrantVS is not None:
+                    qdrant_path = os.path.join(cards_dir, "qdrant")
+                    vector_store = _QdrantVS(path=qdrant_path)
+            except (ImportError, Exception):  # noqa: BLE001
+                # qdrant-client / fastembed not installed, or construction failed: keyword-only.
+                vector_store = None
+
+        if vector_store is not None:
             from .adapters import HybridContextAssembler, VectorContextAssembler
             # Pre-trigger keyword bootstrap so that export_for_embedding() has cards
             # to export even when the vector arm's seeding runs in a parallel thread
@@ -249,7 +265,7 @@ def resolve_context_assembler(cfg: RunnerConfig):
             # cards (AUTO-UPDATE). Never raises: errors in seed_source() are swallowed
             # by VectorContextAssembler._maybe_seed().
             vector = VectorContextAssembler(
-                cfg.vector_store,
+                vector_store,
                 provider=cfg.model_provider,
                 seed_source=keyword.export_for_embedding,
             )

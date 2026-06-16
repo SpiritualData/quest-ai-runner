@@ -39,7 +39,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 log = logging.getLogger("quest-ai-runner.rep_sync")
 
@@ -182,11 +182,21 @@ def _write(path: Path, content: str) -> None:
 
 # --- the simple public functions ------------------------------------------------
 
-def pull_rep_to_skill(client: Any, team_id: str, user_id: str, skill_dir: str) -> RepSyncResult:
+def pull_rep_to_skill(client: Any, team_id: str, user_id: str, skill_dir: str,
+                      *, note_store: Any = None) -> RepSyncResult:
     """Quest -> local: GET the rep's AI profile and (re)render its skill file's managed sections.
 
     Human-authored content outside the managed markers is preserved. Idempotent: pulling an
     unchanged profile leaves the file byte-identical. Returns a :class:`RepSyncResult`.
+
+    Args:
+        client:     A QuestClient (or compatible) with ``get_ai_profile``.
+        team_id:    The team the rep belongs to.
+        user_id:    The rep's user id.
+        skill_dir:  Directory containing the rep's SKILL.md.
+        note_store: Optional ``NoteContextStore`` — when provided, the rep's learned_notes from
+                    the just-pulled profile are synced into it.  Best-effort: a sync failure is
+                    logged and never raises.
     """
     profile = client.get_ai_profile(user_id, team_id=team_id)
     path = _skill_path(skill_dir)
@@ -197,10 +207,24 @@ def pull_rep_to_skill(client: Any, team_id: str, user_id: str, skill_dir: str) -
     learned = list(profile.get("learned_notes") or [])
     log.info("pulled rep %s -> %s (persona %d chars, %d corrections)",
              user_id, path, len(str(profile.get("persona") or "")), len(learned))
+    if note_store is not None:
+        sync_notes_to_store(learned, note_store)
     return RepSyncResult(
         direction="pull", user_id=user_id, skill_path=str(path), pulled=True,
         persona_len=len(str(profile.get("persona") or "")), learned_count=len(learned),
     )
+
+
+def sync_notes_to_store(learned_notes: List[Dict[str, Any]], note_store: Any) -> None:
+    """Sync a list of learned_notes dicts into a NoteContextStore.  Never raises.
+
+    A convenience helper for callers (e.g. the poller) that already have a ``note_store``
+    instance and want to sync without going through ``pull_rep_to_skill``.
+    """
+    try:
+        note_store.sync_from_notes(learned_notes)
+    except Exception as e:  # noqa: BLE001
+        log.warning("sync_notes_to_store failed: %s", e)
 
 
 def push_skill_to_rep(client: Any, team_id: str, user_id: str, skill_dir: str) -> RepSyncResult:
