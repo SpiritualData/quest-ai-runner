@@ -551,12 +551,29 @@ class FileContextStore(ContextAssemblerBase):
         except Exception:  # noqa: BLE001
             pass
 
+    def refresh_stale(self, root: Optional[str] = None) -> int:
+        """Re-index only files whose content changed since the last bootstrap.
+
+        Walks the source tree but skips writing any card whose file sha256 still
+        matches the stored fingerprint.  New files get a card; changed files get
+        an updated card; deleted files keep their old card (stale but harmless).
+
+        Designed to be called from a background thread at startup so the context
+        index stays warm without blocking the caller.  Never raises; returns the
+        number of cards written (0 = everything was already up to date).
+        """
+        try:
+            return self._bootstrap_inner(root=root, skip_unchanged=True)
+        except Exception:  # noqa: BLE001
+            return 0
+
     def _bootstrap_inner(
         self,
         root: Optional[str] = None,
         *,
         max_files: int = 10000,
         max_cards: int = 5000,
+        skip_unchanged: bool = False,
     ) -> int:
         """Actual bootstrap logic. May raise; callers wrap in try/except."""
         walk_root = Path(root).resolve() if root else self._repo_root
@@ -679,6 +696,13 @@ class FileContextStore(ContextAssemblerBase):
                         existing = json.load(fh)
                 except Exception:  # noqa: BLE001
                     existing = {}
+
+            # Incremental refresh: skip files whose content hasn't changed.
+            if skip_unchanged and existing:
+                old_sha = (existing.get("files") or [{}])[0].get("sha256", "")
+                new_sha = fp.get("sha256", "")
+                if old_sha and new_sha and old_sha == new_sha:
+                    continue
 
             card: Dict[str, Any] = {
                 "id": card_id,

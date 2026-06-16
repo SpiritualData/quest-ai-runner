@@ -220,18 +220,39 @@ def _cards_exist(cards_dir: str) -> bool:
 
 def _bootstrap_if_needed(keyword, *, root: str, cards_dir: str,
                          block: bool = False) -> None:
-    """Bootstrap the keyword store unless cards already exist.
+    """Bootstrap or refresh the keyword store at startup.
 
-    ``block=True`` runs synchronously (used when a vector store is about to seed
-    from the keyword cards and needs them to be present).  ``block=False``
-    (default) runs in a background thread so the caller is not blocked.
+    Two cases:
 
-    Logs what it is doing so the user is never left wondering why startup is slow.
+    * **Cards exist** (any run after the first): launch a background thread that
+      calls ``refresh_stale()`` — re-indexes only files whose sha256 changed,
+      adds new files, and skips everything unchanged.  The caller is never blocked.
+
+    * **No cards** (first ever run): bootstrap the full tree.  ``block=True``
+      runs it synchronously (needed when a vector store must seed from the cards
+      before its first ``assemble()``).  ``block=False`` runs in background so
+      the chat REPL appears immediately; the first response may arrive before
+      indexing is complete, but subsequent ones have full context.
     """
     if _cards_exist(cards_dir):
-        _log.debug("context index: cards found in %s — skipping bootstrap", cards_dir)
+        _log.info(
+            "context index: scanning %s for changes (background)", root
+        )
+
+        def _bg_refresh() -> None:
+            try:
+                n = keyword.refresh_stale(root=root)
+                if n > 0:
+                    _log.info("context index: refreshed %d card(s)", n)
+                else:
+                    _log.debug("context index: all cards up to date")
+            except Exception:  # noqa: BLE001
+                _log.debug("context index: refresh failed", exc_info=True)
+
+        threading.Thread(target=_bg_refresh, daemon=True, name="qar-refresh").start()
         return
 
+    # First run — no cards yet.
     if block:
         _log.info("context index: building for the first time under %s", root)
         try:
@@ -277,7 +298,9 @@ def resolve_context_assembler(cfg: RunnerConfig):
         from .adapters import FileContextStore
         root = cfg.corpus_root or os.getcwd()
         cards_dir = cfg.context_cards_dir or os.path.join(root, ".quest-context")
-        keyword = FileContextStore(cards_dir, repo_root=root)
+        # auto_bootstrap=False: we manage the lifecycle ourselves via
+        # _bootstrap_if_needed so lazy and explicit bootstrap don't race.
+        keyword = FileContextStore(cards_dir, repo_root=root, auto_bootstrap=False)
         # If a vector store is configured, the default becomes a HYBRID: keyword/IDF FUSED with
         # semantic vector search (the two are complementary). Otherwise keyword-only.
         # Turn-history cards live alongside file cards: same root, subdir "turns".
@@ -304,14 +327,15 @@ def resolve_context_assembler(cfg: RunnerConfig):
                 # qdrant-client / fastembed not installed, or construction failed: keyword-only.
                 vector_store = None
 
+        # Bootstrap (first run) or refresh stale cards (subsequent runs).
+        # block=True when a vector store is present: the vector arm must seed
+        # from keyword cards synchronously before its first assemble() call.
+        # keyword-only: always background so the chat REPL is never blocked.
+        _bootstrap_if_needed(keyword, root=root, cards_dir=cards_dir,
+                             block=vector_store is not None)
+
         if vector_store is not None:
             from .adapters import HybridContextAssembler, VectorContextAssembler
-            # Bootstrap the keyword store so export_for_embedding() has cards to seed
-            # the vector arm.  Skip if cards already exist — incremental updates happen
-            # lazily per assemble() call.  On first run with a vector store, bootstrap
-            # blocks (the vector arm needs cards before it seeds); on keyword-only first
-            # runs, bootstrap is in the background and the chat REPL is not blocked.
-            _bootstrap_if_needed(keyword, root=root, cards_dir=cards_dir, block=True)
             # Wire seed_source so the vector arm is seeded from the keyword store's
             # docstring cards on the first assemble() call (cold-start fix). Because
             # sync() is fingerprint-based, subsequent calls only re-embed changed
