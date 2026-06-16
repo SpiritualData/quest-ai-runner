@@ -30,7 +30,6 @@ Card JSON schema (matches docs/context-assembly.md exactly):
 from __future__ import annotations
 
 import ast
-import concurrent.futures
 import hashlib
 import json
 import logging
@@ -39,6 +38,7 @@ import os
 import re
 import subprocess
 import tempfile
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -56,6 +56,52 @@ _BOOTSTRAP_VERSION = 2
 
 # Name of the meta file written to cards_dir after a successful bootstrap.
 _BOOTSTRAP_META_FILE = "bootstrap_meta.json"
+
+
+def _run_parallel(callables: List, max_workers: int) -> List:
+    """Run callables in parallel with daemon threads; return results in input order.
+
+    Unlike ``ThreadPoolExecutor``, the worker threads are daemon threads and are NOT
+    registered with Python's global ``_threads_queues``, so ``concurrent.futures``'
+    atexit handler never blocks on them during program exit. A second Ctrl+C while
+    bootstrap is running therefore exits cleanly instead of printing a traceback.
+
+    Results are in the same order as ``callables``; a callable that raises yields
+    ``None`` in the output list.
+    """
+    n = len(callables)
+    if n == 0:
+        return []
+    if n == 1:
+        try:
+            return [callables[0]()]
+        except Exception:  # noqa: BLE001
+            return [None]
+
+    results: List[Any] = [None] * n
+    sem = threading.Semaphore(max_workers)
+    done_lock = threading.Lock()
+    done_count = [0]
+    all_done = threading.Event()
+
+    def _run(i: int, fn) -> None:
+        try:
+            results[i] = fn()
+        except Exception:  # noqa: BLE001
+            pass
+        finally:
+            sem.release()
+            with done_lock:
+                done_count[0] += 1
+                if done_count[0] >= n:
+                    all_done.set()
+
+    for i, fn in enumerate(callables):
+        sem.acquire()
+        threading.Thread(target=_run, args=(i, fn), daemon=True).start()
+
+    all_done.wait()
+    return results
 
 
 def _read_bootstrap_meta(cards_dir: str) -> dict:
@@ -874,13 +920,12 @@ def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None):
             len(paths), len(chunks),
         )
         areas: List[Dict[str, Any]] = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=_BOOTSTRAP_WORKERS) as ex:
-            futures = {ex.submit(_discover_areas, chunk, provider, model): i
-                       for i, chunk in enumerate(chunks)}
-            for fut in concurrent.futures.as_completed(futures):
-                result = fut.result()
-                if result:
-                    areas.extend(result)
+        for result in _run_parallel(
+            [lambda c=chunk: _discover_areas(c, provider, model) for chunk in chunks],
+            max_workers=_BOOTSTRAP_WORKERS,
+        ):
+            if result:
+                areas.extend(result)
 
         if not areas:
             _log.warning("context index: bootstrap stage 1 returned no areas")
@@ -889,13 +934,12 @@ def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None):
 
         # Stage 2: extract topic cards per area in parallel.
         raw_cards: List[Dict[str, Any]] = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=_BOOTSTRAP_WORKERS) as ex:
-            futures2 = {ex.submit(_extract_topic_cards, area, allowed, provider, model): area["name"]
-                        for area in areas}
-            for fut in concurrent.futures.as_completed(futures2):
-                result = fut.result()
-                if result:
-                    raw_cards.extend(result)
+        for result in _run_parallel(
+            [lambda a=area: _extract_topic_cards(a, allowed, provider, model) for area in areas],
+            max_workers=_BOOTSTRAP_WORKERS,
+        ):
+            if result:
+                raw_cards.extend(result)
 
         if not raw_cards:
             _log.warning("context index: bootstrap stage 2 returned no topic cards")
@@ -1296,24 +1340,14 @@ class FileContextStore(ContextAssemblerBase):
         fp_map: Dict[str, Dict[str, Any]] = {rel: {} for rel in referenced}
         if referenced:
             n_workers = min(8, len(referenced))
-            try:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
-                    rel_futures = {
-                        pool.submit(self._fingerprint, rel): rel for rel in referenced
-                    }
-                    for fut in concurrent.futures.as_completed(rel_futures):
-                        rel = rel_futures[fut]
-                        try:
-                            fp_map[rel] = fut.result()
-                        except Exception:  # noqa: BLE001
-                            fp_map[rel] = {}
-            except Exception:  # noqa: BLE001
-                # Fallback to serial if ThreadPoolExecutor fails unexpectedly.
-                for rel in referenced:
-                    try:
-                        fp_map[rel] = self._fingerprint(rel)
-                    except Exception:  # noqa: BLE001
-                        fp_map[rel] = {}
+            fp_results = _run_parallel(
+                [lambda r=rel: (r, self._fingerprint(r)) for rel in referenced],
+                max_workers=n_workers,
+            )
+            for item in fp_results:
+                if item is not None:
+                    rel, fp = item
+                    fp_map[rel] = fp or {}
 
         # --- Pass 3: build and write one card per topic ---
         cards_written = 0
@@ -1486,25 +1520,15 @@ class FileContextStore(ContextAssemblerBase):
         fp_results: Dict[tuple, Dict[str, Any]] = {}  # (ci, fi) -> fp dict
         if fp_jobs:
             n_workers = min(8, len(fp_jobs))
-            try:
-                with concurrent.futures.ThreadPoolExecutor(max_workers=n_workers) as pool:
-                    futures = {
-                        pool.submit(self._fingerprint, fpath): (ci, fi)
-                        for ci, fi, fpath in fp_jobs
-                    }
-                    for fut in concurrent.futures.as_completed(futures):
-                        key = futures[fut]
-                        try:
-                            fp_results[key] = fut.result()
-                        except Exception:  # noqa: BLE001
-                            fp_results[key] = {}
-            except Exception:  # noqa: BLE001
-                # ThreadPoolExecutor unavailable (shouldn't happen with stdlib, but guard anyway).
-                for ci, fi, fpath in fp_jobs:
-                    try:
-                        fp_results[(ci, fi)] = self._fingerprint(fpath)
-                    except Exception:  # noqa: BLE001
-                        fp_results[(ci, fi)] = {}
+            raw = _run_parallel(
+                [lambda ci=ci, fi=fi, fp=fpath: ((ci, fi), self._fingerprint(fp))
+                 for ci, fi, fpath in fp_jobs],
+                max_workers=n_workers,
+            )
+            for item in raw:
+                if item is not None:
+                    key, fp = item
+                    fp_results[key] = fp or {}
 
         view_parts: List[str] = []
         card_ids: List[str] = []
