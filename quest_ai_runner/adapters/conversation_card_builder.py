@@ -20,7 +20,11 @@ from typing import Any, Dict, List, Optional
 
 
 class ConversationCardBuilder:
-    """Build context cards from Claude conversations."""
+    """Build context cards from Claude conversations.
+
+    Topic-aware builder: checks existing cards and adds conversation sources
+    to cards with overlapping topics instead of creating duplicates.
+    """
 
     def __init__(self, cards_dir: str, corpus_root: Optional[str] = None):
         """Initialize the builder.
@@ -32,22 +36,87 @@ class ConversationCardBuilder:
         self.cards_dir = Path(cards_dir)
         self.corpus_root = Path(corpus_root) if corpus_root else None
         self.cards_dir.mkdir(parents=True, exist_ok=True)
+        self._existing_cards = self._load_existing_cards()
+
+    def _load_existing_cards(self) -> Dict[str, Dict[str, Any]]:
+        """Load all existing cards from cards_dir.
+
+        Returns:
+            Dict mapping card id -> card dict
+        """
+        cards = {}
+        if not self.cards_dir.is_dir():
+            return cards
+
+        for card_file in self.cards_dir.glob("*.json"):
+            try:
+                card = json.loads(card_file.read_text())
+                card_id = card.get("id") or card_file.stem
+                cards[card_id] = card
+            except (json.JSONDecodeError, OSError):
+                pass
+
+        return cards
+
+    def _find_overlapping_card(self, keywords: List[str], threshold: float = 0.5) -> Optional[str]:
+        """Find an existing card with overlapping topic (by keyword overlap).
+
+        Args:
+            keywords: Keywords from the new conversation
+            threshold: Minimum overlap ratio (0.0-1.0) to consider a match
+
+        Returns:
+            Card id of overlapping card, or None if no match
+        """
+        if not keywords or not self._existing_cards:
+            return None
+
+        new_set = set(keywords)
+        best_match = None
+        best_overlap = threshold
+
+        for card_id, card in self._existing_cards.items():
+            existing_keywords = set(card.get("keywords", []))
+            if not existing_keywords:
+                continue
+
+            # Calculate Jaccard similarity
+            intersection = len(new_set & existing_keywords)
+            union = len(new_set | existing_keywords)
+            overlap = intersection / union if union > 0 else 0
+
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_match = card_id
+
+        return best_match
 
     def _extract_keywords(self, text: str, limit: int = 10) -> List[str]:
-        """Extract keywords from conversation text.
+        """Extract keywords from conversation text intelligently.
 
         Looks for:
-        - Capitalized words (likely topics/names)
+        - All-caps terms (JWT, OAuth, API, etc.)
+        - Capitalized multi-word phrases (likely topics/names)
         - Bracketed terms [term]
-        - Words after "discuss", "about", "regarding"
-        - Repeated significant words
+        - Words after topic indicators
+        - Repeated significant words (4+ letters, 2+ occurrences)
         """
         keywords = set()
+        stop_words = {
+            "the", "and", "for", "are", "but", "with", "that", "this", "here",
+            "have", "from", "use", "should", "would", "could", "just",
+        }
 
-        # Find capitalized words (likely topics/entities)
-        for match in re.finditer(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\b", text):
+        # Find ALL-CAPS terms (JWT, OAuth, API, etc.)
+        for match in re.finditer(r"\b([A-Z]{2,})\b", text):
             word = match.group(1).lower()
-            if len(word) > 2 and word not in ("user", "assistant"):
+            if len(word) >= 2:
+                keywords.add(word)
+
+        # Find capitalized multi-word phrases (likely topics/entities)
+        for match in re.finditer(r"\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b", text):
+            word = match.group(1).lower()
+            if len(word) > 4:
                 keywords.add(word)
 
         # Find bracketed terms
@@ -56,23 +125,24 @@ class ConversationCardBuilder:
             if len(term) > 2:
                 keywords.add(term)
 
-        # Find words after key phrases
-        for phrase in ("discuss", "about", "regarding", "focus", "cover", "topic"):
-            pattern = f"{phrase}[^.!?]*?([a-z]+(?:\\s+[a-z]+)?)"
+        # Find words after topic-indicating phrases
+        for phrase in ("authentication", "security", "design", "implement", "handle",
+                       "discuss", "about", "regarding", "focus", "cover", "topic"):
+            pattern = f"{phrase}[^.!?]*?([a-z]+)"
             for match in re.finditer(pattern, text, re.IGNORECASE):
                 word = match.group(1).lower()
-                if len(word) > 2:
+                if len(word) >= 4 and word not in stop_words:
                     keywords.add(word)
 
-        # Find frequently occurring words (3+ occurrences)
-        words = re.findall(r"\b([a-z]{3,})\b", text.lower())
+        # Find frequently occurring longer words (4+ letters, 2+ occurrences)
+        words = re.findall(r"\b([a-z]{4,})\b", text.lower())
         word_counts = {}
         for word in words:
-            if word not in ("the", "and", "for", "are", "but", "with", "that", "this"):
+            if word not in stop_words:
                 word_counts[word] = word_counts.get(word, 0) + 1
 
         for word, count in sorted(word_counts.items(), key=lambda x: -x[1]):
-            if count >= 3 and len(keywords) < limit:
+            if count >= 2 and len(keywords) < limit:
                 keywords.add(word)
 
         return sorted(list(keywords))[:limit]
@@ -195,12 +265,40 @@ class ConversationCardBuilder:
     ) -> Optional[Path]:
         """Build a card and write it to disk.
 
+        If an existing card with overlapping topic is found, merge the
+        conversation as a source instead of creating a new card.
+
         Returns:
-            Path to written card, or None on error
+            Path to written/updated card, or None on error
         """
         try:
-            card = self.build_card(conv_id, conv, conv_file_path)
-            return self.write_card(card)
+            # Reload existing cards to catch any changes since init
+            self._existing_cards = self._load_existing_cards()
+
+            new_card = self.build_card(conv_id, conv, conv_file_path)
+            keywords = new_card.get("keywords", [])
+
+            # Check if this conversation's topic overlaps with existing cards
+            # Threshold 0.3: 30% keyword overlap triggers merge
+            overlapping_card_id = self._find_overlapping_card(keywords, threshold=0.3)
+
+            if overlapping_card_id:
+                # Topic overlap found: add conversation as source to existing card
+                existing_card = self._existing_cards[overlapping_card_id]
+                existing_card["sources"].extend(new_card["sources"])
+                # Update keywords (union)
+                existing_card["keywords"] = sorted(
+                    set(existing_card.get("keywords", [])) | set(keywords)
+                )
+                # Update last_verified_at
+                existing_card["provenance"]["last_verified_at"] = (
+                    datetime.now(timezone.utc).isoformat()
+                )
+                return self.write_card(existing_card)
+            else:
+                # New topic: create new card
+                return self.write_card(new_card)
+
         except Exception:  # noqa: BLE001
             return None
 
