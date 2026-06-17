@@ -178,6 +178,8 @@ def main(argv=None) -> int:
                         help="corpus root (default: QAR_CORPUS_ROOT env var)")
     boot_p.add_argument("--cards-dir", default=None, metavar="PATH",
                         help="cards directory (default: <corpus>/.quest-context or QAR_CONTEXT_CARDS_DIR)")
+    boot_p.add_argument("--force", action="store_true",
+                        help="delete all existing cards and bootstrap from scratch (forces re-index when algorithm changes)")
 
     # --- poll subcommand (and legacy flat flags, kept for back-compat) --------
     poll_p = sub.add_parser("poll", help="poll Quest for due tasks and run them")
@@ -267,8 +269,17 @@ def main(argv=None) -> int:
     # --- bootstrap ------------------------------------------------------------
     if args.command == "bootstrap":
         from .adapters.file_context_store import FileContextStore
+        import shutil
         corpus = args.corpus or os.getenv("QAR_CORPUS_ROOT") or os.getcwd()
         cards_dir = args.cards_dir or os.getenv("QAR_CONTEXT_CARDS_DIR") or os.path.join(corpus, ".quest-context")
+
+        # Force mode: delete all cards and bootstrap from scratch
+        if args.force:
+            if os.path.exists(cards_dir):
+                log.info("deleting existing cards directory: %s", cards_dir)
+                shutil.rmtree(cards_dir)
+                log.info("cards deleted")
+
         provider = _model_provider_from_env()
         store = FileContextStore(cards_dir, repo_root=corpus)
         log.info("bootstrapping context store for %s", corpus)
