@@ -32,9 +32,11 @@ reference (the Quest team decision-request) lives in runner.quest_client.
 """
 from .anthropic_provider import AnthropicProvider
 from .cached_db_adapter import CachedDbAdapter
+from .card_metadata_generator import CardMetadataGenerator
 from .claude_cli_provider import ClaudeCliProvider
 from .claude_conversations_adapter import ClaudeConversationsAdapter
 from .composite_retrieval_adapter import CompositeRetrievalAdapter
+from .conversation_card_builder import ConversationCardBuilder
 from .file_context_store import FileContextStore
 from .files_adapter import FilesAdapter
 from .hybrid_context_assembler import HybridContextAssembler
@@ -86,6 +88,8 @@ __all__ = [
     "CachedDbAdapter",
     "ClaudeConversationsAdapter",
     "CompositeRetrievalAdapter",
+    "ConversationCardBuilder",
+    "CardMetadataGenerator",
     "AnthropicProvider",
     "ClaudeCliProvider",
     "GeminiProvider",
