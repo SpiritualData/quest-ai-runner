@@ -279,69 +279,47 @@ def main(argv=None) -> int:
         corpus = args.corpus or os.getenv("QAR_CORPUS_ROOT") or os.getcwd()
         cards_dir = args.cards_dir or os.getenv("QAR_CONTEXT_CARDS_DIR") or os.path.join(corpus, ".quest-context")
 
-        # Dry-run mode: estimate tokens, cost, and time
+        # Dry-run mode: run bootstrap without writing cards, track tokens
         if args.dry_run:
-            # Count source files
-            corpus_path = Path(corpus)
-            skip_dirs = effective_skip_dirs(corpus_path)
-            file_count = 0
+            from .adapters.dryrun_provider import DryRunProvider
+            from .adapters.file_context_store import FileContextStore
 
-            for dirpath, dirnames, filenames in os.walk(corpus_path):
-                prune_dirnames(dirnames, current=Path(dirpath).resolve(), base_skip=skip_dirs)
-                for fname in filenames:
-                    if Path(fname).suffix in {
-                        ".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs",
-                        ".java", ".rb", ".md", ".sh", ".yaml", ".yml", ".toml", ".json",
-                        ".c", ".cpp", ".h", ".hpp", ".cs", ".swift", ".kt", ".scala",
-                        ".html", ".css", ".scss", ".less", ".txt", ".rst",
-                    }:
-                        fpath = Path(dirpath) / fname
-                        try:
-                            if fpath.stat().st_size <= 512 * 1024:  # 512KB max
-                                file_count += 1
-                        except OSError:
-                            pass
+            provider = _model_provider_from_env()
+            dryrun_provider = DryRunProvider(provider)
 
-            # Estimate Stage 1 tokens (file paths)
-            stage1_full_tokens = file_count * 20  # ~20 chars per path
-            stage1_sampled_tokens = max(10, file_count // 10) * 20  # ~10% of files
-            stage1_savings = stage1_full_tokens - stage1_sampled_tokens
+            # Bootstrap with dry-run mode enabled (no cards written)
+            store = FileContextStore(cards_dir, repo_root=corpus, dry_run=True)
+            log.info("dry-run bootstrap starting for %s", corpus)
+            cards_estimated = store.bootstrap(root=corpus, provider=dryrun_provider)
 
-            # Estimate Stage 2 tokens (areas × samples)
-            estimated_areas = max(5, file_count // 50)  # ~1 area per 50 files
-            stage2_full_tokens = estimated_areas * file_count // estimated_areas * 20  # rough
-            stage2_sampled_tokens = estimated_areas * 4 * 100  # 4 samples × ~100 chars each
-
-            total_full_tokens = stage1_full_tokens + stage2_full_tokens
-            total_sampled_tokens = stage1_sampled_tokens + stage2_sampled_tokens
-            total_savings = total_full_tokens - total_sampled_tokens
+            # Get token counts from the provider
+            tokens_in = dryrun_provider.tokens_in
+            tokens_out = dryrun_provider.tokens_out
+            total_tokens = tokens_in + tokens_out
 
             # Cost estimate using actual provider/model pricing
-            cost_sampled, provider, model = estimate_bootstrap_cost(total_sampled_tokens)
+            cost, prov, model = estimate_bootstrap_cost(tokens_in)
 
-            # Time estimate (Stage 1: ~2s per LLM call, Stage 2: ~1s per area)
-            stage1_calls = max(1, file_count // 150)  # 150 files per chunk
-            stage2_time = estimated_areas * 1  # ~1s per area
-            time_estimate = (stage1_calls * 2) + stage2_time + 5  # +5s buffer
+            # Time estimate based on number of tokens and API latency
+            # Rough: ~1000 tokens per second for typical LLM processing
+            time_estimate = max(5, (total_tokens // 1000) + 3)
 
-            # Print clean output without logging timestamps
             corpus_abs = str(Path(corpus).resolve())
             print()
             print("DRY RUN: Bootstrap Cost Estimate")
             print("=" * 50)
             print(f"Corpus: {corpus_abs}")
-            print(f"Source files: {file_count:,}")
-            print(f"Estimated areas: {estimated_areas}")
             print()
-            print("Tokens (with TF-DF-IDF sampling):")
-            print(f"  Input tokens: {total_sampled_tokens:,}")
-            print(f"  Vs. full list: {total_savings:,} tokens saved (75%)")
+            print("Bootstrap estimate:")
+            print(f"  Cards estimated: {cards_estimated}")
+            print(f"  Input tokens: {tokens_in:,}")
+            print(f"  Output tokens: {tokens_out:,}")
             print()
-            print(f"Provider: {provider}")
+            print(f"Provider: {prov}")
             print(f"Model: {model}")
             print()
             print("Cost & Time:")
-            print(f"  Estimated cost: ${cost_sampled:.4f}")
+            print(f"  Estimated cost: ${cost:.4f}")
             print(f"  Estimated time: ~{time_estimate}s (~{time_estimate // 60}m)")
             print()
             print("Run without --dry-run to bootstrap.")

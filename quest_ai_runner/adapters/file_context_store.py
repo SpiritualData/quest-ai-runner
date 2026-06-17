@@ -1152,11 +1152,13 @@ class FileContextStore(ContextAssemblerBase):
         max_cards_in_view: int = 8,
         auto_bootstrap: bool = True,
         confidence_threshold: float = 3.0,
+        dry_run: bool = False,
     ) -> None:
         self._cards_dir = Path(cards_dir)
         self._repo_root = Path(repo_root).resolve() if repo_root else None
         self._max_cards = max_cards_in_view
         self._auto_bootstrap = auto_bootstrap
+        self._dry_run = dry_run
         # CONFIDENCE GATE (the never-worse-by-construction lever). A card is only injected when
         # its IDF match score clears this floor AND it is fresh. A weak/ambiguous match injects
         # NOTHING, so the run is plain Claude Code (the baseline). The system can therefore only
@@ -1255,12 +1257,15 @@ class FileContextStore(ContextAssemblerBase):
 
         On success (``n > 0``) a ``bootstrap_meta.json`` sidecar is written recording the
         algorithm version + card count, so a later run can detect a stale index and re-build.
+
+        In dry-run mode, the bootstrap runs through all the same steps but does not write
+        cards to disk. Token counts are still tracked in the provider.
         """
         try:
             n = self._bootstrap_inner(root=root, provider=provider)
         except Exception:  # noqa: BLE001
             return 0
-        if n > 0:
+        if n > 0 and not self._dry_run:
             # Record the algorithm version so a future run can detect a stale index.
             _write_bootstrap_meta(str(self._cards_dir), self._count_cards_on_disk())
         return n
@@ -1564,21 +1569,25 @@ class FileContextStore(ContextAssemblerBase):
                 "last_outcome": existing.get("last_outcome", "unknown"),
             }
 
-            # Atomic write.
-            tmp_fd, tmp_path = tempfile.mkstemp(
-                dir=str(self._cards_dir), prefix=".tmp_", suffix=".json"
-            )
-            try:
-                with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
-                    json.dump(card, fh, indent=2, ensure_ascii=False)
-                    fh.write("\n")
-                os.replace(tmp_path, str(card_path))
-                cards_written += 1
-            except Exception:  # noqa: BLE001
+            # Atomic write (skip if dry-run mode).
+            if not self._dry_run:
+                tmp_fd, tmp_path = tempfile.mkstemp(
+                    dir=str(self._cards_dir), prefix=".tmp_", suffix=".json"
+                )
                 try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
+                    with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
+                        json.dump(card, fh, indent=2, ensure_ascii=False)
+                        fh.write("\n")
+                    os.replace(tmp_path, str(card_path))
+                    cards_written += 1
+                except Exception:  # noqa: BLE001
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+            else:
+                # In dry-run mode, count the card but don't write it.
+                cards_written += 1
 
         # Invalidate cache after all writes.
         self._cache_dirty = True
@@ -1822,24 +1831,25 @@ class FileContextStore(ContextAssemblerBase):
         if ts:
             card["provenance"]["last_verified_at"] = str(ts)
 
-        # Atomic write via tmp + os.replace.
-        self._cards_dir.mkdir(parents=True, exist_ok=True)
-        tmp_fd, tmp_path = tempfile.mkstemp(
-            dir=str(self._cards_dir), prefix=".tmp_", suffix=".json"
-        )
-        try:
-            with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
-                json.dump(card, fh, indent=2, ensure_ascii=False)
-                fh.write("\n")
-            os.replace(tmp_path, str(card_path))
-            # Invalidate the in-memory cache so the next assemble() sees the new card.
-            self._cache_dirty = True
-        except Exception:  # noqa: BLE001
+        # Atomic write via tmp + os.replace (skip if dry-run mode).
+        if not self._dry_run:
+            self._cards_dir.mkdir(parents=True, exist_ok=True)
+            tmp_fd, tmp_path = tempfile.mkstemp(
+                dir=str(self._cards_dir), prefix=".tmp_", suffix=".json"
+            )
             try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-            raise  # re-raise so the outer try/except in record() catches it
+                with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
+                    json.dump(card, fh, indent=2, ensure_ascii=False)
+                    fh.write("\n")
+                os.replace(tmp_path, str(card_path))
+                # Invalidate the in-memory cache so the next assemble() sees the new card.
+                self._cache_dirty = True
+            except Exception:  # noqa: BLE001
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise  # re-raise so the outer try/except in record() catches it
 
     def _fingerprint(self, path: str) -> Dict[str, Any]:
         """Compute current sha256 + mtime + (optional) git_sha for a file path.
