@@ -345,6 +345,7 @@ def main(argv=None) -> int:
             print()
             print("Tokens (with TF-DF-IDF sampling):")
             print(f"  Input tokens: {tokens_in:,}")
+            print(f"  Output tokens: {tokens_out:,}")
             print(f"  Vs. full list: {file_tokens_saved:,} tokens saved ({savings_pct}%)")
             print()
             print(f"Provider: {prov}")
