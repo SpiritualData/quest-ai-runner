@@ -1735,14 +1735,26 @@ class Orchestrator:
                                     data={"tokens_in": _ti, "tokens_out": _to, "total": _ti + _to}))
 
         # If deferred_deep is set, also run the deep task after returning the answer
-        if plan.deferred_deep:
+        # OR auto-detect if answer claims work needs doing (safety fallback for planner forgetting deferred_deep)
+        should_defer_deep = plan.deferred_deep
+        if not should_defer_deep and self.deep_runner is not None and text_claims_action(text):
+            # Answer claims work but no deferred_deep set — auto-escalate to deep (safety net)
+            should_defer_deep = {"goal": f"Implement what was just described: {user_message}",
+                                  "rationale": "auto-detected from answer text (safety escalation)"}
+            if emit is not None:
+                emit.status("detected work needed, executing now…")
+
+        if should_defer_deep:
             try:
-                emit.status("queuing follow-up work…")
+                if not plan.deferred_deep:
+                    emit.status("executing follow-up work…")
+                else:
+                    emit.status("queuing follow-up work…")
                 deferred_plan = PlanDecision(
                     action="deep",
-                    goal=plan.deferred_deep.get("goal") or f"Follow-up: {user_message}",
-                    deep_brief=plan.deferred_deep.get("brief") or user_message,
-                    rationale=plan.deferred_deep.get("rationale") or "follow-up work from answer phase",
+                    goal=should_defer_deep.get("goal") or f"Follow-up: {user_message}",
+                    deep_brief=should_defer_deep.get("brief") or user_message,
+                    rationale=should_defer_deep.get("rationale") or "follow-up work from answer phase",
                 )
                 deep_model = self._answer_model(deferred_plan, "opus", hint=model_hint)
                 deep_res = self._run_deep(deferred_plan, user_message, deep_model,
@@ -1752,7 +1764,7 @@ class Orchestrator:
                 if deep_res and deep_res.deep_results:
                     deep_output = "\n\n".join(d.output for d in deep_res.deep_results if d.output)
                     if deep_output:
-                        text = text + "\n\n--- Follow-up Work ---\n" + deep_output
+                        text = text + "\n\n--- Work Completed ---\n" + deep_output
             except Exception as e:  # noqa: BLE001 — deferred work must never break the answer
                 log.warning(f"Deferred deep work failed: {type(e).__name__}: {e}", exc_info=True)
 
