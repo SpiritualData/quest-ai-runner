@@ -74,7 +74,7 @@ from .model_registry import TIERS, ModelRegistry
 log = logging.getLogger("quest-ai-runner.orchestrator")
 
 # Defaults (all overridable via OrchestratorConfig).
-DEFAULT_MAX_STEPS = 5
+DEFAULT_MAX_STEPS = 15
 DEFAULT_MAX_ELAPSED_SECONDS = 60.0
 DEFAULT_MAX_GATHERED_CHARS = 60000
 DEFAULT_MAX_READS_PER_STEP = 8
@@ -1635,10 +1635,11 @@ class Orchestrator:
                 )
                 plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
 
-            # Safety gate: if planner chose "read" for 3+ consecutive steps, force a terminal action
+            # Safety gate: if planner chose "read" for many consecutive steps, force a terminal action
             if plan and plan.action == "read":
                 consecutive_reads += 1
-                if consecutive_reads >= 3 and steps > 2:
+                # Escalate to deep if: 5+ consecutive reads OR approaching max_steps while still reading
+                if (consecutive_reads >= 5) or (steps > cfg.max_steps - 2 and consecutive_reads >= 2):
                     log.warning(
                         f"Planner stuck in read loop after {steps} steps / {consecutive_reads} reads. "
                         f"Force-escalating to deep with gathered context."
