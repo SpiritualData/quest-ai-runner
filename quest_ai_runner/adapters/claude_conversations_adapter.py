@@ -48,6 +48,7 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
         self.corpus_root = Path(corpus_root) if corpus_root else None
         self.sessions_dir = Path(sessions_dir) if sessions_dir else Path.home() / ".claude" / "sessions"
         self._conversations: Dict[str, Any] = {}
+        self._conversation_filepaths: Dict[str, Path] = {}  # Track filepath for each conversation
         self._load_conversations()
 
     def _load_conversations(self) -> None:
@@ -111,6 +112,7 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
                         else:
                             session_id = session_file.stem
                         self._conversations[session_id] = data
+                        self._conversation_filepaths[session_id] = session_file.resolve()
                     except (json.JSONDecodeError, OSError):
                         pass  # Skip unreadable files
             except Exception:  # noqa: BLE001
@@ -160,6 +162,58 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
             messages = conv.get("messages") or conv.get("turns") or []
             metadata["message_count"] = len(messages)
         return metadata
+
+    def _get_conversation_digest(self, conv: Any) -> str:
+        """Extract a lightweight digest for embedding.
+
+        Digest includes:
+        - First message (sets the topic)
+        - Last 2-3 messages (provides closure/summary)
+        - Metadata (rep, model, message count)
+
+        This is much cheaper than embedding all messages.
+        """
+        parts = []
+        messages = conv.get("messages") or conv.get("turns") or []
+
+        # Add metadata context
+        metadata = self._get_conversation_metadata(conv)
+        if metadata:
+            meta_str = " | ".join(f"{k}={v}" for k, v in metadata.items())
+            parts.append(f"[{meta_str}]")
+
+        # Add first message (usually the user's query)
+        if messages:
+            first_msg = messages[0]
+            if isinstance(first_msg, dict):
+                text = first_msg.get("text") or first_msg.get("content") or ""
+                if text:
+                    parts.append(f"START: {text[:200]}")  # First 200 chars
+
+        # Add last 2-3 messages (outcome/resolution)
+        if len(messages) > 1:
+            sample_count = min(3, max(1, len(messages) // 2))  # 1-3 messages from the end
+            for msg in messages[-sample_count:]:
+                if isinstance(msg, dict):
+                    text = msg.get("text") or msg.get("content") or ""
+                    if text:
+                        parts.append(f"RECENT: {text[:150]}")  # Last 150 chars each
+
+        return " ".join(parts) if parts else "empty conversation"
+
+    def _get_conversation_timestamp(self, conv: Any) -> float:
+        """Extract timestamp from conversation for recency sorting.
+
+        Returns unix timestamp, or 0 if not available.
+        """
+        if isinstance(conv, dict):
+            # Try common timestamp fields
+            for field in ("updated_at", "updatedAt", "createdAt", "created_at", "timestamp"):
+                if field in conv:
+                    val = conv[field]
+                    if isinstance(val, (int, float)):
+                        return float(val)
+        return 0.0
 
     def _conversation_to_text(self, conv: Any) -> str:
         """Convert a conversation dict to readable text with structure preserved.
@@ -255,20 +309,115 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
         return Observation(kind="grep", pattern=pattern, hits=hits)
 
     def query(self, spec: Dict[str, Any]) -> Observation:
-        """Simple semantic search stub. For now, returns all conversations."""
-        # TODO: implement semantic search using embeddings
-        text_parts = []
-        for conv_id, conv_data in self._conversations.items():
-            conv_text = self._conversation_to_text(conv_data)
-            text_parts.append(f"=== Conversation: {conv_id} ===\n{conv_text}")
+        """Smart conversation retrieval via topic clustering + sampling.
 
-        if not text_parts:
+        Strategy:
+        1. Extract lightweight digests from each conversation (first + last messages)
+        2. Embed digests and cluster by semantic similarity
+        3. Sample most recent conversations from each cluster
+        4. Return sampled conversations with filepaths for full retrieval
+
+        Spec keys:
+        - "max_clusters": number of topic clusters (default 5)
+        - "samples_per_cluster": conversations per cluster to return (default 2)
+        - "query": optional query text for reranking (not used yet, reserved)
+        """
+        if not self._conversations:
             return Observation(kind="error", error="no conversations available")
+
+        max_clusters = spec.get("max_clusters", 5)
+        samples_per_cluster = spec.get("samples_per_cluster", 2)
+
+        # Extract digests for clustering
+        conv_ids = list(self._conversations.keys())
+        digests = {cid: self._get_conversation_digest(self._conversations[cid]) for cid in conv_ids}
+        timestamps = {
+            cid: self._get_conversation_timestamp(self._conversations[cid]) for cid in conv_ids
+        }
+
+        # Try to cluster by embedding + KMeans
+        sampled_ids = self._cluster_and_sample(
+            conv_ids, digests, timestamps, max_clusters, samples_per_cluster
+        )
+
+        if not sampled_ids:
+            return Observation(kind="error", error="no conversations selected after sampling")
+
+        # Build response with filepaths for content engine access
+        text_parts = []
+        for conv_id in sampled_ids:
+            filepath = self._conversation_filepaths.get(conv_id, Path("unknown"))
+            conv_text = self._conversation_to_text(self._conversations[conv_id])
+            text_parts.append(f"=== Conversation: {conv_id} ===\nFILEPATH: {filepath}\n{conv_text}")
 
         return Observation(
             kind="query",
             text="\n\n".join(text_parts),
         )
+
+    def _cluster_and_sample(
+        self,
+        conv_ids: List[str],
+        digests: Dict[str, str],
+        timestamps: Dict[str, float],
+        max_clusters: int,
+        samples_per_cluster: int,
+    ) -> List[str]:
+        """Cluster conversations by digest embedding and sample recent from each.
+
+        Falls back to simple recency sampling if clustering unavailable.
+        """
+        if len(conv_ids) <= samples_per_cluster * 2:
+            # Small set: just sort by recency and return top N
+            return sorted(conv_ids, key=lambda c: timestamps.get(c, 0), reverse=True)[
+                : samples_per_cluster * min(max_clusters, 3)
+            ]
+
+        try:
+            # Try to use sklearn KMeans for clustering
+            from sklearn.cluster import KMeans
+            from sklearn.feature_extraction.text import TfidfVectorizer
+        except ImportError:
+            # Fallback: sample by recency only
+            return sorted(conv_ids, key=lambda c: timestamps.get(c, 0), reverse=True)[
+                : samples_per_cluster * min(max_clusters, 3)
+            ]
+
+        try:
+            # Vectorize digests using TF-IDF (lightweight, no embedder needed)
+            vectorizer = TfidfVectorizer(max_features=100, stop_words="english")
+            digest_list = [digests[cid] for cid in conv_ids]
+            vectors = vectorizer.fit_transform(digest_list).toarray()
+
+            # Cluster into K topics
+            n_clusters = min(max_clusters, len(conv_ids) // 2 or 1)
+            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+            labels = kmeans.fit_predict(vectors)
+
+            # Group conversations by cluster
+            clusters = {}
+            for idx, cid in enumerate(conv_ids):
+                cluster_id = labels[idx]
+                if cluster_id not in clusters:
+                    clusters[cluster_id] = []
+                clusters[cluster_id].append((timestamps.get(cid, 0), cid))
+
+            # Sample top N most recent from each cluster
+            sampled = []
+            for cluster_id in sorted(clusters.keys()):
+                cluster_convs = clusters[cluster_id]
+                # Sort by timestamp (descending, most recent first)
+                cluster_convs.sort(reverse=True)
+                # Take top samples_per_cluster
+                sampled.extend([cid for _, cid in cluster_convs[:samples_per_cluster]])
+
+            return sampled if sampled else [conv_ids[0]]
+
+        except Exception:
+            # Fallback to recency sampling
+            return sorted(conv_ids, key=lambda c: timestamps.get(c, 0), reverse=True)[
+                : samples_per_cluster * min(max_clusters, 3)
+            ]
 
     def list_sources(self) -> Observation:
         """List available conversations."""
