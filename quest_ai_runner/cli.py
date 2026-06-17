@@ -325,10 +325,11 @@ def main(argv=None) -> int:
             time_estimate = (stage1_calls * 2) + stage2_time + 5  # +5s buffer
 
             # Print clean output without logging timestamps
+            corpus_abs = str(Path(corpus).resolve())
             print()
             print("DRY RUN: Bootstrap Cost Estimate")
             print("=" * 50)
-            print(f"Corpus: {corpus}")
+            print(f"Corpus: {corpus_abs}")
             print(f"Source files: {file_count:,}")
             print(f"Estimated areas: {estimated_areas}")
             print()
