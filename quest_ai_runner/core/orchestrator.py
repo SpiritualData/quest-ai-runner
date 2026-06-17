@@ -972,7 +972,7 @@ class Orchestrator:
                   gathered: Optional[List[Dict[str, Any]]] = None) -> OrchestratorResult:
         subtasks = (plan.deep_subtasks or [])[: self.cfg.max_deep_subtasks]
         if not subtasks:
-            subtasks = [{"goal": plan.goal or f"Fully address the request: {user_message[:200]}",
+            subtasks = [{"goal": plan.goal or f"Fully address the request: {user_message}",
                          "brief": plan.deep_brief or user_message}]
         if self.deep_runner is None:
             # No runner configured: surface the goal(s) without executing (caller may spawn).
@@ -999,7 +999,7 @@ class Orchestrator:
         wants_preamble = _run_goal_accepts_context_preamble(self.deep_runner)
 
         def run_one(st: Dict[str, Any]) -> DeepResult:
-            goal = (st.get("goal") or "").strip() or f"Fully address: {user_message[:200]}"
+            goal = (st.get("goal") or "").strip() or f"Fully address: {user_message}"
             brief = (st.get("brief") or goal).strip()
             # Per-subtask execution fact — populated from EVENT_EXEC phase ticks (live) and finalized
             # from the DeepResult.met below. Recording per-subtask keeps facts correct even when
@@ -1200,7 +1200,7 @@ class Orchestrator:
             if not (plan.goal or plan.deep_brief or plan.deep_subtasks):
                 remediate_plan = PlanDecision(
                     action="deep",
-                    goal=f"Fully carry out the user's request: {user_message[:200]}",
+                    goal=f"Fully carry out the user's request: {user_message}",
                     deep_brief=user_message,
                     model_tier=plan.model_tier,
                     rationale="remediation: the prior turn claimed this action without executing it",
@@ -1701,7 +1701,7 @@ class Orchestrator:
                 return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
                                                  partial=True, model=model))
             plan.action = final = "deep"
-            plan.goal = plan.goal or f"Fully address the request: {user_message[:200]}"
+            plan.goal = plan.goal or f"Fully address the request: {user_message}"
             plan.deep_brief = plan.deep_brief or user_message
 
         if final == "deep":
@@ -1740,7 +1740,7 @@ class Orchestrator:
                 emit.status("queuing follow-up work…")
                 deferred_plan = PlanDecision(
                     action="deep",
-                    goal=plan.deferred_deep.get("goal") or f"Follow-up: {user_message[:100]}",
+                    goal=plan.deferred_deep.get("goal") or f"Follow-up: {user_message}",
                     deep_brief=plan.deferred_deep.get("brief") or user_message,
                     rationale=plan.deferred_deep.get("rationale") or "follow-up work from answer phase",
                 )
