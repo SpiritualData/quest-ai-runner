@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -1051,6 +1052,60 @@ class Orchestrator:
             rationale=plan.rationale,
         )
 
+    def _update_context_cards_after_deep(
+        self,
+        deep_result: OrchestratorResult,
+        context_meta: Optional[Dict[str, Any]],
+        exec_started: float,
+    ) -> None:
+        """Discover files modified during deep execution and update context cards.
+
+        Runs in background (non-blocking) to learn which files the deep run actually touched,
+        so future runs using the same cards will have better context. Updates cards only if
+        files are new (idempotent).
+        """
+        if not deep_result.met or not context_meta or not context_meta.get("cards"):
+            return
+
+        def background_update():
+            try:
+                from ..adapters.context_card_updater import (
+                    discover_modified_files,
+                    categorize_files_with_llm,
+                    update_context_cards,
+                )
+
+                # Discover files modified during deep execution
+                modified = discover_modified_files(
+                    getattr(self.retrieval, "corpus_root", "."),
+                    since_time=exec_started,
+                )
+                if not modified:
+                    return
+
+                # Categorize files into the cards that were used
+                categorization = categorize_files_with_llm(
+                    [m.rel_path for m in modified],
+                    context_meta["cards"],
+                    model_provider=self.provider,
+                    model="haiku",
+                )
+
+                # Update the cards
+                card_store_dir = context_meta.get("card_store_dir", ".quest-context")
+                update_context_cards(
+                    context_meta["cards"],
+                    categorization,
+                    card_store_dir,
+                )
+                log.debug(f"Updated context cards with {len(modified)} modified files")
+            except Exception as e:
+                log.debug(f"Background context card update failed (non-blocking): {e}")
+
+        # Launch in background (fire and forget)
+        thread = threading.Thread(target=background_update, daemon=True)
+        thread.start()
+
     # --- broken-promise guard (post-turn honesty check) ----------------------
 
     def _guard_turn(self, res: OrchestratorResult, exec_record: ExecutionRecord, *,
@@ -1612,9 +1667,13 @@ class Orchestrator:
 
         if final == "deep":
             emit.status("working on this now…")
+            exec_start = time.monotonic()
             res = self._run_deep(plan, user_message, self._answer_model(plan, "opus", hint=model_hint),
                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                                  gathered=gathered)
+            # Background: learn from files modified during deep execution
+            if res.met:
+                self._update_context_cards_after_deep(res, context_meta, exec_start)
             return finish(res)
 
         if final == "confirm":
