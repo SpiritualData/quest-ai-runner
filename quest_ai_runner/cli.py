@@ -300,9 +300,13 @@ def main(argv=None) -> int:
             # Cost estimate using actual provider/model pricing
             cost, prov, model = estimate_bootstrap_cost(tokens_in)
 
-            # Time estimate based on number of tokens and API latency
-            # Rough: ~1000 tokens per second for typical LLM processing
-            time_estimate = max(5, (total_tokens // 1000) + 3)
+            # Time estimate: account for LLM call latency (2-4s per call minimum)
+            # plus processing time. Bootstrap typically has 1-3 LLM calls.
+            # Estimate: ~100 tokens/second for LLM throughput + 3-4s per call overhead
+            llm_calls = 2  # Stage 1 (file analysis) + Stage 2 (topic clustering)
+            call_overhead = llm_calls * 4  # ~4s per call for latency/network
+            token_processing = max(10, (total_tokens // 100))  # ~100 tokens/sec throughput
+            time_estimate = call_overhead + token_processing
 
             corpus_abs = str(Path(corpus).resolve())
             print()
