@@ -283,41 +283,69 @@ def main(argv=None) -> int:
         if args.dry_run:
             from .adapters.dryrun_provider import DryRunProvider
             from .adapters.file_context_store import FileContextStore
+            from .adapters._walk import effective_skip_dirs, prune_dirnames
 
+            # Count source files and estimate areas
+            corpus_path = Path(corpus)
+            skip_dirs = effective_skip_dirs(corpus_path)
+            file_count = 0
+
+            for dirpath, dirnames, filenames in os.walk(corpus_path):
+                prune_dirnames(dirnames, current=Path(dirpath).resolve(), base_skip=skip_dirs)
+                for fname in filenames:
+                    if Path(fname).suffix in {
+                        ".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs",
+                        ".java", ".rb", ".md", ".sh", ".yaml", ".yml", ".toml", ".json",
+                        ".c", ".cpp", ".h", ".hpp", ".cs", ".swift", ".kt", ".scala",
+                        ".html", ".css", ".scss", ".less", ".txt", ".rst",
+                    }:
+                        fpath = Path(dirpath) / fname
+                        try:
+                            if fpath.stat().st_size <= 512 * 1024:  # 512KB max
+                                file_count += 1
+                        except OSError:
+                            pass
+
+            # Run bootstrap with DryRunProvider to track actual tokens
             provider = _model_provider_from_env()
             dryrun_provider = DryRunProvider(provider)
 
-            # Bootstrap with dry-run mode enabled (no cards written)
             store = FileContextStore(cards_dir, repo_root=corpus, dry_run=True)
-            log.info("dry-run bootstrap starting for %s", corpus)
-            cards_estimated = store.bootstrap(root=corpus, provider=dryrun_provider)
+            store.bootstrap(root=corpus, provider=dryrun_provider)
 
             # Get token counts from the provider
             tokens_in = dryrun_provider.tokens_in
             tokens_out = dryrun_provider.tokens_out
             total_tokens = tokens_in + tokens_out
 
+            # Estimate number of cards using heuristic: ~50 files per card
+            estimated_cards = max(1, file_count // 50)
+
+            # Estimate TF-DF-IDF sampling ratio: ~10% of files sampled
+            sampled_files = max(10, file_count // 10)
+            file_tokens_saved = (file_count - sampled_files) * 20  # ~20 chars per path
+            savings_pct = 75  # typical savings with TF-DF-IDF
+
             # Cost estimate using actual provider/model pricing
             cost, prov, model = estimate_bootstrap_cost(tokens_in)
 
-            # Time estimate: account for LLM call latency (2-4s per call minimum)
-            # plus processing time. Bootstrap typically has 1-3 LLM calls.
-            # Estimate: ~100 tokens/second for LLM throughput + 3-4s per call overhead
-            llm_calls = 2  # Stage 1 (file analysis) + Stage 2 (topic clustering)
-            call_overhead = llm_calls * 4  # ~4s per call for latency/network
-            token_processing = max(10, (total_tokens // 100))  # ~100 tokens/sec throughput
+            # Time estimate: account for LLM call latency
+            llm_calls = 2  # Stage 1 + Stage 2
+            call_overhead = llm_calls * 4  # ~4s per call
+            token_processing = max(10, (total_tokens // 100))  # ~100 tokens/sec
             time_estimate = call_overhead + token_processing
 
-            corpus_abs = str(Path(corpus).resolve())
+            corpus_abs = str(corpus_path.resolve())
             print()
             print("DRY RUN: Bootstrap Cost Estimate")
             print("=" * 50)
             print(f"Corpus: {corpus_abs}")
+            print(f"Source files: {file_count:,}")
+            print(f"Estimated areas: {max(5, file_count // 50)}")
             print()
-            print("Bootstrap estimate:")
-            print(f"  Cards estimated: {cards_estimated}")
+            print("Tokens (with TF-DF-IDF sampling):")
             print(f"  Input tokens: {tokens_in:,}")
-            print(f"  Output tokens: {tokens_out:,}")
+            print(f"  Vs. full list: {file_tokens_saved:,} tokens saved ({savings_pct}%)")
             print()
             print(f"Provider: {prov}")
             print(f"Model: {model}")

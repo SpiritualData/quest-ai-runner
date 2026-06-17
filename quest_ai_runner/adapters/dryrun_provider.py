@@ -57,14 +57,23 @@ class DryRunProvider(ModelProvider):
         *,
         model: str,
     ) -> str:
-        """Estimate tokens for an answer call without calling the LLM."""
+        """Estimate tokens for an answer call without calling the LLM.
+
+        Returns a stub response in the appropriate format (JSON for structured outputs).
+        """
         # Sum up prompt tokens from all messages
         prompt_text = "".join(str(msg.get("content", "")) for msg in messages)
         input_tokens = max(1, len(prompt_text) // 4)
         self.tokens_in += input_tokens
 
-        # Estimate output tokens based on typical response (~500 tokens for analysis)
-        output_tokens = 500
+        # Estimate output tokens based on response type and size
+        # For JSON responses (topics, areas): estimate based on expected structure
+        # For text responses: estimate ~500 tokens
+        if "json" in prompt_text.lower() or "array" in prompt_text.lower():
+            # Likely a JSON response - estimate moderate size
+            output_tokens = 800
+        else:
+            output_tokens = 500
         self.tokens_out += output_tokens
 
         # Propagate to wrapped provider
@@ -73,7 +82,16 @@ class DryRunProvider(ModelProvider):
         if hasattr(self._wrapped, 'tokens_out'):
             self._wrapped.tokens_out += output_tokens
 
-        return "Dry run estimation only. This would be the actual response."
+        # Return simple stubs that parse without breaking bootstrap logic
+        # (Actual card count will be estimated via heuristic, not from these stubs)
+        if "topic card" in prompt_text.lower():
+            return '[{"id":"stub","name":"Stub","keywords":["stub"],"summary":"Dry run stub","files":[]}]'
+        elif "area" in prompt_text.lower() and "identify" in prompt_text.lower():
+            return '[{"name":"Stub Area","description":"Dry run stub","files":[]}]'
+        elif "merge" in prompt_text.lower() or "group" in prompt_text.lower():
+            return "[[0]]"
+        else:
+            return "Dry run estimation only."
 
     def list_models(self) -> List[str]:
         """Delegate to wrapped provider."""
