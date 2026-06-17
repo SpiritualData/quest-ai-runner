@@ -1469,7 +1469,7 @@ class FileContextStore(ContextAssemblerBase):
                     "description": card.get("summary", ""),
                     "files": files,
                 }
-                regenerated = _extract_topic_cards(area, set(files), provider, None, walk_root=walk_root)
+                regenerated = _extract_topic_cards(area, set(files), provider, model, walk_root=walk_root)
                 if regenerated:
                     # Keep the original card id on the first regenerated card so we upsert in place.
                     regenerated[0]["id"] = cid
