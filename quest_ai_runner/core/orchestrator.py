@@ -285,6 +285,16 @@ DECIDE_TOOL: Dict[str, Any] = {
                     "properties": {"goal": {"type": "string"}, "brief": {"type": "string"}},
                 },
             },
+            "deferred_deep": {
+                "type": ["object", "null"],
+                "description": "When action='answer', optionally queue a deep task to run after answering.",
+                "properties": {
+                    "goal": {"type": "string", "description": "The goal for the deferred deep work"},
+                    "brief": {"type": "string", "description": "Brief for the deferred deep work (optional, defaults to user message)"},
+                    "rationale": {"type": "string", "description": "Why this deep work is queued"},
+                },
+                "required": ["goal"],
+            },
             "rationale": {"type": "string"},
         },
         "required": ["action", "rationale"],
@@ -400,6 +410,15 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
             deep_subs.append({"goal": d.get("goal") or None, "brief": d.get("brief") or None})
     deep_subs = deep_subs[: cfg.max_deep_subtasks]
 
+    deferred_deep: Optional[Dict[str, Any]] = None
+    deferred_raw = raw.get("deferred_deep")
+    if deferred_raw and isinstance(deferred_raw, dict) and deferred_raw.get("goal"):
+        deferred_deep = {
+            "goal": deferred_raw.get("goal"),
+            "brief": deferred_raw.get("brief"),
+            "rationale": deferred_raw.get("rationale"),
+        }
+
     return PlanDecision(
         action=action,
         reads=clean_reads,
@@ -410,6 +429,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
         subquestions=subs,
         deep_subtasks=deep_subs,
         rationale=(raw.get("rationale") or "").strip(),
+        deferred_deep=deferred_deep,
     )
 
 
@@ -1713,6 +1733,29 @@ class Orchestrator:
         if _ti or _to:
             emit.emit(ProgressEvent(type=EVENT_TOKENS,
                                     data={"tokens_in": _ti, "tokens_out": _to, "total": _ti + _to}))
+
+        # If deferred_deep is set, also run the deep task after returning the answer
+        if plan.deferred_deep:
+            try:
+                emit.status("queuing follow-up work…")
+                deferred_plan = PlanDecision(
+                    action="deep",
+                    goal=plan.deferred_deep.get("goal", plan.deferred_deep.get("goal")),
+                    deep_brief=plan.deferred_deep.get("brief", user_message),
+                    rationale=plan.deferred_deep.get("rationale", "follow-up work from answer phase"),
+                )
+                deep_model = self._answer_model(deferred_plan, "opus", hint=model_hint)
+                deep_res = self._run_deep(deferred_plan, user_message, deep_model,
+                                         emit=emit, rep_preamble=rep_preamble,
+                                         exec_record=exec_record, gathered=gathered)
+                # Append deep results to the answer text for visibility
+                if deep_res and deep_res.deep_results:
+                    deep_output = "\n\n".join(d.output for d in deep_res.deep_results if d.output)
+                    if deep_output:
+                        text = text + "\n\n--- Follow-up Work ---\n" + deep_output
+            except Exception as e:  # noqa: BLE001 — deferred work must never break the answer
+                log.warning(f"Deferred deep work failed: {type(e).__name__}: {e}", exc_info=True)
+
         return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
                                          model=model))
 

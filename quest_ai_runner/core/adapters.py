@@ -165,6 +165,8 @@ class PlanDecision:
     subquestions: List[str] = field(default_factory=list)
     deep_subtasks: List[Dict[str, Any]] = field(default_factory=list)
     rationale: str = ""
+    # Optional deferred deep work: when action="answer", can also queue a deep task to run after
+    deferred_deep: Optional[Dict[str, Any]] = None  # {"goal": "...", "brief": "...", "rationale": "..."}
 
 
 @dataclass
