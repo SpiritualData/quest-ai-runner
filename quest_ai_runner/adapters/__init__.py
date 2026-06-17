@@ -38,6 +38,7 @@ from .claude_cli_provider import ClaudeCliProvider
 from .claude_conversations_adapter import ClaudeConversationsAdapter
 from .composite_retrieval_adapter import CompositeRetrievalAdapter
 from .conversation_card_builder import ConversationCardBuilder
+from .feedback_processor import FeedbackProcessor
 from .file_context_store import FileContextStore
 from .files_adapter import FilesAdapter
 from .guidance_card_manager import GuidanceCard, GuidanceCardManager
@@ -96,6 +97,7 @@ __all__ = [
     "CardMetadataGenerator",
     "GuidanceCardManager",
     "GuidanceCard",
+    "FeedbackProcessor",
     "AnthropicProvider",
     "ClaudeCliProvider",
     "GeminiProvider",
