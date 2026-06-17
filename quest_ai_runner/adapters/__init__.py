@@ -4,8 +4,9 @@ These satisfy the core interfaces; a consumer wires the ones it needs into a Run
   * FilesAdapter              — RetrievalAdapter over a configured file root (quest-docs + corpus).
   * CachedDbAdapter           — RetrievalAdapter: live DB reads via a short-TTL cache (no file sync).
   * ClaudeConversationsAdapter — RetrievalAdapter over Claude Code session transcripts (local directory).
+  * QuestRetrievalAdapter     — RetrievalAdapter: query Quest API for goal/quest context, notes, related goals.
   * CompositeRetrievalAdapter — RetrievalAdapter that runs multiple adapters IN PARALLEL, merging
-                                results. Query files, databases, conversations, task memory together.
+                                results. Query files, databases, conversations, Quest, task memory together.
   * AnthropicProvider         — ModelProvider (plan / answer / live models.list bucketing). Needs an
                                 ANTHROPIC_API_KEY (per-token billing).
   * ClaudeCliProvider         — ModelProvider that drives the local ``claude`` CLI headless, KEYLESS:
@@ -40,6 +41,7 @@ from .conversation_card_builder import ConversationCardBuilder
 from .file_context_store import FileContextStore
 from .files_adapter import FilesAdapter
 from .hybrid_context_assembler import HybridContextAssembler
+from .quest_retrieval_adapter import QuestRetrievalAdapter
 from .vector_context_assembler import VectorContextAssembler
 
 # GeminiProvider requires the google-generativeai optional package.
@@ -87,6 +89,7 @@ __all__ = [
     "FilesAdapter",
     "CachedDbAdapter",
     "ClaudeConversationsAdapter",
+    "QuestRetrievalAdapter",
     "CompositeRetrievalAdapter",
     "ConversationCardBuilder",
     "CardMetadataGenerator",
