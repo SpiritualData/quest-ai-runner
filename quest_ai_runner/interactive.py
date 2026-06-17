@@ -876,6 +876,11 @@ class InteractiveSession:
 
         def _feed() -> None:
             try:
+                # run_stream() streams all orchestrator events: planning, context gathering (READ),
+                # execution (EXEC, MILESTONE), and final results. Context retrieval happens here
+                # via the RetrievalAdapter (if configured), regardless of whether deep_runner is
+                # set. Events are displayed in real-time: spinner shows sources as they're gathered,
+                # steps show actions taken. Same pipeline for regular turns and /execute deep runs.
                 for it in self._orch.run_stream(
                     user_text,
                     transcript=self._last_transcript(),
