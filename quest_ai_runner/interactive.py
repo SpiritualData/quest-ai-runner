@@ -263,12 +263,19 @@ class _ContextPanel:
         lines: List[str] = [f"  {frame} {phase}"]
         if sources:
             lines.append("")
-            for src in sources:
-                # Truncate very long paths gracefully
-                label = src if len(src) <= 62 else "…" + src[-59:]
-                # Use different prefix based on source type
-                prefix = "⌕" if src.startswith("(searched") else "↗"
-                lines.append(f"  {prefix}  {label}")
+            # Group sources by type for better visual hierarchy
+            file_sources = [s for s in sources if not s.startswith("(")]
+            search_sources = [s for s in sources if s.startswith("(searched")]
+
+            if file_sources:
+                for src in file_sources:
+                    label = src if len(src) <= 60 else "…" + src[-57:]
+                    lines.append(f"  ↗  {label}")
+            if search_sources:
+                for src in search_sources:
+                    label = src if len(src) <= 60 else "…" + src[-57:]
+                    lines.append(f"  ⌕  {label}")
+
             if overflow:
                 lines.append(f"     and {overflow} more…")
 
@@ -502,7 +509,7 @@ class _TurnRenderer:
         if t == ev["plan"]:
             if text:
                 self._panel.stop()
-                label = f"▸ {action}" if action else "▸"
+                label = f"▸ {action}" if action else "▸ plan"
                 self._print_step(label, text)
                 self._panel.start()
             self._panel.set_phase("planning…")
@@ -510,11 +517,16 @@ class _TurnRenderer:
             self._panel.inc_replans()
             if text:
                 self._panel.stop()
-                self._print_step("↺", text)
+                self._print_step("↺ replan", text)
                 self._panel.start()
             self._panel.set_phase("re-planning…")
         elif t == ev["status"]:
-            self._panel.set_phase(text or "thinking…")
+            # Show user-friendly status messages
+            status = text or "thinking…"
+            if status == "thinking…":
+                self._panel.set_phase("thinking…")
+            else:
+                self._panel.set_phase(status)
         elif t == ev["read"]:
             paths = data.get("sources") or []
             count = data.get("reads", len(paths))
@@ -635,6 +647,8 @@ Commands:
 
   ● Session & Configuration
     /whoami              Show AI identity and session state
+    /status              Show token usage and speed metrics
+    /tasks               Show recently completed tasks
     /reps                List available AI representatives
     /rep <name>          Set representative name directly
     /file <path>         Load a persona file
@@ -698,6 +712,8 @@ class InteractiveSession:
         self._last_user: str = ""
         self._last_assistant: str = ""
         self._turn_count: int = 0
+        # Turn history for /tasks and /status commands
+        self._turns: List[dict] = []  # [{user, model, tokens_in, tokens_out, elapsed, timestamp}]
         # TurnContextStore is wired automatically by resolve_context_assembler in config.py,
         # at <corpus_root>/.quest-context/turns/ — same root as file cards.
         self._console = _Console()
@@ -812,6 +828,20 @@ class InteractiveSession:
                     pass
 
         elif not self._cancelled.is_set() and final is not None:
+            # Record turn for /tasks and /status commands
+            tok_in = getattr(final, "tokens_in", 0) or 0
+            tok_out = getattr(final, "tokens_out", 0) or 0
+            model = _model_label(getattr(final, "model", None))
+            # Truncate user question for history display
+            user_summary = user_text[:60] + "…" if len(user_text) > 60 else user_text
+            self._turns.append({
+                "user": user_summary,
+                "model": model,
+                "tokens_in": tok_in,
+                "tokens_out": tok_out,
+                "elapsed": elapsed,
+                "timestamp": time.time(),
+            })
             # Deep result with no text = no deep_runner configured. The planner
             # chose "deep" (it sees a code/fix request) but nobody ran it. Show
             # the planned goal so the user knows what the AI intended.
@@ -849,15 +879,15 @@ class InteractiveSession:
         src_count, replan_count = panel.summary()
         c = self._console
 
-        # Collect metrics
-        parts: List[str] = []
+        # Collect metrics for display
+        metrics: List[str] = []
         steps = getattr(result, "steps", 0)
         if steps:
-            parts.append(f"{steps} step{'s' if steps != 1 else ''}")
+            metrics.append(f"{steps} step{'s' if steps != 1 else ''}")
         if src_count:
-            parts.append(f"{src_count} source{'s' if src_count != 1 else ''}")
+            metrics.append(f"{src_count} source{'s' if src_count != 1 else ''}")
         if replan_count:
-            parts.append(f"{replan_count} replan{'s' if replan_count != 1 else ''}")
+            metrics.append(f"{replan_count} replan{'s' if replan_count != 1 else ''}")
 
         # Model tier with color
         model_lbl = _model_label(getattr(result, "model", None))
@@ -873,7 +903,7 @@ class InteractiveSession:
                 model_colored = _a(_MAGENTA, model_lbl)
             else:
                 model_colored = model_lbl
-            parts.append(model_colored)
+            metrics.append(model_colored)
 
         # Token usage with better formatting
         tok_in = getattr(result, "tokens_in", 0) or 0
@@ -881,12 +911,12 @@ class InteractiveSession:
         if tok_in or tok_out:
             def _k(n):
                 return f"{n/1000:.1f}k" if n >= 1000 else str(n)
-            parts.append(f"↥ {_k(tok_in)} in · ↦ {_k(tok_out)} out")
+            metrics.append(f"↥ {_k(tok_in)} in · ↦ {_k(tok_out)} out")
 
-        parts.append(f"{elapsed:.1f}s")
+        metrics.append(f"{elapsed:.1f}s")
 
-        # Print as a clean, indented line
-        c.dim("  " + "  ·  ".join(parts))
+        # Print as a clean, indented metrics line
+        c.dim("  " + "  ·  ".join(metrics))
 
     # -- REPL ------------------------------------------------------------------
 
@@ -947,6 +977,10 @@ class InteractiveSession:
                 self._cmd_goal(line[5:].strip(), session); continue
             if line == "/whoami":
                 self._print_whoami(); continue
+            if line == "/status":
+                self._print_status(); continue
+            if line == "/tasks":
+                self._print_tasks(); continue
             if line == "/quests":
                 self._cmd_quests(session); continue
             if line == "/reps":
@@ -1180,6 +1214,87 @@ class InteractiveSession:
         if self._goal_id:
             c.bullet(f"goal: {self._goal_id}", indent=1)
         c.bullet(f"turns: {self._turn_count} in this session", indent=1)
+        c.line("")
+
+    def _print_tasks(self) -> None:
+        """Show recently completed tasks with metadata."""
+        c = self._console
+        if not self._turns:
+            c.line("")
+            c.dim("  No turns yet.")
+            c.line("")
+            return
+
+        c.line("")
+        c.speaker("Tasks", "cyan", f"{len(self._turns)} completed")
+        c.line("")
+
+        # Show up to last 10 turns
+        for i, turn in enumerate(self._turns[-10:], 1):
+            user_text = turn["user"]
+            model = turn["model"] or "?"
+            tokens = f"{turn['tokens_in']}↥ {turn['tokens_out']}↦"
+            elapsed = f"{turn['elapsed']:.1f}s"
+
+            # Color the model tier
+            model_colored = model
+            if "haiku" in model.lower():
+                model_colored = _a(_CYAN, model)
+            elif "sonnet" in model.lower():
+                model_colored = _a(_GREEN, model)
+            elif "opus" in model.lower():
+                model_colored = _a(_GOLD, model)
+
+            c.dim(f"  {i:2d}.  {user_text[:45]}...")
+            c.dim(f"       {model_colored}  {tokens}  {elapsed}")
+
+        c.line("")
+
+    def _print_status(self) -> None:
+        """Show session statistics: token usage, model distribution, speed metrics."""
+        c = self._console
+        c.line("")
+        c.speaker("Session stats", "cyan", "")
+        c.line("")
+
+        if not self._turns:
+            c.bullet("turns: 0", indent=1)
+            c.bullet("total tokens: 0", indent=1)
+            c.line("")
+            return
+
+        # Aggregate stats
+        total_in = sum(t["tokens_in"] for t in self._turns)
+        total_out = sum(t["tokens_out"] for t in self._turns)
+        avg_in = total_in // len(self._turns) if self._turns else 0
+        avg_out = total_out // len(self._turns) if self._turns else 0
+        total_time = sum(t["elapsed"] for t in self._turns)
+        avg_time = total_time / len(self._turns) if self._turns else 0
+
+        # Model distribution
+        model_counts: dict = {}
+        for t in self._turns:
+            model = t["model"] or "unknown"
+            model_counts[model] = model_counts.get(model, 0) + 1
+
+        # Speed metrics
+        times = [t["elapsed"] for t in self._turns]
+        fastest = min(times) if times else 0
+        slowest = max(times) if times else 0
+
+        c.bullet(f"turns: {len(self._turns)}", indent=1)
+        c.bullet(f"total tokens: {total_in + total_out:,} ({total_in:,} in, {total_out:,} out)",
+                indent=1)
+        c.bullet(f"avg tokens per turn: {avg_in} in, {avg_out} out", indent=1)
+        c.line("")
+
+        c.dim("  Models used:")
+        for model, count in sorted(model_counts.items(), key=lambda x: -x[1]):
+            pct = (count / len(self._turns) * 100) if self._turns else 0
+            c.dim(f"    {model:8s}  {count:2d} turn{'s' if count != 1 else ''}  ({pct:5.1f}%)")
+
+        c.line("")
+        c.dim(f"  Speed:  fastest {fastest:.1f}s  ·  slowest {slowest:.1f}s  ·  avg {avg_time:.1f}s")
         c.line("")
 
 
