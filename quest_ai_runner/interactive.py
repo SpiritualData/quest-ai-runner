@@ -897,6 +897,8 @@ class InteractiveSession:
         self._persona_file: Optional[str] = None
         # Restore persisted model/persona from qar_state.json (best-effort)
         self._load_session_state()
+        # Build dynamic model tier menu from the registry
+        self._build_model_tiers_menu()
 
     # -- header ----------------------------------------------------------------
 
@@ -1214,11 +1216,11 @@ class InteractiveSession:
     # -- New command handlers --------------------------------------------------
 
     _DEPTH_ALIASES = {
-        "light": "haiku", "fast": "haiku",
-        "standard": "sonnet", "normal": "sonnet", "default": "sonnet",
-        "deep": "opus", "thorough": "opus", "hard": "opus",
+        "light": "fast", "quick": "fast",
+        "standard": "balanced", "normal": "balanced", "default": "balanced",
+        "deep": "quality", "thorough": "quality", "hard": "quality",
     }
-    _VALID_TIERS = {"haiku", "sonnet", "opus", "fable"}
+    _VALID_TIERS = {"fast", "balanced", "quality", "best", "auto"}
 
     def _cmd_model(self, arg: str) -> None:
         """Set the model tier directly (no arg resets to auto)."""
@@ -1226,7 +1228,7 @@ class InteractiveSession:
         if not arg:
             current = self._model_hint or "auto (orchestrator decides)"
             c.dim(f"  Model: {current}")
-            c.dim("  Usage: /model haiku | sonnet | opus | fable  — or /models for a menu")
+            c.dim("  Usage: /model fast | balanced | quality | best  — or /models for a menu")
             return
         tier = arg.lower().strip()
         if tier in ("auto", "reset", "clear"):
@@ -1235,7 +1237,7 @@ class InteractiveSession:
             self._persist_session_state()
             return
         if tier not in self._VALID_TIERS:
-            c.dim(f"  Unknown tier {tier!r}. Choose: haiku, sonnet, opus, fable")
+            c.dim(f"  Unknown tier {tier!r}. Choose: fast, balanced, quality, best")
             return
         self._model_hint = tier
         c.dim(f"  Model set to {tier}.")
@@ -1247,12 +1249,12 @@ class InteractiveSession:
         if not arg:
             current = self._model_hint or "auto"
             c.dim(f"  Depth/model: {current}")
-            c.dim("  Usage: /depth light | standard | deep")
+            c.dim("  Usage: /depth light | standard | deep  —  or /models for the full menu")
             return
         level = arg.lower().strip()
         tier = self._DEPTH_ALIASES.get(level, level)
         if tier not in self._VALID_TIERS:
-            c.dim(f"  Unknown depth {level!r}. Choose: light (haiku), standard (sonnet), deep (opus)")
+            c.dim(f"  Unknown depth {level!r}. Choose: light (fast), standard (balanced), deep (quality)")
             return
         self._model_hint = tier
         c.dim(f"  Depth set to {level} (model: {tier}).")
@@ -1279,13 +1281,19 @@ class InteractiveSession:
 
     # -- Interactive model/persona menus --------------------------------------
 
-    _MODEL_TIERS = [
-        ("auto",   "orchestrator decides (recommended)"),
-        ("haiku",  "fast, light-weight tasks"),
-        ("sonnet", "balanced — general chat and coding"),
-        ("opus",   "thorough, deep reasoning"),
-        ("fable",  "narrative and creative tasks"),
-    ]
+    def _build_model_tiers_menu(self) -> None:
+        """Build dynamic model tier menu from provider's actual models."""
+        from .core.model_registry import ModelRegistry
+        registry = self._orch.registry
+        models = registry.top_models()
+        # Build menu with semantic tiers and actual model names
+        self._model_tiers = [
+            ("auto",      "orchestrator decides (recommended)"),
+            ("fast",      f"light-weight tasks — {models['fast']}"),
+            ("balanced",  f"general chat and coding — {models['balanced']}"),
+            ("quality",   f"thorough, deep reasoning — {models['quality']}"),
+            ("best",      f"best available (if needed) — {models['best']}"),
+        ]
 
     def _cmd_models_menu(self, session) -> None:
         """Interactive numbered model tier selection menu."""
@@ -1294,19 +1302,19 @@ class InteractiveSession:
         c.line("")
         c.dim("  Available models:")
         c.line("")
-        for i, (tier, desc) in enumerate(self._MODEL_TIERS, 1):
+        for i, (tier, desc) in enumerate(self._model_tiers, 1):
             marker = "●" if tier == current else " "
-            if tier == "haiku":
+            if tier == "fast":
                 tier_colored = _a(_CYAN, tier)
-            elif tier == "sonnet":
+            elif tier == "balanced":
                 tier_colored = _a(_GREEN, tier)
-            elif tier == "opus":
+            elif tier == "quality":
                 tier_colored = _a(_GOLD, tier)
-            elif tier == "fable":
+            elif tier == "best":
                 tier_colored = _a(_MAGENTA, tier)
             else:
                 tier_colored = _a(_DIM, tier)
-            pad = " " * max(0, 8 - len(tier))
+            pad = " " * max(0, 10 - len(tier))
             c.dim(f"  {i}.  {marker} {tier_colored}{pad}  {desc}")
         c.dim(f"  0.  Cancel (keep: {current})")
         c.line("")
@@ -1321,9 +1329,9 @@ class InteractiveSession:
             n = int((raw or "").strip())
         except ValueError:
             c.dim("  Cancelled."); return
-        if n == 0 or n > len(self._MODEL_TIERS):
+        if n == 0 or n > len(self._model_tiers):
             c.dim("  Cancelled."); return
-        tier_name, _ = self._MODEL_TIERS[n - 1]
+        tier_name, _ = self._model_tiers[n - 1]
         if tier_name == "auto":
             self._model_hint = None
             c.dim("  Model set to auto (orchestrator decides).")
