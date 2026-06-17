@@ -1,21 +1,24 @@
 """GeminiProvider — Google Gemini model provider (plan / answer / list_models).
 
-Wraps the Google Generative AI SDK. Three responsibilities:
+Wraps the Google Genai SDK. Three responsibilities:
   * ``plan``  — one cheap, FORCED-structured planner call (returns JSON decision dict).
   * ``answer`` — a normal grounded completion from a message list.
   * ``list_models`` — list available Gemini models (cached).
 
-The ``google-generativeai`` package is imported lazily so the library imports
+The ``google-genai`` package is imported lazily so the library imports
 cleanly even when the SDK isn't installed.
 """
 from __future__ import annotations
 
 import json
+import logging
 import os
 import time
 from typing import Any, Dict, List, Optional
 
 from ..core.adapters import ModelProviderBase
+
+_log = logging.getLogger("quest-ai-runner.gemini")
 
 
 class GeminiProvider(ModelProviderBase):
@@ -32,16 +35,15 @@ class GeminiProvider(ModelProviderBase):
     def _get_client(self):
         if self._client is None:
             try:
-                import google.generativeai as genai  # lazy
+                import google.genai  # lazy
             except ImportError:
                 raise RuntimeError(
-                    "google-generativeai is not installed. "
-                    "Install it with: pip install google-generativeai"
+                    "google-genai is not installed. "
+                    "Install it with: pip install google-genai"
                 )
             if not self._api_key:
                 raise RuntimeError("GOOGLE_API_KEY is not configured")
-            genai.configure(api_key=self._api_key)
-            self._client = genai
+            self._client = google.genai.Client(api_key=self._api_key)
         return self._client
 
     def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
@@ -51,11 +53,11 @@ class GeminiProvider(ModelProviderBase):
         and extract the response.
         """
         client = self._get_client()
-        model_obj = client.GenerativeModel(model_name=model)
-        # Request structured JSON output
-        response = model_obj.generate_content(
-            prompt,
-            generation_config={"response_mime_type": "application/json"}
+        # Request structured JSON output with response_mime_type
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config={"response_mime_type": "application/json"}
         )
         try:
             return json.loads(response.text)
@@ -90,8 +92,10 @@ class GeminiProvider(ModelProviderBase):
                             prompt_parts.append(f"[Image included]\n")
 
         full_prompt = "".join(prompt_parts).strip()
-        model_obj = client.GenerativeModel(model_name=model)
-        response = model_obj.generate_content(full_prompt)
+        response = client.models.generate_content(
+            model=model,
+            contents=full_prompt
+        )
         return response.text if response and response.text else ""
 
     def list_models(self) -> List[str]:
@@ -102,17 +106,18 @@ class GeminiProvider(ModelProviderBase):
 
         try:
             client = self._get_client()
-            # Use the genai.list_models() method to get available models
-            models = client.list_models()
+            # Use the client.models.list() method to get available models
+            models_list = client.models.list()
             # Filter to Gemini models and extract names
             gemini_models = [
-                m.name for m in models
+                m.name for m in models_list
                 if hasattr(m, "name") and "gemini" in m.name.lower()
             ]
             self._models_cache = gemini_models
             self._models_cached_at = now
             return gemini_models
         except Exception:  # noqa: BLE001
+            _log.exception("list_models failed for Gemini")
             # Return fallback model list if API fails
             self._models_cache = ["gemini-2.0-flash", "gemini-1.5-pro"]
             self._models_cached_at = now
