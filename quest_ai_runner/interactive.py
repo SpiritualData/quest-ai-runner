@@ -49,6 +49,11 @@ import time
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
+try:
+    import yaml
+except ImportError:
+    yaml = None  # type: ignore
+
 if TYPE_CHECKING:
     from .config import RunnerConfig
     from .core.orchestrator import Orchestrator, OrchestratorResult, ProgressEvent
@@ -140,6 +145,23 @@ def _activity(duration_sec: float, status: str = "Running") -> str:
     else:
         time_str = f"{secs}s"
     return _DIM + f"✻ {status} for {time_str}" + _RESET
+
+
+def _parse_skill_frontmatter(skill_file: str) -> dict:
+    """Parse SKILL.md YAML frontmatter and return metadata dict."""
+    if not yaml:
+        return {}
+    try:
+        with open(skill_file, "r", encoding="utf-8") as f:
+            content = f.read()
+        if not content.startswith("---"):
+            return {}
+        parts = content.split("---", 2)
+        if len(parts) < 3:
+            return {}
+        return yaml.safe_load(parts[1]) or {}
+    except Exception:
+        return {}
 
 
 # ── Console wrapper ───────────────────────────────────────────────────────────
@@ -1661,17 +1683,19 @@ class InteractiveSession:
             skill_file = os.path.join(entry.path, "SKILL.md")
             if not os.path.isfile(skill_file):
                 continue
-            reps.append({"name": entry.name, "skill_file": skill_file})
+            meta = _parse_skill_frontmatter(skill_file)
+            display_name = meta.get("display_name") or entry.name
+            reps.append({"name": entry.name, "display_name": display_name, "skill_file": skill_file})
         if not reps:
             c.dim(f"  No SKILL.md files found under {skills_dir}.")
             return
         def _label(r):
-            return r["name"]
+            return r["display_name"]
         idx = self._pick_from_list(reps, _label, session)
         if idx is None:
             c.dim("  Cancelled."); return
         r = reps[idx]
-        self._rep_name = r["name"]
+        self._rep_name = r["display_name"]
         try:
             self._persona = open(r["skill_file"]).read()  # noqa: WPS515
             self._persona_file = r["skill_file"]

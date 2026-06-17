@@ -41,6 +41,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
+try:
+    import yaml
+except ImportError:
+    yaml = None  # type: ignore
+
 log = logging.getLogger("quest-ai-runner.rep_sync")
 
 SKILL_FILE_NAME = "SKILL.md"
@@ -129,11 +134,33 @@ def _extract_between(text: str, start: str, end: str) -> Optional[str]:
     return m.group(1) if m else None
 
 
+def _extract_frontmatter_metadata(text: str) -> Dict[str, Any]:
+    """Extract YAML frontmatter metadata (display_name, etc.) from skill file.
+
+    Returns a dict with frontmatter fields like {display_name, name, description, ...}.
+    If frontmatter is not present or YAML parsing fails, returns an empty dict.
+    """
+    if not yaml:
+        return {}
+    try:
+        if not text.startswith("---"):
+            return {}
+        parts = text.split("---", 2)
+        if len(parts) < 3:
+            return {}
+        meta = yaml.safe_load(parts[1]) or {}
+        return meta if isinstance(meta, dict) else {}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 def parse_skill_file(text: str) -> Dict[str, Any]:
     """Read persona + learned_notes back out of a skill file's managed sections.
 
-    Returns ``{persona, learned_notes}`` with only what the file actually contains (a missing
-    managed block yields ``None``/empty so push can send only what's present).
+    Also extracts display_name from frontmatter if present.
+
+    Returns ``{persona, learned_notes, display_name}`` with only what the file actually
+    contains (a missing managed block yields ``None``/empty so push can send only what's present).
     """
     persona = _extract_between(text, _PERSONA_START, _PERSONA_END)
     learned_raw = _extract_between(text, _LEARNED_START, _LEARNED_END)
@@ -153,9 +180,11 @@ def parse_skill_file(text: str) -> Dict[str, Any]:
             if m.group("id"):
                 note["id"] = m.group("id")
             learned_notes.append(note)
+    meta = _extract_frontmatter_metadata(text)
     return {
         "persona": persona.strip() if persona is not None else None,
         "learned_notes": learned_notes,
+        "display_name": meta.get("display_name"),
     }
 
 
@@ -228,8 +257,9 @@ def sync_notes_to_store(learned_notes: List[Dict[str, Any]], note_store: Any) ->
 
 
 def push_skill_to_rep(client: Any, team_id: str, user_id: str, skill_dir: str) -> RepSyncResult:
-    """Local -> Quest: read the managed sections from the skill file and PUT them to the profile.
+    """Local -> Quest: read managed sections + frontmatter from skill file and PUT to profile.
 
+    Sends persona, learned_notes, and display_name (if present in frontmatter).
     Only the fields the file actually carries are sent (a file with just a persona block pushes
     only the persona). Raises :class:`RepSyncError` if the skill file is missing.
     """
@@ -239,13 +269,18 @@ def push_skill_to_rep(client: Any, team_id: str, user_id: str, skill_dir: str) -
     parsed = parse_skill_file(_read_existing(path))
     persona = parsed.get("persona")
     learned_notes = parsed.get("learned_notes")
-    client.update_ai_profile(
-        user_id, team_id=team_id,
-        persona=persona,
-        learned_notes=learned_notes,  # always present (possibly []) once a learned block exists
-    )
-    log.info("pushed skill %s -> rep %s (persona %s, %d corrections)",
-             path, user_id, "set" if persona else "unchanged", len(learned_notes or []))
+    display_name = parsed.get("display_name")
+    kwargs: Dict[str, Any] = {"team_id": team_id}
+    if persona is not None:
+        kwargs["persona"] = persona
+    if learned_notes is not None:
+        kwargs["learned_notes"] = learned_notes
+    if display_name is not None:
+        kwargs["display_name"] = display_name
+    client.update_ai_profile(user_id, **kwargs)
+    log.info("pushed skill %s -> rep %s (persona %s, display_name %s, %d corrections)",
+             path, user_id, "set" if persona else "unchanged",
+             display_name or "unchanged", len(learned_notes or []))
     return RepSyncResult(
         direction="push", user_id=user_id, skill_path=str(path), pushed=True,
         persona_len=len(persona or ""), learned_count=len(learned_notes or []),
