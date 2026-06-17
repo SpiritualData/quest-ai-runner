@@ -294,6 +294,54 @@ class QuestClient:
             raise QuestNotConfigured("team_id is required to list quest goals")
         return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}/goals") or {}
 
+    def get_quest(self, quest_id: str, *, team_id: Optional[str] = None) -> Dict[str, Any]:
+        """GET /api/teams/{team_id}/quests/{quest_id} — fetch a single quest by ID.
+
+        Returns quest metadata: quest_id, outcome, completed, owner_user_ids, and other context.
+        Requires team_id either here or on the client instance. Returns {} if not found.
+        """
+        self._require()
+        tid = team_id or self.team_id
+        if not tid:
+            raise QuestNotConfigured("team_id is required to get a quest")
+        return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}") or {}
+
+    def get_goal(self, goal_id: str, *, quest_id: Optional[str] = None,
+                 team_id: Optional[str] = None) -> Dict[str, Any]:
+        """GET /api/teams/{team_id}/quests/{quest_id}/goals/{goal_id} — fetch a single goal by ID.
+
+        Returns goal metadata: id, name, description, deadline, completed, status, and other context.
+        Requires team_id and quest_id either as parameters or on the client instance.
+        Returns {} if not found.
+        """
+        self._require()
+        tid = team_id or self.team_id
+        if not tid:
+            raise QuestNotConfigured("team_id is required to get a goal")
+        if not quest_id:
+            raise QuestNotConfigured("quest_id is required to get a goal")
+        return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}/goals/{goal_id}") or {}
+
+    def list_goal_notes(self, goal_id: str, *, quest_id: Optional[str] = None,
+                        team_id: Optional[str] = None, limit: int = 10) -> List[Dict[str, Any]]:
+        """GET /api/teams/{team_id}/quests/{quest_id}/goals/{goal_id}/notes — fetch recent notes.
+
+        Returns a list of note dicts (id, text, author, created_at, etc.). Useful for
+        understanding goal progress and context. Returns [] if not found or no notes.
+        """
+        self._require()
+        tid = team_id or self.team_id
+        if not tid:
+            raise QuestNotConfigured("team_id is required to list goal notes")
+        if not quest_id:
+            raise QuestNotConfigured("quest_id is required to list goal notes")
+        resp = self._request(
+            "GET",
+            f"/api/teams/{tid}/quests/{quest_id}/goals/{goal_id}/notes",
+            params={"limit": limit}
+        )
+        return list(resp.get("notes") or resp or []) if isinstance(resp, dict) else (list(resp) if isinstance(resp, list) else [])
+
     # --- task creation (enqueue a new AI task) --------------------------------
 
     def create_task(self, text: str, *,

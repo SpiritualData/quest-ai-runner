@@ -82,7 +82,12 @@ class TaskExecutor:
         """
         task_id = str(task.get("id") or task.get("task_id") or "")
         text = self._task_text(task)
-        quest_id = task.get("goal_id") or task.get("quest_id")
+        goal_id = task.get("goal_id")
+        quest_id = task.get("quest_id")
+        # If only goal_id is set, we'll need quest_id to fetch the goal. Try to infer it from
+        # task metadata or fetch it separately if the backend provides it.
+        if goal_id and not quest_id:
+            quest_id = task.get("_inferred_quest_id")
         # conv_id links this task back to the Quest AI conversation it was delegated from. When
         # present, we post LIVE progress (started → milestones → done) INTO that chat so the
         # conversation doesn't go silent after the hand-off.
@@ -103,6 +108,10 @@ class TaskExecutor:
         self._report_progress(task_id, "started", text=f"Started working on this: {text}")
         self._post_conv(conv_id, f"Started working on this: {text}", kind="started")
 
+        # Fetch goal + quest context from Quest API if available, and build a context_view
+        # for the orchestrator so the deep agent knows what goal/quest it's working on.
+        context_view = self._build_context_view(goal_id, quest_id)
+
         # Route all orchestrator events (except raw streaming partials) to the task's live progress
         # stream so the task-detail SSE shows step-by-step what the AI is doing (plan, read, replan,
         # tokens). Milestones additionally post into the originating chat (same as MilestoneSink).
@@ -114,8 +123,8 @@ class TaskExecutor:
 
         try:
             result: OrchestratorResult = self._orch.run(
-                text, quest_id=quest_id, mode=Mode.BACKGROUND, sink=sink,
-                model_hint=model_hint, rep_preamble=rep_preamble)
+                text, quest_id=quest_id, context_view=context_view, mode=Mode.BACKGROUND,
+                sink=sink, model_hint=model_hint, rep_preamble=rep_preamble)
         except Exception as e:  # noqa: BLE001 — brain failure -> failed report, never crash poller
             msg = f"orchestrator error: {type(e).__name__}: {e}"
             self._report_progress(task_id, "error", text=msg)
@@ -173,6 +182,72 @@ class TaskExecutor:
         post = getattr(self._client, "post_conversation_message", None)
         if callable(post):
             self._safe(lambda: post(conv_id, content, kind=kind))
+
+    def _build_context_view(self, goal_id: Optional[str], quest_id: Optional[str]) -> str:
+        """Fetch goal + quest metadata + notes from the Quest API and build a context_view.
+
+        The context_view is passed to the orchestrator so the deep agent knows what goal/quest
+        it's working on and what progress has been made. Gracefully handles missing API
+        (no-ops when client lacks needed methods) and API errors (builds partial context)."""
+        if not goal_id and not quest_id:
+            return ""
+
+        parts = []
+        # Fetch quest metadata if available
+        if quest_id:
+            get_quest = getattr(self._client, "get_quest", None)
+            if callable(get_quest):
+                try:
+                    quest = get_quest(quest_id)
+                    if quest:
+                        outcome = quest.get("outcome", "")
+                        if outcome:
+                            parts.append(f"Quest outcome: {outcome}")
+                        completed = quest.get("completed")
+                        if completed is not None:
+                            status = "completed" if completed else "in progress"
+                            parts.append(f"Quest status: {status}")
+                except Exception:  # noqa: BLE001
+                    pass  # API unavailable or error; continue with what we have
+
+        # Fetch goal metadata if available
+        if goal_id and quest_id:
+            get_goal = getattr(self._client, "get_goal", None)
+            if callable(get_goal):
+                try:
+                    goal = get_goal(goal_id, quest_id=quest_id)
+                    if goal:
+                        name = goal.get("name", "")
+                        if name:
+                            parts.append(f"Goal: {name}")
+                        description = goal.get("description", "")
+                        if description:
+                            parts.append(f"Goal description: {description}")
+                        deadline = goal.get("deadline", "")
+                        if deadline:
+                            parts.append(f"Goal deadline: {deadline}")
+                        completed = goal.get("completed")
+                        if completed is not None:
+                            status = "completed" if completed else "in progress"
+                            parts.append(f"Goal status: {status}")
+                except Exception:  # noqa: BLE001
+                    pass  # API unavailable or error; continue with what we have
+
+            # Fetch recent goal notes for context
+            list_notes = getattr(self._client, "list_goal_notes", None)
+            if callable(list_notes):
+                try:
+                    notes = list_notes(goal_id, quest_id=quest_id, limit=5)
+                    if notes:
+                        notes_text = "\n".join(
+                            f"  • {n.get('text', '')}" for n in notes if n.get("text")
+                        )
+                        if notes_text:
+                            parts.append(f"Goal notes:\n{notes_text}")
+                except Exception:  # noqa: BLE001
+                    pass  # API unavailable or error; continue with what we have
+
+        return "\n".join(parts) if parts else ""
 
     # --- result -> Quest callback -------------------------------------------
 
