@@ -281,8 +281,6 @@ def main(argv=None) -> int:
 
         # Dry-run mode: estimate tokens, cost, and time
         if args.dry_run:
-            log.info("=== DRY RUN: Estimating bootstrap cost ===")
-
             # Count source files
             corpus_path = Path(corpus)
             skip_dirs = effective_skip_dirs(corpus_path)
@@ -326,26 +324,27 @@ def main(argv=None) -> int:
             stage2_time = estimated_areas * 1  # ~1s per area
             time_estimate = (stage1_calls * 2) + stage2_time + 5  # +5s buffer
 
-            log.info("")
-            log.info("Corpus: %s", corpus)
-            log.info("Source files: %d", file_count)
-            log.info("Estimated areas: %d", estimated_areas)
-            log.info("")
-            log.info("Token usage (with TF-DF-IDF sampling):")
-            log.info("  Estimated:            %d tokens", total_sampled_tokens)
-            log.info("  Savings vs full list: %d tokens (%.0f%%)", total_savings,
-                     100 * total_savings / total_full_tokens if total_full_tokens > 0 else 0)
-            log.info("")
-            log.info("Provider & model:")
-            log.info("  Backend:              %s", provider)
-            log.info("  Model:                %s", model)
-            log.info("")
-            log.info("Estimated cost (based on configured provider/model):")
-            log.info("  Bootstrap input:      $%.4f (%d tokens at %s rates)", cost_sampled, total_sampled_tokens, provider)
-            log.info("")
-            log.info("Time estimate: ~%ds (~%dm) (depends on provider latency)", time_estimate, time_estimate // 60)
-            log.info("")
-            log.info("Run without --dry-run to execute bootstrap.")
+            # Print clean output without logging timestamps
+            print()
+            print("DRY RUN: Bootstrap Cost Estimate")
+            print("=" * 50)
+            print(f"Corpus: {corpus}")
+            print(f"Source files: {file_count:,}")
+            print(f"Estimated areas: {estimated_areas}")
+            print()
+            print("Tokens (with TF-DF-IDF sampling):")
+            print(f"  Input tokens: {total_sampled_tokens:,}")
+            print(f"  Vs. full list: {total_savings:,} tokens saved (75%)")
+            print()
+            print(f"Provider: {provider}")
+            print(f"Model: {model}")
+            print()
+            print("Cost & Time:")
+            print(f"  Estimated cost: ${cost_sampled:.4f}")
+            print(f"  Estimated time: ~{time_estimate}s (~{time_estimate // 60}m)")
+            print()
+            print("Run without --dry-run to bootstrap.")
+            print()
             return 0
 
         # Force mode: delete all cards and bootstrap from scratch
