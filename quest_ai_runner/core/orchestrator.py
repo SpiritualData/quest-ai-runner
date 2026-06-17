@@ -1056,40 +1056,35 @@ class Orchestrator:
         self,
         deep_result: OrchestratorResult,
         context_meta: Optional[Dict[str, Any]],
-        exec_started: float,
     ) -> None:
-        """Discover files modified during deep execution and update context cards.
+        """Update context cards with files modified during deep execution.
 
-        Runs in background (non-blocking) to learn which files the deep run actually touched,
-        so future runs using the same cards will have better context. Updates cards only if
-        files are new (idempotent).
+        Runs in background (non-blocking). Receives edited file list from deep runner's
+        result metadata, categorizes them into the context cards used for this task,
+        and updates card JSON files idempotently.
         """
-        if not deep_result.met or not context_meta or not context_meta.get("cards"):
+        # Get edited files from deep result (the deep runner must return this in metadata)
+        edited_files = (deep_result.data or {}).get("edited_files", []) if hasattr(deep_result, "data") else []
+        if not edited_files or not context_meta or not context_meta.get("cards"):
             return
 
         def background_update():
             try:
                 from ..adapters.context_card_updater import (
-                    discover_modified_files,
                     categorize_files_with_llm,
                     update_context_cards,
                 )
 
-                # Discover files modified during deep execution
-                modified = discover_modified_files(
-                    getattr(self.retrieval, "corpus_root", "."),
-                    since_time=exec_started,
-                )
-                if not modified:
-                    return
-
-                # Categorize files into the cards that were used
+                # Categorize edited files into the context cards that were used
                 categorization = categorize_files_with_llm(
-                    [m.rel_path for m in modified],
+                    edited_files,
                     context_meta["cards"],
                     model_provider=self.provider,
-                    model="haiku",
+                    registry=self.registry,
                 )
+
+                if not categorization:
+                    return
 
                 # Update the cards
                 card_store_dir = context_meta.get("card_store_dir", ".quest-context")
@@ -1098,11 +1093,11 @@ class Orchestrator:
                     categorization,
                     card_store_dir,
                 )
-                log.debug(f"Updated context cards with {len(modified)} modified files")
+                log.debug(f"Updated context cards with {len(edited_files)} edited files")
             except Exception as e:
                 log.debug(f"Background context card update failed (non-blocking): {e}")
 
-        # Launch in background (fire and forget)
+        # Launch in background (fire and forget, doesn't block task result)
         thread = threading.Thread(target=background_update, daemon=True)
         thread.start()
 
@@ -1667,13 +1662,12 @@ class Orchestrator:
 
         if final == "deep":
             emit.status("working on this now…")
-            exec_start = time.monotonic()
             res = self._run_deep(plan, user_message, self._answer_model(plan, "opus", hint=model_hint),
                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                                  gathered=gathered)
-            # Background: learn from files modified during deep execution
+            # Background: categorize edited files into context cards (deep runner returns edited_files in metadata)
             if res.met:
-                self._update_context_cards_after_deep(res, context_meta, exec_start)
+                self._update_context_cards_after_deep(res, context_meta)
             return finish(res)
 
         if final == "confirm":
