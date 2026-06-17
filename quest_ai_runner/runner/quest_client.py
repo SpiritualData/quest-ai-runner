@@ -383,9 +383,11 @@ class QuestClient:
 
     def update_ai_profile(self, user_id: str, *, display_name: Optional[str] = None,
                           persona: Optional[str] = None,
-                          learned_notes: Optional[List[Dict[str, Any]]] = None,
                           team_id: Optional[str] = None) -> Dict[str, Any]:
-        """PUT edits to a rep's profile (any subset of display_name / persona / learned_notes).
+        """PUT edits to a rep's profile (display_name and/or persona).
+
+        NOTE: learned_notes are no longer stored on the rep profile. Feedback/corrections
+        are stored as guidance cards (via add_rep_correction) and loaded via list_guidance_cards.
 
         Only the fields you pass are sent, so a local edit to just the persona pushes up only the
         persona. Returns the updated profile. ``team_id`` defaults to the client's configured team.
@@ -398,28 +400,85 @@ class QuestClient:
             body["display_name"] = display_name
         if persona is not None:
             body["persona"] = persona
-        if learned_notes is not None:
-            body["learned_notes"] = learned_notes
         return self._request(
             "PUT", f"/api/teams/{tid}/members/{user_id}/ai-profile", body=body) or {}
 
     def add_rep_correction(self, user_id: str, correction: str, *,
                            message_id: Optional[str] = None,
+                           task_type: Optional[str] = None,
                            team_id: Optional[str] = None) -> Dict[str, Any]:
-        """POST a single correction (a learned note) for a rep; returns the updated learned_notes.
+        """POST a rep correction as a guidance card (not as rep.learned_notes).
 
-        Use this for the incremental "the chat just corrected the rep" path; use
-        ``update_ai_profile`` to replace the whole notes list. ``team_id`` defaults to the
-        client's configured team.
+        Feedback is stored as guidance cards in the Quest guidance collection,
+        not as rep-specific notes. This makes feedback available to all reps
+        while allowing rep-specific filtering via tags.
+
+        Args:
+            user_id: The rep being corrected.
+            correction: The feedback/correction text.
+            message_id: Optional chat message reference.
+            task_type: Optional task type (plan, answer, deep, etc.).
+            team_id: Team ID (defaults to client's configured team).
+
+        Returns:
+            The created guidance card dict {id, title, body, tags, ...}.
         """
         tid = team_id or self.team_id
         if not tid:
             raise QuestNotConfigured("team_id is required to add a rep correction")
-        body: Dict[str, Any] = {"correction": correction}
+
+        body: Dict[str, Any] = {
+            "correction": correction,
+            "rep_id": user_id,
+            "source": "correction",
+        }
         if message_id is not None:
             body["message_id"] = message_id
+        if task_type is not None:
+            body["task_type"] = task_type
+
+        # Create guidance card from correction (backend does the FeedbackProcessor logic)
         return self._request(
-            "POST", f"/api/teams/{tid}/members/{user_id}/corrections", body=body) or {}
+            "POST",
+            f"/api/teams/{tid}/guidance-from-correction",
+            body=body,
+        ) or {}
+
+    def list_guidance_cards(self, *, rep_id: Optional[str] = None,
+                            source: Optional[str] = None,
+                            task_type: Optional[str] = None,
+                            team_id: Optional[str] = None,
+                            limit: int = 100) -> List[Dict[str, Any]]:
+        """GET guidance cards for this team, optionally filtered by rep/source/task.
+
+        Returns guidance cards that can be loaded by the dynamic loader for
+        UniversalGuidanceProvider. Cards can be filtered by:
+        - rep_id: guidance specific to this rep (rep:rep_id tag)
+        - source: guidance from this source (source:feedback, source:correction, etc.)
+        - task_type: guidance for this task type (task:plan, task:answer, etc.)
+
+        Returns: List of guidance card dicts {id, title, body, tags, description, ...}.
+        """
+        tid = team_id or self.team_id
+        if not tid:
+            raise QuestNotConfigured("team_id is required to list guidance cards")
+
+        params: Dict[str, Any] = {"limit": limit}
+        if rep_id:
+            params["rep_id"] = rep_id
+        if source:
+            params["source"] = source
+        if task_type:
+            params["task_type"] = task_type
+
+        resp = self._request(
+            "GET",
+            f"/api/teams/{tid}/guidance-cards",
+            params=params,
+        ) or {}
+        return list(resp.get("cards") or resp or []) if isinstance(resp, dict) else (
+            list(resp) if isinstance(resp, list) else []
+        )
 
 
 class QuestDecisionSink(EscalationSinkBase):

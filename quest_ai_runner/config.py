@@ -527,7 +527,23 @@ def build_orchestrator(
     guidance = cfg.guidance_provider
     if guidance is None:
         from quest_ai_runner.core.guidance_provider import UniversalGuidanceProvider
-        guidance = UniversalGuidanceProvider()
+        from quest_ai_runner.adapters.quest_guidance_loader import QuestGuidanceLoader
+        from quest_ai_runner.runner.quest_client import QuestClient
+
+        # If Quest is configured, load dynamic guidance from Quest backend
+        dynamic_loader = None
+        if cfg.quest_base_url and cfg.quest_api_key:
+            try:
+                quest_client = QuestClient(
+                    base_url=cfg.quest_base_url,
+                    api_key=cfg.quest_api_key,
+                    team_id=cfg.team_id,
+                )
+                dynamic_loader = QuestGuidanceLoader(quest_client, team_id=cfg.team_id)
+            except Exception:  # noqa: BLE001
+                pass  # Quest loader optional; guidance works without it
+
+        guidance = UniversalGuidanceProvider(dynamic_guidance_loader=dynamic_loader)
 
     return Orchestrator(
         retrieval=get_retrieval_adapter(cfg),

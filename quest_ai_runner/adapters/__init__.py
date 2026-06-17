@@ -43,6 +43,7 @@ from .file_context_store import FileContextStore
 from .files_adapter import FilesAdapter
 from .guidance_card_manager import GuidanceCard, GuidanceCardManager
 from .hybrid_context_assembler import HybridContextAssembler
+from .quest_guidance_loader import QuestGuidanceLoader
 from .quest_retrieval_adapter import QuestRetrievalAdapter
 from .vector_context_assembler import VectorContextAssembler
 
@@ -98,6 +99,7 @@ __all__ = [
     "GuidanceCardManager",
     "GuidanceCard",
     "FeedbackProcessor",
+    "QuestGuidanceLoader",
     "AnthropicProvider",
     "ClaudeCliProvider",
     "GeminiProvider",
