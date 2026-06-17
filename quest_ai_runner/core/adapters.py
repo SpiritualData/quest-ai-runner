@@ -642,6 +642,9 @@ class RetrievalAdapterBase(abc.ABC):
 
 
 class ModelProviderBase(abc.ABC):
+    def __init__(self):
+        self.call_count: int = 0  # Track LLM calls for reporting
+
     @abc.abstractmethod
     def plan(self, prompt, *, model, tool_schema) -> Dict[str, Any]: ...
     @abc.abstractmethod

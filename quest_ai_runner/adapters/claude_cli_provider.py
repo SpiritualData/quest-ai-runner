@@ -199,6 +199,7 @@ class ClaudeCliProvider(ModelProviderBase):
         extra_path_dirs: Optional[List[str]] = None,
         disallowed_tools: Optional[List[str]] = None,
     ):
+        super().__init__()
         self.claude_path = claude_path
         self.timeout_seconds = timeout_seconds
         self.extra_path_dirs = extra_path_dirs

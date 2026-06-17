@@ -22,6 +22,7 @@ from ..core.adapters import ModelProviderBase
 class AnthropicProvider(ModelProviderBase):
     def __init__(self, *, api_key: Optional[str] = None, cache_seconds: float = 3600.0,
                  max_answer_tokens: int = 2048, max_plan_tokens: int = 800):
+        super().__init__()
         self._api_key = api_key or os.getenv("ANTHROPIC_API_KEY")
         self.cache_seconds = cache_seconds
         self.max_answer_tokens = max_answer_tokens
@@ -44,6 +45,7 @@ class AnthropicProvider(ModelProviderBase):
 
     def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
         client = self._get_client()
+        self.call_count += 1
         resp = client.messages.create(
             model=model,
             max_tokens=self.max_plan_tokens,
@@ -76,6 +78,7 @@ class AnthropicProvider(ModelProviderBase):
         }
         if system:
             kwargs["system"] = system
+        self.call_count += 1
         resp = client.messages.create(**kwargs)
         if hasattr(resp, "usage"):
             self.tokens_in += getattr(resp.usage, "input_tokens", 0) or 0

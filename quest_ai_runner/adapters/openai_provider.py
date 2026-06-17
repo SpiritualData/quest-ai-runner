@@ -20,6 +20,7 @@ from ..core.adapters import ModelProviderBase
 
 class OpenAIProvider(ModelProviderBase):
     def __init__(self, *, api_key: Optional[str] = None, cache_seconds: float = 3600.0):
+        super().__init__()
         self._api_key = api_key or os.getenv("OPENAI_API_KEY")
         self.cache_seconds = cache_seconds
         self._client = None

@@ -23,6 +23,7 @@ _log = logging.getLogger("quest-ai-runner.gemini")
 
 class GeminiProvider(ModelProviderBase):
     def __init__(self, *, api_key: Optional[str] = None, cache_seconds: float = 3600.0):
+        super().__init__()
         self._api_key = api_key or os.getenv("GOOGLE_API_KEY")
         self.cache_seconds = cache_seconds
         self._client = None
@@ -31,7 +32,6 @@ class GeminiProvider(ModelProviderBase):
         # Token counts not tracked by Gemini SDK (no usage field); just initialize to 0.
         self.tokens_in: int = 0
         self.tokens_out: int = 0
-        self.call_count: int = 0  # Track number of LLM calls for reporting
 
     def _get_client(self):
         if self._client is None:
