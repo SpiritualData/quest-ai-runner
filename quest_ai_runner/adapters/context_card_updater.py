@@ -1,85 +1,32 @@
-"""Context card updater: discover and categorize files modified during deep runs.
+"""Context card updater: categorize edited files into context cards.
 
-After a deep execution completes, this module:
-1. Discovers which files were modified (by checking mtime or using git)
-2. Uses a fast LLM call to categorize them into the relevant context cards
+After deep execution, this module:
+1. Receives edited files from the deep runner's result metadata
+2. Uses a fast LLM call to categorize them into relevant context cards
 3. Updates the cards to include new files (idempotent — only adds if not already present)
+
+Note: File discovery happens in the deep runner itself (Claude Code / orchestrator), which
+returns edited file metadata as structured data. This module only categorizes and updates.
 """
 from __future__ import annotations
 
 import json
 import logging
-import os
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional
 
 log = logging.getLogger(__name__)
 
 
-@dataclass
-class FileEdit:
-    """A file that was modified during execution."""
-    rel_path: str
-    reason: Optional[str] = None
-
-
-def discover_modified_files(
-    corpus_root: str,
-    since_time: float,
-    git_available: bool = True,
-) -> List[FileEdit]:
-    """Discover files modified since a given timestamp.
-
-    Tries git diff first (accurate + fast), falls back to mtime scan.
-    """
-    edits: List[FileEdit] = []
-
-    if git_available:
-        try:
-            import subprocess
-            result = subprocess.run(
-                ["git", "diff", "--name-only", "--diff-filter=ACMRTUX"],
-                cwd=corpus_root,
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode == 0:
-                for line in result.stdout.strip().split("\n"):
-                    if line:
-                        edits.append(FileEdit(rel_path=line))
-                return edits
-        except Exception as e:
-            log.debug(f"Git diff failed, falling back to mtime: {e}")
-
-    # Fallback: scan for files modified after since_time
-    corpus_path = Path(corpus_root)
-    for fpath in corpus_path.rglob("*"):
-        if not fpath.is_file():
-            continue
-        try:
-            mtime = fpath.stat().st_mtime
-            if mtime >= since_time:
-                rel_path = fpath.relative_to(corpus_path).as_posix()
-                # Skip common non-code files
-                if not any(rel_path.startswith(p) for p in [".git", ".venv", "node_modules", "__pycache__"]):
-                    edits.append(FileEdit(rel_path=rel_path))
-        except (OSError, ValueError):
-            pass
-
-    return edits
-
-
 def categorize_files_into_cards(
-    edited_files: List[FileEdit],
+    edited_files: List[str],
     card_metadata: List[Dict[str, Any]],
     categorizer_fn: Callable[[List[str], List[Dict[str, Any]]], Dict[str, List[str]]],
 ) -> Dict[str, List[str]]:
     """Use an LLM to map edited files to relevant context cards.
 
     Args:
-        edited_files: Files that were modified
+        edited_files: File paths that were modified (passed from deep runner result)
         card_metadata: The context cards that were used for this task
         categorizer_fn: A callable(file_paths, card_metadata) -> {card_id: [files]}
 
@@ -89,10 +36,8 @@ def categorize_files_into_cards(
     if not edited_files or not card_metadata:
         return {}
 
-    file_paths = [e.rel_path for e in edited_files]
-
     try:
-        categorization = categorizer_fn(file_paths, card_metadata)
+        categorization = categorizer_fn(edited_files, card_metadata)
         return categorization or {}
     except Exception as e:
         log.error(f"File categorization failed: {e}")
@@ -165,14 +110,24 @@ def categorize_files_with_llm(
     file_paths: List[str],
     card_metadata: List[Dict[str, Any]],
     model_provider: Any,
-    model: str = "haiku",
+    registry: Any,
 ) -> Dict[str, List[str]]:
-    """Use Claude (fast tier) to categorize files into context cards.
+    """Use LLM (fast tier) to categorize files into context cards.
 
-    Returns a dict mapping card_id -> list of file paths that belong to that card.
+    Args:
+        file_paths: Files that were modified
+        card_metadata: Context cards used for this task
+        model_provider: The model provider (e.g., Claude, Gemini)
+        registry: ModelRegistry to resolve the fast tier model
+
+    Returns:
+        Dict mapping card_id -> list of file paths that belong to that card
     """
     if not file_paths or not card_metadata:
         return {}
+
+    # Resolve fast tier model from registry (not hardcoded)
+    fast_model = registry.resolve_tier("fast")
 
     # Build the card summaries for the LLM
     card_summaries = []
@@ -199,12 +154,11 @@ Keep responses terse and accurate.
 """
 
     try:
-        # Use the fast tier (haiku or equivalent)
         result = model_provider.generate(
             prompt,
-            model=model,
+            model=fast_model,
             max_tokens=500,
-            temperature=0.3,  # Low temp for consistency
+            temperature=0.3,
         )
 
         # Parse response: "path -> card_id" lines
