@@ -507,6 +507,11 @@ def build_orchestrator(
     added to the retrieval stack via CompositeRetrievalAdapter, enabling Quest-aware
     context retrieval without explicit configuration.
 
+    Guidance: When cfg.guidance_provider is None, automatically builds a
+    UniversalGuidanceProvider (loads guidance from standard locations, supports
+    dynamic guidance via pluggable loaders). Guidance is injected into the system
+    prompt as core behavior instructions.
+
     ``notify`` (optional): forwarded to ``resolve_context_assembler`` and then to
     ``_bootstrap_if_needed``. Interactive callers (e.g. the CLI session) pass a
     console-print callback so bootstrap events appear as visible system messages
@@ -517,6 +522,13 @@ def build_orchestrator(
                 if not any(kw in p for kw in _skip)]
     if problems:
         raise ValueError("RunnerConfig invalid for the brain: " + "; ".join(problems))
+
+    # Auto-enable guidance provider if not configured
+    guidance = cfg.guidance_provider
+    if guidance is None:
+        from quest_ai_runner.core.guidance_provider import UniversalGuidanceProvider
+        guidance = UniversalGuidanceProvider()
+
     return Orchestrator(
         retrieval=get_retrieval_adapter(cfg),
         provider=cfg.model_provider,
@@ -527,5 +539,5 @@ def build_orchestrator(
         status=status,
         vision_provider=cfg.vision_provider,
         context_assembler=resolve_context_assembler(cfg, notify=notify),
-        guidance=cfg.guidance_provider,
+        guidance=guidance,
     )
