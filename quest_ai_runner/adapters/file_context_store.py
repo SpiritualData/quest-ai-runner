@@ -1292,7 +1292,7 @@ class FileContextStore(ContextAssemblerBase):
         except Exception:  # noqa: BLE001
             pass
 
-    def refresh_stale(self, root: Optional[str] = None, *, provider=None) -> int:
+    def refresh_stale(self, root: Optional[str] = None, *, provider=None, model: Optional[str] = None) -> int:
         """Re-index only files whose content changed since the last bootstrap.
 
         Existing cards are refreshed purely by a fingerprint check, so no LLM re-call is needed
@@ -1305,7 +1305,7 @@ class FileContextStore(ContextAssemblerBase):
         number of cards written (0 = everything was already up to date).
         """
         try:
-            return self._bootstrap_inner(root=root, provider=provider, skip_unchanged=True)
+            return self._bootstrap_inner(root=root, provider=provider, model=model, skip_unchanged=True)
         except Exception:  # noqa: BLE001
             return 0
 

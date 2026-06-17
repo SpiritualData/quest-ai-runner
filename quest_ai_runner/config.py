@@ -276,7 +276,7 @@ def _bootstrap_if_needed(
 
             def _bg_refresh() -> None:
                 try:
-                    n = keyword.refresh_stale(root=root, provider=provider)
+                    n = keyword.refresh_stale(root=root, provider=provider, model=model)
                     if n > 0:
                         _log.info("context index: refreshed %d card(s)", n)
                     else:
