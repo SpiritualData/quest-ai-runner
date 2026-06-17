@@ -447,24 +447,42 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
 # ---------------------------------------------------------------------------
 
 def _answer_describes_unexecuted_work(text: Optional[str]) -> bool:
-    """Check if answer contains statements about work that needs doing but wasn't executed.
+    """Check if answer contains EXECUTABLE work that should've been done.
 
-    Uses cheap regex patterns first, then falls back to LLM if regex is uncertain.
-    Patterns: "I need to", "I should", "To fix this, I need", etc. — unexecuted work.
+    Returns True ONLY if the unexecuted work is something the AI CAN do.
+    Returns False if work is user-dependent (needs input, confirmation, etc).
+
+    Executable: "I need to update code", "I should modify X", etc.
+    User-dependent: "I need your input", "Please provide", etc. (OK to describe).
     """
     if not text or not text.strip():
         return False
     try:
         import re
-        # Quick regex check for obvious patterns
-        patterns = [
-            r"\bi\s+(?:need|should|will need|must|have to)\s+(?:to\s+)?(?:identify|read|understand|check|inspect|review)",
-            r"\bi\s+(?:need|should)\s+to\s+(?:update|modify|change|fix|add|remove|delete|create|implement)",
+        # Patterns for work AI CAN execute (executable patterns)
+        executable = [
+            r"\bi\s+(?:need|should|must)\s+(?:to\s+)?(?:update|modify|change|fix|add|remove|delete|create|implement|edit)",
+            r"\bi\s+(?:need|should|must)\s+(?:to\s+)?(?:update|edit|modify).{0,30}(?:code|file|logic|field)",
             r"to\s+(?:fix|address|resolve)\s+this,?\s+i\s+(?:need|should|must)",
         ]
-        for pattern in patterns:
+
+        # Patterns for work that NEEDS USER INPUT (don't escalate these)
+        user_dependent = [
+            r"(?:you|your|please)\s+(?:need|should|must|will need)",
+            r"i\s+need\s+(?:your|the user'?s?)\s+(?:input|decision|feedback|confirmation)",
+            r"please\s+(?:provide|specify|confirm|decide|clarify)",
+            r"requires?\s+(?:your|user|human)\s+(?:input|decision|confirmation)",
+        ]
+
+        # Check user-dependent patterns FIRST (higher priority)
+        for pattern in user_dependent:
             if re.search(pattern, text, re.IGNORECASE):
-                return True
+                return False  # OK — work needs user input, don't force execution
+
+        # Check executable patterns
+        for pattern in executable:
+            if re.search(pattern, text, re.IGNORECASE):
+                return True  # Should escalate — AI can execute this
     except Exception:  # noqa: BLE001
         pass
     return False
