@@ -180,6 +180,8 @@ def main(argv=None) -> int:
                         help="cards directory (default: <corpus>/.quest-context or QAR_CONTEXT_CARDS_DIR)")
     boot_p.add_argument("--force", action="store_true",
                         help="delete all existing cards and bootstrap from scratch (forces re-index when algorithm changes)")
+    boot_p.add_argument("--dry-run", action="store_true",
+                        help="estimate tokens, cost, and time without running bootstrap")
 
     # --- poll subcommand (and legacy flat flags, kept for back-compat) --------
     poll_p = sub.add_parser("poll", help="poll Quest for due tasks and run them")
@@ -269,9 +271,82 @@ def main(argv=None) -> int:
     # --- bootstrap ------------------------------------------------------------
     if args.command == "bootstrap":
         from .adapters.file_context_store import FileContextStore
+        from .adapters._walk import effective_skip_dirs, prune_dirnames
         import shutil
+        from pathlib import Path
+
         corpus = args.corpus or os.getenv("QAR_CORPUS_ROOT") or os.getcwd()
         cards_dir = args.cards_dir or os.getenv("QAR_CONTEXT_CARDS_DIR") or os.path.join(corpus, ".quest-context")
+
+        # Dry-run mode: estimate tokens, cost, and time
+        if args.dry_run:
+            log.info("=== DRY RUN: Estimating bootstrap cost ===")
+
+            # Count source files
+            corpus_path = Path(corpus)
+            skip_dirs = effective_skip_dirs(corpus_path)
+            file_count = 0
+
+            for dirpath, dirnames, filenames in os.walk(corpus_path):
+                prune_dirnames(dirnames, current=Path(dirpath).resolve(), base_skip=skip_dirs)
+                for fname in filenames:
+                    if Path(fname).suffix in {
+                        ".py", ".ts", ".tsx", ".js", ".jsx", ".go", ".rs",
+                        ".java", ".rb", ".md", ".sh", ".yaml", ".yml", ".toml", ".json",
+                        ".c", ".cpp", ".h", ".hpp", ".cs", ".swift", ".kt", ".scala",
+                        ".html", ".css", ".scss", ".less", ".txt", ".rst",
+                    }:
+                        fpath = Path(dirpath) / fname
+                        try:
+                            if fpath.stat().st_size <= 512 * 1024:  # 512KB max
+                                file_count += 1
+                        except OSError:
+                            pass
+
+            # Estimate Stage 1 tokens (file paths)
+            stage1_full_tokens = file_count * 20  # ~20 chars per path
+            stage1_sampled_tokens = max(10, file_count // 10) * 20  # ~10% of files
+            stage1_savings = stage1_full_tokens - stage1_sampled_tokens
+
+            # Estimate Stage 2 tokens (areas × samples)
+            estimated_areas = max(5, file_count // 50)  # ~1 area per 50 files
+            stage2_full_tokens = estimated_areas * file_count // estimated_areas * 20  # rough
+            stage2_sampled_tokens = estimated_areas * 4 * 100  # 4 samples × ~100 chars each
+
+            total_full_tokens = stage1_full_tokens + stage2_full_tokens
+            total_sampled_tokens = stage1_sampled_tokens + stage2_sampled_tokens
+            total_savings = total_full_tokens - total_sampled_tokens
+
+            # Cost estimate (~$0.0001 per 1M input tokens for Claude 3.5 Sonnet)
+            cost_full = (total_full_tokens / 1_000_000) * 0.0001
+            cost_sampled = (total_sampled_tokens / 1_000_000) * 0.0001
+            cost_saved = cost_full - cost_sampled
+
+            # Time estimate (Stage 1: ~2s per LLM call, Stage 2: ~1s per area)
+            stage1_calls = max(1, file_count // 150)  # 150 files per chunk
+            stage2_time = estimated_areas * 1  # ~1s per area
+            time_estimate = (stage1_calls * 2) + stage2_time + 5  # +5s buffer
+
+            log.info("")
+            log.info("Corpus: %s", corpus)
+            log.info("Source files: %d", file_count)
+            log.info("Estimated areas: %d", estimated_areas)
+            log.info("")
+            log.info("Token usage:")
+            log.info("  Without optimization: %,d tokens", total_full_tokens)
+            log.info("  With TF-DF-IDF:       %,d tokens", total_sampled_tokens)
+            log.info("  Savings:              %,d tokens (%.0f%%)", total_savings,
+                     100 * total_savings / total_full_tokens if total_full_tokens > 0 else 0)
+            log.info("")
+            log.info("Estimated cost:")
+            log.info("  Without optimization: $%.4f", cost_full)
+            log.info("  With TF-DF-IDF:       $%.4f", cost_sampled)
+            log.info("  Savings:              $%.4f", cost_saved)
+            log.info("")
+            log.info("Time estimate: ~%ds (%dm)", time_estimate, time_estimate // 60)
+            log.info("")
+            log.info("Run without --dry-run to execute bootstrap.")
+            return 0
 
         # Force mode: delete all cards and bootstrap from scratch
         if args.force:
