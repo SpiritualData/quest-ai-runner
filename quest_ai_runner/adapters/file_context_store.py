@@ -45,6 +45,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase
 from ._walk import effective_skip_dirs, prune_dirnames
+from .tfidf_sampling import extract_terms as tfidf_extract_terms, select_representatives
 
 _log = logging.getLogger("quest-ai-runner.context")
 
@@ -1023,81 +1024,18 @@ def _dedup_topic_cards(
     return deduped
 
 
-def _extract_terms(fname: str) -> set:
-    """Extract distinctive terms from a filename for TF-DF-IDF scoring.
-
-    Splits on path separators and file extensions to get components like
-    ["auth", "middleware", "py"] from "auth/middleware.py".
-    Filters out common generic terms.
-    """
-    generic = {"src", "lib", "app", "utils", "test", "spec", "config", "index", "main"}
-    terms: set = set()
-    # Split by both / and . to get path components and extension
-    for part in re.split(r"[/\\.]", fname.lower()):
-        if part and len(part) > 2 and part not in generic:
-            terms.add(part)
-    return terms
-
-
 def _select_representative_files(file_paths: List[str], samples_per_folder: int = 3) -> List[str]:
-    """Select representative files per folder using TF-DF-IDF heuristic.
+    """Select representative files per folder using shared TF-DF-IDF heuristic.
 
-    Groups files by folder, then for each folder selects the top K files whose
-    terms have the highest TF-DF-IDF scores (distinctive within that folder,
-    penalizing corpus-wide generic terms). This reduces token spend in Stage 1
-    while preserving semantic diversity the LLM needs to understand structure.
-
-    Returns a subset of file_paths ordered by folder, with representatives first.
+    Delegates to the shared select_representatives() function from tfidf_sampling module,
+    grouping by folder and scoring by term distinctiveness.
     """
-    if not file_paths:
-        return []
-
-    # Group files by folder (dirname).
-    folders: Dict[str, List[str]] = {}
-    for fpath in file_paths:
-        folder = str(Path(fpath).parent) or "."
-        if folder not in folders:
-            folders[folder] = []
-        folders[folder].append(fpath)
-
-    # Calculate corpus-wide term frequencies to compute DF.
-    all_terms_per_file: Dict[str, set] = {f: _extract_terms(f) for f in file_paths}
-    corpus_df: Dict[str, int] = {}
-    for terms in all_terms_per_file.values():
-        for term in terms:
-            corpus_df[term] = corpus_df.get(term, 0) + 1
-
-    total_folders = len(folders)
-
-    # For each folder, score files by TF-DF-IDF and select top K.
-    representatives: List[str] = []
-    for folder in sorted(folders.keys()):
-        files_in_folder = folders[folder]
-        if len(files_in_folder) <= samples_per_folder:
-            representatives.extend(files_in_folder)
-            continue
-
-        # TF-DF-IDF: term frequency in folder * (1 + log(total_folders / corpus_df))
-        # High TF-DF-IDF means distinctive to this folder.
-        scored: List[tuple] = []
-        for fpath in files_in_folder:
-            terms = all_terms_per_file[fpath]
-            if not terms:
-                continue
-            # Sum TF-DF-IDF over all terms in this file.
-            tf_df_idf_sum = 0.0
-            for term in terms:
-                tf = 1  # Each term appears once per file in our model
-                df = corpus_df.get(term, 1)
-                idf = 1.0 + math.log((total_folders + 1) / (df + 1))
-                tf_df_idf_sum += tf * idf
-            scored.append((tf_df_idf_sum, fpath))
-
-        # Sort by score descending, take top K.
-        scored.sort(reverse=True, key=lambda x: x[0])
-        representatives.extend([fpath for _, fpath in scored[:samples_per_folder]])
-
-    return representatives
+    return select_representatives(
+        file_paths,
+        get_terms=tfidf_extract_terms,
+        samples_per_group=samples_per_folder,
+        get_group=lambda fpath: str(Path(fpath).parent) or ".",
+    )
 
 
 def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None, walk_root=None):

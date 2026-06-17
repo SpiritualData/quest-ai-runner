@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.core.adapters import Observation, RetrievalAdapter
+from .tfidf_sampling import extract_terms, select_representatives
 
 
 class ClaudeConversationsAdapter(RetrievalAdapter):
@@ -308,37 +309,71 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
 
         return Observation(kind="grep", pattern=pattern, hits=hits)
 
-    def query(self, spec: Dict[str, Any]) -> Observation:
-        """Smart conversation retrieval via topic clustering + sampling.
+    def _select_representative_conversations(
+        self, conv_ids: List[str], samples_per_cluster: int = 2
+    ) -> List[str]:
+        """Select representative conversations using shared TF-DF-IDF heuristic.
 
-        Strategy:
+        Uses the shared select_representatives() function, extracting terms from
+        digests and weighting by recency.
+        """
+        if not conv_ids:
+            return []
+
+        # Create helper functions that close over self
+        def get_digest_terms(cid: str) -> set:
+            digest = self._get_conversation_digest(self._conversations[cid])
+            return extract_terms(digest)
+
+        def get_recency_boost(cid: str) -> float:
+            timestamp = self._get_conversation_timestamp(self._conversations[cid])
+            # Small boost for recent conversations
+            return 1.0 + (timestamp / 1e11) if timestamp > 0 else 1.0
+
+        return select_representatives(
+            conv_ids,
+            get_terms=get_digest_terms,
+            samples_per_group=samples_per_cluster,
+            get_score_boost=get_recency_boost,
+        )
+
+    def query(self, spec: Dict[str, Any]) -> Observation:
+        """Smart conversation retrieval via TF-DF-IDF sampling.
+
+        Strategy (new, more efficient):
         1. Extract lightweight digests from each conversation (first + last messages)
-        2. Embed digests and cluster by semantic similarity
-        3. Sample most recent conversations from each cluster
-        4. Return sampled conversations with filepaths for full retrieval
+        2. Use TF-DF-IDF heuristic to identify distinctive conversations
+        3. Weight by recency (newer conversations score higher)
+        4. Return top-K sampled conversations with filepaths for full retrieval
+
+        Fallback to clustering if available (via _cluster_and_sample).
 
         Spec keys:
-        - "max_clusters": number of topic clusters (default 5)
+        - "max_clusters": number of topic clusters (default 5) [fallback only]
         - "samples_per_cluster": conversations per cluster to return (default 2)
         - "query": optional query text for reranking (not used yet, reserved)
+        - "use_tfidf": use TF-DF-IDF sampling instead of clustering (default True)
         """
         if not self._conversations:
             return Observation(kind="error", error="no conversations available")
 
+        conv_ids = list(self._conversations.keys())
         max_clusters = spec.get("max_clusters", 5)
         samples_per_cluster = spec.get("samples_per_cluster", 2)
+        use_tfidf = spec.get("use_tfidf", True)
 
-        # Extract digests for clustering
-        conv_ids = list(self._conversations.keys())
-        digests = {cid: self._get_conversation_digest(self._conversations[cid]) for cid in conv_ids}
-        timestamps = {
-            cid: self._get_conversation_timestamp(self._conversations[cid]) for cid in conv_ids
-        }
-
-        # Try to cluster by embedding + KMeans
-        sampled_ids = self._cluster_and_sample(
-            conv_ids, digests, timestamps, max_clusters, samples_per_cluster
-        )
+        # Use TF-DF-IDF sampling by default (faster, more efficient)
+        if use_tfidf:
+            sampled_ids = self._select_representative_conversations(conv_ids, samples_per_cluster)
+        else:
+            # Fallback to clustering (if _cluster_and_sample is available)
+            digests = {cid: self._get_conversation_digest(self._conversations[cid]) for cid in conv_ids}
+            timestamps = {
+                cid: self._get_conversation_timestamp(self._conversations[cid]) for cid in conv_ids
+            }
+            sampled_ids = self._cluster_and_sample(
+                conv_ids, digests, timestamps, max_clusters, samples_per_cluster
+            )
 
         if not sampled_ids:
             return Observation(kind="error", error="no conversations selected after sampling")
