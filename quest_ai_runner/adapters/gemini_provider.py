@@ -31,6 +31,7 @@ class GeminiProvider(ModelProviderBase):
         # Token counts not tracked by Gemini SDK (no usage field); just initialize to 0.
         self.tokens_in: int = 0
         self.tokens_out: int = 0
+        self.call_count: int = 0  # Track number of LLM calls for reporting
 
     def _get_client(self):
         if self._client is None:
@@ -54,6 +55,7 @@ class GeminiProvider(ModelProviderBase):
         """
         client = self._get_client()
         # Request structured JSON output with response_mime_type
+        self.call_count += 1
         response = client.models.generate_content(
             model=model,
             contents=prompt,
@@ -92,6 +94,7 @@ class GeminiProvider(ModelProviderBase):
                             prompt_parts.append(f"[Image included]\n")
 
         full_prompt = "".join(prompt_parts).strip()
+        self.call_count += 1
         response = client.models.generate_content(
             model=model,
             contents=full_prompt

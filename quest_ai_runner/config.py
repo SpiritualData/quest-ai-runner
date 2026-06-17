@@ -279,6 +279,7 @@ def _bootstrap_if_needed(
                     n = keyword.refresh_stale(root=root, provider=provider, model=model)
                     if n > 0:
                         _log.info("context index: refreshed %d card(s)", n)
+                        _tell(f"Context index updated: {n} card(s) refreshed.")
                     else:
                         _log.debug("context index: all cards up to date")
                 except Exception:  # noqa: BLE001
@@ -310,6 +311,13 @@ def _bootstrap_if_needed(
             try:
                 n = keyword.bootstrap(root=root, provider=provider, model=model)
                 _log.info("context index: ready — %d cards written to %s", n, cards_dir)
+                if n > 0:
+                    calls = getattr(provider, 'call_count', 0)
+                    msg = f"Context index ready: {n} card(s) indexed"
+                    if calls > 0:
+                        msg += f" ({calls} LLM calls)"
+                    msg += "."
+                    _tell(msg)
             finally:
                 fcntl.flock(lock_fd, fcntl.LOCK_UN)
                 lock_fd.close()
