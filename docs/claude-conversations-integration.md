@@ -4,23 +4,31 @@ When you ask quest-ai-runner a question, you want it to know about your Claude c
 
 ## Directory Structure
 
-Store Claude conversations alongside your corpus files:
+Store Claude conversations anywhere within your corpus. `ClaudeConversationsAdapter` recursively discovers them in:
+- `conversations/` directories at any level
+- `.claude/` directories at any level
+- Any `*.json` conversation files within these special directories
 
 ```
 corpus/
 ├── docs/
+│   ├── .claude/
+│   │   ├── design_decisions.json
+│   │   └── api_review.json
 │   ├── architecture.md
-│   ├── api.md
-│   └── guidelines.md
+│   └── api.md
 ├── code/
+│   ├── conversations/
+│   │   ├── implementation.json
+│   │   └── troubleshooting.json
 │   ├── handler.py
 │   └── utils.py
-└── conversations/
-    ├── design_decisions.json
-    ├── implementation.json
-    ├── troubleshooting.json
-    └── team_sync_2026_06.json
+└── conversations/              # or top-level
+    ├── team_sync_2026_06.json
+    └── release_planning.json
 ```
+
+The adapter will find all conversations regardless of nesting depth.
 
 ## Conversation File Format
 
@@ -86,15 +94,29 @@ orch = build_orchestrator(cfg)
 result = orch.run("How have we discussed authentication?")
 ```
 
-### 3. Organize Conversations by Topic
+### 3. Organize Conversations by Topic and Location
 
-Name conversations clearly so the brain can discover them:
+Conversations are discovered recursively, so you can organize by topic/location:
 
-- `design_decisions.json` — architecture and design choices
-- `implementation_notes.json` — coding patterns and approaches
-- `troubleshooting.json` — debugging sessions and solutions
-- `team_sync_2026_06.json` — team meeting notes
-- `performance_analysis.json` — profiling and optimization insights
+```
+corpus/
+├── docs/.claude/
+│   ├── api_design_2026_06.json      — API design discussion
+│   ├── security_review.json         — Security analysis
+│   └── data_model.json              — Data modeling decisions
+├── code/conversations/
+│   ├── performance.json             — Profiling and optimization
+│   ├── error_handling.json          — Error handling patterns
+│   └── refactoring_plan.json        — Code cleanup strategy
+└── conversations/                    — Top-level discussions
+    ├── architecture.json            — System architecture
+    └── team_sync_2026_06.json       — Team meeting notes
+```
+
+**Naming conventions (optional):**
+- Include dates for time-based discovery: `api_design_2026_06_10.json`
+- Group by topic in directory names: `docs/.claude/`, `code/conversations/`
+- Keep names descriptive: `error_handling_patterns.json` not `conv123.json`
 
 ## How It Works
 
