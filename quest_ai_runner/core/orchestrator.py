@@ -1813,12 +1813,11 @@ class Orchestrator:
 
             if has_false_claim or has_unexecuted_work:
                 # Work described but not executed — auto-escalate to deep (safety net)
-                # IMPORTANT: Don't return this answer; execute first, then report results
-                should_defer_deep = {"goal": f"Execute what the answer described: {user_message}",
-                                      "rationale": f"auto-detected {'false claim' if has_false_claim else 'unexecuted work'} in answer",
-                                      "suppress_answer": True}  # Flag: replace answer with execution results
+                # Execute it and append results to the existing analysis
+                should_defer_deep = {"goal": f"Execute what was described: {user_message}",
+                                      "rationale": f"auto-detected {'false claim' if has_false_claim else 'unexecuted work'} in answer"}
                 if emit is not None:
-                    emit.status("executing work now…")
+                    emit.status("executing described work now…")
 
         if should_defer_deep:
             try:
@@ -1836,18 +1835,13 @@ class Orchestrator:
                 deep_res = self._run_deep(deferred_plan, user_message, deep_model,
                                          emit=emit, rep_preamble=rep_preamble,
                                          exec_record=exec_record, gathered=gathered)
-                # If suppress_answer flag is set (bad answer was detected), REPLACE it with results
-                # Otherwise append results to the answer for visibility
+                # Emit execution results as a separate milestone/message (not appended to answer)
                 if deep_res and deep_res.deep_results:
                     deep_output = "\n\n".join(d.output for d in deep_res.deep_results if d.output)
-                    if deep_output:
-                        suppress = should_defer_deep.get("suppress_answer", False)
-                        if suppress:
-                            # Bad answer detected (false claim or unexecuted work) — use execution results instead
-                            text = deep_output
-                        else:
-                            # Normal deferred work — append to answer
-                            text = text + "\n\n--- Work Completed ---\n" + deep_output
+                    if deep_output and emit is not None:
+                        emit.emit(ProgressEvent(type=EVENT_MILESTONE,
+                                                text=deep_output,
+                                                data={"execution_results": True}))
             except Exception as e:  # noqa: BLE001 — deferred work must never break the answer
                 log.warning(f"Deferred deep work failed: {type(e).__name__}: {e}", exc_info=True)
 
