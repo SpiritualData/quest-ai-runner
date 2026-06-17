@@ -36,36 +36,79 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
         """Initialize with either a corpus root or explicit sessions directory.
 
         Args:
-            corpus_root: Path to corpus root (looks for corpus_root/conversations/).
+            corpus_root: Path to corpus root. Recursively scans for:
+                        - .claude/ directories within the corpus
+                        - conversations/ subdirectories
+                        - *.json conversation files at any depth
                         Takes precedence over sessions_dir.
             sessions_dir: Path to Claude Code sessions directory explicitly.
                          Used if corpus_root is not provided.
                          Defaults to ~/.claude/sessions if both are None.
         """
-        if corpus_root:
-            sessions_dir = str(Path(corpus_root) / "conversations")
-        elif sessions_dir is None:
-            sessions_dir = str(Path.home() / ".claude" / "sessions")
-
-        self.sessions_dir = Path(sessions_dir)
+        self.corpus_root = Path(corpus_root) if corpus_root else None
+        self.sessions_dir = Path(sessions_dir) if sessions_dir else Path.home() / ".claude" / "sessions"
         self._conversations: Dict[str, Any] = {}
         self._load_conversations()
 
     def _load_conversations(self) -> None:
-        """Load all .json session files from the sessions directory."""
-        if not self.sessions_dir.is_dir():
-            return  # Directory doesn't exist; proceed with empty conversations
-        try:
-            for session_file in self.sessions_dir.glob("*.json"):
-                try:
-                    with open(session_file) as f:
-                        data = json.load(f)
-                    session_id = session_file.stem
-                    self._conversations[session_id] = data
-                except (json.JSONDecodeError, OSError):
-                    pass  # Skip unreadable files
-        except Exception:  # noqa: BLE001
-            pass  # Silently degrade if directory scan fails
+        """Load all .json conversation files recursively.
+
+        If corpus_root is set, recursively scans for:
+        - .claude/ directories
+        - conversations/ subdirectories
+        - *.json files at any depth
+
+        Otherwise uses the explicit sessions_dir.
+        """
+        search_dirs = []
+
+        # If corpus_root is set, scan it recursively for conversation sources
+        if self.corpus_root and self.corpus_root.is_dir():
+            try:
+                # Find .claude directories anywhere in the corpus
+                search_dirs.extend(self.corpus_root.glob("**/.claude"))
+                # Find conversations/ directories anywhere in the corpus
+                search_dirs.extend(self.corpus_root.glob("**/conversations"))
+            except Exception:  # noqa: BLE001
+                pass
+
+        # Also add explicit sessions_dir if it exists
+        if self.sessions_dir.is_dir():
+            search_dirs.append(self.sessions_dir)
+
+        if not search_dirs:
+            return  # No directories to search
+
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_dirs = []
+        for d in search_dirs:
+            d_abs = d.resolve()
+            if d_abs not in seen:
+                seen.add(d_abs)
+                unique_dirs.append(d)
+
+        # Load all .json files from all search directories
+        for search_dir in unique_dirs:
+            try:
+                for session_file in search_dir.glob("*.json"):
+                    try:
+                        with open(session_file) as f:
+                            data = json.load(f)
+                        # Use relative path from corpus_root as session_id (for uniqueness)
+                        if self.corpus_root:
+                            try:
+                                rel_path = session_file.relative_to(self.corpus_root)
+                                session_id = str(rel_path.with_suffix("")).replace("/", ":")
+                            except ValueError:
+                                session_id = session_file.stem
+                        else:
+                            session_id = session_file.stem
+                        self._conversations[session_id] = data
+                    except (json.JSONDecodeError, OSError):
+                        pass  # Skip unreadable files
+            except Exception:  # noqa: BLE001
+                pass  # Silently degrade if directory scan fails
 
     def _conversation_to_text(self, conv: Any) -> str:
         """Convert a conversation dict to readable text (simplified; adapt as needed)."""
