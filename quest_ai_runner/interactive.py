@@ -724,6 +724,9 @@ Commands:
     /system [text]       Show or set a custom system prompt prepended to persona
     /replan              Prime next turn for a fresh re-planning pass (uses opus)
 
+  ● Execution
+    /execute             Run pending task (executes goals if deep_runner configured)
+
   ● Sessions
     /save [name]         Save this session (transcript + config) to disk
     /load <name>         Restore a saved session
@@ -954,12 +957,12 @@ class InteractiveSession:
                     panel.stop()
                     self._ensure_ai_label()
                     self._console.line("")
-                    self._console.dim("  Task identified: code changes needed.")
+                    self._console.dim("  Task identified. Planned changes:")
                     for i, g in enumerate(goals, 1):
                         prefix = "▸ " if i == 1 else "  "
                         self._console.dim(f"  {prefix}{g}")
                     self._console.line("")
-                    self._console.dim("  Configure a deep_runner in your config to auto-execute tasks.")
+                    self._console.dim("  Use '/execute' to run this task (requires deep_runner in config)")
 
             self._last_user = user_text
             self._last_assistant = final.text or (
@@ -1081,6 +1084,8 @@ class InteractiveSession:
                 self._print_status(); continue
             if line == "/tasks":
                 self._print_tasks(); continue
+            if line == "/execute":
+                self._run_turn("Execute the previous task. Implement all goals from the last turn."); continue
             if line == "/quests":
                 self._cmd_quests(session); continue
             if line == "/reps":
