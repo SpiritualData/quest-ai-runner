@@ -88,14 +88,87 @@ DEFAULT_FALLBACK_TOP = {
 
 
 def bucket_top(models: List[str], fallback: Optional[Dict[str, str]] = None) -> Dict[str, str]:
-    """Return the tier -> model mapping from fallback.
+    """Resolve tier -> model by auto-bucketing from live list, then applying fallback overrides.
 
-    User-specified models (passed via fallback) take full precedence. When a user specifies
-    QAR_MODEL_BALANCED=gpt-4o, that exact model is used even if not in the live provider list.
+    Process:
+    1. Bucket live models by family (claude-haiku, claude-sonnet, claude-opus, gemini-1.5, gemini-2.0, gpt-4o, etc.)
+    2. Map each family to a semantic tier (fast/balanced/quality)
+    3. For each tier, use: user-specified (in fallback) > auto-bucketed > DEFAULT_FALLBACK_TOP
+
+    User-specified models (passed via fallback) take FULL precedence for any tier they specify.
+    When a user specifies QAR_MODEL_BALANCED=gpt-4o, that exact model is used even if not in
+    the live provider list.
 
     Pure function — exposed for testing.
     """
-    return dict(fallback or DEFAULT_FALLBACK_TOP)
+    fb = dict(fallback or {})
+    result = dict(DEFAULT_FALLBACK_TOP)
+
+    if not models:
+        # No live models; apply user overrides to defaults and return
+        result.update(fb)
+        return result
+
+    # Auto-bucket the live list by family; infer tier assignment from family name + position
+    families = {}  # family -> [model, model, ...]
+    for m in models:
+        # Infer family from model name (exact patterns depend on provider)
+        if "claude" in m.lower():
+            if "haiku" in m.lower():
+                families.setdefault("claude-haiku", []).append(m)
+            elif "opus" in m.lower():
+                families.setdefault("claude-opus", []).append(m)
+            elif "sonnet" in m.lower():
+                families.setdefault("claude-sonnet", []).append(m)
+            else:
+                families.setdefault("claude-other", []).append(m)
+        elif "gemini" in m.lower():
+            if "1.5" in m or "1-5" in m:
+                families.setdefault("gemini-1.5", []).append(m)
+            elif "3" in m:
+                families.setdefault("gemini-3", []).append(m)
+            else:
+                families.setdefault("gemini-2.0", []).append(m)
+        elif "gpt-4o" in m.lower():
+            families.setdefault("gpt-4o", []).append(m)
+        elif re.search(r"\bo[134]\b", m.lower()):
+            families.setdefault("o-series", []).append(m)
+        else:
+            families.setdefault("other", []).append(m)
+
+    # Map families to tiers; take the first (newest) model of each family.
+    # Priority: more capable families for higher tiers.
+    fast_candidates = [
+        families.get("claude-haiku", [None])[0],
+        families.get("gemini-1.5", [None])[0],
+        families.get("gpt-4o", [None])[0],
+    ]
+    balanced_candidates = [
+        families.get("gemini-2.0", [None])[0],
+        families.get("claude-sonnet", [None])[0],
+        families.get("gemini-1.5", [None])[0],
+        families.get("o-series", [None])[0],
+    ]
+    quality_candidates = [
+        families.get("claude-opus", [None])[0],
+        families.get("gemini-2.0", [None])[0],
+        families.get("gemini-3", [None])[0],
+        families.get("o-series", [None])[0],
+    ]
+
+    # Assign: use the first non-None candidate for each tier
+    if any(fast_candidates):
+        result["fast"] = next((m for m in fast_candidates if m), result["fast"])
+    if any(balanced_candidates):
+        result["balanced"] = next((m for m in balanced_candidates if m), result["balanced"])
+    if any(quality_candidates):
+        result["quality"] = next((m for m in quality_candidates if m), result["quality"])
+    # best defaults to quality
+    result["best"] = result.get("best") or result["quality"]
+
+    # Apply user overrides (these take full precedence over auto-bucketed)
+    result.update(fb)
+    return result
 
 
 class ModelRegistry:
@@ -103,13 +176,14 @@ class ModelRegistry:
 
     def __init__(self, provider: ModelProvider, *, fallback: Optional[Dict[str, str]] = None):
         self._provider = provider
-        self._fallback = dict(fallback or DEFAULT_FALLBACK_TOP)
+        # Keep only user-specified overrides, not defaults
+        self._user_overrides = dict(fallback or {})
         self._cache: Dict[str, object] = {"source_id": None, "top": None}
 
     def top_models(self) -> Dict[str, str]:
-        """Return tier -> model mapping from fallback.
+        """Return tier -> model mapping from auto-bucketing + user overrides.
 
-        User-specified models (QAR_MODEL_*) override defaults completely.
+        User-specified models (QAR_MODEL_*) override auto-bucketed/defaults completely.
         Falls back to defaults if nothing specified for a tier.
         """
         try:
@@ -117,10 +191,12 @@ class ModelRegistry:
         except Exception:  # noqa: BLE001 — a provider hiccup must never break resolution
             models = []
         if not models:
-            return dict(self._fallback)
+            result = dict(DEFAULT_FALLBACK_TOP)
+            result.update(self._user_overrides)
+            return result
         if self._cache["source_id"] != id(models) or self._cache["top"] is None:
             self._cache["source_id"] = id(models)
-            self._cache["top"] = bucket_top(models, self._fallback)
+            self._cache["top"] = bucket_top(models, self._user_overrides)
         return dict(self._cache["top"])  # copy so callers can't mutate the cache
 
     def resolve_tier(self, tier: Optional[str]) -> str:
