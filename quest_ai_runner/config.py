@@ -209,6 +209,49 @@ def derive_capabilities(cfg: RunnerConfig) -> Dict[str, bool]:
     return {"web": web, "corpus": corpus, "code": code}
 
 
+def get_retrieval_adapter(cfg: RunnerConfig) -> Optional[RetrievalAdapter]:
+    """Get the finalized retrieval adapter, auto-enhancing with QuestRetrievalAdapter if configured.
+
+    If Quest credentials (quest_base_url + quest_api_key) are set and retrieval is configured,
+    automatically add QuestRetrievalAdapter to the stack via CompositeRetrievalAdapter.
+    If only Quest credentials are set but no retrieval adapter is configured, return None
+    (the caller will handle missing retrieval gracefully).
+
+    This enables Quest-aware context retrieval automatically without requiring explicit
+    configuration in each deployment.
+    """
+    if cfg.retrieval is None:
+        return None
+
+    # If Quest credentials are not set, return retrieval as-is
+    if not cfg.quest_base_url or not cfg.quest_api_key:
+        return cfg.retrieval
+
+    # Quest is configured; add QuestRetrievalAdapter to the stack
+    try:
+        from quest_ai_runner.adapters import CompositeRetrievalAdapter, QuestRetrievalAdapter
+        from quest_ai_runner.runner.quest_client import QuestClient
+
+        # Create a Quest client for the retrieval adapter
+        quest_client = QuestClient(
+            base_url=cfg.quest_base_url,
+            api_key=cfg.quest_api_key,
+            team_id=cfg.team_id,
+        )
+        quest_adapter = QuestRetrievalAdapter(quest_client)
+
+        # If retrieval is already a composite, add Quest to it
+        if isinstance(cfg.retrieval, CompositeRetrievalAdapter):
+            # Create a new composite with Quest added
+            adapters = list(cfg.retrieval.adapters) + [quest_adapter]
+            return CompositeRetrievalAdapter(adapters, max_workers=cfg.retrieval.max_workers)
+
+        # Otherwise, create a composite with both the existing adapter and Quest
+        return CompositeRetrievalAdapter([cfg.retrieval, quest_adapter])
+    except Exception:  # noqa: BLE001 — if auto-wiring fails, return original retrieval
+        return cfg.retrieval
+
+
 def build_registry(cfg: RunnerConfig) -> ModelRegistry:
     if cfg.model_provider is None:
         raise ValueError("model_provider is required to build a ModelRegistry")
@@ -460,6 +503,10 @@ def build_orchestrator(
     (it simply won't do grounded read steps), making ``quest-ai-runner chat``
     usable without any Quest API key or corpus configured.
 
+    When Quest credentials are configured, QuestRetrievalAdapter is automatically
+    added to the retrieval stack via CompositeRetrievalAdapter, enabling Quest-aware
+    context retrieval without explicit configuration.
+
     ``notify`` (optional): forwarded to ``resolve_context_assembler`` and then to
     ``_bootstrap_if_needed``. Interactive callers (e.g. the CLI session) pass a
     console-print callback so bootstrap events appear as visible system messages
@@ -471,7 +518,7 @@ def build_orchestrator(
     if problems:
         raise ValueError("RunnerConfig invalid for the brain: " + "; ".join(problems))
     return Orchestrator(
-        retrieval=cfg.retrieval,
+        retrieval=get_retrieval_adapter(cfg),
         provider=cfg.model_provider,
         registry=build_registry(cfg),
         deep_runner=cfg.deep_runner,
