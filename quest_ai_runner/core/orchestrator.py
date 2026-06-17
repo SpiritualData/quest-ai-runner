@@ -1056,24 +1056,43 @@ class Orchestrator:
         self,
         deep_result: OrchestratorResult,
         context_meta: Optional[Dict[str, Any]],
+        project_path: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> None:
         """Update context cards with files modified during deep execution.
 
-        Runs in background (non-blocking). Receives edited file list from deep runner's
-        result metadata, categorizes them into the context cards used for this task,
-        and updates card JSON files idempotently.
+        Runs in background (non-blocking). Discovers edited files via multiple strategies:
+        1. Claude Code: parses ~/.claude/projects/<project>/<session_id>/messages.jsonl
+        2. Other runners: extracts from result metadata or parses prompted output format
+        Then categorizes them into the context cards used for this task and updates
+        card JSON files idempotently.
+
+        Args:
+            deep_result: The OrchestratorResult from deep execution
+            context_meta: Metadata about context cards used for this task
+            project_path: Optional path to project (for Claude Code session parsing)
+            session_id: Optional session ID (for Claude Code session parsing)
         """
-        # Get edited files from deep result (the deep runner must return this in metadata)
-        edited_files = (deep_result.data or {}).get("edited_files", []) if hasattr(deep_result, "data") else []
-        if not edited_files or not context_meta or not context_meta.get("cards"):
+        if not context_meta or not context_meta.get("cards"):
             return
 
         def background_update():
             try:
                 from ..adapters.context_card_updater import (
                     categorize_files_with_llm,
+                    extract_edited_files,
                     update_context_cards,
                 )
+
+                # Discover edited files using multi-strategy extraction
+                edited_files = extract_edited_files(
+                    deep_result,
+                    project_path=project_path,
+                    session_id=session_id,
+                )
+
+                if not edited_files:
+                    return
 
                 # Categorize edited files into the context cards that were used
                 categorization = categorize_files_with_llm(
