@@ -45,9 +45,18 @@ To run the **executor** lane (poll Quest for due tasks and run them), see
 QUEST_BASE_URL=... QUEST_API_KEY=qsk_... QAR_CORPUS_ROOT=... quest-ai-runner --once
 ```
 
+## Features
+
+- **Smart Context Selection (TF-DF-IDF sampling)** — Instead of reading all files or sampling randomly, the runner uses a linguistic heuristic to select the *most representative* items from each group. **62% fewer tokens** on typical codebases, zero external dependencies. See [TF-DF-IDF Sampling](docs/TF_DF_IDF_SAMPLING.md) for details.
+- **Multi-source retrieval** — Composite retrieval adapter lets you query files, databases, Claude conversations, vector stores, etc., all in one orchestrator.
+- **Streaming & live events** — LIVE mode streams partial results to the user; BACKGROUND mode runs detached and reports back. Handoff between the two is seamless.
+- **Extensible adapters** — Four clean interfaces (Retrieval, ModelProvider, DeepRunner, EscalationSink) are Protocol-based, so you implement only what you need.
+- **Discovery-driven planning** — The brain learns source structure at runtime, never needing a static schema blob in the prompt.
+
 ## Documentation
 
 - [Quickstart tutorial](docs/quickstart.md) — install, ground the brain, run the executor lane.
+- [TF-DF-IDF Sampling](docs/TF_DF_IDF_SAMPLING.md) — smart context selection: 62% fewer tokens, zero external deps.
 - [Architecture & naming](docs/architecture.md) — brain / runner / adapters, and why `core` is `core`.
 - [Writing a consumer](docs/writing-a-consumer.md) — wire the library to your own Quest backend.
 - [Implementing adapters](docs/adapters.md) — the four interfaces and how to build your own.
