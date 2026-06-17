@@ -14,10 +14,11 @@ from quest_ai_runner.adapters import (
 from quest_ai_runner.config import RunnerConfig, build_orchestrator
 
 # Compose multiple sources
+corpus_root = "/path/to/corpus"
 retrieval = CompositeRetrievalAdapter([
-    FilesAdapter("/path/to/corpus"),
+    FilesAdapter(corpus_root),
     CachedDbAdapter(db_url="...", sources={...}),
-    ClaudeConversationsAdapter(sessions_dir="~/.claude/sessions"),
+    ClaudeConversationsAdapter(corpus_root=corpus_root),  # auto-discovers corpus/conversations/
 ])
 
 # Wire it into the orchestrator

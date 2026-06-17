@@ -108,9 +108,7 @@ def main():
 
     # Create adapters
     files_adapter = FilesAdapter(str(corpus_root))
-    conversations_adapter = ClaudeConversationsAdapter(
-        sessions_dir=str(corpus_root / "conversations")
-    )
+    conversations_adapter = ClaudeConversationsAdapter(corpus_root=str(corpus_root))
 
     print("✓ FilesAdapter: reads from docs/")
     print("✓ ClaudeConversationsAdapter: reads from conversations/")

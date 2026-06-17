@@ -61,6 +61,7 @@ def temp_sessions():
 
 def test_claude_conversations_adapter_loads_sessions(temp_sessions):
     """Test that ClaudeConversationsAdapter loads session files."""
+    # Test with explicit sessions_dir
     adapter = ClaudeConversationsAdapter(sessions_dir=str(temp_sessions))
 
     # Check that both sessions were loaded
@@ -163,3 +164,21 @@ def test_composite_adapter_handles_missing_paths(temp_corpus, temp_sessions):
     obs = composite.read_section("nonexistent.txt")
     assert obs.kind == "error"
     assert "not found" in obs.error.lower()
+
+
+def test_claude_conversations_adapter_corpus_root(temp_corpus, temp_sessions):
+    """Test ClaudeConversationsAdapter with corpus_root parameter."""
+    # Create a corpus-like structure with conversations subdirectory
+    import shutil
+
+    conversations_dir = temp_corpus / "conversations"
+    conversations_dir.mkdir()
+    for session_file in temp_sessions.glob("*.json"):
+        shutil.copy(session_file, conversations_dir / session_file.name)
+
+    # Test with corpus_root (should auto-discover corpus/conversations/)
+    adapter = ClaudeConversationsAdapter(corpus_root=str(temp_corpus))
+
+    assert adapter._conversations
+    assert "design_discussion" in adapter._conversations
+    assert "error_handling" in adapter._conversations

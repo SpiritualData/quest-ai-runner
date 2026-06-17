@@ -25,17 +25,28 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
 
     Reads .json session files (one per conversation) from a configured directory
     and supports read_section (by conversation id) and grep (across all conversations).
+
+    Can initialize from:
+    - A corpus root (looks for corpus_root/conversations/)
+    - An explicit sessions directory
+    - Defaults to ~/.claude/sessions
     """
 
-    def __init__(self, sessions_dir: Optional[str] = None):
-        """Initialize with a sessions directory.
+    def __init__(self, corpus_root: Optional[str] = None, sessions_dir: Optional[str] = None):
+        """Initialize with either a corpus root or explicit sessions directory.
 
         Args:
-            sessions_dir: Path to Claude Code sessions directory (e.g., ~/.claude/sessions).
-                         Defaults to ~/.claude/sessions.
+            corpus_root: Path to corpus root (looks for corpus_root/conversations/).
+                        Takes precedence over sessions_dir.
+            sessions_dir: Path to Claude Code sessions directory explicitly.
+                         Used if corpus_root is not provided.
+                         Defaults to ~/.claude/sessions if both are None.
         """
-        if sessions_dir is None:
+        if corpus_root:
+            sessions_dir = str(Path(corpus_root) / "conversations")
+        elif sessions_dir is None:
             sessions_dir = str(Path.home() / ".claude" / "sessions")
+
         self.sessions_dir = Path(sessions_dir)
         self._conversations: Dict[str, Any] = {}
         self._load_conversations()
