@@ -53,7 +53,8 @@ _log = logging.getLogger("quest-ai-runner.context")
 # makes previously-written cards stale (a re-index is warranted). ``config._bootstrap_if_needed``
 # compares this against the stored ``bootstrap_meta.json`` version and re-bootstraps when the
 # stored version is older. v2: LLM-based keyword-cluster dedup (replaced Jaccard file-overlap).
-_BOOTSTRAP_VERSION = 2
+# v3: TF-DF-IDF sampling in Stage 1 & 2 (representative files + snippets instead of all paths).
+_BOOTSTRAP_VERSION = 3
 
 # Name of the meta file written to cards_dir after a successful bootstrap.
 _BOOTSTRAP_META_FILE = "bootstrap_meta.json"
