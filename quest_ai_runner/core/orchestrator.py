@@ -26,6 +26,7 @@ message, a deep run, or a Quest decision-request.
 from __future__ import annotations
 
 import inspect
+import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -68,6 +69,8 @@ from .guard import (
     verify_supported,
 )
 from .model_registry import TIERS, ModelRegistry
+
+log = logging.getLogger("quest-ai-runner.orchestrator")
 
 # Defaults (all overridable via OrchestratorConfig).
 DEFAULT_MAX_STEPS = 5
@@ -748,6 +751,7 @@ class Orchestrator:
                     max_bytes=self.cfg.max_gather_chars,
                 )
         except Exception as e:  # noqa: BLE001 — a bad spec must never break the loop
+            log.warning(f"Read spec execution failed: {type(e).__name__}: {e}", exc_info=True)
             return Observation(kind="error", error=type(e).__name__)
         return None
 
@@ -769,6 +773,7 @@ class Orchestrator:
                 try:
                     results[i] = fut.result()
                 except Exception as e:  # noqa: BLE001
+                    log.warning(f"Read operation failed: {type(e).__name__}: {e}", exc_info=True)
                     results[i] = Observation(kind="error", error=type(e).__name__)
         return [r.to_dict() for r in results if r is not None]
 
@@ -859,7 +864,8 @@ class Orchestrator:
                     sub_msg = {"role": "user", "content": focus}
                 msgs = [{"role": "user", "content": ground}, sub_msg]
                 return {"q": sub, "a": self.provider.answer(msgs, model=model)}
-            except Exception:  # noqa: BLE001
+            except Exception as e:  # noqa: BLE001
+                log.warning(f"Sub-question answer generation failed: {type(e).__name__}: {e}", exc_info=True)
                 return None
 
         workers = min(self.cfg.max_parallel, len(subs))
@@ -869,7 +875,8 @@ class Orchestrator:
             for f in futs:
                 try:
                     out[futs[f]] = f.result()
-                except Exception:  # noqa: BLE001
+                except Exception as e:  # noqa: BLE001
+                    log.warning(f"Sub-question result collection failed: {type(e).__name__}: {e}", exc_info=True)
                     out[futs[f]] = None
         ok = [a for a in out if a and (a.get("a") or "").strip()]
         if not ok:
@@ -967,6 +974,7 @@ class Orchestrator:
                         kwargs["context_preamble"] = "\n\n".join(preamble_parts)
                 res = self.deep_runner.run_goal(**kwargs)
             except Exception as e:  # noqa: BLE001
+                log.error(f"Deep runner failed: {type(e).__name__}: {e}", exc_info=True)
                 res = DeepResult(met=False, error=type(e).__name__)
             # DeepResult.met is the AUTHORITATIVE outcome — a met run is a confirmed success; a
             # not-met run that actually executed is a confirmed failure. This is what makes a re-run
@@ -1481,7 +1489,10 @@ class Orchestrator:
             emit.status("planning…" if step == 0 else "re-planning…")
             try:
                 plan = self._plan(user_message, transcript, context_view, gathered, step=step)
-            except Exception:  # noqa: BLE001 — planner failure -> grounded fallback answer
+            except Exception as e:  # noqa: BLE001 — planner failure -> grounded fallback answer
+                log.exception(
+                    f"Planner failed on step {steps}: {e}. Falling back to grounded answer."
+                )
                 plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
             emit.emit(ProgressEvent(type=(EVENT_PLAN if step == 0 else EVENT_REPLAN),
                                     action=plan.action, step=steps, text=plan.rationale or None))
