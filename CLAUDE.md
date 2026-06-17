@@ -69,6 +69,13 @@ and keep the tests green.
 3. Never commit a real `.env`, `qar_state.json`, or any `*_state.json` (all gitignored).
 4. Keep `CHANGELOG.md` (Unreleased) and docs in sync with behavior changes.
 
+## Process management
+
+When running `quest-ai-runner poll` or `quest-ai-runner chat` as systemd user services:
+- **Restart via systemctl:** `systemctl --user restart quest-ai-runner-*.service`
+- **Do NOT kill processes directly** — use systemctl to restart cleanly
+- The service file manages lifecycle; always use systemctl for start/stop/restart
+
 ## Conventions
 
 - Match the surrounding code's style, naming, and comment density.
