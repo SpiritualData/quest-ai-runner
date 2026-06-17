@@ -460,18 +460,20 @@ def _answer_describes_unexecuted_work(text: Optional[str]) -> bool:
     try:
         import re
         # Patterns for work AI CAN execute (executable patterns)
+        # Match "I/we/you need to", "the system needs to", "the code needs to", etc.
         executable = [
-            r"\bi\s+(?:need|should|must)\s+(?:to\s+)?(?:update|modify|change|fix|add|remove|delete|create|implement|edit)",
-            r"\bi\s+(?:need|should|must)\s+(?:to\s+)?(?:update|edit|modify).{0,30}(?:code|file|logic|field)",
-            r"to\s+(?:fix|address|resolve)\s+this,?\s+i\s+(?:need|should|must)",
+            r"(?:i|we|the\s+(?:code|system|logic|field|implementation))\s+(?:need|should|must)\s+(?:to\s+)?(?:update|modify|change|fix|add|remove|delete|create|implement|edit)",
+            r"(?:i|we)\s+(?:need|should|must)\s+(?:to\s+)?(?:update|edit|modify).{0,30}(?:code|file|logic|field|database|api|endpoint)",
+            r"to\s+(?:fix|address|resolve)\s+this,?\s+(?:i|we)\s+(?:need|should|must)",
+            r"to\s+resolve\s+this.*(?:i|we)\s+need\s+to\s+ensure",
         ]
 
         # Patterns for work that NEEDS USER INPUT (don't escalate these)
         user_dependent = [
-            r"(?:you|your|please)\s+(?:need|should|must|will need)",
-            r"i\s+need\s+(?:your|the user'?s?)\s+(?:input|decision|feedback|confirmation)",
-            r"please\s+(?:provide|specify|confirm|decide|clarify)",
-            r"requires?\s+(?:your|user|human)\s+(?:input|decision|confirmation)",
+            r"(?:you|your|please)\s+(?:need|should|must|will need|could|would)",
+            r"(?:i|we)\s+need\s+(?:your|the user'?s?)\s+(?:input|decision|feedback|confirmation|approval)",
+            r"please\s+(?:provide|specify|confirm|decide|clarify|choose)",
+            r"requires?\s+(?:your|user|human)\s+(?:input|decision|confirmation|approval)",
         ]
 
         # Check user-dependent patterns FIRST (higher priority)
