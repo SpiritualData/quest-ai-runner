@@ -63,7 +63,7 @@ import logging
 import os
 import sys
 
-from .adapters import AnthropicProvider, ClaudeCliProvider, FilesAdapter
+from .adapters import AnthropicProvider, ClaudeCliProvider, FilesAdapter, GeminiProvider, OpenAIProvider
 from .config import RunnerConfig
 from .core.adapters import ModelProvider
 from .core.goal_runner import SubprocessConfig, SubprocessGoalRunner
@@ -73,22 +73,37 @@ from .runner.poller import Poller
 def _model_provider_from_env() -> ModelProvider:
     """Pick the model backend from env.
 
-    ``QAR_MODEL_BACKEND`` forces a backend; absent it, we AUTO-SELECT: the keyless ``claude_cli``
-    backend (planner/answer on the box's Claude Code subscription login) unless an
-    ``ANTHROPIC_API_KEY`` is present, in which case the SDK-based ``AnthropicProvider`` is used.
-    This means the runner works out of the box on a subscription login with NO API key.
+    ``QAR_MODEL_BACKEND`` specifies: "anthropic", "claude_cli", "gemini", or "openai".
+    Auto-select if not set: tries "openai" (OPENAI_API_KEY) → "gemini" (GOOGLE_API_KEY) →
+    "anthropic" (ANTHROPIC_API_KEY) → "claude_cli" (keyless, subscription login).
     """
     backend = (os.getenv("QAR_MODEL_BACKEND") or "").strip().lower()
     if not backend:
-        backend = "anthropic" if os.getenv("ANTHROPIC_API_KEY") else "claude_cli"
-    if backend == "claude_cli":
+        # Auto-select: openai > gemini > anthropic > claude_cli (keyless default)
+        if os.getenv("OPENAI_API_KEY"):
+            backend = "openai"
+        elif os.getenv("GOOGLE_API_KEY"):
+            backend = "gemini"
+        elif os.getenv("ANTHROPIC_API_KEY"):
+            backend = "anthropic"
+        else:
+            backend = "claude_cli"
+
+    if backend == "openai":
+        return OpenAIProvider()
+    elif backend == "gemini":
+        return GeminiProvider()
+    elif backend == "claude_cli":
         kwargs = {"claude_path": os.getenv("QAR_CLAUDE_PATH", "claude")}
         # Headless completions over a large corpus can take a while; let the consumer raise the
         # per-call wall-clock cap above the conservative default rather than failing the run.
         if os.getenv("QAR_ANSWER_TIMEOUT"):
             kwargs["timeout_seconds"] = float(os.environ["QAR_ANSWER_TIMEOUT"])
         return ClaudeCliProvider(**kwargs)
-    return AnthropicProvider()
+    elif backend == "anthropic":
+        return AnthropicProvider()
+    else:
+        raise ValueError(f"Unknown QAR_MODEL_BACKEND: {backend}. Use: openai, gemini, anthropic, or claude_cli")
 
 
 def _config_from_env() -> RunnerConfig:
@@ -102,12 +117,20 @@ def _config_from_env() -> RunnerConfig:
             working_dir=deep_dir,
             claude_path=os.getenv("QAR_CLAUDE_PATH", "claude"),
         ))
+    # Allow model tier overrides via env vars: QAR_MODEL_HAIKU, QAR_MODEL_SONNET, QAR_MODEL_OPUS
+    model_fallback = {}
+    for tier in ("haiku", "sonnet", "opus"):
+        env_key = f"QAR_MODEL_{tier.upper()}"
+        if os.getenv(env_key):
+            model_fallback[tier] = os.getenv(env_key)
+
     cfg = RunnerConfig(
         quest_base_url=os.getenv("QUEST_BASE_URL", ""),
         quest_api_key=os.getenv("QUEST_API_KEY", ""),
         team_id=os.getenv("QUEST_TEAM_ID", ""),
         retrieval=retrieval,
         model_provider=_model_provider_from_env(),
+        model_fallback=model_fallback or None,
         deep_runner=deep_runner,
         corpus_root=corpus,
         runner_label=os.getenv("QAR_RUNNER_LABEL") or None,

@@ -7,6 +7,7 @@ These satisfy the core interfaces; a consumer wires the ones it needs into a Run
                                 ANTHROPIC_API_KEY (per-token billing).
   * ClaudeCliProvider         — ModelProvider that drives the local ``claude`` CLI headless, KEYLESS:
                                 plan/answer run on the box's Claude Code subscription login (no API key).
+  * GeminiProvider            — ModelProvider backed by Google Gemini API. Needs a GOOGLE_API_KEY.
   * FileContextStore          — ContextAssembler backed by per-card JSON files (stdlib-only). Selects
                                 relevant cards by keyword overlap, checks file freshness, and renders
                                 a context_view string for the orchestrator's pre-flight injection.
@@ -33,6 +34,24 @@ from .file_context_store import FileContextStore
 from .files_adapter import FilesAdapter
 from .hybrid_context_assembler import HybridContextAssembler
 from .vector_context_assembler import VectorContextAssembler
+
+# GeminiProvider requires the google-generativeai optional package.
+# Guard the import so that ``import quest_ai_runner.adapters`` works even without it installed.
+try:
+    from .gemini_provider import GeminiProvider
+    _GEMINI_AVAILABLE = True
+except ImportError:
+    _GEMINI_AVAILABLE = False
+    GeminiProvider = None  # type: ignore[assignment,misc]
+
+# OpenAIProvider requires the openai optional package.
+# Guard the import so that ``import quest_ai_runner.adapters`` works even without it installed.
+try:
+    from .openai_provider import OpenAIProvider
+    _OPENAI_AVAILABLE = True
+except ImportError:
+    _OPENAI_AVAILABLE = False
+    OpenAIProvider = None  # type: ignore[assignment,misc]
 
 # BM25ContentStore requires the [bm25] optional extra (bm25s).
 # Guard the import so that ``import quest_ai_runner.adapters`` works even without
@@ -62,6 +81,8 @@ __all__ = [
     "CachedDbAdapter",
     "AnthropicProvider",
     "ClaudeCliProvider",
+    "GeminiProvider",
+    "OpenAIProvider",
     "FileContextStore",
     "VectorContextAssembler",
     "HybridContextAssembler",

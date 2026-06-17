@@ -66,6 +66,7 @@ class RunnerConfig:
     # --- adapters (consumer chooses which) ---
     retrieval: Optional[RetrievalAdapter] = None     # FilesAdapter / CachedDbAdapter / a composite
     model_provider: Optional[ModelProvider] = None   # AnthropicProvider or another
+    model_fallback: Optional[dict] = None            # override tier->model mapping (e.g. {"haiku": "gpt-4o", "sonnet": "claude-4"})
     deep_runner: Optional[DeepRunner] = None         # SubprocessGoalRunner or another worker
     escalation: Optional[EscalationSink] = None      # QuestDecisionSink (defaults from quest client)
     # The describer for image attachments the ANSWERING model can't view natively (a non-vision
@@ -211,7 +212,7 @@ def derive_capabilities(cfg: RunnerConfig) -> Dict[str, bool]:
 def build_registry(cfg: RunnerConfig) -> ModelRegistry:
     if cfg.model_provider is None:
         raise ValueError("model_provider is required to build a ModelRegistry")
-    return ModelRegistry(cfg.model_provider)
+    return ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None)
 
 
 def _cards_exist(cards_dir: str) -> bool:
