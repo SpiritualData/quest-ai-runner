@@ -909,9 +909,6 @@ class InteractiveSession:
         if corpus:
             corpus_short = corpus.split("/")[-1] if "/" in corpus else corpus
             parts.append(f"corpus: {corpus_short}")
-        if self._persona:
-            kb = max(1, len(self._persona.encode()) // 1024)
-            parts.append(f"persona: {kb}KB")
         if self._goal_id:
             parts.append(f"goal: {self._goal_id}")
         c.dim("  " + "  •  ".join(parts))
