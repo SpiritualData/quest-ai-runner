@@ -1,6 +1,7 @@
 """Card filter — LLM-based relevance filtering for context cards."""
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import logging
 from dataclasses import dataclass, field
@@ -108,28 +109,30 @@ Return ONLY cards with score >= 0.5."""
         # Fallback: neutral scores for all
         card_scores = {c.get("id", ""): 0.7 for c in candidate_cards}
 
-    # --- Stage 2: File-level relevance ranking (within selected cards) ---
-    results = []
+    # --- Stage 2: File-level relevance ranking (within selected cards, PARALLEL) ---
+    # Filter to only relevant cards, then score files in parallel
+    relevant_cards = []
     for card in candidate_cards:
         card_id = card.get("id", "")
         score = card_scores.get(card_id, 0)
-        if score < 0.5:
-            continue  # Skip irrelevant cards
+        if score >= 0.5:
+            relevant_cards.append((card, score))
 
+    # Define work unit: one card's file ranking
+    def _rank_files_for_card(card_and_score: tuple) -> CardMetadata:
+        card, score = card_and_score
+        card_id = card.get("id", "")
         card_files = card.get("files", [])
+
         if not card_files:
-            # Card has no files, add it with empty file list
-            results.append(
-                CardMetadata(
-                    id=card_id,
-                    title=card.get("title", ""),
-                    file_count=0,
-                    files=[],
-                    relevance_score=score,
-                    adapter=card.get("adapter", ""),
-                )
+            return CardMetadata(
+                id=card_id,
+                title=card.get("title", ""),
+                file_count=0,
+                files=[],
+                relevance_score=score,
+                adapter=card.get("adapter", ""),
             )
-            continue
 
         # Rank files within this card by relevance to task
         file_list = "\n".join(f"- {f}" for f in card_files)
@@ -165,8 +168,8 @@ Respond with ONLY valid JSON (no markdown, no extra text):
             file_scores_map = {}
             for f in (file_scores_raw.get("files") or []):
                 path = f.get("path", "")
-                score = f.get("score", 0.5)
-                file_scores_map[path] = score
+                score_val = f.get("score", 0.5)
+                file_scores_map[path] = score_val
             # Sort files by score descending, take top 5
             ranked_files = sorted(
                 card_files,
@@ -178,16 +181,29 @@ Respond with ONLY valid JSON (no markdown, no extra text):
             # Fallback: use original order, top 5
             ranked_files = card_files[:5]
 
-        results.append(
-            CardMetadata(
-                id=card_id,
-                title=card.get("title", ""),
-                file_count=len(card_files),
-                files=ranked_files,
-                relevance_score=score,
-                adapter=card.get("adapter", ""),
-            )
+        return CardMetadata(
+            id=card_id,
+            title=card.get("title", ""),
+            file_count=len(card_files),
+            files=ranked_files,
+            relevance_score=score,
+            adapter=card.get("adapter", ""),
         )
+
+    # Run file ranking IN PARALLEL for all relevant cards
+    results = []
+    if relevant_cards:
+        try:
+            # Use ThreadPoolExecutor to run file-ranking prompts concurrently
+            # Cap at min(8, len(relevant_cards)) workers to avoid overwhelming the LLM
+            max_workers = min(8, len(relevant_cards))
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                ranked_metadata = list(executor.map(_rank_files_for_card, relevant_cards))
+                results = ranked_metadata
+        except Exception as e:
+            _log.debug("parallel file ranking failed, falling back to sequential: %s", e)
+            # Fallback: sequential ranking
+            results = [_rank_files_for_card(cs) for cs in relevant_cards]
 
     # Sort results by relevance score descending
     results.sort(key=lambda r: r.relevance_score, reverse=True)
