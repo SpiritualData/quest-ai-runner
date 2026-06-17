@@ -31,9 +31,17 @@ Usage:
     quest-ai-runner chat
     quest-ai-runner chat --rep "Joshua's AI" --persona-file path/to/skill.md
     quest-ai-runner chat --goal-id <quest-goal-id>
+
+Example workflow (task execution):
+    ❯ implement markdown rendering for responses
+    (AI identifies this as code work, shows planned changes)
+
+    ❯ /execute
+    (gathers relevant sources, deep_runner applies changes)
 """
 from __future__ import annotations
 
+import json
 import queue as _queue
 import sys
 import threading
@@ -613,13 +621,16 @@ _CTRL_C_WINDOW = 2.0   # seconds: second Ctrl+C within this window exits
 _SLASH_COMMANDS = [
     "/help", "/clear", "/reps", "/rep ", "/file ",
     "/quests", "/goal ", "/whoami", "/quit", "/q",
-    "/model", "/model ", "/depth", "/depth ",
+    "/models", "/model", "/model ", "/depth", "/depth ",
+    "/personas",
     "/system", "/replan",
     "/save ", "/save", "/load ", "/sessions",
 ]
 # /goal with a space triggers search; bare /goal (no arg) also works as a browse
-# /model [haiku|sonnet|opus|fable] — set or show current model tier for the session
+# /models — interactive model tier selection menu
+# /model [haiku|sonnet|opus|fable] — set or show current model tier (no arg → menu)
 # /depth [light|standard|deep] — alias for /model (light=haiku, standard=sonnet, deep=opus)
+# /personas — interactive persona picker (skill files + custom file path)
 # /system [text] — set or show a custom system-prompt prepended to the persona
 # /replan — prime the next turn to force a fresh re-planning pass at opus tier
 # /save [name] — save session to ~/.quest-ai-runner/sessions/<name>.json
@@ -715,18 +726,21 @@ Commands:
     /whoami              Show AI identity and session state
     /status              Show token usage and speed metrics
     /tasks               Show recently completed tasks
-    /reps                List available AI representatives
+    /reps                List available AI representatives (skill files)
+    /personas            Interactive persona picker: skills + custom file path
     /rep <name>          Set representative name directly
     /file <path>         Load a persona file
 
   ● Model & Behavior
+    /models              Interactive model selection menu
     /model [tier]        Show or set model tier: haiku, sonnet, opus, fable
     /depth [level]       Alias for /model: light=haiku, standard=sonnet, deep=opus
     /system [text]       Show or set a custom system prompt prepended to persona
     /replan              Prime next turn for a fresh re-planning pass (uses opus)
 
   ● Execution
-    /execute             Run pending task (executes goals if deep_runner configured)
+    /execute             Re-run with execution intent. Gathers context first, then applies changes
+                         (requires deep_runner configured). Use after AI identifies a code task.
 
   ● Sessions
     /save [name]         Save this session (transcript + config) to disk
@@ -799,7 +813,7 @@ class InteractiveSession:
         # at <corpus_root>/.quest-context/turns/ — same root as file cards.
         self._console = _Console()
         self._cancelled = threading.Event()
-        # Feature: model selection (/model, /depth)
+        # Feature: model selection (/model, /models)
         self._model_hint: Optional[str] = None
         # Feature: system-prompt customization (/system)
         self._system: Optional[str] = None
@@ -807,6 +821,10 @@ class InteractiveSession:
         self._replan_next: bool = False
         # Feature: session save/load (/save, /load, /sessions)
         self._sessions_dir: Path = Path.home() / ".quest-ai-runner" / "sessions"
+        # Track persona source file path for persistence (/personas, /reps, /file)
+        self._persona_file: Optional[str] = None
+        # Restore persisted model/persona from qar_state.json (best-effort)
+        self._load_session_state()
 
     # -- header ----------------------------------------------------------------
 
@@ -1072,13 +1090,17 @@ class InteractiveSession:
                 self._console.dim("  Transcript cleared."); continue
             if line.startswith("/rep "):
                 self._rep_name = line[5:].strip()
-                self._console.dim(f"  Representative: {self._rep_name}"); continue
+                self._console.dim(f"  Representative: {self._rep_name}")
+                self._persist_session_state()
+                continue
             if line.startswith("/file "):
                 path = line[6:].strip()
                 try:
                     self._persona = open(path).read()  # noqa: WPS515
+                    self._persona_file = path
                     kb = max(1, len(self._persona.encode()) // 1024)
                     self._console.dim(f"  Loaded: {path} ({kb}KB)")
+                    self._persist_session_state()
                 except OSError as e:
                     self._console.dim(f"  Could not read {path!r}: {e}")
                 continue
@@ -1096,6 +1118,10 @@ class InteractiveSession:
                 self._cmd_quests(session); continue
             if line == "/reps":
                 self._cmd_reps(session); continue
+            if line == "/personas":
+                self._cmd_personas_menu(session); continue
+            if line in ("/models", "/model"):
+                self._cmd_models_menu(session); continue
             if line.startswith("/model"):
                 self._cmd_model(line[6:].strip()); continue
             if line.startswith("/depth"):
@@ -1128,19 +1154,25 @@ class InteractiveSession:
     _VALID_TIERS = {"haiku", "sonnet", "opus", "fable"}
 
     def _cmd_model(self, arg: str) -> None:
-        """Show or set the model tier for subsequent turns."""
+        """Set the model tier directly (no arg resets to auto)."""
         c = self._console
         if not arg:
             current = self._model_hint or "auto (orchestrator decides)"
             c.dim(f"  Model: {current}")
-            c.dim("  Usage: /model haiku | sonnet | opus | fable")
+            c.dim("  Usage: /model haiku | sonnet | opus | fable  — or /models for a menu")
             return
         tier = arg.lower().strip()
+        if tier in ("auto", "reset", "clear"):
+            self._model_hint = None
+            c.dim("  Model set to auto (orchestrator decides).")
+            self._persist_session_state()
+            return
         if tier not in self._VALID_TIERS:
             c.dim(f"  Unknown tier {tier!r}. Choose: haiku, sonnet, opus, fable")
             return
         self._model_hint = tier
-        c.dim(f"  Model set to {tier}. Use '/model' with no arg to reset to auto.")
+        c.dim(f"  Model set to {tier}.")
+        self._persist_session_state()
 
     def _cmd_depth(self, arg: str) -> None:
         """Alias for /model using friendlier level names."""
@@ -1177,6 +1209,197 @@ class InteractiveSession:
         self._system = arg
         kb = max(1, len(arg.encode()) // 1024)
         c.dim(f"  System prompt set ({kb}KB).")
+
+    # -- Interactive model/persona menus --------------------------------------
+
+    _MODEL_TIERS = [
+        ("auto",   "orchestrator decides (recommended)"),
+        ("haiku",  "fast, light-weight tasks"),
+        ("sonnet", "balanced — general chat and coding"),
+        ("opus",   "thorough, deep reasoning"),
+        ("fable",  "narrative and creative tasks"),
+    ]
+
+    def _cmd_models_menu(self, session) -> None:
+        """Interactive numbered model tier selection menu."""
+        c = self._console
+        current = self._model_hint or "auto"
+        c.line("")
+        c.dim("  Available models:")
+        c.line("")
+        for i, (tier, desc) in enumerate(self._MODEL_TIERS, 1):
+            marker = "●" if tier == current else " "
+            if tier == "haiku":
+                tier_colored = _a(_CYAN, tier)
+            elif tier == "sonnet":
+                tier_colored = _a(_GREEN, tier)
+            elif tier == "opus":
+                tier_colored = _a(_GOLD, tier)
+            elif tier == "fable":
+                tier_colored = _a(_MAGENTA, tier)
+            else:
+                tier_colored = _a(_DIM, tier)
+            pad = " " * max(0, 8 - len(tier))
+            c.dim(f"  {i}.  {marker} {tier_colored}{pad}  {desc}")
+        c.dim(f"  0.  Cancel (keep: {current})")
+        c.line("")
+        try:
+            if session is not None:
+                raw = session.prompt(ANSI(f"{_CYAN}  select › {_RESET}"))
+            else:
+                raw = input("  select › ")
+        except (EOFError, KeyboardInterrupt):
+            c.dim("  Cancelled."); return
+        try:
+            n = int((raw or "").strip())
+        except ValueError:
+            c.dim("  Cancelled."); return
+        if n == 0 or n > len(self._MODEL_TIERS):
+            c.dim("  Cancelled."); return
+        tier_name, _ = self._MODEL_TIERS[n - 1]
+        if tier_name == "auto":
+            self._model_hint = None
+            c.dim("  Model set to auto (orchestrator decides).")
+        else:
+            self._model_hint = tier_name
+            c.dim(f"  Model set to {tier_name}.")
+        self._persist_session_state()
+
+    def _cmd_personas_menu(self, session) -> None:
+        """Unified interactive persona picker: skill files + custom file path entry."""
+        import os
+        c = self._console
+        skills_dir = self._skills_dir()
+        reps = []
+        if skills_dir and os.path.isdir(skills_dir):
+            for entry in sorted(os.scandir(skills_dir), key=lambda e: e.name):
+                if entry.is_dir():
+                    skill_file = os.path.join(entry.path, "SKILL.md")
+                    if os.path.isfile(skill_file):
+                        reps.append({"name": entry.name, "skill_file": skill_file})
+
+        c.line("")
+        if reps:
+            c.dim("  Available personas:")
+            c.line("")
+            c.dim("  ── From skills directory ──")
+            for i, r in enumerate(reps, 1):
+                marker = "●" if r["skill_file"] == self._persona_file else " "
+                c.dim(f"  {i:2d}.  {marker} {r['name']}")
+            c.line("")
+        else:
+            c.dim("  No skill files found  (QAR_SKILLS_DIR or QAR_CORPUS_ROOT/.claude/skills/)")
+            c.line("")
+
+        browse_num = len(reps) + 1
+        clear_num = len(reps) + 2
+        c.dim(f"  {browse_num:2d}.    Enter custom file path…")
+        c.dim(f"  {clear_num:2d}.    Clear persona (use no persona)")
+        c.dim("   0.  Cancel")
+        c.line("")
+
+        try:
+            if session is not None:
+                raw = session.prompt(ANSI(f"{_CYAN}  select › {_RESET}"))
+            else:
+                raw = input("  select › ")
+        except (EOFError, KeyboardInterrupt):
+            c.dim("  Cancelled."); return
+
+        try:
+            n = int((raw or "").strip())
+        except ValueError:
+            c.dim("  Cancelled."); return
+
+        if n == 0:
+            c.dim("  Cancelled.")
+        elif n == clear_num:
+            self._persona = None
+            self._persona_file = None
+            self._persist_session_state()
+            c.dim("  Persona cleared.")
+        elif n == browse_num:
+            try:
+                if session is not None:
+                    path_raw = session.prompt(ANSI(f"{_CYAN}  file path › {_RESET}"))
+                else:
+                    path_raw = input("  file path › ")
+            except (EOFError, KeyboardInterrupt):
+                c.dim("  Cancelled."); return
+            path = (path_raw or "").strip()
+            if not path:
+                c.dim("  Cancelled."); return
+            try:
+                self._persona = open(path).read()  # noqa: WPS515
+                self._persona_file = path
+                kb = max(1, len(self._persona.encode()) // 1024)
+                c.dim(f"  Loaded: {path} ({kb}KB)")
+                self._persist_session_state()
+            except OSError as e:
+                c.dim(f"  Could not read {path!r}: {e}")
+        elif 1 <= n <= len(reps):
+            r = reps[n - 1]
+            self._rep_name = r["name"]
+            try:
+                self._persona = open(r["skill_file"]).read()  # noqa: WPS515
+                self._persona_file = r["skill_file"]
+                kb = max(1, len(self._persona.encode()) // 1024)
+                c.dim(f"  Representative: {self._rep_name}  ({r['skill_file']}, {kb}KB)")
+                self._persist_session_state()
+            except OSError as e:
+                c.dim(f"  Could not read {r['skill_file']!r}: {e}")
+        else:
+            c.dim("  Cancelled.")
+
+    # -- qar_state.json session state persistence -----------------------------
+
+    def _state_path(self) -> Path:
+        """Path to qar_state.json — same file the poller uses, different key."""
+        import os
+        return Path(os.getenv("QAR_STATE_PATH", "./qar_state.json"))
+
+    def _persist_session_state(self) -> None:
+        """Write model_hint/rep_name/persona_file into qar_state.json chat_state (best-effort)."""
+        try:
+            path = self._state_path()
+            state: dict = {}
+            if path.exists():
+                try:
+                    state = json.loads(path.read_text())
+                except (json.JSONDecodeError, OSError):
+                    state = {}
+            state["chat_state"] = {
+                "model_hint": self._model_hint,
+                "rep_name": self._rep_name,
+                "persona_file": self._persona_file,
+            }
+            path.write_text(json.dumps(state, indent=2))
+        except Exception:  # noqa: BLE001
+            pass  # persistence is best-effort; never block the session
+
+    def _load_session_state(self) -> None:
+        """Restore model_hint/rep_name/persona from qar_state.json chat_state (best-effort)."""
+        try:
+            path = self._state_path()
+            if not path.exists():
+                return
+            state = json.loads(path.read_text())
+            cs = state.get("chat_state")
+            if not isinstance(cs, dict):
+                return
+            if cs.get("model_hint"):
+                self._model_hint = cs["model_hint"]
+            if cs.get("rep_name"):
+                self._rep_name = cs["rep_name"]
+            pf = cs.get("persona_file")
+            if pf:
+                try:
+                    self._persona = open(pf).read()  # noqa: WPS515
+                    self._persona_file = pf
+                except OSError:
+                    pass  # file moved or deleted — skip silently
+        except Exception:  # noqa: BLE001
+            pass  # best-effort; never block startup
 
     # -- Session save/load ----------------------------------------------------
 
@@ -1453,9 +1676,11 @@ class InteractiveSession:
         r = reps[idx]
         self._rep_name = r["name"]
         try:
-            self._persona = open(r["skill_file"]).read()
+            self._persona = open(r["skill_file"]).read()  # noqa: WPS515
+            self._persona_file = r["skill_file"]
             kb = max(1, len(self._persona.encode()) // 1024)
             c.dim(f"  Representative: {self._rep_name}  (skill file loaded: {r['skill_file']}, {kb}KB)")
+            self._persist_session_state()
         except OSError as e:
             c.dim(f"  Could not read {r['skill_file']!r}: {e}")
 
