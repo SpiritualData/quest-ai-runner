@@ -867,8 +867,17 @@ class InteractiveSession:
         from .config import build_orchestrator
         # Collect bootstrap/index notices to emit as system messages after the header.
         self._startup_notices: List[str] = []
+        # Create a console reference that will be available in the notify callback
+        self._console = _Console()
+
+        def notify_and_log(msg: str) -> None:
+            """Show bootstrap/index messages to user and queue for header."""
+            self._startup_notices.append(msg)
+            # Show immediately to console if we have access (in interactive mode)
+            self._console.dim(f"  {msg}")
+
         self._orch: "Orchestrator" = build_orchestrator(
-            cfg, notify=self._startup_notices.append
+            cfg, notify=notify_and_log
         )
         self._orch.cfg.instant_ack = True
         self._cfg = cfg
@@ -883,7 +892,6 @@ class InteractiveSession:
         self._turns: List[dict] = []  # [{user, model, tokens_in, tokens_out, elapsed, timestamp}]
         # TurnContextStore is wired automatically by resolve_context_assembler in config.py,
         # at <corpus_root>/.quest-context/turns/ — same root as file cards.
-        self._console = _Console()
         self._cancelled = threading.Event()
         # Feature: model selection (/model, /models)
         self._model_hint: Optional[str] = None
