@@ -38,6 +38,7 @@ import queue as _queue
 import sys
 import threading
 import time
+from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 if TYPE_CHECKING:
