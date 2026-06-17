@@ -69,26 +69,36 @@ class UniversalGuidanceProvider(GuidanceProviderBase):
         *,
         task_type: Optional[str] = None,
         rep_id: Optional[str] = None,
+        team_id: Optional[str] = None,
+        org_id: Optional[str] = None,
+        operation: Optional[str] = None,
+        function_name: Optional[str] = None,
         tags: Optional[List[str]] = None,
         limit: int = 5,
     ) -> List[CoreGuidanceCard]:
-        """Intelligently select applicable guidance for this task.
+        """Intelligently select applicable guidance with hierarchical scope resolution.
 
-        Selection factors (in order of importance):
-        1. Exact tag matches (task_type, rep_id)
-        2. Semantic similarity to user message (if vector store available)
-        3. Keyword matches in title/description
-        4. Rep-specific overrides of generic guidance
+        Selection factors (in priority order):
+        1. Scope hierarchy: rep → team → org → global (more specific overrides general)
+        2. Operation-type matching (operation:plan, operation:answer, operation:deep, etc.)
+        3. Function-level guidance (function:list_goals, function:create_quest, etc.)
+        4. Task-type matching (task:*)
+        5. Semantic similarity to user message (if vector store available)
+        6. Keyword matches in title/description
 
         Args:
             user_message: The user's input (for semantic/keyword matching).
             task_type: Type of task (plan, answer, deep, confirm, etc.).
-            rep_id: The AI rep running this task (affects applicable guidance).
+            rep_id: The AI rep running this task (rep-specific guidance).
+            team_id: The team context (team-level guidance applies).
+            org_id: The organization context (org-level guidance applies).
+            operation: Type of operation (plan, answer, read, write, query, etc.).
+            function_name: Specific function being called (list_goals, create_quest, etc.).
             tags: Additional tags to match (custom categories).
             limit: Max cards to return.
 
         Returns:
-            List of applicable GuidanceCard objects, ordered by relevance.
+            List of applicable GuidanceCard objects, ordered by relevance and scope.
         """
         # Reload if changes detected
         self._reload_if_needed()
@@ -102,69 +112,107 @@ class UniversalGuidanceProvider(GuidanceProviderBase):
         for card in all_cards:
             score = 0
             reasons = []
+            scope_level = -1  # Tracks which scope matched (higher = more specific)
 
-            # Factor 1: Exact tag matches (highest priority)
             card_tags = set(card.tags or [])
-            matching_tags = set()
 
-            if task_type and f"task:{task_type}" in card_tags:
+            # Factor 1: Hierarchical scope matching (highest priority)
+            # More specific scopes override general ones
+            if f"scope:rep:{rep_id}" in card_tags:
+                score += 200
+                scope_level = 4
+                reasons.append(f"scope:rep:{rep_id}")
+            elif f"scope:team:{team_id}" in card_tags:
+                score += 150
+                scope_level = 3
+                reasons.append(f"scope:team:{team_id}")
+            elif f"scope:org:{org_id}" in card_tags:
                 score += 100
-                matching_tags.add(f"task:{task_type}")
-                reasons.append(f"task_type:{task_type}")
+                scope_level = 2
+                reasons.append(f"scope:org:{org_id}")
+            elif "scope:global" in card_tags:
+                score += 50
+                scope_level = 1
+                reasons.append("scope:global")
+            else:
+                # Cards without explicit scope apply globally
+                score += 40
+                scope_level = 0
+                reasons.append("scope:implicit-global")
 
-            if rep_id and f"rep:{rep_id}" in card_tags:
-                score += 90
-                matching_tags.add(f"rep:{rep_id}")
-                reasons.append(f"rep:{rep_id}")
+            # Factor 2: Operation-type matching
+            if operation:
+                if f"operation:{operation}" in card_tags:
+                    score += 120
+                    reasons.append(f"operation:{operation}")
 
+                # Sub-operation matching (e.g., operation:write when doing planning)
+                operation_family = self._get_operation_family(operation)
+                if operation_family and f"operation:{operation_family}" in card_tags:
+                    score += 60
+                    reasons.append(f"operation:{operation_family}")
+
+            # Factor 3: Function-level guidance
+            if function_name:
+                if f"function:{function_name}" in card_tags:
+                    score += 110
+                    reasons.append(f"function:{function_name}")
+
+            # Factor 4: Task-type matching
+            if task_type and f"task:{task_type}" in card_tags:
+                score += 80
+                reasons.append(f"task:{task_type}")
+
+            # Factor 5: Custom tags
             if tags:
                 for tag in tags:
                     if tag in card_tags:
-                        score += 50
-                        matching_tags.add(tag)
+                        score += 40
                         reasons.append(f"tag:{tag}")
 
-            # Factor 2: Semantic similarity (if vector store available)
+            # Factor 6: Semantic similarity (if vector store available)
             if self.vector_store and user_message:
                 try:
                     similarity = self._semantic_score(card, user_message)
-                    score += int(similarity * 80)
+                    score += int(similarity * 70)
                     if similarity > 0.5:
                         reasons.append(f"semantic:{similarity:.2f}")
                 except Exception:  # noqa: BLE001
                     pass
 
-            # Factor 3: Keyword matching
+            # Factor 7: Keyword matching
             if user_message:
                 keyword_score = self._keyword_score(card, user_message)
                 score += keyword_score
                 if keyword_score > 0:
                     reasons.append(f"keyword:{keyword_score}")
 
-            # Include card if it has any relevance or if no filters specified
-            if score > 0 or (not task_type and not rep_id and not tags and not user_message):
-                scored.append((score, reasons, card))
+            # Include card if it has any relevance
+            if score > 0:
+                scored.append((score, scope_level, reasons, card))
 
-        # Sort by score (descending) and return top-k
-        scored.sort(key=lambda x: x[0], reverse=True)
-        result = [card for _, _, card in scored[:limit]]
+        # Sort by: scope (specific first), then score (highest first)
+        scored.sort(key=lambda x: (-x[1], -x[0]))
+        result = [card for _, _, _, card in scored[:limit]]
 
         # Log selections for debugging
         if result:
             log.debug(
-                f"Selected {len(result)} guidance cards (task={task_type}, rep={rep_id}): "
+                f"Selected {len(result)} guidance cards "
+                f"(task={task_type}, rep={rep_id}, team={team_id}, org={org_id}, "
+                f"operation={operation}, function={function_name}): "
                 f"{[c.id for c in result]}"
             )
 
         return result
 
-    def list_cards(self) -> List[CoreGuidanceCard]:
+    def list(self) -> List[CoreGuidanceCard]:
         """List all available guidance cards (file-based + dynamic)."""
         self._reload_if_needed()
         dynamic_cards = [self._to_core_card(d) for d in self._dynamic_cache]
         return self._cards_cache + dynamic_cards
 
-    def read_card(self, card_id: str) -> Optional[CoreGuidanceCard]:
+    def read(self, card_id: str) -> Optional[CoreGuidanceCard]:
         """Read a single card by ID."""
         self._reload_if_needed()
         for card in self._cards_cache:
@@ -230,6 +278,37 @@ class UniversalGuidanceProvider(GuidanceProviderBase):
         card_words = set(searchable.split())
         matches = len(query_words & card_words)
         return matches * 10  # Each match worth 10 points
+
+    @staticmethod
+    def _get_operation_family(operation: str) -> Optional[str]:
+        """Get the operation family for broader matching.
+
+        Maps specific operations to families for guidance inheritance:
+        - plan → planning (for plan-related operations)
+        - answer → answering (for answer-related operations)
+        - read, query → retrieval (for data access operations)
+        - write, update, create, delete → mutation (for write operations)
+        - deep → autonomous (for deep work operations)
+        """
+        families = {
+            "plan": "planning",
+            "planning": "planning",
+            "answer": "answering",
+            "answering": "answering",
+            "read": "retrieval",
+            "query": "retrieval",
+            "retrieval": "retrieval",
+            "write": "mutation",
+            "update": "mutation",
+            "create": "mutation",
+            "delete": "mutation",
+            "mutation": "mutation",
+            "deep": "autonomous",
+            "autonomous": "autonomous",
+            "confirm": "confirmation",
+            "confirmation": "confirmation",
+        }
+        return families.get(operation.lower())
 
     @staticmethod
     def _to_core_card(card_dict: Any) -> CoreGuidanceCard:
