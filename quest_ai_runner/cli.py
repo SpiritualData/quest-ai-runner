@@ -212,6 +212,9 @@ def main(argv=None) -> int:
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    # Suppress verbose Gemini SDK logs
+    logging.getLogger("google_genai.models").setLevel(logging.WARNING)
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     log = logging.getLogger("quest-ai-runner")
 
     # --- chat -----------------------------------------------------------------
