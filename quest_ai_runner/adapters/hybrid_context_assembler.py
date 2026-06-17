@@ -173,10 +173,21 @@ class HybridContextAssembler(ContextAssemblerBase):
                 seen_source_keys.add(key)
                 merged_sources.append(src)
 
+        # Merge card_metadata from both arms (keyword first, then vector), deduped by id.
+        merged_metadata: List[dict] = []
+        seen_card_ids: set = set()
+        for meta in (getattr(kw_result, "card_metadata", None) or []) + \
+                    (getattr(vec_result, "card_metadata", None) or []):
+            card_id = meta.get("id")
+            if card_id and card_id not in seen_card_ids:
+                seen_card_ids.add(card_id)
+                merged_metadata.append(meta)
+
         return AssembledContext(
             context_view=combined_view,
             model_tier_hint=tier_hint,
             card_ids=merged_ids,
             stale=merged_stale,
             sources=merged_sources,
+            card_metadata=merged_metadata,
         )

@@ -80,6 +80,9 @@ EVENT_EXEC = "exec"            # a deep-run EXECUTION-lifecycle tick — generat
                                # LIVE-only texture: like the chatter types it is NOT in
                                # SURFACING_EVENTS, so a BACKGROUND run drops it (the runner
                                # still posts its own milestones/result); a LIVE run shows it.
+EVENT_CONTEXT = "context"      # context assembled for this turn: cards selected + sources.
+                               # Fired when a ContextAssembler is wired and produces card_metadata.
+                               # Carries ``data`` with card_metadata list and sources (ALWAYS surfaces).
 EVENT_RESULT = "result"        # the final answer / deep output (ALWAYS surfaces)
 EVENT_DECISION = "decision"    # a confirm / human decision-request was raised (ALWAYS surfaces)
 EVENT_MILESTONE = "milestone"  # an explicit, real milestone worth surfacing (ALWAYS surfaces)
@@ -88,7 +91,7 @@ EVENT_TOKENS = "tokens"        # cumulative token counts after a model call (ALW
 
 # The event types a BACKGROUND (MilestoneSink) run forwards. Everything else is dropped as
 # intermediate chatter. Encoded ONCE here so every consumer inherits the same policy.
-SURFACING_EVENTS = frozenset({EVENT_RESULT, EVENT_DECISION, EVENT_MILESTONE, EVENT_DONE, EVENT_TOKENS})
+SURFACING_EVENTS = frozenset({EVENT_CONTEXT, EVENT_RESULT, EVENT_DECISION, EVENT_MILESTONE, EVENT_DONE, EVENT_TOKENS})
 
 
 # ---------------------------------------------------------------------------

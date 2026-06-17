@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from .adapters import (
+    EVENT_CONTEXT,
     EVENT_DECISION,
     EVENT_DONE,
     EVENT_EXEC,
@@ -1340,6 +1341,30 @@ class Orchestrator:
                         model_hint = _assembled.model_tier_hint
                 except Exception:  # noqa: BLE001
                     pass
+
+        # --- CONTEXT EVENT: emit EVENT_CONTEXT showing which cards were selected -----------
+        # Dedicated event for context assembly: card selection + sources. Surfaces in all modes.
+        # Never raises.
+        if _assembled is not None:
+            try:
+                _card_meta = getattr(_assembled, "card_metadata", None) or []
+                _sources = getattr(_assembled, "sources", None) or []
+                if _card_meta or _sources:
+                    # Build human-readable card summary for text field.
+                    _card_titles = [c.get("title", c.get("id", "?"))[:50] for c in _card_meta]
+                    _text = "Selected cards: " + ", ".join(_card_titles) + "." if _card_titles else ""
+                    emit.emit(ProgressEvent(
+                        type=EVENT_CONTEXT,
+                        text=_text,
+                        data={
+                            "card_metadata": _card_meta,
+                            "sources": _sources,
+                            "card_count": len(_card_meta),
+                            "source_count": len(_sources),
+                        }
+                    ))
+            except Exception:  # noqa: BLE001
+                pass
 
         # --- CONTEXT TRANSPARENCY (Feature 2): emit a human-readable summary of sources ------
         # Best-effort: emit a STATUS event naming the adapters + file items so the consumer/UI

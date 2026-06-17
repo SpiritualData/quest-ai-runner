@@ -1587,11 +1587,26 @@ class FileContextStore(ContextAssemblerBase):
             if _source_items else []
         )
 
+        # --- Card metadata: populate selection info for UI display and transparency ---------
+        # Build metadata for each selected card so the orchestrator can emit which cards were chosen.
+        card_metadata: List[Dict[str, Any]] = []
+        for card in top_cards:
+            files_list = [fe.get("path", "") for fe in card.get("files", [])[:3]]
+            card_metadata.append({
+                "id": card.get("id", ""),
+                "title": card.get("summary", ""),
+                "relevance_score": 0.75,  # keyword match is fairly high confidence
+                "file_count": len(card.get("files", [])),
+                "files": files_list,
+                "adapter": "keyword",
+            })
+
         return AssembledContext(
             context_view=context_view,
             card_ids=card_ids,
             stale=list(dict.fromkeys(stale_list)),  # deduplicate, preserve order
             sources=_sources,
+            card_metadata=card_metadata,
         )
 
     def _record_inner(self, task_text: str, outcome: Dict[str, Any]) -> None:

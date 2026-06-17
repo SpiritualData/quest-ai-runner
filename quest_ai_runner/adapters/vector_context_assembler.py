@@ -577,9 +577,27 @@ class VectorContextAssembler(ContextAssemblerBase):
             _sources.append({"adapter": "vector", "label": "semantic match", "items": _vector_items})
         _sources.extend(_task_memory_entries)
 
+        # --- Card metadata: populate selection info for UI display and transparency ---------
+        # Build metadata for each selected vector hit so the orchestrator can emit which cards were chosen.
+        card_metadata: List[Dict[str, Any]] = []
+        for h in kept:
+            payload = h.payload or {}
+            hit_paths = payload.get("paths") or []
+            # Determine adapter type from payload
+            adapter_type = "task_memory" if payload.get("task") else "vector"
+            card_metadata.append({
+                "id": h.id,
+                "title": h.text[:100] if h.text else "(no text)",  # first 100 chars as title
+                "relevance_score": min(1.0, h.score),  # normalize vector scores
+                "file_count": len(hit_paths),
+                "files": hit_paths[:3],  # top 3 files
+                "adapter": adapter_type,
+            })
+
         return AssembledContext(
             context_view=context_view,
             card_ids=card_ids,
             stale=[],
             sources=_sources,
+            card_metadata=card_metadata,
         )
