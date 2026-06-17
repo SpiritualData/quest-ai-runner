@@ -1237,6 +1237,7 @@ class FileContextStore(ContextAssemblerBase):
         root: Optional[str] = None,
         *,
         provider=None,
+        model: Optional[str] = None,
     ) -> int:
         """Seed the cards store by walking a source tree. Never raises. Returns cards written.
 
@@ -1261,7 +1262,7 @@ class FileContextStore(ContextAssemblerBase):
         cards to disk. Token counts are still tracked in the provider.
         """
         try:
-            n = self._bootstrap_inner(root=root, provider=provider)
+            n = self._bootstrap_inner(root=root, provider=provider, model=model)
         except Exception:  # noqa: BLE001
             return 0
         if n > 0 and not self._dry_run:
@@ -1313,6 +1314,7 @@ class FileContextStore(ContextAssemblerBase):
         root: Optional[str] = None,
         *,
         provider=None,
+        model: Optional[str] = None,
         max_files: int = 10000,
         max_cards: int = 5000,
         skip_unchanged: bool = False,
@@ -1433,7 +1435,7 @@ class FileContextStore(ContextAssemblerBase):
         topic_cards: List[Dict[str, Any]] = []
         if uncovered:
             topic_cards = _llm_topic_cards(
-                uncovered, provider, existing_cards=existing_cards, walk_root=walk_root
+                uncovered, provider, model=model, existing_cards=existing_cards, walk_root=walk_root
             )
 
         # --- Stale-covered: regenerate the cards that reference any stale file ---

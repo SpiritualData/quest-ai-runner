@@ -372,8 +372,13 @@ def main(argv=None) -> int:
         store = FileContextStore(cards_dir, repo_root=corpus)
         log.info("bootstrapping context store for %s", corpus)
 
+        # Resolve a model from the provider
+        from .core.model_registry import ModelRegistry
+        registry = ModelRegistry(provider)
+        model = registry.resolve_tier("balanced")
+
         start_time = time.time()
-        n = store.bootstrap(root=corpus, provider=provider)
+        n = store.bootstrap(root=corpus, provider=provider, model=model)
         elapsed_time = time.time() - start_time
 
         log.info("done: %d cards in %s", n, cards_dir)
