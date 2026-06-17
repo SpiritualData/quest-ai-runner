@@ -133,17 +133,19 @@ class ConversationCardBuilder:
         except Exception:
             file_hash = ""
 
-        # Build card
+        # Build card with unified source schema
         card: Dict[str, Any] = {
             "id": conv_id,
             "keywords": keywords,
             "summary": summary,
-            "files": [
+            "sources": [
                 {
+                    "type": "conversation",
+                    "id": conv_id,
                     "path": conv_file_path,
                     "sha256": file_hash,
+                    "turn_count": len(self._get_messages(conv)),
                     "why": "Claude conversation",
-                    "symbols": keywords[:5],  # Top keywords as "symbols"
                 }
             ],
             "conventions": [],
@@ -160,10 +162,15 @@ class ConversationCardBuilder:
         return card
 
     @staticmethod
+    def _get_messages(conv: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Extract messages from conversation dict."""
+        return conv.get("messages") or conv.get("turns") or []
+
+    @staticmethod
     def _conversation_to_text(conv: Dict[str, Any]) -> str:
         """Convert conversation to plain text for keyword extraction."""
         parts = []
-        messages = conv.get("messages") or conv.get("turns") or []
+        messages = ConversationCardBuilder._get_messages(conv)
         for msg in messages:
             if isinstance(msg, dict):
                 text = msg.get("text") or msg.get("content") or ""
