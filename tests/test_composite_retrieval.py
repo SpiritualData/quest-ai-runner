@@ -1,5 +1,6 @@
 """Test suite for CompositeRetrievalAdapter and ClaudeConversationsAdapter."""
 import json
+import os
 import tempfile
 from pathlib import Path
 
@@ -248,3 +249,91 @@ def test_claude_conversations_adapter_recursive_discovery(temp_corpus, temp_sess
     assert any("docs:.claude:" in cid for cid in adapter._conversations.keys())
     # Conversations in conversations dir
     assert any("code:conversations:" in cid for cid in adapter._conversations.keys())
+
+
+def test_conversation_filepath_tracking(temp_sessions):
+    """Test that filepaths are tracked for each conversation."""
+    adapter = ClaudeConversationsAdapter(sessions_dir=str(temp_sessions))
+
+    # Check that filepaths are stored
+    assert adapter._conversation_filepaths
+    assert "design_discussion" in adapter._conversation_filepaths
+    assert "error_handling" in adapter._conversation_filepaths
+
+    # Filepaths should be absolute and resolvable
+    for conv_id, filepath in adapter._conversation_filepaths.items():
+        assert filepath.is_absolute()
+        assert filepath.exists()
+        assert filepath.suffix == ".json"
+
+
+def test_conversation_digest_extraction(temp_sessions):
+    """Test that digests are correctly extracted from conversations."""
+    adapter = ClaudeConversationsAdapter(sessions_dir=str(temp_sessions))
+    conv = adapter._conversations["design_discussion"]
+
+    digest = adapter._get_conversation_digest(conv)
+
+    # Digest should contain first message and metadata
+    assert "How do we handle patterns?" in digest or "patterns" in digest.lower()
+    assert "START:" in digest or "RECENT:" in digest
+    assert digest  # Non-empty
+
+
+def test_conversation_timestamp_extraction(temp_sessions):
+    """Test that timestamps are extracted correctly."""
+    adapter = ClaudeConversationsAdapter(sessions_dir=str(temp_sessions))
+
+    # Create a conversation with a timestamp
+    conv_with_ts = {
+        "messages": [{"role": "user", "text": "test"}],
+        "updated_at": 1234567890.5
+    }
+
+    ts = adapter._get_conversation_timestamp(conv_with_ts)
+    assert ts == 1234567890.5
+
+    # Conversation without timestamp should return 0
+    conv_no_ts = {"messages": [{"role": "user", "text": "test"}]}
+    ts = adapter._get_conversation_timestamp(conv_no_ts)
+    assert ts == 0.0
+
+
+def test_conversation_clustering_small_set(temp_sessions):
+    """Test clustering with a small number of conversations."""
+    adapter = ClaudeConversationsAdapter(sessions_dir=str(temp_sessions))
+
+    conv_ids = list(adapter._conversations.keys())
+    digests = {cid: adapter._get_conversation_digest(adapter._conversations[cid]) for cid in conv_ids}
+    timestamps = {cid: adapter._get_conversation_timestamp(adapter._conversations[cid]) for cid in conv_ids}
+
+    sampled = adapter._cluster_and_sample(conv_ids, digests, timestamps, max_clusters=2, samples_per_cluster=1)
+
+    # Should return some conversations
+    assert sampled
+    # Shouldn't return more than needed
+    assert len(sampled) <= len(conv_ids)
+
+
+def test_conversation_query_with_filepaths(temp_sessions):
+    """Test that query() returns conversations with FILEPATH markers."""
+    adapter = ClaudeConversationsAdapter(sessions_dir=str(temp_sessions))
+
+    obs = adapter.query({"max_clusters": 2, "samples_per_cluster": 1})
+
+    assert obs.kind == "query"
+    assert "FILEPATH:" in obs.text  # Should contain filepath markers
+    assert os.path.exists(str(temp_sessions))  # Base path should exist
+
+    # Output should contain conversation content
+    assert "Conversation:" in obs.text or "USER:" in obs.text.upper()
+
+
+def test_conversation_query_empty_no_conversations():
+    """Test that query() handles the case of no conversations gracefully."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        adapter = ClaudeConversationsAdapter(sessions_dir=tmpdir)
+
+        obs = adapter.query({})
+        assert obs.kind == "error"
+        assert "no conversations" in obs.error.lower()
