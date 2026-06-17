@@ -135,6 +135,11 @@ CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
   codebase and applies the edit itself, so any planner pre-reading is wasted work. "answer" is
   NEVER correct for a code/file change -- describing the fix or printing a patch instead of letting
   the deep runner apply it is a FAILURE.
+
+  Recognize code-change tasks by keywords: "fix", "bug", "break", "implement", "build", "refactor",
+  "edit", "update", "change", "add", "remove", "delete", "rewrite", "apply", "make". If the user
+  asks you to fix/implement/change something, escalate to "deep" immediately -- do NOT answer
+  about what you think the fix should be.
 """
 
 _PLANNER_ACTIONS = """\
