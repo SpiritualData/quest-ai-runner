@@ -232,7 +232,7 @@ def _cards_exist(cards_dir: str) -> bool:
 
 
 def _bootstrap_if_needed(
-    keyword, *, root: str, cards_dir: str, provider=None,
+    keyword, *, root: str, cards_dir: str, provider=None, model: Optional[str] = None,
     notify: Optional[Callable[[str], None]] = None,
 ) -> None:
     """Bootstrap or refresh the keyword store at startup. Always runs in the background.
@@ -308,7 +308,7 @@ def _bootstrap_if_needed(
                 lock_fd.close()
                 return
             try:
-                n = keyword.bootstrap(root=root, provider=provider)
+                n = keyword.bootstrap(root=root, provider=provider, model=model)
                 _log.info("context index: ready — %d cards written to %s", n, cards_dir)
             finally:
                 fcntl.flock(lock_fd, fcntl.LOCK_UN)
@@ -412,8 +412,12 @@ def resolve_context_assembler(
         # Bootstrap (first run) or refresh stale cards (subsequent runs).
         # Always runs in the background — the vector arm seeds lazily on first
         # assemble() via seed_source, so blocking startup is never needed.
+        # Resolve a balanced-tier model for the bootstrap LLM calls.
+        from .core.model_registry import ModelRegistry
+        registry = ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None)
+        bootstrap_model = registry.resolve_tier("balanced")
         _bootstrap_if_needed(keyword, root=root, cards_dir=cards_dir,
-                             provider=cfg.model_provider, notify=notify)
+                             provider=cfg.model_provider, model=bootstrap_model, notify=notify)
 
         if vector_store is not None:
             from .adapters import HybridContextAssembler, VectorContextAssembler
