@@ -1740,9 +1740,9 @@ class Orchestrator:
                 emit.status("queuing follow-up work…")
                 deferred_plan = PlanDecision(
                     action="deep",
-                    goal=plan.deferred_deep.get("goal", plan.deferred_deep.get("goal")),
-                    deep_brief=plan.deferred_deep.get("brief", user_message),
-                    rationale=plan.deferred_deep.get("rationale", "follow-up work from answer phase"),
+                    goal=plan.deferred_deep.get("goal") or f"Follow-up: {user_message[:100]}",
+                    deep_brief=plan.deferred_deep.get("brief") or user_message,
+                    rationale=plan.deferred_deep.get("rationale") or "follow-up work from answer phase",
                 )
                 deep_model = self._answer_model(deferred_plan, "opus", hint=model_hint)
                 deep_res = self._run_deep(deferred_plan, user_message, deep_model,
