@@ -71,7 +71,6 @@ class QuestGuidanceLoader:
             # The API should return cards matching any of these scopes
             cards = self.client.list_guidance_cards(
                 team_id=self.team_id,
-                org_id=self.org_id,
                 rep_id=self.rep_id,
                 limit=200,  # Higher limit to get all scopes
             )
@@ -79,7 +78,7 @@ class QuestGuidanceLoader:
             if cards:
                 log.debug(
                     f"Loaded {len(cards)} guidance cards from Quest "
-                    f"(team={self.team_id}, org={self.org_id}, rep={self.rep_id})"
+                    f"(team={self.team_id}, rep={self.rep_id})"
                 )
             return self._last_cards
         except Exception as e:  # noqa: BLE001
