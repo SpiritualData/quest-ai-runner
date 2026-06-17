@@ -255,6 +255,10 @@ class _ContextPanel:
     def inc_replans(self) -> None:
         with self._lock:
             self._replans += 1
+            # Clear displayed sources on replan (keep counts for footer)
+            # This prevents old sources from cluttering the display
+            self._sources = []
+            self._overflow = 0
 
     def add_sources(self, paths: List[str], count: int) -> List[str]:
         """Called when a READ event arrives with its source paths. Returns only NEW paths."""
