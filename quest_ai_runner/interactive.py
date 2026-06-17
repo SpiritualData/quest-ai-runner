@@ -51,7 +51,7 @@ try:
     from prompt_toolkit import PromptSession
     from prompt_toolkit.completion import Completer, Completion
     from prompt_toolkit.formatted_text import ANSI
-    from prompt_toolkit.history import InMemoryHistory
+    from prompt_toolkit.history import FileHistory, InMemoryHistory
     from prompt_toolkit.key_binding import KeyBindings
     from prompt_toolkit.patch_stdout import patch_stdout
     _HAS_PROMPT_TOOLKIT = True
@@ -60,6 +60,7 @@ except ImportError:
 
 try:
     from rich.console import Console as _RichConsole
+    from rich.markdown import Markdown as _RichMarkdown
     _HAS_RICH = True
 except ImportError:
     _HAS_RICH = False
@@ -79,6 +80,37 @@ _BRIGHT_CYAN = "\033[96m"
 
 def _a(code: str, s: str) -> str:
     return f"{code}{s}{_RESET}"
+
+
+def _highlight_ansi(text: str) -> str:
+    """Minimal ANSI syntax highlight for markdown code blocks and emphasis (non-rich fallback)."""
+    import re
+    lines = text.split("\n")
+    out: List[str] = []
+    in_block = False
+    for ln in lines:
+        if ln.startswith("```"):
+            in_block = not in_block
+            # Show fence in dim; language label in cyan
+            lang = ln[3:].strip()
+            if in_block:
+                out.append(_a(_DIM, "```") + (_a(_CYAN, lang) if lang else ""))
+            else:
+                out.append(_a(_DIM, "```"))
+            continue
+        if in_block:
+            # Code block lines: dim yellow
+            out.append(_a(_YELLOW, ln))
+            continue
+        # Inline code: `foo` → cyan
+        ln = re.sub(r"`([^`]+)`", lambda m: _a(_CYAN, "`" + m.group(1) + "`"), ln)
+        # Bold: **foo** → bold
+        ln = re.sub(r"\*\*(.+?)\*\*", lambda m: _a(_BOLD, m.group(1)), ln)
+        # Italic: *foo* → dim
+        ln = re.sub(r"\*(.+?)\*", lambda m: _a(_DIM, m.group(1)), ln)
+        out.append(ln)
+    return "\n".join(out)
+
 
 def _bullet(text: str, indent: int = 0, color: Optional[str] = None) -> str:
     """Format a bullet point with optional color and indentation."""
@@ -133,9 +165,11 @@ class _Console:
         self.dim("  " * indent + "⎿  " + text)
 
     def markdown(self, text: str) -> None:
-        """Render text as markdown (if rich is available, else plain)."""
+        """Render text as markdown with syntax-highlighted code blocks."""
         if self._rich:
-            self._rich.print(text, highlight=False)
+            self._rich.print(_RichMarkdown(text, code_theme="monokai"), highlight=False)
+        elif self._color:
+            self.line(_highlight_ansi(text))
         else:
             self.line(text)
 
@@ -578,8 +612,18 @@ _CTRL_C_WINDOW = 2.0   # seconds: second Ctrl+C within this window exits
 _SLASH_COMMANDS = [
     "/help", "/clear", "/reps", "/rep ", "/file ",
     "/quests", "/goal ", "/whoami", "/quit", "/q",
+    "/model", "/model ", "/depth", "/depth ",
+    "/system", "/replan",
+    "/save ", "/save", "/load ", "/sessions",
 ]
 # /goal with a space triggers search; bare /goal (no arg) also works as a browse
+# /model [haiku|sonnet|opus|fable] — set or show current model tier for the session
+# /depth [light|standard|deep] — alias for /model (light=haiku, standard=sonnet, deep=opus)
+# /system [text] — set or show a custom system-prompt prepended to the persona
+# /replan — prime the next turn to force a fresh re-planning pass at opus tier
+# /save [name] — save session to ~/.quest-ai-runner/sessions/<name>.json
+# /load <name> — restore a saved session
+# /sessions — list saved sessions
 
 
 class _SlashCompleter(Completer):
@@ -592,8 +636,18 @@ class _SlashCompleter(Completer):
                 yield Completion(cmd[len(text):], display=cmd.rstrip())
 
 
+def _history_path() -> Optional[Path]:
+    """Return the path for persistent input history, creating parent dirs as needed."""
+    try:
+        p = Path.home() / ".quest-ai-runner" / "history"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        return p
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _make_prompt_session(last_ctrl_c: list):
-    """Build a PromptSession with Claude-Code-style Ctrl+C behaviour.
+    """Build a PromptSession with Claude-Code-style Ctrl+C behaviour and file-backed history.
 
     ``last_ctrl_c`` is a one-element list holding the monotonic time of the
     most recent Ctrl+C (or 0.0). It is mutated by the key binding so the REPL
@@ -602,6 +656,8 @@ def _make_prompt_session(last_ctrl_c: list):
     First Ctrl+C: clears the input buffer, prints the hint, records the time.
     Second Ctrl+C within ``_CTRL_C_WINDOW`` seconds: raises ``KeyboardInterrupt``
     so prompt_toolkit surfaces it to the caller — the REPL loop then exits.
+
+    Ctrl+R activates incremental fuzzy history search (prompt_toolkit built-in).
     """
     if not _HAS_PROMPT_TOOLKIT:
         return None
@@ -624,11 +680,20 @@ def _make_prompt_session(last_ctrl_c: list):
         '': '#ffffff',
         'completion-menu.completion': 'bg:#1a1a2e #aaaaaa',
         'completion-menu.completion.current': 'bg:#4444aa #ffffff bold',
+        # History search toolbar
+        'bottom-toolbar': 'bg:#222244 #aaaacc',
+        'bottom-toolbar.text': 'bg:#222244 #aaaacc',
+        'reverse-i-search': 'bg:#222244 #aaaacc',
+        'incsearch': 'bg:#222244 #aaaacc',
+        'incsearch.current': 'bold underline #ffffff bg:#444488',
     })
-    completer = _SlashCompleter() if _HAS_PROMPT_TOOLKIT else None
-    return PromptSession(history=InMemoryHistory(), key_bindings=kb,
+    completer = _SlashCompleter()
+    hp = _history_path()
+    history = FileHistory(str(hp)) if hp is not None else InMemoryHistory()
+    return PromptSession(history=history, key_bindings=kb,
                          style=style, completer=completer,
-                         complete_while_typing=True)
+                         complete_while_typing=True,
+                         enable_history_search=True)
 
 
 def _read_line(session, prompt_str: str) -> Optional[str]:
@@ -653,6 +718,17 @@ Commands:
     /rep <name>          Set representative name directly
     /file <path>         Load a persona file
 
+  ● Model & Behavior
+    /model [tier]        Show or set model tier: haiku, sonnet, opus, fable
+    /depth [level]       Alias for /model: light=haiku, standard=sonnet, deep=opus
+    /system [text]       Show or set a custom system prompt prepended to persona
+    /replan              Prime next turn for a fresh re-planning pass (uses opus)
+
+  ● Sessions
+    /save [name]         Save this session (transcript + config) to disk
+    /load <name>         Restore a saved session
+    /sessions            List saved sessions
+
   ● Conversation
     /clear               Reset the transcript
     /help                Show this help
@@ -669,6 +745,7 @@ Keys:
   ESC            Cancel current turn (while streaming)
   Ctrl+C         Clear input line (twice within 2s to exit)
   Ctrl+D         Exit
+  Ctrl+R         Search input history (fuzzy, incremental)
 """
 
 _BANNER = """\
@@ -718,6 +795,14 @@ class InteractiveSession:
         # at <corpus_root>/.quest-context/turns/ — same root as file cards.
         self._console = _Console()
         self._cancelled = threading.Event()
+        # Feature: model selection (/model, /depth)
+        self._model_hint: Optional[str] = None
+        # Feature: system-prompt customization (/system)
+        self._system: Optional[str] = None
+        # Feature: replan priming (/replan) — one-shot flag consumed on the next turn
+        self._replan_next: bool = False
+        # Feature: session save/load (/save, /load, /sessions)
+        self._sessions_dir: Path = Path.home() / ".quest-ai-runner" / "sessions"
 
     # -- header ----------------------------------------------------------------
 
@@ -751,11 +836,27 @@ class InteractiveSession:
             asst = asst[:400].rstrip() + "…"
         return f"User: {self._last_user}\nAssistant: {asst}"
 
+    def _effective_preamble(self) -> Optional[str]:
+        """Combine the system prompt and persona into the rep_preamble passed to the orchestrator."""
+        parts = []
+        if self._system:
+            parts.append(self._system)
+        if self._persona:
+            parts.append(self._persona)
+        return "\n\n".join(parts) if parts else None
+
     def _run_turn(self, user_text: str) -> None:
         from .core.orchestrator import OrchestratorResult
 
         self._cancelled.clear()
         # Do NOT echo user_text — prompt_toolkit already shows it at the ❯ prompt.
+
+        # Consume the replan flag: force opus for this turn, then reset.
+        model_hint = self._model_hint
+        if self._replan_next:
+            model_hint = "opus"
+            self._replan_next = False
+            self._console.dim("  Replan mode: using opus for this turn.")
 
         panel = _ContextPanel(self._console)
         renderer = _TurnRenderer(self._console, panel, self._rep_name)
@@ -776,7 +877,8 @@ class InteractiveSession:
                     user_text,
                     transcript=self._last_transcript(),
                     quest_id=self._goal_id,
-                    rep_preamble=self._persona,
+                    rep_preamble=self._effective_preamble(),
+                    model_hint=model_hint,
                 ):
                     _iq.put(it)
             except Exception as e:  # noqa: BLE001
@@ -842,24 +944,22 @@ class InteractiveSession:
                 "elapsed": elapsed,
                 "timestamp": time.time(),
             })
-            # Deep result with no text = no deep_runner configured. The planner
-            # chose "deep" (it sees a code/fix request) but nobody ran it. Show
-            # the planned goal so the user knows what the AI intended.
-            if final.kind == "deep" and not (final.text or "").strip():
+            # Deep result handling: execution may have run or been planned
+            if final.kind == "deep":
                 goals = final.goals or []
-                if goals:
+                has_text = (final.text or "").strip()
+
+                if not has_text and goals:
+                    # No execution output: show what was planned
                     panel.stop()
-                    if self._console._color or self._console._rich:
-                        self._console.write(f"{_BOLD}{_CYAN}{self._rep_name}{_RESET}  ")
-                    else:
-                        self._console.write(f"{self._rep_name}  ")
-                    self._console.line(
-                        "I can see what needs to be done here. "
-                        "Code execution is not set up for this session, so I can't apply "
-                        "the fix directly. Planned: " + goals[0]
-                    )
-                    for g in goals[1:]:
-                        self._console.dim(f"  Also: {g}")
+                    self._ensure_ai_label()
+                    self._console.line("")
+                    self._console.dim("  Task identified: code changes needed.")
+                    for i, g in enumerate(goals, 1):
+                        prefix = "▸ " if i == 1 else "  "
+                        self._console.dim(f"  {prefix}{g}")
+                    self._console.line("")
+                    self._console.dim("  Configure a deep_runner in your config to auto-execute tasks.")
 
             self._last_user = user_text
             self._last_assistant = final.text or (
@@ -985,12 +1085,173 @@ class InteractiveSession:
                 self._cmd_quests(session); continue
             if line == "/reps":
                 self._cmd_reps(session); continue
+            if line.startswith("/model"):
+                self._cmd_model(line[6:].strip()); continue
+            if line.startswith("/depth"):
+                self._cmd_depth(line[6:].strip()); continue
+            if line.startswith("/system"):
+                self._cmd_system(line[7:].strip()); continue
+            if line == "/replan":
+                self._replan_next = True
+                self._console.dim("  Next turn will use opus for a fresh re-planning pass."); continue
+            if line.startswith("/save"):
+                self._cmd_save(line[5:].strip()); continue
+            if line.startswith("/load "):
+                self._cmd_load(line[6:].strip()); continue
+            if line == "/sessions":
+                self._cmd_sessions(); continue
             if line.startswith("/"):
                 self._console.dim(f"  Unknown command: {line!r}  (/help for list)"); continue
 
             self._run_turn(line)
 
         self._console.dim("Goodbye.")
+
+    # -- New command handlers --------------------------------------------------
+
+    _DEPTH_ALIASES = {
+        "light": "haiku", "fast": "haiku",
+        "standard": "sonnet", "normal": "sonnet", "default": "sonnet",
+        "deep": "opus", "thorough": "opus", "hard": "opus",
+    }
+    _VALID_TIERS = {"haiku", "sonnet", "opus", "fable"}
+
+    def _cmd_model(self, arg: str) -> None:
+        """Show or set the model tier for subsequent turns."""
+        c = self._console
+        if not arg:
+            current = self._model_hint or "auto (orchestrator decides)"
+            c.dim(f"  Model: {current}")
+            c.dim("  Usage: /model haiku | sonnet | opus | fable")
+            return
+        tier = arg.lower().strip()
+        if tier not in self._VALID_TIERS:
+            c.dim(f"  Unknown tier {tier!r}. Choose: haiku, sonnet, opus, fable")
+            return
+        self._model_hint = tier
+        c.dim(f"  Model set to {tier}. Use '/model' with no arg to reset to auto.")
+
+    def _cmd_depth(self, arg: str) -> None:
+        """Alias for /model using friendlier level names."""
+        c = self._console
+        if not arg:
+            current = self._model_hint or "auto"
+            c.dim(f"  Depth/model: {current}")
+            c.dim("  Usage: /depth light | standard | deep")
+            return
+        level = arg.lower().strip()
+        tier = self._DEPTH_ALIASES.get(level, level)
+        if tier not in self._VALID_TIERS:
+            c.dim(f"  Unknown depth {level!r}. Choose: light (haiku), standard (sonnet), deep (opus)")
+            return
+        self._model_hint = tier
+        c.dim(f"  Depth set to {level} (model: {tier}).")
+
+    def _cmd_system(self, arg: str) -> None:
+        """Show or set a custom system prompt prepended to the persona."""
+        c = self._console
+        if not arg:
+            if self._system:
+                preview = self._system[:120] + "…" if len(self._system) > 120 else self._system
+                c.dim(f"  System prompt ({len(self._system)} chars): {preview}")
+                c.dim("  Use '/system clear' to remove, or '/system <text>' to replace.")
+            else:
+                c.dim("  No custom system prompt set.")
+                c.dim("  Usage: /system <text>  —  sets a custom prompt prepended to the persona.")
+            return
+        if arg.lower() == "clear":
+            self._system = None
+            c.dim("  System prompt cleared.")
+            return
+        self._system = arg
+        kb = max(1, len(arg.encode()) // 1024)
+        c.dim(f"  System prompt set ({kb}KB).")
+
+    # -- Session save/load ----------------------------------------------------
+
+    def _sessions_path(self) -> Path:
+        self._sessions_dir.mkdir(parents=True, exist_ok=True)
+        return self._sessions_dir
+
+    def _cmd_save(self, arg: str) -> None:
+        """Save the current session to disk."""
+        c = self._console
+        name = arg.strip() or "default"
+        # Sanitize: only alphanumeric, dash, underscore, dot
+        import re as _re
+        name = _re.sub(r"[^A-Za-z0-9._-]", "_", name) or "default"
+        path = self._sessions_path() / f"{name}.json"
+        payload = {
+            "rep_name": self._rep_name,
+            "persona": self._persona,
+            "goal_id": self._goal_id,
+            "system": self._system,
+            "model_hint": self._model_hint,
+            "last_user": self._last_user,
+            "last_assistant": self._last_assistant,
+            "turn_count": self._turn_count,
+            "turns": self._turns,
+        }
+        try:
+            path.write_text(json.dumps(payload, indent=2, default=str))
+            c.dim(f"  Session saved: {path}")
+        except OSError as e:
+            c.dim(f"  Could not save session: {e}")
+
+    def _cmd_load(self, arg: str) -> None:
+        """Load a saved session from disk."""
+        c = self._console
+        name = arg.strip()
+        if not name:
+            c.dim("  Usage: /load <name>   (see /sessions for saved sessions)")
+            return
+        import re as _re
+        name = _re.sub(r"[^A-Za-z0-9._-]", "_", name)
+        path = self._sessions_path() / f"{name}.json"
+        if not path.exists():
+            c.dim(f"  Session not found: {name!r}  (use /sessions to list)")
+            return
+        try:
+            payload = json.loads(path.read_text())
+        except (OSError, json.JSONDecodeError) as e:
+            c.dim(f"  Could not load session: {e}")
+            return
+        self._rep_name = payload.get("rep_name") or self._rep_name
+        self._persona = payload.get("persona")
+        self._goal_id = payload.get("goal_id")
+        self._system = payload.get("system")
+        self._model_hint = payload.get("model_hint")
+        self._last_user = payload.get("last_user") or ""
+        self._last_assistant = payload.get("last_assistant") or ""
+        self._turn_count = payload.get("turn_count") or 0
+        self._turns = payload.get("turns") or []
+        c.dim(f"  Session loaded: {name!r}  ({self._turn_count} prior turns)")
+        c.dim(f"  Rep: {self._rep_name}" + (f"  Model: {self._model_hint}" if self._model_hint else ""))
+
+    def _cmd_sessions(self) -> None:
+        """List saved sessions."""
+        c = self._console
+        try:
+            paths = sorted(self._sessions_path().glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        except OSError:
+            paths = []
+        if not paths:
+            c.dim("  No saved sessions.  Use /save <name> to save one.")
+            return
+        c.line("")
+        for p in paths:
+            try:
+                sz = p.stat().st_size
+                data = json.loads(p.read_text())
+                rep = data.get("rep_name") or "?"
+                turns = data.get("turn_count") or 0
+                goal = data.get("goal_id") or ""
+                suffix = f"  goal: {goal}" if goal else ""
+                c.dim(f"  {p.stem:20s}  {rep:12s}  {turns} turns  ({sz//1024+1}KB){suffix}")
+            except Exception:  # noqa: BLE001
+                c.dim(f"  {p.stem}")
+        c.dim("")
+        c.dim("  /load <name>  to restore a session")
 
     # -- Quest client (lazy, only when credentials are configured) -------------
 
