@@ -185,8 +185,10 @@ def main(argv=None) -> int:
                         help="estimate tokens, cost, and time without running bootstrap")
 
     # --- paste-context subcommand: save context to a card -----------------------
-    paste_p = sub.add_parser("paste-context", help="save context from stdin to a context card")
-    paste_p.add_argument("card_id", nargs="?", default=None,
+    paste_p = sub.add_parser("paste-context", help="save context to a context card (from args or stdin)")
+    paste_p.add_argument("context", nargs="?", default=None,
+                         help="context text (if not provided, reads from stdin)")
+    paste_p.add_argument("--card-id", default=None,
                          help="card id or key to save under (default: auto-generate from content)")
     paste_p.add_argument("--cards-dir", default=None, metavar="PATH",
                          help="cards directory (default: <corpus>/.quest-context or QAR_CONTEXT_CARDS_DIR)")
@@ -421,7 +423,7 @@ def main(argv=None) -> int:
 
         return 0
 
-    # --- paste-context: save context from stdin to a card ----------------------
+    # --- paste-context: save context from args or stdin to a card ---------------
     if args.command == "paste-context":
         import sys
         import hashlib
@@ -431,15 +433,18 @@ def main(argv=None) -> int:
         corpus = args.corpus or os.getenv("QAR_CORPUS_ROOT") or os.getcwd()
         cards_dir = args.cards_dir or os.getenv("QAR_CONTEXT_CARDS_DIR") or os.path.join(corpus, ".quest-context")
 
-        # Read context from stdin
-        try:
-            context_text = sys.stdin.read()
-        except KeyboardInterrupt:
-            log.error("interrupted")
-            return 1
-        except Exception as e:  # noqa: BLE001
-            log.error("failed to read stdin: %s", e)
-            return 1
+        # Read context from args or stdin
+        if args.context:
+            context_text = args.context
+        else:
+            try:
+                context_text = sys.stdin.read()
+            except KeyboardInterrupt:
+                log.error("interrupted")
+                return 1
+            except Exception as e:  # noqa: BLE001
+                log.error("failed to read stdin: %s", e)
+                return 1
 
         if not context_text.strip():
             log.error("no context provided")
