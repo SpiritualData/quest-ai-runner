@@ -12,6 +12,47 @@ from quest_ai_runner.adapters import (
 )
 
 
+def test_claude_conversation_detection():
+    """Test that _is_claude_conversation correctly identifies valid conversations."""
+    # Valid Claude conversation
+    valid = {
+        "messages": [
+            {"role": "user", "text": "Hello"},
+            {"role": "assistant", "text": "Hi"},
+        ]
+    }
+    assert ClaudeConversationsAdapter._is_claude_conversation(valid)
+
+    # Valid with turns instead of messages
+    valid_turns = {
+        "turns": [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi"},
+        ]
+    }
+    assert ClaudeConversationsAdapter._is_claude_conversation(valid_turns)
+
+    # Invalid: missing role
+    invalid_no_role = {
+        "messages": [{"text": "Hello"}]
+    }
+    assert not ClaudeConversationsAdapter._is_claude_conversation(invalid_no_role)
+
+    # Invalid: missing text/content
+    invalid_no_text = {
+        "messages": [{"role": "user"}]
+    }
+    assert not ClaudeConversationsAdapter._is_claude_conversation(invalid_no_text)
+
+    # Invalid: not a dict
+    assert not ClaudeConversationsAdapter._is_claude_conversation([])
+    assert not ClaudeConversationsAdapter._is_claude_conversation("string")
+
+    # Invalid: random JSON
+    random_json = {"name": "test", "value": 123}
+    assert not ClaudeConversationsAdapter._is_claude_conversation(random_json)
+
+
 @pytest.fixture
 def temp_corpus():
     """Create a temporary corpus with test files."""

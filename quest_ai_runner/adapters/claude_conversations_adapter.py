@@ -95,6 +95,12 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
                     try:
                         with open(session_file) as f:
                             data = json.load(f)
+
+                        # Check if this looks like a Claude conversation
+                        # (has messages/turns field with role/text structure)
+                        if not self._is_claude_conversation(data):
+                            continue  # Skip non-conversation JSON files
+
                         # Use relative path from corpus_root as session_id (for uniqueness)
                         if self.corpus_root:
                             try:
@@ -110,19 +116,77 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
             except Exception:  # noqa: BLE001
                 pass  # Silently degrade if directory scan fails
 
+    @staticmethod
+    def _is_claude_conversation(data: Any) -> bool:
+        """Check if a JSON object looks like a Claude conversation.
+
+        A valid Claude conversation has:
+        - A messages or turns array
+        - Message objects with role (user/assistant) and text/content
+        """
+        if not isinstance(data, dict):
+            return False
+
+        messages = data.get("messages") or data.get("turns")
+        if not isinstance(messages, list) or not messages:
+            return False
+
+        # Check if messages have the right structure (role + text/content)
+        for msg in messages:
+            if not isinstance(msg, dict):
+                return False
+            has_role = "role" in msg
+            has_text = "text" in msg or "content" in msg
+            if not (has_role and has_text):
+                return False
+
+        return True
+
+    def _get_conversation_metadata(self, conv: Any) -> Dict[str, Any]:
+        """Extract metadata from a Claude conversation dict.
+
+        Returns fields like rep_name, turn_count, model used, etc.
+        """
+        metadata = {}
+        if isinstance(conv, dict):
+            # Extract Claude-specific metadata
+            if "rep_name" in conv:
+                metadata["rep"] = conv["rep_name"]
+            if "turn_count" in conv:
+                metadata["turns"] = conv["turn_count"]
+            if "model_hint" in conv:
+                metadata["model"] = conv["model_hint"]
+            # Count actual messages if available
+            messages = conv.get("messages") or conv.get("turns") or []
+            metadata["message_count"] = len(messages)
+        return metadata
+
     def _conversation_to_text(self, conv: Any) -> str:
-        """Convert a conversation dict to readable text (simplified; adapt as needed)."""
+        """Convert a conversation dict to readable text with structure preserved.
+
+        Handles Claude conversation format with role/text pairs and preserves
+        metadata like rep_name and model used.
+        """
         parts = []
         if isinstance(conv, dict):
-            # If it has a 'messages' or 'turns' field, render those
+            # Extract and display metadata header
+            metadata = self._get_conversation_metadata(conv)
+            if metadata:
+                meta_str = " | ".join(f"{k}={v}" for k, v in metadata.items())
+                parts.append(f"[{meta_str}]")
+                parts.append("")
+
+            # Render message turns
             messages = conv.get("messages") or conv.get("turns") or []
             for msg in messages:
                 if isinstance(msg, dict):
                     role = msg.get("role", "unknown")
                     text = msg.get("text") or msg.get("content") or ""
-                    parts.append(f"{role}: {text}")
+                    # Format: "role: text" with role in caps for clarity
+                    parts.append(f"{role.upper()}: {text}")
                 else:
                     parts.append(str(msg))
+
         return "\n".join(parts)
 
     def read_section(
