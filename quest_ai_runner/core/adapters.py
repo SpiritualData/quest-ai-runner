@@ -690,7 +690,7 @@ class StreamSink(ProgressSinkBase):
 
 
 class MilestoneSink(ProgressSinkBase):
-    """BACKGROUND sink — surface ONLY result / decision / milestone / done.
+    """BACKGROUND sink — surface ONLY result / decision / milestone / context / done.
 
     Planning, reading, re-planning, status ticks, and partial chunks are dropped: nobody is
     attending, so intermediate chatter is noise. The same surfacing set (``SURFACING_EVENTS``)
@@ -702,12 +702,14 @@ class MilestoneSink(ProgressSinkBase):
     def __init__(
         self,
         *,
+        on_context: Optional[Callable[[ProgressEvent], None]] = None,
         on_milestone: Optional[Callable[[ProgressEvent], None]] = None,
         on_decision: Optional[Callable[[ProgressEvent], None]] = None,
         on_result: Optional[Callable[[ProgressEvent], None]] = None,
         on_done: Optional[Callable[[ProgressEvent], None]] = None,
         on_tokens: Optional[Callable[[ProgressEvent], None]] = None,
     ):
+        self._on_context = on_context
         self._on_milestone = on_milestone
         self._on_decision = on_decision
         self._on_result = on_result
@@ -718,7 +720,9 @@ class MilestoneSink(ProgressSinkBase):
         if event.type not in SURFACING_EVENTS:
             return  # drop planning/reading/re-planning/status/partial chatter
         try:
-            if event.type == EVENT_MILESTONE and self._on_milestone:
+            if event.type == EVENT_CONTEXT and self._on_context:
+                self._on_context(event)
+            elif event.type == EVENT_MILESTONE and self._on_milestone:
                 self._on_milestone(event)
             elif event.type == EVENT_DECISION and self._on_decision:
                 self._on_decision(event)
