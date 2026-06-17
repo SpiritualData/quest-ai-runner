@@ -117,9 +117,9 @@ def _config_from_env() -> RunnerConfig:
             working_dir=deep_dir,
             claude_path=os.getenv("QAR_CLAUDE_PATH", "claude"),
         ))
-    # Allow model tier overrides via env vars: QAR_MODEL_HAIKU, QAR_MODEL_SONNET, QAR_MODEL_OPUS
+    # Allow model tier overrides via env vars: QAR_MODEL_FAST, QAR_MODEL_BALANCED, QAR_MODEL_QUALITY, QAR_MODEL_BEST
     model_fallback = {}
-    for tier in ("haiku", "sonnet", "opus"):
+    for tier in ("fast", "balanced", "quality", "best"):
         env_key = f"QAR_MODEL_{tier.upper()}"
         if os.getenv(env_key):
             model_fallback[tier] = os.getenv(env_key)
@@ -247,7 +247,7 @@ def main(argv=None) -> int:
         try:
             provider = _model_provider_from_env()
             from .core.model_registry import ModelRegistry
-            ack_model = ModelRegistry(provider).resolve_tier("haiku")
+            ack_model = ModelRegistry(provider).resolve_tier("fast")
             ack_prompt = (
                 "Write ONE sentence (max 20 words) that restates the following "
                 "request in your own words and says you are looking into it. "

@@ -20,7 +20,8 @@ from typing import Dict, List, Optional
 from .adapters import ModelProvider
 
 # Tier names in capability order (cheap -> expensive). The brain uses these names.
-TIERS = ("haiku", "sonnet", "opus")
+# Semantic names (provider-agnostic): fast/balanced/quality (best = quality if not overridden)
+TIERS = ("fast", "balanced", "quality", "best")
 
 
 # ---------------------------------------------------------------------------
@@ -75,35 +76,30 @@ def is_vision_capable(model: Optional[str]) -> bool:
         return False
     return any(p.search(mid) for p in VISION_FAMILY_PATTERNS)
 
-# LAST-KNOWN fallback ONLY — used when the live list is empty/unreachable. NOT the primary
-# source. A consumer can override this map via ModelRegistry(fallback=...).
+# LAST-KNOWN fallback — used for tiers not explicitly overridden, and when the live list is
+# empty/unreachable. A consumer can override this map via ModelRegistry(fallback=...).
+# User-specified models (via fallback) take FULL precedence and bypass auto-bucketing entirely.
 DEFAULT_FALLBACK_TOP = {
-    "opus": "claude-opus-4-8",
-    "sonnet": "claude-sonnet-4-6",
-    "haiku": "claude-haiku-4-5",
+    "fast": "claude-haiku-4-5",
+    "balanced": "claude-sonnet-4-6",
+    "quality": "claude-opus-4-8",
+    "best": "claude-opus-4-8",  # defaults to quality tier
 }
 
 
 def bucket_top(models: List[str], fallback: Optional[Dict[str, str]] = None) -> Dict[str, str]:
-    """Bucket a latest-first id list by family substring, taking the FIRST (latest) of each.
+    """Return the tier -> model mapping from fallback.
 
-    Families the live list doesn't cover fall back to ``fallback`` so all tiers always resolve.
-    Pure function — exposed for direct testing of the bucketing logic.
+    User-specified models (passed via fallback) take full precedence. When a user specifies
+    QAR_MODEL_BALANCED=gpt-4o, that exact model is used even if not in the live provider list.
+
+    Pure function — exposed for testing.
     """
-    fb = fallback or DEFAULT_FALLBACK_TOP
-    top: Dict[str, str] = {}
-    for mid in models or []:
-        low = (mid or "").lower()
-        for tier in TIERS:
-            if tier in low and tier not in top:
-                top[tier] = mid
-    for tier in TIERS:
-        top.setdefault(tier, fb[tier])
-    return top
+    return dict(fallback or DEFAULT_FALLBACK_TOP)
 
 
 class ModelRegistry:
-    """Resolves tier -> live top model id from a ModelProvider."""
+    """Resolves tier -> model id, using fallback (user-specified or defaults)."""
 
     def __init__(self, provider: ModelProvider, *, fallback: Optional[Dict[str, str]] = None):
         self._provider = provider
@@ -111,10 +107,10 @@ class ModelRegistry:
         self._cache: Dict[str, object] = {"source_id": None, "top": None}
 
     def top_models(self) -> Dict[str, str]:
-        """``{"opus": id, "sonnet": id, "haiku": id}`` for the current latest models.
+        """Return tier -> model mapping from fallback.
 
-        Falls back to the last-known map if the provider's list is empty/unreachable.
-        Re-buckets only when the provider returns a new list object.
+        User-specified models (QAR_MODEL_*) override defaults completely.
+        Falls back to defaults if nothing specified for a tier.
         """
         try:
             models = self._provider.list_models()
@@ -128,8 +124,18 @@ class ModelRegistry:
         return dict(self._cache["top"])  # copy so callers can't mutate the cache
 
     def resolve_tier(self, tier: Optional[str]) -> str:
-        """Resolve a tier name to the current top model id. Unknown/None -> "sonnet". Never raises."""
-        t = (tier or "sonnet").strip().lower()
+        """Resolve a tier name to the current top model id. Unknown/None -> "balanced". Never raises."""
+        # Map old provider-specific tier names to new semantic names for backward compatibility
+        tier_map = {
+            "haiku": "fast",
+            "sonnet": "balanced",
+            "opus": "quality",
+        }
+        t = (tier or "balanced").strip().lower()
+        # Check if it's an old tier name and map it
+        if t in tier_map:
+            t = tier_map[t]
+        # If still not in TIERS, default to balanced
         if t not in TIERS:
-            t = "sonnet"
+            t = "balanced"
         return self.top_models()[t]

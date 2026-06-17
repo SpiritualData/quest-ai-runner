@@ -1545,7 +1545,7 @@ class Orchestrator:
         if final not in ("answer", "deep", "confirm"):
             if gathered:
                 emit.status("wrapping up with a best-effort answer…")
-                model = self._answer_model(plan, "sonnet", hint=model_hint)
+                model = self._answer_model(plan, "balanced", hint=model_hint)
                 text = self._grounded_answer(user_message, transcript, context_view, gathered, model,
                                              True, native_blocks=native_blocks)
                 return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
