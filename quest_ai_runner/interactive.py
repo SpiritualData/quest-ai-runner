@@ -256,8 +256,8 @@ class _ContextPanel:
         with self._lock:
             self._replans += 1
 
-    def add_sources(self, paths: List[str], count: int) -> None:
-        """Called when a READ event arrives with its source paths."""
+    def add_sources(self, paths: List[str], count: int) -> List[str]:
+        """Called when a READ event arrives with its source paths. Returns only NEW paths."""
         new_paths: List[str] = []
         with self._lock:
             self._total_sources += count
@@ -274,6 +274,7 @@ class _ContextPanel:
         if not self._tty:
             for p in new_paths:
                 self._c.line(f"  ↗  {p}")
+        return new_paths
 
     def stop(self) -> None:
         self._stop_ev.set()
@@ -573,10 +574,10 @@ class _TurnRenderer:
         elif t == ev["read"]:
             paths = data.get("sources") or []
             count = data.get("reads", len(paths))
-            self._panel.add_sources(paths, count or len(paths))
-            if paths:
+            new_paths = self._panel.add_sources(paths, count or len(paths))
+            if new_paths:
                 self._panel.stop()
-                for p in paths:
+                for p in new_paths:
                     # "(searched ...)" markers use a search glyph; real paths use ↗
                     prefix = "⌕" if p.startswith("(searched ") else "↗"
                     self._print_step(prefix, p)
