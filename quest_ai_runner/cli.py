@@ -371,6 +371,31 @@ def main(argv=None) -> int:
         log.info("bootstrapping context store for %s", corpus)
         n = store.bootstrap(root=corpus, provider=provider)
         log.info("done: %d cards in %s", n, cards_dir)
+
+        # Display bootstrap summary in nice format
+        corpus_abs = str(Path(corpus).resolve())
+        tokens_in = getattr(provider, "tokens_in", 0)
+        tokens_out = getattr(provider, "tokens_out", 0)
+        cost, prov, model = estimate_bootstrap_cost(tokens_in)
+
+        print()
+        print("Bootstrap Complete")
+        print("=" * 50)
+        print(f"Corpus: {corpus_abs}")
+        print(f"Cards created: {n}")
+        print()
+        if tokens_in > 0:
+            print("Tokens used:")
+            print(f"  Input: {tokens_in:,}")
+            print(f"  Output: {tokens_out:,}")
+            print()
+        print(f"Provider: {prov}")
+        print(f"Model: {model}")
+        print()
+        if tokens_in > 0:
+            print(f"Cost: ${cost:.4f}")
+        print()
+
         return 0
 
     # --- poll (default when no subcommand given) ------------------------------
