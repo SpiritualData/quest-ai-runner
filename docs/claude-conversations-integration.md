@@ -120,15 +120,40 @@ corpus/
 
 ## How It Works
 
-When the orchestrator needs context:
+When you provide a corpus with conversations, the adapter:
 
-1. **Discovery**: calls `list_sources()` and `describe_source(name)` to see what conversations exist
+### Discovery Phase
+1. **Recursive scan** for `.claude/` and `conversations/` directories at any depth
+2. **Format validation**: skips non-conversation JSON files
+3. **Metadata extraction**: reads rep_name, turn_count, model used
+4. **Path-based IDs**: unique conversation ids based on location (e.g., `docs:.claude:design`)
+
+### Query Phase (Orchestrator)
+1. **Discovery**: `list_sources()` and `describe_source(name)` enumerate conversations
 2. **Grep**: searches all conversations in parallel for relevant patterns
-3. **Read**: loads full conversations when needed
-4. **Dedup**: removes duplicate hits across sources
-5. **Merge**: combines results from files, conversations, and databases
+3. **Read**: loads full conversation text with metadata header when needed
+4. **Merge**: combines results from files, conversations, and databases
 
-The brain sees conversation context alongside file context — no lossy summarization, full text available.
+### Conversation Format
+The adapter recognizes Claude conversations by structure:
+```json
+{
+  "rep_name": "Joshua's AI",           # optional: AI name
+  "turn_count": 5,                     # optional: for quick reference
+  "messages": [                        # required: array of message objects
+    {
+      "role": "user",                  # required: "user" or "assistant"
+      "text": "Your question here"     # required: message content
+    },
+    {
+      "role": "assistant",
+      "text": "Response here"
+    }
+  ]
+}
+```
+
+The brain sees conversation context alongside file context — no lossy summarization, full conversation history available.
 
 ## Example Query
 
