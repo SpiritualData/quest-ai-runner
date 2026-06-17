@@ -1623,6 +1623,7 @@ class Orchestrator:
 
         plan: Optional[PlanDecision] = None
         steps = 0
+        consecutive_reads = 0  # Track how many steps in a row chose "read"
         for step in range(cfg.max_steps):
             steps = step + 1
             emit.status("planning…" if step == 0 else "re-planning…")
@@ -1633,6 +1634,20 @@ class Orchestrator:
                     f"Planner failed on step {steps}: {e}. Falling back to grounded answer."
                 )
                 plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
+
+            # Safety gate: if planner chose "read" for 3+ consecutive steps, force a terminal action
+            if plan and plan.action == "read":
+                consecutive_reads += 1
+                if consecutive_reads >= 3 and steps > 2:
+                    log.warning(
+                        f"Planner stuck in read loop after {steps} steps / {consecutive_reads} reads. "
+                        f"Force-escalating to deep with gathered context."
+                    )
+                    plan.action = "deep"
+                    plan.goal = plan.goal or f"Complete the request: {user_message}"
+                    plan.deep_brief = plan.deep_brief or user_message
+            else:
+                consecutive_reads = 0  # Reset when planner chooses something else
             emit.emit(ProgressEvent(type=(EVENT_PLAN if step == 0 else EVENT_REPLAN),
                                     action=plan.action, step=steps, text=plan.rationale or None))
             # Emit cumulative token counts so live consumers see usage grow in real time.
