@@ -607,10 +607,136 @@ def _discover_areas(chunk: List[str], provider, model) -> List[Dict[str, Any]]:
         return []
 
 
-def _extract_topic_cards(area: Dict[str, Any], allowed: Set[str], provider, model) -> List[Dict[str, Any]]:
-    """Stage 2: given an area dict, ask the LLM for topic cards. Never raises."""
+def _extract_file_snippet(fpath: str, walk_root: Optional[Path] = None, max_bytes: int = 2048) -> str:
+    """Extract a concise snippet from a file: docstring + function/class signatures.
+
+    For each file, attempts to read first docstring, function/class definitions,
+    and a few substantive lines. Returns at most max_bytes of content.
+    Never raises; returns empty string on read error.
+    """
     try:
-        file_tree = "\n".join(area["files"])
+        if walk_root:
+            full_path = walk_root / fpath
+        else:
+            full_path = Path(fpath)
+
+        if not full_path.exists() or full_path.stat().st_size > _BOOTSTRAP_MAX_BYTES:
+            return ""
+
+        with open(full_path, "r", encoding="utf-8", errors="ignore") as fh:
+            content = fh.read(max_bytes)
+    except Exception:  # noqa: BLE001
+        return ""
+
+    if not content.strip():
+        return ""
+
+    lines = content.split("\n")
+    snippet_lines: List[str] = []
+
+    # Extract leading docstring (""" or ''').
+    in_docstring = False
+    docstring_delimiter = None
+    for i, line in enumerate(lines[:50]):  # Check first 50 lines
+        stripped = line.strip()
+        if not in_docstring and stripped.startswith('"""') or stripped.startswith("'''"):
+            docstring_delimiter = '"""' if stripped.startswith('"""') else "'''"
+            in_docstring = True
+            snippet_lines.append(line)
+            if stripped.count(docstring_delimiter) >= 2:  # Single-line docstring
+                in_docstring = False
+            continue
+        if in_docstring and docstring_delimiter in line:
+            snippet_lines.append(line)
+            in_docstring = False
+            continue
+        if in_docstring:
+            snippet_lines.append(line)
+
+    # Extract function/class definitions (def, class, function, etc.).
+    for line in lines[len(snippet_lines):]:
+        stripped = line.strip()
+        if stripped.startswith(("def ", "class ", "async def ", "function ", "@")):
+            snippet_lines.append(line)
+            if len(snippet_lines) > 20:  # Limit to ~20 key lines
+                break
+
+    # If very little extracted, include first few non-empty lines.
+    if len(snippet_lines) < 5:
+        for line in lines:
+            if line.strip() and not line.strip().startswith("#"):
+                snippet_lines.append(line)
+                if len(snippet_lines) >= 8:
+                    break
+
+    return "\n".join(snippet_lines[:20])
+
+
+def _summarize_snippet(fpath: str, snippet: str) -> str:
+    """Summarize a file snippet based on its length.
+
+    - Short (< 200 chars): return as-is
+    - Medium (200-500 chars): keep docstring + first 2 signatures
+    - Long (> 500 chars): just docstring + file name hint
+
+    This is a heuristic; no LLM involved.
+    """
+    snippet_len = len(snippet)
+
+    if snippet_len < 200:
+        return f"{fpath}:\n{snippet}"
+
+    lines = snippet.split("\n")
+
+    if snippet_len < 500:
+        # Keep docstring (first ~10 lines or until close bracket) + key definitions.
+        kept: List[str] = []
+        for line in lines[:15]:
+            kept.append(line)
+            if '"""' in line or "'''" in line:
+                # Likely end of docstring
+                break
+        # Add first 2 function/class definitions
+        defs_added = 0
+        for line in lines[len(kept):]:
+            if line.strip().startswith(("def ", "class ", "async def ")):
+                kept.append(line)
+                defs_added += 1
+                if defs_added >= 2:
+                    break
+        return f"{fpath}:\n" + "\n".join(kept)
+
+    # Long: just docstring (first 10 lines) + filename hint
+    kept = []
+    for line in lines[:10]:
+        kept.append(line)
+        if '"""' in line or "'''" in line:
+            break
+    if not kept:
+        kept = lines[:5]
+    return f"{fpath} (detailed content omitted, {len(snippet)} bytes):\n" + "\n".join(kept)
+
+
+def _extract_topic_cards(area: Dict[str, Any], allowed: Set[str], provider, model, walk_root: Optional[Path] = None) -> List[Dict[str, Any]]:
+    """Stage 2: given an area dict, sample representative files, extract & summarize snippets,
+    then ask the LLM for topic cards. Never raises."""
+    try:
+        # Sample representative files from the area (reduce token spend on large areas).
+        area_files = area.get("files", [])
+        sampled_files = _select_representative_files(area_files, samples_per_folder=2) if len(area_files) > 5 else area_files
+
+        # Extract snippets + summarize by length for each sampled file.
+        file_entries: List[str] = []
+        for fpath in sampled_files:
+            snippet = _extract_file_snippet(fpath, walk_root=walk_root)
+            if snippet:
+                summarized = _summarize_snippet(fpath, snippet)
+                file_entries.append(summarized)
+            else:
+                # Fallback: just the path if snippet extraction failed
+                file_entries.append(fpath)
+
+        file_tree = "\n---\n".join(file_entries)
         prompt = _TOPIC_PROMPT.format(
             area_name=area["name"],
             area_description=area.get("description", ""),
@@ -974,13 +1100,17 @@ def _select_representative_files(file_paths: List[str], samples_per_folder: int 
     return representatives
 
 
-def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None):
+def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None, walk_root=None):
     """3-stage parallel LLM fan-out to identify semantic topic cards.
 
     Stage 1 -- chunk the path list and run area-discovery calls in parallel (each chunk
-    is small so each call is fast). Stage 2 -- for each discovered area, run a topic-
-    extraction call in parallel. Stage 3 -- dedup via keyword-clustering + an LLM merge
-    decision (``_dedup_topic_cards``), also folding new cards into duplicate ``existing_cards``.
+    is small so each call is fast). Stage 2 -- for each discovered area, sample representative
+    files, extract snippets, summarize by length, then run a topic-extraction call in parallel.
+    Stage 3 -- dedup via keyword-clustering + an LLM merge decision (``_dedup_topic_cards``),
+    also folding new cards into duplicate ``existing_cards``.
+
+    ``walk_root`` (optional) is used in Stage 2 to read file snippets for context. When absent,
+    Stage 2 falls back to file paths only.
 
     Never raises. Returns [] on any unrecoverable error.
     """
@@ -1014,10 +1144,11 @@ def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None):
             return []
         _log.info("context index: bootstrap stage 2 — extracting topics from %d area(s)", len(areas))
 
-        # Stage 2: extract topic cards per area in parallel.
+        # Stage 2: extract topic cards per area in parallel (with sampled snippets).
         raw_cards: List[Dict[str, Any]] = []
+        walk_root_path = Path(walk_root).resolve() if walk_root else None
         for result in _run_parallel(
-            [lambda a=area: _extract_topic_cards(a, allowed, provider, model) for area in areas],
+            [lambda a=area: _extract_topic_cards(a, allowed, provider, model, walk_root=walk_root_path) for area in areas],
             max_workers=_BOOTSTRAP_WORKERS,
         ):
             if result:
@@ -1359,7 +1490,7 @@ class FileContextStore(ContextAssemblerBase):
         topic_cards: List[Dict[str, Any]] = []
         if uncovered:
             topic_cards = _llm_topic_cards(
-                uncovered, provider, existing_cards=existing_cards
+                uncovered, provider, existing_cards=existing_cards, walk_root=walk_root
             )
 
         # --- Stale-covered: regenerate the cards that reference any stale file ---
@@ -1390,7 +1521,7 @@ class FileContextStore(ContextAssemblerBase):
                     "description": card.get("summary", ""),
                     "files": files,
                 }
-                regenerated = _extract_topic_cards(area, set(files), provider, None)
+                regenerated = _extract_topic_cards(area, set(files), provider, None, walk_root=walk_root)
                 if regenerated:
                     # Keep the original card id on the first regenerated card so we upsert in place.
                     regenerated[0]["id"] = cid
