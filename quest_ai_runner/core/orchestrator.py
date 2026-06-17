@@ -657,6 +657,44 @@ class Orchestrator:
         # read_guidance on demand. Cards are opaque text. Never raises. None = today's behavior.
         self.guidance = guidance
 
+    def get_provider_for_model(self, model: str) -> ModelProvider:
+        """Auto-detect and return the provider for a given model based on name prefix.
+
+        Intelligently routes to the right provider for multi-provider setups:
+        - claude-* → Anthropic provider
+        - gemini-* or models/* → Gemini provider (models/* is Gemini's convention)
+        - gpt-* → OpenAI provider
+        Falls back to primary provider if no multi-provider setup or no match.
+        """
+        if not model:
+            return self.provider
+
+        model_lower = model.lower()
+        providers = getattr(self.registry, "_providers", {}) or {}
+
+        # Auto-detect based on model prefix (all model names start with provider family)
+        if model_lower.startswith("claude"):
+            # Anthropic Claude models: claude-opus-*, claude-sonnet-*, claude-haiku-*, etc.
+            if "anthropic" in providers:
+                log.debug(f"Routing claude model '{model}' to Anthropic provider")
+                return providers["anthropic"]
+        elif model_lower.startswith("gemini") or model.startswith("models/"):
+            # Gemini models: gemini-3.5-*, gemini-1.5-*, or models/* (Gemini API convention)
+            if "gemini" in providers:
+                log.debug(f"Routing Gemini model '{model}' to Gemini provider")
+                return providers["gemini"]
+            else:
+                log.warning(f"Gemini model '{model}' requested but Gemini provider not registered. Available: {list(providers.keys())}")
+        elif model_lower.startswith("gpt"):
+            # OpenAI models: gpt-4o, gpt-4-turbo, etc.
+            if "openai" in providers:
+                log.debug(f"Routing GPT model '{model}' to OpenAI provider")
+                return providers["openai"]
+
+        # Fallback to primary provider
+        log.debug(f"Model '{model}' falling back to primary provider ({type(self.provider).__name__})")
+        return self.provider
+
     # --- gather (parallel reads/greps/queries via the RetrievalAdapter) ------
 
     def _exec_one_read(self, spec: Dict[str, Any],
@@ -803,7 +841,8 @@ class Orchestrator:
             max_deep=self.cfg.max_deep_subtasks,
         )
         model = self.registry.resolve_tier(self.cfg.planner_tier)
-        raw = self.provider.plan(prompt, model=model, tool_schema=DECIDE_TOOL)
+        provider = self.get_provider_for_model(model)
+        raw = provider.plan(prompt, model=model, tool_schema=DECIDE_TOOL)
         return normalize_decision(raw or {}, self.cfg)
 
     # --- answer generation (grounded; optional parallel sub-questions) -------
@@ -839,7 +878,8 @@ class Orchestrator:
             messages.append({"role": "user", "content": content})
         else:
             messages.append({"role": "user", "content": user_message})
-        return self.provider.answer(messages, model=model)
+        provider = self.get_provider_for_model(model)
+        return provider.answer(messages, model=model)
 
     def _answer_subquestions(self, user_message: str, transcript: str, context_view: str,
                              gathered: List[Dict[str, Any]], model: str,
@@ -863,7 +903,8 @@ class Orchestrator:
                 else:
                     sub_msg = {"role": "user", "content": focus}
                 msgs = [{"role": "user", "content": ground}, sub_msg]
-                return {"q": sub, "a": self.provider.answer(msgs, model=model)}
+                provider = self.get_provider_for_model(model)
+                return {"q": sub, "a": provider.answer(msgs, model=model)}
             except Exception as e:  # noqa: BLE001
                 log.warning(f"Sub-question answer generation failed: {type(e).__name__}: {e}", exc_info=True)
                 return None
@@ -1287,8 +1328,12 @@ class Orchestrator:
         if self.guidance is not None:
             try:
                 _cards = self.guidance.select(
-                    user_message, k=cfg.guidance_topk, meta=_ctx_meta or None) or []
-            except Exception:  # noqa: BLE001 -- a provider must never break the run
+                    user_message,
+                    team_id=_ctx_meta.get("team_id") if _ctx_meta else None,
+                    org_id=_ctx_meta.get("org_id") if _ctx_meta else None,
+                    limit=cfg.guidance_topk) or []
+            except Exception as e:  # noqa: BLE001 -- a provider must never break the run
+                log.warning(f"Guidance selection failed: {type(e).__name__}: {e}", exc_info=True)
                 _cards = []
             if _cards:
                 _blocks = ["--- APPLICABLE GUIDANCE ---"]

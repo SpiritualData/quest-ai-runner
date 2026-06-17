@@ -79,11 +79,12 @@ def is_vision_capable(model: Optional[str]) -> bool:
 # LAST-KNOWN fallback — used for tiers not explicitly overridden, and when the live list is
 # empty/unreachable. A consumer can override this map via ModelRegistry(fallback=...).
 # User-specified models (via fallback) take FULL precedence and bypass auto-bucketing entirely.
+# Default to Gemini 3.5 + 3.1-lite hybrid for best performance.
 DEFAULT_FALLBACK_TOP = {
-    "fast": "claude-haiku-4-5",
-    "balanced": "claude-sonnet-4-6",
-    "quality": "claude-opus-4-8",
-    "best": "claude-opus-4-8",  # defaults to quality tier
+    "fast": "gemini-3.1-flash-lite",
+    "balanced": "gemini-3.5-flash",
+    "quality": "gemini-3.5-flash",
+    "best": "claude-opus-4-8",  # fallback to best available
 }
 
 
@@ -172,31 +173,74 @@ def bucket_top(models: List[str], fallback: Optional[Dict[str, str]] = None) -> 
 
 
 class ModelRegistry:
-    """Resolves tier -> model id, using fallback (user-specified or defaults)."""
+    """Resolves tier -> model id, using fallback (user-specified or defaults).
 
-    def __init__(self, provider: ModelProvider, *, fallback: Optional[Dict[str, str]] = None):
+    Supports multi-provider operation: can route different tiers to different providers.
+    Default behavior (single provider) unchanged for backward compatibility.
+    """
+
+    def __init__(
+        self,
+        provider: ModelProvider,
+        *,
+        fallback: Optional[Dict[str, str]] = None,
+        providers: Optional[Dict[str, ModelProvider]] = None,
+        provider_overrides: Optional[Dict[str, str]] = None,
+    ):
+        """Initialize ModelRegistry with optional multi-provider support.
+
+        Args:
+            provider: Primary provider (used for all tiers by default)
+            fallback: User-specified model overrides per tier (QAR_MODEL_*)
+            providers: Optional dict of provider_name -> ModelProvider for multi-provider
+            provider_overrides: Optional dict of tier -> provider_name for per-tier routing
+                               (e.g. {"best": "anthropic", "fast": "gemini"})
+        """
         self._provider = provider
+        self._providers = providers or {}
+        self._provider_overrides = dict(provider_overrides or {})
         # Keep only user-specified overrides, not defaults
         self._user_overrides = dict(fallback or {})
         self._cache: Dict[str, object] = {"source_id": None, "top": None}
 
+    def get_provider_for_tier(self, tier: str) -> ModelProvider:
+        """Get the provider to use for a given tier (supports per-tier provider routing).
+
+        Returns the provider specified in provider_overrides, or the primary provider.
+        """
+        provider_name = self._provider_overrides.get(tier)
+        if provider_name and provider_name in self._providers:
+            return self._providers[provider_name]
+        return self._provider
+
     def top_models(self) -> Dict[str, str]:
         """Return tier -> model mapping from auto-bucketing + user overrides.
 
+        With multi-provider support, each tier's models come from its assigned provider.
         User-specified models (QAR_MODEL_*) override auto-bucketed/defaults completely.
         Falls back to defaults if nothing specified for a tier.
         """
-        try:
-            models = self._provider.list_models()
-        except Exception:  # noqa: BLE001 — a provider hiccup must never break resolution
-            models = []
-        if not models:
+        # Collect models from all providers (primary + per-tier overrides)
+        all_models = []
+        for tier in TIERS:
+            provider = self.get_provider_for_tier(tier)
+            try:
+                models = provider.list_models()
+                all_models.extend(models)
+            except Exception:  # noqa: BLE001 — a provider hiccup must never break resolution
+                pass
+
+        if not all_models:
             result = dict(DEFAULT_FALLBACK_TOP)
             result.update(self._user_overrides)
             return result
-        if self._cache["source_id"] != id(models) or self._cache["top"] is None:
-            self._cache["source_id"] = id(models)
-            self._cache["top"] = bucket_top(models, self._user_overrides)
+
+        # Cache is invalidated if the combined model set changes
+        # (simple approach: use tuple of all model lists as cache key)
+        cache_key = tuple(sorted(set(all_models)))
+        if self._cache["source_id"] != cache_key or self._cache["top"] is None:
+            self._cache["source_id"] = cache_key
+            self._cache["top"] = bucket_top(all_models, self._user_overrides)
         return dict(self._cache["top"])  # copy so callers can't mutate the cache
 
     def resolve_tier(self, tier: Optional[str]) -> str:

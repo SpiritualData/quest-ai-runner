@@ -38,11 +38,12 @@ class FakeGuidance(GuidanceProviderBase):
         self.read_calls.append(card_id)
         return self._cards.get(card_id)
 
-    def select(self, user_message, *, k=3, meta=None) -> List[GuidanceCard]:
+    def select(self, user_message, *, task_type=None, rep_id=None, team_id=None, org_id=None,
+               operation=None, function_name=None, tags=None, limit=5) -> List[GuidanceCard]:
         self.select_calls += 1
         if not self._select_ids:
             return []
-        return [self._cards[i] for i in self._select_ids[:k] if i in self._cards]
+        return [self._cards[i] for i in self._select_ids[:limit] if i in self._cards]
 
 
 def _orch(provider, retrieval, **kw):

@@ -67,6 +67,8 @@ class RunnerConfig:
     retrieval: Optional[RetrievalAdapter] = None     # FilesAdapter / CachedDbAdapter / a composite
     model_provider: Optional[ModelProvider] = None   # AnthropicProvider or another
     model_fallback: Optional[dict] = None            # override tier->model mapping (e.g. {"haiku": "gpt-4o", "sonnet": "claude-4"})
+    model_providers: Optional[dict] = None           # multi-provider support: dict of name -> ModelProvider (e.g. {"anthropic": AnthropicProvider(), "gemini": GeminiProvider()})
+    model_provider_overrides: Optional[dict] = None  # per-tier provider routing (e.g. {"best": "anthropic", "fast": "gemini"})
     deep_runner: Optional[DeepRunner] = None         # SubprocessGoalRunner or another worker
     escalation: Optional[EscalationSink] = None      # QuestDecisionSink (defaults from quest client)
     # The describer for image attachments the ANSWERING model can't view natively (a non-vision
@@ -255,7 +257,12 @@ def get_retrieval_adapter(cfg: RunnerConfig) -> Optional[RetrievalAdapter]:
 def build_registry(cfg: RunnerConfig) -> ModelRegistry:
     if cfg.model_provider is None:
         raise ValueError("model_provider is required to build a ModelRegistry")
-    return ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None)
+    return ModelRegistry(
+        cfg.model_provider,
+        fallback=cfg.model_fallback or None,
+        providers=cfg.model_providers or None,
+        provider_overrides=cfg.model_provider_overrides or None,
+    )
 
 
 def _cards_exist(cards_dir: str) -> bool:
@@ -522,6 +529,51 @@ def build_orchestrator(
                 if not any(kw in p for kw in _skip)]
     if problems:
         raise ValueError("RunnerConfig invalid for the brain: " + "; ".join(problems))
+
+    # Auto-build all available providers for multi-provider routing
+    # Any model can auto-route to the right provider based on its name prefix
+    # Always register all providers so models can be routed intelligently
+    from .adapters import AnthropicProvider, GeminiProvider, OpenAIProvider
+
+    all_providers = {}
+    try:
+        all_providers["anthropic"] = AnthropicProvider()
+        _log.debug("Registered Anthropic provider")
+    except Exception as e:  # noqa: BLE001
+        _log.debug(f"Anthropic provider unavailable: {type(e).__name__}")
+    try:
+        all_providers["gemini"] = GeminiProvider()
+        _log.debug("Registered Gemini provider")
+    except Exception as e:  # noqa: BLE001
+        _log.debug(f"Gemini provider unavailable: {type(e).__name__}")
+    try:
+        all_providers["openai"] = OpenAIProvider()
+        _log.debug("Registered OpenAI provider")
+    except Exception as e:  # noqa: BLE001
+        _log.debug(f"OpenAI provider unavailable: {type(e).__name__}")
+
+    # Always update config with all available providers (overwrite any existing)
+    # This ensures multi-provider routing works correctly
+    if all_providers:
+        cfg.model_providers = all_providers
+        _log.info(f"Multi-provider routing enabled with: {list(all_providers.keys())}")
+    else:
+        _log.warning("No multi-provider setup: no providers could be initialized")
+
+    # Wrap providers with MultiProvider for automatic intelligent routing
+    # This ensures ALL provider calls (not just orchestrator calls) route correctly
+    from .adapters.multi_provider import MultiProvider
+
+    if cfg.model_provider and all_providers:
+        original_provider = cfg.model_provider
+        cfg.model_provider = MultiProvider(original_provider, all_providers)
+        _log.debug("Wrapped primary provider with MultiProvider for intelligent routing")
+
+    # Also wrap vision_provider if configured (used for image description fallback)
+    if cfg.vision_provider and all_providers:
+        original_vision_provider = cfg.vision_provider
+        cfg.vision_provider = MultiProvider(original_vision_provider, all_providers)
+        _log.debug("Wrapped vision provider with MultiProvider for intelligent routing")
 
     # Auto-enable guidance provider if not configured
     guidance = cfg.guidance_provider

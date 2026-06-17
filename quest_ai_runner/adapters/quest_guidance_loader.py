@@ -35,25 +35,30 @@ class QuestGuidanceLoader:
         self,
         quest_client: Any,  # QuestClient
         team_id: Optional[str] = None,
+        org_id: Optional[str] = None,
         rep_id: Optional[str] = None,
-        task_type: Optional[str] = None,
     ):
-        """Initialize with Quest client and optional filters.
+        """Initialize with Quest client and scope context.
 
         Args:
             quest_client: A QuestClient instance (configured with base_url, api_key, team_id).
-            team_id: Override team_id (uses client's if not provided).
-            rep_id: Filter guidance to this rep (rep:rep_id tags).
-            task_type: Filter guidance to this task type (task:task_type tags).
+            team_id: Team context (defaults to client's team_id).
+            org_id: Organization context (optional, for org-level guidance).
+            rep_id: AI rep context (optional, for rep-specific guidance filtering).
+
+        Loads guidance at all applicable scopes: global, org, team, rep.
         """
         self.client = quest_client
         self.team_id = team_id or (quest_client.team_id if quest_client else None)
+        self.org_id = org_id
         self.rep_id = rep_id
-        self.task_type = task_type
         self._last_cards: List[Dict[str, Any]] = []
 
     def __call__(self) -> List[Dict[str, Any]]:
-        """Fetch dynamic guidance from Quest backend.
+        """Fetch dynamic guidance from Quest backend at all applicable scopes.
+
+        Fetches guidance cards matching all scopes: global, org, team, rep.
+        Scopes are not exclusive — a card can be tagged with multiple scopes.
 
         Returns: List of guidance card dicts {id, title, body, tags, description, ...}.
         """
@@ -62,15 +67,20 @@ class QuestGuidanceLoader:
             return []
 
         try:
+            # Fetch guidance at all applicable scopes
+            # The API should return cards matching any of these scopes
             cards = self.client.list_guidance_cards(
-                rep_id=self.rep_id,
-                task_type=self.task_type,
                 team_id=self.team_id,
-                limit=100,
+                org_id=self.org_id,
+                rep_id=self.rep_id,
+                limit=200,  # Higher limit to get all scopes
             )
             self._last_cards = cards or []
             if cards:
-                log.debug(f"Loaded {len(cards)} guidance cards from Quest")
+                log.debug(
+                    f"Loaded {len(cards)} guidance cards from Quest "
+                    f"(team={self.team_id}, org={self.org_id}, rep={self.rep_id})"
+                )
             return self._last_cards
         except Exception as e:  # noqa: BLE001
             log.error(f"Failed to load guidance from Quest: {e}")

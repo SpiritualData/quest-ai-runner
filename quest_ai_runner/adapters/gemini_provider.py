@@ -102,20 +102,33 @@ class GeminiProvider(ModelProviderBase):
         return response.text if response and response.text else ""
 
     def list_models(self) -> List[str]:
-        """List available Gemini models."""
+        """List available Gemini models, excluding known unavailable/deprecated ones."""
         now = time.monotonic()
         if self._models_cache is not None and (now - self._models_cached_at) < self.cache_seconds:
             return self._models_cache
+
+        # Known unavailable/deprecated Gemini models to exclude
+        # (API may still return them in list even though they're not usable)
+        exclude_patterns = [
+            "robotics",  # deprecated robotics models
+            "experimental",  # experimental/unstable models
+            "exp-",  # experimental prefix
+        ]
 
         try:
             client = self._get_client()
             # Use the client.models.list() method to get available models
             models_list = client.models.list()
-            # Filter to Gemini models and extract names
+            # Filter to Gemini models, exclude known bad ones, and extract names
             gemini_models = [
                 m.name for m in models_list
                 if hasattr(m, "name") and "gemini" in m.name.lower()
+                and not any(pattern in m.name.lower() for pattern in exclude_patterns)
             ]
+            # Fallback to known-good models if filtered list is empty
+            if not gemini_models:
+                _log.warning("Gemini API returned no usable models; using fallback list")
+                gemini_models = ["gemini-2.0-flash", "gemini-1.5-pro"]
             self._models_cache = gemini_models
             self._models_cached_at = now
             return gemini_models
