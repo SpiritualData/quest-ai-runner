@@ -67,6 +67,7 @@ from .adapters import AnthropicProvider, ClaudeCliProvider, FilesAdapter, Gemini
 from .config import RunnerConfig
 from .core.adapters import ModelProvider
 from .core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+from .pricing import estimate_bootstrap_cost, get_provider_and_model
 from .runner.poller import Poller
 
 
@@ -317,10 +318,8 @@ def main(argv=None) -> int:
             total_sampled_tokens = stage1_sampled_tokens + stage2_sampled_tokens
             total_savings = total_full_tokens - total_sampled_tokens
 
-            # Cost estimate (~$0.0001 per 1M input tokens for Claude 3.5 Sonnet, adjust for your model)
-            cost_full = (total_full_tokens / 1_000_000) * 0.0001
-            cost_sampled = (total_sampled_tokens / 1_000_000) * 0.0001
-            cost_saved = cost_full - cost_sampled
+            # Cost estimate using actual provider/model pricing
+            cost_sampled, provider, model = estimate_bootstrap_cost(total_sampled_tokens)
 
             # Time estimate (Stage 1: ~2s per LLM call, Stage 2: ~1s per area)
             stage1_calls = max(1, file_count // 150)  # 150 files per chunk
@@ -337,8 +336,12 @@ def main(argv=None) -> int:
             log.info("  Savings vs full list: %d tokens (%.0f%%)", total_savings,
                      100 * total_savings / total_full_tokens if total_full_tokens > 0 else 0)
             log.info("")
-            log.info("Estimated cost (with TF-DF-IDF; depends on provider & model):")
-            log.info("  Based on Sonnet:      $%.4f", cost_sampled)
+            log.info("Provider & model:")
+            log.info("  Backend:              %s", provider)
+            log.info("  Model:                %s", model)
+            log.info("")
+            log.info("Estimated cost (based on configured provider/model):")
+            log.info("  Bootstrap input:      $%.4f (%d tokens at %s rates)", cost_sampled, total_sampled_tokens, provider)
             log.info("")
             log.info("Time estimate: ~%ds (~%dm) (depends on provider latency)", time_estimate, time_estimate // 60)
             log.info("")
