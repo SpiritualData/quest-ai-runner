@@ -1434,14 +1434,17 @@ class FileContextStore(ContextAssemblerBase):
         # --- LLM: identify topic cards for the NEW (uncovered) files, deduping vs existing ---
         topic_cards: List[Dict[str, Any]] = []
         if uncovered:
+            _log.info("context index: stage 2 — analyzing %d new files for topics", len(uncovered))
             topic_cards = _llm_topic_cards(
                 uncovered, provider, model=model, existing_cards=existing_cards, walk_root=walk_root
             )
+            _log.info("context index: identified %d topic card(s) from new files", len(topic_cards))
 
         # --- Stale-covered: regenerate the cards that reference any stale file ---
         # Identify the cards touching a stale file and re-run topic extraction over each card's
         # file set so its summary/keywords/files reflect the current code, keeping the card id.
         if stale_covered:
+            _log.info("context index: stage 3 — regenerating %d stale card(s)", len(stale_covered))
             stale_set = set(stale_covered)
             regen_ids = {
                 card.get("id")
@@ -1497,6 +1500,7 @@ class FileContextStore(ContextAssemblerBase):
 
         fp_map: Dict[str, Dict[str, Any]] = {rel: {} for rel in referenced}
         if referenced:
+            _log.info("context index: stage 4 — fingerprinting %d file(s)", len(referenced))
             n_workers = min(8, len(referenced))
             fp_results = _run_parallel(
                 [lambda r=rel: (r, self._fingerprint(r)) for rel in referenced],
@@ -1508,6 +1512,7 @@ class FileContextStore(ContextAssemblerBase):
                     fp_map[rel] = fp or {}
 
         # --- Pass 3: build and write one card per topic ---
+        _log.info("context index: stage 5 — writing %d card(s)", len(topic_cards))
         cards_written = 0
         for tc in topic_cards:
             if cards_written >= max_cards:
