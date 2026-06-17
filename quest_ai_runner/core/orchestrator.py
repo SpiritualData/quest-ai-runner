@@ -136,10 +136,19 @@ CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
   NEVER correct for a code/file change -- describing the fix or printing a patch instead of letting
   the deep runner apply it is a FAILURE.
 
+  CRITICAL: Do NOT answer with "I need to X" or "I should X" or "To fix this, I need to...".
+  These are NOT answers -- they are unexecuted tasks. If you realize work needs doing, choose
+  "deep" immediately and let the runner do it. NEVER describe work in an answer; ALWAYS execute it.
+
   Recognize code-change tasks by keywords: "fix", "bug", "break", "implement", "build", "refactor",
   "edit", "update", "change", "add", "remove", "delete", "rewrite", "apply", "make". If the user
   asks you to fix/implement/change something, escalate to "deep" immediately -- do NOT answer
   about what you think the fix should be.
+
+  If you have already read and gathered context, and now realize execution is needed: choose
+  action="answer" WITH deferred_deep. The answer can acknowledge what was found, but deferred_deep
+  must specify the work to execute. This executes both: user gets immediate feedback PLUS the work
+  gets done in the deferred task.
 """
 
 _PLANNER_ACTIONS = """\
@@ -436,6 +445,30 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
 # ---------------------------------------------------------------------------
 # Rendering helpers (gathered observations -> prompt text / grounding block).
 # ---------------------------------------------------------------------------
+
+def _answer_describes_unexecuted_work(text: Optional[str]) -> bool:
+    """Check if answer contains statements about work that needs doing but wasn't executed.
+
+    Uses cheap regex patterns first, then falls back to LLM if regex is uncertain.
+    Patterns: "I need to", "I should", "To fix this, I need", etc. — unexecuted work.
+    """
+    if not text or not text.strip():
+        return False
+    try:
+        import re
+        # Quick regex check for obvious patterns
+        patterns = [
+            r"\bi\s+(?:need|should|will need|must|have to)\s+(?:to\s+)?(?:identify|read|understand|check|inspect|review)",
+            r"\bi\s+(?:need|should)\s+to\s+(?:update|modify|change|fix|add|remove|delete|create|implement)",
+            r"to\s+(?:fix|address|resolve)\s+this,?\s+i\s+(?:need|should|must)",
+        ]
+        for pattern in patterns:
+            if re.search(pattern, text, re.IGNORECASE):
+                return True
+    except Exception:  # noqa: BLE001
+        pass
+    return False
+
 
 def _render_gathered(gathered: List[Dict[str, Any]]) -> str:
     if not gathered:
@@ -1751,14 +1784,23 @@ class Orchestrator:
                                     data={"tokens_in": _ti, "tokens_out": _to, "total": _ti + _to}))
 
         # If deferred_deep is set, also run the deep task after returning the answer
-        # OR auto-detect if answer claims work needs doing (safety fallback for planner forgetting deferred_deep)
+        # OR auto-detect if answer claims work needs doing OR describes unexecuted work
         should_defer_deep = plan.deferred_deep
-        if not should_defer_deep and self.deep_runner is not None and text_claims_action(text):
-            # Answer claims work but no deferred_deep set — auto-escalate to deep (safety net)
-            should_defer_deep = {"goal": f"Implement what was just described: {user_message}",
-                                  "rationale": "auto-detected from answer text (safety escalation)"}
-            if emit is not None:
-                emit.status("detected work needed, executing now…")
+        if not should_defer_deep and self.deep_runner is not None:
+            # Check two patterns:
+            # 1. Answer claims completed action ("I've fixed", "Done")
+            # 2. Answer describes unexecuted work ("I need to", "I should", "I will need to")
+            has_false_claim = text_claims_action(text)
+            has_unexecuted_work = _answer_describes_unexecuted_work(text)
+
+            if has_false_claim or has_unexecuted_work:
+                # Work described but not executed — auto-escalate to deep (safety net)
+                # IMPORTANT: Don't return this answer; execute first, then report results
+                should_defer_deep = {"goal": f"Execute what the answer described: {user_message}",
+                                      "rationale": f"auto-detected {'false claim' if has_false_claim else 'unexecuted work'} in answer",
+                                      "suppress_answer": True}  # Flag: replace answer with execution results
+                if emit is not None:
+                    emit.status("executing work now…")
 
         if should_defer_deep:
             try:
@@ -1776,11 +1818,18 @@ class Orchestrator:
                 deep_res = self._run_deep(deferred_plan, user_message, deep_model,
                                          emit=emit, rep_preamble=rep_preamble,
                                          exec_record=exec_record, gathered=gathered)
-                # Append deep results to the answer text for visibility
+                # If suppress_answer flag is set (bad answer was detected), REPLACE it with results
+                # Otherwise append results to the answer for visibility
                 if deep_res and deep_res.deep_results:
                     deep_output = "\n\n".join(d.output for d in deep_res.deep_results if d.output)
                     if deep_output:
-                        text = text + "\n\n--- Work Completed ---\n" + deep_output
+                        suppress = should_defer_deep.get("suppress_answer", False)
+                        if suppress:
+                            # Bad answer detected (false claim or unexecuted work) — use execution results instead
+                            text = deep_output
+                        else:
+                            # Normal deferred work — append to answer
+                            text = text + "\n\n--- Work Completed ---\n" + deep_output
             except Exception as e:  # noqa: BLE001 — deferred work must never break the answer
                 log.warning(f"Deferred deep work failed: {type(e).__name__}: {e}", exc_info=True)
 
