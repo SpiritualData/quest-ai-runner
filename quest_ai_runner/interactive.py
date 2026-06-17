@@ -1566,9 +1566,9 @@ class InteractiveSession:
         import os
         c = self._console
         skills_dir = self._skills_dir()
-        if not skills_dir or not os.path.isdir(skills_dir):
-            c.dim(f"  No skills directory found (set QAR_SKILLS_DIR, or QAR_CORPUS_ROOT/.claude/skills/).")
-            c.dim("  You can still use /rep <name> and /file <path> to set a representative manually.")
+        if not os.path.isdir(skills_dir):
+            c.dim(f"  No SKILL.md files found in {skills_dir}")
+            c.dim("  Create .claude/skills/<name>/SKILL.md, or use /rep <name> and /file <path> directly.")
             return
         reps = []
         for entry in sorted(os.scandir(skills_dir), key=lambda e: e.name):
@@ -1598,15 +1598,22 @@ class InteractiveSession:
             c.dim(f"  Could not read {r['skill_file']!r}: {e}")
 
     def _skills_dir(self) -> Optional[str]:
-        """Resolve the local skills directory: QAR_SKILLS_DIR > corpus_root/.claude/skills."""
+        """Resolve the local skills directory: QAR_SKILLS_DIR > corpus_root/.claude/skills > cwd/.claude/skills."""
         import os
+        # Explicit env var takes priority
         explicit = os.getenv("QAR_SKILLS_DIR")
         if explicit:
             return explicit
+        # Next, try corpus_root if configured
         corpus = getattr(self._cfg, "corpus_root", None)
         if corpus:
             return os.path.join(corpus, ".claude", "skills")
-        return None
+        # Finally, default to current working directory
+        cwd_skills = os.path.join(os.getcwd(), ".claude", "skills")
+        if os.path.isdir(cwd_skills):
+            return cwd_skills
+        # If none of the above exist, still return cwd path (for /reps to show the hint)
+        return cwd_skills
 
     def _print_whoami(self) -> None:
         c = self._console
