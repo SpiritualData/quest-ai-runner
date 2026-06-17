@@ -620,7 +620,8 @@ _CTRL_C_WINDOW = 2.0   # seconds: second Ctrl+C within this window exits
 
 _SLASH_COMMANDS = [
     "/help", "/clear", "/reps", "/rep ", "/file ",
-    "/quests", "/goal ", "/whoami", "/quit", "/q",
+    "/quests", "/goal ", "/whoami", "/status", "/tasks",
+    "/execute", "/quit", "/q",
     "/models", "/model", "/model ", "/depth", "/depth ",
     "/system", "/replan",
     "/save ", "/save", "/load ", "/sessions",
@@ -638,12 +639,15 @@ _SLASH_COMMANDS = [
 
 class _SlashCompleter(Completer):
     def get_completions(self, document, complete_event):
-        text = document.text_before_cursor
+        text = document.text_before_cursor.strip()
         if not text.startswith("/"):
             return
+        # Show completions for slash commands
         for cmd in _SLASH_COMMANDS:
             if cmd.startswith(text):
-                yield Completion(cmd[len(text):], display=cmd.rstrip())
+                # Return the remainder to complete, plus the full command for display
+                completion_text = cmd[len(text):]
+                yield Completion(completion_text, display=cmd, start_position=len(text) - len(document.text_before_cursor))
 
 
 def _history_path() -> Optional[Path]:
