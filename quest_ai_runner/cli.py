@@ -184,6 +184,17 @@ def main(argv=None) -> int:
     boot_p.add_argument("--dry-run", action="store_true",
                         help="estimate tokens, cost, and time without running bootstrap")
 
+    # --- paste-context subcommand: save context to a card -----------------------
+    paste_p = sub.add_parser("paste-context", help="save context from stdin to a context card")
+    paste_p.add_argument("card_id", nargs="?", default=None,
+                         help="card id or key to save under (default: auto-generate from content)")
+    paste_p.add_argument("--cards-dir", default=None, metavar="PATH",
+                         help="cards directory (default: <corpus>/.quest-context or QAR_CONTEXT_CARDS_DIR)")
+    paste_p.add_argument("--corpus", default=None, metavar="PATH",
+                         help="corpus root (default: QAR_CORPUS_ROOT env var)")
+    paste_p.add_argument("--goal-id", default=None,
+                         help="optional: quest goal id for metadata")
+
     # --- poll subcommand (and legacy flat flags, kept for back-compat) --------
     poll_p = sub.add_parser("poll", help="poll Quest for due tasks and run them")
     poll_p.add_argument("--once", action="store_true", help="one scan then exit (cron mode)")
@@ -408,6 +419,87 @@ def main(argv=None) -> int:
         print(f"Time: {elapsed_time:.0f}s (~{int(elapsed_time // 60)}m)")
         print()
 
+        return 0
+
+    # --- paste-context: save context from stdin to a card ----------------------
+    if args.command == "paste-context":
+        import sys
+        import hashlib
+        import json
+        from pathlib import Path
+
+        corpus = args.corpus or os.getenv("QAR_CORPUS_ROOT") or os.getcwd()
+        cards_dir = args.cards_dir or os.getenv("QAR_CONTEXT_CARDS_DIR") or os.path.join(corpus, ".quest-context")
+
+        # Read context from stdin
+        try:
+            context_text = sys.stdin.read()
+        except KeyboardInterrupt:
+            log.error("interrupted")
+            return 1
+        except Exception as e:  # noqa: BLE001
+            log.error("failed to read stdin: %s", e)
+            return 1
+
+        if not context_text.strip():
+            log.error("no context provided")
+            return 1
+
+        # Determine card id
+        if args.card_id:
+            card_id = args.card_id
+        else:
+            # Auto-generate from content hash
+            h = hashlib.sha256(context_text.encode("utf-8")).hexdigest()[:8]
+            card_id = f"pasted-{h}"
+
+        # Build the card
+        from datetime import datetime, timezone
+        card = {
+            "id": card_id,
+            "keywords": ["pasted", "context"],
+            "summary": context_text.split('\n')[0][:100],  # First line or 100 chars
+            "content": context_text,
+            "files": [],
+            "conventions": [],
+            "provenance": {
+                "created_by_task": "paste-context",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            },
+            "usage_count": 0,
+            "last_outcome": "unknown",
+        }
+        if args.goal_id:
+            card["goal_id"] = args.goal_id
+
+        # Ensure cards directory exists
+        Path(cards_dir).mkdir(parents=True, exist_ok=True)
+
+        # Write card atomically
+        card_path = Path(cards_dir) / f"{card_id}.json"
+        try:
+            tmp_fd, tmp_path = __import__("tempfile").mkstemp(
+                dir=str(cards_dir),
+                prefix=".tmp_",
+                suffix=".json"
+            )
+            try:
+                with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
+                    json.dump(card, fh, indent=2, ensure_ascii=False)
+                    fh.write("\n")
+                os.replace(tmp_path, str(card_path))
+            except Exception:  # noqa: BLE001
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+                raise
+        except Exception as e:  # noqa: BLE001
+            log.error("failed to write card: %s", e)
+            return 1
+
+        print(f"Saved to {card_path}")
+        print(f"Card ID: {card_id}")
         return 0
 
     # --- poll (default when no subcommand given) ------------------------------
