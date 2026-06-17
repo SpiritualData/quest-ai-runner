@@ -262,6 +262,7 @@ class _ContextPanel:
         self._total_sources = 0          # total sources seen (for footer)
         self._replans = 0
         self._last_line_count = 0
+        self._card_names: List[Tuple[str, str]] = []  # (card_id, title) pairs shown
 
     def start(self) -> None:
         if not self._tty:
@@ -274,6 +275,11 @@ class _ContextPanel:
         with self._lock:
             self._phase = text
 
+    def set_cards(self, cards: List[dict]) -> None:
+        """Set the context cards that were selected."""
+        with self._lock:
+            self._card_names = [(c.get("id", "?"), c.get("title", "(no title)")[:50]) for c in cards]
+
     def inc_replans(self) -> None:
         with self._lock:
             self._replans += 1
@@ -281,6 +287,7 @@ class _ContextPanel:
             # This prevents old sources from cluttering the display
             self._sources = []
             self._overflow = 0
+            self._card_names = []
 
     def add_sources(self, paths: List[str], count: int) -> List[str]:
         """Called when a READ event arrives with its source paths. Returns only NEW paths."""
@@ -329,8 +336,16 @@ class _ContextPanel:
             phase = self._phase
             sources = list(self._sources)
             overflow = self._overflow
+            cards = list(self._card_names)
 
         lines: List[str] = [f"  {frame} {phase}"]
+
+        # Show context cards if available
+        if cards:
+            lines.append("")
+            for card_id, title in cards:
+                lines.append(f"  📇 {_a(_DIM, card_id)}: {title}")
+
         if sources:
             lines.append("")
             # Group sources by type for better visual hierarchy
@@ -594,6 +609,9 @@ class _TurnRenderer:
             # Display selected context cards + their sources
             card_meta = data.get("card_metadata") or []
             sources = data.get("sources") or []
+            if card_meta:
+                # Update the spinner panel to show card names
+                self._panel.set_cards(card_meta)
             if card_meta or sources:
                 self._panel.stop()
                 self._ensure_ai_label()
