@@ -317,7 +317,7 @@ def main(argv=None) -> int:
             total_sampled_tokens = stage1_sampled_tokens + stage2_sampled_tokens
             total_savings = total_full_tokens - total_sampled_tokens
 
-            # Cost estimate (~$0.0001 per 1M input tokens for Claude 3.5 Sonnet)
+            # Cost estimate (~$0.0001 per 1M input tokens for Claude 3.5 Sonnet, adjust for your model)
             cost_full = (total_full_tokens / 1_000_000) * 0.0001
             cost_sampled = (total_sampled_tokens / 1_000_000) * 0.0001
             cost_saved = cost_full - cost_sampled
@@ -332,18 +332,15 @@ def main(argv=None) -> int:
             log.info("Source files: %d", file_count)
             log.info("Estimated areas: %d", estimated_areas)
             log.info("")
-            log.info("Token usage:")
-            log.info("  Without optimization: %,d tokens", total_full_tokens)
-            log.info("  With TF-DF-IDF:       %,d tokens", total_sampled_tokens)
-            log.info("  Savings:              %,d tokens (%.0f%%)", total_savings,
+            log.info("Token usage (with TF-DF-IDF sampling):")
+            log.info("  Estimated:            %d tokens", total_sampled_tokens)
+            log.info("  Savings vs full list: %d tokens (%.0f%%)", total_savings,
                      100 * total_savings / total_full_tokens if total_full_tokens > 0 else 0)
             log.info("")
-            log.info("Estimated cost:")
-            log.info("  Without optimization: $%.4f", cost_full)
-            log.info("  With TF-DF-IDF:       $%.4f", cost_sampled)
-            log.info("  Savings:              $%.4f", cost_saved)
+            log.info("Estimated cost (with TF-DF-IDF; depends on provider & model):")
+            log.info("  Based on Sonnet:      $%.4f", cost_sampled)
             log.info("")
-            log.info("Time estimate: ~%ds (%dm)", time_estimate, time_estimate // 60)
+            log.info("Time estimate: ~%ds (~%dm) (depends on provider latency)", time_estimate, time_estimate // 60)
             log.info("")
             log.info("Run without --dry-run to execute bootstrap.")
             return 0
