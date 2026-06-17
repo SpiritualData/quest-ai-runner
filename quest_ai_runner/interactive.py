@@ -473,12 +473,12 @@ class _TurnRenderer:
     def _types(self):
         if self._ev is None:
             from .core.adapters import (
-                EVENT_STATUS, EVENT_PLAN, EVENT_READ, EVENT_REPLAN,
+                EVENT_CONTEXT, EVENT_STATUS, EVENT_PLAN, EVENT_READ, EVENT_REPLAN,
                 EVENT_PARTIAL, EVENT_EXEC, EVENT_RESULT, EVENT_DECISION,
                 EVENT_MILESTONE, EVENT_DONE,
             )
             self._ev = dict(
-                status=EVENT_STATUS, plan=EVENT_PLAN, read=EVENT_READ,
+                context=EVENT_CONTEXT, status=EVENT_STATUS, plan=EVENT_PLAN, read=EVENT_READ,
                 replan=EVENT_REPLAN, partial=EVENT_PARTIAL, exec=EVENT_EXEC,
                 result=EVENT_RESULT, decision=EVENT_DECISION,
                 milestone=EVENT_MILESTONE, done=EVENT_DONE,
@@ -568,6 +568,72 @@ class _TurnRenderer:
                 self._print_step("↺ replan", text)
                 self._panel.start()
             self._panel.set_phase("re-planning…")
+        elif t == ev["context"]:
+            # Display selected context cards + their sources
+            card_meta = data.get("card_metadata") or []
+            sources = data.get("sources") or []
+            if card_meta or sources:
+                self._panel.stop()
+                self._ensure_ai_label()
+                # Show selected cards
+                if card_meta:
+                    c = self._c
+                    if c._rich:
+                        c._rich.print("[dim]Context cards selected:[/]", highlight=False)
+                    else:
+                        c.line(f"{_DIM}Context cards selected:{_RESET}")
+                    for card in card_meta:
+                        card_id = card.get("id", "?")
+                        title = card.get("title", "(no title)")[:60]
+                        score = card.get("relevance_score", 0)
+                        adapter = card.get("adapter", "unknown")
+                        file_count = card.get("file_count", 0)
+                        # Format: ● [adapter] card_id: title (score: 0.85, 3 files)
+                        if c._rich:
+                            score_str = f"score: {score:.2f}" if score else "score: unknown"
+                            files_str = f"{file_count} file{'s' if file_count != 1 else ''}"
+                            c._rich.print(
+                                f"  [cyan]●[/] [{adapter}] {_a(_DIM, card_id)}: {title}",
+                                highlight=False
+                            )
+                            c._rich.print(
+                                f"    [dim]{score_str}, {files_str}[/]",
+                                highlight=False
+                            )
+                        elif c._color:
+                            score_str = f"score: {score:.2f}" if score else "score: unknown"
+                            files_str = f"{file_count} file{'s' if file_count != 1 else ''}"
+                            c.line(f"  {_CYAN}●{_RESET} [{adapter}] {_a(_DIM, card_id)}: {title}")
+                            c.line(f"    {_DIM}{score_str}, {files_str}{_RESET}")
+                        else:
+                            score_str = f"score: {score:.2f}" if score else "score: unknown"
+                            files_str = f"{file_count} file{'s' if file_count != 1 else ''}"
+                            c.line(f"  • [{adapter}] {card_id}: {title}")
+                            c.line(f"    {score_str}, {files_str}")
+                # Show source attribution
+                if sources:
+                    c = self._c
+                    if c._rich:
+                        c._rich.print("[dim]Sources:[/]", highlight=False)
+                    else:
+                        c.line(f"{_DIM}Sources:{_RESET}")
+                    for src in sources:
+                        src_adapter = src.get("adapter", "?")
+                        src_label = src.get("label", src_adapter)
+                        items = src.get("items") or []
+                        if items:
+                            items_str = ", ".join(str(x).split("/")[-1] for x in items[:3])
+                            extra = f" (+{len(items) - 3} more)" if len(items) > 3 else ""
+                            if c._rich:
+                                c._rich.print(
+                                    f"  [dim]• {src_label}: {items_str}{extra}[/]",
+                                    highlight=False
+                                )
+                            elif c._color:
+                                c.line(f"  {_DIM}• {src_label}: {items_str}{extra}{_RESET}")
+                            else:
+                                c.line(f"  • {src_label}: {items_str}{extra}")
+                self._panel.start()
         elif t == ev["status"]:
             # Show user-friendly status messages
             status = text or "thinking…"
