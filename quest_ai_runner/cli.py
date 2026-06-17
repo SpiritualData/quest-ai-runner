@@ -366,10 +366,16 @@ def main(argv=None) -> int:
                 shutil.rmtree(cards_dir)
                 log.info("cards deleted")
 
+        import time
+
         provider = _model_provider_from_env()
         store = FileContextStore(cards_dir, repo_root=corpus)
         log.info("bootstrapping context store for %s", corpus)
+
+        start_time = time.time()
         n = store.bootstrap(root=corpus, provider=provider)
+        elapsed_time = time.time() - start_time
+
         log.info("done: %d cards in %s", n, cards_dir)
 
         # Display bootstrap summary in nice format
@@ -394,6 +400,7 @@ def main(argv=None) -> int:
         print()
         if tokens_in > 0:
             print(f"Cost: ${cost:.4f}")
+        print(f"Time: {elapsed_time:.0f}s (~{int(elapsed_time // 60)}m)")
         print()
 
         return 0
