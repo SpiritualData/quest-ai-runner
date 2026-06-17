@@ -3,6 +3,9 @@
 These satisfy the core interfaces; a consumer wires the ones it needs into a RunnerConfig:
   * FilesAdapter              — RetrievalAdapter over a configured file root (quest-docs + corpus).
   * CachedDbAdapter           — RetrievalAdapter: live DB reads via a short-TTL cache (no file sync).
+  * ClaudeConversationsAdapter — RetrievalAdapter over Claude Code session transcripts (local directory).
+  * CompositeRetrievalAdapter — RetrievalAdapter that runs multiple adapters IN PARALLEL, merging
+                                results. Query files, databases, conversations, task memory together.
   * AnthropicProvider         — ModelProvider (plan / answer / live models.list bucketing). Needs an
                                 ANTHROPIC_API_KEY (per-token billing).
   * ClaudeCliProvider         — ModelProvider that drives the local ``claude`` CLI headless, KEYLESS:
@@ -30,6 +33,8 @@ reference (the Quest team decision-request) lives in runner.quest_client.
 from .anthropic_provider import AnthropicProvider
 from .cached_db_adapter import CachedDbAdapter
 from .claude_cli_provider import ClaudeCliProvider
+from .claude_conversations_adapter import ClaudeConversationsAdapter
+from .composite_retrieval_adapter import CompositeRetrievalAdapter
 from .file_context_store import FileContextStore
 from .files_adapter import FilesAdapter
 from .hybrid_context_assembler import HybridContextAssembler
@@ -79,6 +84,8 @@ except ImportError:
 __all__ = [
     "FilesAdapter",
     "CachedDbAdapter",
+    "ClaudeConversationsAdapter",
+    "CompositeRetrievalAdapter",
     "AnthropicProvider",
     "ClaudeCliProvider",
     "GeminiProvider",
