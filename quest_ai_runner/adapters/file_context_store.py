@@ -605,7 +605,7 @@ def _discover_areas(chunk: List[str], provider, model) -> List[Dict[str, Any]]:
                 areas.append({"name": name, "description": desc, "files": files})
         return areas
     except Exception:  # noqa: BLE001
-        _log.debug("context index: area discovery failed for chunk", exc_info=True)
+        _log.warning("context index: area discovery failed for chunk", exc_info=True)
         return []
 
 
@@ -770,7 +770,7 @@ def _extract_topic_cards(area: Dict[str, Any], allowed: Set[str], provider, mode
             })
         return cards
     except Exception:  # noqa: BLE001
-        _log.debug("context index: topic extraction failed for area %r", area.get("name"), exc_info=True)
+        _log.warning("context index: topic extraction failed for area %r", area.get("name"), exc_info=True)
         return []
 
 
@@ -929,7 +929,7 @@ def _dedup_cluster_llm(cluster: List[Dict[str, Any]], provider, model) -> List[D
             return cluster
         return [_merge_card_group([cluster[i] for i in g]) for g in groups]
     except Exception:  # noqa: BLE001
-        _log.debug("context index: LLM dedup failed for cluster, keeping it unchanged",
+        _log.warning("context index: LLM dedup failed for cluster, keeping it unchanged",
                    exc_info=True)
         return cluster
 
