@@ -341,6 +341,7 @@ class AssembledContext:
     card_ids: List[str] = field(default_factory=list)
     stale: List[str] = field(default_factory=list)
     sources: List[Dict[str, Any]] = field(default_factory=list)
+    card_metadata: List[Dict[str, Any]] = field(default_factory=list)  # [{'id', 'title', 'relevance_score', 'file_count', 'files', 'adapter'}]
 
 
 @runtime_checkable
