@@ -74,9 +74,31 @@ _GREEN   = "\033[32m"
 _YELLOW  = "\033[33m"
 _MAGENTA = "\033[35m"
 _BLUE    = "\033[34m"
+_GOLD    = "\033[38;5;220m"  # 256-color gold for opus
+_BRIGHT_CYAN = "\033[96m"
 
 def _a(code: str, s: str) -> str:
     return f"{code}{s}{_RESET}"
+
+def _bullet(text: str, indent: int = 0, color: Optional[str] = None) -> str:
+    """Format a bullet point with optional color and indentation."""
+    prefix = "  " * indent + "● "
+    if color:
+        return prefix + color + text + _RESET
+    return prefix + text
+
+def _sub_bullet(text: str, indent: int = 1) -> str:
+    """Format a sub-bullet (indented)."""
+    return "  " * indent + "⎿  " + text
+
+def _activity(duration_sec: float, status: str = "Running") -> str:
+    """Format an activity indicator like Claude Code's 'Churned for 20s'."""
+    mins, secs = divmod(int(duration_sec), 60)
+    if mins > 0:
+        time_str = f"{mins}m {secs}s"
+    else:
+        time_str = f"{secs}s"
+    return _DIM + f"✻ {status} for {time_str}" + _RESET
 
 
 # ── Console wrapper ───────────────────────────────────────────────────────────
@@ -98,6 +120,24 @@ class _Console:
         if self._rich:    self._rich.print(s, style="dim", highlight=False)
         elif self._color: self.line(_a(_DIM, s))
         else:             self.line(s)
+
+    def bullet(self, text: str, indent: int = 0, color: Optional[str] = None) -> None:
+        """Print a bullet point with optional color."""
+        if self._rich and color:
+            self._rich.print(f"{'  ' * indent}[{color}]●[/] {text}", highlight=False)
+        else:
+            self.line(_bullet(text, indent, color))
+
+    def sub_bullet(self, text: str, indent: int = 1) -> None:
+        """Print a sub-bullet (tree-style indented)."""
+        self.dim("  " * indent + "⎿  " + text)
+
+    def markdown(self, text: str) -> None:
+        """Render text as markdown (if rich is available, else plain)."""
+        if self._rich:
+            self._rich.print(text, highlight=False)
+        else:
+            self.line(text)
 
     def speaker(self, label: str, color: str, text: str) -> None:
         _ansi = {"cyan": _CYAN, "green": _GREEN, "yellow": _YELLOW,
@@ -224,13 +264,16 @@ class _ContextPanel:
         if sources:
             lines.append("")
             for src in sources:
+                # Truncate very long paths gracefully
                 label = src if len(src) <= 62 else "…" + src[-59:]
-                lines.append(f"  ↗  {label}")
+                # Use different prefix based on source type
+                prefix = "⌕" if src.startswith("(searched") else "↗"
+                lines.append(f"  {prefix}  {label}")
             if overflow:
-                lines.append(f"     … and {overflow} more")
+                lines.append(f"     and {overflow} more…")
 
         # Each render ends with \n after every line, so the cursor sits one line
-        # BELOW the last spinner line.  On the next render we move up by n lines
+        # BELOW the last spinner line. On the next render we move up by n lines
         # to land exactly on the first spinner line and overwrite from there.
         n = self._last_line_count
         if n:
@@ -392,15 +435,15 @@ class _TurnRenderer:
 
     def _ensure_ai_label(self) -> None:
         if not self._ai_label_printed:
-            # Write inline (no newline) so the response flows after the label on the same line.
+            # Print label on its own line with proper spacing (Claude Code style)
             if self._c._color or self._c._rich:
-                self._c.write(f"{_BOLD}{_CYAN}{self._rep_name}{_RESET}  ")
+                self._c.line(f"{_BOLD}{_CYAN}{self._rep_name}{_RESET}")
             else:
-                self._c.write(f"{self._rep_name}  ")
+                self._c.line(f"{self._rep_name}")
             self._ai_label_printed = True
 
     def _print_step(self, prefix: str, message: str) -> None:
-        """Print a dim step line (call while panel is stopped)."""
+        """Print a dim step/action line (call while panel is stopped)."""
         c = self._c
         if c._rich:
             c._rich.print(f"  [dim]{prefix}  {message}[/]", highlight=False)
@@ -408,6 +451,16 @@ class _TurnRenderer:
             c.line(f"  {_DIM}{prefix}  {message}{_RESET}")
         else:
             c.line(f"  {prefix}  {message}")
+
+    def _print_success(self, message: str) -> None:
+        """Print a success indicator."""
+        c = self._c
+        if c._rich:
+            c._rich.print(f"  [green]✓[/] {message}", highlight=False)
+        elif c._color:
+            c.line(f"  {_a(_GREEN, '✓')} {message}")
+        else:
+            c.line(f"  ✓ {message}")
 
     def render(self, event) -> None:
         # run_stream() yields dicts (via ProgressEvent.to_dict()); support both.
@@ -430,19 +483,14 @@ class _TurnRenderer:
                 # Do NOT set _partial_started/_in_partial — the real result still shows normally.
                 self._panel.stop()
                 if text:
-                    c = self._c
-                    if c._rich:
-                        c._rich.print(f"  [dim]{text}[/]", highlight=False)
-                    elif c._color:
-                        c.line(f"  {_DIM}{text}{_RESET}")
-                    else:
-                        c.line(f"  {text}")
+                    self._c.dim(f"  {text}")
                 self._panel.start()
                 return
-            # Regular streaming token path (unchanged).
+            # Regular streaming token path.
             if not self._partial_started:
                 self._panel.stop()
                 self._ensure_ai_label()
+                self._c.line("")  # Blank line after label for breathing room
                 self._partial_started = True
                 self._in_partial = True
             self._c.write(text)
@@ -487,16 +535,14 @@ class _TurnRenderer:
             self._panel.set_phase(text or "running…")
         elif t == ev["milestone"]:
             self._panel.stop()
-            c = self._c
-            if c._rich:    c._rich.print(f"  [green]✓[/] {text}", highlight=False)
-            elif c._color: c.line(f"  {_a(_GREEN, '✓')} {text}")
-            else:          c.line(f"  ✓ {text}")
+            self._print_success(text)
             self._panel.start()
         elif t == ev["result"]:
             if not self._partial_started and text:
                 self._panel.stop()
                 self._ensure_ai_label()
-                self._c.line(text)
+                self._c.line("")  # Blank line after label for breathing room
+                self._c.markdown(text)  # Use markdown rendering for better formatting
         elif t == ev["decision"]:
             self._panel.stop()
             c = self._c
@@ -586,32 +632,41 @@ def _read_line(session, prompt_str: str) -> Optional[str]:
 
 _HELP = """\
 Commands:
-  /help              Show this help
-  /clear             Reset the conversation transcript
-  /reps              List and select an AI representative for this session
-  /rep <name>        Set a custom representative name directly
-  /file <path>       Load any file as the persona for this session
-  /quests            Browse and attach to a Quest goal
-  /goal <search>     Search goals by name and pick one  (or pass an id directly)
-  /whoami            Show what this AI knows about itself and this session
-  /quit  /q          Exit
+
+  ● Session & Configuration
+    /whoami              Show AI identity and session state
+    /reps                List available AI representatives
+    /rep <name>          Set representative name directly
+    /file <path>         Load a persona file
+
+  ● Conversation
+    /clear               Reset the transcript
+    /help                Show this help
+
+  ● Goals & Quests
+    /quests              Browse and attach to goals
+    /goal <search|id>    Search goals or attach by ID
+
+  ● Exit
+    /quit, /q            Exit the session
 
 Keys:
-  ESC          Cancel the current turn while it is streaming
-  Ctrl+C       Clear the input line  (press twice within 2s to exit)
-  Ctrl+D       Exit
+
+  ESC            Cancel current turn (while streaming)
+  Ctrl+C         Clear input line (twice within 2s to exit)
+  Ctrl+D         Exit
 """
 
 _BANNER = """\
 {B}{C}quest-ai-runner{R}  Grounded AI that acts like a colleague
 
-  What makes this different from a plain chat window:
-  · finds just the right context efficiently for every request; no "look at this file" needed
-  · routes to the right model automatically, bringing in higher models for review (haiku → sonnet → opus)
-  · optimal token usage; can run the same conversation forever
-  · named AI representatives learn how to act like their associated human over time
+  What makes this different:
+  ● finds just the right context efficiently; no "look at this file" needed
+  ● routes to the right model automatically (haiku → sonnet → opus)
+  ● optimal token usage; can run forever without context bloat
+  ● named AI reps learn how to act like their associated human
 
-  {D}ESC cancel turn  ·  Ctrl+D exit  ·  /help for commands{R}
+  {D}ESC to cancel  ·  Ctrl+D to exit  ·  /help for all commands{R}
 """
 
 
@@ -657,13 +712,14 @@ class InteractiveSession:
         parts = [f"AI: {self._rep_name}"]
         corpus = getattr(self._cfg, "corpus_root", None)
         if corpus:
-            parts.append(f"corpus: {corpus}")
+            corpus_short = corpus.split("/")[-1] if "/" in corpus else corpus
+            parts.append(f"corpus: {corpus_short}")
         if self._persona:
             kb = max(1, len(self._persona.encode()) // 1024)
             parts.append(f"persona: {kb}KB")
         if self._goal_id:
             parts.append(f"goal: {self._goal_id}")
-        c.dim("  " + "  ·  ".join(parts))
+        c.dim("  " + "  •  ".join(parts))
         for notice in self._startup_notices:
             c.dim(f"  {notice}")
         c.line("")
@@ -789,8 +845,11 @@ class InteractiveSession:
 
     def _print_turn_footer(self, result: "OrchestratorResult",
                            panel: _ContextPanel, elapsed: float) -> None:
-        """Dim one-liner: N steps · M sources · [replans] · model · Xs"""
+        """Structured footer: steps · sources · model (color-coded) · tokens · duration."""
         src_count, replan_count = panel.summary()
+        c = self._console
+
+        # Collect metrics
         parts: List[str] = []
         steps = getattr(result, "steps", 0)
         if steps:
@@ -799,17 +858,35 @@ class InteractiveSession:
             parts.append(f"{src_count} source{'s' if src_count != 1 else ''}")
         if replan_count:
             parts.append(f"{replan_count} replan{'s' if replan_count != 1 else ''}")
+
+        # Model tier with color
         model_lbl = _model_label(getattr(result, "model", None))
+        model_colored = ""
         if model_lbl:
-            parts.append(model_lbl)
+            if "haiku" in model_lbl:
+                model_colored = _a(_CYAN, model_lbl)
+            elif "sonnet" in model_lbl:
+                model_colored = _a(_GREEN, model_lbl)
+            elif "opus" in model_lbl:
+                model_colored = _a(_GOLD, model_lbl)
+            elif "fable" in model_lbl:
+                model_colored = _a(_MAGENTA, model_lbl)
+            else:
+                model_colored = model_lbl
+            parts.append(model_colored)
+
+        # Token usage with better formatting
         tok_in = getattr(result, "tokens_in", 0) or 0
         tok_out = getattr(result, "tokens_out", 0) or 0
         if tok_in or tok_out:
             def _k(n):
                 return f"{n/1000:.1f}k" if n >= 1000 else str(n)
-            parts.append(f"{_k(tok_in)} in / {_k(tok_out)} out")
+            parts.append(f"↥ {_k(tok_in)} in · ↦ {_k(tok_out)} out")
+
         parts.append(f"{elapsed:.1f}s")
-        self._console.dim("  " + "  ·  ".join(parts))
+
+        # Print as a clean, indented line
+        c.dim("  " + "  ·  ".join(parts))
 
     # -- REPL ------------------------------------------------------------------
 
@@ -1090,18 +1167,19 @@ class InteractiveSession:
     def _print_whoami(self) -> None:
         c = self._console
         c.line("")
-        c.speaker(self._rep_name, "cyan", "")
+        c.speaker(self._rep_name, "cyan", "Session info")
+        c.line("")
         if self._persona:
             kb = max(1, len(self._persona.encode()) // 1024)
-            c.dim(f"  representative:  {self._rep_name}  ({kb}KB skill file loaded)")
+            c.bullet(f"representative: {self._rep_name} ({kb}KB skill file)", indent=1)
         else:
-            c.dim(f"  representative:  {self._rep_name}  (no skill file loaded — use /reps to pick one)")
+            c.bullet(f"representative: {self._rep_name} (use /reps to load a skill file)", indent=1)
         corpus = getattr(self._cfg, "corpus_root", None)
         if corpus:
-            c.dim(f"  corpus:          {corpus}")
+            c.bullet(f"corpus: {corpus}", indent=1)
         if self._goal_id:
-            c.dim(f"  goal:            {self._goal_id}")
-        c.dim(f"  turns:           {self._turn_count} in this session")
+            c.bullet(f"goal: {self._goal_id}", indent=1)
+        c.bullet(f"turns: {self._turn_count} in this session", indent=1)
         c.line("")
 
 
