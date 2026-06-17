@@ -82,6 +82,11 @@ def compose_goal_prompt(goal: str, brief: str, *, preamble: str = "") -> str:
         body_parts.append(preamble.strip())
     body_parts.append(f"TASK:\n{brief.strip()}")
     body_parts.append(
+        "EFFICIENCY: The context above shows the relevant files/sources already identified by the "
+        "brain. Use them as your starting point. Only explore further if the provided context is "
+        "insufficient to complete the goal. Avoid redundant exploration of files already listed above."
+    )
+    body_parts.append(
         "When complete, provide a clear summary of what you did. If you couldn't fully meet the "
         "goal, say exactly what's left."
     )
