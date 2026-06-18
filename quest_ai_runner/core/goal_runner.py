@@ -492,19 +492,17 @@ def _monitor_claude_session(
                                             if msg_text and msg_text.strip():
                                                 event_count += 1
 
-                                                # Build unique run_id from session UUID + task number (if multi-task)
-                                                # This ensures uniqueness across concurrent QAR instances
+                                                # Extract task UUID from prompt (e.g., "TASK 1 [a1b2c3d4]")
+                                                # This is the unique task identifier across all concurrent instances
                                                 if not file_session_ids.get(str(jsonl_file)):
-                                                    session_uuid = jsonl_file.stem  # e.g., a1b2c3d4-...
                                                     import re
-                                                    match = re.search(r'\bTASK\s+(\d+)\b', msg_text)
+                                                    # Extract UUID from [a1b2c3d4] format
+                                                    match = re.search(r'\[([a-f0-9]{8})\]', msg_text)
                                                     if match:
-                                                        # Multi-task: include task number for clarity
-                                                        task_num = match.group(1)
-                                                        run_id = f"task{task_num}_{session_uuid[:8]}"
+                                                        run_id = match.group(1)
                                                     else:
-                                                        # Single task: just use session UUID
-                                                        run_id = session_uuid[:8]
+                                                        # Fallback: use filename UUID if parsing fails
+                                                        run_id = jsonl_file.stem[:8]
                                                     file_session_ids[str(jsonl_file)] = run_id
                                                 else:
                                                     run_id = file_session_ids.get(str(jsonl_file))
