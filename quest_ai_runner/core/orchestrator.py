@@ -1128,46 +1128,39 @@ class Orchestrator:
                     results[i] = Observation(kind="error", error=type(e).__name__)
         return [r.to_dict() for r in results if r is not None]
 
-    # --- execution directive detection (FORCE deep when user explicitly rejects planning) ----
+    # --- execution directive detection (LLM-based, FORCE deep when user explicitly rejects planning) ----
 
     def _detect_execution_directive(self, user_message: str) -> bool:
         """True iff the user has EXPLICITLY demanded execution over planning.
 
-        Keywords: "code it", "just do it", "execute", "build it", "implement",
-        "don't plan", "no more plans/proposals", "why haven't you coded",
-        "i don't want plans", "given 3 times", etc.
+        Uses a fast LLM call (haiku) to classify whether the message contains
+        a directive to execute/implement/build rather than plan/analyze.
 
-        This is a STRUCTURAL gate (no model cost) that forces action="deep" on first step.
+        This is flexible and maintains naturally — no brittle keyword lists.
         """
-        if not user_message:
+        if not user_message or len(user_message.strip()) < 10:
             return False
-        msg_lower = user_message.lower()
-        execution_keywords = (
-            "code it",
-            "just do it",
-            "execute it",
-            "build it",
-            "implement ",
-            "don't plan",
-            "no more plan",
-            "stop plan",
-            "no proposals",
-            "no draft",
-            "why haven't you coded",
-            "why didn't you code",
-            "code it already",
-            "given this to",
-            "i don't want plan",
-            "do the work",
-            "run the code",
-            "make the changes",
-            "apply the changes",
-            "i want execution",
-            "i want real work",
-            "no analysis",
-            "no planning",
+
+        # Fast classification call (haiku tier)
+        classify_prompt = (
+            "Classify this user message as EXECUTION or ANALYSIS.\n\n"
+            "EXECUTION: user explicitly demands you DO work (code it, implement, build, execute, "
+            "fix it, apply changes, make it happen, just do it, no more planning, etc.)\n\n"
+            "ANALYSIS: user asks you to think/plan/review/explain/understand (not to execute)\n\n"
+            f"Message: {user_message}\n\n"
+            "Answer ONLY 'EXECUTION' or 'ANALYSIS':"
         )
-        return any(keyword in msg_lower for keyword in execution_keywords)
+
+        try:
+            model = self.registry.resolve_tier("haiku")
+            provider = self.get_provider_for_model(model)
+            result = provider.answer(
+                [{"role": "user", "content": classify_prompt}],
+                model=model
+            )
+            return result and "EXECUTION" in result.upper()
+        except Exception:  # noqa: BLE001 — classification failure → assume not an execution directive
+            return False
 
     # --- planner call --------------------------------------------------------
 
