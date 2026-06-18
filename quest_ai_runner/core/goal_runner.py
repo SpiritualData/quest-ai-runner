@@ -242,14 +242,21 @@ def _find_claude_project_dir(working_dir: Optional[str] = None) -> Optional[Path
     """
     if not working_dir:
         working_dir = os.getenv("QAR_DEEP_WORKING_DIR") or os.getenv("QAR_CORPUS_ROOT")
+        _log.info("_find_claude_project_dir: using env vars QAR_DEEP_WORKING_DIR=%s QAR_CORPUS_ROOT=%s",
+                 os.getenv("QAR_DEEP_WORKING_DIR"), os.getenv("QAR_CORPUS_ROOT"))
 
     if not working_dir:
+        _log.warning("_find_claude_project_dir: no working_dir provided or found in env")
         return None
 
     # Direct .claude/projects in the working directory
     local_projects = Path(working_dir) / ".claude" / "projects"
+    _log.info("_find_claude_project_dir: checking %s", local_projects)
     if local_projects.exists() and local_projects.is_dir():
+        _log.info("_find_claude_project_dir: ✓ found")
         return local_projects
+    else:
+        _log.warning("_find_claude_project_dir: ✗ does not exist or not a dir")
 
     return None
 
