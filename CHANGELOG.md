@@ -18,6 +18,14 @@ All notable changes to this project are documented here. The format is based on
   not just the worker exit code, so a silent no-op or a sub-standard result is a confirmed failure.
   Parallel subgoals carry the OVERALL goal in their prompt so each stays aligned with the larger
   goal (hierarchical goal: overall user goal -> subgoals).
+- **The goal loop now applies to EVERY input, not just deep execution.** A plain ANSWER is also
+  pursued as a goal: when a quality bar is wired (a GuidanceProvider), the written answer is verified
+  against the user's goal at that bar and regenerated with steering until it meets the bar or
+  `answer_goal_max_iterations` is reached. Every deep process prompt carries the top input-level goal
+  (the user's actual request) plus, in a fan-out, the overall goal it serves, alongside its own
+  done-standard; retries carry the prior output and the verifier's feedback. New: `run()` /
+  `run_stream()` accept a `pending_inputs` callable so new user messages that arrive mid-run are
+  folded into the next deep process / answer retry (inert when the consumer does not supply it).
 
 ### Fixed
 - **Actionable requests now EXECUTE instead of ending as a proposal.** The cheap planner often
