@@ -678,6 +678,19 @@ class _TurnRenderer:
         else:
             c.line(f"  ✓ {message}")
 
+    def _print_markdown_with_indicator(self, text: str) -> None:
+        """Print markdown content with a green checkmark indicator."""
+        c = self._c
+        # Print the checkmark on same line as first line of markdown
+        if c._rich:
+            c._rich.print(f"  [green]✓[/]", highlight=False, end=" ")
+        elif c._color:
+            c.write(f"  {_a(_GREEN, '✓')} ")
+        else:
+            c.write(f"  ✓ ")
+        # Render the content (often markdown-formatted)
+        c.markdown(text)
+
     def render(self, event) -> None:
         # run_stream() yields dicts (via ProgressEvent.to_dict()); support both.
         if isinstance(event, dict):
@@ -882,16 +895,7 @@ class _TurnRenderer:
         elif t == ev["milestone"]:
             self._panel.stop()
             if text:
-                # Print checkmark, then render markdown for the milestone content
-                c = self._c
-                if c._rich:
-                    c._rich.print(f"  [green]✓[/]", highlight=False, end=" ")
-                elif c._color:
-                    c.write(f"  {_a(_GREEN, '✓')} ")
-                else:
-                    c.write(f"  ✓ ")
-                # Render the milestone text (often contains markdown formatting)
-                c.markdown(text)
+                self._print_markdown_with_indicator(text)
             self._panel.start()
         elif t == ev["result"]:
             if not self._partial_started and text:
