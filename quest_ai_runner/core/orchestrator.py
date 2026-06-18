@@ -1590,7 +1590,8 @@ class Orchestrator:
         if _ctx_future is not None:
             try:
                 _assembled = _ctx_future.result(timeout=3.0)
-            except Exception:  # noqa: BLE001 — timeout, cancelled, or assembler error: skip
+            except Exception as e:  # noqa: BLE001 — timeout, cancelled, or assembler error: skip
+                log.warning(f"Context assembly failed or timed out: {e}")
                 _assembled = None
             finally:
                 try:
