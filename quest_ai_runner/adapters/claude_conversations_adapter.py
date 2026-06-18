@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.core.adapters import Observation, RetrievalAdapter
-from .tfidf_sampling import extract_terms, select_representatives
+from .tfdfidf_sampling import extract_terms, select_representatives
 
 
 class ClaudeConversationsAdapter(RetrievalAdapter):

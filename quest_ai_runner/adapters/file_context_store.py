@@ -45,7 +45,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase
 from ._walk import effective_skip_dirs, prune_dirnames
-from .tfidf_sampling import extract_terms as tfidf_extract_terms, select_representatives
+from .tfdfidf_sampling import extract_terms as tfdfidf_extract_terms, select_representatives
 
 _log = logging.getLogger("quest-ai-runner.context")
 
@@ -54,7 +54,7 @@ _log = logging.getLogger("quest-ai-runner.context")
 # compares this against the stored ``bootstrap_meta.json`` version and re-bootstraps when the
 # stored version is older. v2: LLM-based keyword-cluster dedup (replaced Jaccard file-overlap).
 # v3: TF-DF-IDF sampling in Stage 1 & 2 (representative files + snippets instead of all paths).
-# v4: per-file TF-DF-IDF term signatures from actual content stored in file entries (tfidf_terms).
+# v4: per-file TF-DF-IDF term signatures from actual content stored in file entries (tfdfidf_terms).
 _BOOTSTRAP_VERSION = 4
 
 # Name of the meta file written to cards_dir after a successful bootstrap.
@@ -1028,12 +1028,12 @@ def _dedup_topic_cards(
 def _select_representative_files(file_paths: List[str], samples_per_folder: int = 3) -> List[str]:
     """Select representative files per folder using shared TF-DF-IDF heuristic.
 
-    Delegates to the shared select_representatives() function from tfidf_sampling module,
+    Delegates to the shared select_representatives() function from tfdfidf_sampling module,
     grouping by folder and scoring by term distinctiveness.
     """
     return select_representatives(
         file_paths,
-        get_terms=tfidf_extract_terms,
+        get_terms=tfdfidf_extract_terms,
         samples_per_group=samples_per_folder,
         get_group=lambda fpath: str(Path(fpath).parent) or ".",
     )
@@ -1523,9 +1523,9 @@ class FileContextStore(ContextAssemblerBase):
         # --- Pass 2b: compute per-file TF-DF-IDF term signatures from actual content ---
         # Read each referenced file's content, compute corpus-level DF, then compute the
         # top-15 most distinctive terms per file (high TF in this file, rare across corpus).
-        # These are stored as ``tfidf_terms`` in each file entry so ``_card_term_weights``
+        # These are stored as ``tfdfidf_terms`` in each file entry so ``_card_term_weights``
         # can use actual content signal instead of relying only on LLM-assigned keywords.
-        tfidf_terms_map: Dict[str, List[str]] = {}
+        tfdfidf_terms_map: Dict[str, List[str]] = {}
         if referenced and walk_root is not None:
             _log.info("context index: stage 4b — computing TF-DF-IDF term signatures for %d file(s)", len(referenced))
 
@@ -1560,14 +1560,14 @@ class FileContextStore(ContextAssemblerBase):
             # Compute top-15 distinctive terms per file: IDF = log((N+1)/(df+1))+1, TF=presence
             for rel, terms in file_term_sets.items():
                 if not terms:
-                    tfidf_terms_map[rel] = []
+                    tfdfidf_terms_map[rel] = []
                     continue
                 term_scores = {
                     t: math.log((N_corpus + 1) / (corpus_df_content.get(t, 0) + 1)) + 1
                     for t in terms
                 }
                 top = sorted(term_scores, key=term_scores.__getitem__, reverse=True)[:15]
-                tfidf_terms_map[rel] = top
+                tfdfidf_terms_map[rel] = top
 
         # --- Pass 3: build and write one card per topic ---
         _log.info("context index: stage 5 — writing %d card(s)", len(topic_cards))
@@ -1589,7 +1589,7 @@ class FileContextStore(ContextAssemblerBase):
                     "git_sha": fp.get("git_sha", ""),
                     "why": "",
                     "symbols": [],
-                    "tfidf_terms": tfidf_terms_map.get(rel, []),
+                    "tfdfidf_terms": tfdfidf_terms_map.get(rel, []),
                 })
 
             # Load existing card so we preserve usage_count / last_outcome if present.
@@ -1698,7 +1698,7 @@ class FileContextStore(ContextAssemblerBase):
             # TF-DF-IDF terms: top-15 distinctive terms from actual file content.
             # Weight 2.5 — above filename (2.0) and symbols (1.0), below LLM keywords (3.0).
             # These are only present in cards bootstrapped at v4+; older cards degrade gracefully.
-            for term in fe.get("tfidf_terms", []):
+            for term in fe.get("tfdfidf_terms", []):
                 _add(term, 2.5)
             for sym in fe.get("symbols", []):
                 _add(sym, 1.0)

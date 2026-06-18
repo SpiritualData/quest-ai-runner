@@ -4,13 +4,21 @@ Provides reusable functions for selecting representative items (files, conversat
 from a larger corpus using TF-DF-IDF heuristic: distinctive within their group, penalizing
 corpus-wide generic terms. Used by FileContextStore, ClaudeConversationsAdapter, etc.
 
-Reference: Schilder & Kondadadi (2008) on multi-document summarization.
+TF-DF-IDF = tf(t,d) × df(t,cluster) × idf(t,corpus) after Schilder & Kondadadi (2008):
+- tf: binary term presence in a document (1 or 0)
+- cluster_df: how many documents in the SAME group contain the term
+  (high = term is representative of the group's topic)
+- idf: log((N+1)/(n_t+1))+1, where N = total corpus items, n_t = items containing term
+  (high = term is rare globally → distinctive)
+
+Files with terms shared across their folder (cluster_df) AND rare in the full corpus (idf)
+score highest — they are the best representatives of their folder's topic.
 """
 from __future__ import annotations
 
 import math
 import re
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Callable, Dict, List, Optional, Set
 
 
 def extract_terms(text: str, stopwords: Optional[Set[str]] = None) -> set:
@@ -32,7 +40,6 @@ def extract_terms(text: str, stopwords: Optional[Set[str]] = None) -> set:
         }
 
     terms: set = set()
-    # Split on whitespace and punctuation
     for part in re.split(r"[\s\W/\\.]+ ", text.lower()):
         if part and len(part) > 2 and part not in stopwords:
             terms.add(part)
@@ -48,9 +55,8 @@ def select_representatives(
 ) -> List[str]:
     """Select representative items from a corpus using TF-DF-IDF heuristic.
 
-    Groups items (optionally) and for each group selects top-K items whose
-    terms have the highest TF-DF-IDF scores (distinctive within group,
-    penalizing corpus-wide generic terms).
+    Groups items and for each group selects top-K items scored by TF-DF-IDF:
+    terms shared with group-mates (cluster_df) AND rare globally (idf) score highest.
 
     Args:
         items: List of items to sample from.
@@ -59,7 +65,7 @@ def select_representatives(
         get_group: Function that returns a group key for an item. If None,
                    all items are treated as one group.
         get_score_boost: Optional function that returns a multiplicative score
-                        boost for an item (e.g., recency boost). Default 1.0.
+                        boost for an item (e.g., recency). Default 1.0.
 
     Returns:
         Subset of items, ordered by group then by descending TF-DF-IDF score.
@@ -67,57 +73,54 @@ def select_representatives(
     if not items:
         return []
 
-    # Use identity grouping if no grouper provided
     if get_group is None:
         get_group = lambda x: "all"
 
-    # Extract terms and group assignments
     all_terms_per_item = {item: get_terms(item) for item in items}
-    groups = {}
+    groups: Dict[str, List[str]] = {}
     for item in items:
-        group_key = get_group(item)
-        if group_key not in groups:
-            groups[group_key] = []
-        groups[group_key].append(item)
+        groups.setdefault(get_group(item), []).append(item)
 
-    # Calculate corpus-wide term frequency
+    N_items = len(items)
+
+    # corpus_df: how many items contain each term (denominator for global IDF)
     corpus_df: Dict[str, int] = {}
     for terms in all_terms_per_item.values():
         for term in terms:
             corpus_df[term] = corpus_df.get(term, 0) + 1
 
-    total_groups = len(groups)
+    # group_df: per-group term counts (cluster DF — the "DF" in TF-DF-IDF)
+    group_df: Dict[str, Dict[str, int]] = {}
+    for item in items:
+        gdf = group_df.setdefault(get_group(item), {})
+        for term in all_terms_per_item[item]:
+            gdf[term] = gdf.get(term, 0) + 1
 
-    # For each group, score items by TF-DF-IDF and select top K
     representatives: List[str] = []
     for group_key in sorted(groups.keys()):
         items_in_group = groups[group_key]
 
-        # If group is small, keep all items
         if len(items_in_group) <= samples_per_group:
             representatives.extend(items_in_group)
             continue
 
-        # TF-DF-IDF: term frequency * (1 + log(total_groups / corpus_df))
+        gdf = group_df.get(group_key, {})
         scored: List[tuple] = []
         for item in items_in_group:
             terms = all_terms_per_item[item]
             if not terms:
                 continue
 
-            # Sum TF-DF-IDF over all terms in this item
-            tf_df_idf_sum = 0.0
+            score = 0.0
             for term in terms:
-                tf = 1  # Each term counts once per item in our model
-                df = corpus_df.get(term, 1)
-                idf = 1.0 + math.log((total_groups + 1) / (df + 1))
-                tf_df_idf_sum += tf * idf
+                cluster_df = gdf.get(term, 1)
+                n_t = corpus_df.get(term, 1)
+                idf = math.log((N_items + 1) / (n_t + 1)) + 1.0
+                score += cluster_df * idf  # TF=1 (binary), so tf × cluster_df × idf = cluster_df × idf
 
-            # Apply optional score boost (e.g., recency)
             boost = get_score_boost(item) if get_score_boost else 1.0
-            scored.append((tf_df_idf_sum * boost, item))
+            scored.append((score * boost, item))
 
-        # Sort by score descending, take top K
         if scored:
             scored.sort(reverse=True, key=lambda x: x[0])
             representatives.extend([item for _, item in scored[:samples_per_group]])
