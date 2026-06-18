@@ -1410,9 +1410,9 @@ class Orchestrator:
         overall_goal = (plan.goal or "").strip() or user_message
         multi = len(subtasks) > 1
 
-        def run_one(st: Dict[str, Any], task_index: int = 0) -> DeepResult:
-            goal = (st.get("goal") or "").strip() or f"Fully address: {user_message}"
-            brief = (st.get("brief") or goal).strip()
+        def run_one(task: Dict[str, Any], task_index: int = 0) -> DeepResult:
+            goal = (task.get("goal") or "").strip() or f"Fully address: {user_message}"
+            brief = (task.get("brief") or goal).strip()
             # EVERY deep process is told BOTH the top input-level goal (the user's actual request)
             # and, when it is a subgoal of a larger fan-out, the overall goal it serves — so it never
             # loses sight of what the user wants while pursuing its specific piece. (Its OWN process
@@ -2339,30 +2339,26 @@ class Orchestrator:
                                             for t in item if isinstance(t, dict) and "goal" in t
                                         ]
                                         if group:
-                                            # Mark group for sequential execution
-                                            result.append(("_seq_", group))
+                                            # Mark group for sequential execution as a list
+                                            result.append(group)  # Store as list, not tuple
                                 return result
                             normalized = normalize_tasks(tasks_json)
                             # Parse nested structure: flat items run in parallel, nested lists run sequentially
                             for item in normalized[:4]:  # Max 4 parallel
-                                if isinstance(item, tuple) and item[0] == "_seq_":
-                                    # Sequential group: tasks run one after another
-                                    deep_subtasks.append(item)  # Keep structure for _run_deep
-                                else:
-                                    deep_subtasks.append(item)
+                                deep_subtasks.append(item)  # Item is either dict (task) or list (sequential group)
 
                             # Show parsed tasks to user with nice formatting
                             if deep_subtasks:
                                 emit.emit(ProgressEvent(type=EVENT_PLAN, action="deep", step=steps,
                                                        text=f"Split into {len(deep_subtasks)} task(s)"))
                                 for i, task in enumerate(deep_subtasks, 1):
-                                    if isinstance(task, tuple) and task[0] == "_seq_":
+                                    if isinstance(task, list):
                                         # Sequential group: show as "Task 1 (sequential)"
-                                        group_goals = [t.get("goal", "") for t in task[1]]
+                                        group_goals = [t.get("goal", "") for t in task]
                                         seq_label = " ➜ ".join(group_goals)
                                         emit.status(f"  Task {i}: {seq_label} (sequential)")
                                     else:
-                                        # Single parallel task
+                                        # Single parallel task (dict)
                                         goal = task.get("goal", "")
                                         emit.status(f"  Task {i}: {goal}")
                                 emit.status("Working on this now…")
