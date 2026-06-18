@@ -70,7 +70,7 @@ class _RichLogConsole(_Console):
         self._rich = None          # force the ANSI code path in parent helpers
         self._color = True         # …which emits ANSI strings we convert below
         self._app = app
-        self._log = log
+        self._tlog = log
 
     # -- low-level sinks ------------------------------------------------------
 
@@ -78,9 +78,9 @@ class _RichLogConsole(_Console):
         thread_id = getattr(self._app, "_ui_thread_id", None)
         if thread_id is not None and threading.get_ident() != thread_id:
             # Called from a worker thread — marshal onto the UI thread.
-            self._app.call_from_thread(self._log.write, renderable)
+            self._app.call_from_thread(self._tlog.write, renderable)
         else:
-            self._log.write(renderable)
+            self._tlog.write(renderable)
 
     def write(self, s: str) -> None:
         self._emit(Text.from_ansi(s))
@@ -229,7 +229,7 @@ class QuestAITerminal(App):
         self.title = "Quest AI Runner"
 
         # Per-turn streaming state (reset by _begin_turn).
-        self._running = False
+        self._turn_active = False
         self._cancel = threading.Event()
         self._t0 = 0.0
         self._partial_started = False
@@ -261,7 +261,7 @@ class QuestAITerminal(App):
 
     def on_mount(self) -> None:
         self._ui_thread_id = threading.get_ident()
-        self._log = self.query_one("#transcript", RichLog)
+        self._tlog = self.query_one("#transcript", RichLog)
         self._ctx = self.query_one("#context", ContextPanel)
         self._activity = self.query_one("#activity", Horizontal)
         self._status = self.query_one("#activity StatusLine", StatusLine)
@@ -280,7 +280,7 @@ class QuestAITerminal(App):
         self._activity.display = False
 
         # Redirect the session's console into our transcript and print the header.
-        self._console = _RichLogConsole(self, self._log)
+        self._console = _RichLogConsole(self, self._tlog)
         self.sess._console = self._console
         self._print_header()
         inp.focus()
@@ -316,7 +316,7 @@ class QuestAITerminal(App):
             cb(line)
             return
 
-        if self._running:
+        if self._turn_active:
             # A turn is in flight; ignore extra submissions (input is disabled too).
             return
 
@@ -579,9 +579,9 @@ class QuestAITerminal(App):
         return self._ev
 
     def _begin_turn(self, user_text: str, *, echo: bool, auto: bool = False) -> None:
-        if self._running:
+        if self._turn_active:
             return
-        self._running = True
+        self._turn_active = True
         self._cancel.clear()
         self._partial_started = False
         self._ai_label_shown = False
@@ -591,8 +591,8 @@ class QuestAITerminal(App):
         self._ctx.reset()
 
         if echo:
-            self._log.write(Text(f"❯ {user_text}", style="bold cyan"))
-            self._log.write(Text(""))
+            self._tlog.write(Text(f"❯ {user_text}", style="bold cyan"))
+            self._tlog.write(Text(""))
 
         # Loading strip on, prompt off until the turn ends.
         self._status.set_status("thinking…")
@@ -650,7 +650,7 @@ class QuestAITerminal(App):
             action = getattr(event, "action", None) or ""
             data = event.data or {}
         ev = self._types()
-        log = self._log
+        log = self._tlog
 
         if t == ev["partial"]:
             is_ack = isinstance(data, dict) and data.get("ack")
@@ -752,7 +752,7 @@ class QuestAITerminal(App):
                      cancelled: bool, error: Optional[Exception]) -> None:
         """Wrap up a turn on the UI thread: answer, footer, bookkeeping."""
         s = self.sess
-        log = self._log
+        log = self._tlog
         self._activity.display = False
         self._ctx.display = False
 
@@ -789,7 +789,7 @@ class QuestAITerminal(App):
         self._console.rule()
         log.write(Text(""))
 
-        self._running = False
+        self._turn_active = False
         inp = self.query_one("#prompt", Input)
         inp.disabled = False
         inp.focus()
@@ -870,7 +870,7 @@ class QuestAITerminal(App):
     # -- actions ---------------------------------------------------------------
 
     def action_cancel(self) -> None:
-        if self._running:
+        if self._turn_active:
             self._cancel.set()
             self._status.set_status("cancelling…")
         elif self._pending_select is not None:
@@ -878,7 +878,7 @@ class QuestAITerminal(App):
             self._console.dim("  Cancelled.")
 
     def action_clear_log(self) -> None:
-        self._log.clear()
+        self._tlog.clear()
 
     def action_quit(self) -> None:
         self.exit()

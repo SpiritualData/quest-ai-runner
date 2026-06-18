@@ -1,68 +1,45 @@
-"""Session launcher for Textual-based interactive mode.
+"""Session launcher for the Textual-based interactive (attended) mode.
 
 Usage:
     from quest_ai_runner.textual_session import start_textual_interactive
     start_textual_interactive(config, rep_name="My AI")
+
+This is the Textual replacement for ``interactive.start_interactive()``. It
+builds a real :class:`~quest_ai_runner.interactive.InteractiveSession` (which
+constructs the orchestrator, restores persisted chat state, and prepares the
+model-tier menu), then drives it through the Textual UI in
+:class:`~quest_ai_runner.textual_ui.QuestAITerminal`. All session logic and
+state live in the InteractiveSession; the Textual app only renders and reads.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
-
-from .textual_ui import QuestAITerminal
+from typing import Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .config import RunnerConfig
 
 
 def start_textual_interactive(
-    config: RunnerConfig,
+    config: "RunnerConfig",
     *,
-    rep_name: str = "Quest AI",
+    rep_name: str = "Assistant",
     persona: Optional[str] = None,
     goal_id: Optional[str] = None,
 ) -> None:
-    """Start an interactive Textual-based session (CLI entry point).
+    """Build an InteractiveSession and run it under the Textual UI until quit."""
+    from .interactive import InteractiveSession
+    from .textual_ui import QuestAITerminal
 
-    This is the Textual replacement for interactive.start_interactive().
-    Runs the event loop until user quits.
-
-    Args:
-        config: RunnerConfig for the session
-        rep_name: Name of the AI rep
-        persona: Path to persona/skill file (optional)
-        goal_id: Optional goal ID to attach session to
-    """
-    from .config import build_orchestrator
-
-    app = QuestAITerminal(rep_name=rep_name)
-
-    # Create orchestrator using the build function (same as interactive.py does)
-    app.orchestrator = build_orchestrator(config)
-
-    # TODO: Handle persona loading if provided
-    # if persona:
-    #     app.load_persona(persona)
-
-    # Run the Textual app (blocking until user quits)
-    app.run()
+    session = InteractiveSession(
+        config, rep_name=rep_name, persona=persona, goal_id=goal_id
+    )
+    QuestAITerminal(session).run()
 
 
 def is_textual_available() -> bool:
-    """Check if Textual is available and can be used.
-
-    Returns:
-        True if Textual can be imported and terminal supports it
-    """
+    """True if Textual can be imported (the [tui] extra is installed)."""
     try:
-        from textual.app import App  # noqa: F401
+        import textual  # noqa: F401
         return True
     except ImportError:
         return False
-
-
-if __name__ == "__main__":
-    from .config import RunnerConfig
-
-    # Example usage
-    config = RunnerConfig()
-    start_textual_interactive(config, rep_name="Demo AI")
