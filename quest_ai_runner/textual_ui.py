@@ -43,8 +43,8 @@ class StatusLine(Static):
 class ContextInfo(Static):
     """Displays gathered sources and context cards (replaces panel)."""
 
-    def __init__(self):
-        super().__init__("")
+    def __init__(self, **kwargs):
+        super().__init__("", **kwargs)
         self.sources = []
         self.cards = []
         self.total_sources = 0
