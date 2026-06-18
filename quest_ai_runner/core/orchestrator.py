@@ -797,8 +797,30 @@ _REPLAN_CONTEXT_REF = (
 )
 
 
+def _strip_discovery_section(context_view: str) -> str:
+    """Remove the discovery/command documentation from context_view for the answer LLM.
+
+    The discovery block (which documents commands like {"list_operations": true}) is for the
+    PLANNER to understand what operations exist. The answer LLM should not see these examples,
+    as it should produce text answers, not command structures. Preserve only the quest/data
+    context pointers.
+    """
+    if not context_view:
+        return ""
+    # Find where "## Discovery" starts and remove everything from there onwards
+    discovery_idx = context_view.find("## Discovery")
+    if discovery_idx >= 0:
+        # Keep everything before "## Discovery"
+        return context_view[:discovery_idx].rstrip()
+    return context_view
+
+
 def _grounding_block(context_view: str, gathered: List[Dict[str, Any]], partial: bool) -> str:
-    parts = ["--- GROUNDING CONTEXT (use this; do not fabricate beyond it) ---", context_view or "(none)"]
+    # For the answer LLM, strip out the discovery block (which is planner-specific).
+    # The answer LLM should produce text, not JSON command structures.
+    answer_context_view = _strip_discovery_section(context_view)
+
+    parts = ["--- GROUNDING CONTEXT (use this; do not fabricate beyond it) ---", answer_context_view or "(none)"]
     if gathered:
         parts.append("\n--- ACTUAL CONTENT READ FOR THIS ANSWER ---")
         parts.append(_render_gathered(gathered))
