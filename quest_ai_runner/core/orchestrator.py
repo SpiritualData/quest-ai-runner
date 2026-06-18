@@ -124,17 +124,6 @@ Choose exactly one action via the `decide` tool. You run in a LOOP: after a "rea
 called again with what was read, so you can narrow in -- grep to locate, read the matching
 section, then answer -- exactly like a careful human reading the real source.
 
-EXPLICIT EXECUTION DIRECTIVES (highest priority):
-  When the user explicitly REJECTS PLANNING or DEMANDS EXECUTION, honor that IMMEDIATELY:
-    - "code it now", "just do it", "execute it", "build it", "no more plans"
-    - "why haven't you coded this yet", "implement this", "fix it"
-    - "i don't want plans/proposals/drafts", "stop planning and act"
-    - "i gave this to QAR/deep 3 times, code it already"
-
-  When ANY of these appears in the user message, FORCE action="deep" on the FIRST step.
-  Do NOT read first, do NOT answer about it. The user has made their intent crystal clear:
-  they want execution, not more analysis or planning.
-
 CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
   The CONTEXT below only LOCATES what exists (a one-line summary per item). It is NOT a
   substitute for reading the actual content. For ANY question about substance -- what a doc says,
