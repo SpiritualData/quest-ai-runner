@@ -1376,9 +1376,16 @@ class InteractiveSession:
                         self._console.dim("  (No deep executor configured; cannot auto-execute)")
 
             self._last_user = user_text
-            self._last_assistant = final.text or (
-                "; ".join(final.goals) if final.goals else ""
-            )
+            # For deep runs, signal completion clearly — goal strings look like unfinished TODOs
+            if final.kind == "deep":
+                deep_results = final.deep_results or []
+                goals = final.goals or []
+                all_met = bool(deep_results) and all(d.met for d in deep_results)
+                goal_str = ("; ".join(goals))[:300] if goals else ""
+                prefix = "Completed" if all_met else "Attempted"
+                self._last_assistant = (f"{prefix}: {goal_str}" if goal_str else f"{prefix}.")
+            else:
+                self._last_assistant = final.text or ""
             self._turn_count += 1
             self._console.line("")
             self._print_turn_footer(final, panel, elapsed)

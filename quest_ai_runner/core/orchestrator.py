@@ -236,7 +236,10 @@ Always fill `rationale` (one sentence) and set `model_tier`.
 --- THE USER'S MESSAGE ---
 {user_message}
 
---- RECENT TRANSCRIPT (most recent last) ---
+--- RECENT TRANSCRIPT (prior completed exchanges, most recent last) ---
+NOTE: The transcript shows COMPLETED PRIOR WORK. The USER'S MESSAGE above is the NEW, CURRENT
+REQUEST. Focus entirely on that message. Do NOT redo, continue, or reference prior tasks unless
+the user explicitly asks you to.
 {transcript}
 
 --- CONTEXT (compact; LOCATES content, does NOT replace reading it) ---
@@ -2322,14 +2325,6 @@ class Orchestrator:
             emit.emit(ProgressEvent(type=EVENT_DONE, result_kind=res.kind, step=steps))
             return res
 
-        # EXECUTION DIRECTIVE CHECK (step 0 only): only skip planning if retrying a goal in conversation
-        # (user already described the work once, now demanding execution). Don't skip on first attempt.
-        force_deep_on_step_0 = False
-        is_goal_retry = len(transcript or "") > 100  # Rough heuristic: prior context exists
-        if user_message and is_goal_retry and self._detect_execution_directive(user_message):
-            log.info(f"Execution directive on retry: forcing action='deep' on step 0")
-            force_deep_on_step_0 = True
-
         plan: Optional[PlanDecision] = None
         steps = 0
         consecutive_reads = 0  # Track how many steps in a row chose "read"
@@ -2337,113 +2332,13 @@ class Orchestrator:
             steps = step + 1
             emit.status("Planning…" if step == 0 else "Re-planning…")
 
-            # FORCE DEEP ON STEP 0 if execution directive was detected (skip planning but gather context)
-            if step == 0 and force_deep_on_step_0:
-                # GATHER CONTEXT FIRST: deep needs grounding so it focuses on execution, not searching.
-                # Collect: source inventory, operations, code patterns.
-                context_reads = [
-                    {"list_sources": True},  # What sources/collections exist
-                    {"list_operations": True},  # What operations are available
-                    {"describe_source": "file", "describe_path": ""},  # File structure/types
-                ]
-                try:
-                    context_obs = self._do_reads(context_reads, [])
-                    gathered.extend(context_obs)
-                    emit.status("Gathering context for execution…")
-                except Exception:  # noqa: BLE001
-                    pass  # Graceful: continue even if context gather fails
-
-                # LET THE LLM DECIDE: use cheap haiku to suggest task split as JSON with dependency structure
-                # Most of the time 1 task is fine; only split when work naturally divides.
-                deep_subtasks = []
-                try:
-                    split_prompt = (
-                        "Suggest how to split this work for parallel execution. Return a JSON list "
-                        "where each element is either a task OR a list of tasks that must run sequentially.\n\n"
-                        "Format: [{\"goal\": \"<done-standard>\", \"brief\": \"<details>\"}, ...] for all parallel\n"
-                        "   or: [[{...}, {...}], {...}] for sequential groups within parallel\n\n"
-                        "Most requests = 1 task (just return [{...}]). Only split when work naturally divides.\n\n"
-                        f"Request: {user_message}\n\n"
-                        "Return ONLY valid JSON, no other text."
-                    )
-                    model = self.registry.resolve_tier("haiku")
-                    provider = self.get_provider_for_model(model)
-                    split_result = provider.answer(
-                        [{"role": "user", "content": split_prompt}],
-                        model=model
-                    )
-                    if split_result:
-                        import json
-                        # Parse JSON task structure: preserve nesting for sequential dependencies
-                        tasks_json = json.loads(split_result.strip())
-                        if isinstance(tasks_json, list):
-                            # Process structure: flat items = parallel, nested lists = sequential
-                            # Output: flat list of {"goal": ..., "brief": ...} OR groups
-                            def normalize_tasks(tasks_list):
-                                result = []
-                                for item in tasks_list:
-                                    if isinstance(item, dict) and "goal" in item:
-                                        # Single task
-                                        result.append({
-                                            "goal": _truncate_goal(item.get("goal", "")),
-                                            "brief": item.get("brief", user_message)
-                                        })
-                                    elif isinstance(item, list):
-                                        # Sequential group: normalize each task in group
-                                        group = [
-                                            {
-                                                "goal": _truncate_goal(t.get("goal", "")),
-                                                "brief": t.get("brief", user_message)
-                                            }
-                                            for t in item if isinstance(t, dict) and "goal" in t
-                                        ]
-                                        if group:
-                                            # Mark group for sequential execution as a list
-                                            result.append(group)  # Store as list, not tuple
-                                return result
-                            normalized = normalize_tasks(tasks_json)
-                            # Parse nested structure: flat items run in parallel, nested lists run sequentially
-                            for item in normalized[:4]:  # Max 4 parallel
-                                deep_subtasks.append(item)  # Item is either dict (task) or list (sequential group)
-
-                            # Show parsed tasks with goal conditions
-                            if deep_subtasks:
-                                task_summary = []
-                                for i, task in enumerate(deep_subtasks, 1):
-                                    if isinstance(task, list):
-                                        # Sequential group: show each goal
-                                        group_goals = [t.get("goal", "") for t in task]
-                                        seq_label = " ➜ ".join(group_goals)
-                                        task_summary.append(f"Task {i}: {seq_label} (sequential)")
-                                    else:
-                                        # Single parallel task: show goal (the done-standard)
-                                        goal = task.get("goal", "")
-                                        task_summary.append(f"Task {i}: {goal}")
-
-                                # Emit task plan with all goals visible
-                                task_text = "\n  ".join(task_summary)
-                                emit.emit(ProgressEvent(type=EVENT_PLAN, action="deep", step=steps,
-                                                       text=f"Split into {len(deep_subtasks)} task(s):\n  {task_text}"))
-                                emit.status("Executing tasks…")
-                except Exception:  # noqa: BLE001
-                    pass  # If split fails, fall back to single task
-
-                plan = PlanDecision(
-                    action="deep",
-                    goal=_truncate_goal(user_message[:200] or "Complete the request"),
-                    deep_brief=user_message,
-                    rationale="User demanded execution, skipping plan",
-                    model_tier=None,  # use default
-                    deep_subtasks=deep_subtasks[:4] if deep_subtasks else [],  # Max 4 parallel tasks
+            try:
+                plan = self._plan(user_message, transcript, context_view, gathered, step=step)
+            except Exception as e:  # noqa: BLE001 — planner failure -> grounded fallback answer
+                log.exception(
+                    f"Planner failed on step {steps}: {e}. Falling back to grounded answer."
                 )
-            else:
-                try:
-                    plan = self._plan(user_message, transcript, context_view, gathered, step=step)
-                except Exception as e:  # noqa: BLE001 — planner failure -> grounded fallback answer
-                    log.exception(
-                        f"Planner failed on step {steps}: {e}. Falling back to grounded answer."
-                    )
-                    plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
+                plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
 
             # Safety gate: if planner chose "read" for many consecutive steps, force a terminal action
             if plan and plan.action == "read":

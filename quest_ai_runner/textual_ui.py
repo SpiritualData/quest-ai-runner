@@ -897,7 +897,16 @@ class QuestAITerminal(App):
                     self._ai_label_shown = True
                 self._console.markdown(answer)
             s._last_user = user_text
-            s._last_assistant = final.text or ("; ".join(final.goals) if final.goals else "")
+            # For deep runs, signal completion clearly — goal strings look like unfinished TODOs
+            if final.kind == "deep":
+                deep_results = final.deep_results or []
+                goals = final.goals or []
+                all_met = bool(deep_results) and all(d.met for d in deep_results)
+                goal_str = ("; ".join(goals))[:300] if goals else ""
+                prefix = "Completed" if all_met else "Attempted"
+                s._last_assistant = (f"{prefix}: {goal_str}" if goal_str else f"{prefix}.")
+            else:
+                s._last_assistant = final.text or ""
             s._turn_count += 1
             log.write(Text(""))
             self._write_footer(final, elapsed)
