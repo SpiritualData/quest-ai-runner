@@ -465,6 +465,35 @@ def test_subprocess_runner_passes_tool_flags_and_runs_web_goal(monkeypatch):
     assert "--max-turns" in cmd
 
 
+def test_subprocess_runner_drops_non_claude_model(monkeypatch):
+    """The Claude Code worker only runs Claude models. A non-Claude tier model (e.g. a Gemini id
+    from the consumer's config) must NOT be passed as --model, or Claude Code errors and does
+    nothing. A Claude model is passed through."""
+    import subprocess as _sp
+    from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+
+    captured = {}
+
+    class _Proc:
+        returncode = 0
+        stdout = b"did it"
+        stderr = b""
+
+    def _fake_run(cmd, **kw):
+        captured["cmd"] = cmd
+        return _Proc()
+
+    monkeypatch.setattr(_sp, "run", _fake_run)
+    runner = SubprocessGoalRunner(SubprocessConfig(working_dir="/w", claude_path="/usr/bin/claude"))
+
+    runner.run_goal(goal="g", brief="b", model="gemini-3.5-flash", max_turns=2)
+    assert "--model" not in captured["cmd"], "non-Claude model must not reach Claude Code"
+
+    captured.clear()
+    runner.run_goal(goal="g", brief="b", model="claude-opus-4-8", max_turns=2)
+    assert "--model" in captured["cmd"] and "claude-opus-4-8" in captured["cmd"]
+
+
 def test_subprocess_runner_treats_empty_output_as_not_met(monkeypatch):
     """Exit 0 with NO output is a silent no-op (the worker never ran the goal), not a success.
     The runner must report met=False with a clear message rather than a hollow 'Completed'."""

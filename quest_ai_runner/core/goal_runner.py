@@ -22,6 +22,7 @@ This module provides:
 from __future__ import annotations
 
 import inspect
+import logging
 import os
 import shutil
 import subprocess
@@ -30,7 +31,25 @@ from typing import Any, List, Optional
 
 from .adapters import DeepResult, DeepRunner
 
+_log = logging.getLogger("quest-ai-runner.goal_runner")
+
 DEFAULT_DEEP_MAX_TURNS = 30
+
+
+def _is_claude_model(model: str) -> bool:
+    """Whether ``model`` is a Claude model the Claude Code worker can actually run.
+
+    Claude Code only runs Claude models; a tier resolved from a Gemini/OpenAI deployment (e.g.
+    ``gemini-3.5-flash``, ``gpt-4o``) must NOT be passed as ``--model`` or the worker errors and
+    does nothing. Accepts Claude ids/aliases (``claude-...``, bare ``opus``/``sonnet``/``haiku``,
+    ``us.anthropic.claude-...`` bedrock ids); rejects everything else."""
+    m = (model or "").strip().lower()
+    if not m:
+        return False
+    if "claude" in m or "anthropic" in m:
+        return True
+    # Bare Claude tier aliases Claude Code accepts.
+    return any(m == alias or m.startswith(alias) for alias in ("opus", "sonnet", "haiku"))
 
 
 def _run_goal_accepts_context_preamble(runner: Any) -> bool:
@@ -242,8 +261,17 @@ class SubprocessGoalRunner(DeepRunner):
             cmd += ["--allowed-tools", ",".join(self.cfg.allowed_tools)]
         if self.cfg.disallowed_tools:
             cmd += ["--disallowed-tools", ",".join(self.cfg.disallowed_tools)]
-        if model:
+        # The worker is Claude Code, which ONLY runs Claude models. The orchestrator resolves the
+        # model from the consumer's tier config, which in a Gemini/OpenAI deployment is a NON-Claude
+        # id (e.g. "gemini-3.5-flash"). Passing that as --model makes Claude Code error ("issue with
+        # the selected model ... it may not exist or you may not have access") and the deep run does
+        # nothing. So pass --model ONLY when it is a Claude model; otherwise omit it and let the
+        # worker use its own configured default.
+        if model and _is_claude_model(model):
             cmd += ["--model", model]
+        elif model:
+            _log.debug("deep worker is Claude Code; ignoring non-Claude model %r, using its default",
+                       model)
         turns = max_turns if max_turns is not None else DEFAULT_DEEP_MAX_TURNS
         if goal.strip():
             cmd += ["--max-turns", str(int(turns))]
