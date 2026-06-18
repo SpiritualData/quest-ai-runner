@@ -124,6 +124,17 @@ Choose exactly one action via the `decide` tool. You run in a LOOP: after a "rea
 called again with what was read, so you can narrow in -- grep to locate, read the matching
 section, then answer -- exactly like a careful human reading the real source.
 
+EXPLICIT EXECUTION DIRECTIVES (highest priority):
+  When the user explicitly REJECTS PLANNING or DEMANDS EXECUTION, honor that IMMEDIATELY:
+    - "code it now", "just do it", "execute it", "build it", "no more plans"
+    - "why haven't you coded this yet", "implement this", "fix it"
+    - "i don't want plans/proposals/drafts", "stop planning and act"
+    - "i gave this to QAR/deep 3 times, code it already"
+
+  When ANY of these appears in the user message, FORCE action="deep" on the FIRST step.
+  Do NOT read first, do NOT answer about it. The user has made their intent crystal clear:
+  they want execution, not more analysis or planning.
+
 CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
   The CONTEXT below only LOCATES what exists (a one-line summary per item). It is NOT a
   substitute for reading the actual content. For ANY question about substance -- what a doc says,
@@ -1116,6 +1127,47 @@ class Orchestrator:
                     log.warning(f"Read operation failed: {type(e).__name__}: {e}", exc_info=True)
                     results[i] = Observation(kind="error", error=type(e).__name__)
         return [r.to_dict() for r in results if r is not None]
+
+    # --- execution directive detection (FORCE deep when user explicitly rejects planning) ----
+
+    def _detect_execution_directive(self, user_message: str) -> bool:
+        """True iff the user has EXPLICITLY demanded execution over planning.
+
+        Keywords: "code it", "just do it", "execute", "build it", "implement",
+        "don't plan", "no more plans/proposals", "why haven't you coded",
+        "i don't want plans", "given 3 times", etc.
+
+        This is a STRUCTURAL gate (no model cost) that forces action="deep" on first step.
+        """
+        if not user_message:
+            return False
+        msg_lower = user_message.lower()
+        execution_keywords = (
+            "code it",
+            "just do it",
+            "execute it",
+            "build it",
+            "implement ",
+            "don't plan",
+            "no more plan",
+            "stop plan",
+            "no proposals",
+            "no draft",
+            "why haven't you coded",
+            "why didn't you code",
+            "code it already",
+            "given this to",
+            "i don't want plan",
+            "do the work",
+            "run the code",
+            "make the changes",
+            "apply the changes",
+            "i want execution",
+            "i want real work",
+            "no analysis",
+            "no planning",
+        )
+        return any(keyword in msg_lower for keyword in execution_keywords)
 
     # --- planner call --------------------------------------------------------
 
@@ -2182,19 +2234,42 @@ class Orchestrator:
             emit.emit(ProgressEvent(type=EVENT_DONE, result_kind=res.kind, step=steps))
             return res
 
+        # EXECUTION DIRECTIVE CHECK (step 0 only): if the user explicitly demands execution
+        # over planning ("code it", "just do it", "no more plans", etc.), force "deep" on
+        # the first step and skip planning entirely. This prevents the common pattern of:
+        # user: "code it already" → planner decides "read" → user frustrated.
+        force_deep_on_step_0 = False
+        if user_message and self._detect_execution_directive(user_message):
+            log.info(f"Execution directive detected: forcing action='deep' on step 0")
+            force_deep_on_step_0 = True
+
         plan: Optional[PlanDecision] = None
         steps = 0
         consecutive_reads = 0  # Track how many steps in a row chose "read"
         for step in range(cfg.max_steps):
             steps = step + 1
             emit.status("planning…" if step == 0 else "re-planning…")
-            try:
-                plan = self._plan(user_message, transcript, context_view, gathered, step=step)
-            except Exception as e:  # noqa: BLE001 — planner failure -> grounded fallback answer
-                log.exception(
-                    f"Planner failed on step {steps}: {e}. Falling back to grounded answer."
+
+            # FORCE DEEP ON STEP 0 if execution directive was detected (skip planning)
+            if step == 0 and force_deep_on_step_0:
+                plan = PlanDecision(
+                    action="deep",
+                    goal=_truncate_goal(user_message[:200] or "Complete the request"),
+                    deep_brief=user_message,
+                    rationale="User explicitly demanded execution (no planning)",
+                    model_tier=None,  # use default
                 )
-                plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
+                emit.emit(ProgressEvent(type=EVENT_PLAN,
+                                        action="deep", step=steps,
+                                        text="User explicitly demanded execution, skipping planning"))
+            else:
+                try:
+                    plan = self._plan(user_message, transcript, context_view, gathered, step=step)
+                except Exception as e:  # noqa: BLE001 — planner failure -> grounded fallback answer
+                    log.exception(
+                        f"Planner failed on step {steps}: {e}. Falling back to grounded answer."
+                    )
+                    plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
 
             # Safety gate: if planner chose "read" for many consecutive steps, force a terminal action
             if plan and plan.action == "read":
