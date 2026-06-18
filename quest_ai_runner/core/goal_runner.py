@@ -22,6 +22,7 @@ This module provides:
 from __future__ import annotations
 
 import inspect
+import json
 import logging
 import os
 import shutil
@@ -89,6 +90,29 @@ def extract_escalation_id(output: str) -> Optional[str]:
             if candidate:
                 decision_id = candidate
     return decision_id
+
+
+def _parse_worker_output(raw: str) -> tuple:
+    """Parse Claude Code's ``--output-format json`` envelope into (result_text, tokens, cost, is_error).
+
+    Returns the final result text, the total tokens (input+output) the worker reported, the cost in
+    USD, and whether the worker flagged an error. Falls back to (raw, 0, 0.0, False) when the output
+    is not the expected JSON (e.g. a plain-text worker), so a non-Claude-Code DeepRunner still works.
+    Never raises."""
+    text = raw or ""
+    try:
+        data = json.loads(raw)
+        if isinstance(data, dict) and ("result" in data or "usage" in data):
+            text = str(data.get("result") or "")
+            usage = data.get("usage") or {}
+            tokens = 0
+            if isinstance(usage, dict):
+                tokens = int(usage.get("input_tokens") or 0) + int(usage.get("output_tokens") or 0)
+            cost = float(data.get("total_cost_usd") or 0.0)
+            return text, tokens, cost, bool(data.get("is_error"))
+    except Exception:  # noqa: BLE001 — any parse issue falls back to raw text, no usage
+        pass
+    return text, 0, 0.0, False
 
 
 def compose_goal_prompt(goal: str, brief: str, *, preamble: str = "") -> str:
@@ -252,7 +276,7 @@ class SubprocessGoalRunner(DeepRunner):
         # immediately hits EOF on the piped stdin prompt, and exits 0 having done NOTHING — which
         # this runner would record as met=True (a silent no-op that looks "Completed"). The -p flag
         # is what makes the deep run actually execute the goal and produce output.
-        cmd: List[str] = [binary, "-p"]
+        cmd: List[str] = [binary, "-p", "--output-format", "json"]
         if self.cfg.skip_permissions:
             cmd.append("--dangerously-skip-permissions")
         # Apply explicit tool gating when the consumer pinned it (kept in lock-step with
@@ -293,16 +317,23 @@ class SubprocessGoalRunner(DeepRunner):
         except subprocess.TimeoutExpired:
             return DeepResult(met=False, error="goal run exceeded the time limit before completing")
 
-        out = (proc.stdout or b"").decode("utf-8", errors="replace")
+        raw = (proc.stdout or b"").decode("utf-8", errors="replace")
         err = (proc.stderr or b"").decode("utf-8", errors="replace") or None
+        # We requested ``--output-format json``: parse the worker's final result text AND its
+        # reported token usage / cost out of the JSON envelope. ``out`` becomes the human-readable
+        # result; ``tokens``/``cost`` feed the goal loop's overall token budget. If parsing fails
+        # (older worker, plain text), fall back to treating stdout as the result with no usage.
+        out, tokens, cost, json_is_error = _parse_worker_output(raw)
+
         # The escalation-marker contract: the worker raised a human decision mid-run and printed
         # ``QAR-ESCALATED: <decision_id>``. That overrides met-vs-limit — the run is PAUSED on a
         # human, so the executor must report needs_you with the decision linked, regardless of
         # the exit code.
         decision_id = extract_escalation_id(out)
         if decision_id:
-            return DeepResult(met=False, output=out, decision_id=decision_id)
-        if proc.returncode == 0:
+            return DeepResult(met=False, output=out, decision_id=decision_id,
+                              tokens=tokens, cost_usd=cost)
+        if proc.returncode == 0 and not json_is_error:
             # Safety net against a SILENT NO-OP: a real headless ``-p`` run always prints its final
             # result, so exit-0 with EMPTY output means the worker never actually ran the goal (the
             # failure mode when ``-p`` is missing, or the binary mis-launches). Report it as a
@@ -310,11 +341,11 @@ class SubprocessGoalRunner(DeepRunner):
             # nothing. (A pure chit-chat run has an empty ``goal`` and is exempt.)
             if goal.strip() and not out.strip():
                 return DeepResult(
-                    met=False, output=out,
+                    met=False, output=out, tokens=tokens, cost_usd=cost,
                     error="worker exited cleanly but produced NO output — the goal did not actually "
                           "run (check that the worker runs headless, e.g. Claude Code needs -p).")
-            return DeepResult(met=True, output=out)
+            return DeepResult(met=True, output=out, tokens=tokens, cost_usd=cost)
         if not err:
             err = (f"Goal run did not complete cleanly (exit {proc.returncode}) — likely hit the "
                    "turn/budget limit before fully meeting the goal.")
-        return DeepResult(met=False, output=out, error=err)
+        return DeepResult(met=False, output=out, error=err, tokens=tokens, cost_usd=cost)

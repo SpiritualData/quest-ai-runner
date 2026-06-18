@@ -236,6 +236,49 @@ def test_goal_loop_iterates_until_verified_met():
     assert "also update the helper" in runner.calls[1]["brief"]  # steering fed into retry
 
 
+class _TokenDeepRunner:
+    """A deep runner that records the model used per call and reports a fixed token count, so the
+    model-ladder escalation and the token budget can be asserted."""
+    def __init__(self, tokens=1000):
+        self.calls = []
+        self._tokens = tokens
+
+    def run_goal(self, *, goal, brief, model=None, max_turns=None):
+        from quest_ai_runner.core.adapters import DeepResult
+        self.calls.append({"goal": goal, "brief": brief, "model": model})
+        return DeepResult(met=True, output="attempted", tokens=self._tokens)
+
+
+def test_deep_loop_escalates_model_on_not_met():
+    # Verify keeps saying not-met -> the worker model escalates through the ladder fast->strong.
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
+        {"met": False, "reason": "no", "next_action": "x"},
+        {"met": False, "reason": "no", "next_action": "x"},
+        {"met": False, "reason": "no", "next_action": "x"},
+    ])
+    runner = _TokenDeepRunner(tokens=10)
+    _orch(provider, StubRetrieval(), deep_runner=runner,
+          config=OrchestratorConfig(deep_goal_max_iterations=3,
+                                    deep_model_ladder=["haiku", "sonnet", "opus"],
+                                    deep_goal_token_budget=None)).run("fix it")
+    assert [c["model"] for c in runner.calls] == ["haiku", "sonnet", "opus"]  # escalated each retry
+
+
+def test_deep_loop_stops_at_token_budget():
+    # Each attempt reports 1000 tokens; a 1500-token budget allows attempt 1, then stops after the
+    # second attempt pushes cumulative tokens past the budget (not the full attempt cap).
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
+    ] + [{"met": False, "reason": "no", "next_action": "x"} for _ in range(8)])
+    runner = _TokenDeepRunner(tokens=1000)
+    _orch(provider, StubRetrieval(), deep_runner=runner,
+          config=OrchestratorConfig(deep_goal_max_iterations=8,
+                                    deep_model_ladder=["haiku"],
+                                    deep_goal_token_budget=1500)).run("fix it")
+    assert len(runner.calls) == 2  # stopped on budget, not the 8-attempt cap
+
+
 def test_deep_run_folds_in_new_user_messages():
     # New messages the user sends mid-run are folded into the next deep process (here, the retry),
     # so a long-running goal loop acts on the latest input, not just the stale original request.

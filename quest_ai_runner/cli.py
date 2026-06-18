@@ -145,6 +145,26 @@ def _config_from_env() -> RunnerConfig:
     planner_tier = (os.getenv("QAR_PLANNER_TIER") or "").strip().lower()
     if planner_tier:
         cfg.orchestrator.planner_tier = planner_tier
+
+    # --- Deep goal loop tuning (our own /goal replacement) -------------------------------------
+    # The deep worker is Claude Code (Claude models only). QAR_DEEP_MODELS is the model LADDER the
+    # goal loop escalates through on a not-met goal, fast -> strong. Default to the Anthropic tiers.
+    deep_models = [m.strip() for m in (os.getenv("QAR_DEEP_MODELS") or "haiku,sonnet,opus").split(",")
+                   if m.strip()]
+    cfg.orchestrator.deep_model_ladder = deep_models or None
+    # Overall TOKEN BUDGET for one turn's deep goal loop (worker tokens summed across attempts).
+    # Operator-tunable; replaces a fixed attempt count as the primary stop.
+    if os.getenv("QAR_GOAL_TOKEN_BUDGET"):
+        try:
+            cfg.orchestrator.deep_goal_token_budget = int(os.environ["QAR_GOAL_TOKEN_BUDGET"])
+        except ValueError:
+            pass
+    # Hard safety cap on attempts (the budget is the primary control; this just bounds runaway).
+    if os.getenv("QAR_GOAL_MAX_ATTEMPTS"):
+        try:
+            cfg.orchestrator.deep_goal_max_iterations = int(os.environ["QAR_GOAL_MAX_ATTEMPTS"])
+        except ValueError:
+            pass
     return cfg
 
 

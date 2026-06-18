@@ -350,8 +350,21 @@ class OrchestratorConfig:
     # verifies the done-standard with one cheap LLM call; if it is not yet met, it feeds back what
     # went wrong / what to do next and re-runs, up to this many attempts. 1 = no verify-retry (single
     # shot). This is more token-efficient than /goal (which re-verifies inside the worker every turn)
-    # and lets the brain steer the next attempt.
-    deep_goal_max_iterations: int = 3
+    # and lets the brain steer the next attempt. NOTE: now a HARD SAFETY CAP on attempts; the PRIMARY
+    # stop is the token budget below.
+    deep_goal_max_iterations: int = 8
+    # Overall TOKEN BUDGET for one turn's deep goal loop (sum of the worker's reported tokens across
+    # attempts). The loop keeps iterating + escalating the model WHILE under budget; None disables it
+    # (then only the attempt cap applies). The consumer sets this from an env var so it is operator-
+    # tunable. Default allows a few full deep attempts.
+    deep_goal_token_budget: Optional[int] = 300_000
+    # The deep-worker MODEL LADDER: models tried in order, escalating to a STRONGER one when a goal
+    # is not met (the failure may be a model-capability gap). The deep worker is Claude Code, so
+    # these are Claude models/aliases (fast -> strong, e.g. ["haiku","sonnet","opus"]). None = use the
+    # single model the orchestrator was given (back-compat). The consumer sets it (e.g. from
+    # QAR_DEEP_MODELS); an explicit per-task model request or a guidance "model preference" pins the
+    # model and disables auto-escalation.
+    deep_model_ladder: Optional[List[str]] = None
     # The SAME goal loop applied to plain ANSWERS (not just deep execution): after an answer is
     # written, the brain verifies it meets the goal at the quality bar (the guidance cards selected
     # for the input) and, if unmet, regenerates with steering — up to this many attempts. Only
@@ -560,6 +573,25 @@ what context or file to look at next, or the likely reason it failed. Do NOT use
 --- WORKER OUTPUT (what it reports it did) ---
 {output}
 """
+
+# A guidance card may state a model preference for its kind of work (e.g. a "model selection" card
+# whose body contains "model: sonnet" or "preferred model: claude-opus-4-8"). This scans the
+# applicable-guidance text for such a directive so the deep worker honors it. Returns None if absent.
+_GUIDANCE_MODEL_RE = re.compile(
+    r"(?:preferred[ _]+)?model\s*[:=]\s*([A-Za-z0-9][A-Za-z0-9._-]{1,60})", re.IGNORECASE)
+
+
+def _guidance_model_pref(quality_standards: Optional[str]) -> Optional[str]:
+    """Extract a model preference declared in the applicable guidance cards, or None. Never raises."""
+    if not quality_standards:
+        return None
+    try:
+        m = _GUIDANCE_MODEL_RE.search(quality_standards)
+        if m:
+            return m.group(1).strip()
+    except Exception:  # noqa: BLE001
+        pass
+    return None
 
 
 # Imperative change/build verbs and bug/wrongness signals that mark a USER MESSAGE as a request to
@@ -1228,6 +1260,30 @@ class Orchestrator:
             log.warning("goal verification call failed", exc_info=True)
         return None
 
+    def _deep_models(self, model_hint: Optional[str], quality_standards: Optional[str],
+                     fallback: Optional[str]) -> List[Optional[str]]:
+        """Resolve the deep-worker model LADDER (tried in order, escalating on a not-met goal).
+
+        Priority: (1) an explicit per-task model request via ``model_hint`` when it names a model the
+        worker can run; (2) a guidance card model preference; either PINS a single model (no
+        escalation). Otherwise (3) the configured ``deep_model_ladder`` (fast -> strong), else (4)
+        the single ``fallback`` model the orchestrator was given. Always returns a non-empty list."""
+        from .goal_runner import _is_claude_model  # worker-runnable check (deep worker is Claude Code)
+        # Explicit per-task model request: ``fallback`` already factored ``model_hint`` through the
+        # registry. When a hint was given and it resolved to a model the worker can run (Claude), pin
+        # it (no auto-escalation). In a non-Claude deployment the resolved hint is not worker-runnable,
+        # so we fall through to the ladder instead of handing Claude Code a Gemini/OpenAI id.
+        if model_hint and fallback and _is_claude_model(fallback):
+            return [fallback]
+        pref = _guidance_model_pref(quality_standards)
+        if pref:
+            return [pref]
+        if self.cfg.deep_model_ladder:
+            ladder = [m for m in self.cfg.deep_model_ladder if m]
+            if ladder:
+                return list(ladder)
+        return [fallback]
+
     @staticmethod
     def _drain_pending(pending_inputs: Optional[Callable[[], List[str]]]) -> str:
         """Pull any NEW user messages that arrived mid-run (the consumer supplies the callable) and
@@ -1267,7 +1323,8 @@ class Orchestrator:
                   exec_record: Optional[ExecutionRecord] = None,
                   gathered: Optional[List[Dict[str, Any]]] = None,
                   quality_standards: Optional[str] = None,
-                  pending_inputs: Optional[Callable[[], List[str]]] = None) -> OrchestratorResult:
+                  pending_inputs: Optional[Callable[[], List[str]]] = None,
+                  model_hint: Optional[str] = None) -> OrchestratorResult:
         subtasks = (plan.deep_subtasks or [])[: self.cfg.max_deep_subtasks]
         if not subtasks:
             subtasks = [{"goal": _truncate_goal(plan.goal or f"Fully address the request: {user_message}"),
@@ -1337,9 +1394,9 @@ class Orchestrator:
                 if wants_emit and emit is not None:
                     emit.emit(ev)
 
-            def _do_run(current_brief: str) -> DeepResult:
+            def _do_run(current_brief: str, run_model: Optional[str]) -> DeepResult:
                 try:
-                    kwargs = dict(goal=goal, brief=current_brief, model=model,
+                    kwargs = dict(goal=goal, brief=current_brief, model=run_model,
                                   max_turns=self.cfg.deep_max_turns)
                     if wants_emit:
                         kwargs["emit"] = _emit_one
@@ -1361,21 +1418,31 @@ class Orchestrator:
 
             # OUR OWN GOAL LOOP (replaces Claude Code's /goal): run the worker, then VERIFY the
             # done-standard at the quality bar with one cheap LLM call (judged through the rep persona
-            # and the applicable guidance cards). If it is not met, feed back what fell short + what
-            # to do next and re-run, up to deep_goal_max_iterations. More token-efficient than /goal
-            # (no per-turn self-check inside the worker) and the brain steers each retry.
+            # and the applicable guidance cards). If not met, feed back what fell short + what to do
+            # next AND ESCALATE to a stronger model, then re-run — WHILE under the overall token
+            # budget (bounded by a hard attempt cap). More token-efficient than /goal (no per-turn
+            # self-check inside the worker), the brain steers each retry, and the model auto-escalates.
             base_brief = brief
             current_brief = brief
             max_iters = max(1, self.cfg.deep_goal_max_iterations)
+            budget = self.cfg.deep_goal_token_budget
+            # The model ladder for THIS turn: an explicit per-task / guidance model pins it (no
+            # escalation); otherwise fast -> strong, starting at the fast tier by default.
+            deep_models = self._deep_models(model_hint, quality_standards, model)
+            tier_idx = 0
+            tokens_used = 0
             res = DeepResult(met=False)
             for attempt in range(1, max_iters + 1):
+                run_model = deep_models[min(tier_idx, len(deep_models) - 1)]
                 if emit is not None and attempt > 1:
-                    emit.status(f"goal not met yet, iterating (attempt {attempt} of {max_iters})…")
+                    emit.status("goal not met yet, retrying"
+                                + (f" with {run_model}" if run_model else "") + "…")
                 # Fold in any NEW user messages that arrived since the run started, so this process
                 # (the first attempt or a retry) acts on the latest input, not a stale request.
                 _new = self._drain_pending(pending_inputs)
                 run_brief = current_brief if not _new else (current_brief + "\n\n" + _new)
-                res = _do_run(run_brief)
+                res = _do_run(run_brief, run_model)
+                tokens_used += max(0, getattr(res, "tokens", 0) or 0)
                 # A human-decision escalation, or a hard failure with NO output (binary missing,
                 # timeout, silent no-op), is terminal — do not verify or iterate.
                 if res.decision_id or (res.error and not (res.output or "").strip()):
@@ -1392,14 +1459,19 @@ class Orchestrator:
                     if emit is not None:
                         emit.status("goal verified met.")
                     break
-                # Not met: record why, and (unless out of attempts) steer the next run.
+                # Not met: record why; escalate the model; stop if the token budget is spent.
                 res.met = False
                 res.error = res.error or ("goal not yet met: "
                                           + (verdict.get("reason") or "done-standard not satisfied"))
                 if emit is not None and verdict.get("reason"):
                     emit.status("goal not met: " + verdict["reason"][:160])
-                if attempt < max_iters:
-                    current_brief = self._augment_brief(base_brief, res.output or "", verdict)
+                if tier_idx < len(deep_models) - 1:
+                    tier_idx += 1  # a capability gap is a common cause; try a stronger model next
+                if budget is not None and tokens_used >= budget:
+                    if emit is not None:
+                        emit.status(f"deep token budget reached ({tokens_used}/{budget}); stopping.")
+                    break
+                current_brief = self._augment_brief(base_brief, res.output or "", verdict)
 
             # res.met is now the brain-verified outcome (not just the worker's exit code). The fact
             # records it for the broken-promise guard; a verified-not-met run is a confirmed failure.
@@ -2165,7 +2237,7 @@ class Orchestrator:
             res = self._run_deep(plan, user_message, self._answer_model(plan, "opus", hint=model_hint),
                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                                  gathered=gathered, quality_standards=quality_standards,
-                                 pending_inputs=pending_inputs)
+                                 pending_inputs=pending_inputs, model_hint=model_hint)
             # Background: categorize edited files into context cards (deep runner returns edited_files in metadata)
             if res.deep_results and any(dr.met for dr in res.deep_results):
                 self._update_context_cards_after_deep(res, context_meta)
@@ -2269,7 +2341,7 @@ class Orchestrator:
                                          emit=emit, rep_preamble=rep_preamble,
                                          exec_record=exec_record, gathered=gathered,
                                          quality_standards=quality_standards,
-                                         pending_inputs=pending_inputs)
+                                         pending_inputs=pending_inputs, model_hint=model_hint)
                 # Emit execution results as a separate milestone/message (not appended to answer)
                 if deep_res and deep_res.deep_results:
                     deep_output = "\n\n".join(d.output for d in deep_res.deep_results if d.output)

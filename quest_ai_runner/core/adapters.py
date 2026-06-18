@@ -180,6 +180,11 @@ class DeepResult:
     output: str = ""
     error: Optional[str] = None
     decision_id: Optional[str] = None   # set if the run needed a human decision instead
+    # Resource usage the worker reported for THIS run, when available (0 / 0.0 if the runner does
+    # not report it). The goal loop accumulates these to enforce an overall token budget instead of
+    # a fixed attempt count.
+    tokens: int = 0           # input + output tokens consumed by the worker for this run
+    cost_usd: float = 0.0     # worker-reported cost for this run, when available
 
 
 @dataclass
