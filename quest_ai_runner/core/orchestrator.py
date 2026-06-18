@@ -1453,7 +1453,7 @@ class Orchestrator:
             for attempt in range(1, max_iters + 1):
                 run_model = deep_models[min(tier_idx, len(deep_models) - 1)]
                 if emit is not None and attempt > 1:
-                    emit.status("goal not met yet, retrying"
+                    emit.status("Goal not met yet, retrying"
                                 + (f" with {run_model}" if run_model else "") + "…")
                 # Fold in any NEW user messages that arrived since the run started, so this process
                 # (the first attempt or a retry) acts on the latest input, not a stale request.
@@ -1475,14 +1475,14 @@ class Orchestrator:
                 if verdict.get("met"):
                     res.met = True
                     if emit is not None:
-                        emit.status("goal verified met.")
+                        emit.status("Goal verified met.")
                     break
                 # If the worker reported success with output and no error, trust that over the verifier's
                 # doubt (the verifier can be overly strict; the worker has the full context).
                 if (res.output or "").strip() and not (res.error or "").strip():
                     res.met = True
                     if emit is not None:
-                        emit.status("goal met (worker reported success).")
+                        emit.status("Goal met (worker reported success).")
                     break
                 # Not met: record why; escalate the model; stop if the token budget is spent.
                 res.met = False
@@ -1501,9 +1501,9 @@ class Orchestrator:
                                                data={"attempt": attempt}))
                     # Show the specific reason why the goal wasn't met
                     if verdict and verdict.get("reason"):
-                        emit.status("goal not met: " + verdict.get("reason"))
+                        emit.status("Goal not met: " + verdict.get("reason"))
                     else:
-                        emit.status("goal not met: " + reason)
+                        emit.status("Goal not met: " + reason)
                 if tier_idx < len(deep_models) - 1:
                     tier_idx += 1  # a capability gap is a common cause; try a stronger model next
                 if budget is not None and tokens_used >= budget:
