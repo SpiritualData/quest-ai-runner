@@ -419,9 +419,12 @@ def resolve_context_assembler(
         # _bootstrap_if_needed so lazy and explicit bootstrap don't race.
         # provider= enables LLM relevance filtering of IDF candidates so only
         # cards genuinely relevant to the user's task are injected.
+        from .core.model_registry import ModelRegistry as _MR
+        _registry = _MR(cfg.model_provider, fallback=cfg.model_fallback or None)
         keyword = FileContextStore(
             cards_dir, repo_root=root, auto_bootstrap=False,
             provider=cfg.model_provider,
+            model=_registry.resolve_tier("balanced"),
         )
         # If a vector store is configured, the default becomes a HYBRID: keyword/IDF FUSED with
         # semantic vector search (the two are complementary). Otherwise keyword-only.

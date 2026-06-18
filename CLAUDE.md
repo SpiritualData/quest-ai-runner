@@ -89,6 +89,33 @@ Multiple AIs may work on this repo simultaneously. **Never run destructive git o
 This prevents accidentally losing concurrent work when a user interrupts (Ctrl+C) a long-running
 edit or task.
 
+## Making LLM calls in this repo
+
+**Always use `MultiProvider`, never call a raw provider directly.**
+
+The deployment uses `MultiProvider` to route model calls to the right underlying provider (Anthropic, Gemini, OpenAI) based on the model name. A raw `AnthropicProvider` does not know about Gemini models and will 404. A raw `GeminiProvider` does not know about Claude models.
+
+The correct pattern in any code that needs to make an LLM call:
+
+```python
+# In CLI / entry-point code — call build_orchestrator() first so cfg.model_provider
+# gets wrapped with MultiProvider, then use cfg.model_provider for all calls.
+from .config import build_orchestrator, _config_from_env
+cfg = _config_from_env()
+build_orchestrator(cfg)          # wraps cfg.model_provider with MultiProvider in place
+provider = cfg.model_provider    # now a MultiProvider — routes by model name prefix
+
+from .core.model_registry import ModelRegistry
+model = ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_tier("balanced")
+result = provider.answer([{"role": "user", "content": prompt}], model=model)
+```
+
+**Always use `resolve_tier()` for the model — never hardcode a model name, and never call `list_models()[0]`** (that returns the first model from the Anthropic API which may not be routable by the current provider config).
+
+**Tier guidance:** use `"balanced"` for filtering/judgment tasks (Gemini Flash class), `"fast"` for cheap lookups. `"best"` for high-stakes reasoning. The `model_fallback` config maps these to real model IDs.
+
+**JSON parsing:** LLM responses often include markdown fences. Never call `json.loads(raw)` directly — strip fences first with a helper like `_extract_json()` in `core/card_filter.py`.
+
 ## Conventions
 
 - Match the surrounding code's style, naming, and comment density.

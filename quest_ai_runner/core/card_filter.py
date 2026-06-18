@@ -4,12 +4,49 @@ from __future__ import annotations
 import concurrent.futures
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 from .adapters import ModelProvider
 
 _log = logging.getLogger("quest-ai-runner.card-filter")
+
+
+def _extract_json(text: str) -> str:
+    """Strip markdown fences and return the first JSON object or array substring."""
+    if not text:
+        return ""
+    fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.DOTALL)
+    if fence:
+        text = fence.group(1)
+    # Find first { or [
+    for start_ch, end_ch in [('{', '}'), ('[', ']')]:
+        idx = text.find(start_ch)
+        if idx < 0:
+            continue
+        depth = 0
+        in_str = False
+        esc = False
+        for i in range(idx, len(text)):
+            ch = text[i]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == '\\':
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch == start_ch:
+                depth += 1
+            elif ch == end_ch:
+                depth -= 1
+                if depth == 0:
+                    return text[idx:i + 1]
+    return ""
 
 
 @dataclass
@@ -33,6 +70,7 @@ def filter_cards_by_relevance(
     candidate_cards: List[Dict[str, Any]],
     *,
     model_provider: Optional[ModelProvider] = None,
+    model: Optional[str] = None,
 ) -> List[CardMetadata]:
     """Use LLM to filter context cards by relevance to the task.
 
@@ -100,9 +138,9 @@ Return ONLY cards with score >= 0.5."""
     try:
         card_scores_json = model_provider.answer(
             [{"role": "user", "content": card_prompt}],
-            model=model_provider.list_models()[0] if model_provider.list_models() else None
+            model=model,
         )
-        card_scores_raw = json.loads(card_scores_json or "{}")
+        card_scores_raw = json.loads(_extract_json(card_scores_json or "") or "{}")
         card_scores = {c["id"]: c["score"] for c in (card_scores_raw.get("cards") or [])}
     except Exception as e:
         _log.debug("card-level scoring failed, falling back: %s", e)
@@ -161,9 +199,9 @@ Respond with ONLY valid JSON (no markdown, no extra text):
         try:
             file_scores_json = model_provider.answer(
                 [{"role": "user", "content": file_prompt}],
-                model=model_provider.list_models()[0] if model_provider.list_models() else None
+                model=None,
             )
-            file_scores_raw = json.loads(file_scores_json or "{}")
+            file_scores_raw = json.loads(_extract_json(file_scores_json or "") or "{}")
             # Build path -> score map from response
             file_scores_map = {}
             for f in (file_scores_raw.get("files") or []):

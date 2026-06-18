@@ -1153,6 +1153,7 @@ class FileContextStore(ContextAssemblerBase):
         confidence_threshold: float = 3.0,
         dry_run: bool = False,
         provider: Any = None,
+        model: Optional[str] = None,
     ) -> None:
         self._cards_dir = Path(cards_dir)
         self._repo_root = Path(repo_root).resolve() if repo_root else None
@@ -1163,6 +1164,8 @@ class FileContextStore(ContextAssemblerBase):
         # When wired, IDF-selected candidates are re-ranked and filtered by the LLM
         # so only cards genuinely relevant to the task are injected.
         self._provider = provider
+        # Resolved model ID to use for LLM card filtering (e.g. "balanced" tier resolved by config).
+        self._filter_model = model
         # CONFIDENCE GATE (the never-worse-by-construction lever). A card is only injected when
         # its IDF match score clears this floor AND it is fresh. A weak/ambiguous match injects
         # NOTHING, so the run is plain Claude Code (the baseline). The system can therefore only
@@ -1691,7 +1694,7 @@ class FileContextStore(ContextAssemblerBase):
         llm_meta_map: Dict[str, Any] = {}  # card_id -> CardMetadata from LLM filter
         if self._provider is not None and idf_candidates:
             try:
-                from .card_filter import filter_cards_by_relevance
+                from ..core.card_filter import filter_cards_by_relevance
                 candidate_dicts = [
                     {
                         "id": c.get("id", ""),
@@ -1709,7 +1712,8 @@ class FileContextStore(ContextAssemblerBase):
                     for c in idf_candidates
                 ]
                 filtered = filter_cards_by_relevance(
-                    task_text, candidate_dicts, model_provider=self._provider
+                    task_text, candidate_dicts, model_provider=self._provider,
+                    model=self._filter_model,
                 )
                 for cm in filtered:
                     llm_meta_map[cm.id] = cm

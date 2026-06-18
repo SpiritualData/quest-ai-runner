@@ -604,11 +604,18 @@ def main(argv=None) -> int:
 
         from .adapters.file_context_store import FileContextStore
         provider = None
+        filter_model = None
         if not getattr(args, "no_llm", False):
+            from .config import build_orchestrator
             cfg = _config_from_env()
-            provider = cfg.model_provider  # may be None if no key configured
+            build_orchestrator(cfg)  # wraps cfg.model_provider with MultiProvider
+            provider = cfg.model_provider
+            if provider is not None:
+                from .core.model_registry import ModelRegistry
+                filter_model = ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_tier("balanced")
 
-        store = FileContextStore(cards_dir, repo_root=corpus, auto_bootstrap=False, provider=provider)
+        store = FileContextStore(cards_dir, repo_root=corpus, auto_bootstrap=False,
+                                 provider=provider, model=filter_model)
         result = store.assemble(args.query)
 
         if not result.card_ids:
