@@ -1411,11 +1411,8 @@ class Orchestrator:
         multi = len(subtasks) > 1
 
         def run_one(task: Dict[str, Any], task_index: int = 0) -> DeepResult:
-            import uuid
             goal = (task.get("goal") or "").strip() or f"Fully address: {user_message}"
             brief = (task.get("brief") or goal).strip()
-            # Generate unique task ID (UUID) so monitor can identify this task's output reliably
-            task_uuid = str(uuid.uuid4())[:8]  # 8-char UUID for readability
             # EVERY deep process is told BOTH the top input-level goal (the user's actual request)
             # and, when it is a subgoal of a larger fan-out, the overall goal it serves — so it never
             # loses sight of what the user wants while pursuing its specific piece. (Its OWN process
@@ -1425,8 +1422,8 @@ class Orchestrator:
             if multi and overall_goal and overall_goal != goal:
                 _hdr.append(f"OVERALL GOAL (this process is ONE subgoal serving it, stay aligned):\n"
                             f"{overall_goal}")
-            # Include task UUID in brief so Claude outputs it and monitor can extract it
-            task_label = f"TASK {task_index} [{task_uuid}]" if multi else f"TASK [{task_uuid}]"
+            # Show task identifier in brief so user sees which task is running
+            task_label = f"TASK {task_index}" if multi else "TASK"
             brief = "\n\n".join(_hdr) + f"\n\n{task_label}: {goal}\n\n" + brief
             # Per-subtask execution fact — populated from EVENT_EXEC phase ticks (live) and finalized
             # from the DeepResult.met below. Recording per-subtask keeps facts correct even when
