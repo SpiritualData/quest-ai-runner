@@ -2582,6 +2582,9 @@ class Orchestrator:
                     deep_brief=(should_defer_deep.get("brief") or user_message)[:2000],
                     rationale=should_defer_deep.get("rationale") or "follow-up work from answer phase",
                 )
+                # Show goal condition before executing
+                if emit is not None:
+                    emit.emit(ProgressEvent(type=EVENT_RESULT, text=f"Goal: {deferred_plan.goal}"))
                 deep_model = self._answer_model(deferred_plan, "opus", hint=model_hint)
                 deep_res = self._run_deep(deferred_plan, user_message, deep_model,
                                          emit=emit, rep_preamble=rep_preamble,
