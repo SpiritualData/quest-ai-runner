@@ -7,15 +7,30 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
-- **Code/file-change requests no longer finish having only DESCRIBED the fix.** The answer→deep
-  safety net had regressed to depend solely on the planner's explicit
-  `answer_contains_work_to_execute` flag; a cheap planner that forgets that flag would emit an
-  answer like "to fix this, I need to update ..." and end the turn without doing the work
-  (`_answer_describes_unexecuted_work` was left defined but never called). The detector is
-  re-wired as a fallback alongside `text_claims_action`, so a described-but-unexecuted fix
-  auto-escalates to a deep run that actually applies the change. The detector also recognizes two
-  more high-signal phrasings ("the fix is to update X", "this needs to be updated"). Plain
-  informational answers still do not escalate.
+- **Actionable requests now EXECUTE instead of ending as a proposal.** The cheap planner often
+  routes a change request to `action="answer"`, proposes the change in prose, and forgets to set
+  `answer_contains_work_to_execute`. The previous escalation nets only matched specific ANSWER
+  phrasings (past-tense claims, "I need to update X"), which a model like gemini rarely produces
+  verbatim, so a proposal such as "Aligning these to use the same created_at field will guarantee
+  ..." matched nothing and the turn finished without doing the work. The orchestrator now also
+  escalates by **user-message intent**: `_message_requests_change()` (imperative change verbs +
+  bug/wrongness signals, excluding pure how/what/why questions) detects an actionable request from
+  the stable message; when a deep runner is available and nothing executed, it runs a deep step
+  whose brief carries the assistant's proposed approach so the run APPLIES it. Emits a visible
+  status and logs the escalation. The earlier `_answer_describes_unexecuted_work` net (dropped in a
+  refactor that left it defined but uncalled) is also re-wired as a fallback, now recognizing "the
+  fix is to update X" / "this needs to be updated". Plain informational answers still do not escalate.
+- **Interactive chat no longer crashes on a deep turn.** `InteractiveSession._run_turn` called
+  `self._ensure_ai_label()` for a `kind="deep"` result, but that helper lives on `_TurnRenderer`,
+  so every deep turn raised `AttributeError: 'InteractiveSession' object has no attribute
+  '_ensure_ai_label'` (`OrchestratorResult` never sets `.text` for deep, so the broken branch
+  always ran). It now calls `renderer._ensure_ai_label()` and shows the "planned, use /execute"
+  hint only when no `DeepResult` actually executed, so it no longer misfires after a real run.
+- **Quest decision summaries are capped at the 4000-char condition limit.** A verbose planner
+  question/clarification could produce a decision summary that Quest stores as a goal CONDITION
+  (max 4000 chars), so the POST was rejected with "Goal condition is limited to 4000 characters
+  (got NNNNN)" even when the user's input was short. `QuestClient.create_decision` now truncates an
+  over-long summary at the single boundary to Quest, so any caller's summary is bounded.
 
 ### Changed
 - `FileContextStore.bootstrap()`: now uses an LLM (via the wired `ModelProvider`) to identify semantic topic cards across the codebase — a topic can span files from completely separate directories. The number of cards reflects the natural structure of the codebase, not a preset range. Without a provider, bootstrap is a no-op (cards accumulate via `record()` instead).
