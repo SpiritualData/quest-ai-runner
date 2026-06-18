@@ -2227,7 +2227,7 @@ class Orchestrator:
         consecutive_reads = 0  # Track how many steps in a row chose "read"
         for step in range(cfg.max_steps):
             steps = step + 1
-            emit.status("planning…" if step == 0 else "re-planning…")
+            emit.status("Planning…" if step == 0 else "Re-planning…")
 
             # FORCE DEEP ON STEP 0 if execution directive was detected (skip planning but gather context)
             if step == 0 and force_deep_on_step_0:
@@ -2241,7 +2241,7 @@ class Orchestrator:
                 try:
                     context_obs = self._do_reads(context_reads, [])
                     gathered.extend(context_obs)
-                    emit.status("gathered context for execution…")
+                    emit.status("Gathering context for execution…")
                 except Exception:  # noqa: BLE001
                     pass  # Graceful: continue even if context gather fails
 
@@ -2317,9 +2317,9 @@ class Orchestrator:
                            or r.get("list_operations") or r.get("describe_operation")
                            or r.get("list_guidance") or r.get("read_guidance")
                            for r in plan.reads):
-                        emit.status("exploring…")
+                        emit.status("Exploring…")
                     else:
-                        emit.status("searching…" if any(r.get("grep") for r in plan.reads) else "reading…")
+                        emit.status("Searching…" if any(r.get("grep") for r in plan.reads) else "Reading…")
                     new_obs = self._do_reads(plan.reads, guidance_selected_ids)
                     gathered.extend(new_obs)
                     _sources: List[str] = []
@@ -2360,7 +2360,7 @@ class Orchestrator:
         # Cap/budget fallback: still in read mode -> best-effort answer or escalate to deep.
         if final not in ("answer", "deep", "confirm", "clarify"):
             if gathered:
-                emit.status("wrapping up with a best-effort answer…")
+                emit.status("Wrapping up with a best-effort answer…")
                 model = self._answer_model(plan, "balanced", hint=model_hint)
                 text = self._grounded_answer(user_message, transcript, context_view, gathered, model,
                                              True, native_blocks=native_blocks)
@@ -2376,7 +2376,7 @@ class Orchestrator:
             return finish(res)
 
         if final == "deep":
-            emit.status("working on this now…")
+            emit.status("Working on this now…")
             res = self._run_deep(plan, user_message, self._answer_model(plan, "opus", hint=model_hint),
                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                                  gathered=gathered, quality_standards=quality_standards,
