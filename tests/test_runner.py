@@ -458,9 +458,29 @@ def test_subprocess_runner_passes_tool_flags_and_runs_web_goal(monkeypatch):
     res = runner.run_goal(goal="find sources", brief="research", max_turns=3)
     assert res.met is True
     cmd = captured["cmd"]
+    # -p/--print is MANDATORY: without it Claude Code runs interactively and exits doing nothing.
+    assert "-p" in cmd
     assert "--allowed-tools" in cmd and "WebSearch,WebFetch" in cmd
     assert "--disallowed-tools" in cmd and "Bash" in cmd
     assert "--max-turns" in cmd
+
+
+def test_subprocess_runner_treats_empty_output_as_not_met(monkeypatch):
+    """Exit 0 with NO output is a silent no-op (the worker never ran the goal), not a success.
+    The runner must report met=False with a clear message rather than a hollow 'Completed'."""
+    import subprocess as _sp
+    from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+
+    class _Proc:
+        returncode = 0
+        stdout = b"   \n"   # whitespace only == effectively empty
+        stderr = b""
+
+    monkeypatch.setattr(_sp, "run", lambda cmd, **kw: _Proc())
+    runner = SubprocessGoalRunner(SubprocessConfig(working_dir="/w", claude_path="/usr/bin/claude"))
+    res = runner.run_goal(goal="fix the date bug", brief="do it", max_turns=3)
+    assert res.met is False
+    assert "no output" in (res.error or "").lower()
 
 
 # --- the escalation-marker contract: a deep worker that raised a human decision --------------

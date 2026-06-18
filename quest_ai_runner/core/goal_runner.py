@@ -221,7 +221,13 @@ class SubprocessGoalRunner(DeepRunner):
             resolved = shutil.which(binary)
             if resolved:
                 binary = resolved
-        cmd: List[str] = [binary]
+        # -p / --print: run Claude Code HEADLESS (non-interactive) and print the final result.
+        # This is REQUIRED: Claude Code "starts an interactive session by default" and only runs
+        # non-interactively under -p/--print. Without it, the binary launches the interactive TUI,
+        # immediately hits EOF on the piped stdin prompt, and exits 0 having done NOTHING — which
+        # this runner would record as met=True (a silent no-op that looks "Completed"). The -p flag
+        # is what makes the deep run actually execute the goal and produce output.
+        cmd: List[str] = [binary, "-p"]
         if self.cfg.skip_permissions:
             cmd.append("--dangerously-skip-permissions")
         # Apply explicit tool gating when the consumer pinned it (kept in lock-step with
@@ -263,6 +269,16 @@ class SubprocessGoalRunner(DeepRunner):
         if decision_id:
             return DeepResult(met=False, output=out, decision_id=decision_id)
         if proc.returncode == 0:
+            # Safety net against a SILENT NO-OP: a real headless ``-p`` run always prints its final
+            # result, so exit-0 with EMPTY output means the worker never actually ran the goal (the
+            # failure mode when ``-p`` is missing, or the binary mis-launches). Report it as a
+            # failure with a clear message instead of a hollow "met" that shows "Completed" but did
+            # nothing. (A pure chit-chat run has an empty ``goal`` and is exempt.)
+            if goal.strip() and not out.strip():
+                return DeepResult(
+                    met=False, output=out,
+                    error="worker exited cleanly but produced NO output — the goal did not actually "
+                          "run (check that the worker runs headless, e.g. Claude Code needs -p).")
             return DeepResult(met=True, output=out)
         if not err:
             err = (f"Goal run did not complete cleanly (exit {proc.returncode}) — likely hit the "
