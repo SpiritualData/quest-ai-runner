@@ -308,7 +308,7 @@ def main(argv=None) -> int:
             from .textual_session import is_textual_available, start_textual_interactive
             if is_textual_available():
                 log.debug("using Textual UI for chat session")
-                start_textual_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id)
+                start_textual_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id, verbose=args.verbose)
                 return 0
         except Exception as e:
             log.debug("Textual UI failed, falling back to ANSI: %s", e)

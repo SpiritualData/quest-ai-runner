@@ -25,6 +25,7 @@ def start_textual_interactive(
     rep_name: str = "Assistant",
     persona: Optional[str] = None,
     goal_id: Optional[str] = None,
+    verbose: bool = False,
 ) -> None:
     """Build an InteractiveSession and run it under the Textual UI until quit."""
     from .interactive import InteractiveSession
@@ -33,7 +34,7 @@ def start_textual_interactive(
     session = InteractiveSession(
         config, rep_name=rep_name, persona=persona, goal_id=goal_id
     )
-    QuestAITerminal(session).run()
+    QuestAITerminal(session, verbose=verbose).run()
 
 
 def is_textual_available() -> bool:

@@ -310,11 +310,12 @@ class QuestAITerminal(App):
         Binding("ctrl+l", "clear_log", "Clear screen"),
     ]
 
-    def __init__(self, session: InteractiveSession, **kwargs) -> None:
+    def __init__(self, session: InteractiveSession, verbose: bool = False, **kwargs) -> None:
         super().__init__(**kwargs)
         self.sess = session
         self.rep_name = session._rep_name
         self.title = "Quest AI Runner"
+        self.verbose = verbose
 
         # Per-turn streaming state (reset by _begin_turn).
         self._turn_active = False
@@ -379,9 +380,10 @@ class QuestAITerminal(App):
         root_logger = logging.getLogger()
         root_logger.handlers.clear()  # Remove stderr handler from basicConfig
         log_handler = _RichLogHandler(self, self._tlog)
-        log_handler.setLevel(logging.DEBUG)
+        log_level = logging.DEBUG if self.verbose else logging.INFO
+        log_handler.setLevel(log_level)
         root_logger.addHandler(log_handler)
-        root_logger.setLevel(logging.DEBUG)
+        root_logger.setLevel(log_level)
 
         self._print_header()
         inp.focus()
