@@ -2479,8 +2479,8 @@ class Orchestrator:
         if final == "deep":
             # Show goal condition before executing
             goal_text = plan.goal or f"Complete: {user_message[:100]}"
-            emit.emit(ProgressEvent(type=EVENT_RESULT, text=f"Goal: {goal_text}"))
-            emit.status("Executing goal now…")
+            emit.emit(ProgressEvent(type=EVENT_RESULT, text=f"Executing: {goal_text}"))
+            emit.status("Running now…")
             res = self._run_deep(plan, user_message, self._answer_model(plan, "opus", hint=model_hint),
                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                                  gathered=gathered, quality_standards=quality_standards,
@@ -2585,7 +2585,7 @@ class Orchestrator:
                 )
                 # Show goal condition before executing
                 if emit is not None:
-                    emit.emit(ProgressEvent(type=EVENT_RESULT, text=f"Goal: {deferred_plan.goal}"))
+                    emit.emit(ProgressEvent(type=EVENT_RESULT, text=f"Executing follow-up: {deferred_plan.goal}"))
                 deep_model = self._answer_model(deferred_plan, "opus", hint=model_hint)
                 deep_res = self._run_deep(deferred_plan, user_message, deep_model,
                                          emit=emit, rep_preamble=rep_preamble,
