@@ -2245,16 +2245,16 @@ class Orchestrator:
                 except Exception:  # noqa: BLE001
                     pass  # Graceful: continue even if context gather fails
 
-                # LET THE LLM DECIDE HOW TO SPLIT: use cheap haiku call to suggest logical task boundaries
-                # (not file-based, but semantic—multiple files per task when they're logically connected)
+                # LET THE LLM DECIDE: use cheap haiku call to suggest task split (1, 2, 3, or 4 subtasks)
+                # Most of the time 1 task is fine; only split when work naturally divides.
                 deep_subtasks = []
                 try:
                     split_prompt = (
-                        "Suggest 2-4 logical subtasks to complete this work. "
-                        "Each subtask may touch multiple files (they're often connected). "
-                        "Keep goals short and checkable.\n\n"
+                        "How many parallel subtasks (1, 2, 3, or 4) would you use to split this work? "
+                        "Answer only with the number, then on the next line list the goals (one per line). "
+                        "Each subtask may touch multiple files. Most requests = 1 task is fine.\n\n"
                         f"Request: {user_message}\n\n"
-                        "Format:\nGoal 1: <short done-standard>\nGoal 2: <short done-standard>\n..."
+                        "Format:\n1\nGoal: <done-standard>"
                     )
                     model = self.registry.resolve_tier("haiku")
                     provider = self.get_provider_for_model(model)
