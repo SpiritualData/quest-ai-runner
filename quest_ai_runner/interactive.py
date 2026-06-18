@@ -561,7 +561,7 @@ class _DeepRunTracker:
                 self._runs[run_id]['status'] = status
 
     def get_dashboard(self) -> str:
-        """Return a dashboard summary of all runs."""
+        """Return a dashboard summary of all runs with latest output."""
         with self._lock:
             if not self._runs:
                 return ""
@@ -573,10 +573,19 @@ class _DeepRunTracker:
                 mins, secs = divmod(int(elapsed), 60)
                 time_str = f"{mins}m{secs}s" if mins > 0 else f"{secs}s"
 
-                lines.append(f"  {status_icon} {run_id[:20]}: {info['goal'][:40]} ({time_str})")
+                # Task header
+                lines.append(f"{status_icon} {run_id[:8]}: {time_str}")
+
+                # Show last 2-3 output lines with indenting
                 if info['output']:
-                    last_line = info['output'].split('\n')[-1]
-                    lines.append(f"     {_DIM}{last_line[:60]}{_RESET}")
+                    output_lines = info['output'].split('\n')[-3:]
+                    for out_line in output_lines:
+                        if out_line.strip():
+                            # Indent file paths more
+                            if '/' in out_line:
+                                lines.append(f"  → {out_line[:70]}")
+                            else:
+                                lines.append(f"  {out_line[:70]}")
 
             return "\n".join(lines)
 
@@ -884,24 +893,32 @@ class _TurnRenderer:
                 goal = data.get("goal") or "executing work…"
                 self._deep_tracker.add_run(run_id, goal)
                 self._current_deep_run_id = run_id
-                if self._c._color:
-                    sys.__stdout__.write(f"\n{_DIM}[exec] started run: {run_id}{_RESET}\n")
-                    sys.__stdout__.flush()
-
-            # Update this run's output
-            if text:
-                self._deep_tracker.update_run_output(run_id, text)
-                # Print live updates as Claude Code produces them
+                # Print goal header once per run
                 self._panel.stop()
-                self._display("exec", text)
+                self._c.line("")
+                if self._c._color:
+                    self._c.line(f"{_BOLD}{_BRIGHT_CYAN}GOAL:{_RESET} {goal}")
+                else:
+                    self._c.line(f"GOAL: {goal}")
                 self._panel.start()
 
-            # Show dashboard if multiple runs
+            # Update this run's output (accumulate without printing every line)
+            if text:
+                self._deep_tracker.update_run_output(run_id, text)
+                # Don't print individual exec events; show dashboard instead
+                # (keeps output clean and grouped)
+
+            # Show dashboard with latest output from all runs
             active_runs = len(self._deep_tracker._runs)
-            if active_runs > 1 and text is None:  # only show dashboard between events
+            if active_runs > 0:
+                # Periodically refresh dashboard (every 2 events or so)
                 self._panel.stop()
-                self._c.dim("\n  Deep runs dashboard (press Tab to switch):")
-                self._c.dim(self._deep_tracker.get_dashboard())
+                dashboard = self._deep_tracker.get_dashboard()
+                if dashboard:
+                    self._c.dim("\n  Progress from all deep runs:")
+                    for line in dashboard.split('\n'):
+                        if line.strip():
+                            self._c.dim("    " + line)  # Extra indent for clarity
                 self._panel.start()
         elif t == ev["milestone"]:
             self._panel.stop()
