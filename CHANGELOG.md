@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Code/file-change requests no longer finish having only DESCRIBED the fix.** The answer→deep
+  safety net had regressed to depend solely on the planner's explicit
+  `answer_contains_work_to_execute` flag; a cheap planner that forgets that flag would emit an
+  answer like "to fix this, I need to update ..." and end the turn without doing the work
+  (`_answer_describes_unexecuted_work` was left defined but never called). The detector is
+  re-wired as a fallback alongside `text_claims_action`, so a described-but-unexecuted fix
+  auto-escalates to a deep run that actually applies the change. The detector also recognizes two
+  more high-signal phrasings ("the fix is to update X", "this needs to be updated"). Plain
+  informational answers still do not escalate.
+
 ### Changed
 - `FileContextStore.bootstrap()`: now uses an LLM (via the wired `ModelProvider`) to identify semantic topic cards across the codebase — a topic can span files from completely separate directories. The number of cards reflects the natural structure of the codebase, not a preset range. Without a provider, bootstrap is a no-op (cards accumulate via `record()` instead).
 - **Bootstrap Stage 3 now dedups via keyword-clustering + an LLM merge decision** (replaces the old Jaccard file-overlap merge). Cards that share at least 2 keywords are clustered transitively (union-find); each multi-card cluster gets ONE LLM call asking which cards describe the same concept and should be merged. New cards are also deduped against the cards already on disk, folding a duplicate new card into the existing card's id rather than writing a divergent one. With no provider it falls back to a keyword-union merge (Jaccard >= 30%).
