@@ -1331,9 +1331,8 @@ class InteractiveSession:
                     for d in (final.deep_results or [])
                 )
                 if not executed and goals:
-                    # Nothing ran (no deep_runner wired, or it produced nothing): show the plan.
+                    # Nothing ran (no deep_runner wired, or it produced nothing)
                     panel.stop()
-                    # _ensure_ai_label lives on the _TurnRenderer, not on the session.
                     renderer._ensure_ai_label()
                     self._console.line("")
                     self._console.dim("  Task identified. Planned changes:")
@@ -1341,16 +1340,13 @@ class InteractiveSession:
                         prefix = "▸ " if i == 1 else "  "
                         self._console.dim(f"  {prefix}{g}")
                     self._console.line("")
-                    # Prompt user to confirm and execute (requires deep_runner in config)
-                    try:
-                        # Simple y/n confirmation without requiring /execute command
-                        response = input("  Execute these changes? (y/n): ").strip().lower()
-                        if response in ("y", "yes"):
-                            self._run_turn("Execute it. No more planning, just code it and apply changes now.")
-                        else:
-                            self._console.dim("  Changes not executed.")
-                    except (EOFError, KeyboardInterrupt):
-                        self._console.dim("  Cancelled.")
+
+                    # If deep_runner is configured, execute automatically (don't ask)
+                    # Otherwise skip (no executor available)
+                    if self._cfg.deep_runner:
+                        self._run_turn("Execute it. No more planning, just code it and apply changes now.")
+                    else:
+                        self._console.dim("  (No deep executor configured; cannot auto-execute)")
 
             self._last_user = user_text
             self._last_assistant = final.text or (
