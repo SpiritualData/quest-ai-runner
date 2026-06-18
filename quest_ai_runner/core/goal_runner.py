@@ -234,57 +234,24 @@ class SubprocessConfig:
         return True
 
 
-def _find_claude_project_dir(working_dir: str) -> Optional[Path]:
-    """Find the Claude projects directory for a given working directory.
+def _find_claude_project_dir(working_dir: Optional[str] = None) -> Optional[Path]:
+    """Find the Claude projects directory.
 
-    Checks both local .claude/projects and ~/.claude/projects for session files.
+    Claude stores projects in {working_dir}/.claude/projects when run from that cwd.
+    working_dir can be provided explicitly or read from QAR_DEEP_WORKING_DIR env var.
     """
-    project_key = working_dir.replace("/", "-")
-    candidates = []
+    if not working_dir:
+        working_dir = os.getenv("QAR_DEEP_WORKING_DIR") or os.getenv("QAR_CORPUS_ROOT")
 
-    # 1. Local .claude folder in the working directory
-    local_claude_dir = Path(working_dir) / ".claude" / "projects" / project_key
-    if local_claude_dir.exists():
-        candidates.append(local_claude_dir)
-
-    # 2. Home directory .claude folder
-    home_claude_dir = Path.home() / ".claude" / "projects" / project_key
-    if home_claude_dir.exists():
-        candidates.append(home_claude_dir)
-
-    # 3. Try without leading dash in project key
-    project_key_no_dash = project_key.lstrip("-")
-    local_alt = Path(working_dir) / ".claude" / "projects" / project_key_no_dash
-    if local_alt.exists():
-        candidates.append(local_alt)
-
-    home_alt = Path.home() / ".claude" / "projects" / project_key_no_dash
-    if home_alt.exists():
-        candidates.append(home_alt)
-
-    # 4. Search for any project folder with JSONL files
-    local_projects = Path(working_dir) / ".claude" / "projects"
-    if local_projects.exists():
-        for proj_dir in local_projects.iterdir():
-            if proj_dir.is_dir() and proj_dir not in candidates:
-                if list(proj_dir.glob("*.jsonl")):
-                    candidates.append(proj_dir)
-
-    if not candidates:
+    if not working_dir:
         return None
 
-    # Return the one with the most recently modified JSONL file
-    def get_latest_jsonl_mtime(proj_dir: Path) -> float:
-        try:
-            jsonl_files = list(proj_dir.glob("*.jsonl"))
-            if not jsonl_files:
-                return 0
-            return max(f.stat().st_mtime for f in jsonl_files)
-        except Exception:
-            return 0
+    # Direct .claude/projects in the working directory
+    local_projects = Path(working_dir) / ".claude" / "projects"
+    if local_projects.exists() and local_projects.is_dir():
+        return local_projects
 
-    candidates.sort(key=get_latest_jsonl_mtime, reverse=True)
-    return candidates[0]
+    return None
 
 
 def _find_active_jsonl_file(project_dir: Path) -> Optional[Path]:
@@ -384,7 +351,7 @@ def _format_message_text(msg: dict) -> str:
     return ""
 
 
-def _get_existing_sessions(working_dir: str) -> set:
+def _get_existing_sessions(working_dir: Optional[str] = None) -> set:
     """Get set of session file stems (UUIDs) that exist before Claude starts."""
     project_dir = _find_claude_project_dir(working_dir)
     if not project_dir:
