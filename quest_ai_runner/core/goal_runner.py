@@ -235,39 +235,37 @@ class SubprocessConfig:
 
 
 def _find_claude_project_dir(working_dir: Optional[str] = None) -> Optional[Path]:
-    """Find the Claude projects directory for the specific working_dir.
+    """Find ANY .claude/projects directory with JSONL files.
 
-    Claude stores projects in {base}/.claude/projects/{project-key}/
-    where {project-key} is derived from the working_dir path.
+    Claude stores sessions in {base}/.claude/projects/{project-key}/*.jsonl
+    We don't know the exact project-key, so search for any dir with JSONL files.
     """
-    if not working_dir:
-        working_dir = os.getenv("QAR_DEEP_WORKING_DIR") or os.getenv("QAR_CORPUS_ROOT")
-        _log.info("_find_claude_project_dir: using env vars QAR_DEEP_WORKING_DIR=%s QAR_CORPUS_ROOT=%s",
-                 os.getenv("QAR_DEEP_WORKING_DIR"), os.getenv("QAR_CORPUS_ROOT"))
+    candidates = []
 
-    if not working_dir:
-        _log.warning("_find_claude_project_dir: no working_dir provided or found in env")
-        return None
+    # Check working_dir's .claude/projects
+    if working_dir:
+        local_projects = Path(working_dir) / ".claude" / "projects"
+        if local_projects.exists():
+            candidates.append(local_projects)
+            _log.info("_find_claude_project_dir: found .claude/projects in working_dir")
 
-    # Project key is the full path with / replaced by -
-    project_key = working_dir.replace("/", "-")
-    _log.info("_find_claude_project_dir: working_dir=%s -> project_key=%s", working_dir, project_key)
+    # Check home .claude/projects
+    home_projects = Path.home() / ".claude" / "projects"
+    if home_projects.exists():
+        candidates.append(home_projects)
+        _log.info("_find_claude_project_dir: found .claude/projects in home")
 
-    # Check .claude/projects in the working directory
-    local_projects = Path(working_dir) / ".claude" / "projects" / project_key
-    _log.info("_find_claude_project_dir: checking local %s", local_projects)
-    if local_projects.exists() and local_projects.is_dir():
-        _log.info("_find_claude_project_dir: ✓ found local project dir")
-        return local_projects
+    # Search each candidate for subdirs with JSONL files
+    for base in candidates:
+        try:
+            for subdir in base.iterdir():
+                if subdir.is_dir() and list(subdir.glob("*.jsonl")):
+                    _log.info("_find_claude_project_dir: ✓ found project dir with JSONL: %s", subdir)
+                    return subdir
+        except Exception as e:
+            _log.debug("_find_claude_project_dir: error searching %s: %s", base, e)
 
-    # Also check home directory .claude/projects
-    home_projects = Path.home() / ".claude" / "projects" / project_key
-    _log.info("_find_claude_project_dir: checking home %s", home_projects)
-    if home_projects.exists() and home_projects.is_dir():
-        _log.info("_find_claude_project_dir: ✓ found home project dir")
-        return home_projects
-
-    _log.warning("_find_claude_project_dir: ✗ not found in local or home .claude/projects")
+    _log.warning("_find_claude_project_dir: ✗ no .claude/projects dir with JSONL files found")
     return None
 
 
