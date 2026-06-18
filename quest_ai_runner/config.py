@@ -597,6 +597,12 @@ def build_orchestrator(
 
         guidance = UniversalGuidanceProvider(dynamic_guidance_loader=dynamic_loader)
 
+    # A default in-process inbox for mid-run user messages, so any interface (chat, Quest frontend,
+    # ...) can push new messages and have them folded into the running goal loop automatically. A
+    # consumer that already supplied one keeps it; a distributed deployment can pass its own.
+    from .core.inbox import InMemoryInbox
+    input_inbox = getattr(cfg, "input_inbox", None) or InMemoryInbox()
+
     return Orchestrator(
         retrieval=get_retrieval_adapter(cfg),
         provider=cfg.model_provider,
@@ -608,4 +614,5 @@ def build_orchestrator(
         vision_provider=cfg.vision_provider,
         context_assembler=resolve_context_assembler(cfg, notify=notify),
         guidance=guidance,
+        input_inbox=input_inbox,
     )

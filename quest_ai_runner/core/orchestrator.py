@@ -62,6 +62,7 @@ from .adapters import (
     RetrievalAdapter,
 )
 from .context_doctrine import CACHED_HINT_GATE, MODEL_TIER_GATE, SUFFICIENCY_GATE
+from .inbox import InputInbox
 from .guard import (
     ExecutionFact,
     ExecutionRecord,
@@ -908,11 +909,16 @@ class Orchestrator:
         vision_model: Optional[str] = None,
         context_assembler: Optional[ContextAssembler] = None,
         guidance: Optional[GuidanceProvider] = None,
+        input_inbox: Optional["InputInbox"] = None,
     ):
         self.retrieval = retrieval
         self.provider = provider
         self.registry = registry
         self.deep_runner = deep_runner
+        # Generic conversation inbox for mid-run user messages. When wired, ``run`` auto-drains the
+        # current conversation's pending messages between goal-loop steps, so ANY interface that
+        # pushes to it (chat, Quest frontend, ...) gets mid-run message folding with no extra wiring.
+        self.input_inbox = input_inbox
         self.escalation = escalation
         self.cfg = config or OrchestratorConfig()
         self._status = status or (lambda _msg: None)
@@ -1886,6 +1892,19 @@ class Orchestrator:
         _ctx_meta: Dict[str, Any] = {**(context_meta or {})}
         if quest_id is not None:
             _ctx_meta.setdefault("quest_id", quest_id)
+
+        # --- Mid-run user messages: auto-drain a wired inbox for THIS conversation ----------------
+        # If the caller didn't pass an explicit ``pending_inputs`` but an ``input_inbox`` is wired,
+        # build one that drains this conversation's pending messages. This makes mid-run message
+        # folding work for ANY interface that pushes to the inbox (chat, Quest frontend, ...) with no
+        # per-interface wiring beyond the push. The conversation key is resolved generically.
+        if pending_inputs is None and self.input_inbox is not None:
+            _conv_key = (quest_id or _ctx_meta.get("conversation_id")
+                         or _ctx_meta.get("session_id") or _ctx_meta.get("user_id"))
+            if _conv_key:
+                _inbox = self.input_inbox
+                pending_inputs = lambda: _inbox.drain(_conv_key)  # noqa: E731
+
         _assembled = None
         _ctx_future = None
         _ctx_executor = None

@@ -279,6 +279,24 @@ def test_deep_loop_stops_at_token_budget():
     assert len(runner.calls) == 2  # stopped on budget, not the 8-attempt cap
 
 
+def test_input_inbox_auto_drains_into_deep_run():
+    # The generic abstraction: an interface pushes a mid-run message to the wired inbox; the
+    # orchestrator auto-drains this conversation (no explicit pending_inputs) and folds it in.
+    from quest_ai_runner.core.inbox import InMemoryInbox
+    inbox = InMemoryInbox()
+    inbox.push("conv1", "also handle nulls")
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
+        {"met": True, "reason": "done"},
+    ])
+    runner = StubDeepRunner(met=True, output="working")
+    res = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider),
+                       deep_runner=runner, input_inbox=inbox,
+                       config=OrchestratorConfig(deep_goal_max_iterations=2)).run("fix it", quest_id="conv1")
+    assert res.kind == "deep"
+    assert "also handle nulls" in runner.calls[0]["brief"]  # drained + folded with no manual wiring
+
+
 def test_deep_run_folds_in_new_user_messages():
     # New messages the user sends mid-run are folded into the next deep process (here, the retry),
     # so a long-running goal loop acts on the latest input, not just the stale original request.
