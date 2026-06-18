@@ -156,7 +156,7 @@ class Observation:
 @dataclass
 class PlanDecision:
     """The planner's structured next-step decision (one iteration of the loop)."""
-    action: str                                   # "read" | "answer" | "deep" | "confirm"
+    action: str                                   # "read" | "answer" | "deep" | "confirm" | "clarify"
     reads: List[Dict[str, Any]] = field(default_factory=list)
     goal: Optional[str] = None
     deep_brief: Optional[str] = None
@@ -169,6 +169,8 @@ class PlanDecision:
     deferred_deep: Optional[Dict[str, Any]] = None  # {"goal": "...", "brief": "...", "rationale": "..."}
     # Explicit signal: this answer contains work that needs execution (instead of regex guessing)
     answer_contains_work_to_execute: bool = False  # Set True if answer describes work the AI should do
+    # User clarification/input needed: when action="clarify"
+    clarification: Optional[Dict[str, Any]] = None  # {"question": "...", "options": [...], "allow_free_input": bool}
 
 
 @dataclass

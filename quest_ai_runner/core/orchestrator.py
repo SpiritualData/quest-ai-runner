@@ -259,7 +259,7 @@ DECIDE_TOOL: Dict[str, Any] = {
     "input_schema": {
         "type": "object",
         "properties": {
-            "action": {"type": "string", "enum": ["read", "answer", "deep", "confirm"]},
+            "action": {"type": "string", "enum": ["read", "answer", "deep", "confirm", "clarify"]},
             "reads": {
                 "type": "array",
                 "items": {
@@ -307,6 +307,16 @@ DECIDE_TOOL: Dict[str, Any] = {
             "answer_contains_work_to_execute": {
                 "type": "boolean",
                 "description": "Set to true if this answer describes work the AI should execute (instead of just reporting). Triggers auto-escalation to deep.",
+            },
+            "clarification": {
+                "type": ["object", "null"],
+                "description": "When action='clarify', specify what user input/approval is needed.",
+                "properties": {
+                    "question": {"type": "string", "description": "What to ask the user"},
+                    "options": {"type": "array", "items": {"type": "string"}, "description": "List of possible responses (if multiple-choice)"},
+                    "allow_free_input": {"type": "boolean", "description": "Whether user can provide free-text input beyond options"},
+                },
+                "required": ["question"],
             },
             "rationale": {"type": "string"},
         },
@@ -388,7 +398,7 @@ class OrchestratorResult:
 
 def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDecision:
     action = (raw.get("action") or "answer").strip().lower()
-    if action not in ("read", "answer", "deep", "confirm"):
+    if action not in ("read", "answer", "deep", "confirm", "clarify"):
         action = "answer"
 
     reads_in = raw.get("reads") or []
@@ -432,6 +442,15 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
             "rationale": deferred_raw.get("rationale"),
         }
 
+    clarification: Optional[Dict[str, Any]] = None
+    clarif_raw = raw.get("clarification")
+    if clarif_raw and isinstance(clarif_raw, dict) and clarif_raw.get("question"):
+        clarification = {
+            "question": clarif_raw.get("question"),
+            "options": clarif_raw.get("options") or [],
+            "allow_free_input": bool(clarif_raw.get("allow_free_input", False)),
+        }
+
     return PlanDecision(
         action=action,
         reads=clean_reads,
@@ -444,6 +463,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
         rationale=(raw.get("rationale") or "").strip(),
         deferred_deep=deferred_deep,
         answer_contains_work_to_execute=bool(raw.get("answer_contains_work_to_execute", False)),
+        clarification=clarification,
     )
 
 
@@ -1290,6 +1310,46 @@ class Orchestrator:
                                     text="Corrected the reply to reflect what actually happened.",
                                     data={"claim_corrected": True}))
 
+    # --- clarify (user selection/clarification) --------------------------------
+
+    def _run_clarify(self, plan: PlanDecision, *, quest_id: Optional[str] = None,
+                     emit: Optional[_Emitter] = None) -> OrchestratorResult:
+        """Surface user clarification/selection need as a decision request.
+
+        Creates a decision-request with the question and options (if any) so the user can
+        respond on the frontend or terminal. Returns with kind="confirm" to trigger UI.
+        """
+        clarif = plan.clarification or {}
+        question = clarif.get("question", "Need your input to proceed").strip()
+        options = clarif.get("options") or []
+        allow_free = clarif.get("allow_free_input", False)
+
+        # Format options for display
+        if options:
+            question_with_opts = f"{question}\n\nOptions:\n" + "\n".join(f"- {opt}" for opt in options)
+            if allow_free:
+                question_with_opts += "\n\n(You can also provide custom input)"
+        else:
+            question_with_opts = question
+
+        decision_id = None
+        if self.escalation is not None:
+            try:
+                decision_id = self.escalation.escalate(Escalation(
+                    summary=question_with_opts,
+                    kind="clarify" if options or allow_free else "approve",
+                    quest_id=quest_id,
+                    default_on_silence="hold"))
+            except Exception:  # noqa: BLE001
+                decision_id = None
+
+        if emit is not None:
+            emit.emit(ProgressEvent(type=EVENT_MILESTONE,
+                                    text=f"Clarification needed: {question}"))
+
+        return OrchestratorResult(kind="confirm", question=question_with_opts,
+                                  decision_id=decision_id, rationale=plan.rationale)
+
     # --- confirm -------------------------------------------------------------
 
     def _run_confirm(self, plan: PlanDecision, *, quest_id: Optional[str]) -> OrchestratorResult:
@@ -1758,7 +1818,7 @@ class Orchestrator:
                     if budget_exhausted():
                         break
                     continue
-            if plan.action in ("answer", "deep", "confirm"):
+            if plan.action in ("answer", "deep", "confirm", "clarify"):
                 break
         else:
             plan = plan or PlanDecision(action="answer")
@@ -1766,7 +1826,7 @@ class Orchestrator:
         final = (plan or PlanDecision(action="answer")).action
 
         # Cap/budget fallback: still in read mode -> best-effort answer or escalate to deep.
-        if final not in ("answer", "deep", "confirm"):
+        if final not in ("answer", "deep", "confirm", "clarify"):
             if gathered:
                 emit.status("wrapping up with a best-effort answer…")
                 model = self._answer_model(plan, "balanced", hint=model_hint)
@@ -1777,6 +1837,11 @@ class Orchestrator:
             plan.action = final = "deep"
             plan.goal = plan.goal or f"Fully address the request: {user_message}"
             plan.deep_brief = plan.deep_brief or user_message
+
+        if final == "clarify":
+            # User clarification/selection needed: surface as decision-request
+            res = self._run_clarify(plan, quest_id=quest_id, emit=emit)
+            return finish(res)
 
         if final == "deep":
             emit.status("working on this now…")
