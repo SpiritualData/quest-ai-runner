@@ -236,6 +236,25 @@ def test_goal_loop_iterates_until_verified_met():
     assert "also update the helper" in runner.calls[1]["brief"]  # steering fed into retry
 
 
+def test_deep_run_folds_in_new_user_messages():
+    # New messages the user sends mid-run are folded into the next deep process (here, the retry),
+    # so a long-running goal loop acts on the latest input, not just the stale original request.
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
+        {"met": False, "reason": "incomplete", "next_action": "keep going"},
+        {"met": True, "reason": "done"},
+    ])
+    runner = StubDeepRunner(met=True, output="working")
+    new_msgs = ["also handle the edge case"]
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(deep_goal_max_iterations=3)).run(
+        "fix the thing", pending_inputs=lambda: new_msgs)
+    assert res.kind == "deep"
+    assert len(runner.calls) == 2
+    # The 2nd process (retry) brief includes the new user message folded in.
+    assert "also handle the edge case" in runner.calls[1]["brief"]
+
+
 def test_goal_loop_stops_when_first_attempt_verified_met():
     provider = StubProvider(decisions=[
         {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},

@@ -1229,6 +1229,22 @@ class Orchestrator:
         return None
 
     @staticmethod
+    def _drain_pending(pending_inputs: Optional[Callable[[], List[str]]]) -> str:
+        """Pull any NEW user messages that arrived mid-run (the consumer supplies the callable) and
+        render them as a block to fold into the next attempt, so a long-running goal loop picks up
+        what the user said after it started. Returns "" when none / not wired. Never raises."""
+        if pending_inputs is None:
+            return ""
+        try:
+            msgs = [str(m).strip() for m in (pending_inputs() or []) if str(m).strip()]
+        except Exception:  # noqa: BLE001 — draining must never break the run
+            return ""
+        if not msgs:
+            return ""
+        return ("--- NEW MESSAGES FROM THE USER SINCE YOU STARTED (incorporate these) ---\n"
+                + "\n".join(f"- {m}" for m in msgs))
+
+    @staticmethod
     def _augment_brief(base_brief: str, prev_output: str, verdict: Dict[str, Any]) -> str:
         """Build the next attempt's brief from the verdict: the original brief PLUS what the last
         attempt produced, why it fell short, and the specific next action to take."""
@@ -1250,7 +1266,8 @@ class Orchestrator:
                   rep_preamble: Optional[str] = None,
                   exec_record: Optional[ExecutionRecord] = None,
                   gathered: Optional[List[Dict[str, Any]]] = None,
-                  quality_standards: Optional[str] = None) -> OrchestratorResult:
+                  quality_standards: Optional[str] = None,
+                  pending_inputs: Optional[Callable[[], List[str]]] = None) -> OrchestratorResult:
         subtasks = (plan.deep_subtasks or [])[: self.cfg.max_deep_subtasks]
         if not subtasks:
             subtasks = [{"goal": _truncate_goal(plan.goal or f"Fully address the request: {user_message}"),
@@ -1354,7 +1371,11 @@ class Orchestrator:
             for attempt in range(1, max_iters + 1):
                 if emit is not None and attempt > 1:
                     emit.status(f"goal not met yet, iterating (attempt {attempt} of {max_iters})…")
-                res = _do_run(current_brief)
+                # Fold in any NEW user messages that arrived since the run started, so this process
+                # (the first attempt or a retry) acts on the latest input, not a stale request.
+                _new = self._drain_pending(pending_inputs)
+                run_brief = current_brief if not _new else (current_brief + "\n\n" + _new)
+                res = _do_run(run_brief)
                 # A human-decision escalation, or a hard failure with NO output (binary missing,
                 # timeout, silent no-op), is terminal — do not verify or iterate.
                 if res.decision_id or (res.error and not (res.output or "").strip()):
@@ -1661,7 +1682,8 @@ class Orchestrator:
             model_hint: Optional[str] = None,
             attachments: Optional[List[Dict[str, Any]]] = None,
             context_meta: Optional[Dict[str, Any]] = None,
-            rep_preamble: Optional[str] = None) -> OrchestratorResult:
+            rep_preamble: Optional[str] = None,
+            pending_inputs: Optional[Callable[[], List[str]]] = None) -> OrchestratorResult:
         """Run the bounded loop for one request and return a terminal OrchestratorResult.
 
         Streaming/event interface (both lanes use the SAME emissions; the SINK decides policy):
@@ -2142,7 +2164,8 @@ class Orchestrator:
             emit.status("working on this now…")
             res = self._run_deep(plan, user_message, self._answer_model(plan, "opus", hint=model_hint),
                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
-                                 gathered=gathered, quality_standards=quality_standards)
+                                 gathered=gathered, quality_standards=quality_standards,
+                                 pending_inputs=pending_inputs)
             # Background: categorize edited files into context cards (deep runner returns edited_files in metadata)
             if res.deep_results and any(dr.met for dr in res.deep_results):
                 self._update_context_cards_after_deep(res, context_meta)
@@ -2245,7 +2268,8 @@ class Orchestrator:
                 deep_res = self._run_deep(deferred_plan, user_message, deep_model,
                                          emit=emit, rep_preamble=rep_preamble,
                                          exec_record=exec_record, gathered=gathered,
-                                         quality_standards=quality_standards)
+                                         quality_standards=quality_standards,
+                                         pending_inputs=pending_inputs)
                 # Emit execution results as a separate milestone/message (not appended to answer)
                 if deep_res and deep_res.deep_results:
                     deep_output = "\n\n".join(d.output for d in deep_res.deep_results if d.output)
@@ -2279,10 +2303,12 @@ class Orchestrator:
                         break
                     if emit is not None:
                         emit.status("answer not yet at the bar, improving it…")
+                    _new = self._drain_pending(pending_inputs)
                     steer = (f"Why your previous answer fell short: "
                              f"{verdict.get('reason') or 'it did not meet the quality bar'}. "
                              f"Do this now: {verdict.get('next_action') or 'address the gap and answer fully.'}\n\n"
-                             f"--- YOUR PREVIOUS ANSWER ---\n{text}")
+                             + (_new + "\n\n" if _new else "")
+                             + f"--- YOUR PREVIOUS ANSWER ---\n{text}")
                     text = _gen_answer(steer)
             except Exception:  # noqa: BLE001 — answer verification must never break the turn
                 log.warning("answer goal verification failed", exc_info=True)
@@ -2297,7 +2323,8 @@ class Orchestrator:
                    mode: Mode = Mode.LIVE,
                    model_hint: Optional[str] = None,
                    attachments: Optional[List[Dict[str, Any]]] = None,
-                   rep_preamble: Optional[str] = None):
+                   rep_preamble: Optional[str] = None,
+                   pending_inputs: Optional[Callable[[], List[str]]] = None):
         """Generator form of ``run`` for a LIVE consumer that wants to iterate events.
 
         Yields each ``ProgressEvent`` (as emitted, post-sink-policy for the given mode) and,
@@ -2330,7 +2357,8 @@ class Orchestrator:
             try:
                 res = self.run(user_message, transcript=transcript, context_view=context_view,
                                quest_id=quest_id, mode=mode, sink=sink, model_hint=model_hint,
-                               attachments=attachments, rep_preamble=rep_preamble)
+                               attachments=attachments, rep_preamble=rep_preamble,
+                               pending_inputs=pending_inputs)
                 result_box["result"] = res
             except Exception as e:  # noqa: BLE001
                 result_box["error"] = e
