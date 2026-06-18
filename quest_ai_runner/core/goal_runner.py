@@ -435,13 +435,12 @@ def _monitor_claude_session(
             return
 
         _log.info("✓ found claude project dir: %s", project_dir)
-        processed_lines: Set[str] = set()
         event_count = 0
 
         # Monitor ALL new session files (parallel tasks create multiple sessions)
         _log.info("monitoring for new claude sessions (parallel tasks may create multiple)...")
-        watched_files: Dict[str, int] = {}  # filename -> last known file size
-        file_session_ids: Dict[str, str] = {}  # filename -> Claude's session_id
+        watched_files: Dict[str, int] = {}  # filename -> last known file position (bytes)
+        file_session_ids: Dict[str, str] = {}  # filename -> task UUID
         session_timeout = 15.0
         session_start = time.time()
 
@@ -456,35 +455,28 @@ def _monitor_claude_session(
                         if mtime < cutoff_time:
                             continue
 
-                        if jsonl_file not in watched_files:
-                            _log.info("detected new session file: %s", jsonl_file.name)
-                            watched_files[jsonl_file] = 0  # Start watching from beginning
+                        # Track file position, not content hash (simpler, no duplicates)
+                        file_key = str(jsonl_file)
+                        if file_key not in watched_files:
+                            _log.debug("detected new session file: %s", jsonl_file.name)
+                            watched_files[file_key] = 0  # Start from beginning
 
-                        # Session ID comes from Claude's sessionId field in the JSONL
-                        # (will be extracted from first message if not already known)
-                        session_id = file_session_ids.get(str(jsonl_file))
-
-                        # Read new lines from this session file
+                        # Read new lines from this session file (only new ones we haven't seen)
                         current_size = jsonl_file.stat().st_size
-                        if current_size > watched_files[jsonl_file]:
+                        last_pos = watched_files[file_key]
+
+                        if current_size > last_pos:
                             try:
                                 with open(jsonl_file, 'r') as f:
-                                    f.seek(watched_files[jsonl_file])
+                                    f.seek(last_pos)
                                     for line in f:
-                                        line_hash = _hash_line(line)
-                                        if line_hash in processed_lines:
-                                            continue
-
                                         try:
                                             msg = json.loads(line.strip())
                                             msg_type = msg.get("type", "")
 
                                             # Only emit assistant messages (the actual work output)
                                             if msg_type not in ("assistant", "message"):
-                                                processed_lines.add(line_hash)
                                                 continue
-
-                                            processed_lines.add(line_hash)
 
                                             # Format and emit the message as a progress event
                                             msg_text = _format_message_text(msg)
@@ -492,30 +484,29 @@ def _monitor_claude_session(
                                                 event_count += 1
 
                                                 # Extract task UUID from Claude's output (e.g., "TASK 1 [a1b2c3d4]")
-                                                if not file_session_ids.get(str(jsonl_file)):
+                                                if file_key not in file_session_ids:
                                                     import re
                                                     match = re.search(r'\[([a-f0-9]{8})\]', msg_text)
                                                     if match:
                                                         run_id = match.group(1)
-                                                        _log.debug("identified task UUID: %s (from message)", run_id)
                                                     else:
-                                                        # Fallback: use file UUID if task UUID not found
                                                         run_id = jsonl_file.stem[:8]
-                                                        _log.debug("task UUID not found, using file UUID: %s", run_id)
-                                                    file_session_ids[str(jsonl_file)] = run_id
+                                                    file_session_ids[file_key] = run_id
                                                 else:
-                                                    run_id = file_session_ids.get(str(jsonl_file))
-                                                _log.info("emitting exec event #%d from %s: %s",
-                                                         event_count, run_id, msg_text[:80])
+                                                    run_id = file_session_ids[file_key]
+
+                                                _log.debug("emitting exec event #%d from %s: %s",
+                                                         event_count, run_id, msg_text[:60])
                                                 callback(ProgressEvent(
                                                     type=EVENT_EXEC,
                                                     text=msg_text,
-                                                    data={"run_id": run_id, "message_type": msg_type}
+                                                    data={"run_id": run_id, "message_type": msg_type, "event_number": event_count}
                                                 ))
                                         except json.JSONDecodeError:
                                             pass
 
-                                watched_files[jsonl_file] = current_size
+                                # Update file position to end
+                                watched_files[file_key] = current_size
                             except FileNotFoundError:
                                 pass
                     except Exception as e:
