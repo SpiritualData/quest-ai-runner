@@ -606,7 +606,7 @@ class _TurnRenderer:
                 self._panel.start()
             self._panel.set_phase("re-planning…")
         elif t == ev["context"]:
-            # Display selected context cards + their sources
+            # Display selected context cards + their sources + relevant files
             card_meta = data.get("card_metadata") or []
             sources = data.get("sources") or []
             if card_meta:
@@ -615,7 +615,7 @@ class _TurnRenderer:
             if card_meta or sources:
                 self._panel.stop()
                 self._ensure_ai_label()
-                # Show selected cards
+                # Show selected cards with their relevant files/sources grouped by card
                 if card_meta:
                     c = self._c
                     if c._rich:
@@ -628,6 +628,7 @@ class _TurnRenderer:
                         score = card.get("relevance_score", 0)
                         adapter = card.get("adapter", "unknown")
                         file_count = card.get("file_count", 0)
+                        card_files = card.get("files", [])
                         # Format: ● [adapter] card_id: title (score: 0.85, 3 files)
                         if c._rich:
                             score_str = f"score: {score:.2f}" if score else "score: unknown"
@@ -640,16 +641,40 @@ class _TurnRenderer:
                                 f"    [dim]{score_str}, {files_str}[/]",
                                 highlight=False
                             )
+                            # Show relevant files from this card
+                            if card_files:
+                                for file_path in card_files[:5]:  # Show top 5 files per card
+                                    c._rich.print(
+                                        f"      [dim]→ {file_path}[/]",
+                                        highlight=False
+                                    )
+                                if len(card_files) > 5:
+                                    c._rich.print(
+                                        f"      [dim]... and {len(card_files) - 5} more files[/]",
+                                        highlight=False
+                                    )
                         elif c._color:
                             score_str = f"score: {score:.2f}" if score else "score: unknown"
                             files_str = f"{file_count} file{'s' if file_count != 1 else ''}"
                             c.line(f"  {_CYAN}●{_RESET} [{adapter}] {_a(_DIM, card_id)}: {title}")
                             c.line(f"    {_DIM}{score_str}, {files_str}{_RESET}")
+                            # Show relevant files from this card
+                            if card_files:
+                                for file_path in card_files[:5]:  # Show top 5 files per card
+                                    c.line(f"      {_DIM}→ {file_path}{_RESET}")
+                                if len(card_files) > 5:
+                                    c.line(f"      {_DIM}... and {len(card_files) - 5} more files{_RESET}")
                         else:
                             score_str = f"score: {score:.2f}" if score else "score: unknown"
                             files_str = f"{file_count} file{'s' if file_count != 1 else ''}"
                             c.line(f"  • [{adapter}] {card_id}: {title}")
                             c.line(f"    {score_str}, {files_str}")
+                            # Show relevant files from this card
+                            if card_files:
+                                for file_path in card_files[:5]:  # Show top 5 files per card
+                                    c.line(f"      → {file_path}")
+                                if len(card_files) > 5:
+                                    c.line(f"      ... and {len(card_files) - 5} more files")
                 # Show source attribution
                 if sources:
                     c = self._c
