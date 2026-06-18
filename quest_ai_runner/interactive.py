@@ -1,4 +1,16 @@
-"""Interactive (attended) session: a multi-turn REPL over the orchestrator brain.
+"""DEPRECATED: Use the Textual UI (textual_ui.py) instead.
+
+This ANSI-based interactive.py is kept for backward compatibility only.
+The Textual UI provides a better experience with proper display handling,
+cleaner context management, and no message context mixing bugs.
+
+Install the [tui] extra and use 'quest-ai-runner chat' which auto-detects
+the Textual environment. For ANSI-only fallback, the system will use this
+module, but Textual is recommended.
+
+────────────────────────────────────────────────────────────────────────
+
+Interactive (attended) session: a multi-turn REPL over the orchestrator brain.
 
 quest-ai-runner solves a specific set of problems with long-running AI sessions:
 
@@ -45,6 +57,7 @@ import queue as _queue
 import sys
 import threading
 import time
+import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
@@ -52,6 +65,15 @@ try:
     import yaml
 except ImportError:
     yaml = None  # type: ignore
+
+# Emit deprecation warning when this module is imported
+warnings.warn(
+    "The ANSI interactive.py module is deprecated. Use the Textual UI instead "
+    "(textual_ui.py) by installing the [tui] extra: pip install quest-ai-runner[tui]. "
+    "This module is kept for ANSI-only fallback compatibility only.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 if TYPE_CHECKING:
     from .config import RunnerConfig
