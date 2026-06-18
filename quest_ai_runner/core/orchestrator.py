@@ -2332,6 +2332,22 @@ class Orchestrator:
             steps = step + 1
             emit.status("Planning…" if step == 0 else "Re-planning…")
 
+            # AUTO-INJECT FUNCTION DISCOVERY on step 0: pre-load all available operations
+            # so the planner sees them from the start, ordered by relevance. This eliminates
+            # the need for the planner to first ASK for operations; they're already in hand.
+            if step == 0 and self.retrieval is not None:
+                try:
+                    ops_obs = self._exec_one_read({"list_operations": True})
+                    if ops_obs is not None:
+                        gathered.append(ops_obs.to_dict())
+                        emit.emit(ProgressEvent(
+                            type=EVENT_READ,
+                            text="Loaded available operations",
+                            data={"locator": "list_operations"}
+                        ))
+                except Exception as e:  # noqa: BLE001
+                    log.debug(f"Auto-injection of list_operations failed: {e}")
+
             try:
                 plan = self._plan(user_message, transcript, context_view, gathered, step=step)
             except Exception as e:  # noqa: BLE001 — planner failure -> grounded fallback answer
