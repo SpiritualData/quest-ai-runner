@@ -417,7 +417,12 @@ def resolve_context_assembler(
         cards_dir = cfg.context_cards_dir or os.path.join(root, ".quest-context")
         # auto_bootstrap=False: we manage the lifecycle ourselves via
         # _bootstrap_if_needed so lazy and explicit bootstrap don't race.
-        keyword = FileContextStore(cards_dir, repo_root=root, auto_bootstrap=False)
+        # provider= enables LLM relevance filtering of IDF candidates so only
+        # cards genuinely relevant to the user's task are injected.
+        keyword = FileContextStore(
+            cards_dir, repo_root=root, auto_bootstrap=False,
+            provider=cfg.model_provider,
+        )
         # If a vector store is configured, the default becomes a HYBRID: keyword/IDF FUSED with
         # semantic vector search (the two are complementary). Otherwise keyword-only.
         # Turn-history cards live alongside file cards: same root, subdir "turns".
