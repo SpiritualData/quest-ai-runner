@@ -118,31 +118,38 @@ class ContextPanel(Static):
     no flicker, no log spam).
     """
 
-    def reset(self) -> None:
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.cards: List[dict] = []
         self.sources: List[str] = []
         self.total_sources = 0
         self.replans = 0
-        self.update("")
+
+    def reset(self) -> None:
+        self.cards = []
+        self.sources = []
+        self.total_sources = 0
+        self.replans = 0
+        self.refresh()
 
     def set_cards(self, cards: List[dict]) -> None:
         self.cards = cards or []
-        self._refresh_display()
+        self.refresh()
 
     def add_sources(self, paths: List[str]) -> None:
         for p in paths:
             if p not in self.sources:
                 self.sources.append(p)
                 self.total_sources += 1
-        self._refresh_display()
+        self.refresh()
 
     def inc_replans(self) -> None:
         self.replans += 1
         self.cards = []
         self.sources = []
-        self._refresh_display()
+        self.refresh()
 
-    def _refresh_display(self) -> None:
+    def render(self) -> str:
         lines: List[str] = []
         if self.cards:
             lines.append("[bold cyan]\U0001F4C7 Context cards[/bold cyan]")
@@ -171,8 +178,8 @@ class ContextPanel(Static):
                 lines.append(f"  {prefix} [dim]{label}[/dim]")
             if len(self.sources) > 6:
                 lines.append(f"  [dim]… and {len(self.sources) - 6} more[/dim]")
-        self.update("\n".join(lines))
         self.display = bool(lines)
+        return "\n".join(lines)
 
 
 # ── Main app ──────────────────────────────────────────────────────────────────
