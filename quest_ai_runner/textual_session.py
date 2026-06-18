@@ -9,11 +9,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Optional
 
 from .textual_ui import QuestAITerminal
-from .core.orchestrator import Orchestrator
 
 if TYPE_CHECKING:
     from .config import RunnerConfig
-    from .core.orchestrator import OrchestratorResult
 
 
 def start_textual_interactive(
@@ -34,10 +32,12 @@ def start_textual_interactive(
         persona: Path to persona/skill file (optional)
         goal_id: Optional goal ID to attach session to
     """
+    from .config import build_orchestrator
+
     app = QuestAITerminal(rep_name=rep_name)
 
-    # Create orchestrator with config
-    app.orchestrator = Orchestrator(config)
+    # Create orchestrator using the build function (same as interactive.py does)
+    app.orchestrator = build_orchestrator(config)
 
     # TODO: Handle persona loading if provided
     # if persona:
