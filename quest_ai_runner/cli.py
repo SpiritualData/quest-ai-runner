@@ -622,22 +622,28 @@ def main(argv=None) -> int:
             print("No context cards matched.")
             return 0
 
+        mode = "IDF only" if getattr(args, "no_llm", False) else "IDF + LLM filter"
         print(f"Query: {args.query}")
-        print(f"Cards: {len(result.card_ids)}" + (" (IDF only)" if getattr(args, "no_llm", False) else " (IDF + LLM filter)"))
+        print(f"Found {len(result.card_ids)} card(s)  [{mode}]")
         print()
-        for m in result.card_metadata:
-            score_str = f"{m['relevance_score']:.2f}"
-            print(f"  [{m['adapter']}] {m['id']}")
-            print(f"    score: {score_str}  files: {m['file_count']}")
+        for i, m in enumerate(result.card_metadata, 1):
+            title = m.get("title") or m["id"]
+            score_pct = int(m["relevance_score"] * 100)
+            fc = m["file_count"]
+            print(f"  {i}. {title}  ({score_pct}% match, {fc} file{'s' if fc != 1 else ''})")
             for f in m.get("files", []):
-                print(f"      -> {f}")
-        if result.sources:
+                print(f"       {f}")
             print()
-            print("Sources:")
+        if result.sources:
+            all_items = []
             for src in result.sources:
-                items = src.get("items", [])
-                label = src.get("label", src.get("adapter", ""))
-                print(f"  {label}: {', '.join(items[:5])}" + (f" (+{len(items)-5} more)" if len(items) > 5 else ""))
+                all_items.extend(src.get("items", []))
+            if all_items:
+                print(f"Top sources ({len(all_items)} total):")
+                for f in all_items[:8]:
+                    print(f"  {f}")
+                if len(all_items) > 8:
+                    print(f"  ... +{len(all_items) - 8} more")
         return 0
 
     # --- poll (default when no subcommand given) ------------------------------
