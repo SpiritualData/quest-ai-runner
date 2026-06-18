@@ -492,10 +492,19 @@ def _monitor_claude_session(
                                             if msg_text and msg_text.strip():
                                                 event_count += 1
 
-                                                # Use session file UUID as run_id (stable, unique across instances)
-                                                # Extract once per file and cache it
+                                                # Extract task ID from Claude's output (e.g., "TASK 1 [a1b2c3d4]")
+                                                # This links Claude's output to the task we defined
                                                 if not file_session_ids.get(str(jsonl_file)):
-                                                    run_id = jsonl_file.stem[:8]  # First 8 chars of UUID
+                                                    import re
+                                                    # Look for [XXXXXXXX] pattern in message
+                                                    match = re.search(r'\[([a-f0-9]{8})\]', msg_text)
+                                                    if match:
+                                                        run_id = match.group(1)
+                                                        _log.info("identified task: %s (file: %s)", run_id, jsonl_file.name)
+                                                    else:
+                                                        # Fallback: use file UUID if task ID not found
+                                                        run_id = jsonl_file.stem[:8]
+                                                        _log.warning("task ID not found in message, using file UUID: %s", run_id)
                                                     file_session_ids[str(jsonl_file)] = run_id
                                                 else:
                                                     run_id = file_session_ids.get(str(jsonl_file))
