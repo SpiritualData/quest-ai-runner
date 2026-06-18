@@ -26,6 +26,7 @@ message, a deep run, or a Quest decision-request.
 from __future__ import annotations
 
 import inspect
+import json
 import logging
 import re
 import threading
@@ -795,6 +796,28 @@ _REPLAN_CONTEXT_REF = (
     "(unchanged since step 1 — the full CONTEXT was provided then and has not changed; "
     "focus on the NEW gathered observations below)"
 )
+
+
+def _is_orchestrator_command(text: str) -> bool:
+    """True if text is a JSON command structure (not user-facing text).
+
+    Orchestrator commands like {"list_operations": true} or {"grep": "..."}
+    should NEVER appear as result text. This detects them so they can be rejected.
+    """
+    if not text or not text.strip().startswith("{"):
+        return False
+    try:
+        obj = json.loads(text.strip())
+        if not isinstance(obj, dict):
+            return False
+        # Check for known orchestrator command keys
+        orchestrator_keys = {
+            "list_operations", "describe_operation", "list_sources", "describe_source",
+            "grep", "rel_path", "query", "list_guidance", "read_guidance"
+        }
+        return any(k in obj for k in orchestrator_keys)
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return False
 
 
 def _strip_discovery_section(context_view: str) -> str:
@@ -2281,7 +2304,15 @@ class Orchestrator:
                                               "total": _fti + _fto, "final": True}))
             # The terminal result + an explicit done event. RESULT/DONE always surface (both lanes).
             if res.kind == "answer":
-                emit.emit(ProgressEvent(type=EVENT_RESULT, text=res.text, result_kind="answer"))
+                # Sanity check: answer text should NEVER be an orchestrator command.
+                # If it is, something went wrong in the planner/answer path.
+                if res.text and _is_orchestrator_command(res.text):
+                    log.error(f"Orchestrator: answer result is an internal command {res.text}; "
+                             "replacing with error message")
+                    result_text = "I had trouble formulating a proper response to that. Please try again."
+                else:
+                    result_text = res.text
+                emit.emit(ProgressEvent(type=EVENT_RESULT, text=result_text, result_kind="answer"))
             elif res.kind == "confirm":
                 emit.emit(ProgressEvent(type=EVENT_DECISION, text=res.question,
                                         decision_id=res.decision_id, result_kind="confirm"))
