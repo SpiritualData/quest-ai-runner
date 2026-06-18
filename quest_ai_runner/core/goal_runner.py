@@ -460,6 +460,9 @@ def _monitor_claude_session(
                             _log.info("detected new session: %s", jsonl_file.name)
                             watched_files[jsonl_file] = 0  # Start watching from beginning
 
+                        # Session ID is the filename stem (UUID)
+                        session_id = jsonl_file.stem
+
                         # Read new lines from this session file
                         current_size = jsonl_file.stat().st_size
                         if current_size > watched_files[jsonl_file]:
@@ -486,12 +489,12 @@ def _monitor_claude_session(
                                             msg_text = _format_message_text(msg)
                                             if msg_text and msg_text.strip():
                                                 event_count += 1
-                                                _log.info("emitting exec event #%d from %s: %s",
-                                                         event_count, jsonl_file.name, msg_text[:80])
+                                                _log.info("emitting exec event #%d from session %s: %s",
+                                                         event_count, session_id[:8], msg_text[:80])
                                                 callback(ProgressEvent(
                                                     type=EVENT_EXEC,
                                                     text=msg_text,
-                                                    data={"message_type": msg_type, "file": jsonl_file.name}
+                                                    data={"run_id": session_id, "message_type": msg_type}
                                                 ))
                                         except json.JSONDecodeError:
                                             pass
