@@ -658,38 +658,54 @@ class _TurnRenderer:
                 self._c.line(f"{self._rep_name}")
             self._ai_label_printed = True
 
-    def _print_step(self, prefix: str, message: str) -> None:
-        """Print a dim step/action line (call while panel is stopped)."""
-        c = self._c
-        if c._rich:
-            c._rich.print(f"  [dim]{prefix}  {message}[/]", highlight=False)
-        elif c._color:
-            c.line(f"  {_DIM}{prefix}  {message}{_RESET}")
-        else:
-            c.line(f"  {prefix}  {message}")
+    def _display(self, kind: str, text: str, prefix: str = "") -> None:
+        """Unified display method for all user-facing output.
 
-    def _print_success(self, message: str) -> None:
-        """Print a success indicator."""
+        Types:
+          step       - dim action line (e.g. "▸ plan  reasoning")
+          success    - green checkmark + plain text (e.g. "✓ Completed: ...")
+          milestone  - green checkmark + markdown rendering (completion messages)
+          markdown   - render markdown without prefix (AI response text)
+          plain      - plain text line
+          exec       - execution progress line (e.g. "→ Read: file.ts")
+        """
         c = self._c
-        if c._rich:
-            c._rich.print(f"  [green]✓[/] {message}", highlight=False)
-        elif c._color:
-            c.line(f"  {_a(_GREEN, '✓')} {message}")
-        else:
-            c.line(f"  ✓ {message}")
-
-    def _print_markdown_with_indicator(self, text: str) -> None:
-        """Print markdown content with a green checkmark indicator."""
-        c = self._c
-        # Print the checkmark on same line as first line of markdown
-        if c._rich:
-            c._rich.print(f"  [green]✓[/]", highlight=False, end=" ")
-        elif c._color:
-            c.write(f"  {_a(_GREEN, '✓')} ")
-        else:
-            c.write(f"  ✓ ")
-        # Render the content (often markdown-formatted)
-        c.markdown(text)
+        if kind == "step":
+            if c._rich:
+                c._rich.print(f"  [dim]{prefix}  {text}[/]", highlight=False)
+            elif c._color:
+                c.line(f"  {_DIM}{prefix}  {text}{_RESET}")
+            else:
+                c.line(f"  {prefix}  {text}")
+        elif kind == "success":
+            if c._rich:
+                c._rich.print(f"  [green]✓[/] {text}", highlight=False)
+            elif c._color:
+                c.line(f"  {_a(_GREEN, '✓')} {text}")
+            else:
+                c.line(f"  ✓ {text}")
+        elif kind == "milestone":
+            # Green checkmark + markdown rendering
+            if c._rich:
+                c._rich.print(f"  [green]✓[/]", highlight=False, end=" ")
+            elif c._color:
+                c.write(f"  {_a(_GREEN, '✓')} ")
+            else:
+                c.write(f"  ✓ ")
+            c.markdown(text)
+        elif kind == "markdown":
+            # Markdown rendering without prefix
+            c.markdown(text)
+        elif kind == "exec":
+            # Execution progress line (cyan arrow)
+            if c._rich:
+                c._rich.print(f"  [cyan]→[/] {text[:100]}", highlight=False, soft_wrap=True)
+            elif c._color:
+                c.line(f"  {_CYAN}→{_RESET} {text[:100]}")
+            else:
+                c.line(f"  → {text[:100]}")
+        elif kind == "plain":
+            c.line(text)
 
     def render(self, event) -> None:
         # run_stream() yields dicts (via ProgressEvent.to_dict()); support both.
@@ -705,6 +721,7 @@ class _TurnRenderer:
             data   = event.data or {}
         ev = self._types()
 
+        # All output types go through unified _display() method
         if t == ev["partial"]:
             is_ack = isinstance(data, dict) and data.get("ack")
             if is_ack:
@@ -732,14 +749,14 @@ class _TurnRenderer:
             if text:
                 self._panel.stop()
                 label = f"▸ {action}" if action else "▸ plan"
-                self._print_step(label, text)
+                self._display("step", text, label)
                 self._panel.start()
             self._panel.set_phase("planning…")
         elif t == ev["replan"]:
             self._panel.inc_replans()
             if text:
                 self._panel.stop()
-                self._print_step("↺ replan", text)
+                self._display("step", text, "↺ replan")
                 self._panel.start()
             self._panel.set_phase("re-planning…")
         elif t == ev["context"]:
@@ -852,7 +869,7 @@ class _TurnRenderer:
                 for p in new_paths:
                     # "(searched ...)" markers use a search glyph; real paths use ↗
                     prefix = "⌕" if p.startswith("(searched ") else "↗"
-                    self._print_step(prefix, p)
+                    self._display("step", p, prefix)
                 self._panel.start()
             total = self._panel._total_sources
             self._panel.set_phase(
@@ -877,12 +894,7 @@ class _TurnRenderer:
                 self._deep_tracker.update_run_output(run_id, text)
                 # Print live updates as Claude Code produces them
                 self._panel.stop()
-                if self._c._rich:
-                    self._c._rich.print(f"  [cyan]→[/] {text[:100]}", highlight=False, soft_wrap=True)
-                elif self._c._color:
-                    self._c.line(f"  {_CYAN}→{_RESET} {text[:100]}")
-                else:
-                    self._c.line(f"  → {text[:100]}")
+                self._display("exec", text)
                 self._panel.start()
 
             # Show dashboard if multiple runs
@@ -895,14 +907,14 @@ class _TurnRenderer:
         elif t == ev["milestone"]:
             self._panel.stop()
             if text:
-                self._print_markdown_with_indicator(text)
+                self._display("markup", text)
             self._panel.start()
         elif t == ev["result"]:
             if not self._partial_started and text:
                 self._panel.stop()
                 self._ensure_ai_label()
                 self._c.line("")  # Blank line after label for breathing room
-                self._c.markdown(text)  # Use markdown rendering for better formatting
+                self._display("markdown", text)
         elif t == ev["decision"]:
             self._panel.stop()
             c = self._c
