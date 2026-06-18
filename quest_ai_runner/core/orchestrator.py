@@ -432,6 +432,14 @@ class OrchestratorResult:
 # ---------------------------------------------------------------------------
 
 def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDecision:
+    # A provider's structured output is not guaranteed to be a dict: some models/SDKs return a LIST
+    # (e.g. multiple tool calls, or a JSON array). Coerce to a dict so a stray shape degrades to a
+    # safe "answer" instead of raising 'list' object has no attribute 'get' from the planner.
+    if not isinstance(raw, dict):
+        if isinstance(raw, list):
+            raw = next((x for x in raw if isinstance(x, dict)), {})
+        else:
+            raw = {}
     action = (raw.get("action") or "answer").strip().lower()
     if action not in ("read", "answer", "deep", "confirm", "clarify"):
         action = "answer"
@@ -699,9 +707,11 @@ def _render_gathered(gathered: List[Dict[str, Any]]) -> str:
         return "[]"
     parts: List[str] = []
     for obs in gathered:
+        if not isinstance(obs, dict):  # defensive: a malformed observation must not crash a replan
+            continue
         kind = obs.get("kind")
         if kind == "grep":
-            hits = obs.get("hits") or []
+            hits = [h for h in (obs.get("hits") or []) if isinstance(h, dict)]
             head = [f"  {h.get('rel_path')}:{h.get('line_no')}: {h.get('line')}" for h in hits[:20]]
             more = "" if len(hits) <= 20 else f"\n  … (+{len(hits) - 20} more hits)"
             parts.append(
@@ -727,9 +737,11 @@ def _summarize_observation(obs: Dict[str, Any]) -> str:
         text = " ".join(str(s or "").split())
         return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
+    if not isinstance(obs, dict):
+        return _oneline(obs)
     kind = obs.get("kind")
     if kind == "grep":
-        hits = obs.get("hits") or []
+        hits = [h for h in (obs.get("hits") or []) if isinstance(h, dict)]
         where = f" in {obs.get('scope')}" if obs.get("scope") else ""
         paths = sorted({h.get("rel_path") for h in hits if h.get("rel_path")})
         files = "" if not paths else " across " + ", ".join(list(paths)[:5]) + (

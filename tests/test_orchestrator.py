@@ -279,6 +279,16 @@ def test_deep_loop_stops_at_token_budget():
     assert len(runner.calls) == 2  # stopped on budget, not the 8-attempt cap
 
 
+def test_planner_list_output_does_not_crash():
+    # A provider can return a LIST instead of a dict (multiple tool calls / a JSON array). The
+    # planner must coerce it rather than raise 'list' object has no attribute 'get' and fall over.
+    from quest_ai_runner.core.orchestrator import normalize_decision, OrchestratorConfig
+    cfg = OrchestratorConfig()
+    assert normalize_decision([{"action": "deep", "goal": "g", "rationale": "r"}], cfg).action == "deep"
+    assert normalize_decision(["weird"], cfg).action == "answer"   # no dict in list -> safe default
+    assert normalize_decision("nope", cfg).action == "answer"      # non-dict scalar -> safe default
+
+
 def test_input_inbox_auto_drains_into_deep_run():
     # The generic abstraction: an interface pushes a mid-run message to the wired inbox; the
     # orchestrator auto-drains this conversation (no explicit pending_inputs) and folds it in.
