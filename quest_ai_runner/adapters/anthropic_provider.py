@@ -17,6 +17,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from ..core.adapters import ModelProviderBase
+from .retry_utils import retry_transient
 
 
 class AnthropicProvider(ModelProviderBase):
@@ -43,6 +44,7 @@ class AnthropicProvider(ModelProviderBase):
             self._client = anthropic.Anthropic(api_key=self._api_key)
         return self._client
 
+    @retry_transient(max_retries=3, base_delay=1.0)
     def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
         client = self._get_client()
         self.call_count += 1
@@ -61,6 +63,7 @@ class AnthropicProvider(ModelProviderBase):
                 return dict(block.input or {})
         raise RuntimeError("planner returned no structured decision")
 
+    @retry_transient(max_retries=3, base_delay=1.0)
     def answer(self, messages: List[Dict[str, Any]], *, model: str, system: Optional[str] = None) -> str:
         client = self._get_client()
         # A message's ``content`` may be a plain string (the common path, unchanged) OR a LIST of
@@ -85,14 +88,19 @@ class AnthropicProvider(ModelProviderBase):
             self.tokens_out += getattr(resp.usage, "output_tokens", 0) or 0
         return "".join(getattr(b, "text", "") for b in resp.content if getattr(b, "type", None) == "text")
 
+    @retry_transient(max_retries=2, base_delay=1.0)
+    def _list_models_api(self) -> List[str]:
+        """Call Anthropic API to list models; wrapped by list_models() for caching."""
+        client = self._get_client()
+        page = client.models.list()
+        return [m.id for m in getattr(page, "data", []) if getattr(m, "id", None)]
+
     def list_models(self) -> List[str]:
         now = time.monotonic()
         if self._models_cache is not None and (now - self._models_cached_at) < self.cache_seconds:
             return self._models_cache
         try:
-            client = self._get_client()
-            page = client.models.list()
-            ids = [m.id for m in getattr(page, "data", []) if getattr(m, "id", None)]
+            ids = self._list_models_api()
         except Exception:  # noqa: BLE001 — empty list -> registry uses its fallback map
             ids = []
         # client.models.list() is already latest-first; keep it as returned.

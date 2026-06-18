@@ -17,6 +17,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from ..core.adapters import ModelProviderBase
+from .retry_utils import retry_transient
 
 _log = logging.getLogger("quest-ai-runner.gemini")
 
@@ -47,6 +48,7 @@ class GeminiProvider(ModelProviderBase):
             self._client = google.genai.Client(api_key=self._api_key)
         return self._client
 
+    @retry_transient(max_retries=3, base_delay=1.0)
     def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
         """Run the planner with structured JSON output.
 
@@ -67,6 +69,7 @@ class GeminiProvider(ModelProviderBase):
             # Fallback: return empty dict on parse failure
             return {}
 
+    @retry_transient(max_retries=3, base_delay=1.0)
     def answer(self, messages: List[Dict[str, Any]], *, model: str, system: Optional[str] = None) -> str:
         """Generate an answer from a conversation history.
 
@@ -101,39 +104,37 @@ class GeminiProvider(ModelProviderBase):
         )
         return response.text if response and response.text else ""
 
+    @retry_transient(max_retries=2, base_delay=1.0)
+    def _list_models_api(self) -> List[str]:
+        """Call Gemini API to list models; wrapped by list_models() for caching."""
+        client = self._get_client()
+        models_list = client.models.list()
+        # Known unavailable/deprecated Gemini models to exclude
+        exclude_patterns = ["robotics", "experimental", "exp-"]
+        gemini_models = [
+            m.name for m in models_list
+            if hasattr(m, "name") and "gemini" in m.name.lower()
+            and not any(pattern in m.name.lower() for pattern in exclude_patterns)
+        ]
+        # Fallback to known-good models if filtered list is empty
+        if not gemini_models:
+            _log.warning("Gemini API returned no usable models; using fallback list")
+            gemini_models = ["gemini-2.0-flash", "gemini-1.5-pro"]
+        return gemini_models
+
     def list_models(self) -> List[str]:
         """List available Gemini models, excluding known unavailable/deprecated ones."""
         now = time.monotonic()
         if self._models_cache is not None and (now - self._models_cached_at) < self.cache_seconds:
             return self._models_cache
 
-        # Known unavailable/deprecated Gemini models to exclude
-        # (API may still return them in list even though they're not usable)
-        exclude_patterns = [
-            "robotics",  # deprecated robotics models
-            "experimental",  # experimental/unstable models
-            "exp-",  # experimental prefix
-        ]
-
         try:
-            client = self._get_client()
-            # Use the client.models.list() method to get available models
-            models_list = client.models.list()
-            # Filter to Gemini models, exclude known bad ones, and extract names
-            gemini_models = [
-                m.name for m in models_list
-                if hasattr(m, "name") and "gemini" in m.name.lower()
-                and not any(pattern in m.name.lower() for pattern in exclude_patterns)
-            ]
-            # Fallback to known-good models if filtered list is empty
-            if not gemini_models:
-                _log.warning("Gemini API returned no usable models; using fallback list")
-                gemini_models = ["gemini-2.0-flash", "gemini-1.5-pro"]
+            gemini_models = self._list_models_api()
             self._models_cache = gemini_models
             self._models_cached_at = now
             return gemini_models
         except Exception:  # noqa: BLE001
-            _log.exception("list_models failed for Gemini")
+            _log.exception("list_models failed for Gemini after retries")
             # Return fallback model list if API fails
             self._models_cache = ["gemini-2.0-flash", "gemini-1.5-pro"]
             self._models_cached_at = now

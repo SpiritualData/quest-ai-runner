@@ -16,6 +16,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from ..core.adapters import ModelProviderBase
+from .retry_utils import retry_transient
 
 
 class OpenAIProvider(ModelProviderBase):
@@ -44,6 +45,7 @@ class OpenAIProvider(ModelProviderBase):
             self._client = OpenAI(api_key=self._api_key)
         return self._client
 
+    @retry_transient(max_retries=3, base_delay=1.0)
     def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
         """Run the planner with JSON mode forced output.
 
@@ -64,6 +66,7 @@ class OpenAIProvider(ModelProviderBase):
         except (json.JSONDecodeError, AttributeError, IndexError):
             return {}
 
+    @retry_transient(max_retries=3, base_delay=1.0)
     def answer(self, messages: List[Dict[str, Any]], *, model: str, system: Optional[str] = None) -> str:
         """Generate an answer from a conversation history."""
         client = self._get_client()
@@ -88,6 +91,16 @@ class OpenAIProvider(ModelProviderBase):
 
         return response.choices[0].message.content if response and response.choices else ""
 
+    @retry_transient(max_retries=2, base_delay=1.0)
+    def _list_models_api(self) -> List[str]:
+        """Call OpenAI API to list models; wrapped by list_models() for caching."""
+        client = self._get_client()
+        models = client.models.list()
+        return [
+            m.id for m in models.data
+            if hasattr(m, "id") and ("gpt" in m.id.lower())
+        ]
+
     def list_models(self) -> List[str]:
         """List available OpenAI models."""
         now = time.monotonic()
@@ -95,14 +108,7 @@ class OpenAIProvider(ModelProviderBase):
             return self._models_cache
 
         try:
-            client = self._get_client()
-            # List all models owned by OpenAI (first-party models)
-            models = client.models.list()
-            # Extract model IDs and filter to commonly used ones
-            model_ids = [
-                m.id for m in models.data
-                if hasattr(m, "id") and ("gpt" in m.id.lower())
-            ]
+            model_ids = self._list_models_api()
             self._models_cache = model_ids
             self._models_cached_at = now
             return model_ids

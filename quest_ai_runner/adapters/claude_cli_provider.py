@@ -34,6 +34,7 @@ import subprocess
 from typing import Any, Dict, List, Optional
 
 from ..core.adapters import ModelProviderBase
+from .retry_utils import retry_transient
 
 # Tools the spawned planner/answer process is barred from. plan/answer are PURE completions —
 # the orchestrator does its own retrieval (the RetrievalAdapter) and its own deep execution (the
@@ -236,6 +237,7 @@ class ClaudeCliProvider(ModelProviderBase):
                 binary = resolved
         return binary
 
+    @retry_transient(max_retries=3, base_delay=1.0)
     def _invoke(self, prompt: str, *, model: Optional[str], system: Optional[str] = None) -> str:
         """Run one headless ``claude -p`` completion and return the model's text.
 

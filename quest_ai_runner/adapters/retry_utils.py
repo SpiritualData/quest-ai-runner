@@ -1,0 +1,98 @@
+"""Retry utilities for transient provider errors (503, rate limits, timeouts).
+
+Provides a provider-agnostic retry decorator that handles:
+  * HTTP 503 (Service Unavailable) from Gemini, OpenAI, Anthropic
+  * Rate-limit errors (429)
+  * Timeout errors
+  * Other transient SDK errors
+
+Applies exponential backoff with jitter and retries up to max_retries times.
+"""
+from __future__ import annotations
+
+import logging
+import random
+import time
+from functools import wraps
+from typing import Any, Callable, Optional
+
+_log = logging.getLogger("quest-ai-runner.retry")
+
+
+def is_transient_error(exc: Exception) -> bool:
+    """Identify transient errors worth retrying."""
+    exc_str = str(exc)
+    exc_type = type(exc).__name__
+
+    # Gemini SDK: google.genai.errors.ServerError with 503/429
+    if "ServerError" in exc_type or "RateLimitError" in exc_type:
+        if "503" in exc_str or "429" in exc_str or "overloaded" in exc_str.lower():
+            return True
+
+    # Generic timeout / connection errors
+    if any(keyword in exc_type.lower() for keyword in ["timeout", "connectionerror", "httperror"]):
+        return True
+
+    # Anthropic SDK: RateLimitError, APIStatusError with 429/503
+    if "RateLimitError" in exc_type or "APIStatusError" in exc_type:
+        if "429" in exc_str or "503" in exc_str:
+            return True
+
+    # OpenAI SDK: RateLimitError, APIError with 429/503
+    if "RateLimitError" in exc_type or "APIError" in exc_type:
+        if "429" in exc_str or "503" in exc_str:
+            return True
+
+    return False
+
+
+def retry_transient(max_retries: int = 3, base_delay: float = 1.0) -> Callable:
+    """Decorator: retry on transient provider errors with exponential backoff + jitter.
+
+    Args:
+        max_retries: number of retries after the initial attempt (total tries = max_retries + 1)
+        base_delay: initial delay in seconds; doubles on each retry, plus jitter
+
+    Returns:
+        Decorator that wraps a provider method (plan, answer, list_models, etc.)
+
+    Example:
+        @retry_transient(max_retries=3, base_delay=1.0)
+        def plan(self, prompt, *, model, tool_schema):
+            # API call here
+            return ...
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            last_exc = None
+            for attempt in range(max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as exc:
+                    last_exc = exc
+                    if not is_transient_error(exc):
+                        raise  # Not transient; fail immediately
+
+                    if attempt >= max_retries:
+                        # Last attempt; give up
+                        _log.error(
+                            f"{func.__name__} failed after {max_retries + 1} attempts: {type(exc).__name__}: {exc}"
+                        )
+                        raise
+
+                    # Transient error and we have retries left; backoff and retry
+                    delay = base_delay * (2 ** attempt)  # exponential: 1, 2, 4, 8, ...
+                    jitter = random.uniform(0, delay * 0.1)  # ±10% jitter
+                    total_delay = delay + jitter
+                    _log.warning(
+                        f"{func.__name__} attempt {attempt + 1} failed ({type(exc).__name__}); "
+                        f"retrying in {total_delay:.2f}s"
+                    )
+                    time.sleep(total_delay)
+
+            # Should not reach here, but if we do, raise the last exception
+            raise last_exc
+
+        return wrapper
+    return decorator
