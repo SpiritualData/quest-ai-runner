@@ -45,6 +45,13 @@ Env it reads:
   ANTHROPIC_API_KEY (optional)                   — only for the "anthropic" backend (per-token
                                                    billing). NOT needed for the keyless claude_cli
                                                    backend, which runs on Claude Code's subscription.
+  WEB_SEARCH_ENABLED (optional)                 — set to "true" to enable live web search in the
+                                                   shallow orchestrator via the Tavily API. Requires
+                                                   WEB_SEARCH_API_KEY. Get a key at tavily.com (free
+                                                   tier: 500 searches/month).
+  WEB_SEARCH_API_KEY (optional)                 — Tavily API key (tvly_...). Required when
+                                                   WEB_SEARCH_ENABLED=true.
+  WEB_SEARCH_MAX_RESULTS (optional)             — max results per web search call (default 5).
 
 chat-specific env vars (all optional):
   QAR_REP_NAME (optional)                        — display name for the AI representative shown in
@@ -63,7 +70,7 @@ import logging
 import os
 import sys
 
-from .adapters import AnthropicProvider, ClaudeCliProvider, FilesAdapter, GeminiProvider, OpenAIProvider
+from .adapters import AnthropicProvider, ClaudeCliProvider, CompositeRetrievalAdapter, FilesAdapter, GeminiProvider, OpenAIProvider, WebSearchAdapter
 from .config import RunnerConfig
 from .core.adapters import ModelProvider
 from .core.goal_runner import SubprocessConfig, SubprocessGoalRunner
@@ -107,9 +114,45 @@ def _model_provider_from_env() -> ModelProvider:
         raise ValueError(f"Unknown QAR_MODEL_BACKEND: {backend}. Use: openai, gemini, anthropic, or claude_cli")
 
 
+def _web_search_adapter_from_env():
+    """Build a WebSearchAdapter from env if WEB_SEARCH_ENABLED=true and a key is set.
+
+    Env vars read:
+      WEB_SEARCH_ENABLED    -- must be "true" (case-insensitive) to enable
+      WEB_SEARCH_API_KEY    -- Tavily API key (tvly_...). Required when enabled.
+      WEB_SEARCH_MAX_RESULTS -- max results per search (default 5)
+    """
+    enabled = (os.getenv("WEB_SEARCH_ENABLED") or "").strip().lower() == "true"
+    if not enabled:
+        return None
+    api_key = (os.getenv("WEB_SEARCH_API_KEY") or "").strip()
+    if not api_key:
+        import logging
+        logging.getLogger("quest-ai-runner").warning(
+            "WEB_SEARCH_ENABLED=true but WEB_SEARCH_API_KEY is not set; web search disabled"
+        )
+        return None
+    max_results = 5
+    try:
+        max_results = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5"))
+    except ValueError:
+        pass
+    return WebSearchAdapter(api_key=api_key, max_results=max_results)
+
+
 def _config_from_env() -> RunnerConfig:
     corpus = os.getenv("QAR_CORPUS_ROOT")
     retrieval = FilesAdapter(corpus) if corpus else None
+
+    # Optionally add live web search to the retrieval stack.
+    # WEB_SEARCH_ENABLED=true + WEB_SEARCH_API_KEY=tvly_... enables it.
+    web_adapter = _web_search_adapter_from_env()
+    if web_adapter is not None:
+        if retrieval is not None:
+            retrieval = CompositeRetrievalAdapter([retrieval, web_adapter])
+        else:
+            retrieval = web_adapter
+
     # QAR_DEEP_WORKING_DIR defaults to QAR_CORPUS_ROOT so only one env var is needed.
     deep_dir = os.getenv("QAR_DEEP_WORKING_DIR") or corpus
     deep_runner = None

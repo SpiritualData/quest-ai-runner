@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **WebSearchAdapter**: new `RetrievalAdapter` that grounds the shallow orchestrator loop in live
+  web data via the Tavily API. Uses stdlib `urllib.request` only (no extra deps). Enable with
+  `WEB_SEARCH_ENABLED=true` and `WEB_SEARCH_API_KEY=tvly_...` env vars. `WEB_SEARCH_MAX_RESULTS`
+  controls result count (default 5). When enabled, the CLI wires it alongside `FilesAdapter` via
+  `CompositeRetrievalAdapter` so local corpus and web search are both queried. The adapter is
+  graceful: every method catches all exceptions and returns `Observation(kind="error")` rather than
+  raising. Exported from `quest_ai_runner.adapters` as `WebSearchAdapter`.
+- **`derive_capabilities` web detection**: when a `WebSearchAdapter` with a configured API key is
+  in the retrieval stack (directly or inside a `CompositeRetrievalAdapter`), `derive_capabilities`
+  now correctly reports `web: true` even without a deep runner. This lets the Quest backend route
+  web-research tasks to a runner that has shallow web search but no subprocess deep-runner.
+
 ### Changed
 - **Deep execution now runs on our own goal-verification loop instead of Claude Code's `/goal`.**
   `/goal` re-checks its condition inside the worker every turn (token-heavy) and caps the condition

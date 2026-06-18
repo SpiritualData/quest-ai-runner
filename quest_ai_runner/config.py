@@ -194,10 +194,9 @@ def derive_capabilities(cfg: RunnerConfig) -> Dict[str, bool]:
     deep = cfg.deep_runner
     code = deep is not None
 
-    # web: the deep-runner browses via Claude Code's WebSearch/WebFetch. Read the ACTUAL tool
-    # gating off the SubprocessGoalRunner's config (web_enabled) rather than hardcoding. A non-
-    # subprocess DeepRunner that doesn't expose web_enabled() is treated as non-web (conservative,
-    # honest). No deep-runner at all → no way to browse → web:false.
+    # web: the deep-runner browses via Claude Code's WebSearch/WebFetch (reads off the actual
+    # tool gating), OR a WebSearchAdapter is wired into the retrieval stack (shallow web search
+    # via Tavily). Both are honest: we detect what the config actually provides.
     web = False
     if deep is not None:
         sub_cfg = getattr(deep, "cfg", None)
@@ -207,6 +206,21 @@ def derive_capabilities(cfg: RunnerConfig) -> Dict[str, bool]:
                 web = bool(web_enabled())
             except Exception:  # noqa: BLE001 — capability detection must never break the runner
                 web = False
+
+    # If no deep-runner web capability, check the retrieval stack for a WebSearchAdapter.
+    if not web and retrieval is not None:
+        try:
+            from .adapters.web_search_adapter import WebSearchAdapter as _WSA
+            from .adapters.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
+            if isinstance(retrieval, _WSA):
+                web = bool(getattr(retrieval, "_api_key", ""))
+            elif isinstance(retrieval, _CRA):
+                web = any(
+                    isinstance(a, _WSA) and bool(getattr(a, "_api_key", ""))
+                    for a in getattr(retrieval, "adapters", [])
+                )
+        except Exception:  # noqa: BLE001 — capability detection must never break the runner
+            pass
 
     return {"web": web, "corpus": corpus, "code": code}
 

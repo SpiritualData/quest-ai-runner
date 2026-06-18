@@ -5,6 +5,9 @@ These satisfy the core interfaces; a consumer wires the ones it needs into a Run
   * CachedDbAdapter           — RetrievalAdapter: live DB reads via a short-TTL cache (no file sync).
   * ClaudeConversationsAdapter — RetrievalAdapter over Claude Code session transcripts (local directory).
   * QuestRetrievalAdapter     — RetrievalAdapter: query Quest API for goal/quest context, notes, related goals.
+  * WebSearchAdapter          — RetrievalAdapter that searches the live web via the Tavily API (stdlib
+                                urllib only; no extra deps). Enable with WEB_SEARCH_ENABLED=true +
+                                WEB_SEARCH_API_KEY env vars, or pass api_key= at construction.
   * CompositeRetrievalAdapter — RetrievalAdapter that runs multiple adapters IN PARALLEL, merging
                                 results. Query files, databases, conversations, Quest, task memory together.
   * AnthropicProvider         — ModelProvider (plan / answer / live models.list bucketing). Needs an
@@ -33,6 +36,7 @@ reference (the Quest team decision-request) lives in runner.quest_client.
 """
 from .anthropic_provider import AnthropicProvider
 from .cached_db_adapter import CachedDbAdapter
+from .web_search_adapter import WebSearchAdapter
 from .card_metadata_generator import CardMetadataGenerator
 from .claude_cli_provider import ClaudeCliProvider
 from .claude_conversations_adapter import ClaudeConversationsAdapter
@@ -93,6 +97,7 @@ __all__ = [
     "CachedDbAdapter",
     "ClaudeConversationsAdapter",
     "QuestRetrievalAdapter",
+    "WebSearchAdapter",
     "CompositeRetrievalAdapter",
     "ConversationCardBuilder",
     "CardMetadataGenerator",
