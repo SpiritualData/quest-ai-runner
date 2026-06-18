@@ -127,22 +127,22 @@ class ContextPanel(Static):
 
     def set_cards(self, cards: List[dict]) -> None:
         self.cards = cards or []
-        self._render()
+        self._refresh_display()
 
     def add_sources(self, paths: List[str]) -> None:
         for p in paths:
             if p not in self.sources:
                 self.sources.append(p)
                 self.total_sources += 1
-        self._render()
+        self._refresh_display()
 
     def inc_replans(self) -> None:
         self.replans += 1
         self.cards = []
         self.sources = []
-        self._render()
+        self._refresh_display()
 
-    def _render(self) -> None:
+    def _refresh_display(self) -> None:
         lines: List[str] = []
         if self.cards:
             lines.append("[bold cyan]\U0001F4C7 Context cards[/bold cyan]")
