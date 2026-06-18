@@ -34,7 +34,11 @@ def start_textual_interactive(
     session = InteractiveSession(
         config, rep_name=rep_name, persona=persona, goal_id=goal_id
     )
-    QuestAITerminal(session, verbosity=verbosity).run()
+    try:
+        QuestAITerminal(session, verbosity=verbosity).run()
+    except KeyboardInterrupt:
+        # Ctrl+C pressed — exit cleanly without traceback
+        pass
 
 
 def is_textual_available() -> bool:
