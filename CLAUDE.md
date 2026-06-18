@@ -76,26 +76,18 @@ When running `quest-ai-runner poll` or `quest-ai-runner chat` as systemd user se
 - **Do NOT kill processes directly** — use systemctl to restart cleanly
 - The service file manages lifecycle; always use systemctl for start/stop/restart
 
-## Concurrent AI work — protect uncommitted changes
+## Concurrent AI work — preserve uncommitted changes
 
 Multiple AIs may work on this repo simultaneously. **Never run destructive git operations
-(`git restore`, `git reset --hard`, `git checkout .`) without first checking what you're discarding:**
+(`git restore`, `git reset --hard`, `git checkout .`) on files with uncommitted changes.**
 
-1. Before restoring any file, run:
-   ```bash
-   git status
-   git diff <file>
-   ```
-2. If uncommitted changes exist, they're likely in-progress work from another AI — preserve them:
-   ```bash
-   git stash
-   # ...make your fix...
-   git stash pop
-   ```
-3. If you must discard changes, explicitly confirm the diff is safe to lose.
+1. Always check `git status` before making changes
+2. If a file has uncommitted changes, they're likely in-progress work from another AI
+3. Leave uncommitted changes as-is; work around them or wait for them to be committed
+4. Only discard changes if you're certain they're yours and no longer needed
 
 This prevents accidentally losing concurrent work when a user interrupts (Ctrl+C) a long-running
-edit or commit.
+edit or task.
 
 ## Conventions
 
