@@ -32,30 +32,43 @@ class CompositeContextAssembler:
     ) -> Any:
         """Return concatenated context from all assemblers. Never raises."""
         from .adapters import AssembledContext
+        import logging
 
+        _log = logging.getLogger(__name__)
         parts: List[str] = []
         card_ids: List[str] = []
         stale: List[str] = []
         hint: Optional[str] = None
+        sources: List[Dict[str, Any]] = []
+        card_metadata: List[Dict[str, Any]] = []
+
         for a in self._assemblers:
             try:
                 if _accepts_meta(a):
                     result = a.assemble(task_text, meta=meta)
                 else:
                     result = a.assemble(task_text)
+                if result is None:
+                    _log.warning(f"Assembler {type(a).__name__} returned None instead of AssembledContext")
+                    continue
                 if result.context_view:
                     parts.append(result.context_view)
                 card_ids.extend(result.card_ids or [])
                 stale.extend(result.stale or [])
+                sources.extend(getattr(result, 'sources', None) or [])
+                card_metadata.extend(getattr(result, 'card_metadata', None) or [])
                 if hint is None and result.model_tier_hint:
                     hint = result.model_tier_hint
-            except Exception:
-                pass
+            except Exception as e:
+                _log.debug(f"Assembler {type(a).__name__} failed: {type(e).__name__}: {e}", exc_info=True)
+
         return AssembledContext(
             context_view="\n\n".join(parts),
             model_tier_hint=hint,
             card_ids=card_ids,
             stale=stale,
+            sources=sources,
+            card_metadata=card_metadata,
         )
 
     def record(self, task_text: str, outcome: Dict[str, Any]) -> None:

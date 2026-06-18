@@ -2111,9 +2111,12 @@ class Orchestrator:
         # caller provided its own grounding (panel docs / chat uploads append below).
         if _ctx_future is not None:
             try:
-                _assembled = _ctx_future.result(timeout=3.0)
-            except Exception as e:  # noqa: BLE001 — timeout, cancelled, or assembler error: skip
-                log.warning(f"Context assembly failed or timed out: {e}")
+                _assembled = _ctx_future.result(timeout=5.0)
+            except TimeoutError as e:  # noqa: BLE001 — timeout: skip with debug note
+                log.debug(f"Context assembly timed out after 5s: {e}", exc_info=True)
+                _assembled = None
+            except Exception as e:  # noqa: BLE001 — cancelled or assembler error: skip
+                log.warning(f"Context assembly failed: {type(e).__name__}: {e}", exc_info=True)
                 _assembled = None
             finally:
                 try:
