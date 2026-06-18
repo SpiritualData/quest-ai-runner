@@ -1445,6 +1445,7 @@ class Orchestrator:
                 except Exception:  # noqa: BLE001 — recording must never break the run
                     pass
                 if wants_emit and emit is not None:
+                    log.debug(f"emitting exec event: {getattr(ev, 'type', '?')}: {getattr(ev, 'text', '')[:80]}")
                     emit.emit(ev)
 
             def _do_run(current_brief: str, run_model: Optional[str]) -> DeepResult:

@@ -396,10 +396,11 @@ def _monitor_claude_session(
     Runs in a background thread. Polls for new JSONL lines and emits ProgressEvents
     as Claude Code produces output (thinking, tool calls, text, etc.).
     """
+    _log.info("monitor thread started for working_dir: %s", working_dir)
     try:
         project_dir = _find_claude_project_dir(working_dir)
         if not project_dir:
-            _log.debug("claude project dir not found yet, waiting...")
+            _log.info("claude project dir not found yet, waiting for session (%.0fs timeout)...", max_wait_seconds)
             # Wait for it to be created, then find it
             start = time.time()
             while time.time() - start < max_wait_seconds and not stop_event.is_set():
@@ -409,7 +410,7 @@ def _monitor_claude_session(
                     break
 
         if not project_dir:
-            _log.debug("could not locate claude project dir after %.1f seconds", max_wait_seconds)
+            _log.warning("could not locate claude project dir after %.1f seconds — no live output available", max_wait_seconds)
             return
 
         _log.info("found claude project dir: %s", project_dir)
@@ -442,7 +443,7 @@ def _monitor_claude_session(
                                 msg_text = _format_message_text(msg)
                                 if msg_text:
                                     event_count += 1
-                                    _log.debug("emitting exec event #%d: %s", event_count, msg_text[:80])
+                                    _log.info("emitting exec event #%d: %s", event_count, msg_text[:80])
                                     callback(ProgressEvent(
                                         type=EVENT_EXEC,
                                         text=msg_text,
@@ -543,7 +544,7 @@ class SubprocessGoalRunner(DeepRunner):
         stop_monitor = threading.Event()
         monitor_thread = None
         if emit is not None:
-            _log.debug("starting claude session monitor for deep run")
+            _log.info("starting claude session monitor for deep run in: %s", self.cfg.working_dir)
             monitor_thread = threading.Thread(
                 target=_monitor_claude_session,
                 args=(self.cfg.working_dir, emit, stop_monitor),
@@ -551,7 +552,7 @@ class SubprocessGoalRunner(DeepRunner):
             )
             monitor_thread.start()
         else:
-            _log.debug("emit callback not provided; not starting session monitor")
+            _log.warning("emit callback not provided; NOT starting session monitor (no live output)")
 
         try:
             proc = subprocess.Popen(
