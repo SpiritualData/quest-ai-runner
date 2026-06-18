@@ -881,7 +881,17 @@ class _TurnRenderer:
                 self._panel.start()
         elif t == ev["milestone"]:
             self._panel.stop()
-            self._print_success(text)
+            if text:
+                # Print checkmark, then render markdown for the milestone content
+                c = self._c
+                if c._rich:
+                    c._rich.print(f"  [green]✓[/]", highlight=False, end=" ")
+                elif c._color:
+                    c.write(f"  {_a(_GREEN, '✓')} ")
+                else:
+                    c.write(f"  ✓ ")
+                # Render the milestone text (often contains markdown formatting)
+                c.markdown(text)
             self._panel.start()
         elif t == ev["result"]:
             if not self._partial_started and text:
