@@ -1410,7 +1410,7 @@ class Orchestrator:
         overall_goal = (plan.goal or "").strip() or user_message
         multi = len(subtasks) > 1
 
-        def run_one(st: Dict[str, Any]) -> DeepResult:
+        def run_one(st: Dict[str, Any], task_index: int = 0) -> DeepResult:
             goal = (st.get("goal") or "").strip() or f"Fully address: {user_message}"
             brief = (st.get("brief") or goal).strip()
             # EVERY deep process is told BOTH the top input-level goal (the user's actual request)
@@ -1422,7 +1422,9 @@ class Orchestrator:
             if multi and overall_goal and overall_goal != goal:
                 _hdr.append(f"OVERALL GOAL (this process is ONE subgoal serving it, stay aligned):\n"
                             f"{overall_goal}")
-            brief = "\n\n".join(_hdr) + "\n\n--- THIS PROCESS'S TASK ---\n" + brief
+            # Show task identifier in brief so user sees which task is running
+            task_id = f"[Task {task_index}]" if multi else ""
+            brief = "\n\n".join(_hdr) + f"\n\n--- THIS PROCESS'S TASK {task_id} ---\n{goal}\n\n" + brief
             # Per-subtask execution fact — populated from EVENT_EXEC phase ticks (live) and finalized
             # from the DeepResult.met below. Recording per-subtask keeps facts correct even when
             # multiple subtasks run concurrently (each closure owns its own ``fact``).
@@ -1579,11 +1581,11 @@ class Orchestrator:
         all_results: List[Optional[DeepResult]] = []
         all_goals: List[str] = []
 
-        def run_sequential_group(group: List[Dict[str, Any]]) -> List[Optional[DeepResult]]:
+        def run_sequential_group(group: List[Dict[str, Any]], group_index: int = 0) -> List[Optional[DeepResult]]:
             """Run tasks in a group sequentially, returning results in order."""
             results = []
-            for task in group:
-                res = run_one(task)
+            for task_num, task in enumerate(group, 1):
+                res = run_one(task, task_index=f"{group_index}.{task_num}")
                 results.append(res)
                 all_goals.append((task.get("goal") or "").strip() or user_message)
             return results
@@ -1591,14 +1593,14 @@ class Orchestrator:
         # If only flat tasks (no groups), run all in parallel
         if not seq_groups and flat_tasks:
             if len(flat_tasks) == 1:
-                res = run_one(flat_tasks[0])
+                res = run_one(flat_tasks[0], task_index=1)
                 all_results.append(res)
                 all_goals.append((flat_tasks[0].get("goal") or "").strip() or user_message)
             else:
                 workers = min(self.cfg.max_parallel, len(flat_tasks))
                 results: List[Optional[DeepResult]] = [None] * len(flat_tasks)
                 with ThreadPoolExecutor(max_workers=workers) as pool:
-                    futs = {pool.submit(run_one, st): i for i, st in enumerate(flat_tasks)}
+                    futs = {pool.submit(run_one, st, i+1): i for i, st in enumerate(flat_tasks)}
                     for f in futs:
                         results[futs[f]] = f.result()
                 all_results.extend([r for r in results if r is not None])
@@ -1613,7 +1615,7 @@ class Orchestrator:
             workers = min(self.cfg.max_parallel, len(all_units))
 
             with ThreadPoolExecutor(max_workers=workers) as pool:
-                futs = {pool.submit(run_sequential_group, unit): i for i, unit in enumerate(all_units)}
+                futs = {pool.submit(run_sequential_group, unit, i+1): i for i, unit in enumerate(all_units)}
                 for f in futs:
                     group_results = f.result()
                     all_results.extend([r for r in group_results if r is not None])
@@ -2349,18 +2351,21 @@ class Orchestrator:
                                 else:
                                     deep_subtasks.append(item)
 
-                            # Show parsed tasks to user
+                            # Show parsed tasks to user with nice formatting
                             if deep_subtasks:
-                                emit.status(f"Split into {len(deep_subtasks)} task(s)")
+                                emit.emit(ProgressEvent(type=EVENT_PLAN, action="deep", step=steps,
+                                                       text=f"Split into {len(deep_subtasks)} task(s)"))
                                 for i, task in enumerate(deep_subtasks, 1):
                                     if isinstance(task, tuple) and task[0] == "_seq_":
-                                        # Sequential group
-                                        goals = [t.get("goal", "")[:50] for t in task[1]]
-                                        emit.status(f"  {i}. (sequential) {' → '.join(goals)}")
+                                        # Sequential group: show as "Task 1 (sequential)"
+                                        group_goals = [t.get("goal", "") for t in task[1]]
+                                        seq_label = " ➜ ".join(group_goals)
+                                        emit.status(f"  Task {i}: {seq_label} (sequential)")
                                     else:
                                         # Single parallel task
-                                        goal = task.get("goal", "")[:60]
-                                        emit.status(f"  {i}. {goal}")
+                                        goal = task.get("goal", "")
+                                        emit.status(f"  Task {i}: {goal}")
+                                emit.status("Working on this now…")
                 except Exception:  # noqa: BLE001
                     pass  # If split fails, fall back to single task
 
