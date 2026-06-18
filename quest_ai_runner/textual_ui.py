@@ -30,8 +30,8 @@ from typing import Callable, List, Optional, TYPE_CHECKING
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal
-from textual.widgets import Footer, Header, Input, LoadingIndicator, RichLog, Static
+from textual.containers import Horizontal  # kept for layout elsewhere if needed
+from textual.widgets import Footer, Header, Input, RichLog, Static
 
 from rich.markdown import Markdown as RichMarkdown
 from rich.text import Text
@@ -146,11 +146,43 @@ class _RichLogHandler(logging.Handler):
 
 # ── Live widgets ────────────────────────────────────────────────────────────
 
-class StatusLine(Static):
-    """The phase line shown beside the loading indicator while a turn runs."""
+class ActivityBar(Static):
+    """Three animated dots + status text in one line.
+
+    Replaces the separate LoadingIndicator + StatusLine pair so we fully
+    control dot count, inter-dot spacing, and the gap before the text.
+    """
+
+    _INTERVAL = 0.45
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._text = "thinking…"
+        self._frame = 0
+        self._timer = None
+        self.display = False
+
+    def on_mount(self) -> None:
+        self._timer = self.set_interval(self._INTERVAL, self._tick)
+
+    def _tick(self) -> None:
+        self._frame = (self._frame + 1) % 3
+        self.refresh()
 
     def set_status(self, text: str) -> None:
-        self.update(f"[dim]{text}[/dim]")
+        self._text = text
+        self.refresh()
+
+    def render(self):
+        t = Text()
+        for i in range(3):
+            if i > 0:
+                t.append("  ")                          # space between dots
+            style = "cyan bold" if i == self._frame else "cyan dim"
+            t.append("●", style=style)
+        t.append("    ")                                # clear gap before text
+        t.append(self._text, style="dim")
+        return t
 
 
 class ContextPanel(Static):
@@ -368,12 +400,10 @@ class QuestAITerminal(App):
     }
 
     #activity {
-        height: auto;
+        height: 1;
         padding: 0 1;
         margin: 0 1;
     }
-    #activity LoadingIndicator { width: 3; height: 1; color: $accent; }
-    #activity StatusLine { width: 1fr; height: 1; }
 
     #prompt {
         margin: 0 1 1 1;
@@ -427,9 +457,7 @@ class QuestAITerminal(App):
         yield ContextPanel(id="context")
         yield DeepActivity(id="deep")
         yield DeepDetailPanel(id="deep-detail")
-        with Horizontal(id="activity"):
-            yield LoadingIndicator()
-            yield StatusLine("thinking…")
+        yield ActivityBar(id="activity")
         yield Input(id="prompt", placeholder="Ask anything…   (/help for commands, Esc to cancel, d=expand agent, Tab=cycle)")
         yield Footer()
 
@@ -439,8 +467,7 @@ class QuestAITerminal(App):
         self._ctx = self.query_one("#context", ContextPanel)
         self._deep_view = self.query_one("#deep", DeepActivity)
         self._deep_detail = self.query_one("#deep-detail", DeepDetailPanel)
-        self._activity = self.query_one("#activity", Horizontal)
-        self._status = self.query_one("#activity StatusLine", StatusLine)
+        self._activity = self.query_one("#activity", ActivityBar)
         inp = self.query_one("#prompt", Input)
 
         # Slash-command autocompletion, like the prompt_toolkit completer.
@@ -793,7 +820,7 @@ class QuestAITerminal(App):
             self._tlog.write(Text(""))
 
         # Loading strip on, prompt off until the turn ends.
-        self._status.set_status("thinking…")
+        self._activity.set_status("thinking…")
         self._activity.display = True
         inp = self.query_one("#prompt", Input)
         inp.disabled = True
@@ -859,29 +886,29 @@ class QuestAITerminal(App):
             # Accumulate streamed answer; render once at the end (calm display).
             self._partial_started = True
             self._answer_parts.append(text)
-            self._status.set_status("answering…")
+            self._activity.set_status("answering…")
             return
 
         if t == ev["status"]:
-            self._status.set_status(text or "thinking…")
+            self._activity.set_status(text or "thinking…")
 
         elif t == ev["plan"]:
             if text:
                 label = f"▸ {action}" if action else "▸ plan"
                 log.write(Text(f"  {label}  {text}", style="dim"))
-            self._status.set_status("planning…")
+            self._activity.set_status("planning…")
 
         elif t == ev["replan"]:
             self._ctx.inc_replans()
             if text:
                 log.write(Text(f"  ↺ replan  {text}", style="dim"))
-            self._status.set_status("re-planning…")
+            self._activity.set_status("re-planning…")
 
         elif t == ev["read"]:
             paths = data.get("sources") or []
             self._ctx.add_sources(paths)
             total = self._ctx.total_sources
-            self._status.set_status(
+            self._activity.set_status(
                 f"gathering context  ({total} source{'s' if total != 1 else ''} so far)"
             )
 
@@ -940,7 +967,7 @@ class QuestAITerminal(App):
             if self._deep_event_count % 10 == 0:
                 n = len(self._deep._runs)
                 self._deep_view.show(self._deep.get_dashboard(), n_runs=n)
-            self._status.set_status("executing…")
+            self._activity.set_status("executing…")
 
         elif t == ev["milestone"]:
             if text:
@@ -1091,7 +1118,7 @@ class QuestAITerminal(App):
     def action_cancel(self) -> None:
         if self._turn_active:
             self._cancel.set()
-            self._status.set_status("cancelling…")
+            self._activity.set_status("cancelling…")
         elif self._pending_select is not None:
             self._pending_select = None
             self._console.dim("  Cancelled.")
