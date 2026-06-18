@@ -1110,7 +1110,7 @@ Keys:
 """
 
 _BANNER = """\
-{B}{C}quest-ai-runner{R}  Grounded AI that acts like a colleague
+{B}{C}Quest AI Runner{R}  Grounded AI that acts like a colleague
 
   What makes this different:
   ● finds just the right context efficiently; no "look at this file" needed
