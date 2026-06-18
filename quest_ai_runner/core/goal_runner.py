@@ -405,7 +405,7 @@ def _monitor_claude_session(
     callback: Callable[[ProgressEvent], None],
     stop_event: threading.Event,
     cutoff_time: Optional[float] = None,
-    poll_interval: float = 0.5,
+    poll_interval: float = 0.1,
     max_wait_seconds: float = 30.0,
 ) -> None:
     """Monitor Claude Code session files and stream updates via callback.
@@ -439,67 +439,78 @@ def _monitor_claude_session(
         processed_lines: Set[str] = set()
         event_count = 0
 
-        # Wait for a new session to be created (Claude runs with -p which creates JSONL files)
-        _log.info("waiting for new claude session to be created...")
-        session_id = _detect_new_session(project_dir, cutoff_time, timeout=15.0)
-        jsonl_file = None
-        if session_id:
-            jsonl_file = project_dir / f"{session_id}.jsonl"
-            _log.info("detected new session: %s", session_id)
-        else:
-            _log.warning("timeout waiting for new session — using most recent file")
-            jsonl_file = _find_active_jsonl_file(project_dir)
-
-        if not jsonl_file:
-            _log.warning("no claude session file found")
-            return
-
-        _log.info("monitoring session file: %s", jsonl_file)
-        last_emitted_text = None
+        # Monitor ALL new session files (parallel tasks create multiple sessions)
+        _log.info("monitoring for new claude sessions (parallel tasks may create multiple)...")
+        watched_files: Dict[str, int] = {}  # filename -> last known file size
+        session_timeout = 15.0
+        session_start = time.time()
 
         while not stop_event.is_set():
+            # Periodically check for new session files
             try:
-                # Read and process new lines from the JSONL file
-                try:
-                    with open(jsonl_file, 'r') as f:
-                        for line_num, line in enumerate(f, 1):
-                            line_hash = _hash_line(line)
-                            if line_hash in processed_lines:
-                                continue
+                # Find all JSONL files in the project dir and subdirs
+                for jsonl_file in project_dir.rglob("*.jsonl"):
+                    try:
+                        mtime = jsonl_file.stat().st_mtime
+                        # Only monitor files created after we started
+                        if mtime < cutoff_time:
+                            continue
 
+                        if jsonl_file not in watched_files:
+                            _log.info("detected new session: %s", jsonl_file.name)
+                            watched_files[jsonl_file] = 0  # Start watching from beginning
+
+                        # Read new lines from this session file
+                        current_size = jsonl_file.stat().st_size
+                        if current_size > watched_files[jsonl_file]:
                             try:
-                                msg = json.loads(line.strip())
-                                msg_type = msg.get("type", "")
+                                with open(jsonl_file, 'r') as f:
+                                    f.seek(watched_files[jsonl_file])
+                                    for line in f:
+                                        line_hash = _hash_line(line)
+                                        if line_hash in processed_lines:
+                                            continue
 
-                                # Only emit assistant messages (the actual work output), not every intermediate step
-                                if msg_type not in ("assistant", "message"):
-                                    processed_lines.add(line_hash)
-                                    continue
+                                        try:
+                                            msg = json.loads(line.strip())
+                                            msg_type = msg.get("type", "")
 
-                                processed_lines.add(line_hash)
+                                            # Only emit assistant messages (the actual work output)
+                                            if msg_type not in ("assistant", "message"):
+                                                processed_lines.add(line_hash)
+                                                continue
 
-                                # Format and emit the message as a progress event
-                                msg_text = _format_message_text(msg)
-                                if msg_text and msg_text.strip():
-                                    event_count += 1
-                                    _log.info("emitting exec event #%d: %s", event_count, msg_text[:100])
-                                    callback(ProgressEvent(
-                                        type=EVENT_EXEC,
-                                        text=msg_text,
-                                        data={"message_type": msg_type}
-                                    ))
-                            except json.JSONDecodeError:
-                                # Skip malformed lines
+                                            processed_lines.add(line_hash)
+
+                                            # Format and emit the message as a progress event
+                                            msg_text = _format_message_text(msg)
+                                            if msg_text and msg_text.strip():
+                                                event_count += 1
+                                                _log.info("emitting exec event #%d from %s: %s",
+                                                         event_count, jsonl_file.name, msg_text[:80])
+                                                callback(ProgressEvent(
+                                                    type=EVENT_EXEC,
+                                                    text=msg_text,
+                                                    data={"message_type": msg_type, "file": jsonl_file.name}
+                                                ))
+                                        except json.JSONDecodeError:
+                                            pass
+
+                                watched_files[jsonl_file] = current_size
+                            except FileNotFoundError:
                                 pass
-                except FileNotFoundError:
-                    # File was deleted or moved
-                    pass
-
-                time.sleep(poll_interval)
+                    except Exception as e:
+                        _log.debug("error processing session file %s: %s", jsonl_file.name, e)
 
             except Exception as e:
-                _log.debug("error monitoring claude session: %s", e)
-                time.sleep(poll_interval)
+                _log.debug("error scanning project dir: %s", e)
+
+            # Stop monitoring after timeout with no new activity
+            if time.time() - session_start > session_timeout and not watched_files:
+                _log.warning("timeout waiting for any new sessions")
+                break
+
+            time.sleep(poll_interval)
 
     except Exception as e:
         _log.warning("claude session monitor failed: %s", e)
