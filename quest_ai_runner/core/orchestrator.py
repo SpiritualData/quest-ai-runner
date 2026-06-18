@@ -2266,12 +2266,13 @@ class Orchestrator:
                     )
                     if split_result:
                         import json
-                        # Parse JSON task structure
+                        # Parse JSON task structure: preserve nesting for sequential dependencies
                         tasks_json = json.loads(split_result.strip())
                         if isinstance(tasks_json, list):
-                            # Flatten: convert nested lists to deep_subtasks (orchestrator will handle dependency)
-                            def flatten_tasks(tasks_list, parent_tasks=None):
-                                result = parent_tasks or []
+                            # Process structure: flat items = parallel, nested lists = sequential
+                            # Output: flat list of {"goal": ..., "brief": ...} OR groups
+                            def normalize_tasks(tasks_list):
+                                result = []
                                 for item in tasks_list:
                                     if isinstance(item, dict) and "goal" in item:
                                         # Single task
@@ -2280,10 +2281,31 @@ class Orchestrator:
                                             "brief": item.get("brief", user_message)
                                         })
                                     elif isinstance(item, list):
-                                        # Sequential group: add all tasks
-                                        flatten_tasks(item, result)
+                                        # Sequential group: normalize each task in group
+                                        group = [
+                                            {
+                                                "goal": _truncate_goal(t.get("goal", "")),
+                                                "brief": t.get("brief", user_message)
+                                            }
+                                            for t in item if isinstance(t, dict) and "goal" in t
+                                        ]
+                                        if group:
+                                            # Mark group for sequential execution
+                                            result.append(("_seq_", group))
                                 return result
-                            deep_subtasks = flatten_tasks(tasks_json)[:4]  # Max 4 parallel
+                            normalized = normalize_tasks(tasks_json)
+                            # Parse nested structure: flat items run in parallel, nested lists run sequentially
+                            # NOTE: Currently flattens sequential groups (runs all concurrently).
+                            # TODO: implement proper sequential execution in _run_deep to honor nesting:
+                            #   - run sequential groups one after another
+                            #   - run independent parallel groups concurrently
+                            for item in normalized[:4]:  # Max 4 parallel
+                                if isinstance(item, tuple) and item[0] == "_seq_":
+                                    # Sequential group: currently flattened (loses order)
+                                    # Future: keep as group and execute sequentially in _run_deep
+                                    deep_subtasks.extend(item[1])
+                                else:
+                                    deep_subtasks.append(item)
                 except Exception:  # noqa: BLE001
                     pass  # If split fails, fall back to single task
 
