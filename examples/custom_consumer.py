@@ -39,6 +39,7 @@ from typing import Optional
 from quest_ai_runner.adapters import AnthropicProvider, ClaudeCliProvider, FilesAdapter
 from quest_ai_runner.config import RunnerConfig
 from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+from quest_ai_runner.core.orchestrator import OrchestratorConfig
 
 
 def _model_provider():
@@ -84,6 +85,15 @@ def build_config(*, with_model_provider: bool = True) -> RunnerConfig:
     elif cards_env:
         context_kwargs["context_cards_dir"] = cards_env       # custom location, still default-on
 
+    # Orchestrator tuning (optional): read from env or use defaults
+    orch_config_kwargs = {}
+    max_reads_env = os.getenv("QAR_MAX_CONSECUTIVE_READS")
+    if max_reads_env:
+        try:
+            orch_config_kwargs["max_consecutive_reads"] = int(max_reads_env)
+        except ValueError:
+            print(f"Warning: QAR_MAX_CONSECUTIVE_READS={max_reads_env!r} is not a valid integer, using default")
+
     return RunnerConfig(
         quest_base_url=os.getenv("QUEST_BASE_URL", ""),
         quest_api_key=os.getenv("QUEST_API_KEY", ""),
@@ -94,6 +104,7 @@ def build_config(*, with_model_provider: bool = True) -> RunnerConfig:
         deep_runner=deep,
         corpus_root=corpus,
         default_assignee_user_id=os.getenv("QAR_DECISION_ASSIGNEE"),
+        orchestrator=OrchestratorConfig(**orch_config_kwargs) if orch_config_kwargs else OrchestratorConfig(),
         **context_kwargs,
     )
 
