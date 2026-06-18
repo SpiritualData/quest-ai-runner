@@ -238,21 +238,26 @@ class DeepActivity(Static):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._dashboard = ""
+        self._n_runs = 0
         self.display = False
 
-    def show(self, dashboard: str) -> None:
+    def show(self, dashboard: str, n_runs: int = 1) -> None:
         self._dashboard = dashboard or ""
+        self._n_runs = n_runs
         self.display = bool(self._dashboard.strip())
         self.refresh()
 
     def hide(self) -> None:
         self._dashboard = ""
+        self._n_runs = 0
         self.display = False
         self.refresh()
 
     def render(self):
-        # Plain Text (not markup) so file paths with brackets render literally.
-        return Text(self._dashboard, style="dim")
+        if not self._dashboard.strip():
+            return Text("")
+        hint = "  [d] expand  [Tab] next agent" if self._n_runs > 1 else "  [d] expand"
+        return Text.from_ansi(self._dashboard + f"\x1b[2m\n{hint}\x1b[0m")
 
 
 class DeepDetailPanel(Static):
@@ -270,12 +275,17 @@ class DeepDetailPanel(Static):
         self._run_id: Optional[str] = None
         self._goal: str = ""
         self._lines: List[str] = []
+        self._pos: int = 1
+        self._total: int = 1
         self.display = False
 
-    def open_for(self, run_id: str, goal: str, existing_lines: List[str]) -> None:
+    def open_for(self, run_id: str, goal: str, existing_lines: List[str],
+                 pos: int = 1, total: int = 1) -> None:
         self._run_id = run_id
         self._goal = goal
         self._lines = list(existing_lines)
+        self._pos = pos
+        self._total = total
         self.display = True
         self.refresh()
 
@@ -297,10 +307,13 @@ class DeepDetailPanel(Static):
     def render(self):
         if not self._run_id:
             return Text("")
-        header = f"⎅ [{self._run_id}] {self._goal[:65]}"
+        pos_str = f"agent {self._pos}/{self._total}  " if self._total > 1 else ""
+        nav_hint = "  [Tab] next  [d] close" if self._total > 1 else "  [d] close"
+        header = f"⎅ {pos_str}{self._goal[:60]}"
         tail = self._lines[-self.MAX_LINES:]
         body = "\n".join(f"  {ln}" for ln in tail)
-        return Text.from_ansi(f"\x1b[1;36m{header}\x1b[0m\n{body}")
+        footer = f"\x1b[2m{nav_hint}\x1b[0m"
+        return Text.from_ansi(f"\x1b[1;36m{header}\x1b[0m\n{body}\n{footer}")
 
 
 # ── Main app ──────────────────────────────────────────────────────────────────
@@ -908,7 +921,8 @@ class QuestAITerminal(App):
                     log.write(Text(goal, style="bold cyan"))
                 # Auto-open detail panel for the first run (user can close with d).
                 if len(self._deep_seen) == 1:
-                    self._deep_detail.open_for(run_id, goal or "executing work…", [])
+                    n = len(self._deep._runs)
+                    self._deep_detail.open_for(run_id, goal or "executing work…", [], pos=1, total=n)
             self._cur_deep_run = run_id
             if text:
                 self._deep.update_run_output(run_id, text)
@@ -917,7 +931,8 @@ class QuestAITerminal(App):
             # Throttle dashboard redraws to every 10 events to avoid flicker.
             self._deep_event_count += 1
             if self._deep_event_count % 10 == 0:
-                self._deep_view.show(self._deep.get_dashboard())
+                n = len(self._deep._runs)
+                self._deep_view.show(self._deep.get_dashboard(), n_runs=n)
             self._status.set_status("executing…")
 
         elif t == ev["milestone"]:
@@ -1080,33 +1095,34 @@ class QuestAITerminal(App):
     def action_quit(self) -> None:
         self.exit()
 
+    def _open_detail_for(self, run_id: str) -> None:
+        """Open the detail panel for a specific run_id, computing pos/total."""
+        with self._deep._lock:
+            info = self._deep._runs.get(run_id)
+            run_ids = sorted(self._deep._runs.keys())
+        if info is None:
+            return
+        pos = run_ids.index(run_id) + 1 if run_id in run_ids else 1
+        total = len(run_ids)
+        existing = list(info.get("exec_lines", []))
+        self._deep_detail.open_for(run_id, info["goal"], existing, pos=pos, total=total)
+
     def action_toggle_deep_detail(self) -> None:
         """Toggle the expanded detail view for the current deep run (key: d)."""
         if self._deep_detail.display:
             self._deep_detail.hide()
             return
-        # Pick which run to show: the most recently active one.
         run_id = self._cur_deep_run or self._deep.get_active_run()
         if run_id is None:
             return
-        with self._deep._lock:
-            info = self._deep._runs.get(run_id)
-        if info is None:
-            return
-        existing = list(info.get("exec_lines", []))
-        self._deep_detail.open_for(run_id, info["goal"], existing)
+        self._open_detail_for(run_id)
 
     def action_cycle_deep_run(self) -> None:
         """Cycle the detail panel to the next deep run (key: Tab)."""
         run_id = self._deep.next_run()
         if run_id is None:
             return
-        with self._deep._lock:
-            info = self._deep._runs.get(run_id)
-        if info is None:
-            return
-        existing = list(info.get("exec_lines", []))
-        self._deep_detail.open_for(run_id, info["goal"], existing)
+        self._open_detail_for(run_id)
 
 
 if __name__ == "__main__":
