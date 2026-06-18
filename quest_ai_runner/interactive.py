@@ -264,8 +264,6 @@ class _ContextPanel:
         self._last_line_count = 0
         self._cards: List[dict] = []     # full card objects with files instead of just names
         self._card_files_map: dict = {}  # card_id -> [files] mapping
-        self._content_buffer: List[str] = []  # buffered output lines (merged with spinner)
-        self._buffer_updated = False     # flag to apply buffer next render
 
     def start(self) -> None:
         if not self._tty:
@@ -319,18 +317,6 @@ class _ContextPanel:
                 self._c.line(f"  ↗  {p}")
         return new_paths
 
-    def buffer_lines(self, lines: List[str]) -> None:
-        """Buffer content lines to display on next render (no spinner stop/start)."""
-        with self._lock:
-            self._content_buffer = lines
-            self._buffer_updated = True
-
-    def clear_buffer(self) -> None:
-        """Clear the content buffer."""
-        with self._lock:
-            self._content_buffer = []
-            self._buffer_updated = False
-
     def stop(self) -> None:
         """Stop the spinner and erase the panel (final state)."""
         self._stop_ev.set()
@@ -361,7 +347,6 @@ class _ContextPanel:
             overflow = self._overflow
             cards = list(self._cards)
             card_files_map = dict(self._card_files_map)
-            content_buffer = list(self._content_buffer)
 
         lines: List[str] = [f"  {frame} {phase}"]
 
@@ -405,13 +390,6 @@ class _ContextPanel:
 
             if overflow:
                 lines.append(f"     {_a(_DIM, f'and {overflow} more…')}")
-
-        # Append any buffered content (smooth blending, no stop/start jarring)
-        if content_buffer:
-            if not sources and not cards:
-                # Content is the first thing after spinner; add spacing
-                lines.append("")
-            lines.extend(content_buffer)
 
         # Each render ends with \n after every line, so the cursor sits one line
         # BELOW the last spinner line. On the next render we move up by n lines
@@ -689,22 +667,6 @@ class _TurnRenderer:
                 self._c.line(f"{self._rep_name}")
             self._ai_label_printed = True
 
-    def _format_display(self, kind: str, text: str, label: str = "") -> str:
-        """Format output for buffering (returns ANSI string, does not print)."""
-        if kind == "step":
-            # Plan/replan/read step: label + text
-            if self._c._color:
-                return f"  {_DIM}{label}  {text}{_RESET}"
-            else:
-                return f"  {label}  {text}"
-        elif kind == "exec":
-            # Execution progress line
-            if self._c._color:
-                return f"  {_CYAN}→{_RESET} {text[:100]}"
-            else:
-                return f"  → {text[:100]}"
-        return text
-
     def _display(self, kind: str, text: str, prefix: str = "") -> None:
         """Unified display method for all user-facing output.
 
@@ -772,9 +734,12 @@ class _TurnRenderer:
         if t == ev["partial"]:
             is_ack = isinstance(data, dict) and data.get("ack")
             if is_ack:
-                # Instant ack: buffer as a dim line (no jarring stop/start).
+                # Instant ack: show as a dim note above the spinner, then restart it.
+                # Do NOT set _partial_started/_in_partial — the real result still shows normally.
+                self._panel.stop()
                 if text:
-                    self._panel.buffer_lines([_a(_DIM, f"  ✓ {text}")])
+                    self._c.dim(f"  {text}")
+                self._panel.start()
                 return
             # Regular streaming token path.
             if not self._partial_started:
@@ -791,16 +756,17 @@ class _TurnRenderer:
 
         if t == ev["plan"]:
             if text:
+                self._panel.stop()
                 label = f"▸ {action}" if action else "▸ plan"
-                # Format as a buffer line instead of stopping spinner
-                formatted = self._format_display("step", text, label)
-                self._panel.buffer_lines([formatted])
+                self._display("step", text, label)
+                self._panel.start()
             self._panel.set_phase("planning…")
         elif t == ev["replan"]:
             self._panel.inc_replans()
             if text:
-                formatted = self._format_display("step", text, "↺ replan")
-                self._panel.buffer_lines([formatted])
+                self._panel.stop()
+                self._display("step", text, "↺ replan")
+                self._panel.start()
             self._panel.set_phase("re-planning…")
         elif t == ev["context"]:
             # Display selected context cards + their sources + relevant files
@@ -908,14 +874,12 @@ class _TurnRenderer:
             count = data.get("reads", len(paths))
             new_paths = self._panel.add_sources(paths, count or len(paths))
             if new_paths:
-                # Buffer read events instead of stop/start (smooth blending)
-                buffer_lines = []
+                self._panel.stop()
                 for p in new_paths:
                     # "(searched ...)" markers use a search glyph; real paths use ↗
                     prefix = "⌕" if p.startswith("(searched ") else "↗"
-                    formatted = self._format_display("step", p, prefix)
-                    buffer_lines.append(formatted)
-                self._panel.buffer_lines(buffer_lines)
+                    self._display("step", p, prefix)
+                self._panel.start()
             total = self._panel._total_sources
             self._panel.set_phase(
                 f"gathering context  "
