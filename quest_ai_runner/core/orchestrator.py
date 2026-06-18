@@ -1854,7 +1854,7 @@ class Orchestrator:
                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                                  gathered=gathered)
             # Background: categorize edited files into context cards (deep runner returns edited_files in metadata)
-            if res.met:
+            if res.deep_results and any(dr.met for dr in res.deep_results):
                 self._update_context_cards_after_deep(res, context_meta)
             return finish(res)
 
