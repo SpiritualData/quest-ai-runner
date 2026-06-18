@@ -2346,24 +2346,25 @@ class Orchestrator:
                             for item in normalized[:4]:  # Max 4 parallel
                                 deep_subtasks.append(item)  # Item is either dict (task) or list (sequential group)
 
-                            # Show parsed tasks to user with nice formatting
+                            # Show parsed tasks with goal conditions
                             if deep_subtasks:
                                 task_summary = []
                                 for i, task in enumerate(deep_subtasks, 1):
                                     if isinstance(task, list):
-                                        # Sequential group
+                                        # Sequential group: show each goal
                                         group_goals = [t.get("goal", "") for t in task]
                                         seq_label = " ➜ ".join(group_goals)
                                         task_summary.append(f"Task {i}: {seq_label} (sequential)")
                                     else:
-                                        # Single parallel task
+                                        # Single parallel task: show goal (the done-standard)
                                         goal = task.get("goal", "")
                                         task_summary.append(f"Task {i}: {goal}")
 
-                                # Emit all tasks at once so they display together
+                                # Emit task plan with all goals visible
                                 task_text = "\n  ".join(task_summary)
                                 emit.emit(ProgressEvent(type=EVENT_PLAN, action="deep", step=steps,
-                                                       text=f"Split into {len(deep_subtasks)} task(s)\n  {task_text}"))
+                                                       text=f"Split into {len(deep_subtasks)} task(s):\n  {task_text}"))
+                                emit.status("Executing tasks…")
                 except Exception:  # noqa: BLE001
                     pass  # If split fails, fall back to single task
 
@@ -2475,7 +2476,10 @@ class Orchestrator:
             return finish(res)
 
         if final == "deep":
-            emit.status("Working on this now…")
+            # Show goal condition before executing
+            goal_text = plan.goal or f"Complete: {user_message[:100]}"
+            emit.emit(ProgressEvent(type=EVENT_RESULT, text=f"Goal: {goal_text}"))
+            emit.status("Executing goal now…")
             res = self._run_deep(plan, user_message, self._answer_model(plan, "opus", hint=model_hint),
                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                                  gathered=gathered, quality_standards=quality_standards,
