@@ -2262,13 +2262,12 @@ class Orchestrator:
             emit.emit(ProgressEvent(type=EVENT_DONE, result_kind=res.kind, step=steps))
             return res
 
-        # EXECUTION DIRECTIVE CHECK (step 0 only): if the user explicitly demands execution
-        # over planning ("code it", "just do it", "no more plans", etc.), force "deep" on
-        # the first step and skip planning entirely. This prevents the common pattern of:
-        # user: "code it already" → planner decides "read" → user frustrated.
+        # EXECUTION DIRECTIVE CHECK (step 0 only): only skip planning if retrying a goal in conversation
+        # (user already described the work once, now demanding execution). Don't skip on first attempt.
         force_deep_on_step_0 = False
-        if user_message and self._detect_execution_directive(user_message):
-            log.info(f"Execution directive detected: forcing action='deep' on step 0")
+        is_goal_retry = len(transcript or "") > 100  # Rough heuristic: prior context exists
+        if user_message and is_goal_retry and self._detect_execution_directive(user_message):
+            log.info(f"Execution directive on retry: forcing action='deep' on step 0")
             force_deep_on_step_0 = True
 
         plan: Optional[PlanDecision] = None
@@ -2349,19 +2348,22 @@ class Orchestrator:
 
                             # Show parsed tasks to user with nice formatting
                             if deep_subtasks:
-                                emit.emit(ProgressEvent(type=EVENT_PLAN, action="deep", step=steps,
-                                                       text=f"Split into {len(deep_subtasks)} task(s)"))
+                                task_summary = []
                                 for i, task in enumerate(deep_subtasks, 1):
                                     if isinstance(task, list):
-                                        # Sequential group: show as "Task 1 (sequential)"
+                                        # Sequential group
                                         group_goals = [t.get("goal", "") for t in task]
                                         seq_label = " ➜ ".join(group_goals)
-                                        emit.status(f"  Task {i}: {seq_label} (sequential)")
+                                        task_summary.append(f"Task {i}: {seq_label} (sequential)")
                                     else:
-                                        # Single parallel task (dict)
+                                        # Single parallel task
                                         goal = task.get("goal", "")
-                                        emit.status(f"  Task {i}: {goal}")
-                                emit.status("Working on this now…")
+                                        task_summary.append(f"Task {i}: {goal}")
+
+                                # Emit all tasks at once so they display together
+                                task_text = "\n  ".join(task_summary)
+                                emit.emit(ProgressEvent(type=EVENT_PLAN, action="deep", step=steps,
+                                                       text=f"Split into {len(deep_subtasks)} task(s)\n  {task_text}"))
                 except Exception:  # noqa: BLE001
                     pass  # If split fails, fall back to single task
 

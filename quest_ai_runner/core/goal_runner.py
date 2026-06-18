@@ -543,7 +543,7 @@ class SubprocessGoalRunner(DeepRunner):
         stop_monitor = threading.Event()
         monitor_thread = None
         if emit is not None:
-            _log.info("starting claude session monitor for deep run")
+            _log.debug("starting claude session monitor for deep run")
             monitor_thread = threading.Thread(
                 target=_monitor_claude_session,
                 args=(self.cfg.working_dir, emit, stop_monitor),
