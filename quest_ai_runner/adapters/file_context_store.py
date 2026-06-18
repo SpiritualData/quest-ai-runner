@@ -1766,7 +1766,18 @@ class FileContextStore(ContextAssemblerBase):
             card_id = card.get("id", "")
             card_ids.append(card_id)
             summary = card.get("summary", "(no summary)")
-            files = card.get("files", [])
+            # Use the pre-sorted file list (mtime descending = most recently modified first).
+            files = card.get("_sorted_files", card.get("files", []))
+
+            # When the LLM filter ran, restrict displayed files to the LLM-ranked set.
+            llm_cm = llm_meta_map.get(card_id)
+            if llm_cm is not None and llm_cm.files:
+                llm_path_set = set(llm_cm.files)
+                # Keep LLM-selected files in mtime order; then append remaining files
+                # so nothing is dropped from the staleness check.
+                llm_files = [fe for fe in files if fe.get("path", "") in llm_path_set]
+                other_files = [fe for fe in files if fe.get("path", "") not in llm_path_set]
+                files = llm_files + other_files
 
             file_lines: List[str] = []
             for fi, fe in enumerate(files):
@@ -1802,14 +1813,22 @@ class FileContextStore(ContextAssemblerBase):
         context_view = "\n\n---\n\n".join(view_parts)
 
         # --- Context transparency: collect the file paths surfaced by this arm ----------------
-        # One source entry per arm (keyword/IDF), listing the pinned file paths so the
-        # orchestrator can emit "Context from: docstring cards (file1.py, file2.py)".
+        # One source entry per arm (keyword/IDF), listing the pinned file paths (mtime-sorted,
+        # LLM-filtered when available) so the orchestrator can emit them for the user.
         _source_items: List[str] = []
         for card in top_cards:
-            for fe in card.get("files", []):
-                fp = fe.get("path", "")
-                if fp and fp not in _source_items:
-                    _source_items.append(fp)
+            card_id = card.get("id", "")
+            llm_cm = llm_meta_map.get(card_id)
+            if llm_cm is not None and llm_cm.files:
+                # LLM-ranked files only, in LLM relevance order
+                for fp in llm_cm.files:
+                    if fp and fp not in _source_items:
+                        _source_items.append(fp)
+            else:
+                for fe in card.get("_sorted_files", card.get("files", [])):
+                    fp = fe.get("path", "")
+                    if fp and fp not in _source_items:
+                        _source_items.append(fp)
         _sources = (
             [{"adapter": "keyword", "label": "docstring cards", "items": _source_items}]
             if _source_items else []
@@ -1817,17 +1836,33 @@ class FileContextStore(ContextAssemblerBase):
 
         # --- Card metadata: populate selection info for UI display and transparency ---------
         # Build metadata for each selected card so the orchestrator can emit which cards were chosen.
+        # Use the LLM-judged relevance score when available; fall back to a fixed 0.75 for IDF-only.
         card_metadata: List[Dict[str, Any]] = []
         for card in top_cards:
-            files_list = [fe.get("path", "") for fe in card.get("files", [])[:3]]
+            card_id = card.get("id", "")
+            llm_cm = llm_meta_map.get(card_id)
+            # LLM-ranked files (already relevance-ordered), else mtime-sorted files
+            if llm_cm is not None and llm_cm.files:
+                display_files = llm_cm.files[:3]
+                relevance_score = llm_cm.relevance_score
+            else:
+                display_files = [
+                    fe.get("path", "")
+                    for fe in card.get("_sorted_files", card.get("files", []))[:3]
+                ]
+                relevance_score = 0.75
             card_metadata.append({
-                "id": card.get("id", ""),
+                "id": card_id,
                 "title": card.get("summary", ""),
-                "relevance_score": 0.75,  # keyword match is fairly high confidence
+                "relevance_score": relevance_score,
                 "file_count": len(card.get("files", [])),
-                "files": files_list,
+                "files": display_files,
                 "adapter": "keyword",
             })
+
+        # Clean up the temp sort key we stashed on card dicts (they're in-memory cache copies).
+        for card in top_cards:
+            card.pop("_sorted_files", None)
 
         return AssembledContext(
             context_view=context_view,
