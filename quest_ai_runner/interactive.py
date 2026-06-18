@@ -36,7 +36,6 @@ Example workflow (task execution):
     ❯ implement markdown rendering for responses
     (AI identifies this as code work, shows planned changes)
 
-    ❯ /execute
     (gathers relevant sources, deep_runner applies changes)
 """
 from __future__ import annotations
@@ -938,7 +937,7 @@ _CTRL_C_WINDOW = 2.0   # seconds: second Ctrl+C within this window exits
 _SLASH_COMMANDS = [
     "/help", "/clear", "/reps", "/rep ", "/file ",
     "/quests", "/goal ", "/whoami", "/status", "/tasks",
-    "/execute", "/quit", "/q",
+    "/quit", "/q",
     "/models", "/model", "/model ", "/depth", "/depth ",
     "/system", "/replan",
     "/save ", "/save", "/load ", "/sessions",
@@ -1068,11 +1067,6 @@ Commands:
     /depth [level]       Alias for /model: light=haiku, standard=sonnet, deep=opus
     /system [text]       Show or set a custom system prompt prepended to persona
     /replan              Prime next turn for a fresh re-planning pass (uses opus)
-
-  ● Execution
-    /execute             Re-run with execution intent. Gathers context first, then applies changes
-                         (requires deep_runner configured). Use after AI identifies a code task.
-    Tab                  When multiple deep runs execute concurrently, switch to the next one
 
   ● Sessions
     /save [name]         Save this session (transcript + config) to disk
@@ -1335,7 +1329,16 @@ class InteractiveSession:
                         prefix = "▸ " if i == 1 else "  "
                         self._console.dim(f"  {prefix}{g}")
                     self._console.line("")
-                    self._console.dim("  Use '/execute' to run this task (requires deep_runner in config)")
+                    # Prompt user to confirm and execute (requires deep_runner in config)
+                    try:
+                        # Simple y/n confirmation without requiring /execute command
+                        response = input("  Execute these changes? (y/n): ").strip().lower()
+                        if response in ("y", "yes"):
+                            self._run_turn("Execute it. No more planning, just code it and apply changes now.")
+                        else:
+                            self._console.dim("  Changes not executed.")
+                    except (EOFError, KeyboardInterrupt):
+                        self._console.dim("  Cancelled.")
 
             self._last_user = user_text
             self._last_assistant = final.text or (
@@ -1461,8 +1464,6 @@ class InteractiveSession:
                 self._print_status(); continue
             if line == "/tasks":
                 self._print_tasks(); continue
-            if line == "/execute":
-                self._run_turn("Execute the previous task. Implement all goals from the last turn."); continue
             if line == "/quests":
                 self._cmd_quests(session); continue
             if line == "/reps":
