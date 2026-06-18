@@ -380,7 +380,7 @@ class QuestAITerminal(App):
         root_logger = logging.getLogger()
         root_logger.handlers.clear()  # Remove stderr handler from basicConfig
         log_handler = _RichLogHandler(self, self._tlog)
-        log_level = logging.DEBUG if self.verbose else logging.INFO
+        log_level = logging.INFO if self.verbose else logging.WARNING
         log_handler.setLevel(log_level)
         root_logger.addHandler(log_handler)
         root_logger.setLevel(log_level)
