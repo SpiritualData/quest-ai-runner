@@ -17,7 +17,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from ..core.adapters import ModelProviderBase
-from .retry_utils import retry_transient
+from .retry_utils import parse_json_with_retry, retry_transient
 
 _log = logging.getLogger("quest-ai-runner.gemini")
 
@@ -56,17 +56,23 @@ class GeminiProvider(ModelProviderBase):
         and extract the response.
         """
         client = self._get_client()
-        # Request structured JSON output with response_mime_type
-        self.call_count += 1
-        response = client.models.generate_content(
-            model=model,
-            contents=prompt,
-            config={"response_mime_type": "application/json"}
-        )
+
+        def _call() -> str:
+            # A FRESH structured-JSON generation each attempt, so a malformed response is re-asked.
+            self.call_count += 1
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt,
+                config={"response_mime_type": "application/json"},
+            )
+            return response.text
+
         try:
-            return json.loads(response.text)
-        except (json.JSONDecodeError, AttributeError):
-            # Fallback: return empty dict on parse failure
+            # Standard JSON-output retry: re-ask the model if its structured output won't parse into
+            # a dict/list, instead of silently degrading to {} on the first bad shape.
+            return parse_json_with_retry(
+                _call, validate=lambda o: isinstance(o, (dict, list)), label="gemini planner")
+        except Exception:  # noqa: BLE001 — after retries, fall back to a safe empty decision
             return {}
 
     @retry_transient(max_retries=3, base_delay=1.0)

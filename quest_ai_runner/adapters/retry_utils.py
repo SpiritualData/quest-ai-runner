@@ -10,6 +10,7 @@ Applies exponential backoff with jitter and retries up to max_retries times.
 """
 from __future__ import annotations
 
+import json
 import logging
 import random
 import time
@@ -17,6 +18,43 @@ from functools import wraps
 from typing import Any, Callable, Optional
 
 _log = logging.getLogger("quest-ai-runner.retry")
+
+
+def parse_json_with_retry(
+    produce: Callable[[], Any],
+    *,
+    max_retries: int = 2,
+    base_delay: float = 0.5,
+    validate: Optional[Callable[[Any], bool]] = None,
+    label: str = "json",
+) -> Any:
+    """Standard helper: call ``produce`` and parse its output as JSON, RETRYING ``produce`` when
+    parsing (or an optional ``validate(obj)`` check) fails.
+
+    Use this for ANY JSON produced by a model or worker (a structured planner/verdict, an LLM that
+    returns a JSON object, a tool envelope) so a malformed shape gets another attempt instead of
+    silently degrading to a fallback. ``produce`` should make a FRESH call each time and return
+    either a raw string (parsed via ``json.loads``) or an already-decoded ``dict``/``list``
+    (validated and returned as-is). Applies exponential backoff with jitter between attempts.
+
+    Returns the parsed object. Raises the last parse/validation error after the final attempt, so
+    the caller can apply its own fallback (e.g. a safe default) in one place.
+    """
+    last_err: Optional[Exception] = None
+    for attempt in range(max_retries + 1):
+        try:
+            raw = produce()
+            obj = raw if isinstance(raw, (dict, list)) else json.loads(raw)
+            if validate is None or validate(obj):
+                return obj
+            last_err = ValueError(f"{label}: output failed validation")
+        except (json.JSONDecodeError, ValueError, TypeError) as e:
+            last_err = e
+        if attempt < max_retries:
+            _log.warning("%s parse failed (attempt %d/%d): %s — retrying",
+                         label, attempt + 1, max_retries + 1, last_err)
+            time.sleep(base_delay * (2 ** attempt) + random.uniform(0, 0.2))
+    raise last_err if last_err is not None else ValueError(f"{label}: parse failed")
 
 
 def is_transient_error(exc: Exception) -> bool:

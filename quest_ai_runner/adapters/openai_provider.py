@@ -16,7 +16,7 @@ import time
 from typing import Any, Dict, List, Optional
 
 from ..core.adapters import ModelProviderBase
-from .retry_utils import retry_transient
+from .retry_utils import parse_json_with_retry, retry_transient
 
 
 class OpenAIProvider(ModelProviderBase):
@@ -52,18 +52,24 @@ class OpenAIProvider(ModelProviderBase):
         OpenAI's JSON mode (response_format={'type': 'json_object'}) ensures valid JSON output.
         """
         client = self._get_client()
-        response = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"},
-        )
-        if hasattr(response, "usage"):
-            self.tokens_in += getattr(response.usage, "prompt_tokens", 0) or 0
-            self.tokens_out += getattr(response.usage, "completion_tokens", 0) or 0
+
+        def _call() -> str:
+            # A FRESH JSON-mode completion each attempt, so a malformed response is re-asked.
+            response = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": prompt}],
+                response_format={"type": "json_object"},
+            )
+            if hasattr(response, "usage"):
+                self.tokens_in += getattr(response.usage, "prompt_tokens", 0) or 0
+                self.tokens_out += getattr(response.usage, "completion_tokens", 0) or 0
+            return response.choices[0].message.content or ""
+
         try:
-            content = response.choices[0].message.content
-            return json.loads(content) if content else {}
-        except (json.JSONDecodeError, AttributeError, IndexError):
+            # Standard JSON-output retry: re-ask the model if its structured output won't parse.
+            return parse_json_with_retry(
+                _call, validate=lambda o: isinstance(o, (dict, list)), label="openai planner")
+        except Exception:  # noqa: BLE001 — after retries, fall back to a safe empty decision
             return {}
 
     @retry_transient(max_retries=3, base_delay=1.0)
