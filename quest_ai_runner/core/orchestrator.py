@@ -961,6 +961,8 @@ class Orchestrator:
         provider: ModelProvider,
         registry: ModelRegistry,
         deep_runner: Optional[DeepRunner] = None,
+        deep_runners: Optional[Dict[str, Any]] = None,
+        deep_runner_classifier: Optional[Any] = None,
         escalation: Optional[EscalationSink] = None,
         config: Optional[OrchestratorConfig] = None,
         status: Optional[Callable[[str], None]] = None,
@@ -974,6 +976,11 @@ class Orchestrator:
         self.provider = provider
         self.registry = registry
         self.deep_runner = deep_runner
+        # Named deep-runner registry + classifier (both optional). When both are set, the
+        # classifier selects a runner key for each goal. Falls back to deep_runner on any
+        # failure or missing key. All existing behaviour is unchanged when either is absent.
+        self.deep_runners: Dict[str, Any] = deep_runners or {}
+        self.deep_runner_classifier: Optional[Any] = deep_runner_classifier
         # Generic conversation inbox for mid-run user messages. When wired, ``run`` auto-drains the
         # current conversation's pending messages between goal-loop steps, so ANY interface that
         # pushes to it (chat, Quest frontend, ...) gets mid-run message folding with no extra wiring.
@@ -1516,7 +1523,23 @@ class Orchestrator:
                             )
                         if preamble_parts:
                             kwargs["context_preamble"] = "\n\n".join(preamble_parts)
-                    return self.deep_runner.run_goal(**kwargs)
+                    # If named runners + classifier are registered, let the classifier pick which
+                    # runner handles this goal. Falls back to self.deep_runner on any failure.
+                    active_runner = self.deep_runner
+                    if self.deep_runners and self.deep_runner_classifier is not None:
+                        try:
+                            key = self.deep_runner_classifier(user_message, goal, brief)
+                            if key in self.deep_runners:
+                                active_runner = self.deep_runners[key]
+                                log.debug(f"deep_runner_classifier selected runner {key!r}")
+                            else:
+                                log.warning(
+                                    f"deep_runner_classifier returned unknown key {key!r}; "
+                                    f"using default runner"
+                                )
+                        except Exception as e:  # noqa: BLE001 — classifier failure must never block a run
+                            log.warning(f"deep_runner_classifier failed ({e}); using default runner")
+                    return active_runner.run_goal(**kwargs)
                 except Exception as e:  # noqa: BLE001
                     log.error(f"Deep runner failed: {type(e).__name__}: {e}", exc_info=True)
                     return DeepResult(met=False, error=type(e).__name__)

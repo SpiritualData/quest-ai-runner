@@ -70,6 +70,17 @@ class RunnerConfig:
     model_providers: Optional[dict] = None           # multi-provider support: dict of name -> ModelProvider (e.g. {"anthropic": AnthropicProvider(), "gemini": GeminiProvider()})
     model_provider_overrides: Optional[dict] = None  # per-tier provider routing (e.g. {"best": "anthropic", "fast": "gemini"})
     deep_runner: Optional[DeepRunner] = None         # SubprocessGoalRunner or another worker
+    # Named deep-runner registry. When non-empty and a ``deep_runner_classifier`` is
+    # also provided, the orchestrator calls the classifier to SELECT which runner handles
+    # each deep goal, rather than always using the single ``deep_runner``. The consumer
+    # maps string keys (e.g. "code", "text", "delegate") to runner implementations.
+    # Generic mechanism — consumer supplies both the keys and the classifier logic.
+    deep_runners: Dict[str, Any] = field(default_factory=dict)
+    # Callable that selects a runner key from ``deep_runners`` for a given goal.
+    # Signature: (message: str, goal: str, brief: str) -> str
+    # Must return a key present in ``deep_runners``; falls back to ``deep_runner`` on KeyError.
+    # Left None -> ``deep_runner`` is always used (backward-compatible default).
+    deep_runner_classifier: Optional[Any] = None
     escalation: Optional[EscalationSink] = None      # QuestDecisionSink (defaults from quest client)
     # The describer for image attachments the ANSWERING model can't view natively (a non-vision
     # model, or a text-only provider like the keyless CLI). The runner OWNS multimodal because the
@@ -643,6 +654,8 @@ def build_orchestrator(
         provider=cfg.model_provider,
         registry=build_registry(cfg),
         deep_runner=cfg.deep_runner,
+        deep_runners=cfg.deep_runners,
+        deep_runner_classifier=cfg.deep_runner_classifier,
         escalation=cfg.escalation,
         config=cfg.orchestrator,
         status=status,
