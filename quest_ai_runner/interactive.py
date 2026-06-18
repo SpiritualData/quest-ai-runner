@@ -494,18 +494,116 @@ def _model_label(model_id: Optional[str]) -> str:
     return model_id.split("-")[0]
 
 
+class _DeepRunTracker:
+    """Track multiple concurrent deep runs and their latest output.
+
+    When multiple deep tasks execute concurrently, shows a dashboard with latest
+    output from each, and allows toggling to view one run's full progress.
+    """
+
+    def __init__(self) -> None:
+        self._runs: dict = {}  # run_id -> {'goal': str, 'status': str, 'output': str, 'started': float}
+        self._lock = threading.Lock()
+        self._active_run_id: Optional[str] = None  # which run is currently displayed in detail
+
+    def add_run(self, run_id: str, goal: str) -> None:
+        """Register a new deep run."""
+        with self._lock:
+            self._runs[run_id] = {
+                'goal': goal,
+                'status': 'running',
+                'output': '',
+                'started': time.time(),
+                'exec_lines': [],  # accumulate exec events for this run
+            }
+            if self._active_run_id is None:
+                self._active_run_id = run_id
+
+    def update_run_output(self, run_id: str, text: str) -> None:
+        """Add output to a deep run's progress."""
+        with self._lock:
+            if run_id in self._runs:
+                # Keep latest 10 lines of output for dashboard view
+                current = self._runs[run_id]['output']
+                lines = (current + '\n' + text).strip().split('\n')
+                self._runs[run_id]['output'] = '\n'.join(lines[-10:])
+                self._runs[run_id]['exec_lines'].append(text)
+
+    def set_run_status(self, run_id: str, status: str) -> None:
+        """Update a run's status (running/done/error)."""
+        with self._lock:
+            if run_id in self._runs:
+                self._runs[run_id]['status'] = status
+
+    def get_dashboard(self) -> str:
+        """Return a dashboard summary of all runs."""
+        with self._lock:
+            if not self._runs:
+                return ""
+
+            lines = []
+            for run_id, info in sorted(self._runs.items()):
+                status_icon = "▶" if info['status'] == 'running' else ("✓" if info['status'] == 'done' else "✗")
+                elapsed = time.time() - info['started']
+                mins, secs = divmod(int(elapsed), 60)
+                time_str = f"{mins}m{secs}s" if mins > 0 else f"{secs}s"
+
+                lines.append(f"  {status_icon} {run_id[:20]}: {info['goal'][:40]} ({time_str})")
+                if info['output']:
+                    last_line = info['output'].split('\n')[-1]
+                    lines.append(f"     {_DIM}{last_line[:60]}{_RESET}")
+
+            return "\n".join(lines)
+
+    def set_active_run(self, run_id: str) -> bool:
+        """Switch to viewing a specific run's detailed progress."""
+        with self._lock:
+            if run_id in self._runs:
+                self._active_run_id = run_id
+                return True
+        return False
+
+    def next_run(self) -> Optional[str]:
+        """Cycle to the next run."""
+        with self._lock:
+            run_ids = sorted(self._runs.keys())
+            if not run_ids:
+                return None
+            if self._active_run_id is None or self._active_run_id not in run_ids:
+                self._active_run_id = run_ids[0]
+                return self._active_run_id
+            idx = run_ids.index(self._active_run_id)
+            self._active_run_id = run_ids[(idx + 1) % len(run_ids)]
+            return self._active_run_id
+
+    def get_active_run(self) -> Optional[str]:
+        """Get the currently active run ID."""
+        with self._lock:
+            return self._active_run_id
+
+    def get_run_detail(self, run_id: Optional[str]) -> str:
+        """Get full execution details for a run."""
+        with self._lock:
+            if run_id and run_id in self._runs:
+                info = self._runs[run_id]
+                return f"\n".join(info.get('exec_lines', [])[-50:])  # last 50 exec events
+        return ""
+
+
 class _TurnRenderer:
     """Routes ProgressEvents to the context panel and console for one turn."""
 
     def __init__(self, console: _Console, panel: _ContextPanel,
-                 rep_name: str) -> None:
+                 rep_name: str, deep_tracker: Optional[_DeepRunTracker] = None) -> None:
         self._c = console
         self._panel = panel
         self._rep_name = rep_name
+        self._deep_tracker = deep_tracker or _DeepRunTracker()
         self._in_partial = False
         self._partial_started = False
         self._ai_label_printed = False
         self._ev = None
+        self._current_deep_run_id: Optional[str] = None  # track which deep run we're in
 
     def _types(self):
         if self._ev is None:
@@ -723,7 +821,28 @@ class _TurnRenderer:
                 f"({total} source{'s' if total != 1 else ''} so far)"
             )
         elif t == ev["exec"]:
-            self._panel.set_phase(text or "running…")
+            # Track execution progress in deep runs
+            run_id = data.get("run_id") or "default"
+
+            # If this is a new/first exec event for this run, register it
+            if run_id != self._current_deep_run_id:
+                goal = data.get("goal") or "executing work…"
+                self._deep_tracker.add_run(run_id, goal)
+                self._current_deep_run_id = run_id
+
+            # Update this run's output
+            if text:
+                self._deep_tracker.update_run_output(run_id, text)
+
+            # Show dashboard if multiple runs, otherwise just update phase
+            active_runs = len(self._deep_tracker._runs)
+            if active_runs > 1:
+                self._panel.stop()
+                self._c.dim("\n  Deep runs dashboard (press Tab to switch):")
+                self._c.dim(self._deep_tracker.get_dashboard())
+                self._panel.start()
+            else:
+                self._panel.set_phase(text or "running…")
         elif t == ev["milestone"]:
             self._panel.stop()
             self._print_success(text)
@@ -814,6 +933,9 @@ def _make_prompt_session(last_ctrl_c: list):
     from prompt_toolkit.styles import Style
     kb = KeyBindings()
 
+    # Store deep run tracker for Tab key access
+    deep_tracker = _DeepRunTracker()
+
     @kb.add("c-c")
     def _cc(event):
         now = time.monotonic()
@@ -825,6 +947,16 @@ def _make_prompt_session(last_ctrl_c: list):
         # Write the hint directly to the real stdout (patch_stdout corrupts \033 bytes).
         sys.__stdout__.write(f"\n{_DIM}  (press Ctrl+C again to exit){_RESET}\n")
         sys.__stdout__.flush()
+
+    @kb.add("tab")
+    def _tab(event):
+        """Switch to next deep run when multiple are executing."""
+        next_run = deep_tracker.next_run()
+        if next_run:
+            # Brief visual feedback
+            event.app.current_buffer.reset()
+            sys.__stdout__.write(f"\n{_DIM}  → Viewing: {next_run}{_RESET}\n")
+            sys.__stdout__.flush()
 
     style = Style.from_dict({
         '': '#ffffff',
@@ -878,6 +1010,7 @@ Commands:
   ● Execution
     /execute             Re-run with execution intent. Gathers context first, then applies changes
                          (requires deep_runner configured). Use after AI identifies a code task.
+    Tab                  When multiple deep runs execute concurrently, switch to the next one
 
   ● Sessions
     /save [name]         Save this session (transcript + config) to disk
@@ -968,6 +1101,8 @@ class InteractiveSession:
         self._sessions_dir: Path = Path.home() / ".quest-ai-runner" / "sessions"
         # Track persona source file path for persistence (/personas, /reps, /file)
         self._persona_file: Optional[str] = None
+        # Feature: multi-deep-run tracking (dashboard view)
+        self._deep_tracker = _DeepRunTracker()
         # Restore persisted model/persona from qar_state.json (best-effort)
         self._load_session_state()
         # Build dynamic model tier menu from the registry
@@ -1025,7 +1160,7 @@ class InteractiveSession:
             self._console.dim("  Replan mode: using opus for this turn.")
 
         panel = _ContextPanel(self._console)
-        renderer = _TurnRenderer(self._console, panel, self._rep_name)
+        renderer = _TurnRenderer(self._console, panel, self._rep_name, self._deep_tracker)
         renderer.begin()
 
         t0 = time.monotonic()
