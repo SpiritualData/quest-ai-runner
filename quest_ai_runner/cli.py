@@ -261,6 +261,16 @@ def main(argv=None) -> int:
     paste_p.add_argument("--goal-id", default=None,
                          help="optional: quest goal id for metadata")
 
+    # --- search-context subcommand: show what context cards a query would surface --
+    sc_p = sub.add_parser("search-context", help="show which context cards a query selects")
+    sc_p.add_argument("query", help="the input text to search context for")
+    sc_p.add_argument("--corpus", default=None, metavar="PATH",
+                      help="corpus root (default: QAR_CORPUS_ROOT env var or cwd)")
+    sc_p.add_argument("--cards-dir", default=None, metavar="PATH",
+                      help="cards directory (default: <corpus>/.quest-context)")
+    sc_p.add_argument("--no-llm", action="store_true",
+                      help="skip LLM relevance filter, show raw IDF results only")
+
     # --- poll subcommand (and legacy flat flags, kept for back-compat) --------
     poll_p = sub.add_parser("poll", help="poll Quest for due tasks and run them")
     poll_p.add_argument("--once", action="store_true", help="one scan then exit (cron mode)")
@@ -584,6 +594,43 @@ def main(argv=None) -> int:
 
         print(f"Saved to {card_path}")
         print(f"Card ID: {card_id}")
+        return 0
+
+    # --- search-context: show which cards a query selects ---------------------
+    if args.command == "search-context":
+        import os as _os
+        corpus = getattr(args, "corpus", None) or _os.getenv("QAR_CORPUS_ROOT") or _os.getcwd()
+        cards_dir = getattr(args, "cards_dir", None) or _os.getenv("QAR_CONTEXT_CARDS_DIR") or _os.path.join(corpus, ".quest-context")
+
+        from .adapters.file_context_store import FileContextStore
+        provider = None
+        if not getattr(args, "no_llm", False):
+            cfg = _config_from_env()
+            provider = cfg.model_provider  # may be None if no key configured
+
+        store = FileContextStore(cards_dir, repo_root=corpus, auto_bootstrap=False, provider=provider)
+        result = store.assemble(args.query)
+
+        if not result.card_ids:
+            print("No context cards matched.")
+            return 0
+
+        print(f"Query: {args.query}")
+        print(f"Cards: {len(result.card_ids)}" + (" (IDF only)" if getattr(args, "no_llm", False) else " (IDF + LLM filter)"))
+        print()
+        for m in result.card_metadata:
+            score_str = f"{m['relevance_score']:.2f}"
+            print(f"  [{m['adapter']}] {m['id']}")
+            print(f"    score: {score_str}  files: {m['file_count']}")
+            for f in m.get("files", []):
+                print(f"      -> {f}")
+        if result.sources:
+            print()
+            print("Sources:")
+            for src in result.sources:
+                items = src.get("items", [])
+                label = src.get("label", src.get("adapter", ""))
+                print(f"  {label}: {', '.join(items[:5])}" + (f" (+{len(items)-5} more)" if len(items) > 5 else ""))
         return 0
 
     # --- poll (default when no subcommand given) ------------------------------

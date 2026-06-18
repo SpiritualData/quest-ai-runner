@@ -1657,6 +1657,7 @@ class FileContextStore(ContextAssemblerBase):
         # a source file and its test file both match the same query, the source file ranks first.
         # Tie-break by (usage_count DESC, last_verified_at DESC).
         scored: List[tuple] = []  # (-score, -usage_count, -last_verified_ts, card_dict)
+        idf_score_map: Dict[str, float] = {}  # card_id -> raw IDF score (for relevance display)
         for cid, card in cards.items():
             card_terms = card_term_sets[cid]
             base_score = sum(_idf(t) for t in task_kws if t in card_terms)
@@ -1668,6 +1669,7 @@ class FileContextStore(ContextAssemblerBase):
             # falls back to plain Claude Code (never worse). This is what makes the layer dominate:
             # it adds a grounding only when confident, and otherwise equals the baseline.
             if score >= self._confidence_threshold:
+                idf_score_map[cid] = score
                 usage = card.get("usage_count", 0)
                 verified_at = card.get("provenance", {}).get("last_verified_at", "") or ""
                 scored.append((-score, -usage, -len(verified_at), verified_at, card))
@@ -1837,7 +1839,8 @@ class FileContextStore(ContextAssemblerBase):
 
         # --- Card metadata: populate selection info for UI display and transparency ---------
         # Build metadata for each selected card so the orchestrator can emit which cards were chosen.
-        # Use the LLM-judged relevance score when available; fall back to a fixed 0.75 for IDF-only.
+        # Use the LLM-judged relevance score when available; otherwise use the normalized IDF score.
+        _max_idf = max(idf_score_map.values()) if idf_score_map else 1.0
         card_metadata: List[Dict[str, Any]] = []
         for card in top_cards:
             card_id = card.get("id", "")
@@ -1851,7 +1854,7 @@ class FileContextStore(ContextAssemblerBase):
                     fe.get("path", "")
                     for fe in card.get("_sorted_files", card.get("files", []))[:3]
                 ]
-                relevance_score = 0.75
+                relevance_score = idf_score_map.get(card_id, 0.0) / _max_idf
             card_metadata.append({
                 "id": card_id,
                 "title": card.get("summary", ""),
