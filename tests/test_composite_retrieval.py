@@ -315,6 +315,39 @@ def test_conversation_clustering_small_set(temp_sessions):
     assert len(sampled) <= len(conv_ids)
 
 
+def test_claude_conversations_adapter_read_by_filename_with_corpus_root(temp_corpus, temp_sessions):
+    """Test that read_section() finds conversations by filename even when corpus_root uses full paths.
+
+    This is a regression test for the ID lookup bug where conversations stored with
+    full paths (e.g., 'conversations:design_discussion') couldn't be looked up by
+    filename stem (e.g., 'design_discussion').
+    """
+    import shutil
+
+    # Copy conversations to a subdirectory under corpus_root
+    conversations_dir = temp_corpus / "conversations"
+    conversations_dir.mkdir()
+
+    for session_file in temp_sessions.glob("*.json"):
+        shutil.copy(session_file, conversations_dir / session_file.name)
+
+    # Create adapter with corpus_root (uses full paths as keys)
+    adapter = ClaudeConversationsAdapter(corpus_root=str(temp_corpus))
+
+    # Verify conversations are stored with full path keys
+    assert "conversations:design_discussion" in adapter._conversations
+    assert "conversations:error_handling" in adapter._conversations
+
+    # BUG FIX: read_section() should find by filename STEM even with full path keys
+    obs = adapter.read_section("design_discussion")
+    assert obs.kind == "read", f"Expected kind='read' but got '{obs.kind}': {obs.error if hasattr(obs, 'error') else ''}"
+    assert "pattern" in obs.text.lower()
+
+    # Also verify lookup map was populated
+    assert adapter._conv_id_lookup["design_discussion"] == "conversations:design_discussion"
+    assert adapter._conv_id_lookup["error_handling"] == "conversations:error_handling"
+
+
 def test_conversation_query_with_filepaths(temp_sessions):
     """Test that query() returns conversations with FILEPATH markers."""
     adapter = ClaudeConversationsAdapter(sessions_dir=str(temp_sessions))

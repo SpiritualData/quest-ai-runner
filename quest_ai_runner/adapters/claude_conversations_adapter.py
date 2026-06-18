@@ -50,6 +50,7 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
         self.sessions_dir = Path(sessions_dir) if sessions_dir else Path.home() / ".claude" / "sessions"
         self._conversations: Dict[str, Any] = {}
         self._conversation_filepaths: Dict[str, Path] = {}  # Track filepath for each conversation
+        self._conv_id_lookup: Dict[str, str] = {}  # Map from filename stem to unique key (for faster lookup)
         self._load_conversations()
 
     def _load_conversations(self) -> None:
@@ -103,17 +104,26 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
                         if not self._is_claude_conversation(data):
                             continue  # Skip non-conversation JSON files
 
-                        # Use relative path from corpus_root as session_id (for uniqueness)
+                        # Generate a unique key for this conversation, but allow lookup by filename stem.
+                        # For corpus_root, use path prefix to disambiguate same-name files.
+                        # For sessions_dir, use just the filename.
+                        file_stem = session_file.stem
                         if self.corpus_root:
                             try:
                                 rel_path = session_file.relative_to(self.corpus_root)
-                                session_id = str(rel_path.with_suffix("")).replace("/", ":")
+                                # Use path:filename as unique key to handle collisions
+                                unique_key = str(rel_path.with_suffix("")).replace("/", ":")
                             except ValueError:
-                                session_id = session_file.stem
+                                unique_key = file_stem
                         else:
-                            session_id = session_file.stem
-                        self._conversations[session_id] = data
-                        self._conversation_filepaths[session_id] = session_file.resolve()
+                            unique_key = file_stem
+
+                        self._conversations[unique_key] = data
+                        self._conversation_filepaths[unique_key] = session_file.resolve()
+
+                        # Add lookup from filename stem to unique key
+                        # If collision occurs, keep the most recent one (last loaded wins)
+                        self._conv_id_lookup[file_stem] = unique_key
                     except (json.JSONDecodeError, OSError):
                         pass  # Skip unreadable files
             except Exception:  # noqa: BLE001
@@ -255,13 +265,23 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
     ) -> Observation:
         """Read a conversation by id or path.
 
-        rel_path is expected to be a conversation id (session name).
+        rel_path is expected to be a conversation id (session name, or filename stem).
+        Looks up the conversation using the stored mapping.
         """
-        conv_id = rel_path.split("/")[-1]  # e.g., "my_session" from "conversations/my_session"
-        if conv_id not in self._conversations:
+        # Extract the conversation id from the path (just the filename, no directory)
+        conv_id = rel_path.split("/")[-1]
+
+        # Try direct lookup first (if the exact key exists in _conversations)
+        unique_key = None
+        if conv_id in self._conversations:
+            unique_key = conv_id
+        # Then try the lookup map (filename stem → unique key)
+        elif conv_id in self._conv_id_lookup:
+            unique_key = self._conv_id_lookup[conv_id]
+        else:
             return Observation(kind="error", error=f"conversation not found: {conv_id}")
 
-        conv_text = self._conversation_to_text(self._conversations[conv_id])
+        conv_text = self._conversation_to_text(self._conversations[unique_key])
 
         # Apply line range if specified
         if start_line or end_line:
@@ -455,7 +475,12 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
             ]
 
     def list_sources(self) -> Observation:
-        """List available conversations."""
+        """List available conversations.
+
+        Returns all loaded conversations. Use this sparingly — it exposes all loaded
+        conversations, including previous/unrelated ones. Prefer explicit read_section()
+        by specific conversation ID when possible.
+        """
         if not self._conversations:
             return Observation(kind="error", error="no conversations loaded")
 

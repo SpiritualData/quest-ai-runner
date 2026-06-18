@@ -200,10 +200,15 @@ class TaskExecutor:
         # Fetch prior conversation history if this task was delegated from a chat
         if conv_id and self._retrieval:
             try:
-                # Try to read the conversation from the retrieval adapter
+                # Try to read the EXACT conversation by its conv_id
                 obs = self._retrieval.read_section(str(conv_id))
                 if obs and obs.kind == "read" and obs.text:
-                    parts.append(f"=== Prior Conversation Context ===\n{obs.text}\n")
+                    # Explicitly mark which conversation we loaded to disambiguate from previous tasks
+                    parts.append(f"=== Prior Conversation Context (conv_id={conv_id}) ===\n{obs.text}\n")
+                elif obs and obs.kind == "error":
+                    # Conversation not found is non-critical, but log it for debugging
+                    # (the task still runs with just the goal/quest context, not the prior chat)
+                    pass
             except Exception:  # noqa: BLE001 — conversation fetch failure is non-critical
                 pass
 
