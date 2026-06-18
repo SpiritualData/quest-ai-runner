@@ -2342,17 +2342,25 @@ class Orchestrator:
                                 return result
                             normalized = normalize_tasks(tasks_json)
                             # Parse nested structure: flat items run in parallel, nested lists run sequentially
-                            # NOTE: Currently flattens sequential groups (runs all concurrently).
-                            # TODO: implement proper sequential execution in _run_deep to honor nesting:
-                            #   - run sequential groups one after another
-                            #   - run independent parallel groups concurrently
                             for item in normalized[:4]:  # Max 4 parallel
                                 if isinstance(item, tuple) and item[0] == "_seq_":
-                                    # Sequential group: currently flattened (loses order)
-                                    # Future: keep as group and execute sequentially in _run_deep
-                                    deep_subtasks.extend(item[1])
+                                    # Sequential group: tasks run one after another
+                                    deep_subtasks.append(item)  # Keep structure for _run_deep
                                 else:
                                     deep_subtasks.append(item)
+
+                            # Show parsed tasks to user
+                            if deep_subtasks:
+                                emit.status(f"Split into {len(deep_subtasks)} task(s)")
+                                for i, task in enumerate(deep_subtasks, 1):
+                                    if isinstance(task, tuple) and task[0] == "_seq_":
+                                        # Sequential group
+                                        goals = [t.get("goal", "")[:50] for t in task[1]]
+                                        emit.status(f"  {i}. (sequential) {' → '.join(goals)}")
+                                    else:
+                                        # Single parallel task
+                                        goal = task.get("goal", "")[:60]
+                                        emit.status(f"  {i}. {goal}")
                 except Exception:  # noqa: BLE001
                     pass  # If split fails, fall back to single task
 
