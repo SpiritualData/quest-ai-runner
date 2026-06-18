@@ -573,19 +573,18 @@ class _DeepRunTracker:
                 mins, secs = divmod(int(elapsed), 60)
                 time_str = f"{mins}m{secs}s" if mins > 0 else f"{secs}s"
 
-                # Task header
-                lines.append(f"{status_icon} {run_id[:8]}: {time_str}")
+                # Show goal (not task ID)
+                goal = info['goal'][:60]
+                lines.append(f"{status_icon} {time_str}: {goal}")
 
-                # Show last 2-3 output lines with indenting
+                # Show last output line
                 if info['output']:
-                    output_lines = info['output'].split('\n')[-3:]
-                    for out_line in output_lines:
-                        if out_line.strip():
-                            # Indent file paths more
-                            if '/' in out_line:
-                                lines.append(f"  → {out_line[:70]}")
-                            else:
-                                lines.append(f"  {out_line[:70]}")
+                    last_line = info['output'].split('\n')[-1].strip()
+                    if last_line:
+                        if '/' in last_line:
+                            lines.append(f"    → {last_line[:66]}")
+                        else:
+                            lines.append(f"    {last_line[:66]}")
 
             return "\n".join(lines)
 
@@ -887,6 +886,7 @@ class _TurnRenderer:
         elif t == ev["exec"]:
             # Track execution progress in deep runs
             run_id = data.get("run_id") or "default"
+            event_count = data.get("event_number", 0)
 
             # If this is a new/first exec event for this run, register it
             if run_id != self._current_deep_run_id:
@@ -897,28 +897,23 @@ class _TurnRenderer:
                 self._panel.stop()
                 self._c.line("")
                 if self._c._color:
-                    self._c.line(f"{_BOLD}{_BRIGHT_CYAN}GOAL:{_RESET} {goal}")
+                    self._c.line(f"{_BOLD}{_BRIGHT_CYAN}{goal}{_RESET}")
                 else:
-                    self._c.line(f"GOAL: {goal}")
+                    self._c.line(f"{goal}")
                 self._panel.start()
 
             # Update this run's output (accumulate without printing every line)
             if text:
                 self._deep_tracker.update_run_output(run_id, text)
-                # Don't print individual exec events; show dashboard instead
-                # (keeps output clean and grouped)
 
-            # Show dashboard with latest output from all runs
-            active_runs = len(self._deep_tracker._runs)
-            if active_runs > 0:
-                # Periodically refresh dashboard (every 2 events or so)
+            # Show dashboard only occasionally (every 10 events) to avoid flicker
+            if event_count % 10 == 0 and event_count > 0:
                 self._panel.stop()
                 dashboard = self._deep_tracker.get_dashboard()
                 if dashboard:
-                    self._c.dim("\n  Progress from all deep runs:")
                     for line in dashboard.split('\n'):
                         if line.strip():
-                            self._c.dim("    " + line)  # Extra indent for clarity
+                            self._c.dim("  " + line)
                 self._panel.start()
         elif t == ev["milestone"]:
             self._panel.stop()
