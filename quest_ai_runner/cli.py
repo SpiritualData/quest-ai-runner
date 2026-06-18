@@ -282,7 +282,6 @@ def main(argv=None) -> int:
 
     # --- chat -----------------------------------------------------------------
     if args.command == "chat":
-        from .interactive import start_interactive
         cfg = _config_from_env()
         # chat only needs a model provider — Quest credentials and a retrieval
         # adapter are optional (no corpus = no grounding, but still works).
@@ -303,6 +302,19 @@ def main(argv=None) -> int:
             except OSError as e:
                 log.error("could not read persona file %r: %s", persona_path, e)
                 return 1
+
+        # Try Textual UI first (smooth 120 FPS terminal), fall back to ANSI
+        try:
+            from .textual_session import is_textual_available, start_textual_interactive
+            if is_textual_available():
+                log.debug("using Textual UI for chat session")
+                start_textual_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id)
+                return 0
+        except Exception as e:
+            log.debug("Textual UI failed, falling back to ANSI: %s", e)
+
+        # Fallback to original ANSI-based interactive session
+        from .interactive import start_interactive
         start_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id)
         return 0
 

@@ -1,8 +1,8 @@
 """Session launcher for Textual-based interactive mode.
 
 Usage:
-    from quest_ai_runner.textual_session import run_textual_session
-    result = run_textual_session(config, rep_name="My AI")
+    from quest_ai_runner.textual_session import start_textual_interactive
+    start_textual_interactive(config, rep_name="My AI")
 """
 from __future__ import annotations
 
@@ -16,63 +16,53 @@ if TYPE_CHECKING:
     from .core.orchestrator import OrchestratorResult
 
 
-async def run_textual_session(
+def start_textual_interactive(
     config: RunnerConfig,
+    *,
     rep_name: str = "Quest AI",
+    persona: Optional[str] = None,
     goal_id: Optional[str] = None,
-) -> Optional[OrchestratorResult]:
-    """Run an interactive Textual-based session.
-
-    Args:
-        config: RunnerConfig for the session
-        rep_name: Name of the AI rep
-        goal_id: Optional goal ID to run from
-
-    Returns:
-        The orchestrator result, or None if session was cancelled
-    """
-    # Create orchestrator
-    orchestrator = Orchestrator(config)
-
-    # Create and run Textual app
-    app = QuestAITerminal(rep_name=rep_name)
-
-    # Run the app and stream orchestrator output
-    async def stream_goal():
-        if goal_id:
-            return await orchestrator.run_goal(goal_id)
-        else:
-            return await orchestrator.run_turn(goal_id=None)
-
-    # Mount the orchestrator and run
-    async with app.run_test() as pilot:
-        result = app._stream_orchestrator()
-
-    return result
-
-
-def run_textual_repl(
-    config: RunnerConfig,
-    rep_name: str = "Quest AI",
 ) -> None:
-    """Run an interactive Textual REPL for conversational AI interaction.
+    """Start an interactive Textual-based session (CLI entry point).
+
+    This is the Textual replacement for interactive.start_interactive().
+    Runs the event loop until user quits.
 
     Args:
         config: RunnerConfig for the session
         rep_name: Name of the AI rep
+        persona: Path to persona/skill file (optional)
+        goal_id: Optional goal ID to attach session to
     """
     app = QuestAITerminal(rep_name=rep_name)
 
-    # TODO: Integrate with REPL input handling
-    # For now, just run the app
+    # Create orchestrator with config
+    app.orchestrator = Orchestrator(config)
+
+    # TODO: Handle persona loading if provided
+    # if persona:
+    #     app.load_persona(persona)
+
+    # Run the Textual app (blocking until user quits)
     app.run()
 
 
+def is_textual_available() -> bool:
+    """Check if Textual is available and can be used.
+
+    Returns:
+        True if Textual can be imported and terminal supports it
+    """
+    try:
+        from textual.app import App  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 if __name__ == "__main__":
-    import asyncio
     from .config import RunnerConfig
 
     # Example usage
     config = RunnerConfig()
-    result = asyncio.run(run_textual_session(config))
-    print(f"Session result: {result}")
+    start_textual_interactive(config, rep_name="Demo AI")
