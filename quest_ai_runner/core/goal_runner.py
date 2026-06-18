@@ -401,8 +401,9 @@ def _monitor_claude_session(
             _log.debug("could not locate claude project dir after %.1f seconds", max_wait_seconds)
             return
 
-        _log.debug("found claude project dir: %s", project_dir)
+        _log.info("found claude project dir: %s", project_dir)
         processed_lines: Set[str] = set()
+        event_count = 0
 
         while not stop_event.is_set():
             try:
@@ -411,6 +412,8 @@ def _monitor_claude_session(
                 if not jsonl_file:
                     time.sleep(poll_interval)
                     continue
+
+                _log.debug("monitoring session file: %s", jsonl_file)
 
                 # Read and process new lines from the JSONL file
                 try:
@@ -427,6 +430,8 @@ def _monitor_claude_session(
                                 # Format and emit the message as a progress event
                                 msg_text = _format_message_text(msg)
                                 if msg_text:
+                                    event_count += 1
+                                    _log.debug("emitting exec event #%d: %s", event_count, msg_text[:80])
                                     callback(ProgressEvent(
                                         type=EVENT_EXEC,
                                         text=msg_text,
@@ -527,12 +532,15 @@ class SubprocessGoalRunner(DeepRunner):
         stop_monitor = threading.Event()
         monitor_thread = None
         if emit is not None:
+            _log.info("starting claude session monitor for deep run")
             monitor_thread = threading.Thread(
                 target=_monitor_claude_session,
                 args=(self.cfg.working_dir, emit, stop_monitor),
                 daemon=True
             )
             monitor_thread.start()
+        else:
+            _log.debug("emit callback not provided; not starting session monitor")
 
         try:
             proc = subprocess.Popen(
