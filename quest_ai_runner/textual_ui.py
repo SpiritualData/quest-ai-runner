@@ -35,6 +35,7 @@ from textual.widgets import Footer, Header, Input, LoadingIndicator, RichLog, St
 
 from rich.markdown import Markdown as RichMarkdown
 from rich.text import Text
+import logging
 
 from .interactive import (
     InteractiveSession,
@@ -109,6 +110,38 @@ class _RichLogConsole(_Console):
             return max(40, min(self._app.size.width - 6, 100))
         except Exception:  # noqa: BLE001
             return 88
+
+
+# ── Logging handler for RichLog ────────────────────────────────────────────────
+#
+# Captures Python logging output and writes it to the RichLog with proper wrapping,
+# so log messages don't get truncated at the terminal edge.
+
+class _RichLogHandler(logging.Handler):
+    """A logging handler that writes to a Textual RichLog (thread-safe)."""
+
+    def __init__(self, app: "QuestAITerminal", log: RichLog) -> None:
+        super().__init__()
+        self._app = app
+        self._tlog = log
+        self.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = self.format(record)
+            text = Text.from_ansi(msg)
+            text.no_wrap = False
+
+            def _write_impl():
+                self._tlog.write(text)
+
+            thread_id = getattr(self._app, "_ui_thread_id", None)
+            if thread_id is not None and threading.get_ident() != thread_id:
+                self._app.call_from_thread(_write_impl)
+            else:
+                _write_impl()
+        except Exception:  # noqa: BLE001
+            self.handleError(record)
 
 
 # ── Live widgets ────────────────────────────────────────────────────────────
@@ -341,6 +374,15 @@ class QuestAITerminal(App):
         # Redirect the session's console into our transcript and print the header.
         self._console = _RichLogConsole(self, self._tlog)
         self.sess._console = self._console
+
+        # Capture Python logging output into the RichLog (not stderr) for proper wrapping.
+        root_logger = logging.getLogger()
+        root_logger.handlers.clear()  # Remove stderr handler from basicConfig
+        log_handler = _RichLogHandler(self, self._tlog)
+        log_handler.setLevel(logging.DEBUG)
+        root_logger.addHandler(log_handler)
+        root_logger.setLevel(logging.DEBUG)
+
         self._print_header()
         inp.focus()
 
