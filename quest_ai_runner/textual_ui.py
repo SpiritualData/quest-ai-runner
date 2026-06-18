@@ -198,7 +198,7 @@ class ContextPanel(Static):
             lines.append("[bold cyan]\U0001F4C7 Context cards[/bold cyan]")
             for card in self.cards:
                 cid = card.get("id", "?")
-                title = (card.get("title") or "(no title)")[:50]
+                title = card.get("title") or "(no title)"
                 adapter = card.get("adapter", "")
                 score = card.get("relevance_score", 0)
                 fcount = card.get("file_count", len(card.get("files", [])))
@@ -217,7 +217,7 @@ class ContextPanel(Static):
             lines.append("[bold cyan]⌕ Sources[/bold cyan]")
             for src in self.sources[-6:]:
                 prefix = "⌕" if src.startswith("(searched") else "↗"
-                label = src if len(src) <= 70 else "…" + src[-67:]
+                label = src
                 lines.append(f"  {prefix} [dim]{label}[/dim]")
             if len(self.sources) > 6:
                 lines.append(f"  [dim]… and {len(self.sources) - 6} more[/dim]")
@@ -257,7 +257,9 @@ class DeepActivity(Static):
         if not self._dashboard.strip():
             return Text("")
         hint = "  [d] expand  [Tab] next agent" if self._n_runs > 1 else "  [d] expand"
-        return Text.from_ansi(self._dashboard + f"\x1b[2m\n{hint}\x1b[0m")
+        t = Text.from_ansi(self._dashboard + f"\x1b[2m\n{hint}\x1b[0m")
+        t.no_wrap = False
+        return t
 
 
 class DeepDetailPanel(Static):
@@ -313,7 +315,9 @@ class DeepDetailPanel(Static):
         tail = self._lines[-self.MAX_LINES:]
         body = "\n".join(f"  {ln}" for ln in tail)
         footer = f"\x1b[2m{nav_hint}\x1b[0m"
-        return Text.from_ansi(f"\x1b[1;36m{header}\x1b[0m\n{body}\n{footer}")
+        t = Text.from_ansi(f"\x1b[1;36m{header}\x1b[0m\n{body}\n{footer}")
+        t.no_wrap = False
+        return t
 
 
 # ── Main app ──────────────────────────────────────────────────────────────────
@@ -339,6 +343,7 @@ class QuestAITerminal(App):
         padding: 0 1;
         margin: 0 1;
         color: $text-muted;
+        overflow: hidden hidden;
     }
 
     #deep {
@@ -348,6 +353,7 @@ class QuestAITerminal(App):
         padding: 0 1;
         margin: 0 1;
         color: $text-muted;
+        overflow: hidden hidden;
     }
 
     #deep-detail {
@@ -358,6 +364,7 @@ class QuestAITerminal(App):
         padding: 0 1;
         margin: 0 1;
         color: $text-muted;
+        overflow: hidden hidden;
     }
 
     #activity {
@@ -886,7 +893,7 @@ class QuestAITerminal(App):
                 log.write("[dim]Context cards selected:[/dim]")
                 for card in card_meta:
                     cid = card.get("id", "?")
-                    title = (card.get("title") or "(no title)")[:60]
+                    title = card.get("title") or "(no title)"
                     adapter = card.get("adapter", "unknown")
                     score = card.get("relevance_score", 0)
                     fcount = card.get("file_count", 0)

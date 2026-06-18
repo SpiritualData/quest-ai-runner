@@ -617,7 +617,7 @@ class _DeepRunTracker:
                     output_lines = [l.strip() for l in info['output'].split('\n') if l.strip()]
                     for ol in output_lines[-lines_per_run:]:
                         prefix = "    → " if '/' in ol else "    "
-                        lines.append(f"{prefix}{ol[:66]}")
+                        lines.append(f"{prefix}{ol}")
 
             return "\n".join(lines)
 
