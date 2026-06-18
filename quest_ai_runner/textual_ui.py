@@ -75,18 +75,28 @@ class _RichLogConsole(_Console):
     # -- low-level sinks ------------------------------------------------------
 
     def _emit(self, renderable) -> None:
+        def _write_impl():
+            # Ensure proper wrapping by explicitly setting overflow on Text
+            if isinstance(renderable, Text):
+                renderable.no_wrap = False
+            self._tlog.write(renderable)
+
         thread_id = getattr(self._app, "_ui_thread_id", None)
         if thread_id is not None and threading.get_ident() != thread_id:
             # Called from a worker thread — marshal onto the UI thread.
-            self._app.call_from_thread(self._tlog.write, renderable)
+            self._app.call_from_thread(_write_impl)
         else:
-            self._tlog.write(renderable)
+            _write_impl()
 
     def write(self, s: str) -> None:
-        self._emit(Text.from_ansi(s))
+        text = Text.from_ansi(s)
+        text.no_wrap = False
+        self._emit(text)
 
     def line(self, s: str = "") -> None:
-        self._emit(Text.from_ansi(s) if s else Text(""))
+        text = Text.from_ansi(s) if s else Text("")
+        text.no_wrap = False
+        self._emit(text)
 
     def markdown(self, text: str) -> None:
         try:
