@@ -492,17 +492,10 @@ def _monitor_claude_session(
                                             if msg_text and msg_text.strip():
                                                 event_count += 1
 
-                                                # Extract task UUID from prompt (e.g., "TASK 1 [a1b2c3d4]")
-                                                # This is the unique task identifier across all concurrent instances
+                                                # Use session file UUID as run_id (stable, unique across instances)
+                                                # Extract once per file and cache it
                                                 if not file_session_ids.get(str(jsonl_file)):
-                                                    import re
-                                                    # Extract UUID from [a1b2c3d4] format
-                                                    match = re.search(r'\[([a-f0-9]{8})\]', msg_text)
-                                                    if match:
-                                                        run_id = match.group(1)
-                                                    else:
-                                                        # Fallback: use filename UUID if parsing fails
-                                                        run_id = jsonl_file.stem[:8]
+                                                    run_id = jsonl_file.stem[:8]  # First 8 chars of UUID
                                                     file_session_ids[str(jsonl_file)] = run_id
                                                 else:
                                                     run_id = file_session_ids.get(str(jsonl_file))
