@@ -2238,9 +2238,6 @@ class Orchestrator:
                     rationale="User explicitly demanded execution (no planning)",
                     model_tier=None,  # use default
                 )
-                emit.emit(ProgressEvent(type=EVENT_PLAN,
-                                        action="deep", step=steps,
-                                        text="User explicitly demanded execution, skipping planning"))
             else:
                 try:
                     plan = self._plan(user_message, transcript, context_view, gathered, step=step)
