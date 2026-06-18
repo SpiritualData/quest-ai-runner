@@ -116,18 +116,18 @@ class TurnContextStore:
             ]
             scored.sort(key=lambda x: (-x[0], -x[1]))  # highest score, most recent first
 
-            # Always include the last card (most recent turn)
-            last = cards[-1]
-            selected: Dict[int, Dict[str, Any]] = {id(last): last}
-
-            # Gather older candidates (up to 2x limit so LLM filter has headroom)
-            older_candidates = [
+            # All candidates: most recent first, limited to 2x max_older headroom
+            all_candidates = [
                 card for score, idx, card in scored
-                if id(card) != id(last) and score > 0
-            ][: self._max_older * 2]
+                if score > 0
+            ][: (self._max_older + 1) * 2]
+            # Always include the last turn as a candidate even if IDF score is 0
+            last = cards[-1]
+            if last not in all_candidates:
+                all_candidates = [last] + all_candidates
 
-            # LLM filter on older candidates when provider is wired
-            if self._provider is not None and older_candidates:
+            # LLM filter across all candidates (including the most recent turn)
+            if self._provider is not None and all_candidates:
                 try:
                     from .card_filter import filter_cards_by_relevance
                     candidate_dicts = [
@@ -137,22 +137,22 @@ class TurnContextStore:
                             "files": [],
                             "adapter": "turn",
                         }
-                        for i, c in enumerate(older_candidates)
+                        for i, c in enumerate(all_candidates)
                     ]
                     kept = filter_cards_by_relevance(
                         task_text, candidate_dicts,
                         model_provider=self._provider, model=self._model,
                     )
                     kept_ids = {m.id for m in kept}
-                    older_candidates = [
-                        c for c in older_candidates
+                    all_candidates = [
+                        c for c in all_candidates
                         if c.get("id", "") in kept_ids
                     ]
                 except Exception:
                     pass  # silently fall back to IDF selection
 
-            # Add top older cards up to max_older
-            for card in older_candidates:
+            selected: Dict[int, Dict[str, Any]] = {}
+            for card in all_candidates:
                 if len(selected) >= self._max_older + 1:
                     break
                 selected[id(card)] = card
