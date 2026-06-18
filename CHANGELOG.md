@@ -26,6 +26,21 @@ All notable changes to this project are documented here. The format is based on
   done-standard; retries carry the prior output and the verifier's feedback. New: `run()` /
   `run_stream()` accept a `pending_inputs` callable so new user messages that arrive mid-run are
   folded into the next deep process / answer retry (inert when the consumer does not supply it).
+- **The deep loop auto-selects and escalates the worker model, bounded by a token budget.** The
+  deep worker is Claude Code (Claude models only); the loop manages a Claude model ladder
+  (`QAR_DEEP_MODELS`, default `haiku,sonnet,opus`): start at the fast Anthropic tier, escalate to a
+  stronger model each time the goal is not met. An explicit per-task model request (a `model_hint`
+  that resolves to a Claude model) or a guidance card `model:` preference pins the model (no
+  escalation). The fixed 3-attempt cap is replaced by an overall **token budget**
+  (`QAR_GOAL_TOKEN_BUDGET`, default 300k): the worker runs with `--output-format json`, its reported
+  tokens/cost are parsed into `DeepResult.tokens`/`cost_usd`, and the loop continues while under
+  budget (`deep_goal_max_iterations`, raised to 8, is now a hard safety cap). A non-Claude model id
+  is never passed to the Claude Code worker.
+- **Mid-run messages are a generic abstraction.** `core/inbox.py` adds `InputInbox` +
+  `InMemoryInbox`; the Orchestrator takes an `input_inbox` and `run()` auto-drains the current
+  conversation (keyed by quest/conversation/session/user id) when no explicit `pending_inputs` is
+  given. `build_orchestrator` wires a default inbox, so any interface (chat, Quest frontend, ...)
+  only pushes new messages with `inbox.push(conversation_id, message)` and the brain folds them in.
 
 ### Fixed
 - **Actionable requests now EXECUTE instead of ending as a proposal.** The cheap planner often
