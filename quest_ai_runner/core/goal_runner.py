@@ -235,10 +235,10 @@ class SubprocessConfig:
 
 
 def _find_claude_project_dir(working_dir: Optional[str] = None) -> Optional[Path]:
-    """Find the Claude projects directory.
+    """Find the Claude projects directory for the specific working_dir.
 
-    Claude stores projects in {working_dir}/.claude/projects when run from that cwd.
-    working_dir can be provided explicitly or read from QAR_DEEP_WORKING_DIR env var.
+    Claude stores projects in {base}/.claude/projects/{project-key}/
+    where {project-key} is derived from the working_dir path.
     """
     if not working_dir:
         working_dir = os.getenv("QAR_DEEP_WORKING_DIR") or os.getenv("QAR_CORPUS_ROOT")
@@ -249,15 +249,25 @@ def _find_claude_project_dir(working_dir: Optional[str] = None) -> Optional[Path
         _log.warning("_find_claude_project_dir: no working_dir provided or found in env")
         return None
 
-    # Direct .claude/projects in the working directory
-    local_projects = Path(working_dir) / ".claude" / "projects"
-    _log.info("_find_claude_project_dir: checking %s", local_projects)
-    if local_projects.exists() and local_projects.is_dir():
-        _log.info("_find_claude_project_dir: ✓ found")
-        return local_projects
-    else:
-        _log.warning("_find_claude_project_dir: ✗ does not exist or not a dir")
+    # Project key is the full path with / replaced by -
+    project_key = working_dir.replace("/", "-")
+    _log.info("_find_claude_project_dir: working_dir=%s -> project_key=%s", working_dir, project_key)
 
+    # Check .claude/projects in the working directory
+    local_projects = Path(working_dir) / ".claude" / "projects" / project_key
+    _log.info("_find_claude_project_dir: checking local %s", local_projects)
+    if local_projects.exists() and local_projects.is_dir():
+        _log.info("_find_claude_project_dir: ✓ found local project dir")
+        return local_projects
+
+    # Also check home directory .claude/projects
+    home_projects = Path.home() / ".claude" / "projects" / project_key
+    _log.info("_find_claude_project_dir: checking home %s", home_projects)
+    if home_projects.exists() and home_projects.is_dir():
+        _log.info("_find_claude_project_dir: ✓ found home project dir")
+        return home_projects
+
+    _log.warning("_find_claude_project_dir: ✗ not found in local or home .claude/projects")
     return None
 
 
