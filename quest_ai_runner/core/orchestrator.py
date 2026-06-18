@@ -2245,16 +2245,18 @@ class Orchestrator:
                 except Exception:  # noqa: BLE001
                     pass  # Graceful: continue even if context gather fails
 
-                # LET THE LLM DECIDE: use cheap haiku call to suggest task split (1, 2, 3, or 4 subtasks)
+                # LET THE LLM DECIDE: use cheap haiku to suggest task split as JSON with dependency structure
                 # Most of the time 1 task is fine; only split when work naturally divides.
                 deep_subtasks = []
                 try:
                     split_prompt = (
-                        "How many parallel subtasks (1, 2, 3, or 4) would you use to split this work? "
-                        "Answer only with the number, then on the next line list the goals (one per line). "
-                        "Each subtask may touch multiple files. Most requests = 1 task is fine.\n\n"
+                        "Suggest how to split this work for parallel execution. Return a JSON list "
+                        "where each element is either a task OR a list of tasks that must run sequentially.\n\n"
+                        "Format: [{\"goal\": \"<done-standard>\", \"brief\": \"<details>\"}, ...] for all parallel\n"
+                        "   or: [[{...}, {...}], {...}] for sequential groups within parallel\n\n"
+                        "Most requests = 1 task (just return [{...}]). Only split when work naturally divides.\n\n"
                         f"Request: {user_message}\n\n"
-                        "Format:\n1\nGoal: <done-standard>"
+                        "Return ONLY valid JSON, no other text."
                     )
                     model = self.registry.resolve_tier("haiku")
                     provider = self.get_provider_for_model(model)
@@ -2263,16 +2265,25 @@ class Orchestrator:
                         model=model
                     )
                     if split_result:
-                        # Parse LLM's suggested goals and build subtasks
-                        lines = split_result.split("\n")
-                        for line in lines:
-                            if line.startswith("Goal ") and ":" in line:
-                                goal_text = line.split(":", 1)[1].strip()
-                                if goal_text:
-                                    deep_subtasks.append({
-                                        "goal": _truncate_goal(goal_text),
-                                        "brief": user_message  # Each subtask gets full context
-                                    })
+                        import json
+                        # Parse JSON task structure
+                        tasks_json = json.loads(split_result.strip())
+                        if isinstance(tasks_json, list):
+                            # Flatten: convert nested lists to deep_subtasks (orchestrator will handle dependency)
+                            def flatten_tasks(tasks_list, parent_tasks=None):
+                                result = parent_tasks or []
+                                for item in tasks_list:
+                                    if isinstance(item, dict) and "goal" in item:
+                                        # Single task
+                                        result.append({
+                                            "goal": _truncate_goal(item.get("goal", "")),
+                                            "brief": item.get("brief", user_message)
+                                        })
+                                    elif isinstance(item, list):
+                                        # Sequential group: add all tasks
+                                        flatten_tasks(item, result)
+                                return result
+                            deep_subtasks = flatten_tasks(tasks_json)[:4]  # Max 4 parallel
                 except Exception:  # noqa: BLE001
                     pass  # If split fails, fall back to single task
 
