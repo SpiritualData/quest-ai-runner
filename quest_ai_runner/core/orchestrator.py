@@ -1422,9 +1422,12 @@ class Orchestrator:
             if multi and overall_goal and overall_goal != goal:
                 _hdr.append(f"OVERALL GOAL (this process is ONE subgoal serving it, stay aligned):\n"
                             f"{overall_goal}")
+            # Generate task UUID for matching with JSONL session file
+            import uuid
+            task_uuid = str(uuid.uuid4())[:8]
             # Show task identifier in brief so user sees which task is running
             task_label = f"TASK {task_index}" if multi else "TASK"
-            brief = "\n\n".join(_hdr) + f"\n\n{task_label}: {goal}\n\n" + brief
+            brief = "\n\n".join(_hdr) + f"\n\n{task_label} [{task_uuid}]: {goal}\n\n" + brief
             # Per-subtask execution fact — populated from EVENT_EXEC phase ticks (live) and finalized
             # from the DeepResult.met below. Recording per-subtask keeps facts correct even when
             # multiple subtasks run concurrently (each closure owns its own ``fact``).

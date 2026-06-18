@@ -255,13 +255,12 @@ def _find_claude_project_dir(working_dir: Optional[str] = None) -> Optional[Path
         candidates.append(home_projects)
         _log.info("_find_claude_project_dir: found .claude/projects in home")
 
-    # Search each candidate for subdirs with JSONL files
+    # Search each candidate for any JSONL files (recursive)
     for base in candidates:
         try:
-            for subdir in base.iterdir():
-                if subdir.is_dir() and list(subdir.glob("*.jsonl")):
-                    _log.info("_find_claude_project_dir: ✓ found project dir with JSONL: %s", subdir)
-                    return subdir
+            if list(base.rglob("*.jsonl")):
+                _log.info("_find_claude_project_dir: ✓ found .claude/projects with JSONL: %s", base)
+                return base
         except Exception as e:
             _log.debug("_find_claude_project_dir: error searching %s: %s", base, e)
 
@@ -492,9 +491,17 @@ def _monitor_claude_session(
                                             if msg_text and msg_text.strip():
                                                 event_count += 1
 
-                                                # Use file UUID as run_id (identifies which session/task)
+                                                # Extract task UUID from Claude's output (e.g., "TASK 1 [a1b2c3d4]")
                                                 if not file_session_ids.get(str(jsonl_file)):
-                                                    run_id = jsonl_file.stem[:8]
+                                                    import re
+                                                    match = re.search(r'\[([a-f0-9]{8})\]', msg_text)
+                                                    if match:
+                                                        run_id = match.group(1)
+                                                        _log.debug("identified task UUID: %s (from message)", run_id)
+                                                    else:
+                                                        # Fallback: use file UUID if task UUID not found
+                                                        run_id = jsonl_file.stem[:8]
+                                                        _log.debug("task UUID not found, using file UUID: %s", run_id)
                                                     file_session_ids[str(jsonl_file)] = run_id
                                                 else:
                                                     run_id = file_session_ids.get(str(jsonl_file))
