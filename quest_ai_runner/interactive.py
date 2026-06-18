@@ -584,11 +584,24 @@ class _DeepRunTracker:
             if run_id in self._runs:
                 self._runs[run_id]['status'] = status
 
-    def get_dashboard(self) -> str:
-        """Return a dashboard summary of all runs with latest output."""
+    def get_dashboard(self, lines_per_run: Optional[int] = None) -> str:
+        """Return a dashboard summary of all runs with latest output.
+
+        ``lines_per_run`` controls how many output lines are shown per agent.
+        When omitted it scales automatically: 5 for one run, 3 for two, 2 for three+.
+        """
         with self._lock:
             if not self._runs:
                 return ""
+
+            n_runs = len(self._runs)
+            if lines_per_run is None:
+                if n_runs == 1:
+                    lines_per_run = 5
+                elif n_runs == 2:
+                    lines_per_run = 3
+                else:
+                    lines_per_run = 2
 
             lines = []
             for run_id, info in sorted(self._runs.items()):
@@ -597,18 +610,14 @@ class _DeepRunTracker:
                 mins, secs = divmod(int(elapsed), 60)
                 time_str = f"{mins}m{secs}s" if mins > 0 else f"{secs}s"
 
-                # Show goal (not task ID)
                 goal = info['goal'][:60]
                 lines.append(f"{status_icon} {time_str}: {goal}")
 
-                # Show last output line
                 if info['output']:
-                    last_line = info['output'].split('\n')[-1].strip()
-                    if last_line:
-                        if '/' in last_line:
-                            lines.append(f"    → {last_line[:66]}")
-                        else:
-                            lines.append(f"    {last_line[:66]}")
+                    output_lines = [l.strip() for l in info['output'].split('\n') if l.strip()]
+                    for ol in output_lines[-lines_per_run:]:
+                        prefix = "    → " if '/' in ol else "    "
+                        lines.append(f"{prefix}{ol[:66]}")
 
             return "\n".join(lines)
 

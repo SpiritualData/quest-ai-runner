@@ -242,7 +242,6 @@ class DeepActivity(Static):
 
     def show(self, dashboard: str) -> None:
         self._dashboard = dashboard or ""
-        # Set display property before refresh so Textual sees visibility change
         self.display = bool(self._dashboard.strip())
         self.refresh()
 
@@ -254,6 +253,54 @@ class DeepActivity(Static):
     def render(self):
         # Plain Text (not markup) so file paths with brackets render literally.
         return Text(self._dashboard, style="dim")
+
+
+class DeepDetailPanel(Static):
+    """Expanded tail-view of one deep run's live exec output.
+
+    Hidden by default. Press ``d`` to toggle; ``Tab`` to cycle runs.
+    Always shows the last N lines so the view stays anchored to current
+    activity without needing a scrollbar.
+    """
+
+    MAX_LINES = 22
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._run_id: Optional[str] = None
+        self._goal: str = ""
+        self._lines: List[str] = []
+        self.display = False
+
+    def open_for(self, run_id: str, goal: str, existing_lines: List[str]) -> None:
+        self._run_id = run_id
+        self._goal = goal
+        self._lines = list(existing_lines)
+        self.display = True
+        self.refresh()
+
+    def push_line(self, run_id: str, line: str) -> None:
+        """Append a new output line if this run is the one currently displayed."""
+        if self._run_id == run_id and line.strip():
+            self._lines.append(line.strip())
+            self.refresh()
+
+    def hide(self) -> None:
+        self._run_id = None
+        self.display = False
+        self.refresh()
+
+    @property
+    def active_run_id(self) -> Optional[str]:
+        return self._run_id
+
+    def render(self):
+        if not self._run_id:
+            return Text("")
+        header = f"⎅ [{self._run_id}] {self._goal[:65]}"
+        tail = self._lines[-self.MAX_LINES:]
+        body = "\n".join(f"  {ln}" for ln in tail)
+        return Text.from_ansi(f"\x1b[1;36m{header}\x1b[0m\n{body}")
 
 
 # ── Main app ──────────────────────────────────────────────────────────────────
@@ -283,8 +330,18 @@ class QuestAITerminal(App):
 
     #deep {
         height: auto;
-        max-height: 14;
+        max-height: 18;
         border-left: thick $warning 40%;
+        padding: 0 1;
+        margin: 0 1;
+        color: $text-muted;
+    }
+
+    #deep-detail {
+        height: auto;
+        max-height: 26;
+        border-left: thick $warning 80%;
+        border-top: dashed $warning 40%;
         padding: 0 1;
         margin: 0 1;
         color: $text-muted;
@@ -310,6 +367,8 @@ class QuestAITerminal(App):
         Binding("ctrl+c", "quit", "Quit", priority=True),
         Binding("escape", "cancel", "Cancel turn"),
         Binding("ctrl+l", "clear_log", "Clear screen"),
+        Binding("d", "toggle_deep_detail", "Expand agent", show=True),
+        Binding("tab", "cycle_deep_run", "Next agent", show=True),
     ]
 
     def __init__(self, session: InteractiveSession, verbosity: int = 0, **kwargs) -> None:
@@ -347,10 +406,11 @@ class QuestAITerminal(App):
                       highlight=True, markup=True, auto_scroll=True)
         yield ContextPanel(id="context")
         yield DeepActivity(id="deep")
+        yield DeepDetailPanel(id="deep-detail")
         with Horizontal(id="activity"):
             yield LoadingIndicator()
             yield StatusLine("thinking…")
-        yield Input(id="prompt", placeholder="Ask anything…   (/help for commands, Esc to cancel)")
+        yield Input(id="prompt", placeholder="Ask anything…   (/help for commands, Esc to cancel, d=expand agent, Tab=cycle)")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -358,6 +418,7 @@ class QuestAITerminal(App):
         self._tlog = self.query_one("#transcript", RichLog)
         self._ctx = self.query_one("#context", ContextPanel)
         self._deep_view = self.query_one("#deep", DeepActivity)
+        self._deep_detail = self.query_one("#deep-detail", DeepDetailPanel)
         self._activity = self.query_one("#activity", Horizontal)
         self._status = self.query_one("#activity StatusLine", StatusLine)
         inp = self.query_one("#prompt", Input)
@@ -705,6 +766,7 @@ class QuestAITerminal(App):
         self._deep_event_count = 0
         self._ctx.reset()
         self._deep_view.hide()
+        self._deep_detail.hide()
 
         if echo:
             self._tlog.write(Text(f"❯ {user_text}", style="bold cyan"))
@@ -844,12 +906,15 @@ class QuestAITerminal(App):
                 if goal:
                     log.write(Text(""))
                     log.write(Text(goal, style="bold cyan"))
+                # Auto-open detail panel for the first run (user can close with d).
+                if len(self._deep_seen) == 1:
+                    self._deep_detail.open_for(run_id, goal or "executing work…", [])
             self._cur_deep_run = run_id
             if text:
                 self._deep.update_run_output(run_id, text)
-            # Live progress updates the deep panel IN PLACE — never appended, so
-            # the steady tick stream doesn't bury the conversation. Throttle to
-            # every 10 events to avoid flicker and excessive redraws.
+                # Push to detail panel live (no throttle — it's just a tail view).
+                self._deep_detail.push_line(run_id, text)
+            # Throttle dashboard redraws to every 10 events to avoid flicker.
             self._deep_event_count += 1
             if self._deep_event_count % 10 == 0:
                 self._deep_view.show(self._deep.get_dashboard())
@@ -877,6 +942,7 @@ class QuestAITerminal(App):
         self._activity.display = False
         self._ctx.display = False
         self._deep_view.hide()
+        self._deep_detail.hide()
 
         if error is not None:
             log.write(f"  [red]Error:[/red] {error}")
@@ -1013,6 +1079,34 @@ class QuestAITerminal(App):
 
     def action_quit(self) -> None:
         self.exit()
+
+    def action_toggle_deep_detail(self) -> None:
+        """Toggle the expanded detail view for the current deep run (key: d)."""
+        if self._deep_detail.display:
+            self._deep_detail.hide()
+            return
+        # Pick which run to show: the most recently active one.
+        run_id = self._cur_deep_run or self._deep.get_active_run()
+        if run_id is None:
+            return
+        with self._deep._lock:
+            info = self._deep._runs.get(run_id)
+        if info is None:
+            return
+        existing = list(info.get("exec_lines", []))
+        self._deep_detail.open_for(run_id, info["goal"], existing)
+
+    def action_cycle_deep_run(self) -> None:
+        """Cycle the detail panel to the next deep run (key: Tab)."""
+        run_id = self._deep.next_run()
+        if run_id is None:
+            return
+        with self._deep._lock:
+            info = self._deep._runs.get(run_id)
+        if info is None:
+            return
+        existing = list(info.get("exec_lines", []))
+        self._deep_detail.open_for(run_id, info["goal"], existing)
 
 
 if __name__ == "__main__":
