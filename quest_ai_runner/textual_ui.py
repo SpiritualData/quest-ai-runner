@@ -227,7 +227,6 @@ class QuestAITerminal(App):
         self.sess = session
         self.rep_name = session._rep_name
         self.title = "Quest AI Runner"
-        self.sub_title = "grounded AI that acts like a colleague"
 
         # Per-turn streaming state (reset by _begin_turn).
         self._running = False
