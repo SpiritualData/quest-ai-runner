@@ -498,6 +498,10 @@ def _answer_describes_unexecuted_work(text: Optional[str]) -> bool:
             r"(?:i|we)\s+(?:need|should|must)\s+(?:to\s+)?(?:update|edit|modify).{0,30}(?:code|file|logic|field|database|api|endpoint)",
             r"to\s+(?:fix|address|resolve)\s+this,?\s+(?:i|we)\s+(?:need|should|must)",
             r"to\s+resolve\s+this.*(?:i|we)\s+need\s+to\s+ensure",
+            # "the fix/solution is to update X" — describing the change instead of applying it.
+            r"the\s+(?:fix|solution)\s+is\s+to\s+(?:update|modify|change|fix|add|remove|delete|create|implement|edit)",
+            # "this/it needs to be updated", "the code needs updating" — passive describe-not-do.
+            r"(?:this|it|the\s+(?:code|logic|field|implementation))\s+(?:needs?|requires?)\s+(?:to\s+be\s+)?(?:updat|modif|chang|fix|add|remov|delet|creat|implement|edit)",
         ]
 
         # Patterns for work that NEEDS USER INPUT (don't escalate these)
@@ -1902,6 +1906,17 @@ class Orchestrator:
                                       "rationale": "auto-detected false claim in answer (fallback)"}
                 if emit is not None:
                     emit.status("executing claimed work now…")
+            # Fallback: the answer DESCRIBES executable work it never did ("I need to update X",
+            # "to fix this I need to..."). The cheap planner frequently forgets to set
+            # answer_contains_work_to_execute on code/file-change tasks, so without this net the
+            # turn ends having only TALKED about the fix instead of doing it (the "it just finishes
+            # the request" regression). Re-wired here so a described-but-unexecuted fix still
+            # escalates to a deep run that actually applies it.
+            elif _answer_describes_unexecuted_work(text):
+                should_defer_deep = {"goal": f"Execute the work the answer describes: {user_message}",
+                                      "rationale": "auto-detected unexecuted work in answer (fallback)"}
+                if emit is not None:
+                    emit.status("executing described work now…")
 
         if should_defer_deep:
             try:

@@ -139,6 +139,38 @@ def test_cap_with_nothing_gathered_escalates_to_deep():
     assert res.deep_results and res.deep_results[0].met is True
 
 
+def test_answer_describing_unexecuted_work_escalates_to_deep():
+    # Regression guard: a cheap planner ends a code-fix request with action="answer" and FORGETS
+    # to set answer_contains_work_to_execute. The answer only DESCRIBES the fix ("to fix this, I
+    # need to update ..."). Without the unexecuted-work safety net the turn just finishes having
+    # talked about the change instead of doing it. The orchestrator must auto-escalate to a deep
+    # run that actually applies the work.
+    provider = StubProvider(
+        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "describe"}],
+        answer_text="To fix this, I need to update the date-assignment logic in the code.",
+    )
+    runner = StubDeepRunner(met=True, output="applied the date fix")
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run(
+        "the system incorrectly assigns dates to actions"
+    )
+    # The descriptive answer is still returned, but the work was actually executed via a deep run.
+    assert res.kind == "answer"
+    assert runner.calls, "expected a deferred deep run to execute the described work"
+
+
+def test_plain_informational_answer_does_not_escalate():
+    # The net must stay OFF for genuine Q&A: an informational answer with no described change
+    # should NOT trigger a deep run (no false escalation / no wasted subprocess).
+    provider = StubProvider(
+        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "inform"}],
+        answer_text="The cache refreshes every 12 hours via a cron job.",
+    )
+    runner = StubDeepRunner(met=True)
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run("how often does the cache refresh?")
+    assert res.kind == "answer"
+    assert not runner.calls, "informational answer must not escalate to a deep run"
+
+
 # --- per-step planner-view leaning (compress older gathered) --------------------------------
 
 def _read_obs(path: str, body: str) -> dict:
