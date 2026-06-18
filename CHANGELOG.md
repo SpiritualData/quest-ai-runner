@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **Deep execution now runs on our own goal-verification loop instead of Claude Code's `/goal`.**
+  `/goal` re-checks its condition inside the worker every turn (token-heavy) and caps the condition
+  at 4000 characters, rejecting a longer one and then running nothing. The worker is now invoked
+  headless (`-p`) with the done-standard given as plain context; after it runs, the brain verifies
+  the done-standard AT THE QUALITY BAR via one cheap LLM call (`_verify_goal`), judged through the
+  AI rep persona and the GUIDANCE CARDS selected for the input (guidance = the quality standards).
+  If unmet, the brief is augmented with why it fell short and what to do next, and it re-runs up to
+  `deep_goal_max_iterations` (default 3). `DeepResult.met` now reflects the brain's verification,
+  not just the worker exit code, so a silent no-op or a sub-standard result is a confirmed failure.
+  Parallel subgoals carry the OVERALL goal in their prompt so each stays aligned with the larger
+  goal (hierarchical goal: overall user goal -> subgoals).
+
 ### Fixed
 - **Actionable requests now EXECUTE instead of ending as a proposal.** The cheap planner often
   routes a change request to `action="answer"`, proposes the change in prose, and forgets to set
