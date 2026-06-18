@@ -1611,17 +1611,18 @@ class FileContextStore(ContextAssemblerBase):
     def _card_searchable_terms(self, card: Dict[str, Any]) -> Set[str]:
         """Build the full searchable term set for a card (IDF universe).
 
-        Includes tokens from: keywords, summary, and each file's symbols.
-        File path segments are intentionally excluded: including them causes
-        false positives where a card about an unrelated topic scores high simply
-        because one of its files is named e.g. ``planning.py`` and the query
-        mentions ``planning``.  Symbols (function/class names) are fine because
-        they encode semantic meaning, not filesystem structure.
+        Includes tokens from: keywords, summary, each pinned file's path
+        segments (split on / _ . so "planning.py" contributes "planning"),
+        and each file's symbols.  Lowercased, short/stopword-free.
         """
         parts: List[str] = []
         parts.extend(card.get("keywords", []))
         parts.append(card.get("summary", ""))
         for fe in card.get("files", []):
+            # Split path on common symbol separators so each path component
+            # (directory name, filename stem, extension) becomes a token.
+            import re as _re
+            parts.append(_re.sub(r"[/._\-]", " ", fe.get("path", "")))
             parts.extend(fe.get("symbols", []))
         return _tokenize(" ".join(parts))
 
