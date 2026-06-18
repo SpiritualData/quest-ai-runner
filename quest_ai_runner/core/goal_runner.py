@@ -384,10 +384,58 @@ def _format_message_text(msg: dict) -> str:
     return ""
 
 
+def _get_existing_sessions(working_dir: str) -> set:
+    """Get set of session file stems (UUIDs) that exist before Claude starts."""
+    project_dir = _find_claude_project_dir(working_dir)
+    if not project_dir:
+        return set()
+    try:
+        return {f.stem for f in project_dir.glob("*.jsonl")}
+    except Exception:
+        return set()
+
+
+def _detect_new_session(
+    project_dir: Path,
+    existing_sessions: set,
+    timeout: float = 15.0,
+) -> Optional[str]:
+    """Detect a new JSONL session file created by Claude.
+
+    Returns the session ID (filename stem) or None if timeout.
+    """
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            current = {f.stem for f in project_dir.glob("*.jsonl")}
+            new_sessions = current - existing_sessions
+            if new_sessions:
+                # Return the most recently modified new session
+                newest_id = None
+                newest_mtime = 0
+                for session_id in new_sessions:
+                    jsonl_path = project_dir / f"{session_id}.jsonl"
+                    try:
+                        mtime = jsonl_path.stat().st_mtime
+                        if mtime > newest_mtime:
+                            newest_mtime = mtime
+                            newest_id = session_id
+                    except Exception:
+                        pass
+                if newest_id:
+                    _log.info("detected new claude session: %s", newest_id)
+                    return newest_id
+        except Exception:
+            pass
+        time.sleep(0.5)
+    return None
+
+
 def _monitor_claude_session(
     working_dir: str,
     callback: Callable[[ProgressEvent], None],
     stop_event: threading.Event,
+    existing_sessions: Optional[set] = None,
     poll_interval: float = 0.5,
     max_wait_seconds: float = 30.0,
 ) -> None:
@@ -397,6 +445,8 @@ def _monitor_claude_session(
     as Claude Code produces output (thinking, tool calls, text, etc.).
     """
     _log.info("monitor thread started for working_dir: %s", working_dir)
+    if existing_sessions is None:
+        existing_sessions = set()
     try:
         project_dir = _find_claude_project_dir(working_dir)
         if not project_dir:
@@ -417,15 +467,28 @@ def _monitor_claude_session(
         processed_lines: Set[str] = set()
         event_count = 0
 
+        # Wait for a new session to be created (Claude runs with -p which creates JSONL files)
+        jsonl_file = None
+        if existing_sessions:
+            _log.info("waiting for new claude session to be created...")
+            session_id = _detect_new_session(project_dir, existing_sessions, timeout=15.0)
+            if session_id:
+                jsonl_file = project_dir / f"{session_id}.jsonl"
+                _log.info("detected new session: %s", session_id)
+            else:
+                _log.warning("timeout waiting for new session — using most recent file")
+                jsonl_file = _find_active_jsonl_file(project_dir)
+        else:
+            jsonl_file = _find_active_jsonl_file(project_dir)
+
+        if not jsonl_file:
+            _log.warning("no claude session file found")
+            return
+
+        _log.info("monitoring session file: %s", jsonl_file)
+
         while not stop_event.is_set():
             try:
-                # Find the active session file (most recently modified with content)
-                jsonl_file = _find_active_jsonl_file(project_dir)
-                if not jsonl_file:
-                    time.sleep(poll_interval)
-                    continue
-
-                _log.debug("monitoring session file: %s", jsonl_file)
 
                 # Read and process new lines from the JSONL file
                 try:
@@ -541,13 +604,17 @@ class SubprocessGoalRunner(DeepRunner):
             cmd += ["--max-turns", str(int(turns))]
 
         # Start monitoring Claude Code session in a background thread if emit is provided.
+        # First, detect which session files exist BEFORE we start Claude.
         stop_monitor = threading.Event()
         monitor_thread = None
+        existing_sessions = set()
         if emit is not None:
-            _log.info("starting claude session monitor for deep run in: %s", self.cfg.working_dir)
+            existing_sessions = _get_existing_sessions(self.cfg.working_dir)
+            _log.info("starting claude session monitor for deep run in: %s (existing sessions: %d)",
+                     self.cfg.working_dir, len(existing_sessions))
             monitor_thread = threading.Thread(
                 target=_monitor_claude_session,
-                args=(self.cfg.working_dir, emit, stop_monitor),
+                args=(self.cfg.working_dir, emit, stop_monitor, existing_sessions),
                 daemon=True
             )
             monitor_thread.start()
