@@ -479,6 +479,19 @@ def _truncate_goal(goal: str, max_chars: int = 3900) -> str:
     return goal
 
 
+# A decision's summary is stored by Quest as a goal CONDITION — a short, human-readable done-standard.
+# Raw text (a verbose planner question, a deep brief, dumped gathered context) must NEVER be written
+# there: it overflows Quest's 4000-char limit and reads as a wall of text instead of a decision ask.
+# When a summary is long it is condensed by an LLM into a one or two sentence ask before escalation.
+_CONCISE_DECISION_LIMIT = 600  # summaries longer than this are condensed before they reach Quest
+_CONDENSE_DECISION_PROMPT = (
+    "Rewrite the following into a SINGLE concise decision request for a human to approve or answer. "
+    "At most 2 sentences, under 400 characters. State plainly what decision or input is needed; omit "
+    "analysis, code, and background. Do NOT use em dashes (--); use a comma, a colon, or parentheses "
+    "instead.\n\nTEXT:\n{text}"
+)
+
+
 # Imperative change/build verbs and bug/wrongness signals that mark a USER MESSAGE as a request to
 # CHANGE something (code, files, or data), not just to be informed. Kept app-agnostic.
 _CHANGE_VERBS = (
@@ -1375,6 +1388,29 @@ class Orchestrator:
 
     # --- clarify (user selection/clarification) --------------------------------
 
+    def _concise_decision_summary(self, text: str) -> str:
+        """Return a concise summary safe to store as a Quest goal CONDITION.
+
+        A decision summary becomes a goal condition (a short done-standard), so raw text (a verbose
+        planner question, a brief, dumped analysis) must not go there. A short summary passes through
+        unchanged; a long one is condensed by a cheap LLM call into a one or two sentence ask, with a
+        hard-truncation fallback if the model call fails. Never raises.
+        """
+        s = (text or "").strip()
+        if len(s) <= _CONCISE_DECISION_LIMIT:
+            return s
+        try:
+            model = self.registry.resolve_tier(self.cfg.planner_tier)
+            out = self.provider.answer(
+                [{"role": "user", "content": _CONDENSE_DECISION_PROMPT.format(text=s[:6000])}],
+                model=model,
+            )
+            if isinstance(out, str) and out.strip():
+                return out.strip()[:_CONCISE_DECISION_LIMIT]
+        except Exception:  # noqa: BLE001 — condensing must never break an escalation
+            pass
+        return s[:_CONCISE_DECISION_LIMIT].rstrip() + " [...]"
+
     def _run_clarify(self, plan: PlanDecision, *, quest_id: Optional[str] = None,
                      emit: Optional[_Emitter] = None) -> OrchestratorResult:
         """Surface user clarification/selection need as a decision request.
@@ -1399,7 +1435,9 @@ class Orchestrator:
         if self.escalation is not None:
             try:
                 decision_id = self.escalation.escalate(Escalation(
-                    summary=question_with_opts,
+                    # Condense to a concise done-standard: a decision summary is stored as a goal
+                    # CONDITION, never a place to dump raw text.
+                    summary=self._concise_decision_summary(question_with_opts),
                     kind="clarify" if options or allow_free else "approve",
                     quest_id=quest_id,
                     default_on_silence="hold"))
@@ -1422,7 +1460,9 @@ class Orchestrator:
         if self.escalation is not None:
             try:
                 decision_id = self.escalation.escalate(Escalation(
-                    summary=question, kind="approve", quest_id=quest_id, default_on_silence="hold"))
+                    # Condense long questions: the summary is stored as a goal CONDITION.
+                    summary=self._concise_decision_summary(question),
+                    kind="approve", quest_id=quest_id, default_on_silence="hold"))
             except Exception:  # noqa: BLE001 — escalation failure still returns the question
                 decision_id = None
         return OrchestratorResult(kind="confirm", question=question, decision_id=decision_id,

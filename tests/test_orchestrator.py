@@ -158,6 +158,31 @@ def test_answer_describing_unexecuted_work_escalates_to_deep():
     assert runner.calls, "expected a deferred deep run to execute the described work"
 
 
+def test_confirm_condenses_long_summary_before_escalation():
+    # A decision summary is stored by Quest as a goal CONDITION (4000-char cap). A verbose planner
+    # question must NOT be dumped there raw; it is condensed by an LLM call into a short ask first.
+    long_q = "Detailed background analysis of the date logic. " * 400  # ~19k chars of raw text
+    provider = StubProvider(decisions=[
+        {"action": "confirm", "confirm_question": long_q, "rationale": "ambiguous"},
+    ])
+    sink = StubEscalation(decision_id="dec_x")
+    res = _orch(provider, StubRetrieval(), escalation=sink).run("do the risky thing", quest_id="q1")
+    assert res.kind == "confirm"
+    assert sink.raised, "an escalation should have been raised"
+    sent = sink.raised[0].summary
+    assert len(sent) <= 600, f"decision summary not condensed: {len(sent)} chars"
+    assert sent != long_q  # raw text was not passed through
+
+
+def test_short_confirm_summary_passes_through_unchanged():
+    provider = StubProvider(decisions=[
+        {"action": "confirm", "confirm_question": "Send the donor email now?", "rationale": "money"},
+    ])
+    sink = StubEscalation(decision_id="dec_y")
+    _orch(provider, StubRetrieval(), escalation=sink).run("email the donor", quest_id="q2")
+    assert sink.raised[0].summary == "Send the donor email now?"  # short -> untouched, no LLM call
+
+
 def test_actionable_message_with_proposal_answer_escalates_to_deep():
     # The real-world failure the user hit: the planner answers (PROPOSES) a code change in one step
     # and forgets the explicit flag. The proposal phrasing ("Aligning these to use the same
