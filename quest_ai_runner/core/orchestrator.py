@@ -2229,13 +2229,26 @@ class Orchestrator:
             steps = step + 1
             emit.status("planning…" if step == 0 else "re-planning…")
 
-            # FORCE DEEP ON STEP 0 if execution directive was detected (skip planning)
+            # FORCE DEEP ON STEP 0 if execution directive was detected (skip planning but gather context)
             if step == 0 and force_deep_on_step_0:
+                # GATHER CONTEXT FIRST: deep needs grounding so it focuses on execution, not searching.
+                # Quick context assembly: affected files + key code patterns.
+                context_reads = [
+                    {"grep": r"\.tsx?$|\.py$|\.md$"},  # Find affected files
+                    {"list_sources": True},  # What sources exist
+                    {"list_operations": True},  # What operations are available
+                ]
+                try:
+                    context_obs = self._do_reads(context_reads, [])
+                    gathered.extend(context_obs)
+                    emit.status("gathered context for execution…")
+                except Exception:  # noqa: BLE001
+                    pass  # Graceful: continue even if context gather fails
+
                 # Search for affected files to enable parallel subtasks
                 affected_files = []
                 try:
-                    search_results = self._do_reads([{"grep": r"\.tsx?$|\.py$|\.md$"}], [])
-                    for obs in search_results:
+                    for obs in gathered:
                         if isinstance(obs, dict) and obs.get("kind") == "grep":
                             hits = obs.get("hits") or []
                             # Collect up to 4 affected files for parallel tasks
