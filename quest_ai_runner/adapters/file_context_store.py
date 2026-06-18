@@ -54,7 +54,8 @@ _log = logging.getLogger("quest-ai-runner.context")
 # compares this against the stored ``bootstrap_meta.json`` version and re-bootstraps when the
 # stored version is older. v2: LLM-based keyword-cluster dedup (replaced Jaccard file-overlap).
 # v3: TF-DF-IDF sampling in Stage 1 & 2 (representative files + snippets instead of all paths).
-_BOOTSTRAP_VERSION = 3
+# v4: per-file TF-DF-IDF term signatures from actual content stored in file entries (tfidf_terms).
+_BOOTSTRAP_VERSION = 4
 
 # Name of the meta file written to cards_dir after a successful bootstrap.
 _BOOTSTRAP_META_FILE = "bootstrap_meta.json"
@@ -1519,6 +1520,55 @@ class FileContextStore(ContextAssemblerBase):
                     rel, fp = item
                     fp_map[rel] = fp or {}
 
+        # --- Pass 2b: compute per-file TF-DF-IDF term signatures from actual content ---
+        # Read each referenced file's content, compute corpus-level DF, then compute the
+        # top-15 most distinctive terms per file (high TF in this file, rare across corpus).
+        # These are stored as ``tfidf_terms`` in each file entry so ``_card_term_weights``
+        # can use actual content signal instead of relying only on LLM-assigned keywords.
+        tfidf_terms_map: Dict[str, List[str]] = {}
+        if referenced and walk_root is not None:
+            _log.info("context index: stage 4b — computing TF-DF-IDF term signatures for %d file(s)", len(referenced))
+
+            def _read_file_terms(rel: str) -> tuple:
+                try:
+                    p = walk_root / rel
+                    if p.exists() and p.stat().st_size <= _BOOTSTRAP_MAX_BYTES:
+                        text = p.read_text(encoding="utf-8", errors="replace")
+                        return rel, _tokenize(text)
+                except Exception:  # noqa: BLE001
+                    pass
+                return rel, set()
+
+            n_workers_content = min(8, len(referenced))
+            content_results = _run_parallel(
+                [lambda r=rel: _read_file_terms(r) for rel in referenced],
+                max_workers=n_workers_content,
+            )
+
+            # Build corpus DF (how many files contain each term)
+            file_term_sets: Dict[str, Set[str]] = {}
+            for item in content_results:
+                if item is not None:
+                    rel, terms = item
+                    file_term_sets[rel] = terms
+            corpus_df_content: Dict[str, int] = {}
+            for terms in file_term_sets.values():
+                for t in terms:
+                    corpus_df_content[t] = corpus_df_content.get(t, 0) + 1
+            N_corpus = max(len(file_term_sets), 1)
+
+            # Compute top-15 distinctive terms per file: IDF = log((N+1)/(df+1))+1, TF=presence
+            for rel, terms in file_term_sets.items():
+                if not terms:
+                    tfidf_terms_map[rel] = []
+                    continue
+                term_scores = {
+                    t: math.log((N_corpus + 1) / (corpus_df_content.get(t, 0) + 1)) + 1
+                    for t in terms
+                }
+                top = sorted(term_scores, key=term_scores.__getitem__, reverse=True)[:15]
+                tfidf_terms_map[rel] = top
+
         # --- Pass 3: build and write one card per topic ---
         _log.info("context index: stage 5 — writing %d card(s)", len(topic_cards))
         cards_written = 0
@@ -1539,6 +1589,7 @@ class FileContextStore(ContextAssemblerBase):
                     "git_sha": fp.get("git_sha", ""),
                     "why": "",
                     "symbols": [],
+                    "tfidf_terms": tfidf_terms_map.get(rel, []),
                 })
 
             # Load existing card so we preserve usage_count / last_outcome if present.
@@ -1644,6 +1695,11 @@ class FileContextStore(ContextAssemblerBase):
                 # Directory components → structural noise
                 for part in p.parent.parts:
                     _add(re.sub(r"[_\-]", " ", part), 0.5)
+            # TF-DF-IDF terms: top-15 distinctive terms from actual file content.
+            # Weight 2.5 — above filename (2.0) and symbols (1.0), below LLM keywords (3.0).
+            # These are only present in cards bootstrapped at v4+; older cards degrade gracefully.
+            for term in fe.get("tfidf_terms", []):
+                _add(term, 2.5)
             for sym in fe.get("symbols", []):
                 _add(sym, 1.0)
 
