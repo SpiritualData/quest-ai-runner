@@ -361,20 +361,27 @@ def _detect_new_session(
     Returns the session ID (filename stem) or None if timeout.
     """
     start = time.time()
+    _log.info("waiting for new session file in %s (timeout %.0fs)", project_dir, timeout)
     while time.time() - start < timeout:
         try:
-            for jsonl_file in project_dir.glob("*.jsonl"):
+            files = list(project_dir.glob("*.jsonl"))
+            _log.debug("  found %d jsonl files in project dir", len(files))
+            for jsonl_file in files:
                 try:
                     mtime = jsonl_file.stat().st_mtime
+                    age = time.time() - mtime
                     if mtime > cutoff_time:
                         session_id = jsonl_file.stem
-                        _log.info("detected new claude session: %s", session_id)
+                        _log.info("✓ detected new claude session: %s (age %.1fs)", session_id, age)
                         return session_id
-                except Exception:
-                    pass
-        except Exception:
-            pass
+                    else:
+                        _log.debug("  file %s is too old (%.1fs)", jsonl_file.name, age)
+                except Exception as e:
+                    _log.debug("error checking file: %s", e)
+        except Exception as e:
+            _log.debug("error globbing: %s", e)
         time.sleep(0.5)
+    _log.warning("✗ timeout waiting for new session after %.0fs", timeout)
     return None
 
 
@@ -397,20 +404,23 @@ def _monitor_claude_session(
     try:
         project_dir = _find_claude_project_dir(working_dir)
         if not project_dir:
-            _log.info("claude project dir not found yet, waiting for session (%.0fs timeout)...", max_wait_seconds)
+            _log.warning("✗ project dir not found: checked %s and QAR_DEEP_WORKING_DIR/QAR_CORPUS_ROOT",
+                        working_dir)
+            _log.info("waiting for .claude/projects to be created (%.0fs timeout)...", max_wait_seconds)
             # Wait for it to be created, then find it
             start = time.time()
             while time.time() - start < max_wait_seconds and not stop_event.is_set():
                 time.sleep(poll_interval)
                 project_dir = _find_claude_project_dir(working_dir)
                 if project_dir:
+                    _log.info("✓ .claude/projects created: %s", project_dir)
                     break
 
         if not project_dir:
-            _log.warning("could not locate claude project dir after %.1f seconds — no live output available", max_wait_seconds)
+            _log.error("✗ FATAL: could not locate .claude/projects dir after %.1f seconds", max_wait_seconds)
             return
 
-        _log.info("found claude project dir: %s", project_dir)
+        _log.info("✓ found claude project dir: %s", project_dir)
         processed_lines: Set[str] = set()
         event_count = 0
 
