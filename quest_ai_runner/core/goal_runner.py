@@ -455,10 +455,10 @@ def _monitor_claude_session(
             return
 
         _log.info("monitoring session file: %s", jsonl_file)
+        last_emitted_text = None
 
         while not stop_event.is_set():
             try:
-
                 # Read and process new lines from the JSONL file
                 try:
                     with open(jsonl_file, 'r') as f:
@@ -469,17 +469,24 @@ def _monitor_claude_session(
 
                             try:
                                 msg = json.loads(line.strip())
+                                msg_type = msg.get("type", "")
+
+                                # Only emit assistant messages (the actual work output), not every intermediate step
+                                if msg_type not in ("assistant", "message"):
+                                    processed_lines.add(line_hash)
+                                    continue
+
                                 processed_lines.add(line_hash)
 
                                 # Format and emit the message as a progress event
                                 msg_text = _format_message_text(msg)
-                                if msg_text:
+                                if msg_text and msg_text.strip():
                                     event_count += 1
-                                    _log.info("emitting exec event #%d: %s", event_count, msg_text[:80])
+                                    _log.info("emitting exec event #%d: %s", event_count, msg_text[:100])
                                     callback(ProgressEvent(
                                         type=EVENT_EXEC,
                                         text=msg_text,
-                                        data={"message_type": msg.get("type"), "line": line_num}
+                                        data={"message_type": msg_type}
                                     ))
                             except json.JSONDecodeError:
                                 # Skip malformed lines
