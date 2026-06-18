@@ -167,6 +167,8 @@ class PlanDecision:
     rationale: str = ""
     # Optional deferred deep work: when action="answer", can also queue a deep task to run after
     deferred_deep: Optional[Dict[str, Any]] = None  # {"goal": "...", "brief": "...", "rationale": "..."}
+    # Explicit signal: this answer contains work that needs execution (instead of regex guessing)
+    answer_contains_work_to_execute: bool = False  # Set True if answer describes work the AI should do
 
 
 @dataclass

@@ -304,6 +304,10 @@ DECIDE_TOOL: Dict[str, Any] = {
                 },
                 "required": ["goal"],
             },
+            "answer_contains_work_to_execute": {
+                "type": "boolean",
+                "description": "Set to true if this answer describes work the AI should execute (instead of just reporting). Triggers auto-escalation to deep.",
+            },
             "rationale": {"type": "string"},
         },
         "required": ["action", "rationale"],
@@ -439,6 +443,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
         deep_subtasks=deep_subs,
         rationale=(raw.get("rationale") or "").strip(),
         deferred_deep=deferred_deep,
+        answer_contains_work_to_execute=bool(raw.get("answer_contains_work_to_execute", False)),
     )
 
 
@@ -1804,22 +1809,22 @@ class Orchestrator:
                                     data={"tokens_in": _ti, "tokens_out": _to, "total": _ti + _to}))
 
         # If deferred_deep is set, also run the deep task after returning the answer
-        # OR auto-detect if answer claims work needs doing OR describes unexecuted work
+        # OR if planner explicitly flagged answer_contains_work_to_execute
+        # OR auto-detect false claims (fallback for broken prompts)
         should_defer_deep = plan.deferred_deep
         if not should_defer_deep and self.deep_runner is not None:
-            # Check two patterns:
-            # 1. Answer claims completed action ("I've fixed", "Done")
-            # 2. Answer describes unexecuted work ("I need to", "I should", "I will need to")
-            has_false_claim = text_claims_action(text)
-            has_unexecuted_work = _answer_describes_unexecuted_work(text)
-
-            if has_false_claim or has_unexecuted_work:
-                # Work described but not executed — auto-escalate to deep (safety net)
-                # Execute it and append results to the existing analysis
-                should_defer_deep = {"goal": f"Execute what was described: {user_message}",
-                                      "rationale": f"auto-detected {'false claim' if has_false_claim else 'unexecuted work'} in answer"}
+            # Primary: trust planner's explicit flag
+            if plan.answer_contains_work_to_execute:
+                should_defer_deep = {"goal": f"Execute what the answer describes: {user_message}",
+                                      "rationale": "planner indicated answer contains work to execute"}
                 if emit is not None:
                     emit.status("executing described work now…")
+            # Fallback: regex pattern matching for false claims (safety net for bad planner output)
+            elif text_claims_action(text):
+                should_defer_deep = {"goal": f"Execute what was claimed: {user_message}",
+                                      "rationale": "auto-detected false claim in answer (fallback)"}
+                if emit is not None:
+                    emit.status("executing claimed work now…")
 
         if should_defer_deep:
             try:
