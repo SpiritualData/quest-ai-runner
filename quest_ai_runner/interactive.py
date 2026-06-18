@@ -967,17 +967,20 @@ _SLASH_COMMANDS = [
 # /sessions — list saved sessions
 
 
-class _SlashCompleter(Completer):
-    def get_completions(self, document, complete_event):
-        text = document.text_before_cursor.strip()
-        if not text.startswith("/"):
-            return
-        # Show completions for slash commands
-        for cmd in _SLASH_COMMANDS:
-            if cmd.startswith(text):
-                # Return the remainder to complete, plus the full command for display
-                completion_text = cmd[len(text):]
-                yield Completion(completion_text, display=cmd, start_position=len(text) - len(document.text_before_cursor))
+if _HAS_PROMPT_TOOLKIT:
+    class _SlashCompleter(Completer):
+        def get_completions(self, document, complete_event):
+            text = document.text_before_cursor.strip()
+            if not text.startswith("/"):
+                return
+            # Show completions for slash commands
+            for cmd in _SLASH_COMMANDS:
+                if cmd.startswith(text):
+                    # Return the remainder to complete, plus the full command for display
+                    completion_text = cmd[len(text):]
+                    yield Completion(completion_text, display=cmd, start_position=len(text) - len(document.text_before_cursor))
+else:
+    _SlashCompleter = None  # type: ignore
 
 
 def _history_path() -> Optional[Path]:
