@@ -885,9 +885,20 @@ class _TurnRenderer:
                 goal = data.get("goal") or "executing work…"
                 self._deep_tracker.add_run(run_id, goal)
                 self._current_deep_run_id = run_id
+
+                # Stop the panel and show the new run info
+                self._panel.stop()
                 if self._c._color:
                     sys.__stdout__.write(f"\n{_DIM}[exec] started run: {run_id}{_RESET}\n")
                     sys.__stdout__.flush()
+
+                # Show dashboard if multiple runs are now active
+                active_runs = len(self._deep_tracker._runs)
+                if active_runs > 1:
+                    self._c.dim("\n  Deep runs dashboard (press Tab to switch):")
+                    self._c.dim(self._deep_tracker.get_dashboard())
+
+                self._panel.start()
 
             # Update this run's output
             if text:
@@ -895,14 +906,6 @@ class _TurnRenderer:
                 # Print live updates as Claude Code produces them
                 self._panel.stop()
                 self._display("exec", text)
-                self._panel.start()
-
-            # Show dashboard if multiple runs
-            active_runs = len(self._deep_tracker._runs)
-            if active_runs > 1 and text is None:  # only show dashboard between events
-                self._panel.stop()
-                self._c.dim("\n  Deep runs dashboard (press Tab to switch):")
-                self._c.dim(self._deep_tracker.get_dashboard())
                 self._panel.start()
         elif t == ev["milestone"]:
             self._panel.stop()
