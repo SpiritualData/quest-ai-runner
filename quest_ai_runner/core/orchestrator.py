@@ -2231,12 +2231,37 @@ class Orchestrator:
 
             # FORCE DEEP ON STEP 0 if execution directive was detected (skip planning)
             if step == 0 and force_deep_on_step_0:
+                # Search for affected files to enable parallel subtasks
+                affected_files = []
+                try:
+                    search_results = self._do_reads([{"grep": r"\.tsx?$|\.py$|\.md$"}], [])
+                    for obs in search_results:
+                        if isinstance(obs, dict) and obs.get("kind") == "grep":
+                            hits = obs.get("hits") or []
+                            # Collect up to 4 affected files for parallel tasks
+                            for hit in hits[:4]:
+                                rel_path = hit.get("rel_path")
+                                if rel_path:
+                                    affected_files.append(rel_path)
+                except Exception:  # noqa: BLE001
+                    affected_files = []
+
+                # Create parallel subtasks, one per file (if found), else single task
+                deep_subtasks = []
+                if affected_files and len(affected_files) > 1:
+                    for file_path in affected_files[:4]:  # Max 4 parallel tasks
+                        deep_subtasks.append({
+                            "goal": _truncate_goal(f"Fix/implement {file_path}"),
+                            "brief": f"{user_message}\n\nFocus on: {file_path}"
+                        })
+
                 plan = PlanDecision(
                     action="deep",
                     goal=_truncate_goal(user_message[:200] or "Complete the request"),
                     deep_brief=user_message,
                     rationale="User demanded execution, skipping plan",
                     model_tier=None,  # use default
+                    deep_subtasks=deep_subtasks if deep_subtasks else [],
                 )
             else:
                 try:
