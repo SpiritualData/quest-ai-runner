@@ -85,6 +85,7 @@ DEFAULT_MAX_SUBQUESTIONS = 4
 DEFAULT_MAX_DEEP_SUBTASKS = 4
 DEFAULT_DEEP_MAX_TURNS = 30
 DEFAULT_MAX_GATHER_CHARS = 6000
+DEFAULT_MAX_CONSECUTIVE_READS = 10
 # Lean re-plan view: the planner is re-fed the WHOLE cumulative ``gathered`` each step, which
 # bloats fast on multi-read runs. Instead, keep the most-recent observations in full and COMPRESS
 # older ones to one-line summaries (path/source + key finding) — but only once ``gathered`` has
@@ -347,6 +348,7 @@ class OrchestratorConfig:
     max_deep_subtasks: int = DEFAULT_MAX_DEEP_SUBTASKS
     deep_max_turns: int = DEFAULT_DEEP_MAX_TURNS
     max_gather_chars: int = DEFAULT_MAX_GATHER_CHARS
+    max_consecutive_reads: int = DEFAULT_MAX_CONSECUTIVE_READS
     # OUR OWN GOAL LOOP (replaces Claude Code's /goal). After the deep worker runs, the brain
     # verifies the done-standard with one cheap LLM call; if it is not yet met, it feeds back what
     # went wrong / what to do next and re-runs, up to this many attempts. 1 = no verify-retry (single
@@ -2197,8 +2199,8 @@ class Orchestrator:
             # Safety gate: if planner chose "read" for many consecutive steps, force a terminal action
             if plan and plan.action == "read":
                 consecutive_reads += 1
-                # Escalate to deep if: 5+ consecutive reads OR approaching max_steps while still reading
-                if (consecutive_reads >= 5) or (steps > cfg.max_steps - 2 and consecutive_reads >= 2):
+                # Escalate to deep if: max_consecutive_reads+ consecutive reads
+                if consecutive_reads >= cfg.max_consecutive_reads:
                     log.warning(
                         f"Planner stuck in read loop after {steps} steps / {consecutive_reads} reads. "
                         f"Force-escalating to deep with gathered context."
