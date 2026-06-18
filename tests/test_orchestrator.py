@@ -158,6 +158,50 @@ def test_answer_describing_unexecuted_work_escalates_to_deep():
     assert runner.calls, "expected a deferred deep run to execute the described work"
 
 
+def test_goal_loop_iterates_until_verified_met():
+    # Our own goal loop (replaces Claude Code /goal): the worker runs, the brain VERIFIES the
+    # done-standard, and if not met it re-runs with steering. Here verify says not-met on attempt 1,
+    # met on attempt 2 -> two worker runs, final met=True, and the 2nd brief carries the steering.
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},  # planner
+        {"met": False, "reason": "the fix was incomplete", "next_action": "also update the helper"},
+        {"met": True, "reason": "done"},
+    ])
+    runner = StubDeepRunner(met=True, output="made an edit")
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(deep_goal_max_iterations=3)).run("fix the thing")
+    assert res.kind == "deep"
+    assert len(runner.calls) == 2, "should have re-run once after verify said not-met"
+    assert res.deep_results[0].met is True
+    assert "also update the helper" in runner.calls[1]["brief"]  # steering fed into retry
+
+
+def test_goal_loop_stops_when_first_attempt_verified_met():
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
+        {"met": True, "reason": "done on first try"},
+    ])
+    runner = StubDeepRunner(met=True, output="made the edit")
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(deep_goal_max_iterations=3)).run("fix the thing")
+    assert len(runner.calls) == 1  # verified met immediately, no wasted retries
+    assert res.deep_results[0].met is True
+
+
+def test_goal_loop_reports_not_met_after_exhausting_attempts():
+    # Verify keeps saying not-met -> after max iterations the result is a confirmed failure.
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
+        {"met": False, "reason": "still wrong", "next_action": "try again"},
+        {"met": False, "reason": "still wrong", "next_action": "try again"},
+    ])
+    runner = StubDeepRunner(met=True, output="attempted something")
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(deep_goal_max_iterations=2)).run("fix the thing")
+    assert len(runner.calls) == 2
+    assert res.deep_results[0].met is False  # brain-verified not met, despite worker exit-0
+
+
 def test_confirm_condenses_long_summary_before_escalation():
     # A decision summary is stored by Quest as a goal CONDITION (4000-char cap). A verbose planner
     # question must NOT be dumped there raw; it is condensed by an LLM call into a short ask first.

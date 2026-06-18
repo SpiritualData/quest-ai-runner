@@ -73,27 +73,33 @@ def extract_escalation_id(output: str) -> Optional[str]:
 
 
 def compose_goal_prompt(goal: str, brief: str, *, preamble: str = "") -> str:
-    """Compose the headless prompt: the ``/goal`` directive (single line) + an optional
-    consumer context preamble + the brief. The /goal directive is the canonical mechanism
-    that holds an autonomous run to a checkable done-standard."""
-    goal_line = " ".join((goal or "").split())
+    """Compose the headless worker prompt: an optional preamble + the TASK brief + the GOAL stated
+    as a plain-text done-standard.
+
+    We deliberately do NOT use Claude Code's ``/goal`` directive. ``/goal`` runs its OWN internal
+    verify-the-condition-every-turn loop (token-heavy) and caps the condition at 4000 chars
+    (a longer one is rejected and the worker runs nothing). Instead the ORCHESTRATOR runs its own
+    goal loop: it verifies the done-standard with one cheap LLM call after the worker returns, and
+    re-runs with targeted guidance if it is not yet met. So here the worker just attempts the task
+    once and reports concretely what it changed; the done-standard is given as context, not as a
+    self-policed directive."""
+    goal_text = " ".join((goal or "").split())
     body_parts: List[str] = []
     if preamble.strip():
         body_parts.append(preamble.strip())
     body_parts.append(f"TASK:\n{brief.strip()}")
+    if goal_text:
+        body_parts.append("GOAL (the done-standard your work must satisfy):\n" + goal_text)
     body_parts.append(
         "EFFICIENCY: The context above shows the relevant files/sources already identified by the "
         "brain. Use them as your starting point. Only explore further if the provided context is "
         "insufficient to complete the goal. Avoid redundant exploration of files already listed above."
     )
     body_parts.append(
-        "When complete, provide a clear summary of what you did. If you couldn't fully meet the "
-        "goal, say exactly what's left."
+        "When done, summarize CONCRETELY what you changed (the files and the actual edits/actions). "
+        "If you could not fully meet the goal, say exactly what remains and why."
     )
-    body = "\n\n".join(body_parts)
-    if goal_line:
-        return f"/goal {goal_line}\n\n{body}"
-    return body
+    return "\n\n".join(body_parts)
 
 
 class GoalRunner:

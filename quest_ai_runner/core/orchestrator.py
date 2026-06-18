@@ -191,9 +191,18 @@ The four actions:
     file (e.g. "fix the back button", "implement the new endpoint", "add a field to the form"). A
     coding/file task is ALWAYS "deep": the deep runner edits the real files, so never "answer" a
     change request by describing the fix or emitting a patch. This holds even
-    mutation must be PROPOSED/EXECUTED, never merely talked about. Provide BOTH `goal` (a CONCRETE,
-    CHECKABLE done-standard, as a human would write it) and `deep_brief` (a clear self-contained
-    brief that PRESERVES the user's action verb -- say "add/update ...", not "look up/review ..."). BE A
+    mutation must be PROPOSED/EXECUTED, never merely talked about. Provide BOTH `goal` and
+    `deep_brief`, and KEEP THEM DISTINCT:
+      * `goal` = the SHORT, CHECKABLE DONE-STANDARD only -- the single condition that means the work
+        is COMPLETE, the stop-condition an executor is held to and verifies ("the back button
+        returns to the previous screen", "a backdated habit entry no longer counts toward today").
+        ONE sentence, ideally under 200 characters. It is NOT a place for the task details, the
+        analysis, the plan, code, or a restatement of the whole request -- a long or dumped `goal`
+        is WRONG and will be rejected by the executor.
+      * `deep_brief` = the clear self-contained brief with the details, which PRESERVES the user's
+        action verb (say "add/update ...", not "look up/review ..."). All the context goes HERE,
+        never in `goal`.
+    BE A
     GROUNDED FIRST RESPONDER: if the request is actionable but UNDER-SPECIFIED (e.g. "add a goal"
     with no details), do NOT bounce it back as a question -- GROUND in the CONTEXT/GATHERED above and
     author a concrete, specific `goal` + `deep_brief` yourself (a reasonable proposal the human can
@@ -337,6 +346,12 @@ class OrchestratorConfig:
     max_deep_subtasks: int = DEFAULT_MAX_DEEP_SUBTASKS
     deep_max_turns: int = DEFAULT_DEEP_MAX_TURNS
     max_gather_chars: int = DEFAULT_MAX_GATHER_CHARS
+    # OUR OWN GOAL LOOP (replaces Claude Code's /goal). After the deep worker runs, the brain
+    # verifies the done-standard with one cheap LLM call; if it is not yet met, it feeds back what
+    # went wrong / what to do next and re-runs, up to this many attempts. 1 = no verify-retry (single
+    # shot). This is more token-efficient than /goal (which re-verifies inside the worker every turn)
+    # and lets the brain steer the next attempt.
+    deep_goal_max_iterations: int = 3
     planner_tier: str = "haiku"  # the cheap model that runs the planner step
     # Per-step planner-view leaning (see DEFAULT_PLANNER_* above). The full ``gathered`` is always
     # kept for the final answer; these only trim what the cheap PLANNER re-reads each re-plan step.
@@ -490,6 +505,56 @@ _CONDENSE_DECISION_PROMPT = (
     "analysis, code, and background. Do NOT use em dashes (--); use a comma, a colon, or parentheses "
     "instead.\n\nTEXT:\n{text}"
 )
+
+
+# ---------------------------------------------------------------------------
+# OUR OWN GOAL VERIFICATION (replaces Claude Code's /goal self-check).
+# After a deep worker runs, the brain decides whether the done-standard is met — judged through the
+# AI rep's lens (rep_preamble) and AGAINST the applicable GUIDANCE CARDS, which encode the quality
+# standards the result must satisfy — and, when it is not met, what the next attempt should do. This
+# is the primitive the goal loop iterates on.
+# ---------------------------------------------------------------------------
+
+VERIFY_GOAL_TOOL: Dict[str, Any] = {
+    "name": "goal_verdict",
+    "description": "Judge whether the worker's run met the done-standard at the quality bar; if not, say what to do next.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "met": {"type": "boolean",
+                    "description": "True ONLY if the output gives concrete evidence the goal is fully "
+                                   "satisfied AND meets the quality standards."},
+            "reason": {"type": "string", "description": "One sentence: why it is or is not met."},
+            "next_action": {"type": "string",
+                            "description": "If not met: a SHORT, specific instruction for the next attempt "
+                                           "(what to fix, what context/file to look at, or why it failed)."},
+        },
+        "required": ["met"],
+    },
+}
+
+VERIFY_GOAL_PROMPT = """\
+You are verifying whether an autonomous worker MET a goal (a checkable done-standard) AT THE REQUIRED
+QUALITY BAR. Judge strictly from the EVIDENCE in the worker's reported output.
+
+Decide:
+  - met=true ONLY if the output gives concrete evidence the done-standard is fully satisfied AND it
+    meets the QUALITY STANDARDS below (it names the specific change/result it produced and that
+    clearly matches the goal and the standards).
+  - met=false if the output is vague, only describes a plan, is partial, hit a limit or error, falls
+    short of the quality standards, or does not clearly satisfy the goal.
+When met=false, set next_action to a SHORT, specific instruction for the next attempt: what to fix,
+what context or file to look at next, or the likely reason it failed. Do NOT use em dashes.
+
+{persona}{standards}--- GOAL (done-standard) ---
+{goal}
+
+--- TASK BRIEF ---
+{brief}
+
+--- WORKER OUTPUT (what it reports it did) ---
+{output}
+"""
 
 
 # Imperative change/build verbs and bug/wrongness signals that mark a USER MESSAGE as a request to
@@ -1117,13 +1182,70 @@ class Orchestrator:
         except Exception:  # noqa: BLE001
             return "\n\n".join(a["a"] for a in ok)
 
+    # --- our own goal verification (replaces Claude Code's /goal) -------------
+
+    def _verify_goal(self, goal: str, brief: str, output: str, *,
+                     rep_preamble: Optional[str] = None,
+                     quality_standards: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Decide whether the worker's run met the done-standard AT THE QUALITY BAR.
+
+        Judged through the AI rep's lens (``rep_preamble``) and against the applicable GUIDANCE CARDS
+        (``quality_standards`` — the quality bar the result must clear). Returns
+        ``{"met": bool, "reason": str, "next_action": str}``, or ``None`` if verification could not
+        run (the caller then trusts the worker's own outcome rather than looping blindly). Never
+        raises.
+        """
+        if not (output or "").strip():
+            # Nothing to judge — the worker reported no result. Treat as not verifiable here; the
+            # loop already handles an empty-output run as a terminal failure before calling this.
+            return None
+        persona = ""
+        if rep_preamble and rep_preamble.strip():
+            persona = ("--- ACT AS THIS PERSONA WHEN JUDGING ---\n"
+                       + rep_preamble.strip()[:1500] + "\n\n")
+        standards = ""
+        if quality_standards and quality_standards.strip():
+            standards = ("--- QUALITY STANDARDS (the bar the result must meet) ---\n"
+                         + quality_standards.strip()[:3000] + "\n\n")
+        try:
+            model = self.registry.resolve_tier(self.cfg.planner_tier)
+            raw = self.provider.plan(
+                VERIFY_GOAL_PROMPT.format(
+                    persona=persona, standards=standards,
+                    goal=(goal or "")[:1000], brief=(brief or "")[:2000],
+                    output=(output or "")[:6000]),
+                model=model, tool_schema=VERIFY_GOAL_TOOL)
+            if isinstance(raw, dict) and "met" in raw:
+                return {"met": bool(raw.get("met")),
+                        "reason": str(raw.get("reason") or "").strip(),
+                        "next_action": str(raw.get("next_action") or "").strip()}
+        except Exception:  # noqa: BLE001 — verification must never break the run
+            log.warning("goal verification call failed", exc_info=True)
+        return None
+
+    @staticmethod
+    def _augment_brief(base_brief: str, prev_output: str, verdict: Dict[str, Any]) -> str:
+        """Build the next attempt's brief from the verdict: the original brief PLUS what the last
+        attempt produced, why it fell short, and the specific next action to take."""
+        reason = (verdict.get("reason") or "the done-standard was not yet satisfied").strip()
+        nxt = (verdict.get("next_action")
+               or "complete the remaining work so the goal is fully met.").strip()
+        return (
+            f"{base_brief}\n\n"
+            "--- PREVIOUS ATTEMPT DID NOT YET MEET THE GOAL ---\n"
+            f"What it reported:\n{(prev_output or '').strip()[:1500]}\n\n"
+            f"Why it fell short: {reason}\n"
+            f"Do this now: {nxt}"
+        )
+
     # --- deep fan-out --------------------------------------------------------
 
     def _run_deep(self, plan: PlanDecision, user_message: str, model: str,
                   emit: Optional[_Emitter] = None,
                   rep_preamble: Optional[str] = None,
                   exec_record: Optional[ExecutionRecord] = None,
-                  gathered: Optional[List[Dict[str, Any]]] = None) -> OrchestratorResult:
+                  gathered: Optional[List[Dict[str, Any]]] = None,
+                  quality_standards: Optional[str] = None) -> OrchestratorResult:
         subtasks = (plan.deep_subtasks or [])[: self.cfg.max_deep_subtasks]
         if not subtasks:
             subtasks = [{"goal": _truncate_goal(plan.goal or f"Fully address the request: {user_message}"),
@@ -1152,9 +1274,20 @@ class Orchestrator:
         # is enough to build a useful context_preamble for the deep runner.
         wants_preamble = _run_goal_accepts_context_preamble(self.deep_runner)
 
+        # HIERARCHICAL GOAL: the overall user-level goal this turn pursues. When the work fans out
+        # into parallel subgoals, each subgoal process must be told the HIGHER goal it serves, so it
+        # stays aligned with the whole instead of optimizing its piece in isolation.
+        overall_goal = (plan.goal or "").strip() or user_message
+        multi = len(subtasks) > 1
+
         def run_one(st: Dict[str, Any]) -> DeepResult:
             goal = (st.get("goal") or "").strip() or f"Fully address: {user_message}"
             brief = (st.get("brief") or goal).strip()
+            # Include the higher goal in a subgoal's prompt (only when this really is a subgoal of a
+            # larger, different goal — otherwise the goal already IS the overall goal).
+            if multi and overall_goal and overall_goal != goal:
+                brief = (f"OVERALL GOAL (this is ONE subgoal serving it, keep it aligned):\n"
+                         f"{overall_goal}\n\n--- THIS SUBGOAL ---\n{brief}")
             # Per-subtask execution fact — populated from EVENT_EXEC phase ticks (live) and finalized
             # from the DeepResult.met below. Recording per-subtask keeps facts correct even when
             # multiple subtasks run concurrently (each closure owns its own ``fact``).
@@ -1177,29 +1310,68 @@ class Orchestrator:
                 if wants_emit and emit is not None:
                     emit.emit(ev)
 
-            try:
-                kwargs = dict(goal=goal, brief=brief, model=model,
-                              max_turns=self.cfg.deep_max_turns)
-                if wants_emit:
-                    kwargs["emit"] = _emit_one
-                if wants_preamble:
-                    preamble_parts = []
-                    if rep_preamble:
-                        preamble_parts.append(rep_preamble)
-                    if gathered:
-                        preamble_parts.append(
-                            "--- RELEVANT CONTENT FOUND BY THE BRAIN ---\n"
-                            + _render_gathered(gathered)
-                        )
-                    if preamble_parts:
-                        kwargs["context_preamble"] = "\n\n".join(preamble_parts)
-                res = self.deep_runner.run_goal(**kwargs)
-            except Exception as e:  # noqa: BLE001
-                log.error(f"Deep runner failed: {type(e).__name__}: {e}", exc_info=True)
-                res = DeepResult(met=False, error=type(e).__name__)
-            # DeepResult.met is the AUTHORITATIVE outcome — a met run is a confirmed success; a
-            # not-met run that actually executed is a confirmed failure. This is what makes a re-run
-            # UNSAFE (a real attempt happened), so the guard will prefer honest correction.
+            def _do_run(current_brief: str) -> DeepResult:
+                try:
+                    kwargs = dict(goal=goal, brief=current_brief, model=model,
+                                  max_turns=self.cfg.deep_max_turns)
+                    if wants_emit:
+                        kwargs["emit"] = _emit_one
+                    if wants_preamble:
+                        preamble_parts = []
+                        if rep_preamble:
+                            preamble_parts.append(rep_preamble)
+                        if gathered:
+                            preamble_parts.append(
+                                "--- RELEVANT CONTENT FOUND BY THE BRAIN ---\n"
+                                + _render_gathered(gathered)
+                            )
+                        if preamble_parts:
+                            kwargs["context_preamble"] = "\n\n".join(preamble_parts)
+                    return self.deep_runner.run_goal(**kwargs)
+                except Exception as e:  # noqa: BLE001
+                    log.error(f"Deep runner failed: {type(e).__name__}: {e}", exc_info=True)
+                    return DeepResult(met=False, error=type(e).__name__)
+
+            # OUR OWN GOAL LOOP (replaces Claude Code's /goal): run the worker, then VERIFY the
+            # done-standard at the quality bar with one cheap LLM call (judged through the rep persona
+            # and the applicable guidance cards). If it is not met, feed back what fell short + what
+            # to do next and re-run, up to deep_goal_max_iterations. More token-efficient than /goal
+            # (no per-turn self-check inside the worker) and the brain steers each retry.
+            base_brief = brief
+            current_brief = brief
+            max_iters = max(1, self.cfg.deep_goal_max_iterations)
+            res = DeepResult(met=False)
+            for attempt in range(1, max_iters + 1):
+                if emit is not None and attempt > 1:
+                    emit.status(f"goal not met yet, iterating (attempt {attempt} of {max_iters})…")
+                res = _do_run(current_brief)
+                # A human-decision escalation, or a hard failure with NO output (binary missing,
+                # timeout, silent no-op), is terminal — do not verify or iterate.
+                if res.decision_id or (res.error and not (res.output or "").strip()):
+                    break
+                # Verify the done-standard ourselves, applying the quality standards (guidance) and
+                # the rep persona. None => could not verify => trust the worker's own outcome.
+                verdict = self._verify_goal(goal, base_brief, res.output or "",
+                                            rep_preamble=rep_preamble,
+                                            quality_standards=quality_standards)
+                if verdict is None:
+                    break
+                if verdict.get("met"):
+                    res.met = True
+                    if emit is not None:
+                        emit.status("goal verified met.")
+                    break
+                # Not met: record why, and (unless out of attempts) steer the next run.
+                res.met = False
+                res.error = res.error or ("goal not yet met: "
+                                          + (verdict.get("reason") or "done-standard not satisfied"))
+                if emit is not None and verdict.get("reason"):
+                    emit.status("goal not met: " + verdict["reason"][:160])
+                if attempt < max_iters:
+                    current_brief = self._augment_brief(base_brief, res.output or "", verdict)
+
+            # res.met is now the brain-verified outcome (not just the worker's exit code). The fact
+            # records it for the broken-promise guard; a verified-not-met run is a confirmed failure.
             if fact is not None:
                 if res.met:
                     fact.succeeded = True
@@ -1640,6 +1812,10 @@ class Orchestrator:
         # what was pre-selected so a later read_guidance of the same id returns a de-dupe note.
         # Best-effort: any failure leaves the run exactly as if no guidance were wired.
         guidance_selected_ids: set = set()
+        # The guidance cards selected for THIS input are the QUALITY STANDARDS the result must meet.
+        # We keep them in ``quality_standards`` so the goal loop can verify the done-standard against
+        # the same standards the planner was given (see _run_deep / _verify_goal).
+        quality_standards: Optional[str] = None
         if self.guidance is not None:
             try:
                 _cards = self.guidance.select(
@@ -1656,6 +1832,7 @@ class Orchestrator:
                     guidance_selected_ids.add(_c.id)
                     _blocks.append(f"[{_c.id}] {_c.title}\n(applies when: {_c.relevance})\n{_c.body}")
                 _guidance_view = "\n\n".join(_blocks)
+                quality_standards = _guidance_view  # rolls into goal verification as the quality bar
                 context_view = (_guidance_view + "\n\n" + context_view if context_view
                                 else _guidance_view)
                 # Transparency: a STATUS tick naming the guidance applied this turn.
@@ -1955,7 +2132,7 @@ class Orchestrator:
             emit.status("working on this now…")
             res = self._run_deep(plan, user_message, self._answer_model(plan, "opus", hint=model_hint),
                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
-                                 gathered=gathered)
+                                 gathered=gathered, quality_standards=quality_standards)
             # Background: categorize edited files into context cards (deep runner returns edited_files in metadata)
             if res.deep_results and any(dr.met for dr in res.deep_results):
                 self._update_context_cards_after_deep(res, context_meta)
@@ -2048,7 +2225,8 @@ class Orchestrator:
                 deep_model = self._answer_model(deferred_plan, "opus", hint=model_hint)
                 deep_res = self._run_deep(deferred_plan, user_message, deep_model,
                                          emit=emit, rep_preamble=rep_preamble,
-                                         exec_record=exec_record, gathered=gathered)
+                                         exec_record=exec_record, gathered=gathered,
+                                         quality_standards=quality_standards)
                 # Emit execution results as a separate milestone/message (not appended to answer)
                 if deep_res and deep_res.deep_results:
                     deep_output = "\n\n".join(d.output for d in deep_res.deep_results if d.output)
