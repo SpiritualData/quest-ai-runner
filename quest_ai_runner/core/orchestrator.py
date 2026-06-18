@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -476,6 +477,57 @@ def _truncate_goal(goal: str, max_chars: int = 3900) -> str:
     if len(goal) > max_chars:
         return goal[:max_chars] + " [truncated]"
     return goal
+
+
+# Imperative change/build verbs and bug/wrongness signals that mark a USER MESSAGE as a request to
+# CHANGE something (code, files, or data), not just to be informed. Kept app-agnostic.
+_CHANGE_VERBS = (
+    r"fix|implement|build|refactor|add|remove|delete|change|update|edit|rewrite|apply|create|"
+    r"make|migrate|rename|move|replace|configure|enable|disable|integrate|wire\s+up|hook\s+up|"
+    r"set\s+up|ensure|adjust|correct|patch|resolve|handle|support|improve|optimize"
+)
+_CHANGE_VERB_RE = re.compile(r"\b(?:" + _CHANGE_VERBS + r")\b", re.IGNORECASE)
+# Bug/wrongness descriptions ("it incorrectly X", "doesn't work", "should X but Y", "is broken").
+_WRONGNESS_RE = re.compile(
+    r"\b(?:bug|broken|incorrect(?:ly)?|wrong(?:ly)?|fail(?:s|ing|ed)?|error|"
+    r"does\s*n['’]?t\s+work|do\s+not\s+work|not\s+working|is\s*n['’]?t\s+working|"
+    r"should\b.{0,60}\bbut\b|instead\s+of)\b",
+    re.IGNORECASE,
+)
+# A purely interrogative opener: when the message is just a how/what/why question with no imperative
+# change verb, it wants an explanation, not an edit. Used to avoid auto-editing on "how do I…?".
+_INFO_QUESTION_RE = re.compile(
+    r"^\s*(?:how|what|what['’]?s|why|which|who|when|where|explain|describe|tell\s+me|"
+    r"can\s+you\s+explain|is\s+there|are\s+there|do\s+you|does\s+it|should\s+i)\b",
+    re.IGNORECASE,
+)
+
+
+def _message_requests_change(message: Optional[str]) -> bool:
+    """True iff the USER MESSAGE asks for a CHANGE to be made (code/files/data), not just info.
+
+    Keyed off the STABLE user message rather than the (highly variable) answer text, because the
+    cheap planner often misroutes an actionable request to "answer" and then only DESCRIBES the
+    change. This is the reliable signal that the turn should have executed work. Conservative on
+    pure questions: a how/what/why explanation request with no imperative change verb returns False
+    so an informational ask is never auto-escalated into a file-editing run. Never raises.
+    """
+    if not message or not message.strip():
+        return False
+    try:
+        m = message.strip()
+        has_verb = bool(_CHANGE_VERB_RE.search(m))
+        has_wrongness = bool(_WRONGNESS_RE.search(m))
+        if not (has_verb or has_wrongness):
+            return False
+        # A leading interrogative with NO imperative change verb is an explanation request: don't
+        # escalate (e.g. "how does the date logic work?"). A bug statement ("it incorrectly X") or
+        # an imperative ("fix the date bug") is a change request even if it also reads as a report.
+        if _INFO_QUESTION_RE.search(m) and not has_verb:
+            return False
+        return True
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _answer_describes_unexecuted_work(text: Optional[str]) -> bool:
@@ -1917,6 +1969,29 @@ class Orchestrator:
                                       "rationale": "auto-detected unexecuted work in answer (fallback)"}
                 if emit is not None:
                     emit.status("executing described work now…")
+            # Decisive fallback, keyed off the STABLE USER MESSAGE (not the variable answer text):
+            # the user asked for a CHANGE (fix/implement/"it incorrectly X"…), a deep runner is
+            # available, yet the planner routed to "answer" and nothing executed this turn. The
+            # earlier regex nets only match specific ANSWER phrasings, which a model like gemini
+            # rarely produces verbatim, so an actionable request would silently end as a proposal.
+            # Detecting intent from the message instead reliably catches that case. The brief carries
+            # the assistant's proposed approach so the deep run APPLIES it rather than re-deriving.
+            elif (_message_requests_change(user_message)
+                  and (exec_record is None or not exec_record.any_mutation_attempted)):
+                log.info("Escalating answer->deep: user message requests a change but the turn only "
+                         "produced a proposal; running it now.")
+                _proposal = (text or "").strip()
+                _brief = user_message if not _proposal else (
+                    f"{user_message}\n\nThe assistant proposed this approach. APPLY it (make the "
+                    f"actual code/file/data changes, do not just describe them):\n{_proposal}"
+                )
+                should_defer_deep = {
+                    "goal": f"Carry out the user's request: {user_message}",
+                    "brief": _brief,
+                    "rationale": "user message requests a change but turn only proposed it (message-intent fallback)",
+                }
+                if emit is not None:
+                    emit.status("you asked for a change, making it now…")
 
         if should_defer_deep:
             try:

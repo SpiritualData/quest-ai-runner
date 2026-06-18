@@ -158,6 +158,27 @@ def test_answer_describing_unexecuted_work_escalates_to_deep():
     assert runner.calls, "expected a deferred deep run to execute the described work"
 
 
+def test_actionable_message_with_proposal_answer_escalates_to_deep():
+    # The real-world failure the user hit: the planner answers (PROPOSES) a code change in one step
+    # and forgets the explicit flag. The proposal phrasing ("Aligning these to use the same
+    # created_at field will guarantee ...") matches NONE of the answer-text regex nets, so the turn
+    # used to end as a proposal that never ran. The message-intent fallback (keyed off the stable
+    # user message "the system incorrectly assigns dates ...") must still escalate to a deep run,
+    # and the brief must carry the proposed approach so the deep run APPLIES it.
+    provider = StubProvider(
+        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "propose"}],
+        answer_text=("Aligning these to use the same created_at field will guarantee that editing "
+                     "an entry's time to yesterday immediately moves it out of today's actions."),
+    )
+    runner = StubDeepRunner(met=True, output="applied the change")
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run(
+        "the system incorrectly assigns dates to actions"
+    )
+    assert res.kind == "answer"
+    assert runner.calls, "message-intent fallback must execute the proposed change"
+    assert "created_at" in runner.calls[0]["brief"], "brief should carry the proposed approach"
+
+
 def test_plain_informational_answer_does_not_escalate():
     # The net must stay OFF for genuine Q&A: an informational answer with no described change
     # should NOT trigger a deep run (no false escalation / no wasted subprocess).
