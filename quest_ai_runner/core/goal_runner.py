@@ -442,6 +442,7 @@ def _monitor_claude_session(
         # Monitor ALL new session files (parallel tasks create multiple sessions)
         _log.info("monitoring for new claude sessions (parallel tasks may create multiple)...")
         watched_files: Dict[str, int] = {}  # filename -> last known file size
+        file_session_ids: Dict[str, str] = {}  # filename -> Claude's session_id
         session_timeout = 15.0
         session_start = time.time()
 
@@ -457,11 +458,12 @@ def _monitor_claude_session(
                             continue
 
                         if jsonl_file not in watched_files:
-                            _log.info("detected new session: %s", jsonl_file.name)
+                            _log.info("detected new session file: %s", jsonl_file.name)
                             watched_files[jsonl_file] = 0  # Start watching from beginning
 
-                        # Session ID is the filename stem (UUID)
-                        session_id = jsonl_file.stem
+                        # Session ID comes from Claude's sessionId field in the JSONL
+                        # (will be extracted from first message if not already known)
+                        session_id = file_session_ids.get(str(jsonl_file))
 
                         # Read new lines from this session file
                         current_size = jsonl_file.stat().st_size
@@ -489,12 +491,23 @@ def _monitor_claude_session(
                                             msg_text = _format_message_text(msg)
                                             if msg_text and msg_text.strip():
                                                 event_count += 1
-                                                _log.info("emitting exec event #%d from session %s: %s",
-                                                         event_count, session_id[:8], msg_text[:80])
+
+                                                # Extract task ID from message if present (e.g., "TASK 1:" in brief)
+                                                task_id = None
+                                                if msg_text:
+                                                    import re
+                                                    match = re.search(r'\bTASK\s+(\d+)\b', msg_text)
+                                                    if match:
+                                                        task_id = f"task_{match.group(1)}"
+                                                        file_session_ids[str(jsonl_file)] = task_id
+
+                                                run_id = task_id or session_id or jsonl_file.stem
+                                                _log.info("emitting exec event #%d from %s: %s",
+                                                         event_count, run_id, msg_text[:80])
                                                 callback(ProgressEvent(
                                                     type=EVENT_EXEC,
                                                     text=msg_text,
-                                                    data={"run_id": session_id, "message_type": msg_type}
+                                                    data={"run_id": run_id, "message_type": msg_type}
                                                 ))
                                         except json.JSONDecodeError:
                                             pass
