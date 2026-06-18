@@ -11,22 +11,24 @@ from quest_ai_runner.core.model_registry import (
 
 def test_bucket_takes_latest_first_of_each_family():
     # Latest-first list: the FIRST opus/sonnet/haiku seen wins.
+    # Semantic tiers: opus -> quality, sonnet -> balanced, haiku -> fast.
     models = [
         "claude-opus-4-9", "claude-opus-4-8",
         "claude-sonnet-4-7", "claude-sonnet-4-6",
         "claude-haiku-4-6", "claude-haiku-4-5",
     ]
     top = bucket_top(models)
-    assert top == {"opus": "claude-opus-4-9", "sonnet": "claude-sonnet-4-7",
-                   "haiku": "claude-haiku-4-6"}
+    assert top["quality"] == "claude-opus-4-9"
+    assert top["balanced"] == "claude-sonnet-4-7"
+    assert top["fast"] == "claude-haiku-4-6"
 
 
 def test_bucket_fills_missing_families_from_fallback():
-    # Only opus present live -> sonnet/haiku come from the fallback map.
+    # Only opus present live -> balanced/fast come from the fallback map.
     top = bucket_top(["claude-opus-9-9"])
-    assert top["opus"] == "claude-opus-9-9"
-    assert top["sonnet"] == DEFAULT_FALLBACK_TOP["sonnet"]
-    assert top["haiku"] == DEFAULT_FALLBACK_TOP["haiku"]
+    assert top["quality"] == "claude-opus-9-9"
+    assert top["balanced"] == DEFAULT_FALLBACK_TOP["balanced"]
+    assert top["fast"] == DEFAULT_FALLBACK_TOP["fast"]
 
 
 def test_registry_resolves_tiers_from_provider():
@@ -52,7 +54,8 @@ def test_registry_falls_back_when_list_empty():
             return []
 
     reg = ModelRegistry(Empty())
-    assert reg.resolve_tier("opus") == DEFAULT_FALLBACK_TOP["opus"]
+    # "opus" tier-name maps to "quality" via backward-compat tier_map
+    assert reg.resolve_tier("opus") == DEFAULT_FALLBACK_TOP["quality"]
 
 
 def test_registry_survives_provider_exception():
@@ -63,8 +66,8 @@ def test_registry_survives_provider_exception():
             raise RuntimeError("network down")
 
     reg = ModelRegistry(Boom())
-    # Must not raise; falls back.
-    assert reg.resolve_tier("sonnet") == DEFAULT_FALLBACK_TOP["sonnet"]
+    # Must not raise; falls back. "sonnet" maps to "balanced".
+    assert reg.resolve_tier("sonnet") == DEFAULT_FALLBACK_TOP["balanced"]
 
 
 # --- vision-capability seam -------------------------------------------------
@@ -78,9 +81,9 @@ def test_registry_survives_provider_exception():
     "claude-opus-4-8",
     "claude-haiku-4-5",
     "opus", "sonnet", "haiku",
-    DEFAULT_FALLBACK_TOP["opus"],
-    DEFAULT_FALLBACK_TOP["sonnet"],
-    DEFAULT_FALLBACK_TOP["haiku"],
+    DEFAULT_FALLBACK_TOP["best"],
+    DEFAULT_FALLBACK_TOP["balanced"],
+    DEFAULT_FALLBACK_TOP["fast"],
     # Google Gemini 1.5 / 2.x / 3.x.
     "gemini-1.5-pro", "gemini-2.0-flash", "gemini-3-pro",
     # OpenAI multimodal families.

@@ -1150,7 +1150,7 @@ class FileContextStore(ContextAssemblerBase):
         repo_root: Optional[str] = None,
         max_cards_in_view: int = 8,
         auto_bootstrap: bool = True,
-        confidence_threshold: float = 3.0,
+        confidence_threshold: float = 9.0,
         dry_run: bool = False,
         provider: Any = None,
         model: Optional[str] = None,
@@ -1611,23 +1611,47 @@ class FileContextStore(ContextAssemblerBase):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _card_searchable_terms(self, card: Dict[str, Any]) -> Set[str]:
-        """Build the full searchable term set for a card (IDF universe).
+    def _card_term_weights(self, card: Dict[str, Any]) -> Dict[str, float]:
+        """Build a term -> max-weight map for field-weighted scoring.
 
-        Includes tokens from: keywords, summary, each pinned file's path
-        segments (split on / _ . so "planning.py" contributes "planning"),
-        and each file's symbols.  Lowercased, short/stopword-free.
+        Each term's weight is the MAXIMUM across all sources it appears in:
+          keywords (LLM-tagged)    3.0  -- most intentional signal
+          summary + filename stem  2.0  -- filename is a title for the file
+          symbols (fn/class names) 1.0  -- meaningful but uncurated
+          directory components     0.5  -- structural noise
+          file extension           0.0  -- dropped (.py/.ts adds no signal)
+
+        Max (not sum) prevents inflating scores when a keyword term also appears
+        in the summary -- the keyword weight already captures that signal.
         """
-        parts: List[str] = []
-        parts.extend(card.get("keywords", []))
-        parts.append(card.get("summary", ""))
+        weights: Dict[str, float] = {}
+
+        def _add(text: str, w: float) -> None:
+            for t in _tokenize(text):
+                if w > weights.get(t, 0.0):
+                    weights[t] = w
+
+        for kw in card.get("keywords", []):
+            _add(kw, 3.0)
+        _add(card.get("summary", ""), 2.0)
+
         for fe in card.get("files", []):
-            # Split path on common symbol separators so each path component
-            # (directory name, filename stem, extension) becomes a token.
-            import re as _re
-            parts.append(_re.sub(r"[/._\-]", " ", fe.get("path", "")))
-            parts.extend(fe.get("symbols", []))
-        return _tokenize(" ".join(parts))
+            path = fe.get("path", "")
+            if path:
+                p = Path(path)
+                # Filename stem (e.g. "ChatWindow" from ChatWindow.tsx) → title-level signal
+                _add(re.sub(r"[_\-]", " ", p.stem), 2.0)
+                # Directory components → structural noise
+                for part in p.parent.parts:
+                    _add(re.sub(r"[_\-]", " ", part), 0.5)
+            for sym in fe.get("symbols", []):
+                _add(sym, 1.0)
+
+        return weights
+
+    def _card_searchable_terms(self, card: Dict[str, Any]) -> Set[str]:
+        """Return the set of all terms in a card (for DF computation)."""
+        return set(self._card_term_weights(card).keys())
 
     def _assemble_inner(self, task_text: str) -> AssembledContext:
         task_kws = _tokenize(task_text)
@@ -1638,33 +1662,35 @@ class FileContextStore(ContextAssemblerBase):
         if not cards:
             return AssembledContext()
 
-        # ---- IDF-weighted scoring ----
-        # Build a term -> searchable set mapping for every card (computed once).
-        card_term_sets: Dict[str, Set[str]] = {
-            cid: self._card_searchable_terms(c) for cid, c in cards.items()
+        # ---- Field-weighted TF-IDF scoring ----
+        # Each card has a term->weight map (keywords=3, summary+filename=2,
+        # symbols=1, dir components=0.5, extensions dropped). DF is computed
+        # from presence (a term counts once per card regardless of weight) so
+        # rare terms still get high IDF. Score = sum(field_weight * IDF).
+        card_weight_maps: Dict[str, Dict[str, float]] = {
+            cid: self._card_term_weights(c) for cid, c in cards.items()
         }
         N = len(cards)
 
-        # Compute document frequency per term across all cards.
+        # Compute document frequency per term (presence-based across all cards).
         df: Dict[str, int] = {}
-        for term_set in card_term_sets.values():
-            for term in term_set:
+        for tw in card_weight_maps.values():
+            for term in tw:
                 df[term] = df.get(term, 0) + 1
 
         # IDF(term) = log((N+1)/(df+1)) + 1  (smooth, always >= 1).
         def _idf(term: str) -> float:
             return math.log((N + 1) / (df.get(term, 0) + 1)) + 1.0
 
-        # Score each card: sum of IDF for each query term present in the card's term set.
-        # Test-file cards are down-weighted by their stored ``weight`` (default 0.5) so that
-        # a source file and its test file both match the same query, the source file ranks first.
+        # Score each card: sum of field_weight * IDF for each query term present.
+        # Test-file cards are down-weighted by their stored ``weight`` (default 0.5).
         # Tie-break by (usage_count DESC, last_verified_at DESC).
         scored: List[tuple] = []  # (-score, -usage_count, -last_verified_ts, card_dict)
-        idf_score_map: Dict[str, float] = {}  # card_id -> raw IDF score (for relevance display)
+        idf_score_map: Dict[str, float] = {}  # card_id -> raw score (for relevance display)
         for cid, card in cards.items():
-            card_terms = card_term_sets[cid]
-            base_score = sum(_idf(t) for t in task_kws if t in card_terms)
-            # Apply weight: test files stored with weight=0.5 are penalised.
+            tw = card_weight_maps[cid]
+            base_score = sum(tw[t] * _idf(t) for t in task_kws if t in tw)
+            # Apply test-file penalty.
             card_weight = float(card.get("weight", _SOURCE_FILE_WEIGHT))
             score = base_score * card_weight
             # CONFIDENCE GATE: only a match that clears the threshold is injected. A weak match
@@ -1815,6 +1841,39 @@ class FileContextStore(ContextAssemblerBase):
             part = f"### Card: {card_id}\n{summary}\n\nFiles:\n{file_block}"
             if conv_block:
                 part += f"\n\nConventions:\n{conv_block}"
+
+            # Surface other source files in the same directories that weren't sampled
+            # into this card during bootstrap, so the context engine can decide whether
+            # to pull them in.
+            if self._repo_root is not None:
+                pinned_paths: Set[str] = {fe.get("path", "") for fe in card.get("files", [])}
+                dirs_to_scan: Set[str] = set()
+                for fp in pinned_paths:
+                    if fp:
+                        parent = str(Path(fp).parent)
+                        dirs_to_scan.add(parent)
+                sibling_paths: List[str] = []
+                for d in sorted(dirs_to_scan):
+                    dir_abs = self._repo_root / d
+                    if dir_abs.is_dir():
+                        try:
+                            for entry in sorted(dir_abs.iterdir()):
+                                if (entry.is_file()
+                                        and entry.suffix in _SOURCE_EXTS
+                                        and not entry.name.startswith(".")):
+                                    rel = str(entry.relative_to(self._repo_root))
+                                    if rel not in pinned_paths:
+                                        sibling_paths.append(rel)
+                        except OSError:
+                            pass
+                if sibling_paths:
+                    shown = sibling_paths[:12]
+                    more = len(sibling_paths) - len(shown)
+                    sibling_lines = "\n".join(f"  - {p}" for p in shown)
+                    if more:
+                        sibling_lines += f"\n  - … and {more} more"
+                    part += f"\n\nOther files in the same directories (not sampled into this card):\n{sibling_lines}"
+
             view_parts.append(part)
 
         context_view = "\n\n---\n\n".join(view_parts)

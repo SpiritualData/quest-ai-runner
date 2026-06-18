@@ -283,7 +283,7 @@ class TestFileContextStoreAssemble:
             summary="The chat subsystem handles real-time conversation."
         ))
         # confidence_threshold=0.0: tests ranking/matching on small synthetic sets
-        # where IDF scores are below the production gate of 3.0.
+        # where IDF scores are below the production gate of 9.0.
         store = FileContextStore(str(cards_dir), confidence_threshold=0.0)
         ac = store.assemble("how does the chat conversation work?")
         assert "chat-card" in ac.card_ids
@@ -1126,7 +1126,7 @@ class TestIDFScoring:
         ))
 
         # confidence_threshold=0.0: tests ranking logic on small synthetic card sets
-        # where IDF scores are below the production gate of 3.0.
+        # where IDF scores are below the production gate of 9.0.
         store = FileContextStore(str(cards_dir), max_cards_in_view=4, auto_bootstrap=False,
                                  confidence_threshold=0.0)
 
@@ -1223,7 +1223,8 @@ class TestConfidenceGate:
         cards_dir = tmp_path / "cards"
         cards_dir.mkdir()
         # Two cards with a single common term each.  With N=2 and df=1,
-        # IDF(term) = log(3/2)+1 ~= 1.405; that stays below the default 3.0 gate.
+        # IDF(term) = log(3/2)+1 ~= 1.405; max keyword weight = 3.0, so
+        # score ~= 3.0*1.0 + 3.0*1.405 = 7.2, which stays below the default 9.0 gate.
         _write_card(cards_dir, _make_card(
             "weak-card-a", ["python", "module"],
             summary="weak card a: python module",
@@ -1233,7 +1234,7 @@ class TestConfidenceGate:
             summary="weak card b: python package",
         ))
 
-        # Default threshold (3.0) -- scores ~1.4 per matching term never clear it.
+        # Default threshold (9.0) -- weak common-term match scores ~7.2, below the gate.
         store = FileContextStore(str(cards_dir), auto_bootstrap=False)
         ac = store.assemble("python module package")
 
@@ -1245,7 +1246,7 @@ class TestConfidenceGate:
         )
 
     def test_weak_match_on_small_card_set_clears_with_zero_threshold(self, tmp_path):
-        """The same weak match that is gated out at 3.0 IS returned at 0.0.
+        """The same weak match that is gated out at 9.0 IS returned at 0.0.
 
         This proves the gate is the only reason the match is suppressed,
         and that confidence_threshold=0.0 restores old behaviour.
@@ -1268,13 +1269,19 @@ class TestConfidenceGate:
         assert len(ac_open.card_ids) > 0, "expected open store to return weak match"
 
     # ------------------------------------------------------------------
-    # 2. Default threshold is 3.0
+    # 2. Default threshold is 9.0 (calibrated for max field-weighted scoring)
     # ------------------------------------------------------------------
 
-    def test_default_threshold_is_3(self, tmp_path):
-        """FileContextStore default confidence_threshold must be 3.0."""
+    def test_default_threshold_is_9(self, tmp_path):
+        """FileContextStore default confidence_threshold must be 9.0.
+
+        Calibrated for max field-weighted scoring: a keyword match scores
+        keyword_weight(3.0) * IDF. A single unique keyword in a 36-card corpus
+        scores ~11.7, well above 9.0. Common terms in a tiny corpus score ~7.2,
+        below 9.0. This gates noise while passing genuine matches.
+        """
         store = FileContextStore(str(tmp_path / "cards"), auto_bootstrap=False)
-        assert store._confidence_threshold == 3.0
+        assert store._confidence_threshold == 9.0
 
     # ------------------------------------------------------------------
     # 3. Strong/confident match over a realistic ~30+ card bootstrap IS injected
@@ -1337,9 +1344,10 @@ class TestConfidenceGate:
 
     def test_strong_match_injected_over_large_bootstrap(self, tmp_path):
         """A distinctive query term that appears in only ONE of ~36 topic cards clears the
-        3.0 gate and is injected with the right card.
+        9.0 gate and is injected with the right card.
 
-        IDF for a term in 1/36 cards = log(37/2)+1 ~= 3.92, which exceeds 3.0.
+        With max field weights: keyword_weight(3.0) * IDF(1/36 cards ~= 3.92) = 11.76 per
+        term, which exceeds the 9.0 gate. Six such terms gives a total score of ~70.
         """
         n_noise = 35
         repo = self._make_large_repo(tmp_path, n_noise_files=n_noise)
@@ -1361,7 +1369,7 @@ class TestConfidenceGate:
 
         assert ac.context_view != "", (
             f"expected non-empty context_view for distinctive strong match "
-            f"(N={n} cards, threshold=3.0)"
+            f"(N={n} cards, threshold=9.0)"
         )
         assert len(ac.card_ids) > 0, (
             "expected at least one card_id for strong/distinctive match"

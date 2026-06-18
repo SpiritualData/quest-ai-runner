@@ -14,7 +14,6 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from quest_ai_runner.adapters.file_context_store import (
     _select_representative_files,
-    _extract_terms,
     _extract_file_snippet,
     _summarize_snippet,
 )
