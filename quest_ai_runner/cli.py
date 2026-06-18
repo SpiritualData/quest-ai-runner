@@ -214,7 +214,8 @@ def _config_from_env() -> RunnerConfig:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="quest-ai-runner",
                                      description="Poll Quest for due AI tasks and execute them.")
-    parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("-v", "--verbose", action="count", default=0,
+                        help="increase verbosity: -v for info, -vv for debug")
     sub = parser.add_subparsers(dest="command")
 
     # --- chat subcommand: interactive attended session ------------------------
@@ -308,7 +309,7 @@ def main(argv=None) -> int:
             from .textual_session import is_textual_available, start_textual_interactive
             if is_textual_available():
                 log.debug("using Textual UI for chat session")
-                start_textual_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id, verbose=args.verbose)
+                start_textual_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id, verbosity=args.verbose)
                 return 0
         except Exception as e:
             log.debug("Textual UI failed, falling back to ANSI: %s", e)
