@@ -1152,12 +1152,17 @@ class FileContextStore(ContextAssemblerBase):
         auto_bootstrap: bool = True,
         confidence_threshold: float = 3.0,
         dry_run: bool = False,
+        provider: Any = None,
     ) -> None:
         self._cards_dir = Path(cards_dir)
         self._repo_root = Path(repo_root).resolve() if repo_root else None
         self._max_cards = max_cards_in_view
         self._auto_bootstrap = auto_bootstrap
         self._dry_run = dry_run
+        # Optional ModelProvider for LLM-based card relevance filtering.
+        # When wired, IDF-selected candidates are re-ranked and filtered by the LLM
+        # so only cards genuinely relevant to the task are injected.
+        self._provider = provider
         # CONFIDENCE GATE (the never-worse-by-construction lever). A card is only injected when
         # its IDF match score clears this floor AND it is fresh. A weak/ambiguous match injects
         # NOTHING, so the run is plain Claude Code (the baseline). The system can therefore only
@@ -1606,14 +1611,17 @@ class FileContextStore(ContextAssemblerBase):
     def _card_searchable_terms(self, card: Dict[str, Any]) -> Set[str]:
         """Build the full searchable term set for a card (IDF universe).
 
-        Includes tokens from: keywords, summary, each pinned file's path
-        segments, and each file's symbols.  Lowercased, short/stopword-free.
+        Includes tokens from: keywords, summary, and each file's symbols.
+        File path segments are intentionally excluded: including them causes
+        false positives where a card about an unrelated topic scores high simply
+        because one of its files is named e.g. ``planning.py`` and the query
+        mentions ``planning``.  Symbols (function/class names) are fine because
+        they encode semantic meaning, not filesystem structure.
         """
         parts: List[str] = []
         parts.extend(card.get("keywords", []))
         parts.append(card.get("summary", ""))
         for fe in card.get("files", []):
-            parts.append(fe.get("path", "").replace("/", " ").replace("_", " "))
             parts.extend(fe.get("symbols", []))
         return _tokenize(" ".join(parts))
 
@@ -1669,7 +1677,51 @@ class FileContextStore(ContextAssemblerBase):
         # Sort: primary descending score, then tie-break descending usage_count,
         # then tie-break by presence of a verified_at string (longer = more recent).
         scored.sort(key=lambda x: (x[0], x[1], x[2]))
-        top_cards = [x[4] for x in scored[: self._max_cards]]
+        # Take up to 2x max_cards as IDF candidates so the LLM filter has enough to work with.
+        idf_candidates = [x[4] for x in scored[: self._max_cards * 2]]
+
+        # ---- LLM relevance filter (when a provider is wired) ----
+        # IDF finds cards that share keywords with the task.  The LLM filter culls
+        # cards that share keywords but are semantically unrelated to the task.
+        # Also ranks the files within each kept card by relevance and returns only
+        # the relevant ones.
+        llm_meta_map: Dict[str, Any] = {}  # card_id -> CardMetadata from LLM filter
+        if self._provider is not None and idf_candidates:
+            try:
+                from .card_filter import filter_cards_by_relevance
+                candidate_dicts = [
+                    {
+                        "id": c.get("id", ""),
+                        "title": c.get("summary", ""),
+                        "files": [
+                            fe.get("path", "")
+                            for fe in sorted(
+                                c.get("files", []),
+                                key=lambda fe: fe.get("mtime", 0.0),
+                                reverse=True,
+                            )[:10]
+                        ],
+                        "adapter": "keyword",
+                    }
+                    for c in idf_candidates
+                ]
+                filtered = filter_cards_by_relevance(
+                    task_text, candidate_dicts, model_provider=self._provider
+                )
+                for cm in filtered:
+                    llm_meta_map[cm.id] = cm
+                # Keep only LLM-approved cards, in LLM relevance order.
+                idf_candidates = [
+                    c for c in idf_candidates if c.get("id", "") in llm_meta_map
+                ]
+                idf_candidates.sort(
+                    key=lambda c: llm_meta_map[c.get("id", "")].relevance_score,
+                    reverse=True,
+                )
+            except Exception:  # noqa: BLE001
+                _log.debug("LLM card filter failed, using IDF ranking", exc_info=True)
+
+        top_cards = idf_candidates[: self._max_cards]
 
         # Render each card, checking file freshness.
         # Collect every (card_index, file_entry) pair that needs a fingerprint check, then
@@ -1678,9 +1730,18 @@ class FileContextStore(ContextAssemblerBase):
         # fingerprint yields an empty dict (same as today, never raises).
         #
         # Build the flat list of (card_idx, fe) pairs to fingerprint.
+        # Files are sorted by mtime descending (most recently modified first) before
+        # fingerprinting so both the freshness check and the rendered view order matches
+        # the user expectation of "most recent sources first".
         fp_jobs: List[tuple] = []  # (card_idx, fe_idx, fpath)
         for ci, card in enumerate(top_cards):
-            for fi, fe in enumerate(card.get("files", [])):
+            sorted_files = sorted(
+                card.get("files", []),
+                key=lambda fe: fe.get("mtime", 0.0),
+                reverse=True,
+            )
+            card["_sorted_files"] = sorted_files  # stash for render phase below
+            for fi, fe in enumerate(sorted_files):
                 fp_jobs.append((ci, fi, fe.get("path", "")))
 
         # Dispatch fingerprint reads in parallel.

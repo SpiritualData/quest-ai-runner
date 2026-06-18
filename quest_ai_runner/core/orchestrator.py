@@ -2340,13 +2340,8 @@ class Orchestrator:
                     ops_obs = self._exec_one_read({"list_operations": True})
                     if ops_obs is not None:
                         gathered.append(ops_obs.to_dict())
-                        emit.emit(ProgressEvent(
-                            type=EVENT_READ,
-                            text="Loaded available operations",
-                            data={"locator": "list_operations"}
-                        ))
                 except Exception as e:  # noqa: BLE001
-                    log.debug(f"Auto-injection of list_operations failed: {e}")
+                    log.debug(f"Auto-injection of list_operations failed: {type(e).__name__}: {e}")
 
             try:
                 plan = self._plan(user_message, transcript, context_view, gathered, step=step)

@@ -103,7 +103,11 @@ class QuestClient:
 
     def whoami(self) -> Dict[str, Any]:
         """Validate the key and return the authenticated executor identity."""
-        return self._request("GET", "/api/teams/whoami") or {}
+        try:
+            return self._request("GET", "/api/teams/whoami") or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("whoami failed: %s", e)
+            return {}
 
     # --- discovery -----------------------------------------------------------
 
@@ -132,11 +136,19 @@ class QuestClient:
         params: Dict[str, Any] = {"status": status, "due_before": iso}
         if tid:
             params["team_id"] = tid
-        resp = self._request("GET", "/api/assistant-tasks", params=params)
-        return _as_task_list(resp)
+        try:
+            resp = self._request("GET", "/api/assistant-tasks", params=params)
+            return _as_task_list(resp)
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("discover_due failed: %s", e)
+            return []
 
     def get_task(self, task_id: str) -> Dict[str, Any]:
-        return self._request("GET", f"/api/assistant-tasks/{task_id}") or {}
+        try:
+            return self._request("GET", f"/api/assistant-tasks/{task_id}") or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("get_task failed for %s: %s", task_id, e)
+            return {}
 
     # --- claim / report ------------------------------------------------------
 
@@ -150,19 +162,35 @@ class QuestClient:
         body: Dict[str, Any] = {"status": "in_progress"}
         if handler:
             body["handler"] = handler
-        return self._request("PATCH", f"/api/assistant-tasks/{task_id}", body=body)
+        try:
+            return self._request("PATCH", f"/api/assistant-tasks/{task_id}", body=body)
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("claim failed for task %s: %s", task_id, e)
+            return {}
 
     def report_done(self, task_id: str, result: str) -> Dict[str, Any]:
-        return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
-                             body={"status": "done", "result": result})
+        try:
+            return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
+                                 body={"status": "done", "result": result})
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("report_done failed for task %s: %s", task_id, e)
+            return {}
 
     def report_needs_you(self, task_id: str, result: str, decision_id: str) -> Dict[str, Any]:
-        return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
-                             body={"status": "needs_you", "result": result, "decision_id": decision_id})
+        try:
+            return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
+                                 body={"status": "needs_you", "result": result, "decision_id": decision_id})
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("report_needs_you failed for task %s: %s", task_id, e)
+            return {}
 
     def report_failed(self, task_id: str, result: str) -> Dict[str, Any]:
-        return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
-                             body={"status": "failed", "result": result})
+        try:
+            return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
+                                 body={"status": "failed", "result": result})
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("report_failed for task %s: %s", task_id, e)
+            return {}
 
     # --- live execution progress onto the task (the task-detail stream) ------
 
@@ -206,8 +234,15 @@ class QuestClient:
         Best-effort by contract at the call site (a dropped progress post must never fail the task),
         but this method itself surfaces API errors so callers can log them.
         """
-        return self._request("POST", f"/api/quest-ai/conversations/{conv_id}/progress",
-                             body={"content": content, "kind": kind}) or {}
+        try:
+            if not self.configured:
+                log.warning("post_conversation_message skipped: Quest API not configured")
+                return {}
+            return self._request("POST", f"/api/quest-ai/conversations/{conv_id}/progress",
+                                 body={"content": content, "kind": kind}) or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("post_conversation_message for conv %s failed: %s", conv_id, e)
+            return {}
 
     # --- environment heartbeat (so the backend knows this runner is live) ----
 
@@ -229,15 +264,19 @@ class QuestClient:
         the client's configured team. The CALLER (poller) keeps this best-effort: a failed
         heartbeat must never break task execution.
         """
-        tid = team_id or self.team_id
-        if not tid:
-            raise QuestNotConfigured("team_id is required to post an environment heartbeat")
-        body: Dict[str, Any] = {"capabilities": dict(capabilities)}
-        if runner_label:
-            body["runner_label"] = runner_label
-        if env_id:
-            body["env_id"] = env_id
-        return self._request("POST", f"/api/teams/{tid}/environment/heartbeat", body=body) or {}
+        try:
+            tid = team_id or self.team_id
+            if not tid:
+                raise QuestNotConfigured("team_id is required to post an environment heartbeat")
+            body: Dict[str, Any] = {"capabilities": dict(capabilities)}
+            if runner_label:
+                body["runner_label"] = runner_label
+            if env_id:
+                body["env_id"] = env_id
+            return self._request("POST", f"/api/teams/{tid}/environment/heartbeat", body=body) or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("post_environment_heartbeat failed: %s", e)
+            return {}
 
     # --- escalation (team decision-requests; the confirm-before-act surface) --
 
@@ -245,31 +284,43 @@ class QuestClient:
                         quest_id: Optional[str] = None, assignee_user_id: Optional[str] = None,
                         default_on_silence: str = "hold",
                         team_id: Optional[str] = None) -> Dict[str, Any]:
-        tid = team_id or self.team_id
-        if not tid:
-            raise QuestNotConfigured("team_id is required to raise a decision-request")
-        # Quest stores a decision's summary as a goal CONDITION, capped at 4000 chars server-side.
-        # A verbose planner question/clarification (or any caller) can exceed that and the POST is
-        # rejected with "Goal condition is limited to 4000 characters". Cap here at the single
-        # boundary to Quest so an over-long summary is truncated (never dropped or errored),
-        # regardless of which caller built it.
-        if isinstance(summary, str) and len(summary) > 4000:
-            summary = summary[:3900].rstrip() + "\n\n[...truncated]"
-        body: Dict[str, Any] = {"kind": kind, "summary": summary,
-                                "default_on_silence": default_on_silence}
-        if quest_id:
-            body["quest_id"] = quest_id
-        if assignee_user_id:
-            body["assigned_to_user_id"] = assignee_user_id
-        return self._request("POST", f"/api/teams/{tid}/decisions", body=body)
+        try:
+            tid = team_id or self.team_id
+            if not tid:
+                raise QuestNotConfigured("team_id is required to raise a decision-request")
+            # Quest stores a decision's summary as a goal CONDITION, capped at 4000 chars server-side.
+            # A verbose planner question/clarification (or any caller) can exceed that and the POST is
+            # rejected with "Goal condition is limited to 4000 characters". Cap here at the single
+            # boundary to Quest so an over-long summary is truncated (never dropped or errored),
+            # regardless of which caller built it.
+            if isinstance(summary, str) and len(summary) > 4000:
+                summary = summary[:3900].rstrip() + "\n\n[...truncated]"
+            body: Dict[str, Any] = {"kind": kind, "summary": summary,
+                                    "default_on_silence": default_on_silence}
+            if quest_id:
+                body["quest_id"] = quest_id
+            if assignee_user_id:
+                body["assigned_to_user_id"] = assignee_user_id
+            return self._request("POST", f"/api/teams/{tid}/decisions", body=body)
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("create_decision failed: %s", e)
+            return {}
 
     def list_open_decisions_for_user(self, user_id: str) -> List[Dict[str, Any]]:
-        return self._request("GET", "/api/teams/decisions/for-user",
-                             params={"user_id": user_id}) or []
+        try:
+            return self._request("GET", "/api/teams/decisions/for-user",
+                                 params={"user_id": user_id}) or []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_open_decisions_for_user failed for user %s: %s", user_id, e)
+            return []
 
     def resolve_decision(self, decision_id: str, resolution: str) -> Dict[str, Any]:
-        return self._request("POST", f"/api/teams/decisions/{decision_id}/resolve",
-                             body={"resolution": resolution})
+        try:
+            return self._request("POST", f"/api/teams/decisions/{decision_id}/resolve",
+                                 body={"resolution": resolution})
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("resolve_decision failed for decision %s: %s", decision_id, e)
+            return {}
 
     # --- quest and goal browsing (for interactive chat context selection) ------
 
@@ -279,12 +330,16 @@ class QuestClient:
         Returns a list of dicts with keys: quest_id, outcome, completed, owner_user_ids.
         Requires team_id either here or on the client instance.
         """
-        self._require()
-        tid = team_id or self.team_id
-        if not tid:
-            raise QuestNotConfigured("team_id is required to list quests")
-        resp = self._request("GET", f"/api/teams/{tid}/quests") or []
-        return resp if isinstance(resp, list) else []
+        try:
+            self._require()
+            tid = team_id or self.team_id
+            if not tid:
+                raise QuestNotConfigured("team_id is required to list quests")
+            resp = self._request("GET", f"/api/teams/{tid}/quests") or []
+            return resp if isinstance(resp, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_quests failed: %s", e)
+            return []
 
     def list_quest_goals(self, quest_id: str, *,
                          team_id: Optional[str] = None) -> Dict[str, Any]:
@@ -295,11 +350,15 @@ class QuestClient:
         Groups are ordered year → quarter → month → week → day → custom, then chronologically.
         Requires team_id either here or on the client instance.
         """
-        self._require()
-        tid = team_id or self.team_id
-        if not tid:
-            raise QuestNotConfigured("team_id is required to list quest goals")
-        return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}/goals") or {}
+        try:
+            self._require()
+            tid = team_id or self.team_id
+            if not tid:
+                raise QuestNotConfigured("team_id is required to list quest goals")
+            return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}/goals") or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_quest_goals failed for quest %s: %s", quest_id, e)
+            return {}
 
     def get_quest(self, quest_id: str, *, team_id: Optional[str] = None) -> Dict[str, Any]:
         """GET /api/teams/{team_id}/quests/{quest_id} — fetch a single quest by ID.
@@ -307,11 +366,15 @@ class QuestClient:
         Returns quest metadata: quest_id, outcome, completed, owner_user_ids, and other context.
         Requires team_id either here or on the client instance. Returns {} if not found.
         """
-        self._require()
-        tid = team_id or self.team_id
-        if not tid:
-            raise QuestNotConfigured("team_id is required to get a quest")
-        return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}") or {}
+        try:
+            self._require()
+            tid = team_id or self.team_id
+            if not tid:
+                raise QuestNotConfigured("team_id is required to get a quest")
+            return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}") or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("get_quest failed for quest %s: %s", quest_id, e)
+            return {}
 
     def get_goal(self, goal_id: str, *, quest_id: Optional[str] = None,
                  team_id: Optional[str] = None) -> Dict[str, Any]:
@@ -321,13 +384,17 @@ class QuestClient:
         Requires team_id and quest_id either as parameters or on the client instance.
         Returns {} if not found.
         """
-        self._require()
-        tid = team_id or self.team_id
-        if not tid:
-            raise QuestNotConfigured("team_id is required to get a goal")
-        if not quest_id:
-            raise QuestNotConfigured("quest_id is required to get a goal")
-        return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}/goals/{goal_id}") or {}
+        try:
+            self._require()
+            tid = team_id or self.team_id
+            if not tid:
+                raise QuestNotConfigured("team_id is required to get a goal")
+            if not quest_id:
+                raise QuestNotConfigured("quest_id is required to get a goal")
+            return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}/goals/{goal_id}") or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("get_goal failed for goal %s: %s", goal_id, e)
+            return {}
 
     def list_goal_notes(self, goal_id: str, *, quest_id: Optional[str] = None,
                         team_id: Optional[str] = None, limit: int = 10) -> List[Dict[str, Any]]:
@@ -336,18 +403,22 @@ class QuestClient:
         Returns a list of note dicts (id, text, author, created_at, etc.). Useful for
         understanding goal progress and context. Returns [] if not found or no notes.
         """
-        self._require()
-        tid = team_id or self.team_id
-        if not tid:
-            raise QuestNotConfigured("team_id is required to list goal notes")
-        if not quest_id:
-            raise QuestNotConfigured("quest_id is required to list goal notes")
-        resp = self._request(
-            "GET",
-            f"/api/teams/{tid}/quests/{quest_id}/goals/{goal_id}/notes",
-            params={"limit": limit}
-        )
-        return list(resp.get("notes") or resp or []) if isinstance(resp, dict) else (list(resp) if isinstance(resp, list) else [])
+        try:
+            self._require()
+            tid = team_id or self.team_id
+            if not tid:
+                raise QuestNotConfigured("team_id is required to list goal notes")
+            if not quest_id:
+                raise QuestNotConfigured("quest_id is required to list goal notes")
+            resp = self._request(
+                "GET",
+                f"/api/teams/{tid}/quests/{quest_id}/goals/{goal_id}/notes",
+                params={"limit": limit}
+            )
+            return list(resp.get("notes") or resp or []) if isinstance(resp, dict) else (list(resp) if isinstance(resp, list) else [])
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_goal_notes failed for goal %s: %s", goal_id, e)
+            return []
 
     # --- task creation (enqueue a new AI task) --------------------------------
 
@@ -363,15 +434,19 @@ class QuestClient:
         ``scheduled_at`` is an ISO-8601 UTC datetime string; omit it to run as soon as the
         runner's next poll picks it up. Returns the created task dict (includes its ``id``).
         """
-        body: Dict[str, Any] = {"text": text, "source": source}
-        tid = team_id if team_id is not None else self.team_id
-        if tid:
-            body["team_id"] = tid
-        if goal_id is not None:
-            body["goal_id"] = goal_id
-        if scheduled_at is not None:
-            body["scheduled_at"] = scheduled_at
-        return self._request("POST", "/api/assistant-tasks", body=body) or {}
+        try:
+            body: Dict[str, Any] = {"text": text, "source": source}
+            tid = team_id if team_id is not None else self.team_id
+            if tid:
+                body["team_id"] = tid
+            if goal_id is not None:
+                body["goal_id"] = goal_id
+            if scheduled_at is not None:
+                body["scheduled_at"] = scheduled_at
+            return self._request("POST", "/api/assistant-tasks", body=body) or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("create_task failed: %s", e)
+            return {}
 
     # --- AI-rep profile (the rep <-> skill-file sync surface) -----------------
 
@@ -383,10 +458,14 @@ class QuestClient:
         renders into the rep's local Claude skill file(s). ``team_id`` defaults to the client's
         configured team.
         """
-        tid = team_id or self.team_id
-        if not tid:
-            raise QuestNotConfigured("team_id is required to read an AI-rep profile")
-        return self._request("GET", f"/api/teams/{tid}/members/{user_id}/ai-profile") or {}
+        try:
+            tid = team_id or self.team_id
+            if not tid:
+                raise QuestNotConfigured("team_id is required to read an AI-rep profile")
+            return self._request("GET", f"/api/teams/{tid}/members/{user_id}/ai-profile") or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("get_ai_profile failed for user %s: %s", user_id, e)
+            return {}
 
     def update_ai_profile(self, user_id: str, *, display_name: Optional[str] = None,
                           persona: Optional[str] = None,
@@ -399,16 +478,20 @@ class QuestClient:
         Only the fields you pass are sent, so a local edit to just the persona pushes up only the
         persona. Returns the updated profile. ``team_id`` defaults to the client's configured team.
         """
-        tid = team_id or self.team_id
-        if not tid:
-            raise QuestNotConfigured("team_id is required to update an AI-rep profile")
-        body: Dict[str, Any] = {}
-        if display_name is not None:
-            body["display_name"] = display_name
-        if persona is not None:
-            body["persona"] = persona
-        return self._request(
-            "PUT", f"/api/teams/{tid}/members/{user_id}/ai-profile", body=body) or {}
+        try:
+            tid = team_id or self.team_id
+            if not tid:
+                raise QuestNotConfigured("team_id is required to update an AI-rep profile")
+            body: Dict[str, Any] = {}
+            if display_name is not None:
+                body["display_name"] = display_name
+            if persona is not None:
+                body["persona"] = persona
+            return self._request(
+                "PUT", f"/api/teams/{tid}/members/{user_id}/ai-profile", body=body) or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("update_ai_profile failed for user %s: %s", user_id, e)
+            return {}
 
     def add_rep_correction(self, user_id: str, correction: str, *,
                            message_id: Optional[str] = None,
@@ -430,26 +513,30 @@ class QuestClient:
         Returns:
             The created guidance card dict {id, title, body, tags, ...}.
         """
-        tid = team_id or self.team_id
-        if not tid:
-            raise QuestNotConfigured("team_id is required to add a rep correction")
+        try:
+            tid = team_id or self.team_id
+            if not tid:
+                raise QuestNotConfigured("team_id is required to add a rep correction")
 
-        body: Dict[str, Any] = {
-            "correction": correction,
-            "rep_id": user_id,
-            "source": "correction",
-        }
-        if message_id is not None:
-            body["message_id"] = message_id
-        if task_type is not None:
-            body["task_type"] = task_type
+            body: Dict[str, Any] = {
+                "correction": correction,
+                "rep_id": user_id,
+                "source": "correction",
+            }
+            if message_id is not None:
+                body["message_id"] = message_id
+            if task_type is not None:
+                body["task_type"] = task_type
 
-        # Create guidance card from correction (backend does the FeedbackProcessor logic)
-        return self._request(
-            "POST",
-            f"/api/teams/{tid}/guidance-from-correction",
-            body=body,
-        ) or {}
+            # Create guidance card from correction (backend does the FeedbackProcessor logic)
+            return self._request(
+                "POST",
+                f"/api/teams/{tid}/guidance-from-correction",
+                body=body,
+            ) or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("add_rep_correction failed for user %s: %s", user_id, e)
+            return {}
 
     def list_guidance_cards(self, *, rep_id: Optional[str] = None,
                             source: Optional[str] = None,
@@ -466,26 +553,30 @@ class QuestClient:
 
         Returns: List of guidance card dicts {id, title, body, tags, description, ...}.
         """
-        tid = team_id or self.team_id
-        if not tid:
-            raise QuestNotConfigured("team_id is required to list guidance cards")
+        try:
+            tid = team_id or self.team_id
+            if not tid:
+                raise QuestNotConfigured("team_id is required to list guidance cards")
 
-        params: Dict[str, Any] = {"limit": limit}
-        if rep_id:
-            params["rep_id"] = rep_id
-        if source:
-            params["source"] = source
-        if task_type:
-            params["task_type"] = task_type
+            params: Dict[str, Any] = {"limit": limit}
+            if rep_id:
+                params["rep_id"] = rep_id
+            if source:
+                params["source"] = source
+            if task_type:
+                params["task_type"] = task_type
 
-        resp = self._request(
-            "GET",
-            f"/api/teams/{tid}/guidance-cards",
-            params=params,
-        ) or {}
-        return list(resp.get("cards") or resp or []) if isinstance(resp, dict) else (
-            list(resp) if isinstance(resp, list) else []
-        )
+            resp = self._request(
+                "GET",
+                f"/api/teams/{tid}/guidance-cards",
+                params=params,
+            ) or {}
+            return list(resp.get("cards") or resp or []) if isinstance(resp, dict) else (
+                list(resp) if isinstance(resp, list) else []
+            )
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_guidance_cards failed: %s", e)
+            return []
 
 
 class QuestDecisionSink(EscalationSinkBase):
@@ -501,12 +592,16 @@ class QuestDecisionSink(EscalationSinkBase):
         self._default_assignee = default_assignee_user_id
 
     def escalate(self, escalation: Escalation) -> str:
-        res = self._client.create_decision(
-            escalation.summary,
-            kind=escalation.kind,
-            quest_id=escalation.quest_id,
-            assignee_user_id=escalation.assignee or self._default_assignee,
-            default_on_silence=escalation.default_on_silence,
-        )
-        # The API returns the created decision; surface its id (best-effort across field names).
-        return str((res or {}).get("decision_id") or (res or {}).get("id") or "")
+        try:
+            res = self._client.create_decision(
+                escalation.summary,
+                kind=escalation.kind,
+                quest_id=escalation.quest_id,
+                assignee_user_id=escalation.assignee or self._default_assignee,
+                default_on_silence=escalation.default_on_silence,
+            )
+            # The API returns the created decision; surface its id (best-effort across field names).
+            return str((res or {}).get("decision_id") or (res or {}).get("id") or "")
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("escalate failed: %s", e)
+            return ""
