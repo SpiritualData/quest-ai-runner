@@ -85,7 +85,7 @@ DEFAULT_MAX_SUBQUESTIONS = 4
 DEFAULT_MAX_DEEP_SUBTASKS = 4
 DEFAULT_DEEP_MAX_TURNS = 30
 DEFAULT_MAX_GATHER_CHARS = 6000
-DEFAULT_MAX_CONSECUTIVE_READS = 10
+DEFAULT_MAX_CONSECUTIVE_READS = 20
 # Lean re-plan view: the planner is re-fed the WHOLE cumulative ``gathered`` each step, which
 # bloats fast on multi-read runs. Instead, keep the most-recent observations in full and COMPRESS
 # older ones to one-line summaries (path/source + key finding) — but only once ``gathered`` has
