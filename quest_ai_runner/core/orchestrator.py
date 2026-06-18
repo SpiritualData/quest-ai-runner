@@ -1560,21 +1560,68 @@ class Orchestrator:
                                         data={"goal": goal}))
             return res
 
-        if len(subtasks) == 1:
-            res = run_one(subtasks[0])
-            return OrchestratorResult(kind="deep", deep_results=[res],
-                                      goals=[(subtasks[0].get("goal") or "").strip() or user_message],
-                                      rationale=plan.rationale)
-        workers = min(self.cfg.max_parallel, len(subtasks))
-        results: List[Optional[DeepResult]] = [None] * len(subtasks)
-        with ThreadPoolExecutor(max_workers=workers) as pool:
-            futs = {pool.submit(run_one, st): i for i, st in enumerate(subtasks)}
-            for f in futs:
-                results[futs[f]] = f.result()
+        # Handle nested task groups for sequential dependencies:
+        # - flat task dict = run in parallel with others
+        # - [task, task, ...] = run sequentially within group, in parallel with other groups
+        def is_sequential_group(item):
+            return isinstance(item, list)
+
+        # Separate sequential groups from flat tasks
+        flat_tasks = []
+        seq_groups = []
+        for item in subtasks:
+            if is_sequential_group(item):
+                seq_groups.append([t for t in item if isinstance(t, dict)])
+            elif isinstance(item, dict):
+                flat_tasks.append(item)
+
+        # Execute: run all groups & flat tasks in parallel, but within each group tasks run sequentially
+        all_results: List[Optional[DeepResult]] = []
+        all_goals: List[str] = []
+
+        def run_sequential_group(group: List[Dict[str, Any]]) -> List[Optional[DeepResult]]:
+            """Run tasks in a group sequentially, returning results in order."""
+            results = []
+            for task in group:
+                res = run_one(task)
+                results.append(res)
+                all_goals.append((task.get("goal") or "").strip() or user_message)
+            return results
+
+        # If only flat tasks (no groups), run all in parallel
+        if not seq_groups and flat_tasks:
+            if len(flat_tasks) == 1:
+                res = run_one(flat_tasks[0])
+                all_results.append(res)
+                all_goals.append((flat_tasks[0].get("goal") or "").strip() or user_message)
+            else:
+                workers = min(self.cfg.max_parallel, len(flat_tasks))
+                results: List[Optional[DeepResult]] = [None] * len(flat_tasks)
+                with ThreadPoolExecutor(max_workers=workers) as pool:
+                    futs = {pool.submit(run_one, st): i for i, st in enumerate(flat_tasks)}
+                    for f in futs:
+                        results[futs[f]] = f.result()
+                all_results.extend([r for r in results if r is not None])
+                for st in flat_tasks:
+                    all_goals.append((st.get("goal") or "").strip() or user_message)
+
+        # If there are sequential groups, run them with flat tasks in parallel
+        # Each group's tasks run sequentially, but groups run parallel with each other
+        elif seq_groups or flat_tasks:
+            # Combine: each group + each flat task becomes a unit in the thread pool
+            all_units = seq_groups + [[t] for t in flat_tasks]  # Wrap flat tasks in lists
+            workers = min(self.cfg.max_parallel, len(all_units))
+
+            with ThreadPoolExecutor(max_workers=workers) as pool:
+                futs = {pool.submit(run_sequential_group, unit): i for i, unit in enumerate(all_units)}
+                for f in futs:
+                    group_results = f.result()
+                    all_results.extend([r for r in group_results if r is not None])
+
         return OrchestratorResult(
             kind="deep",
-            deep_results=[r for r in results if r is not None],
-            goals=[(st.get("goal") or "").strip() or user_message for st in subtasks],
+            deep_results=[r for r in all_results if r is not None],
+            goals=all_goals,
             rationale=plan.rationale,
         )
 
