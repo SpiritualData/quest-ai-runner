@@ -158,6 +158,66 @@ def test_answer_describing_unexecuted_work_escalates_to_deep():
     assert runner.calls, "expected a deferred deep run to execute the described work"
 
 
+class _GCard:
+    def __init__(self, id, title, relevance, body):
+        self.id, self.title, self.relevance, self.body = id, title, relevance, body
+
+
+class _StubGuidance:
+    """Minimal GuidanceProvider: select() returns fixed quality-standard cards."""
+    def __init__(self, cards):
+        self._cards = cards
+
+    def select(self, message, *, team_id=None, org_id=None, limit=3):
+        return self._cards
+
+
+def test_answer_verified_against_goal_regenerates_when_not_met():
+    # Top-tier goal loop on a plain ANSWER: when a quality bar (guidance) is wired, the answer is
+    # verified against the goal and REGENERATED with steering if it falls short.
+    card = _GCard("g1", "Quality bar", "always", "Be specific and complete.")
+    provider = StubProvider(
+        decisions=[
+            {"action": "answer", "model_tier": "sonnet", "rationale": "answer"},
+            {"met": False, "reason": "too vague", "next_action": "add the specifics"},
+        ],
+        answer_text="a vague answer",
+    )
+    res = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider),
+                       guidance=_StubGuidance([card]),
+                       config=OrchestratorConfig(answer_goal_max_iterations=2)).run("explain X")
+    assert res.kind == "answer"
+    assert provider.answer_calls == 2  # regenerated once after verify said not-met
+
+
+def test_answer_verified_met_no_regeneration():
+    card = _GCard("g1", "Quality bar", "always", "Be specific.")
+    provider = StubProvider(
+        decisions=[
+            {"action": "answer", "model_tier": "sonnet", "rationale": "answer"},
+            {"met": True, "reason": "complete and specific"},
+        ],
+        answer_text="a complete, specific answer",
+    )
+    res = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider),
+                       guidance=_StubGuidance([card]),
+                       config=OrchestratorConfig(answer_goal_max_iterations=2)).run("explain X")
+    assert res.kind == "answer"
+    assert provider.answer_calls == 1  # verified met on the first answer, no wasted regeneration
+
+
+def test_answer_not_verified_without_a_quality_bar():
+    # No GuidanceProvider wired => no quality bar => no answer verification (single generation).
+    provider = StubProvider(
+        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "answer"}],
+        answer_text="an answer",
+    )
+    res = _orch(provider, StubRetrieval(),
+                config=OrchestratorConfig(answer_goal_max_iterations=2)).run("explain X")
+    assert res.kind == "answer"
+    assert provider.answer_calls == 1
+
+
 def test_goal_loop_iterates_until_verified_met():
     # Our own goal loop (replaces Claude Code /goal): the worker runs, the brain VERIFIES the
     # done-standard, and if not met it re-runs with steering. Here verify says not-met on attempt 1,

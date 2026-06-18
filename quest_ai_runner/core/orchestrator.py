@@ -352,6 +352,11 @@ class OrchestratorConfig:
     # shot). This is more token-efficient than /goal (which re-verifies inside the worker every turn)
     # and lets the brain steer the next attempt.
     deep_goal_max_iterations: int = 3
+    # The SAME goal loop applied to plain ANSWERS (not just deep execution): after an answer is
+    # written, the brain verifies it meets the goal at the quality bar (the guidance cards selected
+    # for the input) and, if unmet, regenerates with steering — up to this many attempts. Only
+    # engages when a GuidanceProvider is wired (there is a quality bar to check). 1 = no verify-retry.
+    answer_goal_max_iterations: int = 2
     planner_tier: str = "haiku"  # the cheap model that runs the planner step
     # Per-step planner-view leaning (see DEFAULT_PLANNER_* above). The full ``gathered`` is always
     # kept for the final answer; these only trim what the cheap PLANNER re-reads each re-plan step.
@@ -1283,11 +1288,16 @@ class Orchestrator:
         def run_one(st: Dict[str, Any]) -> DeepResult:
             goal = (st.get("goal") or "").strip() or f"Fully address: {user_message}"
             brief = (st.get("brief") or goal).strip()
-            # Include the higher goal in a subgoal's prompt (only when this really is a subgoal of a
-            # larger, different goal — otherwise the goal already IS the overall goal).
+            # EVERY deep process is told BOTH the top input-level goal (the user's actual request)
+            # and, when it is a subgoal of a larger fan-out, the overall goal it serves — so it never
+            # loses sight of what the user wants while pursuing its specific piece. (Its OWN process
+            # goal/done-standard is added separately by compose_goal_prompt.) This header is baked
+            # into the base brief, so every retry keeps it alongside the prior output + feedback.
+            _hdr = [f"USER'S REQUEST (the top-level goal):\n{user_message}"]
             if multi and overall_goal and overall_goal != goal:
-                brief = (f"OVERALL GOAL (this is ONE subgoal serving it, keep it aligned):\n"
-                         f"{overall_goal}\n\n--- THIS SUBGOAL ---\n{brief}")
+                _hdr.append(f"OVERALL GOAL (this process is ONE subgoal serving it, stay aligned):\n"
+                            f"{overall_goal}")
+            brief = "\n\n".join(_hdr) + "\n\n--- THIS PROCESS'S TASK ---\n" + brief
             # Per-subtask execution fact — populated from EVENT_EXEC phase ticks (live) and finalized
             # from the DeepResult.met below. Recording per-subtask keeps facts correct even when
             # multiple subtasks run concurrently (each closure owns its own ``fact``).
@@ -2144,14 +2154,23 @@ class Orchestrator:
 
         # answer
         model = self._answer_model(plan, "sonnet", hint=model_hint)
-        if len(plan.subquestions) >= 2:
-            emit.status(f"answering {len(plan.subquestions)} parts in parallel…")
-            text = self._answer_subquestions(user_message, transcript, context_view, gathered,
-                                             model, plan.subquestions, native_blocks=native_blocks)
-        else:
-            emit.status("answering")
-            text = self._grounded_answer(user_message, transcript, context_view, gathered, model,
+
+        def _gen_answer(steering: Optional[str]) -> str:
+            # Produce an answer, optionally STEERED by goal-verification feedback (the prior answer
+            # plus why it fell short + what to fix) folded into the grounding context.
+            cv = context_view
+            if steering:
+                cv = ((context_view + "\n\n" if context_view else "")
+                      + "--- IMPROVE YOUR ANSWER (it did not yet meet the goal) ---\n" + steering)
+            if len(plan.subquestions) >= 2:
+                return self._answer_subquestions(user_message, transcript, cv, gathered,
+                                                 model, plan.subquestions, native_blocks=native_blocks)
+            return self._grounded_answer(user_message, transcript, cv, gathered, model,
                                          False, native_blocks=native_blocks)
+
+        emit.status(f"answering {len(plan.subquestions)} parts in parallel…"
+                    if len(plan.subquestions) >= 2 else "answering")
+        text = _gen_answer(None)
         _ti = getattr(self.provider, 'tokens_in', 0)
         _to = getattr(self.provider, 'tokens_out', 0)
         if _ti or _to:
@@ -2236,6 +2255,37 @@ class Orchestrator:
                                                 data={"execution_results": True}))
             except Exception as e:  # noqa: BLE001 — deferred work must never break the answer
                 log.warning(f"Deferred deep work failed: {type(e).__name__}: {e}", exc_info=True)
+
+        # TOP-TIER GOAL VERIFICATION — the SAME goal loop, now applied to a plain ANSWER so EVERY
+        # input is pursued as a goal. Hold the answer to the user's overall goal at the quality bar
+        # (the guidance cards selected for this input) and regenerate with steering (the prior answer
+        # + why it fell short + what to fix) until it meets the bar or attempts run out. Engages only
+        # when there IS a quality bar (a GuidanceProvider is wired) and we are not deferring to a deep
+        # run (which ran its own verification). Best-effort: never breaks the turn.
+        if (not should_defer_deep and self.guidance is not None
+                and self.cfg.answer_goal_max_iterations > 1):
+            try:
+                overall_goal = (plan.goal or "").strip() or (
+                    "Fully and correctly answer the user's request to their satisfaction: "
+                    + user_message)
+                _max = max(1, self.cfg.answer_goal_max_iterations)
+                for _attempt in range(1, _max):  # at most _max-1 regenerations after the first answer
+                    verdict = self._verify_goal(overall_goal, user_message, text,
+                                                rep_preamble=rep_preamble,
+                                                quality_standards=quality_standards)
+                    if verdict is None or verdict.get("met"):
+                        if emit is not None and verdict and verdict.get("met"):
+                            emit.status("answer verified against the goal.")
+                        break
+                    if emit is not None:
+                        emit.status("answer not yet at the bar, improving it…")
+                    steer = (f"Why your previous answer fell short: "
+                             f"{verdict.get('reason') or 'it did not meet the quality bar'}. "
+                             f"Do this now: {verdict.get('next_action') or 'address the gap and answer fully.'}\n\n"
+                             f"--- YOUR PREVIOUS ANSWER ---\n{text}")
+                    text = _gen_answer(steer)
+            except Exception:  # noqa: BLE001 — answer verification must never break the turn
+                log.warning("answer goal verification failed", exc_info=True)
 
         return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
                                          model=model))
