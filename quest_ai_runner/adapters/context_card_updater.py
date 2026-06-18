@@ -81,7 +81,10 @@ def discover_claude_code_edits(project_path: str, session_id: str) -> List[str]:
 
         log.debug(f"Discovered {len(edited_files)} edited files from Claude Code session {session_id}")
     except Exception as e:
-        log.error(f"Failed to parse Claude Code session {session_id}: {e}")
+        log.error(
+            f"Failed to parse Claude Code session {session_id}: {type(e).__name__}: {e}",
+            exc_info=True
+        )
 
     return edited_files
 
@@ -247,7 +250,7 @@ def categorize_files_into_cards(
         categorization = categorizer_fn(edited_files, card_metadata)
         return categorization or {}
     except Exception as e:
-        log.error(f"File categorization failed: {e}")
+        log.error(f"File categorization failed: {type(e).__name__}: {e}", exc_info=True)
         return {}
 
 
@@ -287,7 +290,7 @@ def update_context_cards(
             with open(card_file, "r", encoding="utf-8") as f:
                 card_data = json.load(f)
         except Exception as e:
-            log.error(f"Failed to read card {card_id}: {e}")
+            log.error(f"Failed to read card {card_id}: {type(e).__name__}: {e}", exc_info=True)
             continue
 
         # Merge new files into existing file list
@@ -310,7 +313,7 @@ def update_context_cards(
                 json.dump(card_data, f, indent=2)
             log.debug(f"Updated card {card_id} with {len(files_to_add)} new files")
         except Exception as e:
-            log.error(f"Failed to write card {card_id}: {e}")
+            log.error(f"Failed to write card {card_id}: {type(e).__name__}: {e}", exc_info=True)
 
 
 def categorize_files_with_llm(
@@ -387,5 +390,5 @@ Keep responses terse and accurate.
 
         return categorization
     except Exception as e:
-        log.error(f"LLM categorization failed: {e}")
+        log.error(f"LLM categorization failed: {type(e).__name__}: {e}", exc_info=True)
         return {}

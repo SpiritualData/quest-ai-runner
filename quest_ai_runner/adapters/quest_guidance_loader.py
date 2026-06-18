@@ -82,7 +82,10 @@ class QuestGuidanceLoader:
                 )
             return self._last_cards
         except Exception as e:  # noqa: BLE001
-            log.error(f"Failed to load guidance from Quest: {e}")
+            log.error(
+                f"Failed to load guidance from Quest: {type(e).__name__}: {e}",
+                exc_info=True
+            )
             return []
 
     def reload(self) -> List[Dict[str, Any]]:
