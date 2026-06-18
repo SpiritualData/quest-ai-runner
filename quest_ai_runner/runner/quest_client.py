@@ -248,6 +248,13 @@ class QuestClient:
         tid = team_id or self.team_id
         if not tid:
             raise QuestNotConfigured("team_id is required to raise a decision-request")
+        # Quest stores a decision's summary as a goal CONDITION, capped at 4000 chars server-side.
+        # A verbose planner question/clarification (or any caller) can exceed that and the POST is
+        # rejected with "Goal condition is limited to 4000 characters". Cap here at the single
+        # boundary to Quest so an over-long summary is truncated (never dropped or errored),
+        # regardless of which caller built it.
+        if isinstance(summary, str) and len(summary) > 4000:
+            summary = summary[:3900].rstrip() + "\n\n[...truncated]"
         body: Dict[str, Any] = {"kind": kind, "summary": summary,
                                 "default_on_silence": default_on_silence}
         if quest_id:

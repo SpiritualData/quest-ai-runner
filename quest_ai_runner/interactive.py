@@ -1115,15 +1115,23 @@ class InteractiveSession:
                 "elapsed": elapsed,
                 "timestamp": time.time(),
             })
-            # Deep result handling: execution may have run or been planned
+            # Deep result handling: execution may have run or only been planned.
             if final.kind == "deep":
                 goals = final.goals or []
-                has_text = (final.text or "").strip()
-
-                if not has_text and goals:
-                    # No execution output: show what was planned
+                # A deep turn that actually executed has at least one DeepResult that either met
+                # its goal or produced output (its text/milestones were already streamed live).
+                # ``OrchestratorResult`` never sets ``.text`` for kind="deep", so checking ``.text``
+                # alone always looked unexecuted and wrongly showed the "use /execute" hint (and
+                # crashed on a renderer-only helper). Key off the deep results instead.
+                executed = any(
+                    getattr(d, "met", False) or (getattr(d, "output", "") or "").strip()
+                    for d in (final.deep_results or [])
+                )
+                if not executed and goals:
+                    # Nothing ran (no deep_runner wired, or it produced nothing): show the plan.
                     panel.stop()
-                    self._ensure_ai_label()
+                    # _ensure_ai_label lives on the _TurnRenderer, not on the session.
+                    renderer._ensure_ai_label()
                     self._console.line("")
                     self._console.dim("  Task identified. Planned changes:")
                     for i, g in enumerate(goals, 1):
