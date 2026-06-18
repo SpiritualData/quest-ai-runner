@@ -2235,7 +2235,7 @@ class Orchestrator:
                     action="deep",
                     goal=_truncate_goal(user_message[:200] or "Complete the request"),
                     deep_brief=user_message,
-                    rationale="User explicitly demanded execution (no planning)",
+                    rationale="User demanded execution, skipping plan",
                     model_tier=None,  # use default
                 )
             else:
