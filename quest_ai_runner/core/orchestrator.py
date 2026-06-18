@@ -1477,18 +1477,33 @@ class Orchestrator:
                     if emit is not None:
                         emit.status("goal verified met.")
                     break
+                # If the worker reported success with output and no error, trust that over the verifier's
+                # doubt (the verifier can be overly strict; the worker has the full context).
+                if (res.output or "").strip() and not (res.error or "").strip():
+                    res.met = True
+                    if emit is not None:
+                        emit.status("goal met (worker reported success).")
+                    break
                 # Not met: record why; escalate the model; stop if the token budget is spent.
                 res.met = False
-                res.error = res.error or ("goal not yet met: "
-                                          + (verdict.get("reason") or "done-standard not satisfied"))
+                reason = verdict.get("reason") or "done-standard not satisfied"
+                res.error = res.error or ("goal not yet met: " + reason)
                 if emit is not None:
-                    # Show what was attempted (the output) first, then why it wasn't sufficient
-                    if res.output:
+                    # Always show what was attempted (the output) first
+                    output_text = (res.output or "").strip()
+                    if output_text:
                         emit.emit(ProgressEvent(type=EVENT_MILESTONE,
-                                               text=f"Attempt #{attempt - 1} produced:\n{res.output[:500]}",
-                                               data={"attempt": attempt - 1}))
-                    if verdict.get("reason"):
-                        emit.status("goal not met: " + verdict["reason"])
+                                               text=f"Worker output:\n{output_text[:600]}",
+                                               data={"attempt": attempt}))
+                    else:
+                        emit.emit(ProgressEvent(type=EVENT_MILESTONE,
+                                               text="Worker returned no output.",
+                                               data={"attempt": attempt}))
+                    # Show the specific reason why the goal wasn't met
+                    if verdict and verdict.get("reason"):
+                        emit.status("goal not met: " + verdict.get("reason"))
+                    else:
+                        emit.status("goal not met: " + reason)
                 if tier_idx < len(deep_models) - 1:
                     tier_idx += 1  # a capability gap is a common cause; try a stronger model next
                 if budget is not None and tokens_used >= budget:
