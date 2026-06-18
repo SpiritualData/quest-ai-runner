@@ -1481,8 +1481,14 @@ class Orchestrator:
                 res.met = False
                 res.error = res.error or ("goal not yet met: "
                                           + (verdict.get("reason") or "done-standard not satisfied"))
-                if emit is not None and verdict.get("reason"):
-                    emit.status("goal not met: " + verdict["reason"][:160])
+                if emit is not None:
+                    # Show what was attempted (the output) first, then why it wasn't sufficient
+                    if res.output:
+                        emit.emit(ProgressEvent(type=EVENT_MILESTONE,
+                                               text=f"Attempt #{attempt - 1} produced:\n{res.output[:500]}",
+                                               data={"attempt": attempt - 1}))
+                    if verdict.get("reason"):
+                        emit.status("goal not met: " + verdict["reason"])
                 if tier_idx < len(deep_models) - 1:
                     tier_idx += 1  # a capability gap is a common cause; try a stronger model next
                 if budget is not None and tokens_used >= budget:
