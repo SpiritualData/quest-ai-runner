@@ -43,6 +43,8 @@ class UniversalGuidanceProvider(GuidanceProviderBase):
         cards_dir: Optional[str] = None,
         dynamic_guidance_loader: Optional[Callable[[], List[Dict[str, Any]]]] = None,
         vector_store: Optional[Any] = None,
+        provider: Optional[Any] = None,
+        model: Optional[str] = None,
     ):
         """Initialize with file-based and optional dynamic guidance sources.
 
@@ -53,12 +55,17 @@ class UniversalGuidanceProvider(GuidanceProviderBase):
                                     Called each select() to pick up new feedback.
             vector_store: Optional vector store (e.g., Qdrant) for semantic search.
                          When set, guidance cards are indexed for similarity matching.
+            provider: ModelProvider (MultiProvider) for LLM relevance filtering of
+                      candidate guidance cards after tag/keyword/semantic scoring.
+            model: Resolved model ID to use for filtering (e.g. balanced tier).
         """
         from quest_ai_runner.adapters.guidance_card_manager import GuidanceCardManager
 
         self.manager = GuidanceCardManager(cards_dir=cards_dir)
         self.dynamic_loader = dynamic_guidance_loader
         self.vector_store = vector_store
+        self._provider = provider
+        self._model = model
         self._cards_cache: List[CoreGuidanceCard] = []
         self._dynamic_cache: List[Dict[str, Any]] = []
         self._cache_valid = False
@@ -193,7 +200,32 @@ class UniversalGuidanceProvider(GuidanceProviderBase):
 
         # Sort by: scope (specific first), then score (highest first)
         scored.sort(key=lambda x: (-x[1], -x[0]))
-        result = [card for _, _, _, card in scored[:limit]]
+        # Take 2x limit as candidates so LLM filter has headroom
+        candidates = [card for _, _, _, card in scored[: limit * 2]]
+
+        # LLM filter: verify candidates are genuinely relevant to user_message
+        if self._provider is not None and user_message and candidates:
+            try:
+                from .card_filter import filter_cards_by_relevance
+                candidate_dicts = [
+                    {
+                        "id": c.id,
+                        "title": f"{c.title} — {c.relevance}" if c.relevance else c.title,
+                        "files": [],
+                        "adapter": "guidance",
+                    }
+                    for c in candidates
+                ]
+                kept = filter_cards_by_relevance(
+                    user_message, candidate_dicts,
+                    model_provider=self._provider, model=self._model,
+                )
+                kept_ids = {m.id for m in kept}
+                candidates = [c for c in candidates if c.id in kept_ids]
+            except Exception:
+                pass  # fall back to tag/keyword ranking
+
+        result = candidates[:limit]
 
         # Log selections for debugging
         if result:

@@ -66,11 +66,15 @@ class TurnContextStore:
         max_turns: int = 200,
         max_older: int = 4,
         max_assistant_chars: int = 400,
+        provider: Optional[Any] = None,
+        model: Optional[str] = None,
     ):
         self._dir = Path(turns_dir)
         self._max_turns = max_turns
         self._max_older = max_older
         self._max_assistant_chars = max_assistant_chars
+        self._provider = provider
+        self._model = model
 
     def _ensure_dir(self) -> None:
         self._dir.mkdir(parents=True, exist_ok=True)
@@ -116,12 +120,42 @@ class TurnContextStore:
             last = cards[-1]
             selected: Dict[int, Dict[str, Any]] = {id(last): last}
 
-            # Add top-scoring older cards (excluding the last)
-            for score, idx, card in scored:
+            # Gather older candidates (up to 2x limit so LLM filter has headroom)
+            older_candidates = [
+                card for score, idx, card in scored
+                if id(card) != id(last) and score > 0
+            ][: self._max_older * 2]
+
+            # LLM filter on older candidates when provider is wired
+            if self._provider is not None and older_candidates:
+                try:
+                    from .card_filter import filter_cards_by_relevance
+                    candidate_dicts = [
+                        {
+                            "id": c.get("id", f"turn-{i}"),
+                            "title": c.get("user", ""),
+                            "files": [],
+                            "adapter": "turn",
+                        }
+                        for i, c in enumerate(older_candidates)
+                    ]
+                    kept = filter_cards_by_relevance(
+                        task_text, candidate_dicts,
+                        model_provider=self._provider, model=self._model,
+                    )
+                    kept_ids = {m.id for m in kept}
+                    older_candidates = [
+                        c for c in older_candidates
+                        if c.get("id", "") in kept_ids
+                    ]
+                except Exception:
+                    pass  # silently fall back to IDF selection
+
+            # Add top older cards up to max_older
+            for card in older_candidates:
                 if len(selected) >= self._max_older + 1:
                     break
-                if id(card) not in selected and score > 0:
-                    selected[id(card)] = card
+                selected[id(card)] = card
 
             # Restore chronological order
             ordered = [c for c in cards if id(c) in selected]

@@ -434,7 +434,11 @@ def resolve_context_assembler(
         from .core.turn_context_store import TurnContextStore
         from .core.composite_assembler import CompositeContextAssembler
         turns_dir = os.path.join(cards_dir, "turns")
-        turn_store = TurnContextStore(turns_dir=turns_dir)
+        turn_store = TurnContextStore(
+            turns_dir=turns_dir,
+            provider=cfg.model_provider,
+            model=_registry.resolve_tier("balanced"),
+        )
 
         # Resolve the vector store: explicit instance > auto-build local Qdrant > None.
         # When the [qdrant] extra is installed and no explicit store is configured, we auto-build
@@ -620,7 +624,13 @@ def build_orchestrator(
             except Exception:  # noqa: BLE001
                 pass  # Quest loader optional; guidance works without it
 
-        guidance = UniversalGuidanceProvider(dynamic_guidance_loader=dynamic_loader)
+        from .core.model_registry import ModelRegistry as _GuidanceRegistry
+        _g_registry = _GuidanceRegistry(cfg.model_provider, fallback=cfg.model_fallback or None)
+        guidance = UniversalGuidanceProvider(
+            dynamic_guidance_loader=dynamic_loader,
+            provider=cfg.model_provider,
+            model=_g_registry.resolve_tier("balanced"),
+        )
 
     # A default in-process inbox for mid-run user messages, so any interface (chat, Quest frontend,
     # ...) can push new messages and have them folded into the running goal loop automatically. A
