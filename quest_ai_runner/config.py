@@ -498,9 +498,12 @@ def resolve_context_assembler(
             # sync() is fingerprint-based, subsequent calls only re-embed changed
             # cards (AUTO-UPDATE). Never raises: errors in seed_source() are swallowed
             # by VectorContextAssembler._maybe_seed().
+            # Resolve the query model tier to a full model ID (not a bare tier name like "haiku")
+            query_model = registry.resolve_tier("fast")
             vector = VectorContextAssembler(
                 vector_store,
                 provider=cfg.model_provider,
+                query_model=query_model,
                 seed_source=keyword.export_for_embedding,
             )
             file_assembler = HybridContextAssembler(keyword=keyword, vector=vector)
