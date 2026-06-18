@@ -546,7 +546,7 @@ class SubprocessGoalRunner(DeepRunner):
             _log.info("starting claude session monitor for deep run")
             monitor_thread = threading.Thread(
                 target=_monitor_claude_session,
-                args=(self.cfg.working_dir, emit.emit, stop_monitor),
+                args=(self.cfg.working_dir, emit, stop_monitor),
                 daemon=True
             )
             monitor_thread.start()
