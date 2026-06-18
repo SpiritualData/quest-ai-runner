@@ -262,7 +262,8 @@ class _ContextPanel:
         self._total_sources = 0          # total sources seen (for footer)
         self._replans = 0
         self._last_line_count = 0
-        self._card_names: List[Tuple[str, str]] = []  # (card_id, title) pairs shown
+        self._cards: List[dict] = []     # full card objects with files instead of just names
+        self._card_files_map: dict = {}  # card_id -> [files] mapping
 
     def start(self) -> None:
         if not self._tty:
@@ -278,7 +279,13 @@ class _ContextPanel:
     def set_cards(self, cards: List[dict]) -> None:
         """Set the context cards that were selected."""
         with self._lock:
-            self._card_names = [(c.get("id", "?"), c.get("title", "(no title)")[:50]) for c in cards]
+            self._cards = cards
+            self._card_files_map = {}
+            for card in cards:
+                card_id = card.get("id", "?")
+                files = card.get("files", [])[:3]  # Show top 3 files per card
+                if files:
+                    self._card_files_map[card_id] = files
 
     def inc_replans(self) -> None:
         with self._lock:
@@ -287,7 +294,8 @@ class _ContextPanel:
             # This prevents old sources from cluttering the display
             self._sources = []
             self._overflow = 0
-            self._card_names = []
+            self._cards = []
+            self._card_files_map = {}
 
     def add_sources(self, paths: List[str], count: int) -> List[str]:
         """Called when a READ event arrives with its source paths. Returns only NEW paths."""
@@ -336,33 +344,51 @@ class _ContextPanel:
             phase = self._phase
             sources = list(self._sources)
             overflow = self._overflow
-            cards = list(self._card_names)
+            cards = list(self._cards)
+            card_files_map = dict(self._card_files_map)
 
         lines: List[str] = [f"  {frame} {phase}"]
 
-        # Show context cards if available
+        # Show context cards with their files grouped underneath
         if cards:
             lines.append("")
-            for card_id, title in cards:
-                lines.append(f"  📇 {_a(_DIM, card_id)}: {title}")
+            lines.append(f"  {_a(_BRIGHT_CYAN, '📇 Context Cards')}")
+            for card in cards:
+                card_id = card.get("id", "?")
+                title = card.get("title", "(no title)")[:50]
+                adapter = card.get("adapter", "")
+                # Show card with adapter label and color differentiation
+                adapter_label = f"[{adapter}]" if adapter else ""
+                lines.append(f"  {_a(_BRIGHT_CYAN, '●')} {adapter_label} {_a(_DIM, card_id)}: {title}")
+
+                # Show relevant files nested under this card
+                files = card_files_map.get(card_id, card.get("files", [])[:3])
+                if files:
+                    for file_path in files[:3]:
+                        file_label = file_path if len(file_path) <= 50 else "…" + file_path[-47:]
+                        lines.append(f"    {_a(_BRIGHT_CYAN, '→')} {file_label}")
+                    file_count = len(card.get("files", []))
+                    if file_count > 3:
+                        lines.append(f"    {_a(_DIM, f'+ {file_count - 3} more files')}")
 
         if sources:
+            # Only show remaining ad-hoc sources (not in any card)
             lines.append("")
-            # Group sources by type for better visual hierarchy
+            lines.append(f"  {_a(_BRIGHT_CYAN, '⌕ Additional Sources')}")
             file_sources = [s for s in sources if not s.startswith("(")]
             search_sources = [s for s in sources if s.startswith("(searched")]
 
             if file_sources:
                 for src in file_sources:
-                    label = src if len(src) <= 60 else "…" + src[-57:]
-                    lines.append(f"  ↗  {label}")
+                    label = src if len(src) <= 50 else "…" + src[-47:]
+                    lines.append(f"  {_a(_BRIGHT_CYAN, '↗')} {label}")
             if search_sources:
                 for src in search_sources:
-                    label = src if len(src) <= 60 else "…" + src[-57:]
-                    lines.append(f"  ⌕  {label}")
+                    label = src if len(src) <= 50 else "…" + src[-47:]
+                    lines.append(f"  {_a(_BRIGHT_CYAN, '◆')} {label}")
 
             if overflow:
-                lines.append(f"     and {overflow} more…")
+                lines.append(f"     {_a(_DIM, f'and {overflow} more…')}")
 
         # Each render ends with \n after every line, so the cursor sits one line
         # BELOW the last spinner line. On the next render we move up by n lines
@@ -371,7 +397,7 @@ class _ContextPanel:
         if n:
             sys.stdout.write(f"\033[{n}A")
         for ln in lines:
-            sys.stdout.write(f"\r\033[2K{_DIM}{ln}{_RESET}\n")
+            sys.stdout.write(f"\r\033[2K{ln}\n")
         sys.stdout.flush()
         self._last_line_count = len(lines)
 
