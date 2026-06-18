@@ -471,6 +471,13 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
 # Rendering helpers (gathered observations -> prompt text / grounding block).
 # ---------------------------------------------------------------------------
 
+def _truncate_goal(goal: str, max_chars: int = 3900) -> str:
+    """Truncate goal text to stay under Quest's 4000-char limit."""
+    if len(goal) > max_chars:
+        return goal[:max_chars] + " [truncated]"
+    return goal
+
+
 def _answer_describes_unexecuted_work(text: Optional[str]) -> bool:
     """Check if answer contains EXECUTABLE work that should've been done.
 
@@ -1050,7 +1057,7 @@ class Orchestrator:
                   gathered: Optional[List[Dict[str, Any]]] = None) -> OrchestratorResult:
         subtasks = (plan.deep_subtasks or [])[: self.cfg.max_deep_subtasks]
         if not subtasks:
-            subtasks = [{"goal": plan.goal or f"Fully address the request: {user_message}",
+            subtasks = [{"goal": _truncate_goal(plan.goal or f"Fully address the request: {user_message}"),
                          "brief": plan.deep_brief or user_message}]
         if self.deep_runner is None:
             # No runner configured: surface the goal(s) without executing (caller may spawn).
@@ -1840,7 +1847,7 @@ class Orchestrator:
                 return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
                                                  partial=True, model=model))
             plan.action = final = "deep"
-            plan.goal = plan.goal or f"Fully address the request: {user_message}"
+            plan.goal = _truncate_goal(plan.goal or f"Fully address the request: {user_message}")
             plan.deep_brief = plan.deep_brief or user_message
 
         if final == "clarify":
@@ -1904,8 +1911,8 @@ class Orchestrator:
                     emit.status("queuing follow-up work…")
                 deferred_plan = PlanDecision(
                     action="deep",
-                    goal=should_defer_deep.get("goal") or f"Follow-up: {user_message}",
-                    deep_brief=should_defer_deep.get("brief") or user_message,
+                    goal=_truncate_goal(should_defer_deep.get("goal") or f"Execute: {user_message}"),
+                    deep_brief=(should_defer_deep.get("brief") or user_message)[:2000],
                     rationale=should_defer_deep.get("rationale") or "follow-up work from answer phase",
                 )
                 deep_model = self._answer_model(deferred_plan, "opus", hint=model_hint)
