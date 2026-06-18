@@ -492,23 +492,22 @@ def _monitor_claude_session(
                                             if msg_text and msg_text.strip():
                                                 event_count += 1
 
-                                                # Extract task ID from message if present (e.g., "TASK 1:" in brief)
-                                                # Use file-based session ID as primary run_id to avoid collisions
-                                                # across multiple concurrent QAR instances
-                                                task_id = None
+                                                # Build unique run_id from session UUID + task number (if multi-task)
+                                                # This ensures uniqueness across concurrent QAR instances
                                                 if not file_session_ids.get(str(jsonl_file)):
-                                                    # Extract task number only once per file
-                                                    if msg_text:
-                                                        import re
-                                                        match = re.search(r'\bTASK\s+(\d+)\b', msg_text)
-                                                        if match:
-                                                            task_id = f"task_{match.group(1)}"
-                                                            file_session_ids[str(jsonl_file)] = task_id
+                                                    session_uuid = jsonl_file.stem  # e.g., a1b2c3d4-...
+                                                    import re
+                                                    match = re.search(r'\bTASK\s+(\d+)\b', msg_text)
+                                                    if match:
+                                                        # Multi-task: include task number for clarity
+                                                        task_num = match.group(1)
+                                                        run_id = f"task{task_num}_{session_uuid[:8]}"
+                                                    else:
+                                                        # Single task: just use session UUID
+                                                        run_id = session_uuid[:8]
+                                                    file_session_ids[str(jsonl_file)] = run_id
                                                 else:
-                                                    task_id = file_session_ids.get(str(jsonl_file))
-
-                                                # run_id is unique per file to avoid cross-instance collisions
-                                                run_id = task_id or jsonl_file.stem
+                                                    run_id = file_session_ids.get(str(jsonl_file))
                                                 _log.info("emitting exec event #%d from %s: %s",
                                                          event_count, run_id, msg_text[:80])
                                                 callback(ProgressEvent(
