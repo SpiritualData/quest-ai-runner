@@ -25,26 +25,27 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-# The CORE brain + the RUNNER are stdlib-only (urllib for the Quest client). The Anthropic
-# reference provider is the only optional third-party dep — install the [anthropic] extra for it.
-dependencies = []
+# The CORE brain + the RUNNER are stdlib-only (urllib for the Quest client).
+# TUI dependencies are now core (Textual is the recommended interface).
+# Model providers (anthropic, gemini) and vector stores (qdrant, bm25) remain optional.
+dependencies = [
+    "prompt_toolkit>=3.0",
+    "rich>=13.0",
+    "textual>=0.40.0",
+]
 
 [project.optional-dependencies]
 anthropic = ["anthropic>=0.40"]
 gemini = ["google-genai>=2.0"]
 qdrant = ["qdrant-client>=1.7", "fastembed>=0.3"]
 bm25 = ["bm25s>=0.2"]
-tui = ["prompt_toolkit>=3.0", "rich>=13.0", "textual>=0.40.0"]
-# All production providers + TUI
+# All production providers (TUI is now core, not optional)
 all = [
     "anthropic>=0.40",
     "google-genai>=2.0",
     "qdrant-client>=1.7",
     "fastembed>=0.3",
     "bm25s>=0.2",
-    "prompt_toolkit>=3.0",
-    "rich>=13.0",
-    "textual>=0.40.0",
 ]
 dev = ["pytest>=7.0"]
 
