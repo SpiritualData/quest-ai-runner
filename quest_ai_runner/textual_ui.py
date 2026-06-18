@@ -238,17 +238,20 @@ class DeepActivity(Static):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._dashboard = ""
+        self.display = False
 
     def show(self, dashboard: str) -> None:
         self._dashboard = dashboard or ""
+        # Set display property before refresh so Textual sees visibility change
+        self.display = bool(self._dashboard.strip())
         self.refresh()
 
     def hide(self) -> None:
         self._dashboard = ""
+        self.display = False
         self.refresh()
 
     def render(self):
-        self.display = bool(self._dashboard.strip())
         # Plain Text (not markup) so file paths with brackets render literally.
         return Text(self._dashboard, style="dim")
 
@@ -272,7 +275,6 @@ class QuestAITerminal(App):
     #context {
         height: auto;
         max-height: 16;
-        display: none;
         border-left: thick $accent 30%;
         padding: 0 1;
         margin: 0 1;
@@ -282,7 +284,6 @@ class QuestAITerminal(App):
     #deep {
         height: auto;
         max-height: 14;
-        display: none;
         border-left: thick $warning 40%;
         padding: 0 1;
         margin: 0 1;
@@ -291,7 +292,6 @@ class QuestAITerminal(App):
 
     #activity {
         height: auto;
-        display: none;
         padding: 0 1;
         margin: 0 1;
     }
@@ -330,6 +330,7 @@ class QuestAITerminal(App):
         self._deep_plan_shown = False
         self._deep = _DeepRunTracker()
         self._deep_seen: set = set()
+        self._deep_event_count = 0
 
         # When set, the next submitted line is a menu selection, not a turn.
         self._pending_select: Optional[Callable[[str], None]] = None
@@ -701,6 +702,7 @@ class QuestAITerminal(App):
         self._t0 = time.monotonic()
         self._deep = _DeepRunTracker()
         self._deep_seen = set()
+        self._deep_event_count = 0
         self._ctx.reset()
         self._deep_view.hide()
 
@@ -846,8 +848,11 @@ class QuestAITerminal(App):
             if text:
                 self._deep.update_run_output(run_id, text)
             # Live progress updates the deep panel IN PLACE — never appended, so
-            # the steady tick stream doesn't bury the conversation.
-            self._deep_view.show(self._deep.get_dashboard())
+            # the steady tick stream doesn't bury the conversation. Throttle to
+            # every 10 events to avoid flicker and excessive redraws.
+            self._deep_event_count += 1
+            if self._deep_event_count % 10 == 0:
+                self._deep_view.show(self._deep.get_dashboard())
             self._status.set_status("executing…")
 
         elif t == ev["milestone"]:
