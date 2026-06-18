@@ -71,17 +71,20 @@ class QuestRetrievalAdapter(RetrievalAdapter):
         """Structured lookup against Quest API.
 
         Supports:
-        - goal_id + quest_id: fetch goal metadata, notes, related goals
-        - task_id: fetch task details and history
-        - cross_env_search: search related goals/tasks across envs
+        - goal_context: fetch goal metadata, notes, related goals (requires goal_id + quest_id)
+        - quest_context: fetch quest metadata and goals (requires quest_id)
+        - task_history: fetch task details and history (future)
+        - cross_env_search: search related goals/tasks across envs (future)
+
+        When exact IDs aren't available, use list_sources() first to discover quests,
+        then describe_source() to drill into a specific quest.
 
         Spec format (example):
             {
                 "kind": "goal_context",
                 "goal_id": "goal_123",
                 "quest_id": "quest_456",
-                "include_notes": True,
-                "include_related": True,
+                "include_notes": true
             }
         """
         if not self.client.configured:
@@ -91,6 +94,8 @@ class QuestRetrievalAdapter(RetrievalAdapter):
         try:
             if kind == "goal_context":
                 return self._query_goal_context(spec)
+            elif kind == "quest_context":
+                return self._query_quest_context(spec)
             elif kind == "task_history":
                 return self._query_task_history(spec)
             elif kind == "cross_env_search":
@@ -98,7 +103,7 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             else:
                 return Observation(
                     kind="error",
-                    error=f"Unknown quest query kind: {kind}. Supported: goal_context, task_history, cross_env_search",
+                    error=f"Unknown query kind: {kind}. Use list_sources() to discover quests first, or describe_source() to explore a specific quest.",
                 )
         except Exception as e:  # noqa: BLE001
             return Observation(kind="error", error=f"Quest query error: {type(e).__name__}: {e}")
@@ -113,7 +118,7 @@ class QuestRetrievalAdapter(RetrievalAdapter):
         if not goal_id or not quest_id:
             return Observation(
                 kind="error",
-                error="goal_context query requires goal_id and quest_id",
+                error="goal_context query requires goal_id and quest_id. Use list_sources() to discover available quests, then describe_source('quest/<id>') to see its goals.",
             )
 
         text_parts = []
@@ -150,6 +155,44 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             rel_path=f"quest://goal/{goal_id}",
         )
 
+    def _query_quest_context(self, spec: Dict[str, Any]) -> Observation:
+        """Fetch quest metadata and list its goals."""
+        quest_id = spec.get("quest_id")
+
+        if not quest_id:
+            return Observation(
+                kind="error",
+                error="quest_context query requires quest_id. Use list_sources() to discover available quests.",
+            )
+
+        text_parts = []
+
+        # Fetch quest metadata
+        quest = self.client.get_quest(quest_id)
+        if quest:
+            text_parts.append(f"Quest: {quest.get('name', quest_id)}")
+            if quest.get("outcome"):
+                text_parts.append(f"Outcome: {quest['outcome']}")
+            completed = quest.get("completed")
+            if completed is not None:
+                text_parts.append(f"Status: {'completed' if completed else 'in progress'}")
+
+        # Fetch goals in this quest
+        goals = self.client.list_quest_goals(quest_id, limit=20)
+        if goals:
+            text_parts.append("\nGoals in this quest:")
+            for goal in goals:
+                goal_id = goal.get("goal_id", "?")
+                goal_name = goal.get("name", goal_id)
+                text_parts.append(f"  • {goal_name} ({goal_id})")
+
+        text = "\n".join(text_parts) if text_parts else ""
+        return Observation(
+            kind="query",
+            text=text,
+            rel_path=f"quest://{quest_id}",
+        )
+
     def _query_task_history(self, spec: Dict[str, Any]) -> Observation:
         """Fetch task history and previous results (future: not yet implemented)."""
         return Observation(
@@ -165,7 +208,11 @@ class QuestRetrievalAdapter(RetrievalAdapter):
         )
 
     def list_sources(self) -> Observation:
-        """DISCOVERY: list available Quest context sources."""
+        """DISCOVERY: list available Quest context sources.
+
+        Returns sources in "name: description" format for compatibility with
+        CompositeRetrievalAdapter. Format: "quest/<id>: <outcome>" per line.
+        """
         if not self.client.configured:
             return Observation(kind="error", error="Quest client not configured")
 
@@ -173,24 +220,27 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             quests = self.client.list_quests()
             if not quests:
                 return Observation(
-                    kind="query",
-                    text="No quests available on this Quest instance.",
+                    kind="error",
+                    error="No quests available on this Quest instance.",
                 )
 
-            lines = ["Available quests:"]
-            for quest in quests[:10]:  # Limit display
+            lines = []
+            for quest in quests[:20]:  # Limit display to avoid explosion
                 quest_id = quest.get("quest_id", "?")
                 outcome = quest.get("outcome", "unknown")
-                lines.append(f"  • quest/{quest_id}: {outcome}")
-            if len(quests) > 10:
-                lines.append(f"  ... and {len(quests) - 10} more")
+                lines.append(f"quest/{quest_id}: {outcome}")
 
             return Observation(kind="query", text="\n".join(lines))
         except Exception as e:  # noqa: BLE001
             return Observation(kind="error", error=f"list_sources failed: {e}")
 
     def describe_source(self, name: str, *, path: Optional[str] = None) -> Observation:
-        """DISCOVERY: drill down into a specific quest or goal."""
+        """DISCOVERY: drill down into a specific quest or goal.
+
+        Supports:
+        - describe_source("quest/quest_id") — shows quest metadata and its goals
+        - describe_source("goal/goal_id") — shows goal details and notes
+        """
         if not self.client.configured:
             return Observation(kind="error", error="Quest client not configured")
 
@@ -198,40 +248,77 @@ class QuestRetrievalAdapter(RetrievalAdapter):
         try:
             kind, source_id = name.split("/", 1)
         except ValueError:
-            return Observation(kind="error", error=f"Invalid source name: {name}. Use 'quest/ID' or 'goal/ID'")
+            return Observation(kind="error", error=f"Invalid source name: {name}. Use 'quest/quest_id' or 'goal/goal_id'")
 
-        if kind == "quest":
-            try:
+        try:
+            if kind == "quest":
                 quest = self.client.get_quest(source_id)
-                if quest:
-                    lines = [
-                        f"Quest: {source_id}",
-                        f"  Outcome: {quest.get('outcome', 'unknown')}",
-                        f"  Status: {'completed' if quest.get('completed') else 'in progress'}",
-                    ]
-                    return Observation(kind="query", text="\n".join(lines))
-                return Observation(kind="error", error=f"Quest not found: {source_id}")
-            except Exception as e:  # noqa: BLE001
-                return Observation(kind="error", error=f"describe_source failed: {e}")
-        else:
-            return Observation(kind="error", error=f"Unknown source kind: {kind}")
+                if not quest:
+                    return Observation(kind="error", error=f"Quest not found: {source_id}")
+
+                lines = [
+                    f"Quest: {quest.get('name', source_id)}",
+                    f"Outcome: {quest.get('outcome', 'unknown')}",
+                    f"Status: {'completed' if quest.get('completed') else 'in progress'}",
+                ]
+
+                # Include goals in this quest
+                goals = self.client.list_quest_goals(source_id, limit=20)
+                if goals:
+                    lines.append("\nGoals:")
+                    for goal in goals:
+                        goal_id = goal.get("goal_id", "?")
+                        goal_name = goal.get("name", goal_id)
+                        lines.append(f"  • {goal_name} ({goal_id})")
+
+                return Observation(kind="query", text="\n".join(lines))
+
+            elif kind == "goal":
+                # For goal, we need the quest_id (passed via path parameter or list_sources discovery)
+                quest_id = path
+                if not quest_id:
+                    return Observation(
+                        kind="error",
+                        error=f"To describe goal {source_id}, provide its quest_id via the path parameter: describe_source('goal/{source_id}', path='quest_id')",
+                    )
+
+                goal = self.client.get_goal(source_id, quest_id=quest_id)
+                if not goal:
+                    return Observation(kind="error", error=f"Goal not found: {source_id}")
+
+                lines = [
+                    f"Goal: {goal.get('name', source_id)}",
+                    f"Description: {goal.get('description', 'N/A')}",
+                    f"Deadline: {goal.get('deadline', 'N/A')}",
+                    f"Status: {'completed' if goal.get('completed') else 'in progress'}",
+                ]
+
+                return Observation(kind="query", text="\n".join(lines))
+
+            else:
+                return Observation(kind="error", error=f"Unknown source kind: {kind}. Use 'quest/ID' or 'goal/ID'")
+        except Exception as e:  # noqa: BLE001
+            return Observation(kind="error", error=f"describe_source failed: {e}")
 
     def list_operations(self) -> Observation:
-        """DISCOVERY: operations the brain can invoke."""
+        """DISCOVERY: operations the brain can invoke.
+
+        Returns operations in "name: description" format for compatibility with
+        CompositeRetrievalAdapter.
+        """
         lines = [
-            "Available Quest operations:",
-            "  • get_goal_context(goal_id, quest_id): fetch goal metadata + notes",
-            "  • list_quests(): discover available quests",
-            "  • describe_quest(quest_id): drill into a specific quest",
+            "get_goal_context: Fetch goal metadata and notes from Quest",
+            "query_quest: Query a specific quest for goals and metadata",
+            "discover_goals: List goals available in a quest",
         ]
         return Observation(kind="query", text="\n".join(lines))
 
     def describe_operation(self, name: str) -> Observation:
         """DISCOVERY: full signature and usage for an operation."""
         ops = {
-            "get_goal_context": "Fetch goal metadata, notes, and context. Spec: {kind: 'goal_context', goal_id: str, quest_id: str, include_notes: bool}",
-            "list_quests": "List available quests on this Quest instance. Spec: {kind: 'list_quests'}",
-            "describe_quest": "Drill into a specific quest. Spec: {kind: 'quest_detail', quest_id: str}",
+            "get_goal_context": "Fetch goal metadata, notes, and deadline from Quest. Usage: query({kind: 'goal_context', goal_id: '...', quest_id: '...', include_notes: true})",
+            "query_quest": "Query a specific quest for metadata and status. Usage: query({kind: 'goal_context', quest_id: '...'})",
+            "discover_goals": "List goals within a quest. Usage: list_sources() to discover available quests, then query() with goal_id from context.",
         }
         desc = ops.get(name)
         if desc:
