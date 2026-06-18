@@ -21,16 +21,20 @@ This module provides:
 """
 from __future__ import annotations
 
+import hashlib
 import inspect
 import json
 import logging
 import os
 import shutil
 import subprocess
+import threading
+import time
 from dataclasses import dataclass
-from typing import Any, List, Optional
+from pathlib import Path
+from typing import Any, Callable, List, Optional, Set
 
-from .adapters import DeepResult, DeepRunner
+from .adapters import DeepResult, DeepRunner, EVENT_EXEC, ProgressEvent
 
 _log = logging.getLogger("quest-ai-runner.goal_runner")
 
@@ -230,12 +234,203 @@ class SubprocessConfig:
         return True
 
 
+def _find_claude_project_dir(working_dir: str) -> Optional[Path]:
+    """Find the Claude projects directory for a given working directory.
+
+    Checks both local .claude/projects and ~/.claude/projects for session files.
+    """
+    project_key = working_dir.replace("/", "-")
+    candidates = []
+
+    # 1. Local .claude folder in the working directory
+    local_claude_dir = Path(working_dir) / ".claude" / "projects" / project_key
+    if local_claude_dir.exists():
+        candidates.append(local_claude_dir)
+
+    # 2. Home directory .claude folder
+    home_claude_dir = Path.home() / ".claude" / "projects" / project_key
+    if home_claude_dir.exists():
+        candidates.append(home_claude_dir)
+
+    # 3. Try without leading dash in project key
+    project_key_no_dash = project_key.lstrip("-")
+    local_alt = Path(working_dir) / ".claude" / "projects" / project_key_no_dash
+    if local_alt.exists():
+        candidates.append(local_alt)
+
+    home_alt = Path.home() / ".claude" / "projects" / project_key_no_dash
+    if home_alt.exists():
+        candidates.append(home_alt)
+
+    # 4. Search for any project folder with JSONL files
+    local_projects = Path(working_dir) / ".claude" / "projects"
+    if local_projects.exists():
+        for proj_dir in local_projects.iterdir():
+            if proj_dir.is_dir() and proj_dir not in candidates:
+                if list(proj_dir.glob("*.jsonl")):
+                    candidates.append(proj_dir)
+
+    if not candidates:
+        return None
+
+    # Return the one with the most recently modified JSONL file
+    def get_latest_jsonl_mtime(proj_dir: Path) -> float:
+        try:
+            jsonl_files = list(proj_dir.glob("*.jsonl"))
+            if not jsonl_files:
+                return 0
+            return max(f.stat().st_mtime for f in jsonl_files)
+        except Exception:
+            return 0
+
+    candidates.sort(key=get_latest_jsonl_mtime, reverse=True)
+    return candidates[0]
+
+
+def _find_active_jsonl_file(project_dir: Path) -> Optional[Path]:
+    """Find the most recently modified JSONL file with conversation content."""
+    if not project_dir.exists():
+        return None
+
+    jsonl_files = list(project_dir.glob("*.jsonl"))
+    if not jsonl_files:
+        return None
+
+    # Sort by modification time (most recent first)
+    jsonl_files.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+
+    # Find the first file with actual conversation content
+    for jsonl_file in jsonl_files:
+        try:
+            with open(jsonl_file, 'r') as f:
+                content = f.read()
+                if '"type":"user"' in content or '"type":"assistant"' in content:
+                    return jsonl_file
+        except Exception:
+            continue
+
+    return jsonl_files[0] if jsonl_files else None
+
+
+def _hash_line(line: str) -> str:
+    """Create a hash of a line for deduplication."""
+    return hashlib.md5(line.encode()).hexdigest()
+
+
+def _format_message_text(msg: dict) -> str:
+    """Extract and format text content from a parsed JSONL message."""
+    msg_type = msg.get("type", "unknown")
+
+    # Extract message content blocks
+    text_parts = []
+    if "message" in msg and "content" in msg["message"]:
+        for block in msg["message"]["content"]:
+            block_type = block.get("type", "")
+            if block_type == "text":
+                text = block.get("text", "").strip()
+                if text:
+                    text_parts.append(text)
+            elif block_type == "tool_use":
+                tool_name = block.get("name", "unknown")
+                tool_id = block.get("id", "")[:8]
+                text_parts.append(f"[Calling {tool_name}#{tool_id}]")
+            elif block_type == "tool_result":
+                text_parts.append("[Tool result received]")
+            elif block_type == "thinking":
+                think = block.get("thinking", "").strip()
+                if think:
+                    text_parts.append(f"[Thinking: {think[:100]}...]" if len(think) > 100 else f"[Thinking: {think}]")
+
+    if text_parts:
+        return f"[{msg_type.upper()}] " + " ".join(text_parts)
+    return f"[{msg_type.upper()}]"
+
+
+def _monitor_claude_session(
+    working_dir: str,
+    callback: Callable[[ProgressEvent], None],
+    stop_event: threading.Event,
+    poll_interval: float = 0.5,
+    max_wait_seconds: float = 30.0,
+) -> None:
+    """Monitor Claude Code session files and stream updates via callback.
+
+    Runs in a background thread. Polls for new JSONL lines and emits ProgressEvents
+    as Claude Code produces output (thinking, tool calls, text, etc.).
+    """
+    try:
+        project_dir = _find_claude_project_dir(working_dir)
+        if not project_dir:
+            _log.debug("claude project dir not found yet, waiting...")
+            # Wait for it to be created, then find it
+            start = time.time()
+            while time.time() - start < max_wait_seconds and not stop_event.is_set():
+                time.sleep(poll_interval)
+                project_dir = _find_claude_project_dir(working_dir)
+                if project_dir:
+                    break
+
+        if not project_dir:
+            _log.debug("could not locate claude project dir after %.1f seconds", max_wait_seconds)
+            return
+
+        _log.debug("found claude project dir: %s", project_dir)
+        processed_lines: Set[str] = set()
+
+        while not stop_event.is_set():
+            try:
+                # Find the active session file (most recently modified with content)
+                jsonl_file = _find_active_jsonl_file(project_dir)
+                if not jsonl_file:
+                    time.sleep(poll_interval)
+                    continue
+
+                # Read and process new lines from the JSONL file
+                try:
+                    with open(jsonl_file, 'r') as f:
+                        for line_num, line in enumerate(f, 1):
+                            line_hash = _hash_line(line)
+                            if line_hash in processed_lines:
+                                continue
+
+                            try:
+                                msg = json.loads(line.strip())
+                                processed_lines.add(line_hash)
+
+                                # Format and emit the message as a progress event
+                                msg_text = _format_message_text(msg)
+                                if msg_text:
+                                    callback(ProgressEvent(
+                                        type=EVENT_EXEC,
+                                        text=msg_text,
+                                        data={"message_type": msg.get("type"), "line": line_num}
+                                    ))
+                            except json.JSONDecodeError:
+                                # Skip malformed lines
+                                pass
+                except FileNotFoundError:
+                    # File was deleted or moved
+                    pass
+
+                time.sleep(poll_interval)
+
+            except Exception as e:
+                _log.debug("error monitoring claude session: %s", e)
+                time.sleep(poll_interval)
+
+    except Exception as e:
+        _log.warning("claude session monitor failed: %s", e)
+
+
 class SubprocessGoalRunner(DeepRunner):
     """Reference DeepRunner: spawn Claude Code headless with ``/goal`` + ``--max-turns``.
 
     The working dir, binary, model, and any context preamble are CONFIG, not hardcoded
     paths. Exit code 0 = goal met cleanly; non-zero =
     hit the turn/budget limit or errored (DeepResult.met=False with a clear message).
+
+    When an emit callback is provided, streams live Claude Code session updates to the
+    caller so they see what Claude is doing in real-time.
     """
 
     def __init__(self, config: SubprocessConfig):
@@ -258,6 +453,7 @@ class SubprocessGoalRunner(DeepRunner):
 
     def run_goal(self, *, goal: str, brief: str, model: Optional[str] = None,
                  max_turns: Optional[int] = None,
+                 emit: Optional[Callable[[ProgressEvent], None]] = None,
                  context_preamble: Optional[str] = None) -> DeepResult:
         # ``context_preamble`` is an OPTIONAL PER-CALL override of ``self.cfg.context_preamble``.
         # When the orchestrator forwards a per-task preamble (e.g. an AI rep's pulled persona), it
@@ -300,25 +496,57 @@ class SubprocessGoalRunner(DeepRunner):
         if goal.strip():
             cmd += ["--max-turns", str(int(turns))]
 
+        # Start monitoring Claude Code session in a background thread if emit is provided.
+        stop_monitor = threading.Event()
+        monitor_thread = None
+        if emit is not None:
+            monitor_thread = threading.Thread(
+                target=_monitor_claude_session,
+                args=(self.cfg.working_dir, emit, stop_monitor),
+                daemon=True
+            )
+            monitor_thread.start()
+
         try:
-            proc = subprocess.run(
+            proc = subprocess.Popen(
                 cmd,
-                input=prompt.encode("utf-8"),
-                cwd=self.cfg.working_dir,
-                env=self._build_env(),
+                stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                timeout=self.cfg.timeout_seconds,
+                cwd=self.cfg.working_dir,
+                env=self._build_env(),
             )
         except FileNotFoundError:
+            stop_monitor.set()
+            if monitor_thread:
+                monitor_thread.join(timeout=1)
             return DeepResult(met=False, error=f"worker binary not found: {self.cfg.claude_path}")
         except PermissionError as e:
+            stop_monitor.set()
+            if monitor_thread:
+                monitor_thread.join(timeout=1)
             return DeepResult(met=False, error=f"permission denied running worker: {e}")
-        except subprocess.TimeoutExpired:
-            return DeepResult(met=False, error="goal run exceeded the time limit before completing")
 
-        raw = (proc.stdout or b"").decode("utf-8", errors="replace")
-        err = (proc.stderr or b"").decode("utf-8", errors="replace") or None
+        # Communicate with the process (send prompt and wait for completion)
+        try:
+            raw, err = proc.communicate(
+                input=prompt.encode("utf-8"),
+                timeout=self.cfg.timeout_seconds
+            )
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            stop_monitor.set()
+            if monitor_thread:
+                monitor_thread.join(timeout=1)
+            return DeepResult(met=False, error="goal run exceeded the time limit before completing")
+        finally:
+            # Stop monitoring thread
+            stop_monitor.set()
+            if monitor_thread:
+                monitor_thread.join(timeout=2)
+
+        raw = raw.decode("utf-8", errors="replace") if raw else ""
+        err = err.decode("utf-8", errors="replace") if err else None
         # We requested ``--output-format json``: parse the worker's final result text AND its
         # reported token usage / cost out of the JSON envelope. ``out`` becomes the human-readable
         # result; ``tokens``/``cost`` feed the goal loop's overall token budget. If parsing fails
