@@ -2232,11 +2232,11 @@ class Orchestrator:
             # FORCE DEEP ON STEP 0 if execution directive was detected (skip planning but gather context)
             if step == 0 and force_deep_on_step_0:
                 # GATHER CONTEXT FIRST: deep needs grounding so it focuses on execution, not searching.
-                # Quick context assembly: affected files + key code patterns.
+                # Collect: source inventory, operations, code patterns.
                 context_reads = [
-                    {"grep": r"\.tsx?$|\.py$|\.md$"},  # Find affected files
-                    {"list_sources": True},  # What sources exist
+                    {"list_sources": True},  # What sources/collections exist
                     {"list_operations": True},  # What operations are available
+                    {"describe_source": "file", "describe_path": ""},  # File structure/types
                 ]
                 try:
                     context_obs = self._do_reads(context_reads, [])
@@ -2245,28 +2245,36 @@ class Orchestrator:
                 except Exception:  # noqa: BLE001
                     pass  # Graceful: continue even if context gather fails
 
-                # Search for affected files to enable parallel subtasks
-                affected_files = []
-                try:
-                    for obs in gathered:
-                        if isinstance(obs, dict) and obs.get("kind") == "grep":
-                            hits = obs.get("hits") or []
-                            # Collect up to 4 affected files for parallel tasks
-                            for hit in hits[:4]:
-                                rel_path = hit.get("rel_path")
-                                if rel_path:
-                                    affected_files.append(rel_path)
-                except Exception:  # noqa: BLE001
-                    affected_files = []
-
-                # Create parallel subtasks, one per file (if found), else single task
+                # LET THE LLM DECIDE HOW TO SPLIT: use cheap haiku call to suggest logical task boundaries
+                # (not file-based, but semantic—multiple files per task when they're logically connected)
                 deep_subtasks = []
-                if affected_files and len(affected_files) > 1:
-                    for file_path in affected_files[:4]:  # Max 4 parallel tasks
-                        deep_subtasks.append({
-                            "goal": _truncate_goal(f"Fix/implement {file_path}"),
-                            "brief": f"{user_message}\n\nFocus on: {file_path}"
-                        })
+                try:
+                    split_prompt = (
+                        "Suggest 2-4 logical subtasks to complete this work. "
+                        "Each subtask may touch multiple files (they're often connected). "
+                        "Keep goals short and checkable.\n\n"
+                        f"Request: {user_message}\n\n"
+                        "Format:\nGoal 1: <short done-standard>\nGoal 2: <short done-standard>\n..."
+                    )
+                    model = self.registry.resolve_tier("haiku")
+                    provider = self.get_provider_for_model(model)
+                    split_result = provider.answer(
+                        [{"role": "user", "content": split_prompt}],
+                        model=model
+                    )
+                    if split_result:
+                        # Parse LLM's suggested goals and build subtasks
+                        lines = split_result.split("\n")
+                        for line in lines:
+                            if line.startswith("Goal ") and ":" in line:
+                                goal_text = line.split(":", 1)[1].strip()
+                                if goal_text:
+                                    deep_subtasks.append({
+                                        "goal": _truncate_goal(goal_text),
+                                        "brief": user_message  # Each subtask gets full context
+                                    })
+                except Exception:  # noqa: BLE001
+                    pass  # If split fails, fall back to single task
 
                 plan = PlanDecision(
                     action="deep",
@@ -2274,7 +2282,7 @@ class Orchestrator:
                     deep_brief=user_message,
                     rationale="User demanded execution, skipping plan",
                     model_tier=None,  # use default
-                    deep_subtasks=deep_subtasks if deep_subtasks else [],
+                    deep_subtasks=deep_subtasks[:4] if deep_subtasks else [],  # Max 4 parallel tasks
                 )
             else:
                 try:
