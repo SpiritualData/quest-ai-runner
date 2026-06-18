@@ -343,7 +343,7 @@ class QuestAITerminal(App):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         yield RichLog(id="transcript", max_lines=20000, wrap=True,
-                      highlight=True, markup=True, auto_scroll=True, can_focus=False)
+                      highlight=True, markup=True, auto_scroll=True)
         yield ContextPanel(id="context")
         yield DeepActivity(id="deep")
         with Horizontal(id="activity"):
