@@ -258,7 +258,7 @@ class DeepActivity(Static):
 class QuestAITerminal(App):
     """Textual REPL over an `InteractiveSession`'s orchestrator brain."""
 
-    mouse = "click"
+    mouse = "all"
 
     CSS = """
     Screen { background: $surface; }
@@ -343,7 +343,7 @@ class QuestAITerminal(App):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
         yield RichLog(id="transcript", max_lines=20000, wrap=True,
-                      highlight=True, markup=True, auto_scroll=True, can_focus=True)
+                      highlight=True, markup=True, auto_scroll=True, can_focus=False)
         yield ContextPanel(id="context")
         yield DeepActivity(id="deep")
         with Horizontal(id="activity"):
