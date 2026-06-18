@@ -329,41 +329,52 @@ def _format_message_text(msg: dict) -> str:
     # Extract message content blocks
     text_parts = []
     if "message" in msg and "content" in msg["message"]:
-        for block in msg["message"]["content"]:
-            block_type = block.get("type", "")
-            if block_type == "text":
-                text = block.get("text", "").strip()
-                if text:
-                    # Truncate very long text blocks — they're assistant narration, not output
-                    if len(text) > 200:
-                        text = text[:200].rstrip() + "..."
-                    text_parts.append(text)
-            elif block_type == "tool_use":
-                tool_name = block.get("name", "unknown")
-                # Format tool input as a brief label where possible
-                inp = block.get("input") or {}
-                if tool_name in ("Bash", "bash") and inp.get("command"):
-                    cmd = str(inp["command"]).strip()
-                    brief = (cmd[:80] + "...") if len(cmd) > 80 else cmd
-                    text_parts.append(f"$ {brief}")
-                elif tool_name in ("Read", "read", "Write", "write") and inp.get("file_path"):
-                    text_parts.append(f"{tool_name}: {inp['file_path']}")
-                elif tool_name in ("Edit", "edit") and inp.get("file_path"):
-                    text_parts.append(f"Edit: {inp['file_path']}")
-                elif tool_name in ("WebSearch", "WebFetch") and (inp.get("query") or inp.get("url")):
-                    target = inp.get("query") or inp.get("url", "")
-                    brief = (target[:80] + "...") if len(target) > 80 else target
-                    text_parts.append(f"{tool_name}: {brief}")
-                else:
-                    text_parts.append(f"Using {tool_name}")
-            elif block_type == "tool_result":
-                # Tool results are noisy; skip them (the tool_use line is enough context)
-                pass
-            elif block_type == "thinking":
-                think = block.get("thinking", "").strip()
-                if think:
-                    brief = (think[:120] + "...") if len(think) > 120 else think
-                    text_parts.append(f"[thinking] {brief}")
+        content = msg["message"]["content"]
+
+        # Handle string content (direct text from Claude Code session)
+        if isinstance(content, str):
+            text = content.strip()
+            if text and len(text) > 0:
+                if len(text) > 200:
+                    text = text[:200].rstrip() + "..."
+                text_parts.append(text)
+        # Handle array of content blocks (Claude API format)
+        elif isinstance(content, list):
+            for block in content:
+                block_type = block.get("type", "")
+                if block_type == "text":
+                    text = block.get("text", "").strip()
+                    if text:
+                        # Truncate very long text blocks — they're assistant narration, not output
+                        if len(text) > 200:
+                            text = text[:200].rstrip() + "..."
+                        text_parts.append(text)
+                elif block_type == "tool_use":
+                    tool_name = block.get("name", "unknown")
+                    # Format tool input as a brief label where possible
+                    inp = block.get("input") or {}
+                    if tool_name in ("Bash", "bash") and inp.get("command"):
+                        cmd = str(inp["command"]).strip()
+                        brief = (cmd[:80] + "...") if len(cmd) > 80 else cmd
+                        text_parts.append(f"$ {brief}")
+                    elif tool_name in ("Read", "read", "Write", "write") and inp.get("file_path"):
+                        text_parts.append(f"{tool_name}: {inp['file_path']}")
+                    elif tool_name in ("Edit", "edit") and inp.get("file_path"):
+                        text_parts.append(f"Edit: {inp['file_path']}")
+                    elif tool_name in ("WebSearch", "WebFetch") and (inp.get("query") or inp.get("url")):
+                        target = inp.get("query") or inp.get("url", "")
+                        brief = (target[:80] + "...") if len(target) > 80 else target
+                        text_parts.append(f"{tool_name}: {brief}")
+                    else:
+                        text_parts.append(f"Using {tool_name}")
+                elif block_type == "tool_result":
+                    # Tool results are noisy; skip them (the tool_use line is enough context)
+                    pass
+                elif block_type == "thinking":
+                    think = block.get("thinking", "").strip()
+                    if think:
+                        brief = (think[:120] + "...") if len(think) > 120 else think
+                        text_parts.append(f"[thinking] {brief}")
 
     # Only emit assistant turns with real content; skip bare user/tool_result lines
     if msg_type == "assistant" and text_parts:
