@@ -64,6 +64,9 @@ class TaskExecutor:
     def __init__(self, client, orchestrator: Orchestrator):
         self._client = client
         self._orch = orchestrator
+        # Cache the retrieval adapter from the orchestrator so _build_context_view can fetch
+        # conversation history when conv_id is present
+        self._retrieval = getattr(orchestrator, "retrieval", None)
 
     @staticmethod
     def _task_text(task: Dict[str, Any]) -> str:
@@ -108,9 +111,10 @@ class TaskExecutor:
         self._report_progress(task_id, "started", text=f"Started working on this: {text}")
         self._post_conv(conv_id, f"Started working on this: {text}", kind="started")
 
-        # Fetch goal + quest context from Quest API if available, and build a context_view
-        # for the orchestrator so the deep agent knows what goal/quest it's working on.
-        context_view = self._build_context_view(goal_id, quest_id)
+        # Fetch goal + quest context + conversation history from Quest API if available, and build
+        # a context_view for the orchestrator so the deep agent knows what goal/quest it's working on
+        # and the prior conversation that led to the task.
+        context_view = self._build_context_view(goal_id, quest_id, conv_id)
 
         # Route all orchestrator events (except raw streaming partials) to the task's live progress
         # stream so the task-detail SSE shows step-by-step what the AI is doing (plan, read, replan,
@@ -183,16 +187,28 @@ class TaskExecutor:
         if callable(post):
             self._safe(lambda: post(conv_id, content, kind=kind))
 
-    def _build_context_view(self, goal_id: Optional[str], quest_id: Optional[str]) -> str:
-        """Fetch goal + quest metadata + notes from the Quest API and build a context_view.
+    def _build_context_view(self, goal_id: Optional[str], quest_id: Optional[str],
+                            conv_id: Optional[str] = None) -> str:
+        """Fetch goal + quest metadata + notes + conversation history from the Quest API.
 
         The context_view is passed to the orchestrator so the deep agent knows what goal/quest
-        it's working on and what progress has been made. Gracefully handles missing API
-        (no-ops when client lacks needed methods) and API errors (builds partial context)."""
-        if not goal_id and not quest_id:
-            return ""
-
+        it's working on, what progress has been made, and the prior conversation that led to
+        the task. Gracefully handles missing API (no-ops when client lacks needed methods) and
+        API errors (builds partial context)."""
         parts = []
+
+        # Fetch prior conversation history if this task was delegated from a chat
+        if conv_id and self._retrieval:
+            try:
+                # Try to read the conversation from the retrieval adapter
+                obs = self._retrieval.read_section(str(conv_id))
+                if obs and obs.kind == "read" and obs.text:
+                    parts.append(f"=== Prior Conversation Context ===\n{obs.text}\n")
+            except Exception:  # noqa: BLE001 — conversation fetch failure is non-critical
+                pass
+
+        if not goal_id and not quest_id:
+            return "\n".join(parts) if parts else ""
         # Fetch quest metadata if available
         if quest_id:
             get_quest = getattr(self._client, "get_quest", None)
@@ -247,7 +263,7 @@ class TaskExecutor:
                 except Exception:  # noqa: BLE001
                     pass  # API unavailable or error; continue with what we have
 
-        return "\n".join(parts) if parts else ""
+        return "\n".join(parts) if parts else ""  # Return combined conversation + quest/goal context
 
     # --- result -> Quest callback -------------------------------------------
 
