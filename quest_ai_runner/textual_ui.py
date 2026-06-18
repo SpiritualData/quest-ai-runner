@@ -182,6 +182,34 @@ class ContextPanel(Static):
         return "\n".join(lines)
 
 
+class DeepActivity(Static):
+    """In-place view of concurrent deep-run progress.
+
+    Deep execution emits a steady stream of low-level ticks (tool calls, file
+    reads, agent steps). Appending each snapshot to the transcript buries the
+    conversation under repeated "executing work…" lines. Instead we render the
+    whole live dashboard into this single widget and update it in place — one
+    calm block that grows and shrinks, never a scrolling pile of snapshots.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._dashboard = ""
+
+    def show(self, dashboard: str) -> None:
+        self._dashboard = dashboard or ""
+        self.refresh()
+
+    def hide(self) -> None:
+        self._dashboard = ""
+        self.refresh()
+
+    def render(self):
+        self.display = bool(self._dashboard.strip())
+        # Plain Text (not markup) so file paths with brackets render literally.
+        return Text(self._dashboard, style="dim")
+
+
 # ── Main app ──────────────────────────────────────────────────────────────────
 
 class QuestAITerminal(App):
@@ -201,6 +229,16 @@ class QuestAITerminal(App):
         max-height: 16;
         display: none;
         border-left: thick $accent 30%;
+        padding: 0 1;
+        margin: 0 1;
+        color: $text-muted;
+    }
+
+    #deep {
+        height: auto;
+        max-height: 14;
+        display: none;
+        border-left: thick $warning 40%;
         padding: 0 1;
         margin: 0 1;
         color: $text-muted;
@@ -245,6 +283,7 @@ class QuestAITerminal(App):
         self._answer_parts: List[str] = []
         self._deep_plan_shown = False
         self._deep = _DeepRunTracker()
+        self._deep_seen: set = set()
 
         # When set, the next submitted line is a menu selection, not a turn.
         self._pending_select: Optional[Callable[[str], None]] = None
@@ -260,6 +299,7 @@ class QuestAITerminal(App):
         yield RichLog(id="transcript", max_lines=20000, wrap=True,
                       highlight=True, markup=True, auto_scroll=True)
         yield ContextPanel(id="context")
+        yield DeepActivity(id="deep")
         with Horizontal(id="activity"):
             yield LoadingIndicator()
             yield StatusLine("thinking…")
@@ -270,6 +310,7 @@ class QuestAITerminal(App):
         self._ui_thread_id = threading.get_ident()
         self._tlog = self.query_one("#transcript", RichLog)
         self._ctx = self.query_one("#context", ContextPanel)
+        self._deep_view = self.query_one("#deep", DeepActivity)
         self._activity = self.query_one("#activity", Horizontal)
         self._status = self.query_one("#activity StatusLine", StatusLine)
         inp = self.query_one("#prompt", Input)
@@ -284,6 +325,7 @@ class QuestAITerminal(App):
             pass
 
         self._ctx.reset()
+        self._deep_view.hide()
         self._activity.display = False
 
         # Redirect the session's console into our transcript and print the header.
@@ -595,7 +637,10 @@ class QuestAITerminal(App):
         self._cur_deep_run = None
         self._answer_parts: List[str] = []
         self._t0 = time.monotonic()
+        self._deep = _DeepRunTracker()
+        self._deep_seen = set()
         self._ctx.reset()
+        self._deep_view.hide()
 
         if echo:
             self._tlog.write(Text(f"❯ {user_text}", style="bold cyan"))
@@ -726,20 +771,22 @@ class QuestAITerminal(App):
 
         elif t == ev["exec"]:
             run_id = data.get("run_id") or "default"
-            if run_id != self._cur_deep_run:
-                goal = data.get("goal") or "executing work…"
-                self._deep.add_run(run_id, goal)
-                self._cur_deep_run = run_id
-                log.write(Text(""))
-                log.write(Text(goal, style="bold cyan"))
+            goal = (data.get("goal") or "").strip()
+            if run_id not in self._deep_seen:
+                self._deep_seen.add(run_id)
+                self._deep.add_run(run_id, goal or "executing work…")
+                # Write the goal header to the transcript ONCE per run — and only
+                # when it's a real goal, not the generic "executing…" fallback.
+                if goal:
+                    log.write(Text(""))
+                    log.write(Text(goal, style="bold cyan"))
+            self._cur_deep_run = run_id
             if text:
                 self._deep.update_run_output(run_id, text)
-            count = data.get("event_number", 0)
-            if count and count % 10 == 0:
-                dash = self._deep.get_dashboard()
-                for ln in dash.split("\n"):
-                    if ln.strip():
-                        log.write(Text("  " + ln, style="dim"))
+            # Live progress updates the deep panel IN PLACE — never appended, so
+            # the steady tick stream doesn't bury the conversation.
+            self._deep_view.show(self._deep.get_dashboard())
+            self._status.set_status("executing…")
 
         elif t == ev["milestone"]:
             if text:
@@ -762,6 +809,7 @@ class QuestAITerminal(App):
         log = self._tlog
         self._activity.display = False
         self._ctx.display = False
+        self._deep_view.hide()
 
         if error is not None:
             log.write(f"  [red]Error:[/red] {error}")
