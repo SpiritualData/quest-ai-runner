@@ -1204,6 +1204,11 @@ class InteractiveSession:
         self._deep_tracker = _DeepRunTracker()
         # Restore persisted model/persona from qar_state.json (best-effort)
         self._load_session_state()
+        # Resolve display name from skill frontmatter (display_name > name > rep_name as given)
+        self._refresh_rep_name_from_skill()
+        # If no skill file loaded yet, try auto-discovering one by rep name
+        if not self._persona_file:
+            self._try_load_skill_by_name(rep_name)
         # Build dynamic model tier menu from the registry
         self._build_model_tiers_menu()
 
@@ -1710,6 +1715,7 @@ class InteractiveSession:
                 try:
                     self._persona = open(pf).read()  # noqa: WPS515
                     self._persona_file = pf
+                    self._refresh_rep_name_from_skill()
                 except OSError:
                     pass  # file moved or deleted — skip silently
         except Exception:  # noqa: BLE001
@@ -2017,6 +2023,32 @@ class InteractiveSession:
             return cwd_skills
         # If none of the above exist, still return cwd path (for /reps to show the hint)
         return cwd_skills
+
+    def _refresh_rep_name_from_skill(self) -> None:
+        """Update _rep_name from the loaded skill file's display_name/name field."""
+        if not self._persona_file:
+            return
+        meta = _parse_skill_frontmatter(self._persona_file)
+        name = meta.get("display_name") or meta.get("name")
+        if name:
+            self._rep_name = name
+
+    def _try_load_skill_by_name(self, name: str) -> None:
+        """Auto-load SKILL.md for a rep name if discoverable, and update display name."""
+        if not name or name in ("AI", "Assistant"):
+            return
+        skills_dir = self._skills_dir()
+        if not skills_dir:
+            return
+        skill_file = os.path.join(skills_dir, name, "SKILL.md")
+        if not os.path.isfile(skill_file):
+            return
+        try:
+            self._persona = open(skill_file).read()  # noqa: WPS515
+            self._persona_file = skill_file
+            self._refresh_rep_name_from_skill()
+        except OSError:
+            pass
 
     def _print_whoami(self) -> None:
         c = self._console
