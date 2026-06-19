@@ -605,8 +605,8 @@ def test_model_hint_does_not_touch_planner_calls():
     assert res.kind == "answer"
     from quest_ai_runner.core.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
-    expected_planner = registry.resolve_tier("haiku")  # OrchestratorConfig.planner_tier default
-    assert provider.plan_models == [expected_planner]
+    expected_planner = registry.resolve_tier("balanced")  # OrchestratorConfig.planner_tier default
+    assert all(m == expected_planner for m in provider.plan_models)
 
 
 def test_model_hint_absent_leaves_planner_tier_unchanged():

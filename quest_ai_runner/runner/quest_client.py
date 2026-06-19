@@ -463,12 +463,15 @@ class QuestClient:
             if not tid:
                 raise QuestNotConfigured("team_id is required to read an AI-rep profile")
             return self._request("GET", f"/api/teams/{tid}/members/{user_id}/ai-profile") or {}
-        except (QuestApiError, QuestNotConfigured) as e:
+        except QuestNotConfigured:
+            raise
+        except QuestApiError as e:
             log.warning("get_ai_profile failed for user %s: %s", user_id, e)
             return {}
 
     def update_ai_profile(self, user_id: str, *, display_name: Optional[str] = None,
                           persona: Optional[str] = None,
+                          learned_notes: Optional[list] = None,
                           team_id: Optional[str] = None) -> Dict[str, Any]:
         """PUT edits to a rep's profile (display_name and/or persona).
 
@@ -487,6 +490,8 @@ class QuestClient:
                 body["display_name"] = display_name
             if persona is not None:
                 body["persona"] = persona
+            if learned_notes is not None:
+                body["learned_notes"] = learned_notes
             return self._request(
                 "PUT", f"/api/teams/{tid}/members/{user_id}/ai-profile", body=body) or {}
         except (QuestApiError, QuestNotConfigured) as e:
@@ -518,20 +523,15 @@ class QuestClient:
             if not tid:
                 raise QuestNotConfigured("team_id is required to add a rep correction")
 
-            body: Dict[str, Any] = {
-                "correction": correction,
-                "rep_id": user_id,
-                "source": "correction",
-            }
+            body: Dict[str, Any] = {"correction": correction}
             if message_id is not None:
                 body["message_id"] = message_id
             if task_type is not None:
                 body["task_type"] = task_type
 
-            # Create guidance card from correction (backend does the FeedbackProcessor logic)
             return self._request(
                 "POST",
-                f"/api/teams/{tid}/guidance-from-correction",
+                f"/api/teams/{tid}/members/{user_id}/corrections",
                 body=body,
             ) or {}
         except (QuestApiError, QuestNotConfigured) as e:

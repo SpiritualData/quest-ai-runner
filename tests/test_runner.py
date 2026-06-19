@@ -436,22 +436,24 @@ def test_subprocess_config_web_enabled_derivation():
 def test_subprocess_runner_passes_tool_flags_and_runs_web_goal(monkeypatch):
     """When tools are pinned the runner passes --allowed-tools/--disallowed-tools to Claude Code, so
     what the env ADVERTISES (web_enabled) matches what the worker is actually allowed to do. We
-    intercept subprocess.run to capture the command (no real spawn)."""
+    intercept subprocess.Popen to capture the command (no real spawn)."""
     import subprocess as _sp
     from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
     captured = {}
 
-    class _Proc:
+    class _MockPopen:
         returncode = 0
-        stdout = b"did web research"
-        stderr = b""
+        stdin = None
+        def communicate(self, input=None, timeout=None):
+            captured["cmd_from_popen"] = captured.get("cmd")
+            return (b"did web research", b"")
 
-    def _fake_run(cmd, **kw):
+    def _fake_popen(cmd, **kw):
         captured["cmd"] = cmd
-        return _Proc()
+        return _MockPopen()
 
-    monkeypatch.setattr(_sp, "run", _fake_run)
+    monkeypatch.setattr(_sp, "Popen", _fake_popen)
     runner = SubprocessGoalRunner(SubprocessConfig(
         working_dir="/w", claude_path="/usr/bin/claude",
         allowed_tools=["WebSearch", "WebFetch"], disallowed_tools=["Bash"]))
@@ -474,16 +476,17 @@ def test_subprocess_runner_drops_non_claude_model(monkeypatch):
 
     captured = {}
 
-    class _Proc:
+    class _MockPopen:
         returncode = 0
-        stdout = b"did it"
-        stderr = b""
+        stdin = None
+        def communicate(self, input=None, timeout=None):
+            return (b"did it", b"")
 
-    def _fake_run(cmd, **kw):
+    def _fake_popen(cmd, **kw):
         captured["cmd"] = cmd
-        return _Proc()
+        return _MockPopen()
 
-    monkeypatch.setattr(_sp, "run", _fake_run)
+    monkeypatch.setattr(_sp, "Popen", _fake_popen)
     runner = SubprocessGoalRunner(SubprocessConfig(working_dir="/w", claude_path="/usr/bin/claude"))
 
     runner.run_goal(goal="g", brief="b", model="gemini-3.5-flash", max_turns=2)
@@ -500,12 +503,13 @@ def test_subprocess_runner_treats_empty_output_as_not_met(monkeypatch):
     import subprocess as _sp
     from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
-    class _Proc:
+    class _MockPopen:
         returncode = 0
-        stdout = b"   \n"   # whitespace only == effectively empty
-        stderr = b""
+        stdin = None
+        def communicate(self, input=None, timeout=None):
+            return (b"   \n", b"")
 
-    monkeypatch.setattr(_sp, "run", lambda cmd, **kw: _Proc())
+    monkeypatch.setattr(_sp, "Popen", lambda cmd, **kw: _MockPopen())
     runner = SubprocessGoalRunner(SubprocessConfig(working_dir="/w", claude_path="/usr/bin/claude"))
     res = runner.run_goal(goal="fix the date bug", brief="do it", max_turns=3)
     assert res.met is False
@@ -533,12 +537,13 @@ def test_subprocess_runner_parses_escalation_marker(monkeypatch):
     import subprocess as _sp
     from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
-    class _Proc:
+    class _MockPopen:
         returncode = 0
-        stdout = b"Drafted the email; sending needs approval.\nQAR-ESCALATED: dec_99\n"
-        stderr = b""
+        stdin = None
+        def communicate(self, input=None, timeout=None):
+            return (b"Drafted the email; sending needs approval.\nQAR-ESCALATED: dec_99\n", b"")
 
-    monkeypatch.setattr(_sp, "run", lambda cmd, **kw: _Proc())
+    monkeypatch.setattr(_sp, "Popen", lambda cmd, **kw: _MockPopen())
     runner = SubprocessGoalRunner(SubprocessConfig(working_dir="/w", claude_path="/usr/bin/claude"))
     res = runner.run_goal(goal="send the email", brief="draft + send", max_turns=3)
     assert res.met is False
@@ -930,7 +935,7 @@ def test_executor_task_model_field_reaches_provider():
 def test_executor_task_without_model_field_uses_planner_tier():
     """A task without a ``model`` field leaves the existing planner-tier logic intact."""
     provider = _ModelCapturingProvider(decisions=[
-        {"action": "answer", "model_tier": "haiku", "rationale": "ok"},
+        {"action": "answer", "rationale": "ok"},
     ])
     client = MockQuestClient([])
     ex = TaskExecutor(client, _brain(provider))
@@ -938,8 +943,8 @@ def test_executor_task_without_model_field_uses_planner_tier():
     assert out.status == "done"
     from quest_ai_runner.core.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
-    expected_haiku = registry.resolve_tier("haiku")
-    assert provider.answer_models == [expected_haiku]
+    expected_balanced = registry.resolve_tier("balanced")  # planner_tier default = balanced
+    assert provider.answer_models == [expected_balanced]
 
 
 def test_executor_task_model_none_is_same_as_absent():

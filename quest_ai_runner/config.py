@@ -616,11 +616,13 @@ def build_orchestrator(
         _log.debug(f"OpenAI provider unavailable: {type(e).__name__}")
 
     # Always update config with all available providers (overwrite any existing)
-    # This ensures multi-provider routing works correctly
-    if all_providers:
+    # This ensures multi-provider routing works correctly. Only apply when the primary
+    # provider is a known real type so stub/custom providers stay offline in tests.
+    _real_types = (AnthropicProvider, GeminiProvider, OpenAIProvider)
+    if all_providers and isinstance(cfg.model_provider, _real_types):
         cfg.model_providers = all_providers
         _log.info(f"Multi-provider routing enabled with: {list(all_providers.keys())}")
-    else:
+    elif not all_providers:
         _log.warning("No multi-provider setup: no providers could be initialized")
 
     # Wrap providers with MultiProvider for automatic intelligent routing
@@ -628,9 +630,10 @@ def build_orchestrator(
     from .adapters.multi_provider import MultiProvider
 
     if cfg.model_provider and all_providers:
-        original_provider = cfg.model_provider
-        cfg.model_provider = MultiProvider(original_provider, all_providers)
-        _log.debug("Wrapped primary provider with MultiProvider for intelligent routing")
+        if isinstance(cfg.model_provider, _real_types):
+            original_provider = cfg.model_provider
+            cfg.model_provider = MultiProvider(original_provider, all_providers)
+            _log.debug("Wrapped primary provider with MultiProvider for intelligent routing")
 
     # Also wrap vision_provider if configured (used for image description fallback)
     if cfg.vision_provider and all_providers:

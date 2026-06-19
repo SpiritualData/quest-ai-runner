@@ -473,6 +473,9 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
     tier = raw.get("model_tier")
     if isinstance(tier, str):
         tier = tier.strip().lower()
+        _tier_alias = {"haiku": "fast", "sonnet": "balanced", "opus": "quality"}
+        if tier in _tier_alias:
+            tier = _tier_alias[tier]
         if tier not in TIERS:
             tier = None
     else:
@@ -1821,13 +1824,6 @@ class Orchestrator:
                     if emit is not None:
                         emit.status("Goal verified met.")
                     break
-                # If the worker reported success with output and no error, trust that over the verifier's
-                # doubt (the verifier can be overly strict; the worker has the full context).
-                if (res.output or "").strip() and not (res.error or "").strip():
-                    res.met = True
-                    if emit is not None:
-                        emit.status("Goal met (worker reported success).")
-                    break
                 # Not met: record why; escalate the model; stop if the token budget is spent.
                 res.met = False
                 reason = verdict.get("reason") or "done-standard not satisfied"
@@ -2816,12 +2812,13 @@ class Orchestrator:
             # so the planner sees them from the start, ordered by relevance. This eliminates
             # the need for the planner to first ASK for operations; they're already in hand.
             if step == 0 and self.retrieval is not None:
-                try:
-                    ops_obs = self._exec_one_read({"list_operations": True})
-                    if ops_obs is not None:
-                        gathered.append(ops_obs.to_dict())
-                except Exception as e:  # noqa: BLE001
-                    log.debug(f"Auto-injection of list_operations failed: {type(e).__name__}: {e}")
+                if getattr(self.retrieval, "list_operations", None) is not None:
+                    try:
+                        ops_obs = self._exec_one_read({"list_operations": True})
+                        if ops_obs is not None:
+                            gathered.append(ops_obs.to_dict())
+                    except Exception as e:  # noqa: BLE001
+                        log.debug(f"Auto-injection of list_operations failed: {type(e).__name__}: {e}")
 
             try:
                 plan = self._plan(user_message, transcript, context_view, gathered, step=step)
@@ -2976,8 +2973,10 @@ class Orchestrator:
                                       "rationale": "planner indicated answer contains work to execute"}
                 if emit is not None:
                     emit.status("executing described work now…")
-            # Fallback: regex pattern matching for false claims (safety net for bad planner output)
-            elif text_claims_action(text):
+            # Fallback: regex pattern matching for false claims (safety net for bad planner output).
+            # When verify_claims is enabled the guard handles false claims; skip here to avoid
+            # the deferred deep run interfering with the guard's remediation logic.
+            elif text_claims_action(text) and not self.cfg.verify_claims:
                 should_defer_deep = {"goal": f"Execute what was claimed: {user_message}",
                                       "rationale": "auto-detected false claim in answer (fallback)"}
                 if emit is not None:
@@ -3000,8 +2999,12 @@ class Orchestrator:
             # rarely produces verbatim, so an actionable request would silently end as a proposal.
             # Detecting intent from the message instead reliably catches that case. The brief carries
             # the assistant's proposed approach so the deep run APPLIES it rather than re-deriving.
+            # Skip when verify_claims is enabled AND the answer already claims completion: the guard
+            # handles that case directly (claim verification + remediation). Running the deferred
+            # deep first would mark exec_record.any_success=True, preventing the guard from remediating.
             elif (_message_requests_change(user_message)
-                  and (exec_record is None or not exec_record.any_mutation_attempted)):
+                  and (exec_record is None or not exec_record.any_mutation_attempted)
+                  and not (self.cfg.verify_claims and text_claims_action(text))):
                 log.info("Escalating answer->deep: user message requests a change but the turn only "
                          "produced a proposal; running it now.")
                 _proposal = (text or "").strip()

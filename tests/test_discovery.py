@@ -57,7 +57,7 @@ def test_list_sources_flows_into_grounding():
     retrieval = DiscoveryStubRetrieval()
     res = _orch(provider, retrieval).run("what can you see?")
     assert res.kind == "answer"
-    assert retrieval.discovery_calls == ["list_sources"]
+    assert retrieval.discovery_calls == ["list_operations", "list_sources"]
     joined = "\n".join(m["content"] for m in provider.last_answer_messages)
     assert "the planning tree" in joined          # the listing reached the answer's grounding
 
@@ -89,7 +89,7 @@ def test_describe_operation_drilldown():
     retrieval = DiscoveryStubRetrieval()
     res = _orch(provider, retrieval).run("how do I get insights?")
     assert res.kind == "answer"
-    assert retrieval.discovery_calls == ["list_operations", "describe_operation:get_insights"]
+    assert retrieval.discovery_calls == ["list_operations", "list_operations", "describe_operation:get_insights"]
     joined = "\n".join(m["content"] for m in provider.last_answer_messages)
     assert "SIGNATURE OF get_insights" in joined
 

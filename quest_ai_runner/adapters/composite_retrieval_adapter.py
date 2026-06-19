@@ -50,10 +50,11 @@ class CompositeRetrievalAdapter:
         """Run a method on all adapters in parallel. Returns [(adapter, result), ...]."""
         results: List[tuple] = []
         with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-            futures = {
-                executor.submit(getattr(adapter, method_name), *args, **kwargs): adapter
-                for adapter in self.adapters
-            }
+            futures = {}
+            for adapter in self.adapters:
+                fn = getattr(adapter, method_name, None)
+                if fn is not None:
+                    futures[executor.submit(fn, *args, **kwargs)] = adapter
             for future in as_completed(futures):
                 adapter = futures[future]
                 try:
