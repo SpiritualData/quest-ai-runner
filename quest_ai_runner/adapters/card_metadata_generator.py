@@ -34,13 +34,16 @@ class CardMetadataGenerator:
     Metadata can be refreshed later if new sources are added.
     """
 
-    def __init__(self, model_provider: ModelProvider):
+    def __init__(self, model_provider: ModelProvider, model: str = "fast"):
         """Initialize with an LLM provider.
 
         Args:
             model_provider: ModelProvider for LLM calls (must have .answer() method)
+            model: resolved model id (from registry.resolve_tier) to use for metadata gen.
+                   Callers should pass registry.resolve_tier("fast") — never a pinned id.
         """
         self.model_provider = model_provider
+        self._model = model
 
     def generate(self, card: Dict[str, Any]) -> Dict[str, Any]:
         """Generate metadata for a card based on its sources.
@@ -69,7 +72,7 @@ Return ONLY valid JSON, no other text."""
         try:
             response = self.model_provider.answer(
                 [{"role": "user", "content": prompt}],
-                model="claude-haiku-4-5-20251001",  # cheap model for metadata
+                model=self._model,
             )
             metadata = json.loads(response)
             return {

@@ -97,7 +97,7 @@ class VectorContextAssembler(ContextAssemblerBase):
         - LLM review (filter candidates to only those relevant to the task)
         When ``None`` both steps are skipped.
     query_model:
-        Model tier to use for the LLM steps.  Defaults to ``"haiku"`` (cheap).
+        Model tier to use for the LLM steps.  Defaults to ``"fast"`` (cheap).
     num_queries:
         How many extra LLM-generated queries to issue alongside the raw task
         text.  Only used when ``provider`` is given.
@@ -129,7 +129,7 @@ class VectorContextAssembler(ContextAssemblerBase):
         vector_store: VectorStore,
         *,
         provider: Any = None,
-        query_model: str = "haiku",
+        query_model: str = "fast",
         num_queries: int = 3,
         top_k: int = 8,
         confidence_min_score: float = 0.0,

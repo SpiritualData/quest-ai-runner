@@ -14,8 +14,8 @@ Env it reads:
   QAR_ANSWER_TIMEOUT (optional, seconds)         — per-call cap for the claude_cli planner/answer
                                                    backend (default 180; raise for large corpora)
   QAR_PLANNER_TIER (optional)                    — model tier for the planner step that picks
-                                                   read/answer/deep (default haiku; raise to e.g.
-                                                   sonnet when tasks are mostly real work/edits)
+                                                   read/answer/deep (default balanced; use fast
+                                                   to reduce cost, best for complex routing)
   QAR_STATE_PATH (optional)                      — signature store path (default: ./qar_state.json)
   QAR_POLL_INTERVAL (optional, seconds)          — loop cadence (default 900)
   QAR_RUNNER_LABEL (optional)                    — human-readable tag sent on the env heartbeat
@@ -192,7 +192,7 @@ def _config_from_env() -> RunnerConfig:
     # --- Deep goal loop tuning (our own /goal replacement) -------------------------------------
     # The deep worker is Claude Code (Claude models only). QAR_DEEP_MODELS is the model LADDER the
     # goal loop escalates through on a not-met goal, fast -> strong. Default to the Anthropic tiers.
-    deep_models = [m.strip() for m in (os.getenv("QAR_DEEP_MODELS") or "haiku,sonnet,opus").split(",")
+    deep_models = [m.strip() for m in (os.getenv("QAR_DEEP_MODELS") or "fast,balanced,best").split(",")
                    if m.strip()]
     cfg.orchestrator.deep_model_ladder = deep_models or None
     # Overall TOKEN BUDGET for one turn's deep goal loop (worker tokens summed across attempts).

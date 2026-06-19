@@ -168,7 +168,7 @@ class BM25ContentStore(ContextAssemblerBase):
         ``assemble()`` generates ``num_queries`` diverse search queries from the
         task text and runs BM25 over each IN PARALLEL.
     query_model:
-        Model tier used for query-gen (cheap; defaults to "haiku").
+        Model tier used for query-gen (cheap; defaults to "fast").
     num_queries:
         Number of extra LLM-generated queries (in addition to the raw task text).
     top_k:
@@ -191,7 +191,7 @@ class BM25ContentStore(ContextAssemblerBase):
         root: str,
         index_dir: Optional[str] = None,
         provider: Any = None,
-        query_model: str = "haiku",
+        query_model: str = "fast",
         num_queries: int = 3,
         top_k: int = 8,
         max_in_view: int = 8,
