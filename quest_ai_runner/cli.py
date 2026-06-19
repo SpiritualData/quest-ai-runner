@@ -192,7 +192,7 @@ def _config_from_env() -> RunnerConfig:
     # --- Deep goal loop tuning (our own /goal replacement) -------------------------------------
     # The deep worker is Claude Code (Claude models only). QAR_DEEP_MODELS is the model LADDER the
     # goal loop escalates through on a not-met goal, fast -> strong. Default to the Anthropic tiers.
-    deep_models = [m.strip() for m in (os.getenv("QAR_DEEP_MODELS") or "fast,balanced,best").split(",")
+    deep_models = [m.strip() for m in (os.getenv("QAR_DEEP_MODELS") or "fast,balanced,quality,best").split(",")
                    if m.strip()]
     cfg.orchestrator.deep_model_ladder = deep_models or None
     # Overall TOKEN BUDGET for one turn's deep goal loop (worker tokens summed across attempts).
