@@ -177,10 +177,10 @@ class ActivityBar(Static):
         t = Text()
         for i in range(3):
             if i > 0:
-                t.append("  ")                          # space between dots
+                t.append(" ")
             style = "cyan bold" if i == self._frame else "cyan dim"
             t.append("●", style=style)
-        t.append("    ")                                # clear gap before text
+        t.append("  ")
         t.append(self._text, style="dim")
         return t
 
