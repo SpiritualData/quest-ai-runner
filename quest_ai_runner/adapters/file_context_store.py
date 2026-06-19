@@ -57,6 +57,14 @@ _log = logging.getLogger("quest-ai-runner.context")
 # v4: per-file TF-DF-IDF term signatures from actual content stored in file entries (tfdfidf_terms).
 _BOOTSTRAP_VERSION = 4
 
+# Per-feature algorithm versions. Bump ONLY the version for the feature whose algorithm changed —
+# an unrelated feature should never force a re-run. Each version is stored in the card/file-entry
+# that carries the feature's output (e.g. ``tfdfidf_v`` in each file entry) so bootstrap can skip
+# entries that are already current. ``bootstrap_meta.json`` records which features are fully
+# migrated across ALL cards under ``feature_versions``; a feature is only marked complete there
+# once every on-disk card/file-entry carries the current version for that feature.
+_TFDFIDF_VERSION = 1  # stored as "tfdfidf_v" in each file entry within a card
+
 # Name of the meta file written to cards_dir after a successful bootstrap.
 _BOOTSTRAP_META_FILE = "bootstrap_meta.json"
 
@@ -118,16 +126,24 @@ def _read_bootstrap_meta(cards_dir: str) -> dict:
         return {}
 
 
-def _write_bootstrap_meta(cards_dir: str, count: int) -> None:
+def _write_bootstrap_meta(
+    cards_dir: str,
+    count: int,
+    *,
+    feature_versions: Optional[Dict[str, int]] = None,
+) -> None:
     """Write ``bootstrap_meta.json`` atomically (temp file + replace). Never raises.
 
-    Records the algorithm ``version`` (so a future runner can detect a stale index), the
-    ``card_count`` just written, and a UTC ``completed_at`` timestamp.
+    Records the global algorithm ``version``, per-feature versions (``feature_versions`` dict —
+    only features fully migrated across ALL cards are included), the ``card_count``, and a UTC
+    ``completed_at`` timestamp.  A feature is absent from ``feature_versions`` when its migration
+    is still in progress; startup re-triggers that feature's migration until it appears.
     """
     try:
         Path(cards_dir).mkdir(parents=True, exist_ok=True)
         payload = {
             "version": _BOOTSTRAP_VERSION,
+            "feature_versions": feature_versions or {},
             "card_count": int(count),
             "completed_at": datetime.now(timezone.utc).isoformat(),
         }
@@ -1283,9 +1299,31 @@ class FileContextStore(ContextAssemblerBase):
         except Exception:  # noqa: BLE001
             return 0
         if n > 0 and not self._dry_run:
-            # Record the algorithm version so a future run can detect a stale index.
-            _write_bootstrap_meta(str(self._cards_dir), self._count_cards_on_disk())
+            _write_bootstrap_meta(
+                str(self._cards_dir),
+                self._count_cards_on_disk(),
+                feature_versions=self._completed_feature_versions(),
+            )
         return n
+
+    def _completed_feature_versions(self) -> Dict[str, int]:
+        """Return the subset of per-feature versions that are complete across ALL on-disk cards.
+
+        A feature is included only when every file entry in every card carries the current version
+        for that feature.  Missing or outdated entries mean the feature migration is still in
+        progress — the feature is omitted so the next startup retries it.  Never raises.
+        """
+        try:
+            all_cards = self._load_all()
+            tfdfidf_done = all(
+                fe.get("tfdfidf_v", 0) >= _TFDFIDF_VERSION
+                for card in all_cards.values()
+                for fe in card.get("files", [])
+                if isinstance(fe, dict) and fe.get("path")
+            )
+            return {"tfdfidf": _TFDFIDF_VERSION} if tfdfidf_done else {}
+        except Exception:  # noqa: BLE001
+            return {}
 
     def _maybe_auto_bootstrap(self) -> None:
         """Trigger bootstrap once if auto_bootstrap is on and the store is empty. Never raises."""
@@ -1439,7 +1477,34 @@ class FileContextStore(ContextAssemblerBase):
         if not existing_cards:
             uncovered = list(file_paths)
 
-        if not uncovered and not stale_covered:
+        # --- Feature migration: cards whose file entries have an outdated per-feature version ---
+        # These cards already have correct LLM-generated content; only the cheap computed fields
+        # (e.g. tfdfidf_terms) need refreshing.  They are added to topic_cards WITHOUT triggering
+        # LLM calls — stage 4b recomputes the field, stage 5 writes the updated card.
+        # The per-entry "tfdfidf_v" field IS the checkpoint: entries already at _TFDFIDF_VERSION
+        # are skipped automatically, so an interrupted migration resumes on the next startup.
+        tfdfidf_migration_cards: List[Dict[str, Any]] = []
+        for card in existing_cards:
+            cid = card.get("id", "")
+            if not cid:
+                continue
+            card_files = [fe for fe in card.get("files", []) if isinstance(fe, dict) and fe.get("path")]
+            if any(fe.get("tfdfidf_v", 0) < _TFDFIDF_VERSION for fe in card_files):
+                tfdfidf_migration_cards.append({
+                    "id": cid,
+                    "name": card.get("name", ""),
+                    "keywords": card.get("keywords", []),
+                    "summary": card.get("summary", ""),
+                    "description": card.get("description", ""),
+                    "files": [fe["path"] for fe in card_files],
+                })
+        if tfdfidf_migration_cards:
+            _log.info(
+                "context index: %d card(s) have file entries below tfdfidf v%d — will update",
+                len(tfdfidf_migration_cards), _TFDFIDF_VERSION,
+            )
+
+        if not uncovered and not stale_covered and not tfdfidf_migration_cards:
             _log.info("context index: all files covered and up to date")
             return 0
 
@@ -1500,6 +1565,13 @@ class FileContextStore(ContextAssemblerBase):
                         "summary": card.get("summary", ""),
                         "files": files,
                     })
+
+        # Merge tfdfidf migration cards (don't add duplicates already queued for LLM regen).
+        if tfdfidf_migration_cards:
+            queued_ids = {tc.get("id") for tc in topic_cards}
+            for mc in tfdfidf_migration_cards:
+                if mc.get("id") not in queued_ids:
+                    topic_cards.append(mc)
 
         if not topic_cards:
             return 0
@@ -1598,6 +1670,7 @@ class FileContextStore(ContextAssemblerBase):
                     "why": "",
                     "symbols": [],
                     "tfdfidf_terms": tfdfidf_terms_map.get(rel, []),
+                    "tfdfidf_v": _TFDFIDF_VERSION,
                 })
 
             # Load existing card so we preserve usage_count / last_outcome if present.
@@ -1610,17 +1683,20 @@ class FileContextStore(ContextAssemblerBase):
                 except Exception:  # noqa: BLE001
                     existing = {}
 
-            # Incremental refresh: skip a topic whose every file's sha256 is unchanged.
+            # Incremental refresh: skip a topic only if every file's sha256 is unchanged AND
+            # every file entry already carries the current per-feature versions.
             if skip_unchanged and existing:
-                old_shas = {
-                    fe.get("path", ""): fe.get("sha256", "")
+                old_file_data = {
+                    fe.get("path", ""): fe
                     for fe in existing.get("files", [])
+                    if isinstance(fe, dict)
                 }
                 unchanged = bool(file_dicts) and all(
                     fd["sha256"]
-                    and old_shas.get(fd["path"]) == fd["sha256"]
+                    and old_file_data.get(fd["path"], {}).get("sha256", "") == fd["sha256"]
+                    and old_file_data.get(fd["path"], {}).get("tfdfidf_v", 0) >= _TFDFIDF_VERSION
                     for fd in file_dicts
-                ) and len(old_shas) == len(file_dicts)
+                ) and len(old_file_data) == len(file_dicts)
                 if unchanged:
                     continue
 

@@ -30,8 +30,8 @@ from .core.adapters import (
 from .adapters.file_context_store import (
     _BOOTSTRAP_META_FILE,
     _BOOTSTRAP_VERSION,
+    _TFDFIDF_VERSION,
     _read_bootstrap_meta,
-    _write_bootstrap_meta,
 )
 from .core.model_registry import ModelRegistry
 from .core.orchestrator import Orchestrator, OrchestratorConfig
@@ -342,27 +342,34 @@ def _bootstrap_if_needed(
             _log.info(msg)
 
     if _cards_exist(cards_dir):
-        # VERSION MISMATCH check: if the stored cards were built by an older bootstrap algorithm,
-        # they are stale and we re-bootstrap in the background (the user can chat immediately
-        # against whatever cards exist). Otherwise we just refresh stale cards.
+        # Check the global version and per-feature versions independently.
+        # Global version bump → full LLM re-index for uncovered/stale files.
+        # Per-feature version behind → cheap targeted migration (no LLM) until all cards updated.
+        # Each is detected and handled separately so an unrelated feature never forces extra work.
         meta = _read_bootstrap_meta(cards_dir)
         stored_version = meta.get("version", 0)
-        prior_interrupted = meta.get("in_progress", False)
-        if stored_version < _BOOTSTRAP_VERSION:
+        stored_features = meta.get("feature_versions", {})
+
+        needs_full = stored_version < _BOOTSTRAP_VERSION
+        needs_tfdfidf = stored_features.get("tfdfidf", 0) < _TFDFIDF_VERSION
+
+        if needs_full:
             _tell(
                 f"Context index: algorithm updated (v{stored_version} -> v{_BOOTSTRAP_VERSION}),"
                 " re-indexing in background. Chat is ready now."
             )
-            # Fall through to the background bootstrap path below (don't return early). The
-            # incremental bootstrap dedups new/refreshed cards against the existing ones.
-        elif prior_interrupted:
+        elif needs_tfdfidf:
             _tell(
-                "Context index: previous re-index was interrupted, resuming in background."
-                " Chat is ready now."
+                "Context index: computing tfdfidf signatures in background. Chat is ready now."
             )
-            # Fall through to the background bootstrap path to finish the interrupted run.
+
+        if needs_full or needs_tfdfidf:
+            # Fall through to the background bootstrap path below. The bootstrap detects which
+            # cards need tfdfidf migration and processes only those; per-entry "tfdfidf_v" is the
+            # checkpoint so an interrupted run resumes from where it left off next startup.
+            pass
         else:
-            # Version matches: just refresh stale cards in the background.
+            # Everything up to date: just refresh cards whose source files changed.
             _log.debug("context index: scanning %s for changes (background)", root)
 
             def _bg_refresh() -> None:
@@ -400,16 +407,6 @@ def _bootstrap_if_needed(
                 lock_fd.close()
                 return
             try:
-                # Stamp in_progress=True before the expensive bootstrap runs.  If this daemon
-                # thread is killed (session exit), the next startup sees in_progress=True and
-                # retries rather than silently leaving cards in a partially-upgraded state.
-                # Concurrent sessions that lose the flock race above get the "skipping" message
-                # and exit, so only one session re-bootstraps at a time.
-                _write_bootstrap_meta(
-                    cards_dir,
-                    _read_bootstrap_meta(cards_dir).get("card_count", 0),
-                    in_progress=True,
-                )
                 n = keyword.bootstrap(root=root, provider=provider, model=model)
                 _log.info("context index: ready — %d cards written to %s", n, cards_dir)
                 if n > 0:
