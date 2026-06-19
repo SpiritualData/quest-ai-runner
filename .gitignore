@@ -1,6 +1,9 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+
+# Throwaway / scratch / demo scripts (see CLAUDE.md Conventions) — never committed
+scratch/
 *.egg
 build/
 dist/

@@ -121,3 +121,10 @@ result = provider.answer([{"role": "user", "content": prompt}], model=model)
 - Match the surrounding code's style, naming, and comment density.
 - Commit in this repo only; write clear, scoped commits.
 - Tests for any behavior change, and they must pass offline.
+- **Every file lives in its proper folder, never the repo root.** This applies to ALL files, not
+  just tests: library code under `quest_ai_runner/`, tests under `tests/`, runnable reference
+  consumers under `examples/`, docs under `docs/`, evaluation harnesses under `evaluation/`. The
+  repo root is for project config only (`README.md`, `CHANGELOG.md`, `pyproject.toml`, `.env*`,
+  etc.) — do not drop new `.py` files there.
+- **Throwaway / scratch / demo scripts go in the gitignored `scratch/` directory** (create it if
+  absent; it is in `.gitignore`), never the repo root and never committed. Delete them when done.
