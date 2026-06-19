@@ -1,4 +1,4 @@
-# Architecture & conventions
+# Architecture Standards
 
 The standards every contributor (human or AI) follows when changing `quest-ai-runner`. The first
 half describes **how the code is organized** (so you put a change in the right place); the second
