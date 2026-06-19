@@ -1686,6 +1686,8 @@ class Orchestrator:
             if multi and overall_goal and overall_goal != goal:
                 _hdr.append(f"OVERALL GOAL (this process is ONE subgoal serving it, stay aligned):\n"
                             f"{overall_goal}")
+                _hdr.append("FOCUS: concentrate on THIS subgoal using the context selected for it "
+                            "below. Search for more only if you genuinely need it.")
             # Generate task UUID for matching with JSONL session file
             import uuid
             task_uuid = str(uuid.uuid4())[:8]
@@ -1736,7 +1738,12 @@ class Orchestrator:
                         preamble_parts = []
                         if rep_preamble:
                             preamble_parts.append(rep_preamble)
-                        if gathered:
+                        # MAIN-FLOW ACCUMULATION vs SUBGOAL FOCUS. A single main-flow deep run
+                        # ACCUMULATES: it carries the brain's gathered content forward. A fanned-out
+                        # subgoal (multi) does NOT inherit that whole pile -- it is handed ONLY its
+                        # own focused context so it concentrates on its piece (it can still search for
+                        # more if it falls short, via the widening below).
+                        if gathered and not multi:
                             preamble_parts.append(
                                 "--- RELEVANT CONTENT FOUND BY THE BRAIN ---\n"
                                 + _render_gathered(gathered)
@@ -2498,11 +2505,12 @@ class Orchestrator:
         # A short or anaphoric input ("ok do it", "the first one") can't be understood alone. Only
         # when a ConversationStore is wired, a conv_id is present, AND a cheap keyword check says the
         # input leans on context, do we pull a relevant slice of the conversation and ask the model
-        # ONCE to rewrite the message as a self-contained goal condition. A self-contained input skips
-        # this entirely (no LLM hop, ZERO added latency). The goal condition is the OUTPUT of stage 1
-        # and the INPUT to stages 2 and 3; the conversation slice is a stage-1 input only and is NOT
-        # passed to the planner (which would be noise). The planner still sees the user's LITERAL
-        # words too, so word-for-word fidelity is preserved.
+        # ONCE to rewrite the message as a goal condition. A self-contained input skips this entirely
+        # (no LLM hop, ZERO added latency). Context ACCUMULATES: the conversation slice gathered here
+        # flows forward into stages 2 and 3 (each starts from what is already gathered and searches
+        # for more as needed). A subgoal the planner spawns is the exception: it is handed only its
+        # own focused context (see _run_deep). The planner still sees the user's LITERAL words too, so
+        # word-for-word fidelity is preserved.
         goal_condition = user_message
         conv_ctx_text = ""
         if (self.conversation_store is not None and conv_id
@@ -2521,18 +2529,21 @@ class Orchestrator:
                 return self._finish_understanding_clarify(
                     res, emit=emit, exec_record=exec_record, user_message=user_message,
                     ctx_meta=_ctx_meta)
-            # STAGE 1 produced a goal condition. Emit a streamed event so the UI shows it at once.
-            # The conversation slice (``conv_ctx_text``) was INPUT to STAGE 1 (understanding) ONLY --
-            # it does NOT flow to the planner. The planner (STAGE 3) plans how to ACHIEVE the goal
-            # condition using the achievement context STAGE 2 finds (context selection off the goal
-            # condition, below) plus whatever it searches for itself; the raw chat slice would just be
-            # noise there. So we inject ONLY the resolved request, not the conversation context.
-            if goal_condition != user_message:
+            # STAGE 1 produced a goal condition. Context ACCUMULATES across the stages: the
+            # conversation context selected here flows FORWARD, so stage 2 (achievement-context
+            # selection, below) and stage 3 (the planner) each START from what was already gathered
+            # and only search for MORE as needed. So we inject the gathered conversation context AND
+            # the resolved request. (Narrowing to a minimal, just-what-it-needs slice happens later
+            # per SUBGOAL in _run_deep, to keep each subgoal focused, not on this main flow.)
+            if goal_condition != user_message or conv_ctx_text:
                 emit.emit(ProgressEvent(
                     type=EVENT_UNDERSTANDING,
                     text=f"Understood as: {goal_condition}",
                     data={"goal_condition": goal_condition}))
-                _understood_block = f"--- UNDERSTOOD REQUEST ---\n{goal_condition}\n"
+                _understood_block = (
+                    "--- CONVERSATION CONTEXT ---\n" + conv_ctx_text + "\n"
+                    if conv_ctx_text else ""
+                ) + f"--- UNDERSTOOD REQUEST ---\n{goal_condition}\n"
                 context_view = (_understood_block + "\n" + context_view
                                 if context_view else _understood_block)
 
