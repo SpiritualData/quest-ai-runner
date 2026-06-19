@@ -893,7 +893,10 @@ class QuestAITerminal(App):
             self._activity.set_status(text or "thinking…")
 
         elif t == ev["plan"]:
-            if text:
+            if action == "deep":
+                # Don't echo the internal routing rationale — just signal the mode.
+                log.write(Text("  ▸ Deep execution", style="dim"))
+            elif text:
                 label = f"▸ {action}" if action else "▸ plan"
                 log.write(Text(f"  {label}  {text}", style="dim"))
             self._activity.set_status("planning…")
@@ -969,7 +972,10 @@ class QuestAITerminal(App):
 
         elif t == ev["milestone"]:
             if text:
-                log.write(f"  [green]✓[/green] {text}")
+                # Keep the milestone short — the full goal text repeats in the answer.
+                lower = text.lower()
+                label = "Done" if ("completed" in lower or "done" in lower) else text[:55]
+                log.write(f"  [green]✓[/green] [dim]{label}[/dim]")
 
         elif t == ev["result"]:
             # Non-streamed answers arrive here; streamed ones are in _answer_parts.
@@ -1090,26 +1096,43 @@ class QuestAITerminal(App):
         self._deep_plan_shown = False
 
     def _write_footer(self, final, elapsed: float) -> None:
-        metrics: List[str] = []
-        steps = getattr(final, "steps", 0)
-        if steps:
-            metrics.append(f"{steps} step{'s' if steps != 1 else ''}")
-        src = self._ctx.total_sources
-        if src:
-            metrics.append(f"{src} source{'s' if src != 1 else ''}")
-        if self._ctx.replans:
-            metrics.append(f"{self._ctx.replans} replan{'s' if self._ctx.replans != 1 else ''}")
+        def _k(n: int) -> str:
+            return f"{n / 1000:.1f}k" if n >= 1000 else str(n)
+
+        parts: List[tuple] = []   # (text, style)
+
+        if final.kind == "deep":
+            deep_results = final.deep_results or []
+            all_met = bool(deep_results) and all(d.met for d in deep_results)
+            parts.append(("✓ Done" if all_met else "~ Partial", "green" if all_met else "yellow"))
+            deep_tokens = sum(getattr(d, "tokens", 0) for d in deep_results)
+            if deep_tokens:
+                parts.append((f"{_k(deep_tokens)} tokens", "dim"))
+        else:
+            steps = getattr(final, "steps", 0)
+            if steps:
+                parts.append((f"{steps} step{'s' if steps != 1 else ''}", "dim"))
+            src = self._ctx.total_sources
+            if src:
+                parts.append((f"{src} source{'s' if src != 1 else ''}", "dim"))
+            if self._ctx.replans:
+                parts.append((f"{self._ctx.replans} replan{'s' if self._ctx.replans != 1 else ''}", "dim"))
+            tok_in = getattr(final, "tokens_in", 0) or 0
+            tok_out = getattr(final, "tokens_out", 0) or 0
+            if tok_in or tok_out:
+                parts.append((f"↥ {_k(tok_in)} in · ↦ {_k(tok_out)} out", "dim"))
+
         model_lbl = _model_label(getattr(final, "model", None))
         if model_lbl:
-            metrics.append(model_lbl)
-        tok_in = getattr(final, "tokens_in", 0) or 0
-        tok_out = getattr(final, "tokens_out", 0) or 0
-        if tok_in or tok_out:
-            def _k(n: int) -> str:
-                return f"{n / 1000:.1f}k" if n >= 1000 else str(n)
-            metrics.append(f"↥ {_k(tok_in)} in · ↦ {_k(tok_out)} out")
-        metrics.append(f"{elapsed:.1f}s")
-        self._console.dim("  " + "  ·  ".join(metrics))
+            parts.append((model_lbl, "dim"))
+        parts.append((f"{elapsed:.1f}s", "dim"))
+
+        t = Text("  ")
+        for i, (label, style) in enumerate(parts):
+            if i > 0:
+                t.append("  ·  ", style="dim")
+            t.append(label, style=style)
+        self._tlog.write(t)
 
     # -- actions ---------------------------------------------------------------
 
