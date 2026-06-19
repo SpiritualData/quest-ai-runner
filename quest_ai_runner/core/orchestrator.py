@@ -33,7 +33,7 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .adapters import (
     EVENT_CONTEXT,
@@ -411,6 +411,20 @@ class OrchestratorConfig:
     # turns with no action claim. ``max_remediations`` caps SAFE re-runs (only when no action ran).
     verify_claims: bool = True
     max_remediations: int = 1
+    # ASYNC POST-DEEP CONTEXT-CARD UPDATER. After a deep task finishes (answer already delivered),
+    # an ASYNC, best-effort LLM process updates THIS user's context cards to prepare for future
+    # similar requests: it appends a "future context" instruction to each deep brief, parses that
+    # section back out of the result, makes ONE cheap LLM call to plan card edits (fields + content,
+    # corrections, removals), and applies them via the card-update API. ON by default; fully inert
+    # when no card-update-capable store, no provider, or this toggle is off (then deep is byte-for-
+    # byte unchanged, including the brief: the future-context block is appended ONLY when active). The
+    # consumer can disable it from env/config. The updater never blocks the answer and never raises.
+    async_card_update: bool = True
+    # Hard cap on how many CARDS the updater will touch in one run (keeps a best-effort background
+    # write bounded regardless of what the LLM returns).
+    async_card_update_max_cards: int = 6
+    # Hard cap on edit OPERATIONS (add/replace/remove items + field edits) applied per card.
+    async_card_update_max_edits_per_card: int = 12
 
 
 @dataclass
@@ -621,6 +635,129 @@ Do NOT use em dashes.
 {output}
 """
 
+# ---------------------------------------------------------------------------
+# ASYNC POST-DEEP CONTEXT-CARD UPDATER (prepare for the FUTURE after a deep run).
+# Two centralized prompts: (1) the instruction appended to a deep process's brief so its output ends
+# with a machine-parseable "future context" section, and (2) the updater prompt that turns the run
+# into a STRUCTURED set of card edits. Both forbid em dashes (hard brand rule). Generic: no org names.
+# ---------------------------------------------------------------------------
+
+# The exact delimiter line the deep worker must emit before its future-context bullets, and the
+# prefix the parser slices on. Kept as one constant so the brief instruction and the parser agree.
+FUTURE_CONTEXT_DELIMITER = "=== FUTURE CONTEXT (for similar requests by this user) ==="
+
+# Appended to a deep process's brief ONLY when the async card updater is active (a card-update store
+# + a provider are available and the toggle is on). A non-updating deployment never sees this block.
+DEEP_FUTURE_CONTEXT_INSTRUCTION = (
+    "\n\n--- PREPARE FUTURE CONTEXT ---\n"
+    "After you finish the work above and write your normal result, END your output with a clearly "
+    "delimited section that names context which would help a FUTURE similar request by THIS user. "
+    "Start the section with this exact line on its own:\n"
+    f"{FUTURE_CONTEXT_DELIMITER}\n"
+    "Then list one bullet per line (start each line with '- '). Prefer durable, reusable pointers: "
+    "collection names with their ids, key files you relied on, stable facts, and useful references. "
+    "Keep each bullet short. If nothing is worth remembering, write the delimiter line followed by "
+    "'- (none)'. Do not use em dashes; use a comma, a colon, or parentheses instead."
+)
+
+# The updater's ONE LLM call. It is given the request, what executed, the parsed future-context
+# section, and the user's CURRENT relevant cards, and must return a STRUCTURED edit plan as JSON.
+CARD_UPDATE_TOOL: Dict[str, Any] = {
+    "name": "card_edits",
+    "description": "Return the context-card edits that best prepare for future similar requests by "
+                   "this user, correcting stale prior items where needed.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "edits": {
+                "type": "array",
+                "description": "One entry per card to update or create (bounded; keep it minimal).",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "card_id": {"type": "string",
+                                    "description": "The id of an existing card to update, or a new "
+                                                   "short slug to create one."},
+                        "name": {"type": ["string", "null"],
+                                 "description": "Optional new card name (re-embeds the card)."},
+                        "description": {"type": ["string", "null"],
+                                        "description": "Optional new card description (re-embeds)."},
+                        "add": {
+                            "type": "array",
+                            "description": "Content items to ADD. PREFER a resolvable reference "
+                                           "(a collection with name+id) over a copied snapshot; use "
+                                           "a note ONLY when there is nothing external to point at.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "type": {"type": "string",
+                                             "enum": ["collection", "file", "conversation",
+                                                      "query", "note"]},
+                                    "locator": {"type": "object",
+                                                "description": "For collection: {name,id}. For "
+                                                               "note: {text}. For file: {path}."},
+                                    "why": {"type": "string"},
+                                },
+                                "required": ["type"],
+                            },
+                        },
+                        "replace": {
+                            "type": "array",
+                            "description": "Corrections of existing items: each {item_id, item} "
+                                           "where item is the corrected content item.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "item_id": {"type": "string"},
+                                    "item": {"type": "object"},
+                                },
+                                "required": ["item_id", "item"],
+                            },
+                        },
+                        "remove": {
+                            "type": "array",
+                            "description": "Ids of stale items to drop from the card.",
+                            "items": {"type": "string"},
+                        },
+                    },
+                    "required": ["card_id"],
+                },
+            },
+        },
+        "required": ["edits"],
+    },
+}
+
+CARD_UPDATE_PROMPT = """\
+You maintain a user's reusable CONTEXT CARDS so future similar requests start better-grounded.
+A deep task just finished for this user. Decide the MINIMAL set of card edits that would best help a
+FUTURE similar request by THIS user, and correct any stale prior items you can see.
+
+Rules:
+  - PREFER resolvable references over copied text: add a "collection" item with {{name, id}} (or a
+    "file" with {{path}}) the run actually used, rather than pasting a snapshot. Use a "note"
+    (locator {{text: ...}}) ONLY when there is a durable fact with nothing external to point at.
+  - To UPDATE an existing card, reuse its exact card_id from CURRENT CARDS below. To capture
+    something new, use a short new slug as card_id.
+  - When a CURRENT card holds an item that is now wrong or outdated, correct it via "replace"
+    (its item_id plus the corrected item) or drop it via "remove".
+  - You may set a card's "name"/"description" when it would make the card easier to find later.
+  - Keep it small and high-signal. If nothing is worth saving, return an empty edits list.
+  - Do not use em dashes. Use a comma, a colon, or parentheses instead.
+
+--- THE USER'S REQUEST / GOAL ---
+{request}
+
+--- WHAT WAS EXECUTED (brief + result) ---
+{executed}
+
+--- FUTURE-CONTEXT THE WORKER FLAGGED ---
+{future_context}
+
+--- THIS USER'S CURRENT RELEVANT CARDS (id, name, and current items) ---
+{current_cards}
+"""
+
 # STEP 1 (User Input Understanding): rewrite a short/anaphoric latest message into ONE
 # self-contained instruction (a goal condition) using ONLY the provided conversation context.
 # NO em dashes anywhere (hard brand rule). Reserved replies: MORE_CONTEXT_NEEDED / CLARIFY: <q>.
@@ -788,6 +925,68 @@ def _answer_describes_unexecuted_work(text: Optional[str]) -> bool:
     except Exception:  # noqa: BLE001
         pass
     return False
+
+
+def _parse_future_context(output: Optional[str]) -> str:
+    """Extract the worker's FUTURE-CONTEXT section from a DeepResult.output. Returns "" when absent.
+
+    The deep brief instructs the worker to END its output with the
+    ``FUTURE_CONTEXT_DELIMITER`` line followed by bullet lines. This slices from the LAST occurrence
+    of the delimiter to the end (the last one wins so a worker that echoes the instruction earlier
+    does not confuse the parser), strips a trailing code fence, and returns the bullets verbatim.
+    Robust to a missing/garbled section: any miss yields "". Never raises.
+    """
+    if not output or not isinstance(output, str):
+        return ""
+    try:
+        idx = output.rfind(FUTURE_CONTEXT_DELIMITER)
+        if idx < 0:
+            return ""
+        section = output[idx + len(FUTURE_CONTEXT_DELIMITER):]
+        # Drop a trailing markdown fence if the worker wrapped the section.
+        section = section.replace("```", "")
+        return section.strip()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _card_update_store(assembler: Any) -> Optional[Any]:
+    """Return the underlying card store that exposes the card-update API, or None. Never raises.
+
+    GENERIC capability detection (no hardcoded ``FileContextStore`` type check): an object is
+    card-update-capable when it exposes callable ``update_card`` AND ``add_content``. The wired
+    ``context_assembler`` may BE such a store, or may be a composite/hybrid that wraps one, so this
+    unwraps the known wrapper shapes (a ``CompositeContextAssembler``'s ``_assemblers`` list, a
+    ``HybridContextAssembler``'s ``_keyword``/``_vector`` arms) and returns the first capable inner
+    store it finds. Returns None when nothing card-update-capable is reachable.
+    """
+    def _is_capable(obj: Any) -> bool:
+        return bool(obj is not None
+                    and callable(getattr(obj, "update_card", None))
+                    and callable(getattr(obj, "add_content", None)))
+
+    try:
+        seen: set = set()
+        stack: List[Any] = [assembler]
+        while stack:
+            obj = stack.pop()
+            if obj is None or id(obj) in seen:
+                continue
+            seen.add(id(obj))
+            if _is_capable(obj):
+                return obj
+            # Unwrap known wrapper shapes (duck-typed, so a custom composite with the same
+            # attribute is handled too without importing concrete classes).
+            inner = getattr(obj, "_assemblers", None)
+            if isinstance(inner, (list, tuple)):
+                stack.extend(inner)
+            for attr in ("_keyword", "_vector", "_store", "_inner", "_delegate"):
+                child = getattr(obj, attr, None)
+                if child is not None:
+                    stack.append(child)
+    except Exception:  # noqa: BLE001
+        return None
+    return None
 
 
 def _render_gathered(gathered: List[Dict[str, Any]]) -> str:
@@ -1676,6 +1875,9 @@ class Orchestrator:
         # stays aligned with the whole instead of optimizing its piece in isolation.
         overall_goal = (plan.goal or "").strip() or user_message
         multi = len(subtasks) > 1
+        # Whether the async post-deep card updater is active (toggle on + provider + card-update
+        # store). Computed once: it gates appending the FUTURE-CONTEXT instruction to each deep brief.
+        card_update_active = self._card_updater_active()
 
         def run_one(task: Dict[str, Any], task_index: int = 0) -> DeepResult:
             goal = (task.get("goal") or "").strip() or f"Fully address: {user_message}"
@@ -1697,6 +1899,12 @@ class Orchestrator:
             # Show task identifier in brief so user sees which task is running
             task_label = f"TASK {task_index}" if multi else "TASK"
             brief = "\n\n".join(_hdr) + f"\n\n{task_label} [{task_uuid}]: {goal}\n\n" + brief
+            # When the async post-deep card updater is active, ask the worker to END its output with
+            # a machine-parseable FUTURE-CONTEXT section so the updater can prepare reusable context
+            # for this user's next similar request. Appended ONLY when active, so a non-updating
+            # deployment's deep brief is byte-for-byte unchanged.
+            if card_update_active:
+                brief = brief + DEEP_FUTURE_CONTEXT_INSTRUCTION
             # Per-subtask execution fact — populated from EVENT_EXEC phase ticks (live) and finalized
             # from the DeepResult.met below. Recording per-subtask keeps facts correct even when
             # multiple subtasks run concurrently (each closure owns its own ``fact``).
@@ -1956,6 +2164,218 @@ class Orchestrator:
             rationale=plan.rationale,
         )
 
+    # --- async post-deep context-card updater (prepare for the FUTURE) -------
+
+    def _card_updater_active(self) -> bool:
+        """True when the async post-deep card updater can run: the toggle is on, a provider is
+        wired, and the wired context_assembler exposes (or wraps) the card-update API. Never raises.
+
+        When False, the deep loop is byte-for-byte unchanged: no future-context instruction is
+        appended to deep briefs, and no updater LLM call is made.
+        """
+        try:
+            return bool(self.cfg.async_card_update
+                        and self.provider is not None
+                        and _card_update_store(self.context_assembler) is not None)
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _select_current_cards(self, query: str,
+                              ctx_meta: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Select the user's CURRENT relevant cards for ``query`` via the wired assembler, so the
+        updater can CORRECT existing ones rather than only add. Returns the assembler's
+        ``card_metadata`` list (``[{id, title, files, ...}]``) or []. Never raises."""
+        if self.context_assembler is None or not (query or "").strip():
+            return []
+        try:
+            assembled = self.context_assembler.assemble(query, meta=ctx_meta or None)
+            return list(getattr(assembled, "card_metadata", None) or [])
+        except Exception:  # noqa: BLE001
+            return []
+
+    @staticmethod
+    def _scoped_card_id(card_id: str, user_id: Optional[str]) -> str:
+        """Attribute a card id to a user so cards never leak across users. Existing ids that already
+        carry the user prefix (an UPDATE of a current card) are left as-is; a fresh slug is prefixed
+        with ``u:<user_id>:`` so a created card is user-scoped. No user_id means no change (single-
+        tenant / unscoped deployments behave as before). Never raises."""
+        cid = (card_id or "").strip()
+        if not user_id:
+            return cid
+        prefix = f"u:{user_id}:"
+        if not cid:
+            return prefix
+        return cid if cid.startswith(prefix) else prefix + cid
+
+    def _update_cards_after_deep(
+        self,
+        *,
+        request: str,
+        executed: str,
+        future_context: str,
+        ctx_meta: Optional[Dict[str, Any]],
+    ) -> int:
+        """SYNC post-deep card updater (the loop also runs this in a background thread).
+
+        Makes ONE cheap LLM call that turns the finished run into a STRUCTURED set of card edits
+        (fields name/description + content add/replace/remove), then applies them via the card-update
+        API, user-scoped by ``ctx_meta['user_id']`` and bounded by the config caps. Returns the number
+        of cards it successfully wrote (0 when inactive, nothing to do, or a parse miss). Best-effort:
+        NEVER raises and NEVER affects the OrchestratorResult. Exposed as a sync method so a test can
+        call it directly; the loop invokes it off the result path in a thread.
+        """
+        try:
+            store = _card_update_store(self.context_assembler)
+            if store is None or self.provider is None or not self.cfg.async_card_update:
+                return 0
+            user_id = (ctx_meta or {}).get("user_id")
+            current_cards = self._select_current_cards(request, ctx_meta)
+            current_view = self._render_cards_for_updater(current_cards)
+
+            model = self.registry.resolve_tier(self.cfg.planner_tier)
+            prompt = CARD_UPDATE_PROMPT.format(
+                request=(request or "")[:2000],
+                executed=(executed or "")[:6000],
+                future_context=(future_context or "(none)")[:3000],
+                current_cards=current_view or "(no current cards)",
+            )
+            # Prefer a forced-tool structured return; degrade to text + _extract_json on a provider
+            # that only does plain answers. Any miss -> do nothing.
+            edits = self._call_card_updater(prompt, model)
+            if not edits:
+                return 0
+            return self._apply_card_edits(store, edits, user_id)
+        except Exception:  # noqa: BLE001 — the updater must never affect the run
+            log.debug("post-deep card update failed", exc_info=True)
+            return 0
+
+    def _call_card_updater(self, prompt: str, model: str) -> List[Dict[str, Any]]:
+        """Make the single updater LLM call and return the parsed ``edits`` list (or []). Never
+        raises. Uses forced tool use when the provider supports ``plan``; else parses ``answer``
+        text with the repo's ``_extract_json`` helper. A parse miss yields []."""
+        raw: Any = None
+        try:
+            if hasattr(self.provider, "plan"):
+                raw = self.provider.plan(prompt, model=model, tool_schema=CARD_UPDATE_TOOL)
+        except Exception:  # noqa: BLE001 — fall through to the text path
+            raw = None
+        if not isinstance(raw, dict):
+            try:
+                txt = self.provider.answer([{"role": "user", "content": prompt}], model=model)
+            except Exception:  # noqa: BLE001
+                return []
+            try:
+                raw = json.loads(_extract_json(txt or "") or "{}")
+            except Exception:  # noqa: BLE001 — parse miss: do nothing
+                return []
+        if not isinstance(raw, dict):
+            return []
+        edits = raw.get("edits")
+        return [e for e in edits if isinstance(e, dict)] if isinstance(edits, list) else []
+
+    def _apply_card_edits(self, store: Any, edits: List[Dict[str, Any]],
+                          user_id: Optional[str]) -> int:
+        """Apply parsed card edits via the card-update API, user-scoped + bounded. Returns the count
+        of cards written. Never raises (each card edit is independently guarded)."""
+        written = 0
+        max_cards = max(0, self.cfg.async_card_update_max_cards)
+        max_edits = max(0, self.cfg.async_card_update_max_edits_per_card)
+        for edit in edits[:max_cards]:
+            try:
+                cid = self._scoped_card_id(str(edit.get("card_id") or "").strip(), user_id)
+                if not cid:
+                    continue
+                fields: Dict[str, Any] = {}
+                for _k in ("name", "description"):
+                    v = edit.get(_k)
+                    if isinstance(v, str) and v.strip():
+                        fields[_k] = v.strip()
+                add_items = [it for it in (edit.get("add") or []) if isinstance(it, dict)]
+                replace_in = [r for r in (edit.get("replace") or []) if isinstance(r, dict)]
+                remove_ids = [str(r) for r in (edit.get("remove") or [])
+                              if isinstance(r, (str, int))]
+                # Bound total operations per card so one card can't run away.
+                budget = max_edits
+                add_items = add_items[:budget]
+                budget -= len(add_items)
+                replace_pairs: List[Tuple[str, Dict[str, Any]]] = []
+                for r in replace_in[:max(0, budget)]:
+                    item_id = str(r.get("item_id") or "").strip()
+                    item = r.get("item")
+                    if item_id and isinstance(item, dict):
+                        replace_pairs.append((item_id, item))
+                budget -= len(replace_pairs)
+                remove_ids = remove_ids[:max(0, budget)]
+                if not (fields or add_items or replace_pairs or remove_ids):
+                    continue
+                ok = store.update_card(
+                    cid,
+                    add=add_items or None,
+                    replace=replace_pairs or None,
+                    remove=remove_ids or None,
+                    fields=fields or None,
+                )
+                if ok:
+                    written += 1
+            except Exception:  # noqa: BLE001 — one bad edit must not stop the rest
+                log.debug("applying a card edit failed", exc_info=True)
+        if written:
+            log.debug("post-deep card update wrote %d card(s)", written)
+        return written
+
+    @staticmethod
+    def _render_cards_for_updater(cards: List[Dict[str, Any]]) -> str:
+        """Render the user's current relevant cards (id + title + a few file pointers) for the
+        updater prompt, so it can target existing card_ids and correct stale items. Never raises."""
+        if not cards:
+            return ""
+        lines: List[str] = []
+        for c in cards[:8]:
+            if not isinstance(c, dict):
+                continue
+            cid = c.get("id", "?")
+            title = c.get("title") or c.get("summary") or ""
+            files = [str(f) for f in (c.get("files") or [])][:5]
+            line = f"- [{cid}] {title}".rstrip()
+            if files:
+                line += "  (files: " + ", ".join(files) + ")"
+            lines.append(line)
+        return "\n".join(lines)
+
+    def _update_cards_after_deep_async(
+        self,
+        *,
+        request: str,
+        executed: str,
+        future_context: str,
+        ctx_meta: Optional[Dict[str, Any]],
+        emit: Optional[_Emitter] = None,
+    ) -> None:
+        """Spawn the post-deep card updater in a BACKGROUND daemon thread so it never blocks the
+        returned answer. Inert when the updater is not active. Best-effort: a failure to even start
+        the thread is swallowed. A quiet STATUS tick is emitted; it never surfaces as a user message.
+        """
+        if not self._card_updater_active():
+            return
+
+        def _bg() -> None:
+            try:
+                n = self._update_cards_after_deep(
+                    request=request, executed=executed,
+                    future_context=future_context, ctx_meta=ctx_meta)
+                if n and emit is not None:
+                    try:
+                        emit.status(f"updated {n} context card(s) for next time.")
+                    except Exception:  # noqa: BLE001
+                        pass
+            except Exception:  # noqa: BLE001 — the background updater must never raise out
+                log.debug("background card updater failed", exc_info=True)
+
+        try:
+            threading.Thread(target=_bg, daemon=True).start()
+        except Exception:  # noqa: BLE001
+            pass
+
     def _update_context_cards_after_deep(
         self,
         deep_result: OrchestratorResult,
@@ -2023,6 +2443,40 @@ class Orchestrator:
         # Launch in background (fire and forget, doesn't block task result)
         thread = threading.Thread(target=background_update, daemon=True)
         thread.start()
+
+    def _kickoff_card_update(self, res: OrchestratorResult, plan: Optional[PlanDecision],
+                             user_message: str, ctx_meta: Optional[Dict[str, Any]],
+                             emit: Optional[_Emitter]) -> None:
+        """Build the updater's input bundle from a finished deep result and kick off the async card
+        updater. The request is the user's goal/condition; ``executed`` is the brief + each deep
+        result's output; the FUTURE-CONTEXT section is parsed back out of each output. Inert when the
+        updater is not active or nothing executed. Never raises."""
+        try:
+            if not self._card_updater_active():
+                return
+            results = list(getattr(res, "deep_results", None) or [])
+            if not results:
+                return
+            request = (getattr(plan, "goal", None) or "").strip() or user_message
+            brief = (getattr(plan, "deep_brief", None) or "").strip()
+            outputs = [(d.output or "").strip() for d in results if (d.output or "").strip()]
+            executed_parts: List[str] = []
+            if brief:
+                executed_parts.append("BRIEF:\n" + brief)
+            if outputs:
+                executed_parts.append("RESULT:\n" + "\n\n".join(outputs))
+            future = "\n".join(
+                fc for fc in (_parse_future_context(d.output) for d in results) if fc
+            )
+            self._update_cards_after_deep_async(
+                request=request,
+                executed="\n\n".join(executed_parts),
+                future_context=future,
+                ctx_meta=ctx_meta,
+                emit=emit,
+            )
+        except Exception:  # noqa: BLE001 — kicking off the updater must never break the turn
+            log.debug("card-update kickoff failed", exc_info=True)
 
     # --- broken-promise guard (post-turn honesty check) ----------------------
 
@@ -2931,6 +3385,9 @@ class Orchestrator:
             # Background: categorize edited files into context cards (deep runner returns edited_files in metadata)
             if res.deep_results and any(dr.met for dr in res.deep_results):
                 self._update_context_cards_after_deep(res, context_meta)
+            # Background (ASYNC, best-effort): prepare reusable context for this user's NEXT similar
+            # request by updating their cards from this run. Off the result path; never blocks finish.
+            self._kickoff_card_update(res, plan, user_message, _ctx_meta, emit)
             return finish(res)
 
         if final == "confirm":
@@ -3049,6 +3506,8 @@ class Orchestrator:
                         emit.emit(ProgressEvent(type=EVENT_MILESTONE,
                                                 text=deep_output,
                                                 data={"execution_results": True}))
+                # Async, best-effort: prepare this user's cards for next time from the deferred run.
+                self._kickoff_card_update(deep_res, deferred_plan, user_message, _ctx_meta, emit)
             except Exception as e:  # noqa: BLE001 — deferred work must never break the answer
                 log.warning(f"Deferred deep work failed: {type(e).__name__}: {e}", exc_info=True)
 
@@ -3099,6 +3558,8 @@ class Orchestrator:
                             gathered=gathered, quality_standards=quality_standards,
                             pending_inputs=pending_inputs, model_hint=model_hint,
                             ctx_meta=_ctx_meta)
+                        # Async, best-effort: prepare this user's cards for next time.
+                        self._kickoff_card_update(_esc_res, _esc_plan, user_message, _ctx_meta, emit)
                         return finish(_esc_res)
                     if emit is not None:
                         emit.status("answer not yet at the bar, improving it…")

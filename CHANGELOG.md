@@ -43,6 +43,31 @@ All notable changes to this project are documented here. The format is based on
   content `why` (so such a card is vector-searchable). New built-ins exported from
   `adapters/__init__.py`: `ReferenceResolver`, `NoteResolver`, `build_resolver_registry`,
   `make_file_resolver`. New offline tests in `tests/test_card_content.py` (stub resolvers).
+- **Async post-deep context-card updater (prepare for the FUTURE after a deep run).** After a deep
+  task finishes (answer already delivered), an ASYNC, best-effort LLM process updates THIS user's
+  context cards so the next similar request starts better-grounded. Two parts in
+  `core/orchestrator.py`:
+  (1) when the updater is active, each deep brief is appended with
+  `DEEP_FUTURE_CONTEXT_INSTRUCTION`, asking the worker to END its output with a machine-parseable
+  section after the line `=== FUTURE CONTEXT (for similar requests by this user) ===`;
+  `_parse_future_context()` slices that section back out (last delimiter wins; absent -> "").
+  (2) `_update_cards_after_deep_async()` spawns a background daemon thread (never blocks the answer,
+  never affects the `OrchestratorResult`, never raises) that gathers the request + what executed +
+  the parsed future-context + the user's CURRENT relevant cards (`assemble().card_metadata`), makes
+  ONE cheap `balanced`-tier LLM call (forced `card_edits` tool, falling back to text parsed with the
+  repo's `_extract_json`) returning a STRUCTURED edit plan, and applies it via the card-update API
+  (`update_card(fields=, add=, replace=, remove=)`): name/description `fields`, content `add`
+  (preferring resolvable `collection`/`file` references over copied snapshots, a `note` only when
+  nothing external can be pointed at), `replace` corrections of stale items, and `remove`. Edits are
+  user-scoped (card ids prefixed `u:<user_id>:` from `_ctx_meta['user_id']`, so cards never leak
+  across users) and bounded (`async_card_update_max_cards`, `async_card_update_max_edits_per_card`).
+  Card-update capability is detected GENERICALLY by `_card_update_store()` (any object exposing
+  callable `update_card` + `add_content`, unwrapping composite/hybrid assemblers), not by a
+  `FileContextStore` type check. New `OrchestratorConfig` toggle `async_card_update: bool = True`
+  (env `QAR_ASYNC_CARD_UPDATE=0/1` in the CLI); when off, or when no card-update store or no provider
+  is wired, the deep loop is byte-for-byte unchanged (no future-context block appended, no LLM call).
+  Centralized prompts: `DEEP_FUTURE_CONTEXT_INSTRUCTION` and `CARD_UPDATE_PROMPT`/`CARD_UPDATE_TOOL`
+  (no em dashes). New offline tests in `tests/test_async_card_update.py`.
 
 ### Changed
 - **Selection/render algorithm extracted into pure module-level functions in `conversation_format`.**

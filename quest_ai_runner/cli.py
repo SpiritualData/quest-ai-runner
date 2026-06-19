@@ -208,6 +208,14 @@ def _config_from_env() -> RunnerConfig:
             cfg.orchestrator.deep_goal_max_iterations = int(os.environ["QAR_GOAL_MAX_ATTEMPTS"])
         except ValueError:
             pass
+    # --- Async post-deep context-card updater (prepare for the future) -------------------------
+    # ON by default; set QAR_ASYNC_CARD_UPDATE=0/false/off to disable (then deep is unchanged and no
+    # future-context section is appended to deep briefs). Inert anyway without a card-update store.
+    _acu = (os.getenv("QAR_ASYNC_CARD_UPDATE") or "").strip().lower()
+    if _acu in ("0", "false", "off", "no"):
+        cfg.orchestrator.async_card_update = False
+    elif _acu in ("1", "true", "on", "yes"):
+        cfg.orchestrator.async_card_update = True
     return cfg
 
 
