@@ -574,7 +574,13 @@ class QuestClient:
             return list(resp.get("cards") or resp or []) if isinstance(resp, dict) else (
                 list(resp) if isinstance(resp, list) else []
             )
-        except (QuestApiError, QuestNotConfigured) as e:
+        except QuestApiError as e:
+            if e.status == 404:
+                log.debug("list_guidance_cards: endpoint not available on this backend (404) — skipping")
+            else:
+                log.warning("list_guidance_cards failed: %s", e)
+            return []
+        except QuestNotConfigured as e:
             log.warning("list_guidance_cards failed: %s", e)
             return []
 
