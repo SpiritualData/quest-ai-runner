@@ -38,7 +38,7 @@ print(result.text)
 
 The brain runs a bounded plan → gather → re-plan → answer loop: it greps and reads the matching
 sections of your corpus, then answers grounded in what it found. See
-[architecture.md](architecture.md) for the loop, and [streaming-and-modes.md](streaming-and-modes.md)
+[conventions.md](conventions.md) for the loop, and [streaming-and-modes.md](streaming-and-modes.md)
 to stream events as it works.
 
 ## 3. Run the executor lane (poll Quest for due tasks)

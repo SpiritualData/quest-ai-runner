@@ -21,7 +21,7 @@ open source (Apache-2.0) and is meant to run for *any* org, not one specific dep
 
 Module names describe **architectural role**, not domain. "core" is the stable center everything
 depends on; "runner" is the executor; "adapters" are the swappable implementations. See
-`docs/architecture.md`.
+`docs/conventions.md` for the full architecture and the coding conventions code here must follow.
 
 ## 🔒 Hard rule #1 — NOTHING consumer-specific or secret goes in the repo
 

@@ -57,7 +57,7 @@ QUEST_BASE_URL=... QUEST_API_KEY=qsk_... QAR_CORPUS_ROOT=... quest-ai-runner --o
 
 - [Quickstart tutorial](docs/quickstart.md) — install, ground the brain, run the executor lane.
 - [TF-DF-IDF Sampling](docs/TF_DF_IDF_SAMPLING.md) — smart context selection: 62% fewer tokens, zero external deps.
-- [Architecture & naming](docs/architecture.md) — brain / runner / adapters, and why `core` is `core`.
+- [Architecture & conventions](docs/conventions.md) — brain / runner / adapters, why `core` is `core`, and the conventions code here must follow.
 - [Writing a consumer](docs/writing-a-consumer.md) — wire the library to your own Quest backend.
 - [Implementing adapters](docs/adapters.md) — the four interfaces and how to build your own.
 - [Streaming & modes](docs/streaming-and-modes.md) — LIVE vs BACKGROUND, sinks, the handoff.

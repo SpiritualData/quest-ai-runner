@@ -143,4 +143,4 @@ cfg = RunnerConfig(
 ```
 
 See [writing-a-consumer.md](writing-a-consumer.md) for the full config and
-[architecture.md](architecture.md) for how the brain calls these in its loop.
+[conventions.md](conventions.md) for how the brain calls these in its loop.

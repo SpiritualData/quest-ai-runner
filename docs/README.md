@@ -17,8 +17,8 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 
 ## Explanation / reference
 
-- **[Architecture & naming](architecture.md)** — the brain / runner / adapters split, and why
-  `core` is called `core`.
+- **[Architecture & conventions](conventions.md)** — the brain / runner / adapters split, why
+  `core` is called `core`, and the conventions code here must follow.
 - **[Streaming & modes](streaming-and-modes.md)** — LIVE vs BACKGROUND, the `ProgressSink`
   discipline, and the live↔background handoff.
 - **[Quest API contract](quest-api-contract.md)** — the exact endpoints the runner speaks.
