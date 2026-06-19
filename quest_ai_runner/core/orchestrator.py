@@ -611,7 +611,9 @@ def _guidance_model_pref(quality_standards: Optional[str]) -> Optional[str]:
 _CHANGE_VERBS = (
     r"fix|implement|build|refactor|add|remove|delete|change|update|edit|rewrite|apply|create|"
     r"make|migrate|rename|move|replace|configure|enable|disable|integrate|wire\s+up|hook\s+up|"
-    r"set\s+up|ensure|adjust|correct|patch|resolve|handle|support|improve|optimize"
+    r"set\s+up|ensure|adjust|correct|patch|resolve|handle|support|improve|optimize|"
+    r"expand|collapse|toggle|show|hide|open|close|display|render|scroll|load|initialize|reset|"
+    r"convert|transform|format|parse|extract|inject|wrap|unwrap|expose|attach|detach"
 )
 _CHANGE_VERB_RE = re.compile(r"\b(?:" + _CHANGE_VERBS + r")\b", re.IGNORECASE)
 # Bug/wrongness descriptions ("it incorrectly X", "doesn't work", "should X but Y", "is broken").
@@ -1249,6 +1251,42 @@ class Orchestrator:
         """
         tier = hint or plan.model_tier or default_tier
         return self.registry.resolve_tier(tier)
+
+    def _llm_detects_punt(self, text: Optional[str], user_message: Optional[str]) -> bool:
+        """Fast LLM check: did the answer punt instead of doing the requested work?
+
+        Catches cop-outs that regex misses: 'if you can provide the file name I can help',
+        'I would need to dig further', 'the source files are not available', generic
+        implementation guides given instead of actual code changes.
+
+        Uses the fast model tier for low latency.  Never raises.
+        """
+        if not text or not user_message or self.deep_runner is None:
+            return False
+        try:
+            prompt = (
+                "USER REQUEST:\n" + (user_message or "")[:400] + "\n\n"
+                "ASSISTANT RESPONSE:\n" + (text or "")[:1500] + "\n\n"
+                "Did the assistant PUNT? A punt means it:\n"
+                "- Gave a generic 'how to implement' guide instead of actual code changes\n"
+                "- Said it can't find the files and asked the user to provide them\n"
+                "- Described what should be done without doing it\n"
+                "- Said 'once you provide X I can help you'\n"
+                "- Gave a theoretical walkthrough instead of reading/editing real files\n\n"
+                "Reply with exactly one word: PUNTED or EXECUTED"
+            )
+            model = self.registry.resolve_tier("fast")
+            provider = self.get_provider_for_model(model)
+            response = provider.answer(
+                [{"role": "user", "content": prompt}],
+                model=model,
+            )
+            punted = "PUNTED" in (response or "").upper()
+            if punted:
+                log.info("LLM punt detection: answer is a cop-out, escalating to deep")
+            return punted
+        except Exception:  # noqa: BLE001
+            return False
 
     def _grounded_answer(self, user_message: str, transcript: str, context_view: str,
                          gathered: List[Dict[str, Any]], model: str, partial: bool,
@@ -2530,7 +2568,7 @@ class Orchestrator:
             # turn ends having only TALKED about the fix instead of doing it (the "it just finishes
             # the request" regression). Re-wired here so a described-but-unexecuted fix still
             # escalates to a deep run that actually applies it.
-            elif _answer_describes_unexecuted_work(text):
+            elif _answer_describes_unexecuted_work(text) or self._llm_detects_punt(text, user_message):
                 should_defer_deep = {"goal": f"Execute the work the answer describes: {user_message}",
                                       "rationale": "auto-detected unexecuted work in answer (fallback)"}
                 if emit is not None:

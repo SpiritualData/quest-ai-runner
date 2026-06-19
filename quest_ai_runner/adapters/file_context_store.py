@@ -221,7 +221,15 @@ _MIN_TOKEN_LEN = 3  # tokens shorter than this are always dropped
 
 
 def _tokenize(text: str) -> Set[str]:
-    """Lowercase-tokenize ``text`` to a keyword set, dropping short tokens and stopwords."""
+    """Lowercase-tokenize ``text`` to a keyword set, dropping short tokens and stopwords.
+
+    Splits camelCase/PascalCase before extracting tokens so that ``StatusTick``
+    indexes under both ``status`` and ``tick`` (and queries for either word match).
+    """
+    # camelCase split: 'statusTick' -> 'status Tick'
+    text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
+    # acronym boundary: 'parseHTML' -> 'parse HTML', 'HTMLParser' -> 'HTML Parser'
+    text = re.sub(r'([A-Z]{2,})([A-Z][a-z])', r'\1 \2', text)
     raw = re.findall(r"[a-z0-9]+", text.lower())
     return {t for t in raw if len(t) >= _MIN_TOKEN_LEN and t not in _STOPWORDS}
 
@@ -1709,6 +1717,74 @@ class FileContextStore(ContextAssemblerBase):
         """Return the set of all terms in a card (for DF computation)."""
         return set(self._card_term_weights(card).keys())
 
+    def _fallback_file_search(self, task_kws: Set[str]) -> AssembledContext:
+        """When no cards score above threshold, grep the raw file corpus for query keywords.
+
+        This gives the brain relevant file snippets even when the card index is cold or
+        misses novel component names, class names, or camelCase identifiers.  Returns an
+        empty AssembledContext when no files are reachable or no hits are found.
+        """
+        if self._repo_root is None or not self._repo_root.is_dir():
+            return AssembledContext()
+
+        kw_list = sorted(task_kws, key=len, reverse=True)[:12]
+        if not kw_list:
+            return AssembledContext()
+
+        pattern = "|".join(re.escape(k) for k in kw_list)
+        try:
+            rx = re.compile(pattern, re.IGNORECASE)
+        except re.error:
+            return AssembledContext()
+
+        skip_dirs = effective_skip_dirs(self._repo_root)
+        hits_by_file: Dict[str, List[str]] = {}
+        try:
+            for dirpath, dirnames, filenames in os.walk(self._repo_root):
+                prune_dirnames(dirnames, current=Path(dirpath), base_skip=skip_dirs)
+                for fn in filenames:
+                    if fn.startswith("."):
+                        continue
+                    fpath = Path(dirpath) / fn
+                    if fpath.suffix not in _SOURCE_EXTS:
+                        continue
+                    try:
+                        if fpath.stat().st_size > _BOOTSTRAP_MAX_BYTES:
+                            continue
+                        text = fpath.read_text(encoding="utf-8", errors="replace")
+                        matching = [ln.rstrip() for ln in text.splitlines() if rx.search(ln)]
+                        if matching:
+                            rel = str(fpath.relative_to(self._repo_root))
+                            hits_by_file[rel] = matching[:6]
+                    except OSError:
+                        pass
+                    if len(hits_by_file) >= 20:
+                        break
+                if len(hits_by_file) >= 20:
+                    break
+        except Exception:  # noqa: BLE001
+            return AssembledContext()
+
+        if not hits_by_file:
+            return AssembledContext()
+
+        _log.info("context index: no cards matched; fallback file search found %d file(s)",
+                  len(hits_by_file))
+        parts = [
+            "No context cards matched this query. Relevant lines found by direct file search:\n"
+        ]
+        for rel, lines in sorted(hits_by_file.items())[:12]:
+            parts.append(f"**{rel}**")
+            for ln in lines:
+                snippet = ln[:200].rstrip() + ("…" if len(ln) > 200 else "")
+                parts.append(f"  {snippet}")
+            parts.append("")
+        return AssembledContext(
+            context_view="\n".join(parts),
+            sources=[{"adapter": "fallback_grep", "label": "direct file search",
+                      "items": list(hits_by_file.keys())}],
+        )
+
     def _assemble_inner(self, task_text: str) -> AssembledContext:
         task_kws = _tokenize(task_text)
         if not task_kws:
@@ -1760,7 +1836,7 @@ class FileContextStore(ContextAssemblerBase):
                 scored.append((-score, -usage, -len(verified_at), verified_at, card))
 
         if not scored:
-            return AssembledContext()
+            return self._fallback_file_search(task_kws)
 
         # Sort: primary descending score, then tie-break descending usage_count,
         # then tie-break by presence of a verified_at string (longer = more recent).
