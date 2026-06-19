@@ -7,6 +7,21 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Conversational stage narration: one continuous "thinking out loud" train of thought
+  (`OrchestratorConfig.narrate`, `narration_system_prompt`).** When `narrate=True`, the orchestrator
+  narrates the turn as ONE evolving human train of thought rather than emitting hardcoded status
+  labels: a short conversational line at the start (about the new message) and at each stage that
+  involves a real wait (gathering context, deep work), each line CONTINUING the same thought and
+  reacting to what just came in (the planner's own reasoning is the raw material). Lines are emitted
+  as `EVENT_PARTIAL` so a consumer can show them live (and speak them on voice). This SUPERSEDES and
+  folds in the old `instant_ack` path (the ack is just the first beat, not a separate mechanism;
+  `instant_ack=True` still works and now routes through the narrator). Generation uses the cheap
+  planner tier and SPEAKS IN THE SELECTED REP'S PERSONA (`rep_preamble`) when given; HOW it narrates
+  is overridable by the consumer via `narration_system_prompt` (the persona is layered on top). The
+  first beat runs concurrently (no added latency on quick turns); per-stage beats only fire for
+  read/deep actions, so plain answers are unaffected. Every narration failure is swallowed: the turn
+  never depends on it. New `_Narrator` in `core/orchestrator.py`; em dashes are stripped from output
+  defensively (brand-voice safe).
 - **Pluggable card PERSISTENCE boundary: `CardRepository` (`adapters/card_repository.py`).** A tiny
   `CardRepository` Protocol (`load_all` / `read` / `write` / `delete` / `exists` / `revision`, every
   method BEST-EFFORT and NEVER raising) plus the default `FilesystemCardRepository` (one

@@ -400,6 +400,21 @@ class OrchestratorConfig:
     # EVENT_PARTIAL when it returns (~1 s); a failure is swallowed silently.  Default False so
     # existing callers see no behavior change.
     instant_ack: bool = False
+    # CONVERSATIONAL NARRATION: when True, the orchestrator narrates the turn as ONE continuous,
+    # human "thinking out loud" train of thought (the instant ack is just its first beat, not a
+    # separate path): a short conversational line at each meaningful stage — the new message,
+    # gathering context, running the deeper work — each CONTINUING the same thought and reacting to
+    # what just came in (e.g. the planner's reasoning), the way a person says new things as they
+    # occur to them. Lines are emitted as EVENT_PARTIAL (shown live in the chat bubble, not
+    # persisted; spoken on voice). Generated at the cheap planner tier; the first beat runs
+    # concurrently so quick turns add no latency, and slow stages (gather/deep) absorb the cheap
+    # line since there is real wait to fill. Failures are swallowed (the turn never depends on
+    # narration). Speaks in the selected rep's persona (rep_preamble) when available. Supersedes
+    # instant_ack when set.
+    narrate: bool = False
+    # Consumer-supplied system prompt defining HOW to narrate (voice, style, rules). When None, a
+    # sensible generic default is used. The selected rep persona is always applied on top of it.
+    narration_system_prompt: Optional[str] = None
     # GUIDANCE PRE-SELECTION: how many use-case-specific guidance cards the orchestrator asks a
     # wired GuidanceProvider to pre-select (via select()) for the "APPLICABLE GUIDANCE" block
     # before planning. Only consulted when a GuidanceProvider is wired; otherwise inert.
@@ -1280,6 +1295,114 @@ class _Emitter:
                 self.mode = Mode.BACKGROUND
         except Exception:  # noqa: BLE001
             pass
+
+
+class _Narrator:
+    """Conversational, single-train-of-thought progress narration for one turn.
+
+    Folds the old instant-ack into a unified flow: at each meaningful stage the orchestrator calls
+    ``note(moment)``; the narrator generates the NEXT short line of ONE continuous, evolving thought
+    (reacting to what just came in) and emits it as an EVENT_PARTIAL so it is both shown live in the
+    chat bubble (not persisted) and spoken on voice. The FIRST beat is started with ``begin()`` and
+    collected with ``flush_first()`` so it runs concurrently with context assembly and adds no
+    wall-clock latency to quick turns; ``note()`` is synchronous and is only called at stages that
+    already involve a wait (gathering, deep work), so the cheap line is absorbed by that wait.
+
+    Generation uses the cheap planner tier and SPEAKS IN THE SELECTED REP'S PERSONA when one is
+    given. HOW it narrates is overridable by the consumer via ``system_prompt`` (the persona is
+    always layered on top). Every failure is swallowed: the turn never depends on narration.
+    """
+
+    DEFAULT_SYSTEM = (
+        "You are working on the user's request right now and you think out loud to them while you "
+        "work, like a person reasoning through something as they do it. Speak as ONE continuous "
+        "train of thought across the whole turn: each line CONTINUES the same thought and reacts to "
+        "whatever just came in, the way new things occur to someone as they look closer. Keep each "
+        "line to one short, natural, spoken sentence. No lists, no markdown, no greeting, no "
+        "restating the request back, no sign-off. Stay light and human, never robotic status labels. "
+        "Connect to what was last said or done with the user when it helps the moment feel "
+        "continuous. Do NOT use em dashes; use a comma or a period. If nothing fresh is worth saying "
+        "at this moment, reply with an empty string."
+    )
+
+    def __init__(self, *, provider: Any, model: str, emit: "_Emitter",
+                 persona: str = "", transcript_tail: str = "",
+                 system_prompt: Optional[str] = None, enabled: bool = True):
+        self._provider = provider
+        self._model = model
+        self._emit = emit
+        self._persona = (persona or "").strip()
+        self._recent = (transcript_tail or "").strip()[-800:]
+        self._system = (system_prompt or self.DEFAULT_SYSTEM).strip()
+        self.enabled = bool(enabled and provider is not None)
+        self._said: List[str] = []
+        self._first_future: Optional[Any] = None
+        self._executor: Optional[ThreadPoolExecutor] = None
+
+    def _gen(self, moment: str) -> Optional[str]:
+        msgs: List[Dict[str, str]] = [{"role": "system", "content": self._system}]
+        if self._persona:
+            msgs.append({"role": "system", "content": "Speak as this persona:\n" + self._persona})
+        user = ""
+        if self._recent:
+            user += f"The conversation so far (recent):\n{self._recent}\n\n"
+        if self._said:
+            user += "What you've already said out loud this turn:\n" + "\n".join(self._said) + "\n\n"
+        user += f"What just happened: {moment}\n\nSay the next line of your thinking (or empty)."
+        msgs.append({"role": "user", "content": user})
+        return self._provider.answer(msgs, model=self._model)
+
+    def _say(self, line: Optional[str]) -> None:
+        if not line:
+            return
+        # Defensive brand cleanup: never speak em dashes even if the model slips one in.
+        line = line.strip().replace("—", ", ").replace(" -- ", ", ")
+        if not line:
+            return
+        self._said.append(line)
+        try:
+            self._emit.emit(ProgressEvent(type=EVENT_PARTIAL, text=line, data={"narration": True}))
+        except Exception:  # noqa: BLE001 — narration must never break the run
+            pass
+
+    def begin(self, user_message: str) -> None:
+        """Start the first beat concurrently (about the user's new message)."""
+        if not self.enabled:
+            return
+        moment = f"the user just sent a new message: {(user_message or '')[:300]}"
+        try:
+            self._executor = ThreadPoolExecutor(max_workers=1)
+            self._first_future = self._executor.submit(self._safe_gen, moment)
+        except Exception:  # noqa: BLE001
+            self._first_future = None
+
+    def flush_first(self) -> None:
+        """Collect and emit the first beat (called once context assembly is underway)."""
+        if self._first_future is None:
+            return
+        try:
+            self._say(self._first_future.result(timeout=5.0))
+        except Exception:  # noqa: BLE001 — timeout / cancelled / provider error: skip
+            pass
+        finally:
+            try:
+                if self._executor is not None:
+                    self._executor.shutdown(wait=False)
+            except Exception:  # noqa: BLE001
+                pass
+            self._first_future = None
+
+    def note(self, moment: str) -> None:
+        """Emit the next beat for a stage that already involves a wait (synchronous, cheap tier)."""
+        if not self.enabled:
+            return
+        self._say(self._safe_gen(moment))
+
+    def _safe_gen(self, moment: str) -> Optional[str]:
+        try:
+            return self._gen(moment)
+        except Exception:  # noqa: BLE001
+            return None
 
 
 class Orchestrator:
@@ -2920,37 +3043,26 @@ class Orchestrator:
         #   2. Launch a CHEAP one-sentence ack call IN A BACKGROUND THREAD — it runs concurrently
         #      with context assembly + the first planner step, so it adds ZERO wall-clock latency.
         # The ack prompt explicitly forbids em dashes (brand rule). A failure is swallowed.
-        _ack_future = None
-        if cfg.instant_ack:
+        # The narrator unifies the old instant-ack into a single conversational train of thought:
+        # its first beat (started here, concurrent with context assembly) acknowledges the new
+        # message, and later note() calls continue the same thought at the slow stages. ``narrate``
+        # supersedes the legacy ``instant_ack`` flag. Speaks in the selected rep's persona; HOW it
+        # narrates is overridable by the consumer via cfg.narration_system_prompt.
+        _narrator = _Narrator(
+            provider=self.provider,
+            model=self.registry.resolve_tier(cfg.planner_tier),
+            emit=emit,
+            persona=rep_preamble or "",
+            transcript_tail=transcript,
+            system_prompt=cfg.narration_system_prompt,
+            enabled=bool(cfg.narrate or cfg.instant_ack),
+        )
+        if _narrator.enabled:
             try:
                 emit.status("Looking into this...")
             except Exception:  # noqa: BLE001
                 pass
-            if self.provider is not None:
-                try:
-                    _ack_msg = user_message  # capture for closure
-                    _ack_provider = self.provider
-                    _ack_model = self.registry.resolve_tier(cfg.planner_tier)
-
-                    def _do_ack() -> Optional[str]:
-                        try:
-                            _prompt = (
-                                "Write ONE sentence (max 20 words) that restates the following "
-                                "request in your own words and says you are looking into it. "
-                                "Do NOT use em dashes (--). Be natural and brief.\n\n"
-                                f"Request: {_ack_msg[:300]}"
-                            )
-                            return _ack_provider.answer(
-                                [{"role": "user", "content": _prompt}],
-                                model=_ack_model,
-                            )
-                        except Exception:  # noqa: BLE001
-                            return None
-
-                    _ack_executor = ThreadPoolExecutor(max_workers=1)
-                    _ack_future = _ack_executor.submit(_do_ack)
-                except Exception:  # noqa: BLE001
-                    _ack_future = None
+            _narrator.begin(user_message)
 
         # --- ContextAssembler: pre-flight context injection (optional fifth adapter) -----------
         # When a ContextAssembler is wired, call assemble() once before the loop so task-specific
@@ -3112,24 +3224,11 @@ class Orchestrator:
                 except Exception:  # noqa: BLE001
                     pass
 
-        # --- Instant-ack: emit the background ack text when it is ready -----------------------
-        # At this point context assembly + the ack call have been running concurrently.  We
-        # collect the ack result NOW (it should be ~done by the time we reach here) and emit it
-        # as an EVENT_PARTIAL so the consumer streams it.  If not yet done we wait briefly; if
-        # it failed the future result is None and we skip.  Joining here (before the planner
-        # loop) ensures the background thread is cleaned up before run() returns.
-        if _ack_future is not None:
-            try:
-                _ack_text = _ack_future.result(timeout=5.0)
-                if _ack_text and _ack_text.strip():
-                    emit.emit(ProgressEvent(type=EVENT_PARTIAL, text=_ack_text.strip(), data={"ack": True}))
-            except Exception:  # noqa: BLE001 — timeout, cancelled, or provider error: skip
-                pass
-            finally:
-                try:
-                    _ack_executor.shutdown(wait=False)
-                except Exception:  # noqa: BLE001
-                    pass
+        # --- Narrator: emit the first beat once it is ready -----------------------------------
+        # The first conversational beat has been generating concurrently with context assembly.
+        # Collect+emit it NOW (it should be ~done), before the planner loop, so its background
+        # thread is cleaned up before run() returns. A timeout/failure just skips it.
+        _narrator.flush_first()
 
         # --- ContextAssembler: collect the background assemble() result -----------------------
         # The assemble() call has been running concurrently with the ack + guidance.  Collect it
@@ -3348,6 +3447,21 @@ class Orchestrator:
                 consecutive_reads = 0  # Reset when planner chooses something else
             emit.emit(ProgressEvent(type=(EVENT_PLAN if step == 0 else EVENT_REPLAN),
                                     action=plan.action, step=steps, text=plan.rationale or None))
+            # Narrate this planner decision as the next beat of the train of thought, but only for
+            # actions that involve a real wait (gathering context, deep work) so quick answers add
+            # no latency. The planner's own reasoning is the raw material, so the narration reflects
+            # genuine thinking rather than a canned label.
+            if _narrator.enabled and plan.action in ("read", "deep"):
+                _moment = (
+                    "you're gathering more context before answering"
+                    if plan.action == "read"
+                    else "you're starting the deeper work to actually do this"
+                )
+                if plan.rationale:
+                    _moment += f". Your reasoning: {plan.rationale}"
+                if plan.action == "deep" and plan.goal:
+                    _moment += f". The goal: {plan.goal}"
+                _narrator.note(_moment)
             # Emit cumulative token counts so live consumers see usage grow in real time.
             _ti = getattr(self.provider, 'tokens_in', 0)
             _to = getattr(self.provider, 'tokens_out', 0)

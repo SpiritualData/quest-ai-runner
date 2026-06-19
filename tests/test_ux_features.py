@@ -128,10 +128,11 @@ class TestInstantAck:
         first_status = next(e for e in events if e["type"] == EVENT_STATUS)
         assert "looking" in first_status.get("text", "").lower()
 
-    def test_instant_ack_emits_partial_with_restatement(self):
-        """The ack text is emitted as EVENT_PARTIAL (data={ack:True}) and restates the user's request."""
+    def test_instant_ack_emits_partial_as_narration(self):
+        """The first narration beat is emitted as EVENT_PARTIAL (data={narration:True}) and is
+        generated with the user's new message in view (continuity), not as a spinner status tick."""
         cfg = OrchestratorConfig(instant_ack=True)
-        ack_text = "I am looking into your question about pricing."
+        ack_text = "Sure, let me look into your pricing question."
 
         class _TrackingProvider(StubProvider):
             def __init__(self_inner):
@@ -144,9 +145,10 @@ class TestInstantAck:
                 self_inner.last_answer_messages = messages
                 if self_inner._first_answer:
                     self_inner._first_answer = False
-                    # Capture the prompt text so we can assert it mentions the request.
-                    content = messages[0].get("content", "") if messages else ""
-                    self_inner.ack_prompt_captured = content
+                    # Capture ALL message text (the user's new message lives in the user turn).
+                    self_inner.ack_prompt_captured = " ".join(
+                        m.get("content", "") for m in messages
+                    )
                     return ack_text
                 return "STUB ANSWER [grounded_on:False]"
 
@@ -156,20 +158,34 @@ class TestInstantAck:
         sink = StreamSink(lambda ev: events.append(ev))
         orch.run("What is the pricing?", mode=Mode.LIVE, sink=sink)
 
-        # The ack text should be emitted as EVENT_PARTIAL with data={"ack": True} so consumers
-        # can render it as an assistant message (not a spinner status tick).
+        # The first beat is emitted as EVENT_PARTIAL with data={"narration": True} so consumers
+        # render it as a live (non-persisted) assistant line / spoken on voice, not a spinner tick.
         from quest_ai_runner.core.adapters import EVENT_PARTIAL
-        ack_events = [e for e in events if e["type"] == EVENT_PARTIAL
-                      and isinstance(e.get("data"), dict) and e["data"].get("ack")]
-        assert ack_events, (
-            f"Expected EVENT_PARTIAL with data.ack=True for ack text {ack_text!r}; "
+        narration_events = [e for e in events if e["type"] == EVENT_PARTIAL
+                            and isinstance(e.get("data"), dict) and e["data"].get("narration")]
+        assert narration_events, (
+            f"Expected EVENT_PARTIAL with data.narration=True for {ack_text!r}; "
             f"got partial events: {[e for e in events if e['type'] == EVENT_PARTIAL]}"
         )
-        assert ack_events[0].get("text") == ack_text
+        assert narration_events[0].get("text") == ack_text
 
-        # The ack prompt should mention the original request.
+        # The narration is generated with the user's new message in view (continuity).
         assert provider.ack_prompt_captured is not None
         assert "pricing" in provider.ack_prompt_captured.lower()
+
+    def test_narrate_flag_enables_narration_without_instant_ack(self):
+        """narrate=True turns on the conversational train of thought even when instant_ack is False."""
+        cfg = OrchestratorConfig(narrate=True)
+        events: List[Dict[str, Any]] = []
+        provider = StubProvider(decisions=[{"action": "answer", "rationale": "done"}],
+                                answer_text="STUB ANSWER")
+        orch = _make_orch(provider, StubRetrieval(), cfg=cfg)
+        sink = StreamSink(lambda ev: events.append(ev))
+        orch.run("What is the answer?", mode=Mode.LIVE, sink=sink)
+
+        narration = [e for e in events if e["type"] == EVENT_PARTIAL
+                     and isinstance(e.get("data"), dict) and e["data"].get("narration")]
+        assert narration, "narrate=True should emit at least one narration partial"
 
     def test_instant_ack_prompt_forbids_em_dashes(self):
         """The ack prompt explicitly instructs the model not to use em dashes."""
