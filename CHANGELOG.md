@@ -7,6 +7,28 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Pluggable card PERSISTENCE boundary: `CardRepository` (`adapters/card_repository.py`).** A tiny
+  `CardRepository` Protocol (`load_all` / `read` / `write` / `delete` / `exists` / `revision`, every
+  method BEST-EFFORT and NEVER raising) plus the default `FilesystemCardRepository` (one
+  `<cards_dir>/<id>.json` file per card, atomic temp-file + `os.replace` writes, and a cheap
+  `(max_child_mtime, file_count)` change-stamp for `revision()`). `FileContextStore` now routes
+  EVERY card read / write / delete / enumerate / cache-invalidate through an injected repository:
+  the constructor still takes `cards_dir` and builds a `FilesystemCardRepository(cards_dir)` by
+  default, and accepts an optional `card_repository=` override so a consumer can persist cards in a
+  database / vector store while ALL card logic (selection / IDF / recency / the card-update API /
+  `export_for_embedding` / bootstrap) stays in the store. The in-memory cache now invalidates on the
+  repository's `revision()` (the old `_dir_stamp` filesystem scan was removed). Fully behavior-
+  preserving: with the default filesystem repo the on-disk format and selection are byte-for-byte
+  unchanged (all existing card/context/vector tests pass).
+- **Optional native text-search hook on the repository boundary (`search_cards`).** A repository MAY
+  additionally expose `search_cards(query, *, limit) -> Optional[Dict[str, Dict[str, Any]]]` to
+  serve the keyword/IDF arm directly from a native full-text store (e.g. a Qdrant-backed repo)
+  instead of the store scanning every card in memory. `FileContextStore.assemble()` detects the
+  capability by duck-typing (`hasattr`, never an isinstance check): when present and returning a
+  non-`None` set, those cards become the candidate pool for the keyword arm (the store then applies
+  its existing IDF ranking / confidence gate / recency over them); when absent or returning `None`
+  the store falls back to today's in-app IDF over `load_all()`. Purely additive: the default
+  `FilesystemCardRepository` does NOT implement `search_cards`, so its behavior is unchanged.
 - **Source-agnostic context-card CONTENT (cards are no longer file-only).** A context card
   (`adapters/file_context_store.py`) can now carry an optional top-level `content` list of TYPED
   items, each either a REFERENCE resolved FRESH to current content on every use, or an LLM NOTE

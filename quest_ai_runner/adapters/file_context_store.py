@@ -45,6 +45,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase
 from ._walk import effective_skip_dirs, prune_dirnames
+from .card_repository import CardRepository, FilesystemCardRepository
 from .tfdfidf_sampling import extract_terms as tfdfidf_extract_terms, select_representatives
 
 _log = logging.getLogger("quest-ai-runner.context")
@@ -1286,26 +1287,39 @@ class FileContextStore(ContextAssemblerBase):
       auto_bootstrap    -- when True (default), the first ``assemble()`` call on an empty
                           store triggers ``bootstrap()`` once, best-effort, if a repo root is
                           known.  The guard fires only once per instance.
+      card_repository   -- optional ``CardRepository`` that owns where/how cards persist. When
+                          omitted the store builds a ``FilesystemCardRepository(cards_dir)`` (the
+                          default per-card-JSON-files behavior, byte-for-byte). Injecting a
+                          repository (e.g. a database-backed one) keeps ALL card logic here while
+                          swapping only the persistence.
+
+    Persistence boundary
+    --------------------
+    All raw card reads/writes/deletes go through a ``CardRepository`` (see
+    ``card_repository.py``). The default ``FilesystemCardRepository`` stores one
+    ``<cards_dir>/<id>.json`` file per card; a consumer can inject any other repository to
+    persist cards elsewhere. The store keeps every bit of card LOGIC (selection / IDF / recency /
+    the card-update API / ``export_for_embedding`` / bootstrap) and only delegates PERSISTENCE.
 
     In-memory card cache
     --------------------
-    ``_load_all()`` reads and JSON-parses every card on disk.  For large repos this
-    would make every ``assemble()`` call O(all-cards-from-disk).  To avoid that, the
+    ``_load_all()`` fetches and JSON-parses every card via ``repo.load_all()``.  For large repos this
+    would make every ``assemble()`` call O(all-cards).  To avoid that, the
     store keeps a lazily-populated in-memory cache of ``{card_id: card_dict}``.
 
     Invalidation is two-pronged:
 
     1. **Write-path dirty flag** -- ``record()`` and ``bootstrap()`` set
        ``_cache_dirty = True`` immediately after writing.  The next
-       ``_load_all()`` call notices the flag, clears it, and reloads from disk.
+       ``_load_all()`` call notices the flag, clears it, and reloads from the repo.
        This guarantees that a ``record()`` followed by ``assemble()`` in the same
        process always sees the newly written card.
 
     2. **External-change detector** -- on every ``_load_all()`` call the store
-       checks two cheap stats: the maximum child mtime and the file count of
-       ``cards_dir``.  If either changed since the last load, the cache is
-       reloaded unconditionally.  This catches cards written by other processes
-       or agents sharing the same ``cards_dir``.
+       checks the repository's cheap ``revision()`` change-stamp (for the filesystem
+       repo: the maximum child mtime and the file count of ``cards_dir``).  If it
+       changed since the last load, the cache is reloaded unconditionally.  This
+       catches cards written by other processes or agents sharing the same store.
     """
 
     def __init__(
@@ -1322,8 +1336,12 @@ class FileContextStore(ContextAssemblerBase):
         reference_resolvers: Optional[Dict[str, Any]] = None,
         max_card_refs: int = _MAX_CARD_REFS,
         max_card_ref_chars: int = _MAX_CARD_REF_CHARS,
+        card_repository: Optional[CardRepository] = None,
     ) -> None:
         self._cards_dir = Path(cards_dir)
+        # Card PERSISTENCE is pluggable behind a CardRepository. Default: per-card JSON files under
+        # cards_dir (byte-for-byte the prior behavior). A consumer may inject a database-backed repo.
+        self._repo: CardRepository = card_repository or FilesystemCardRepository(cards_dir)
         self._repo_root = Path(repo_root).resolve() if repo_root else None
         self._max_cards = max_cards_in_view
         self._auto_bootstrap = auto_bootstrap
@@ -1363,10 +1381,13 @@ class FileContextStore(ContextAssemblerBase):
 
         # In-memory card cache: {card_id: card_dict} or None when not yet loaded.
         self._cache: Optional[Dict[str, Dict[str, Any]]] = None
-        # Dirty flag: set after any write so next _load_all() reloads from disk.
+        # Dirty flag: set after any write so next _load_all() reloads from the repo.
         self._cache_dirty: bool = False
-        # Snapshot of (max_child_mtime, file_count) at last cache load.
-        self._cache_dir_stamp: Tuple[float, int] = (0.0, 0)
+        # The repository revision (``repo.revision()``) captured at the last cache load. For the
+        # filesystem repo this is the (max_child_mtime, file_count) stamp; for another repo it is
+        # whatever opaque change-stamp that repo returns. _load_all() reloads when it changes. The
+        # initial sentinel never matches a real revision, so the first _load_all() always loads.
+        self._cache_dir_stamp: Any = (0.0, 0)
 
     # ------------------------------------------------------------------
     # Public API: ContextAssemblerBase implementation
@@ -1566,12 +1587,9 @@ class FileContextStore(ContextAssemblerBase):
         root = self._repo_root
         if root is None:
             return
-        # Only bootstrap when there are no existing cards.
-        if self._cards_dir.exists() and any(
-            e.suffix == ".json" and not e.name.startswith(".")
-            and e.name != _BOOTSTRAP_META_FILE
-            for e in self._cards_dir.iterdir()
-        ):
+        # Only bootstrap when there are no existing cards. Ask the repository (not the filesystem)
+        # so a non-filesystem repo with cards already in it does NOT re-bootstrap.
+        if self._repo.load_all():
             return
         try:
             self._bootstrap_inner(root=str(root))
@@ -1905,14 +1923,8 @@ class FileContextStore(ContextAssemblerBase):
                 })
 
             # Load existing card so we preserve usage_count / last_outcome if present.
-            card_path = self._cards_dir / f"{card_id}.json"
-            existing: Dict[str, Any] = {}
-            if card_path.exists():
-                try:
-                    with open(card_path, "r", encoding="utf-8") as fh:
-                        existing = json.load(fh)
-                except Exception:  # noqa: BLE001
-                    existing = {}
+            loaded_existing = self._repo.read(card_id)
+            existing: Dict[str, Any] = loaded_existing if isinstance(loaded_existing, dict) else {}
 
             # Incremental refresh: skip a topic only if every file's sha256 is unchanged AND
             # every file entry already carries the current per-feature versions.
@@ -1949,22 +1961,10 @@ class FileContextStore(ContextAssemblerBase):
                 "last_outcome": existing.get("last_outcome", "unknown"),
             }
 
-            # Atomic write (skip if dry-run mode).
+            # Persist via the repository (skip if dry-run mode).
             if not self._dry_run:
-                tmp_fd, tmp_path = tempfile.mkstemp(
-                    dir=str(self._cards_dir), prefix=".tmp_", suffix=".json"
-                )
-                try:
-                    with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
-                        json.dump(card, fh, indent=2, ensure_ascii=False)
-                        fh.write("\n")
-                    os.replace(tmp_path, str(card_path))
+                if self._repo.write(card_id, card):
                     cards_written += 1
-                except Exception:  # noqa: BLE001
-                    try:
-                        os.unlink(tmp_path)
-                    except OSError:
-                        pass
             else:
                 # In dry-run mode, count the card but don't write it.
                 cards_written += 1
@@ -2103,7 +2103,16 @@ class FileContextStore(ContextAssemblerBase):
         if not task_kws:
             return AssembledContext()
 
-        cards = self._load_all()
+        # Candidate pool for the keyword arm. When the repository exposes NATIVE text search
+        # (a Qdrant-backed repo, say), let it serve the candidates directly instead of scanning
+        # every card in memory; the store still applies its own IDF ranking / confidence gate /
+        # recency over that smaller pool below, so selection behavior is unchanged in kind. Detected
+        # by duck-typing (never isinstance): a repo without ``search_cards`` (e.g. the default
+        # filesystem repo) falls through to the full in-app IDF over ``_load_all()``, byte-for-byte
+        # as before. A repo whose ``search_cards`` returns ``None`` also falls back.
+        cards = self._repo_text_search_candidates(task_text)
+        if cards is None:
+            cards = self._load_all()
         if not cards:
             return AssembledContext()
 
@@ -2394,29 +2403,18 @@ class FileContextStore(ContextAssemblerBase):
             card_metadata=card_metadata,
         )
 
-    def _write_card_atomic(self, card_path: Path, card: Dict[str, Any]) -> None:
-        """Write ``card`` to ``card_path`` atomically (temp + os.replace) and mark the cache dirty.
+    def _write_card_atomic(self, card_id: str, card: Dict[str, Any]) -> None:
+        """Persist ``card`` under ``card_id`` via the repository and mark the cache dirty.
 
-        Shared by record() and the card-update API. Respects ``dry_run`` (writes nothing). Re-raises
-        on failure so the public caller's try/except records the failure; callers above are all
-        wrapped (never raises out of the public surface).
+        Shared by record() and the card-update API. Respects ``dry_run`` (writes nothing). Raises
+        when the repository reports the write failed, so the public caller's try/except records the
+        failure; callers above are all wrapped (never raises out of the public surface).
         """
         if self._dry_run:
             return
-        self._cards_dir.mkdir(parents=True, exist_ok=True)
-        tmp_fd, tmp_path = tempfile.mkstemp(dir=str(self._cards_dir), prefix=".tmp_", suffix=".json")
-        try:
-            with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
-                json.dump(card, fh, indent=2, ensure_ascii=False)
-                fh.write("\n")
-            os.replace(tmp_path, str(card_path))
-            self._cache_dirty = True
-        except Exception:  # noqa: BLE001
-            try:
-                os.unlink(tmp_path)
-            except OSError:
-                pass
-            raise
+        if not self._repo.write(card_id, card):
+            raise OSError(f"card repository write failed for {card_id!r}")
+        self._cache_dirty = True
 
     def _update_card_inner(
         self,
@@ -2437,16 +2435,8 @@ class FileContextStore(ContextAssemblerBase):
         ``description``/``summary`` changes the card's embedding text, so ``export_for_embedding``
         re-fingerprints it and ``VectorStore.sync()`` re-embeds it on the next sync.
         """
-        card_path = self._cards_dir / f"{card_id}.json"
-        card: Dict[str, Any] = {}
-        if card_path.exists():
-            try:
-                with open(card_path, "r", encoding="utf-8") as fh:
-                    loaded = json.load(fh)
-                if isinstance(loaded, dict):
-                    card = loaded
-            except Exception:  # noqa: BLE001 — corrupt card: start fresh but keep the id
-                card = {}
+        loaded = self._repo.read(card_id)
+        card: Dict[str, Any] = loaded if isinstance(loaded, dict) else {}
         card.setdefault("id", card_id)
 
         # 0) embedded field edits (name/description/summary). These are part of the embedding text,
@@ -2487,22 +2477,15 @@ class FileContextStore(ContextAssemblerBase):
 
         # 4) recency trim + persist
         card["content"] = _trim_content_by_recency(content)
-        self._write_card_atomic(card_path, card)
+        self._write_card_atomic(card_id, card)
         return not self._dry_run
 
     def _record_inner(self, task_text: str, outcome: Dict[str, Any]) -> None:
         card_id = _card_slug(task_text)
-        card_path = self._cards_dir / f"{card_id}.json"
 
         # Load existing card or start fresh.
-        if card_path.exists():
-            try:
-                with open(card_path, "r", encoding="utf-8") as fh:
-                    card: Dict[str, Any] = json.load(fh)
-            except Exception:  # noqa: BLE001 -- corrupt card: start fresh
-                card = {}
-        else:
-            card = {}
+        loaded = self._repo.read(card_id)
+        card: Dict[str, Any] = loaded if isinstance(loaded, dict) else {}
 
         # Ensure required fields exist.
         card.setdefault("id", card_id)
@@ -2563,25 +2546,12 @@ class FileContextStore(ContextAssemblerBase):
             existing_content.extend(_normalize_content(raw_content))
             card["content"] = _trim_content_by_recency(existing_content)
 
-        # Atomic write via tmp + os.replace (skip if dry-run mode).
+        # Persist via the repository (skip if dry-run mode). Re-raise on failure so the outer
+        # try/except in record() catches it; the cache is invalidated so assemble() sees the card.
         if not self._dry_run:
-            self._cards_dir.mkdir(parents=True, exist_ok=True)
-            tmp_fd, tmp_path = tempfile.mkstemp(
-                dir=str(self._cards_dir), prefix=".tmp_", suffix=".json"
-            )
-            try:
-                with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
-                    json.dump(card, fh, indent=2, ensure_ascii=False)
-                    fh.write("\n")
-                os.replace(tmp_path, str(card_path))
-                # Invalidate the in-memory cache so the next assemble() sees the new card.
-                self._cache_dirty = True
-            except Exception:  # noqa: BLE001
-                try:
-                    os.unlink(tmp_path)
-                except OSError:
-                    pass
-                raise  # re-raise so the outer try/except in record() catches it
+            if not self._repo.write(card_id, card):
+                raise OSError(f"card repository write failed for {card_id!r}")
+            self._cache_dirty = True
 
     def _read_file_fresh(self, path: str, max_chars: int = _MAX_CARD_REF_ITEM_CHARS) -> str:
         """Read a file's CURRENT content fresh, capped at ``max_chars``. Never raises; "" on failure.
@@ -2705,43 +2675,15 @@ class FileContextStore(ContextAssemblerBase):
         return result
 
     def _count_cards_on_disk(self) -> int:
-        """Count card JSON files on disk (excludes the meta sidecar). Never raises."""
-        try:
-            if not self._cards_dir.exists():
-                return 0
-            return sum(
-                1 for e in self._cards_dir.iterdir()
-                if e.suffix == ".json" and not e.name.startswith(".")
-                and e.name != _BOOTSTRAP_META_FILE
-            )
-        except Exception:  # noqa: BLE001
-            return 0
+        """Count the cards the repository holds (used for the bootstrap-meta card_count).
 
-    def _dir_stamp(self) -> Tuple[float, int]:
-        """Cheap snapshot of cards_dir state: (max_child_mtime, file_count).
-
-        Used to detect external writes (other agents / processes) without
-        reading every card.  Returns (0.0, 0) if the directory does not exist
-        or cannot be stat-ed.
+        Asks the repository rather than scanning the filesystem, so a non-filesystem repo reports
+        the right count. Never raises.
         """
         try:
-            if not self._cards_dir.exists():
-                return (0.0, 0)
-            max_mtime = 0.0
-            count = 0
-            for entry in self._cards_dir.iterdir():
-                if (entry.suffix == ".json" and not entry.name.startswith(".")
-                        and entry.name != _BOOTSTRAP_META_FILE):
-                    count += 1
-                    try:
-                        mt = entry.stat().st_mtime
-                        if mt > max_mtime:
-                            max_mtime = mt
-                    except OSError:
-                        pass
-            return (max_mtime, count)
+            return len(self._repo.load_all())
         except Exception:  # noqa: BLE001
-            return (0.0, 0)
+            return 0
 
     def export_for_embedding(self) -> List[Dict[str, Any]]:
         """Return one item per card suitable for ``VectorStore.sync()``.
@@ -2843,16 +2785,44 @@ class FileContextStore(ContextAssemblerBase):
         except Exception:  # noqa: BLE001
             return []
 
-    def _load_all(self) -> Dict[str, Dict[str, Any]]:
-        """Load all card JSON files from cards_dir. Returns {card_id: card_dict}.
+    def _repo_text_search_candidates(
+        self, task_text: str
+    ) -> Optional[Dict[str, Dict[str, Any]]]:
+        """Candidate cards from the repository's NATIVE text search, or ``None`` to fall back.
 
-        Uses an in-memory cache to avoid re-reading every card on every call.
+        Returns ``None`` (so the caller scans ``_load_all()`` with in-app IDF, today's behavior)
+        when the repository has no native text search OR its search returns ``None`` OR anything
+        goes wrong. Returns ``{card_id: card_dict}`` when the repo served a native-search candidate
+        pool for the keyword arm. Detected by duck-typing (``hasattr``), never an isinstance check,
+        so any repo that exposes a ``search_cards(query, *, limit)`` method participates. Never
+        raises.
+        """
+        search = getattr(self._repo, "search_cards", None)
+        if not callable(search):
+            return None
+        try:
+            # Ask for a generous pool: the keyword arm keeps up to ``_max_cards * 2`` IDF
+            # candidates, so a higher limit lets the repo's text search supply enough rows for the
+            # store's IDF ranking / confidence gate / recency to choose among.
+            limit = max(self._max_cards * 4, 32)
+            result = search(task_text, limit=limit)
+            if result is None:
+                return None
+            return result if isinstance(result, dict) else None
+        except Exception:  # noqa: BLE001 — native search is best-effort; fall back to in-app IDF
+            _log.debug("repo search_cards failed; falling back to in-app IDF", exc_info=True)
+            return None
+
+    def _load_all(self) -> Dict[str, Dict[str, Any]]:
+        """Load all cards via the repository. Returns {card_id: card_dict}.
+
+        Uses an in-memory cache to avoid re-fetching every card on every call.
         Invalidates the cache when:
         - ``_cache_dirty`` is set (after any local write via ``record()`` or
           ``bootstrap()``), OR
-        - the directory's max-child-mtime or file count changed (external write).
+        - the repository's ``revision()`` change-stamp changed (external write).
         """
-        current_stamp = self._dir_stamp()
+        current_stamp = self._repo.revision()
         need_reload = (
             self._cache is None
             or self._cache_dirty
@@ -2861,26 +2831,8 @@ class FileContextStore(ContextAssemblerBase):
         if not need_reload:
             return self._cache  # type: ignore[return-value]
 
-        # Reload from disk.
+        # Reload from the repository.
         self._cache_dirty = False
         self._cache_dir_stamp = current_stamp
-
-        if not self._cards_dir.exists():
-            self._cache = {}
-            return self._cache
-
-        cards: Dict[str, Dict[str, Any]] = {}
-        for entry in self._cards_dir.iterdir():
-            if (entry.suffix != ".json" or entry.name.startswith(".")
-                    or entry.name == _BOOTSTRAP_META_FILE):
-                continue
-            try:
-                with open(entry, "r", encoding="utf-8") as fh:
-                    card = json.load(fh)
-                card_id = card.get("id") or entry.stem
-                cards[card_id] = card
-            except Exception:  # noqa: BLE001 -- corrupt card: skip
-                continue
-
-        self._cache = cards
+        self._cache = self._repo.load_all()
         return self._cache
