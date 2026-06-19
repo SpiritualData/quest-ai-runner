@@ -18,10 +18,17 @@ assembler performs a fully *agentic* retrieval that uses the LLM in two places:
    candidate hits and selects only those that are genuinely relevant to the
    task.  Irrelevant hits never reach the context_view.
 
-3. **Confidence gate.** Only reviewed-relevant hits whose score exceeds
-   ``confidence_min_score`` are injected.  When nothing qualifies the returned
+3. **Confidence gate.** Only reviewed-relevant hits whose RAW similarity score
+   exceeds ``confidence_min_score`` are injected (recency decay re-orders hits but
+   never gates a still-similar one out).  When nothing qualifies the returned
    ``AssembledContext`` is empty and the caller falls back to plain Claude Code
-   (the never-worse guarantee).
+   (the never-worse guarantee).  For learned cards this floor is what makes an
+   unrelated query return NO card and a topic query return ~its own card.
+
+4. **Card-reference resolution.** When a selected hit carries a card ``content``
+   list, its typed references are resolved FRESH through ``reference_resolvers``
+   via the shared ``render_card_content`` routine (same as the keyword arm), so a
+   vector-selected card pulls in the live collection / conversation data.
 
 When no provider is given the agentic steps are skipped: the raw task text is
 the only query and all hits above the confidence gate are kept.
@@ -47,6 +54,13 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase, VectorHit, VectorStore
+from .card_content_render import (
+    MAX_CARD_REF_CHARS,
+    MAX_CARD_REFS,
+    render_card_content,
+    tokenize as _tokenize,
+)
+from .reference_resolver import build_resolver_registry
 
 # Type alias for a seed source callable: returns a list of items suitable for
 # ``VectorStore.sync()`` (each has id/text/payload/fingerprint keys).
@@ -104,9 +118,24 @@ class VectorContextAssembler(ContextAssemblerBase):
     top_k:
         How many nearest neighbours to retrieve per query.
     confidence_min_score:
-        Minimum similarity score for a hit to be considered.  Applied after the
-        LLM review step (or directly when no provider).  Set to ``0.0`` to keep
-        all hits.
+        Minimum similarity score for a hit to be considered.  Applied to the hit's
+        RAW similarity score (the recency decay below only re-orders hits, it does
+        not pull a still-similar hit below the floor).  Set to ``0.0`` to keep all
+        hits.  For the CARD use case (Voyage cosine over learned cards) a modest
+        floor (~0.45) cleanly separates an on-topic card from incidental ones and
+        drops every card on a truly unrelated query; the card wiring sets it
+        explicitly while other callers keep the permissive ``0.0`` default.
+    reference_resolvers:
+        Optional ``{type: ReferenceResolver}`` dict (e.g. a ``collection`` /
+        ``conversation`` / ``query`` resolver) used to resolve a selected card's
+        source-agnostic CONTENT references to FRESH text at render time.  When a
+        vector-selected hit carries a card ``content`` list (the
+        ``QdrantCardVectorStore`` forwards it in the hit payload), each reference
+        is resolved through the matching resolver via the SHARED
+        ``render_card_content`` routine, exactly as the keyword ``FileContextStore``
+        arm does.  Without this the vector arm would render only a card's
+        description and silently drop the live data it points at.  ``None`` (the
+        default) keeps the prior behavior (no card-reference resolution).
     max_in_view:
         Maximum number of hits to include in the rendered context view.
     seed_source:
@@ -137,6 +166,9 @@ class VectorContextAssembler(ContextAssemblerBase):
         half_life_days: float = 30.0,
         max_associations: int = 500,
         seed_source: Optional[_SeedSource] = None,
+        reference_resolvers: Optional[Dict[str, Any]] = None,
+        max_card_refs: int = MAX_CARD_REFS,
+        max_card_ref_chars: int = MAX_CARD_REF_CHARS,
         _clock: Optional[Callable[[], float]] = None,
     ) -> None:
         self._store = vector_store
@@ -149,6 +181,20 @@ class VectorContextAssembler(ContextAssemblerBase):
         self._half_life_days = half_life_days
         self._max_associations = max_associations
         self._seed_source: Optional[_SeedSource] = seed_source
+        # Recency-bound limits for resolving a vector-selected card's ``content`` references.
+        self._max_card_refs = max_card_refs
+        self._max_card_ref_chars = max_card_ref_chars
+        # {type: ReferenceResolver} registry for resolving card content references (collection /
+        # conversation / query / note) FRESH at render time. Built from consumer-injected resolvers;
+        # the built-in ``note`` resolver is always present. No ``file`` resolver is wired here (the
+        # vector arm holds no repo_root file-read policy); a file ref degrades to an unresolved-pointer
+        # line, which is correct for the card use case where references are collections/conversations.
+        try:
+            self._resolvers: Dict[str, Any] = build_resolver_registry(
+                consumer_resolvers=reference_resolvers
+            )
+        except Exception:  # noqa: BLE001 — resolver wiring must never break construction
+            self._resolvers = {}
         # Guard: cold-start seeding runs at most once per process (per instance).
         self._seed_done: bool = False
         # Injectable clock for deterministic tests; defaults to time.time.
@@ -429,15 +475,22 @@ class VectorContextAssembler(ContextAssemblerBase):
             logger.debug("VectorContextAssembler._llm_review failed", exc_info=True)
             return candidates  # on failure keep all (best-effort)
 
-    def _render_hits(self, hits: List[VectorHit]) -> str:
+    def _render_hits(self, hits: List[VectorHit], task_text: str = "") -> str:
         """Render a list of VectorHits into a human-readable context view string.
 
         When a hit carries a rich task-to-context payload (``paths``, ``symbols``,
         ``task``, ``summary``), those fields are surfaced so the consuming agent
         immediately knows where to read.  The age of the association (derived from
         the ``ts`` payload field) is shown when present.
+
+        When a hit carries a card ``content`` list (the ``QdrantCardVectorStore``
+        forwards it for card hits), its source-agnostic references are resolved
+        FRESH through ``self._resolvers`` via the SHARED ``render_card_content``
+        routine and appended, so a vector-selected card pulls in the live
+        collection / conversation data it points at, identically to the keyword arm.
         """
         now = self._clock()
+        task_kws = _tokenize(task_text) if task_text else set()
         parts: List[str] = []
         for hit in hits:
             part_lines = [f"### Vector hit: {hit.id}  (score={hit.score:.3f})"]
@@ -456,9 +509,9 @@ class VectorContextAssembler(ContextAssemblerBase):
                 except (TypeError, ValueError):
                     pass
             # Rich task-to-context payload fields.
-            task_text = hit.payload.get("task", "") or ""
-            if task_text:
-                part_lines.append(f"  matched task: {task_text[:120]}")
+            matched_task = hit.payload.get("task", "") or ""
+            if matched_task:
+                part_lines.append(f"  matched task: {matched_task[:120]}")
             summary = hit.payload.get("summary", "") or ""
             if summary:
                 part_lines.append(f"  summary: {summary[:160]}")
@@ -473,10 +526,24 @@ class VectorContextAssembler(ContextAssemblerBase):
             if path and path not in hit_paths:
                 part_lines.append(f"  path: {path}")
             # Text snippet (for non-association hits).
-            if hit.text and not task_text:
+            if hit.text and not matched_task:
                 snippet = _snippet(hit.text)
                 if snippet:
                     part_lines.append(f"  text: {snippet}")
+            # Source-agnostic card CONTENT: resolve the card's typed references FRESH (recency-bounded)
+            # through the shared render routine, so a vector-selected card pulls in its live data.
+            content = hit.payload.get("content") if hit.payload else None
+            if content:
+                content_lines = render_card_content(
+                    {"content": content},
+                    self._resolvers,
+                    task_kws=task_kws,
+                    max_refs=self._max_card_refs,
+                    max_ref_chars=self._max_card_ref_chars,
+                )
+                if content_lines:
+                    part_lines.append("  content:")
+                    part_lines.extend(content_lines)
             parts.append("\n".join(part_lines))
         return "\n\n---\n\n".join(parts)
 
@@ -516,25 +583,31 @@ class VectorContextAssembler(ContextAssemblerBase):
             if age_days is not None:
                 effective = h.score * (0.5 ** (age_days / half_life))
             else:
-                # No ts: neutral mild decay (treat as 1 half-life old).
+                # No ts (e.g. a card embedding): neutral mild decay for ORDERING only. The
+                # confidence gate below uses the RAW score, so a ts-less card is never pushed
+                # below the floor by this decay; it only affects rank vs dated hits.
                 effective = h.score * 0.5
 
             decayed.append((effective, h))
 
-        # Confidence gate applies to effective (decayed) score.
+        # Confidence gate applies to the RAW similarity score (not the decayed score): the floor is a
+        # "is this semantically similar enough" judgement, independent of age. Recency only re-orders
+        # hits (above), it does not gate a still-similar hit out. This makes a Voyage-cosine card
+        # floor (~0.45) meaningful: the card scores ARE the raw cosines, undistorted by the 0.5x
+        # neutral decay applied to ts-less hits.
         kept_decayed = [
-            (eff, h) for eff, h in decayed if eff >= self._confidence_min_score
+            (eff, h) for eff, h in decayed if h.score >= self._confidence_min_score
         ]
         if not kept_decayed:
             return AssembledContext()
 
-        # Sort by effective score descending, cap at max_in_view.
+        # Sort by effective (decayed) score descending, cap at max_in_view.
         kept_decayed.sort(key=lambda x: x[0], reverse=True)
         kept_decayed = kept_decayed[: self._max_in_view]
         kept = [h for _, h in kept_decayed]
 
-        # Step e: render.
-        context_view = self._render_hits(kept)
+        # Step e: render (pass task_text so card-content references rank + resolve against it).
+        context_view = self._render_hits(kept, task_text)
         card_ids = [h.id for h in kept]
 
         # --- Context transparency: classify each hit as task_memory vs vector bootstrap --------

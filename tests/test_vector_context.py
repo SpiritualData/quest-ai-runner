@@ -1802,3 +1802,95 @@ class TestQdrantVectorStoreQueryEmbedder:
             assert len(all_calls) == 2, (
                 f"expected 2 calls (upsert + search), got {len(all_calls)}"
             )
+
+
+# ---------------------------------------------------------------------------
+# Card-content RESOLUTION in the vector arm + raw-score confidence gate.
+#
+# These lock the two retrieval bugs the card-quality eval surfaced:
+#   Bug 1 — a card SELECTED by the vector arm must RESOLVE its source-agnostic
+#           references (via the wired resolver registry), not just render its
+#           description. Before the fix, resolution lived only in the keyword arm.
+#   Bug 2 — the confidence gate must apply to the RAW similarity score (recency
+#           decay only re-orders), so a card-tuned floor cleanly admits an
+#           on-topic card and drops a weakly-matching one.
+# Fully offline: FakeVectorStore (substring scores) + a stub resolver, no network.
+# ---------------------------------------------------------------------------
+
+class _StubCollectionResolver:
+    """Resolves a ``collection`` reference to FRESH, identifiable text; records calls."""
+
+    def __init__(self) -> None:
+        self.calls: List[Dict[str, Any]] = []
+
+    def resolve(self, locator: Dict[str, Any], *, max_chars: int = 2000) -> str:
+        self.calls.append(locator)
+        name = locator.get("name", "?")
+        cid = locator.get("id", "?")
+        return f"[FRESH ROWS from '{name}' ({cid})]"
+
+
+class TestVectorArmCardResolution:
+    def test_vector_selected_card_resolves_its_reference(self):
+        """A card selected by the vector arm resolves its collection reference FRESH (Bug 1)."""
+        store = FakeVectorStore()
+        store.upsert([{
+            "id": "card:dreams",
+            "text": "dreams journal stress correlation",
+            "payload": {
+                "summary": "Dreams and stress",
+                "content": [{
+                    "id": "c1", "type": "collection", "ts": 1000.0,
+                    "why": "dream journal", "locator": {"name": "Dream Journal", "id": "col_dreams_8821"},
+                }],
+            },
+        }])
+        resolver = _StubCollectionResolver()
+        # provider=None -> no LLM query-gen/review; the raw task text is the only query.
+        asm = VectorContextAssembler(
+            store, provider=None, confidence_min_score=0.0,
+            reference_resolvers={"collection": resolver},
+        )
+        ac = asm.assemble("dreams journal")
+        assert "card:dreams" in ac.card_ids
+        # The reference RESOLVED into the rendered view (the live rows, not just the description).
+        assert "col_dreams_8821" in ac.context_view, ac.context_view
+        assert "FRESH ROWS" in ac.context_view
+        assert resolver.calls, "the collection resolver must have been called for the vector-selected card"
+
+    def test_unwired_reference_type_degrades_gracefully(self):
+        """A reference whose type has no resolver renders an unresolved-pointer line, never errors."""
+        store = FakeVectorStore()
+        store.upsert([{
+            "id": "card:conv",
+            "text": "conversation history recap",
+            "payload": {"content": [{
+                "id": "c1", "type": "conversation", "ts": 1.0,
+                "why": "prior chat", "locator": {"conv_id": "conv_42"},
+            }]},
+        }])
+        # No conversation resolver wired -> graceful unresolved pointer (no raise, no resolution).
+        asm = VectorContextAssembler(store, provider=None, confidence_min_score=0.0)
+        ac = asm.assemble("conversation history")
+        assert "card:conv" in ac.card_ids
+        assert "unresolved" in ac.context_view.lower()
+
+    def test_raw_score_gate_admits_no_ts_card_above_floor(self):
+        """A ts-less (card) hit is gated on its RAW score, not the 0.5x neutral decay (Bug 2)."""
+        store = FakeVectorStore()
+        # Single matching word out of a 2-word query -> raw score 0.5; payload has NO ts.
+        store.upsert([{"id": "card:billing", "text": "billing", "payload": {"summary": "billing"}}])
+        asm = VectorContextAssembler(store, provider=None, confidence_min_score=0.45)
+        ac = asm.assemble("billing unrelated")
+        # Raw 0.5 >= 0.45 -> kept. (Under the old decayed gate, 0.5*0.5=0.25 < 0.45 would drop it.)
+        assert "card:billing" in ac.card_ids
+
+    def test_confidence_floor_drops_weakly_matching_card(self):
+        """A card whose RAW score is below the floor is dropped (Bug 2 precision cut)."""
+        store = FakeVectorStore()
+        # One match out of four query words -> raw score 0.25, below a 0.45 floor.
+        store.upsert([{"id": "card:weak", "text": "billing", "payload": {"summary": "billing"}}])
+        asm = VectorContextAssembler(store, provider=None, confidence_min_score=0.45)
+        ac = asm.assemble("billing two three four")
+        assert ac.card_ids == []
+        assert ac.context_view == ""

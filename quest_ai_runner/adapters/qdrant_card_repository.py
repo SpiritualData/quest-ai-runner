@@ -542,6 +542,12 @@ class QdrantCardVectorStore(VectorStoreBase):
                     "paths": paths,
                     "summary": payload.get("summary", "") or payload.get("name", ""),
                     "kind": "bootstrap",
+                    # Carry the card's source-agnostic CONTENT (typed references / notes) so the
+                    # VectorContextAssembler can resolve them FRESH via its resolver registry. Without
+                    # this the vector arm would render only the card's description and silently drop
+                    # the live collection / conversation data the card points at.
+                    "content": payload.get("content") or [],
+                    "card_id": card_id,
                 }
                 hits.append(VectorHit(id=f"card:{card_id}", score=float(r.score), text=text, payload=hit_payload))
             return hits

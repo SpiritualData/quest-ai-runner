@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Context-card RETRIEVAL quality: vector-selected cards now RESOLVE their references, and an
+  unrelated query returns no card.** Two retrieval bugs made learned cards unusable end to end even
+  though card LEARNING was correct:
+  1. **References were resolved only in the keyword arm.** Resolution lived inside
+     `FileContextStore._render_card_content`, so a card SELECTED by the semantic
+     `VectorContextAssembler` rendered only its description and silently dropped the live
+     collection / conversation data it pointed at. The render logic (recency+relevance ranking,
+     budgeted resolution through the resolver registry) is now extracted into ONE shared routine,
+     `adapters/card_content_render.py::render_card_content`, used by BOTH arms. `VectorContextAssembler`
+     gained a `reference_resolvers=` param and resolves each selected card's `content` via the shared
+     routine; `QdrantCardVectorStore.search` now forwards the card's `content` (and `card_id`) in the
+     hit payload so the vector arm has the references to resolve. `FileContextStore` is unchanged in
+     behavior (it delegates to the same routine).
+  2. **No relevance cutoff: every query returned ALL of a user's cards.** The confidence gate now
+     applies to the hit's RAW similarity score (recency decay only re-orders hits, it never pushes a
+     still-similar hit below the floor), making a Voyage-cosine card floor meaningful. Calibrated
+     against the card-quality eval (on-topic cards score ~0.50-0.58, incidental ones <=0.41), so a
+     ~0.45 floor admits a topic query's own card and drops every card on a truly unrelated query.
+     The global default stays the permissive `0.0`; the card wiring sets the floor explicitly.
+  Verified by `evaluation/card_quality_eval.py` (real model + Voyage): 0/4 -> 4/4 select+resolve and
+  1/1 clean-on-unrelated, stable across runs. New offline regression tests in
+  `tests/test_vector_context.py::TestVectorArmCardResolution` lock the vector-arm resolution and the
+  raw-score gate. Generic by construction: all resolution still goes through the injected resolver
+  registry (a type with no resolver degrades to an unresolved-pointer line).
+
 ### Added
 - **Conversational stage narration: one continuous "thinking out loud" train of thought
   (`OrchestratorConfig.narrate`, `narration_system_prompt`).** When `narrate=True`, the orchestrator
