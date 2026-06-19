@@ -22,6 +22,7 @@ from quest_ai_runner.core.orchestrator import (
     Orchestrator,
     OrchestratorConfig,
     _card_update_store,
+    _normalize_card_edits,
     _parse_future_context,
 )
 
@@ -332,3 +333,35 @@ def test_no_card_update_store_no_call_no_instruction():
     assert res.kind == "deep"
     assert all(DEEP_FUTURE_CONTEXT_INSTRUCTION not in b for b in runner.briefs)
     assert provider.updater_calls == 0
+
+
+# --------------------------------------------------------------------------- edit normalization
+# Real models (and tool-use via provider.plan) return the edits in several shapes: a
+# {"edits": [...]} object, a BARE list of edit objects, or a single {card_id...}. The updater must
+# accept all of them (a live smoke test caught the bare-list shape being silently dropped).
+
+
+def test_normalize_card_edits_accepts_edits_object():
+    edit = {"card_id": "c1", "add": [{"type": "note", "locator": {"text": "x"}}]}
+    assert _normalize_card_edits({"edits": [edit]}) == [edit]
+
+
+def test_normalize_card_edits_accepts_bare_list():
+    edits = [{"card_id": "c1"}, {"card_id": "c2"}]
+    assert _normalize_card_edits(edits) == edits
+
+
+def test_normalize_card_edits_accepts_single_edit_dict():
+    edit = {"card_id": "dreams", "name": "Dreams"}
+    assert _normalize_card_edits(edit) == [edit]
+
+
+def test_normalize_card_edits_unwraps_list_with_wrapper():
+    assert _normalize_card_edits([{"edits": [{"card_id": "c1"}]}]) == [{"card_id": "c1"}]
+
+
+def test_normalize_card_edits_rejects_junk():
+    assert _normalize_card_edits(None) == []
+    assert _normalize_card_edits("nope") == []
+    assert _normalize_card_edits({"nothing": 1}) == []
+    assert _normalize_card_edits([1, 2, "x"]) == []

@@ -730,20 +730,42 @@ CARD_UPDATE_TOOL: Dict[str, Any] = {
 
 CARD_UPDATE_PROMPT = """\
 You maintain a user's reusable CONTEXT CARDS so future similar requests start better-grounded.
-A deep task just finished for this user. Decide the MINIMAL set of card edits that would best help a
-FUTURE similar request by THIS user, and correct any stale prior items you can see.
+A deep task just finished for this user. Decide a small, high-signal set of card edits that best help
+a FUTURE similar request by THIS user, and correct any stale prior items you can see.
+
+The VALUE of a card is its RESOLVABLE REFERENCES, not its prose. A card that has only a name and a
+description but no reference items cannot pull fresh data later, so it is nearly useless. Capturing
+the references is the MAIN job.
 
 Rules:
-  - PREFER resolvable references over copied text: add a "collection" item with {{name, id}} (or a
-    "file" with {{path}}) the run actually used, rather than pasting a snapshot. Use a "note"
-    (locator {{text: ...}}) ONLY when there is a durable fact with nothing external to point at.
-  - To UPDATE an existing card, reuse its exact card_id from CURRENT CARDS below. To capture
-    something new, use a short new slug as card_id.
-  - When a CURRENT card holds an item that is now wrong or outdated, correct it via "replace"
-    (its item_id plus the corrected item) or drop it via "remove".
-  - You may set a card's "name"/"description" when it would make the card easier to find later.
-  - Keep it small and high-signal. If nothing is worth saving, return an empty edits list.
+  - Extract EVERY external source named in the FUTURE-CONTEXT or the executed work as a resolvable
+    reference and put it in the card's "add" list:
+      * a collection named with an id  -> {{"type": "collection", "locator": {{"name": "...", "id": "..."}}, "why": "..."}}
+      * a file path                    -> {{"type": "file", "locator": {{"path": "..."}}, "why": "..."}}
+    Add one item for EACH source named. Do NOT return a card whose "add" is empty when the
+    future-context names collections or files.
+  - PREFER references over copied text. Use a "note" ({{"locator": {{"text": "..."}}}}) ONLY for a
+    durable fact with nothing external to point at.
+  - Group related references onto ONE topical card. Set its "name"/"description" so it is easy to
+    find later.
+  - To UPDATE an existing card, reuse its exact card_id from CURRENT CARDS below; for something new,
+    use a short new slug as card_id.
+  - Correct a wrong or outdated existing item via "replace" (its item_id plus the corrected item),
+    or drop it via "remove".
+  - Keep the NUMBER of cards small, but when the FUTURE-CONTEXT names any collection, file, or
+    durable fact, you MUST return at least one edit that captures it. An empty edits list is correct
+    ONLY when the future-context is genuinely empty or purely transient (nothing reusable).
   - Do not use em dashes. Use a comma, a colon, or parentheses instead.
+
+EXAMPLE: if the future-context says the dream journal is the collection "Dream Journal" (id col_123)
+and stress is tracked in "Daily Mood" (id col_456), return:
+  {{"edits": [
+    {{"card_id": "dreams", "name": "Dreams and stress",
+      "add": [
+        {{"type": "collection", "locator": {{"name": "Dream Journal", "id": "col_123"}}, "why": "the user's dream entries"}},
+        {{"type": "collection", "locator": {{"name": "Daily Mood", "id": "col_456"}}, "why": "daily stress levels to correlate"}}
+      ]}}
+  ]}}
 
 --- THE USER'S REQUEST / GOAL ---
 {request}
@@ -757,6 +779,31 @@ Rules:
 --- THIS USER'S CURRENT RELEVANT CARDS (id, name, and current items) ---
 {current_cards}
 """
+
+
+def _normalize_card_edits(raw: Any) -> List[Dict[str, Any]]:
+    """Coerce a card-updater LLM result into a list of edit dicts. Accepts every shape models
+    actually return: a ``{"edits": [...]}`` object, a BARE list of edit objects, a single
+    ``{"card_id": ...}`` edit, or a list that contains a wrapper object. Returns [] on anything else.
+    Never raises."""
+    try:
+        if isinstance(raw, dict):
+            if isinstance(raw.get("edits"), list):
+                return [e for e in raw["edits"] if isinstance(e, dict)]
+            return [raw] if raw.get("card_id") else []
+        if isinstance(raw, list):
+            out: List[Dict[str, Any]] = []
+            for el in raw:
+                if isinstance(el, dict):
+                    if isinstance(el.get("edits"), list):
+                        out.extend(e for e in el["edits"] if isinstance(e, dict))
+                    elif el.get("card_id"):
+                        out.append(el)
+            return out
+    except Exception:  # noqa: BLE001
+        pass
+    return []
+
 
 # STEP 1 (User Input Understanding): rewrite a short/anaphoric latest message into ONE
 # self-contained instruction (a goal condition) using ONLY the provided conversation context.
@@ -2240,8 +2287,12 @@ class Orchestrator:
                 current_cards=current_view or "(no current cards)",
             )
             # Prefer a forced-tool structured return; degrade to text + _extract_json on a provider
-            # that only does plain answers. Any miss -> do nothing.
+            # that only does plain answers. The model can return an empty set even when the
+            # future-context names reusable sources, so retry ONCE on empty (still at most two cheap
+            # calls). Any miss after that -> do nothing.
             edits = self._call_card_updater(prompt, model)
+            if not edits:
+                edits = self._call_card_updater(prompt, model)
             if not edits:
                 return 0
             return self._apply_card_edits(store, edits, user_id)
@@ -2259,19 +2310,18 @@ class Orchestrator:
                 raw = self.provider.plan(prompt, model=model, tool_schema=CARD_UPDATE_TOOL)
         except Exception:  # noqa: BLE001 — fall through to the text path
             raw = None
-        if not isinstance(raw, dict):
+        # plan() may return a dict, a bare list (tool args as an array), or None. Only fall back to
+        # the text path when it gave us nothing usable.
+        if not isinstance(raw, (dict, list)) or (isinstance(raw, list) and not raw):
             try:
                 txt = self.provider.answer([{"role": "user", "content": prompt}], model=model)
             except Exception:  # noqa: BLE001
                 return []
             try:
-                raw = json.loads(_extract_json(txt or "") or "{}")
+                raw = json.loads(_extract_json(txt or "") or "null")
             except Exception:  # noqa: BLE001 — parse miss: do nothing
                 return []
-        if not isinstance(raw, dict):
-            return []
-        edits = raw.get("edits")
-        return [e for e in edits if isinstance(e, dict)] if isinstance(edits, list) else []
+        return _normalize_card_edits(raw)
 
     def _apply_card_edits(self, store: Any, edits: List[Dict[str, Any]],
                           user_id: Optional[str]) -> int:
