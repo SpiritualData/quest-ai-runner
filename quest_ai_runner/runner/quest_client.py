@@ -576,7 +576,7 @@ class QuestClient:
             )
         except QuestApiError as e:
             if e.status == 404:
-                log.debug("list_guidance_cards: endpoint not available on this backend (404) — skipping")
+                log.info("list_guidance_cards: endpoint not available on this backend (404) — skipping")
             else:
                 log.warning("list_guidance_cards failed: %s", e)
             return []
