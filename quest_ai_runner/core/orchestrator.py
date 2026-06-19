@@ -623,16 +623,27 @@ Do NOT use em dashes.
 # NO em dashes anywhere (hard brand rule). Reserved replies: MORE_CONTEXT_NEEDED / CLARIFY: <q>.
 RESOLVE_REQUEST_PROMPT = """\
 You resolve what a user's latest message means so downstream work targets the right thing.
-Given the recent conversation and the latest user message, rewrite the latest message as ONE
-self-contained instruction: a goal condition stating what would make this request satisfied.
-Use ONLY the provided context to resolve references like "it", "that", "the first one".
-Rules:
-- If the message references something NOT present in the provided context, reply exactly: MORE_CONTEXT_NEEDED
-- If it cannot be resolved even in principle without asking the user, reply: CLARIFY: <one short question>
+You are given the CURRENT conversation (and sometimes OTHER past conversations that may be
+unrelated), plus the user's latest message. Rewrite the latest message as ONE self-contained
+instruction: a goal condition stating what would satisfy the request.
+
+Resolve references ("it", "that", "the first one", "the second one", "do it", "yes") against the
+CURRENT conversation. When the CURRENT conversation contains the referent, resolve it: it lists
+items and the message picks one by position or description ("the second one" = the second item it
+listed), or it proposed an action and the message accepts it ("do it" = carry out that proposal).
+Use an OTHER past conversation ONLY when the latest message clearly continues that specific thread
+("like we discussed" / "from yesterday"). Never borrow a referent from an unrelated conversation
+just because it happens to contain a list, an option, or a proposal.
+
+Rules (check in order):
+- If the referent is genuinely missing from the CURRENT conversation (for example "the third one"
+  when fewer than three were offered, or "do it" / "go ahead" when nothing actionable was proposed),
+  reply: CLARIFY: <one short question>. Do NOT invent or borrow a referent to avoid asking.
+- If the latest message explicitly refers to another conversation or an earlier time and that thing
+  is not in the provided context, reply exactly: MORE_CONTEXT_NEEDED
 - Otherwise reply with ONLY the rewritten self-contained instruction, nothing else.
 Do not use em dashes. Be concise and concrete.
 
-Conversation context:
 {conv_context}
 
 Latest user message: {user_message}
@@ -2180,11 +2191,15 @@ class Orchestrator:
         model = self.registry.resolve_tier(self.cfg.planner_tier)
 
         cur = store.current_slice(conv_id, user_message)
-        conv_ctx_text = (cur.text or "") if cur is not None else ""
+        cur_text = (cur.text or "") if cur is not None else ""
+        # Label the CURRENT conversation distinctly from any OTHER conversations pulled on widening,
+        # so the resolver only borrows a referent from another thread when it clearly continues it
+        # (otherwise a bare "do it" / "the third one" must CLARIFY, never grab an unrelated list).
+        conv_ctx_text = (f"=== CURRENT CONVERSATION ===\n{cur_text}" if cur_text else "")
 
         def _resolve(ctx_text: str) -> str:
             prompt = RESOLVE_REQUEST_PROMPT.format(
-                conv_context=ctx_text or "(no prior conversation available)",
+                conv_context=ctx_text or "=== CURRENT CONVERSATION ===\n(no prior conversation available)",
                 user_message=user_message)
             try:
                 out = self.provider.answer([{"role": "user", "content": prompt}], model=model)
@@ -2195,13 +2210,15 @@ class Orchestrator:
         reply = _resolve(conv_ctx_text)
 
         if reply == "MORE_CONTEXT_NEEDED":
-            # Pull related past conversations and try ONCE more.
+            # Pull related past conversations and try ONCE more, clearly marked as possibly unrelated.
             try:
                 rel = store.related_slices(user_message, conv_scope, exclude_conv_id=conv_id)
             except Exception:  # noqa: BLE001
                 rel = None
             if rel is not None and rel.text:
-                conv_ctx_text = (conv_ctx_text + "\n\n" + rel.text if conv_ctx_text else rel.text)
+                related_block = f"=== OTHER PAST CONVERSATIONS (may be unrelated) ===\n{rel.text}"
+                conv_ctx_text = (conv_ctx_text + "\n\n" + related_block if conv_ctx_text
+                                 else related_block)
             reply = _resolve(conv_ctx_text)
             if reply == "MORE_CONTEXT_NEEDED" or reply.startswith("CLARIFY:"):
                 # Still unresolved: ask the user with a generic short question.
@@ -2471,14 +2488,21 @@ class Orchestrator:
                 _inbox = self.input_inbox
                 pending_inputs = lambda: _inbox.drain(_conv_key)  # noqa: E731
 
-        # --- STEP 1: USER INPUT UNDERSTANDING (resolve the request) ---------------------------
+        # --- STAGE 1: USER INPUT UNDERSTANDING (resolve the request) --------------------------
+        # Three distinct stages follow, each relating to the goal condition but kept separate:
+        #   1. UNDERSTAND the input -> a self-contained GOAL CONDITION (uses CONVERSATION context).
+        #   2. FIND CONTEXT to understand how to ACHIEVE the goal (STAGE 2 below: context selection
+        #      driven by the goal condition, not the raw message).
+        #   3. PLAN how to achieve the goal (the planner loop, using stage-2 achievement context and
+        #      free to search for more / as a planned gather step).
         # A short or anaphoric input ("ok do it", "the first one") can't be understood alone. Only
         # when a ConversationStore is wired, a conv_id is present, AND a cheap keyword check says the
         # input leans on context, do we pull a relevant slice of the conversation and ask the model
-        # ONCE to rewrite the message as a self-contained GOAL CONDITION (what success looks like).
-        # A self-contained input skips this entirely (no LLM hop, ZERO added latency). The resolved
-        # goal_condition then drives context SELECTION (Step 2) and rides along in context_view;
-        # the planner still sees the user's LITERAL words so word-for-word fidelity is preserved.
+        # ONCE to rewrite the message as a self-contained goal condition. A self-contained input skips
+        # this entirely (no LLM hop, ZERO added latency). The goal condition is the OUTPUT of stage 1
+        # and the INPUT to stages 2 and 3; the conversation slice is a stage-1 input only and is NOT
+        # passed to the planner (which would be noise). The planner still sees the user's LITERAL
+        # words too, so word-for-word fidelity is preserved.
         goal_condition = user_message
         conv_ctx_text = ""
         if (self.conversation_store is not None and conv_id
@@ -2497,18 +2521,18 @@ class Orchestrator:
                 return self._finish_understanding_clarify(
                     res, emit=emit, exec_record=exec_record, user_message=user_message,
                     ctx_meta=_ctx_meta)
-            # Understanding actually ran (resolved request and/or pulled conversation context):
-            # emit a streamed event so the UI shows it immediately, and prepend the pulled
-            # conversation context + resolved request to context_view as a labelled block.
-            if goal_condition != user_message or conv_ctx_text:
+            # STAGE 1 produced a goal condition. Emit a streamed event so the UI shows it at once.
+            # The conversation slice (``conv_ctx_text``) was INPUT to STAGE 1 (understanding) ONLY --
+            # it does NOT flow to the planner. The planner (STAGE 3) plans how to ACHIEVE the goal
+            # condition using the achievement context STAGE 2 finds (context selection off the goal
+            # condition, below) plus whatever it searches for itself; the raw chat slice would just be
+            # noise there. So we inject ONLY the resolved request, not the conversation context.
+            if goal_condition != user_message:
                 emit.emit(ProgressEvent(
                     type=EVENT_UNDERSTANDING,
                     text=f"Understood as: {goal_condition}",
                     data={"goal_condition": goal_condition}))
-                _understood_block = (
-                    "--- CONVERSATION CONTEXT ---\n" + conv_ctx_text + "\n"
-                    if conv_ctx_text else ""
-                ) + f"--- UNDERSTOOD REQUEST ---\n{goal_condition}\n"
+                _understood_block = f"--- UNDERSTOOD REQUEST ---\n{goal_condition}\n"
                 context_view = (_understood_block + "\n" + context_view
                                 if context_view else _understood_block)
 
