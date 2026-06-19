@@ -382,7 +382,7 @@ class OrchestratorConfig:
     # for the input) and, if unmet, regenerates with steering — up to this many attempts. Only
     # engages when a GuidanceProvider is wired (there is a quality bar to check). 1 = no verify-retry.
     answer_goal_max_iterations: int = 2
-    planner_tier: str = "haiku"  # the cheap model that runs the planner step
+    planner_tier: str = "balanced"  # routing tier: balanced catches misclassifications haiku misses
     # Per-step planner-view leaning (see DEFAULT_PLANNER_* above). The full ``gathered`` is always
     # kept for the final answer; these only trim what the cheap PLANNER re-reads each re-plan step.
     planner_recent_full: int = DEFAULT_PLANNER_RECENT_FULL
