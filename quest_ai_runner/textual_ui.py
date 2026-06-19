@@ -972,10 +972,12 @@ class QuestAITerminal(App):
 
         elif t == ev["milestone"]:
             if text:
-                # Keep the milestone short — the full goal text repeats in the answer.
-                lower = text.lower()
-                label = "Done" if ("completed" in lower or "done" in lower) else text[:55]
-                log.write(f"  [green]✓[/green] [dim]{label}[/dim]")
+                # Show the first sentence of the goal as a clean completion line.
+                first = text.split(".")[0].strip()
+                label = first if first else text[:70]
+                log.write(Text(""))
+                log.write(f"  [green bold]✓[/green bold]  {label}")
+                log.write(Text(""))
 
         elif t == ev["result"]:
             # Non-streamed answers arrive here; streamed ones are in _answer_parts.
