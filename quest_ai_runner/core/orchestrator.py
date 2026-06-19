@@ -127,8 +127,14 @@ section, then answer -- exactly like a careful human reading the real source.
 
 CODE / FILE CHANGE TASKS (highest priority):
   If the request means changing code or files (fix bug, implement feature, refactor, edit/apply
-  a file, etc.), choose action="deep" IMMEDIATELY. Do NOT read first. The deep runner is a full
-  coding agent — it explores and edits itself. Describing a fix instead of executing is a FAILURE.
+  a file, expand/collapse/toggle/show/hide a UI element, etc.), choose action="deep" IMMEDIATELY.
+  Do NOT read first. The deep runner is a full coding agent -- it explores and edits itself.
+  Describing a fix instead of executing is a FAILURE.
+
+  WHEN SEARCHES RETURN NOTHING: if you searched/grepped for a component, file, or symbol and
+  got no results (or "pattern not found"), that is NOT a reason to answer with generic advice.
+  Choose "deep" -- the deep runner can grep and browse the codebase itself. Never give a
+  'here is how you would implement this' guide when the user asked you to actually do it.
 
 CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
   The CONTEXT below only LOCATES what exists (a one-line summary per item). It is NOT a
@@ -140,11 +146,13 @@ CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
   CRITICAL: Do NOT answer with "I need to X" or "I should X" or "To fix this, I need to...".
   These are NOT answers -- they are unexecuted tasks. If you realize work needs doing, choose
   "deep" immediately and let the runner do it. NEVER describe work in an answer; ALWAYS execute it.
+  NEVER say "if you provide the file name I can help" -- find the file yourself via "deep".
 
   Recognize code-change tasks by keywords: "fix", "bug", "break", "implement", "build", "refactor",
-  "edit", "update", "change", "add", "remove", "delete", "rewrite", "apply", "make". If the user
-  asks you to fix/implement/change something, escalate to "deep" immediately -- do NOT answer
-  about what you think the fix should be.
+  "edit", "update", "change", "add", "remove", "delete", "rewrite", "apply", "make", "expand",
+  "collapse", "toggle", "show", "hide", "open", "close", "display", "render". If the user asks
+  you to change something, escalate to "deep" immediately -- do NOT answer about what you think
+  the fix should be.
 
   If you have already read and gathered context, and now realize execution is needed: choose
   action="answer" WITH deferred_deep. The answer can acknowledge what was found, but deferred_deep
@@ -1251,42 +1259,6 @@ class Orchestrator:
         """
         tier = hint or plan.model_tier or default_tier
         return self.registry.resolve_tier(tier)
-
-    def _llm_detects_punt(self, text: Optional[str], user_message: Optional[str]) -> bool:
-        """Fast LLM check: did the answer punt instead of doing the requested work?
-
-        Catches cop-outs that regex misses: 'if you can provide the file name I can help',
-        'I would need to dig further', 'the source files are not available', generic
-        implementation guides given instead of actual code changes.
-
-        Uses the fast model tier for low latency.  Never raises.
-        """
-        if not text or not user_message or self.deep_runner is None:
-            return False
-        try:
-            prompt = (
-                "USER REQUEST:\n" + (user_message or "")[:400] + "\n\n"
-                "ASSISTANT RESPONSE:\n" + (text or "")[:1500] + "\n\n"
-                "Did the assistant PUNT? A punt means it:\n"
-                "- Gave a generic 'how to implement' guide instead of actual code changes\n"
-                "- Said it can't find the files and asked the user to provide them\n"
-                "- Described what should be done without doing it\n"
-                "- Said 'once you provide X I can help you'\n"
-                "- Gave a theoretical walkthrough instead of reading/editing real files\n\n"
-                "Reply with exactly one word: PUNTED or EXECUTED"
-            )
-            model = self.registry.resolve_tier("fast")
-            provider = self.get_provider_for_model(model)
-            response = provider.answer(
-                [{"role": "user", "content": prompt}],
-                model=model,
-            )
-            punted = "PUNTED" in (response or "").upper()
-            if punted:
-                log.info("LLM punt detection: answer is a cop-out, escalating to deep")
-            return punted
-        except Exception:  # noqa: BLE001
-            return False
 
     def _grounded_answer(self, user_message: str, transcript: str, context_view: str,
                          gathered: List[Dict[str, Any]], model: str, partial: bool,
@@ -2568,7 +2540,7 @@ class Orchestrator:
             # turn ends having only TALKED about the fix instead of doing it (the "it just finishes
             # the request" regression). Re-wired here so a described-but-unexecuted fix still
             # escalates to a deep run that actually applies it.
-            elif _answer_describes_unexecuted_work(text) or self._llm_detects_punt(text, user_message):
+            elif _answer_describes_unexecuted_work(text):
                 should_defer_deep = {"goal": f"Execute the work the answer describes: {user_message}",
                                       "rationale": "auto-detected unexecuted work in answer (fallback)"}
                 if emit is not None:
