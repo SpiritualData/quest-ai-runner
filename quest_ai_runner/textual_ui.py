@@ -380,7 +380,7 @@ class QuestAITerminal(App):
 
     #deep {
         height: auto;
-        max-height: 18;
+        max-height: 10;
         border-left: thick $warning 40%;
         padding: 0 1;
         margin: 0 1;
@@ -953,10 +953,7 @@ class QuestAITerminal(App):
                 if goal:
                     log.write(Text(""))
                     log.write(Text(goal, style="bold cyan"))
-                # Auto-open detail panel for the first run (user can close with d).
-                if len(self._deep_seen) == 1:
-                    n = len(self._deep._runs)
-                    self._deep_detail.open_for(run_id, goal or "executing work…", [], pos=1, total=n)
+                pass
             self._cur_deep_run = run_id
             if text:
                 self._deep.update_run_output(run_id, text)

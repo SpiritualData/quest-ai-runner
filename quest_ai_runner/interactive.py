@@ -594,14 +594,8 @@ class _DeepRunTracker:
             if not self._runs:
                 return ""
 
-            n_runs = len(self._runs)
             if lines_per_run is None:
-                if n_runs == 1:
-                    lines_per_run = 5
-                elif n_runs == 2:
-                    lines_per_run = 3
-                else:
-                    lines_per_run = 2
+                lines_per_run = 1
 
             lines = []
             for run_id, info in sorted(self._runs.items()):
