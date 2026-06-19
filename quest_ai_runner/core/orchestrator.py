@@ -3016,12 +3016,13 @@ class Orchestrator:
 
         # TOP-TIER GOAL VERIFICATION — the SAME goal loop, now applied to a plain ANSWER so EVERY
         # input is pursued as a goal. Hold the answer to the user's overall goal at the quality bar
-        # (the guidance cards selected for this input) and regenerate with steering (the prior answer
-        # + why it fell short + what to fix) until it meets the bar or attempts run out. Engages only
-        # when there IS a quality bar (a GuidanceProvider is wired) and we are not deferring to a deep
-        # run (which ran its own verification). Best-effort: never breaks the turn.
-        if (not should_defer_deep and self.guidance is not None
-                and self.cfg.answer_goal_max_iterations > 1):
+        # and regenerate with steering (the prior answer + why it fell short + what to fix) until it
+        # meets the bar or attempts run out. When the verifier says the answer lacks the context needed
+        # to be definitive (need_more_context=True), escalate to deep so the deep runner can search
+        # further — never accept "I couldn't find it" as a final answer when more searching is possible.
+        # Engages whenever we are not deferring to a deep run (which ran its own verification).
+        # Best-effort: never breaks the turn.
+        if not should_defer_deep and self.cfg.answer_goal_max_iterations > 1:
             try:
                 overall_goal = (plan.goal or "").strip() or (
                     "Fully and correctly answer the user's request to their satisfaction: "
@@ -3035,6 +3036,32 @@ class Orchestrator:
                         if emit is not None and verdict and verdict.get("met"):
                             emit.status("answer verified against the goal.")
                         break
+                    # When the verifier says the answer lacked the context needed to be definitive,
+                    # escalate to deep so it can search further. Regenerating with the SAME gathered
+                    # context won't help — the deep runner can grep/read on its own.
+                    if verdict.get("need_more_context") and self.deep_runner is not None:
+                        if emit is not None:
+                            emit.status("need more context to answer — searching further…")
+                        _context_q = verdict.get("context_query") or user_message
+                        _esc_plan = PlanDecision(
+                            action="deep",
+                            goal=_truncate_goal(overall_goal),
+                            deep_brief=(
+                                f"{user_message}\n\n"
+                                "NOTE: An initial search was done but the result was inconclusive. "
+                                f"What is missing: {_context_q}. "
+                                "Search more thoroughly and give a definitive answer."
+                            ),
+                            rationale="answer verification escalated to deep (insufficient context)",
+                        )
+                        _esc_model = self._answer_model(_esc_plan, "opus", hint=model_hint)
+                        _esc_res = self._run_deep(
+                            _esc_plan, user_message, _esc_model,
+                            emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
+                            gathered=gathered, quality_standards=quality_standards,
+                            pending_inputs=pending_inputs, model_hint=model_hint,
+                            ctx_meta=_ctx_meta)
+                        return finish(_esc_res)
                     if emit is not None:
                         emit.status("answer not yet at the bar, improving it…")
                     _new = self._drain_pending(pending_inputs)

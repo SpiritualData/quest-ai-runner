@@ -28,7 +28,8 @@ def test_plan_read_then_answer():
 
     assert res.kind == "answer"
     assert retrieval.read_calls == ["README.md"]      # it actually read before answering
-    assert provider.plan_calls == 2
+    # plan_calls = 2 loop steps + 1 post-answer verification call (answer_goal_max_iterations)
+    assert provider.plan_calls == 3
     assert provider.answer_calls == 1
     # The README content was injected into the grounding the answer saw.
     joined = "\n".join(m["content"] for m in provider.last_answer_messages)
@@ -466,7 +467,10 @@ def test_loop_feeds_lean_view_to_planner_on_replan():
     cfg = OrchestratorConfig(max_steps=12, planner_recent_full=2, planner_compress_over=4)
     res = _orch(provider, retrieval, config=cfg).run("question")
     assert res.kind == "answer"
-    last_prompt = provider.last_plan_prompt
+    # Use plan_prompts[-2]: the last PLANNER prompt; plan_prompts[-1] is the post-answer
+    # verification call (answer_goal_max_iterations), which uses the VERIFY_GOAL_PROMPT, not
+    # the planner prompt — so "EARLIER READS" would not appear there.
+    last_prompt = provider.plan_prompts[-2]
     assert "EARLIER READS" in last_prompt          # leaning engaged on later steps
     # The oldest full bodies are compressed out of the planner view (only recent kept verbatim).
     assert last_prompt.count(big) <= cfg.planner_recent_full
@@ -496,8 +500,10 @@ def test_repeat_context_off_resends_full_on_replan():
     res = _orch(provider, retrieval).run(
         "q", transcript=_TRANSCRIPT, context_view=_CONTEXT)
     assert res.kind == "answer"
-    assert len(provider.plan_prompts) == 2
-    for p in provider.plan_prompts:
+    # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2] is the post-answer verification
+    # call (answer_goal_max_iterations) using VERIFY_GOAL_PROMPT — not checked here.
+    assert len(provider.plan_prompts) == 3
+    for p in provider.plan_prompts[:2]:
         assert _CONTEXT in p
         assert "the latest message" in p             # full transcript present each step
     assert "unchanged since step 1" not in provider.plan_prompts[0]
@@ -513,7 +519,9 @@ def test_repeat_context_on_step1_full_replan_abbreviated():
     res = _orch(provider, retrieval, config=cfg).run(
         "q", transcript=_TRANSCRIPT, context_view=_CONTEXT)
     assert res.kind == "answer"
-    assert len(provider.plan_prompts) == 2
+    # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2] is the post-answer verification
+    # call (answer_goal_max_iterations) using VERIFY_GOAL_PROMPT — not checked here.
+    assert len(provider.plan_prompts) == 3
     step1, replan = provider.plan_prompts[0], provider.plan_prompts[1]
     # Step 1: full context + transcript.
     assert _CONTEXT in step1
