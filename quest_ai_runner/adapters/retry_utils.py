@@ -123,7 +123,7 @@ def retry_transient(max_retries: int = 3, base_delay: float = 1.0) -> Callable:
                     delay = base_delay * (2 ** attempt)  # exponential: 1, 2, 4, 8, ...
                     jitter = random.uniform(0, delay * 0.1)  # ±10% jitter
                     total_delay = delay + jitter
-                    _log.warning(
+                    _log.info(
                         f"{func.__name__} attempt {attempt + 1} failed ({type(exc).__name__}); "
                         f"retrying in {total_delay:.2f}s"
                     )
