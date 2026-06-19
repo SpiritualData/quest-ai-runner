@@ -917,7 +917,8 @@ class _TurnRenderer:
 
             # If this is a new/first exec event for this run, register it
             if run_id != self._current_deep_run_id:
-                goal = data.get("goal") or "executing work…"
+                raw_goal = (data.get("goal") or "").strip()
+                goal = (raw_goal[:1].upper() + raw_goal[1:]) if raw_goal else "Executing work…"
                 self._deep_tracker.add_run(run_id, goal)
                 self._current_deep_run_id = run_id
                 # Print goal header once per run

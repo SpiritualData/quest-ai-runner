@@ -945,9 +945,10 @@ class QuestAITerminal(App):
         elif t == ev["exec"]:
             run_id = data.get("run_id") or "default"
             goal = (data.get("goal") or "").strip()
+            goal = goal[:1].upper() + goal[1:] if goal else ""
             if run_id not in self._deep_seen:
                 self._deep_seen.add(run_id)
-                self._deep.add_run(run_id, goal or "executing work…")
+                self._deep.add_run(run_id, goal or "Executing work…")
                 # Write the goal header to the transcript ONCE per run — and only
                 # when it's a real goal, not the generic "executing…" fallback.
                 if goal:
