@@ -176,34 +176,35 @@ class TestPlannerPromptGates:
             max_reads=8,
             max_subq=4,
             max_deep=4,
+            rationale_instruction="Always fill `rationale`.",
         )
         assert len(result) > 100
 
     def test_planner_prompt_contains_sufficiency_gate(self):
         result = PLANNER_PROMPT.format(
             user_message="x", transcript="", context_view="", gathered="[]",
-            max_reads=8, max_subq=4, max_deep=4,
+            max_reads=8, max_subq=4, max_deep=4, rationale_instruction="rat",
         )
         assert "read enough before acting" in result.lower()
 
     def test_planner_prompt_contains_model_tier_discipline(self):
         result = PLANNER_PROMPT.format(
             user_message="x", transcript="", context_view="", gathered="[]",
-            max_reads=8, max_subq=4, max_deep=4,
+            max_reads=8, max_subq=4, max_deep=4, rationale_instruction="rat",
         )
         assert "MODEL TIER DISCIPLINE" in result
 
     def test_planner_prompt_substitutes_max_reads(self):
         result = PLANNER_PROMPT.format(
             user_message="x", transcript="", context_view="", gathered="[]",
-            max_reads=42, max_subq=4, max_deep=4,
+            max_reads=42, max_subq=4, max_deep=4, rationale_instruction="rat",
         )
         assert "42" in result
 
     def test_planner_prompt_substitutes_max_subq_and_max_deep(self):
         result = PLANNER_PROMPT.format(
             user_message="x", transcript="", context_view="", gathered="[]",
-            max_reads=8, max_subq=7, max_deep=9,
+            max_reads=8, max_subq=7, max_deep=9, rationale_instruction="rat",
         )
         assert "7" in result
         assert "9" in result

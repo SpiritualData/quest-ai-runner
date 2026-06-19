@@ -167,7 +167,9 @@ class TestInstantAck:
             f"Expected EVENT_PARTIAL with data.narration=True for {ack_text!r}; "
             f"got partial events: {[e for e in events if e['type'] == EVENT_PARTIAL]}"
         )
-        assert narration_events[0].get("text") == ack_text
+        # Emitted with a trailing space so consecutive beats read as separate sentences when a
+        # consumer concatenates them into one bubble; the line itself is unchanged.
+        assert narration_events[0].get("text").rstrip() == ack_text
 
         # The narration is generated with the user's new message in view (continuity).
         assert provider.ack_prompt_captured is not None
@@ -186,6 +188,73 @@ class TestInstantAck:
         narration = [e for e in events if e["type"] == EVENT_PARTIAL
                      and isinstance(e.get("data"), dict) and e["data"].get("narration")]
         assert narration, "narrate=True should emit at least one narration partial"
+
+    def test_per_step_beat_relays_planner_rationale_no_duplicate(self):
+        """Approach B: on a read step, the planner's (conversational) rationale is relayed as the
+        narration beat, and the plan/replan event carries NO duplicate text (so a consumer won't
+        show the line twice). Zero extra LLM call: the beat IS the planner's rationale."""
+        from quest_ai_runner.core.adapters import EVENT_PLAN, EVENT_REPLAN
+        beat = "I'm pulling up your quest history so we can see where things break down."
+        cfg = OrchestratorConfig(narrate=True)
+        # read -> answer. The read step's rationale is the conversational beat.
+        decisions = [
+            {"action": "read", "reads": [{"rel_path": "README.md"}], "rationale": beat,
+             "model_tier": "sonnet"},
+            {"action": "answer", "rationale": "answering now", "model_tier": "sonnet"},
+        ]
+
+        class _AckThenAnswer(StubProvider):
+            """First answer() call is the instant ack; later calls are the grounded answer."""
+            def __init__(self_inner):
+                super().__init__(decisions=list(decisions))
+                self_inner._first = True
+
+            def answer(self_inner, messages, *, model, system=None) -> str:
+                self_inner.answer_calls += 1
+                self_inner.last_answer_messages = messages
+                if self_inner._first:
+                    self_inner._first = False
+                    return "On it, let me dig in."
+                return "STUB ANSWER [grounded_on:False]"
+
+        provider = _AckThenAnswer()
+        retrieval = StubRetrieval(files={"README.md": "some content"})
+        events: List[Dict[str, Any]] = []
+        orch = _make_orch(provider, retrieval, cfg=cfg)
+        sink = StreamSink(lambda ev: events.append(ev))
+        orch.run("why do I keep falling off?", mode=Mode.LIVE, sink=sink,
+                 rep_preamble="You are Maya, a warm, direct coach.")
+
+        # The planner's conversational rationale was relayed as a narration partial.
+        narration = [e.get("text", "").rstrip() for e in events if e["type"] == EVENT_PARTIAL
+                     and isinstance(e.get("data"), dict) and e["data"].get("narration")]
+        assert beat in narration, f"Expected the planner rationale relayed as a beat; got {narration}"
+
+        # The plan/replan events carry NO text (rationale is spoken as the beat, not duplicated).
+        plan_texts = [e.get("text") for e in events if e["type"] in (EVENT_PLAN, EVENT_REPLAN)]
+        assert plan_texts, "Expected at least one plan/replan event"
+        assert all(t is None for t in plan_texts), (
+            f"plan/replan events should carry no duplicate text when narrating; got {plan_texts}"
+        )
+
+        # The planner prompt for this run carried the conversational rationale instruction AND the
+        # injected persona (Approach B: the planner writes the beat in the rep's voice, no extra call).
+        assert any("SPOKEN line" in p for p in provider.plan_prompts), \
+            "Planner prompt should switch to the conversational rationale instruction when narrating"
+        assert any("Maya" in p for p in provider.plan_prompts), \
+            "Planner prompt should carry the rep persona when narrating"
+
+    def test_planner_rationale_plain_when_not_narrating(self):
+        """Without narration, the planner keeps its terse rationale instruction (no persona, no
+        conversational spoken-line directive) so planning behavior is unchanged."""
+        cfg = OrchestratorConfig(narrate=False, instant_ack=False)
+        provider = StubProvider(decisions=[{"action": "answer", "rationale": "done"}])
+        orch = _make_orch(provider, StubRetrieval())
+        orch.run("plain question", mode=Mode.LIVE, sink=StreamSink(lambda _: None),
+                 rep_preamble="You are Maya.")
+        assert provider.plan_prompts
+        assert all("SPOKEN line" not in p for p in provider.plan_prompts)
+        assert any("one sentence" in p for p in provider.plan_prompts)
 
     def test_instant_ack_prompt_forbids_em_dashes(self):
         """The ack prompt explicitly instructs the model not to use em dashes."""

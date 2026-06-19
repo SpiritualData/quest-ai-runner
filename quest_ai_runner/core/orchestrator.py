@@ -242,7 +242,7 @@ PARALLEL SUB-QUESTIONS (optional): if the message has INDEPENDENT parts, set `su
 DEEP FAN-OUT (optional, for "deep"): if the work splits into INDEPENDENT subtasks, set
   `deep_subtasks` to 2-{max_deep} of {{"goal": "...", "brief": "..."}} -- each a concurrent run.
 
-Always fill `rationale` (one sentence) and set `model_tier`.
+{rationale_instruction}
 
 --- THE USER'S MESSAGE ---
 {user_message}
@@ -259,6 +259,21 @@ the user explicitly asks you to.
 --- GATHERED SO FAR (targeted reads/greps done this turn; [] = nothing yet) ---
 {gathered}
 """
+
+# The `rationale` field is dual-purpose: by default it is the planner's terse internal reasoning,
+# but when the consumer turns on narration (cfg.narrate) it becomes the user-facing, spoken
+# "train of thought" beat for this step (Approach B: no extra LLM call — the planner writes its
+# rationale conversationally, in the selected rep's voice, in the call it already makes). The
+# orchestrator picks which instruction to inject per run via the {rationale_instruction} slot.
+_RATIONALE_INSTRUCTION_PLAIN = "Always fill `rationale` (one sentence) and set `model_tier`."
+_RATIONALE_INSTRUCTION_NARRATE = (
+    "For `rationale`: write ONE short, natural, SPOKEN line addressed directly to the user, in your "
+    "own voice, saying what you are doing or noticing RIGHT NOW as you work (NOT the final answer, "
+    "no preamble, no greeting, no restating their request, no markdown, no lists). It is shown live "
+    "and read aloud, so it should sound like a person thinking out loud mid-task. Ground it in what "
+    "you actually see (the gathered observations); never claim a finding you have not read yet. Do "
+    "NOT use em dashes; use a comma or a period. Also set `model_tier`."
+)
 
 # Assemble the final format()-able prompt. The gate constants from context_doctrine have NO
 # literal {/} characters, so they pass through .format() untouched when the final assembled
@@ -1297,20 +1312,25 @@ class _Emitter:
             pass
 
 
-class _Narrator:
+class Narrator:
     """Conversational, single-train-of-thought progress narration for one turn.
 
-    Folds the old instant-ack into a unified flow: at each meaningful stage the orchestrator calls
-    ``note(moment)``; the narrator generates the NEXT short line of ONE continuous, evolving thought
-    (reacting to what just came in) and emits it as an EVENT_PARTIAL so it is both shown live in the
-    chat bubble (not persisted) and spoken on voice. The FIRST beat is started with ``begin()`` and
-    collected with ``flush_first()`` so it runs concurrently with context assembly and adds no
-    wall-clock latency to quick turns; ``note()`` is synchronous and is only called at stages that
-    already involve a wait (gathering, deep work), so the cheap line is absorbed by that wait.
+    Unified, latency-free flow with TWO sources of beats, both emitted as EVENT_PARTIAL (shown live
+    in the chat bubble, not persisted, and spoken on voice):
 
-    Generation uses the cheap planner tier and SPEAKS IN THE SELECTED REP'S PERSONA when one is
-    given. HOW it narrates is overridable by the consumer via ``system_prompt`` (the persona is
-    always layered on top). Every failure is swallowed: the turn never depends on narration.
+    * The FIRST beat (the instant ack) is one cheap call started with ``begin()`` and collected with
+      ``flush_first()``, so it runs CONCURRENTLY with context assembly and adds no wall-clock latency
+      to quick turns. It is grounded in the user's new message + recent conversation + persona, and
+      claims no findings (nothing has been read yet), so it cannot fabricate.
+    * Every later beat is the planner's OWN ``rationale``, written conversationally in the rep's
+      voice in the planning call the orchestrator already makes (Approach B), and handed here via
+      ``relay(line)``. ``relay`` does NO LLM call — it just emits the line — so per-step narration is
+      free and never blocks the turn.
+
+    Generation (for the ack only) uses the cheap planner tier and SPEAKS IN THE SELECTED REP'S
+    PERSONA when one is given. HOW the ack narrates is overridable by the consumer via
+    ``system_prompt`` (the persona is always layered on top). Every failure is swallowed: the turn
+    never depends on narration.
     """
 
     DEFAULT_SYSTEM = (
@@ -1360,8 +1380,12 @@ class _Narrator:
         if not line:
             return
         self._said.append(line)
+        # Emit with a trailing space so consecutive beats (ack, then each per-step beat) read as
+        # separate sentences when a consumer streams them into one bubble, instead of running
+        # together ("...this.I'm pulling up..."). The clean line (no trailing space) is what we
+        # store for dedup. A consumer that replaces the bubble on `done` discards the spacing anyway.
         try:
-            self._emit.emit(ProgressEvent(type=EVENT_PARTIAL, text=line, data={"narration": True}))
+            self._emit.emit(ProgressEvent(type=EVENT_PARTIAL, text=line + " ", data={"narration": True}))
         except Exception:  # noqa: BLE001 — narration must never break the run
             pass
 
@@ -1392,11 +1416,19 @@ class _Narrator:
                 pass
             self._first_future = None
 
-    def note(self, moment: str) -> None:
-        """Emit the next beat for a stage that already involves a wait (synchronous, cheap tier)."""
-        if not self.enabled:
+    def relay(self, line: Optional[str]) -> None:
+        """Emit a pre-composed beat (the planner's conversational rationale). No LLM call.
+
+        Used for every beat after the instant ack: the planner already wrote this line in the
+        rep's voice, so we just speak it. De-duplicated against what was already said this turn so a
+        planner that repeats itself across re-plan steps doesn't echo.
+        """
+        if not self.enabled or not line:
             return
-        self._say(self._safe_gen(moment))
+        clean = line.strip()
+        if clean and clean in self._said:
+            return
+        self._say(clean)
 
     def _safe_gen(self, moment: str) -> Optional[str]:
         try:
@@ -1666,7 +1698,8 @@ class Orchestrator:
     # --- planner call --------------------------------------------------------
 
     def _plan(self, user_message: str, transcript: str, context_view: str,
-              gathered: List[Dict[str, Any]], *, step: int = 0) -> PlanDecision:
+              gathered: List[Dict[str, Any]], *, step: int = 0,
+              narrate: bool = False, persona: str = "") -> PlanDecision:
         # Step 1 (step == 0) always sees the FULL transcript + context_view. On later re-plan
         # steps, if the consumer opted in, swap the (unchanged) transcript + context_view for a
         # short reference note — the planner's job there is to react to the NEW gathered
@@ -1678,6 +1711,10 @@ class Orchestrator:
                 plan_transcript = _REPLAN_TRANSCRIPT_REF
             if context_view:
                 plan_context = _REPLAN_CONTEXT_REF
+        # When narration is on, the planner writes its `rationale` as the user-facing spoken beat
+        # for this step (Approach B), in the selected rep's voice — so we layer the persona on top
+        # and swap in the conversational rationale instruction. No extra LLM call: the beat rides on
+        # the planning call the orchestrator already makes.
         prompt = PLANNER_PROMPT.format(
             user_message=user_message,
             transcript=plan_transcript or "(no prior messages)",
@@ -1687,7 +1724,12 @@ class Orchestrator:
             max_reads=self.cfg.max_reads_per_step,
             max_subq=self.cfg.max_subquestions,
             max_deep=self.cfg.max_deep_subtasks,
+            rationale_instruction=(
+                _RATIONALE_INSTRUCTION_NARRATE if narrate else _RATIONALE_INSTRUCTION_PLAIN),
         )
+        if narrate and persona.strip():
+            prompt = ("--- SPEAK AS THIS PERSONA (for your `rationale` line only) ---\n"
+                      + persona.strip()[:1500] + "\n\n" + prompt)
         model = self.registry.resolve_tier(self.cfg.planner_tier)
         provider = self.get_provider_for_model(model)
         raw = provider.plan(prompt, model=model, tool_schema=DECIDE_TOOL)
@@ -3045,10 +3087,11 @@ class Orchestrator:
         # The ack prompt explicitly forbids em dashes (brand rule). A failure is swallowed.
         # The narrator unifies the old instant-ack into a single conversational train of thought:
         # its first beat (started here, concurrent with context assembly) acknowledges the new
-        # message, and later note() calls continue the same thought at the slow stages. ``narrate``
-        # supersedes the legacy ``instant_ack`` flag. Speaks in the selected rep's persona; HOW it
-        # narrates is overridable by the consumer via cfg.narration_system_prompt.
-        _narrator = _Narrator(
+        # message, and later beats are the planner's own conversational rationale, relayed at the
+        # slow stages (read/deep) via narrator.relay() with NO extra LLM call. ``narrate`` supersedes
+        # the legacy ``instant_ack`` flag. Speaks in the selected rep's persona; HOW the ack narrates
+        # is overridable by the consumer via cfg.narration_system_prompt.
+        narrator = Narrator(
             provider=self.provider,
             model=self.registry.resolve_tier(cfg.planner_tier),
             emit=emit,
@@ -3057,12 +3100,12 @@ class Orchestrator:
             system_prompt=cfg.narration_system_prompt,
             enabled=bool(cfg.narrate or cfg.instant_ack),
         )
-        if _narrator.enabled:
+        if narrator.enabled:
             try:
                 emit.status("Looking into this...")
             except Exception:  # noqa: BLE001
                 pass
-            _narrator.begin(user_message)
+            narrator.begin(user_message)
 
         # --- ContextAssembler: pre-flight context injection (optional fifth adapter) -----------
         # When a ContextAssembler is wired, call assemble() once before the loop so task-specific
@@ -3228,7 +3271,7 @@ class Orchestrator:
         # The first conversational beat has been generating concurrently with context assembly.
         # Collect+emit it NOW (it should be ~done), before the planner loop, so its background
         # thread is cleaned up before run() returns. A timeout/failure just skips it.
-        _narrator.flush_first()
+        narrator.flush_first()
 
         # --- ContextAssembler: collect the background assemble() result -----------------------
         # The assemble() call has been running concurrently with the ack + guidance.  Collect it
@@ -3424,7 +3467,8 @@ class Orchestrator:
                         log.debug(f"Auto-injection of list_operations failed: {type(e).__name__}: {e}")
 
             try:
-                plan = self._plan(user_message, transcript, context_view, gathered, step=step)
+                plan = self._plan(user_message, transcript, context_view, gathered, step=step,
+                                  narrate=narrator.enabled, persona=rep_preamble or "")
             except Exception as e:  # noqa: BLE001 — planner failure -> grounded fallback answer
                 log.exception(
                     f"Planner failed on step {steps}: {e}. Falling back to grounded answer."
@@ -3445,23 +3489,19 @@ class Orchestrator:
                     plan.deep_brief = plan.deep_brief or user_message
             else:
                 consecutive_reads = 0  # Reset when planner chooses something else
+            # When narrating, the planner's `rationale` is ALREADY the user-facing spoken beat for
+            # this step (written conversationally, in the rep's voice). We relay it through the same
+            # narration channel as the instant ack (a partial), so the plan/replan event itself
+            # carries no duplicate text. When not narrating, the plan event keeps the terse rationale
+            # as its expandable detail (legacy behavior).
             emit.emit(ProgressEvent(type=(EVENT_PLAN if step == 0 else EVENT_REPLAN),
-                                    action=plan.action, step=steps, text=plan.rationale or None))
-            # Narrate this planner decision as the next beat of the train of thought, but only for
+                                    action=plan.action, step=steps,
+                                    text=(None if narrator.enabled else (plan.rationale or None))))
+            # Relay this planner decision as the next beat of the train of thought, but only for
             # actions that involve a real wait (gathering context, deep work) so quick answers add
-            # no latency. The planner's own reasoning is the raw material, so the narration reflects
-            # genuine thinking rather than a canned label.
-            if _narrator.enabled and plan.action in ("read", "deep"):
-                _moment = (
-                    "you're gathering more context before answering"
-                    if plan.action == "read"
-                    else "you're starting the deeper work to actually do this"
-                )
-                if plan.rationale:
-                    _moment += f". Your reasoning: {plan.rationale}"
-                if plan.action == "deep" and plan.goal:
-                    _moment += f". The goal: {plan.goal}"
-                _narrator.note(_moment)
+            # no latency. Zero extra LLM call: the beat is the planner's own conversational rationale.
+            if narrator.enabled and plan.action in ("read", "deep"):
+                narrator.relay(plan.rationale)
             # Emit cumulative token counts so live consumers see usage grow in real time.
             _ti = getattr(self.provider, 'tokens_in', 0)
             _to = getattr(self.provider, 'tokens_out', 0)
