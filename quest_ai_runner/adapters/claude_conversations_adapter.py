@@ -12,12 +12,20 @@ Example:
 """
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.core.adapters import Observation, RetrievalAdapter
+from .conversation_format import (
+    conversation_digest,
+    conversation_metadata,
+    conversation_timestamp,
+    conversation_to_text,
+    is_claude_conversation,
+    load_conversations,
+    resolve_conv_key,
+)
 from .tfdfidf_sampling import extract_terms, select_representatives
 
 
@@ -54,205 +62,32 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
         self._load_conversations()
 
     def _load_conversations(self) -> None:
-        """Load all .json conversation files recursively.
+        """Load all .json conversation files (delegates to the shared loader).
 
-        If corpus_root is set, recursively scans for:
-        - .claude/ directories
-        - conversations/ subdirectories
-        - *.json files at any depth
-
-        Otherwise uses the explicit sessions_dir.
+        If corpus_root is set, recursively scans for .claude/ dirs, conversations/ subdirs, and
+        *.json files at any depth; otherwise uses the explicit sessions_dir.
         """
-        search_dirs = []
+        self._conversations, self._conversation_filepaths, self._conv_id_lookup = load_conversations(
+            self.corpus_root, self.sessions_dir
+        )
 
-        # If corpus_root is set, scan it recursively for conversation sources
-        if self.corpus_root and self.corpus_root.is_dir():
-            try:
-                # Find .claude directories anywhere in the corpus
-                search_dirs.extend(self.corpus_root.glob("**/.claude"))
-                # Find conversations/ directories anywhere in the corpus
-                search_dirs.extend(self.corpus_root.glob("**/conversations"))
-            except Exception:  # noqa: BLE001
-                pass
-
-        # Also add explicit sessions_dir if it exists
-        if self.sessions_dir.is_dir():
-            search_dirs.append(self.sessions_dir)
-
-        if not search_dirs:
-            return  # No directories to search
-
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_dirs = []
-        for d in search_dirs:
-            d_abs = d.resolve()
-            if d_abs not in seen:
-                seen.add(d_abs)
-                unique_dirs.append(d)
-
-        # Load all .json files from all search directories
-        for search_dir in unique_dirs:
-            try:
-                for session_file in search_dir.glob("*.json"):
-                    try:
-                        with open(session_file) as f:
-                            data = json.load(f)
-
-                        # Check if this looks like a Claude conversation
-                        # (has messages/turns field with role/text structure)
-                        if not self._is_claude_conversation(data):
-                            continue  # Skip non-conversation JSON files
-
-                        # Generate a unique key for this conversation, but allow lookup by filename stem.
-                        # For corpus_root, use path prefix to disambiguate same-name files.
-                        # For sessions_dir, use just the filename.
-                        file_stem = session_file.stem
-                        if self.corpus_root:
-                            try:
-                                rel_path = session_file.relative_to(self.corpus_root)
-                                # Use path:filename as unique key to handle collisions
-                                unique_key = str(rel_path.with_suffix("")).replace("/", ":")
-                            except ValueError:
-                                unique_key = file_stem
-                        else:
-                            unique_key = file_stem
-
-                        self._conversations[unique_key] = data
-                        self._conversation_filepaths[unique_key] = session_file.resolve()
-
-                        # Add lookup from filename stem to unique key
-                        # If collision occurs, keep the most recent one (last loaded wins)
-                        self._conv_id_lookup[file_stem] = unique_key
-                    except (json.JSONDecodeError, OSError):
-                        pass  # Skip unreadable files
-            except Exception:  # noqa: BLE001
-                pass  # Silently degrade if directory scan fails
-
+    # Thin instance wrappers over the shared, module-level helpers — kept so existing call sites
+    # (and any external callers) keep working with identical behavior.
     @staticmethod
     def _is_claude_conversation(data: Any) -> bool:
-        """Check if a JSON object looks like a Claude conversation.
-
-        A valid Claude conversation has:
-        - A messages or turns array
-        - Message objects with role (user/assistant) and text/content
-        """
-        if not isinstance(data, dict):
-            return False
-
-        messages = data.get("messages") or data.get("turns")
-        if not isinstance(messages, list) or not messages:
-            return False
-
-        # Check if messages have the right structure (role + text/content)
-        for msg in messages:
-            if not isinstance(msg, dict):
-                return False
-            has_role = "role" in msg
-            has_text = "text" in msg or "content" in msg
-            if not (has_role and has_text):
-                return False
-
-        return True
+        return is_claude_conversation(data)
 
     def _get_conversation_metadata(self, conv: Any) -> Dict[str, Any]:
-        """Extract metadata from a Claude conversation dict.
-
-        Returns fields like rep_name, turn_count, model used, etc.
-        """
-        metadata = {}
-        if isinstance(conv, dict):
-            # Extract Claude-specific metadata
-            if "rep_name" in conv:
-                metadata["rep"] = conv["rep_name"]
-            if "turn_count" in conv:
-                metadata["turns"] = conv["turn_count"]
-            if "model_hint" in conv:
-                metadata["model"] = conv["model_hint"]
-            # Count actual messages if available
-            messages = conv.get("messages") or conv.get("turns") or []
-            metadata["message_count"] = len(messages)
-        return metadata
+        return conversation_metadata(conv)
 
     def _get_conversation_digest(self, conv: Any) -> str:
-        """Extract a lightweight digest for embedding.
-
-        Digest includes:
-        - First message (sets the topic)
-        - Last 2-3 messages (provides closure/summary)
-        - Metadata (rep, model, message count)
-
-        This is much cheaper than embedding all messages.
-        """
-        parts = []
-        messages = conv.get("messages") or conv.get("turns") or []
-
-        # Add metadata context
-        metadata = self._get_conversation_metadata(conv)
-        if metadata:
-            meta_str = " | ".join(f"{k}={v}" for k, v in metadata.items())
-            parts.append(f"[{meta_str}]")
-
-        # Add first message (usually the user's query)
-        if messages:
-            first_msg = messages[0]
-            if isinstance(first_msg, dict):
-                text = first_msg.get("text") or first_msg.get("content") or ""
-                if text:
-                    parts.append(f"START: {text[:200]}")  # First 200 chars
-
-        # Add last 2-3 messages (outcome/resolution)
-        if len(messages) > 1:
-            sample_count = min(3, max(1, len(messages) // 2))  # 1-3 messages from the end
-            for msg in messages[-sample_count:]:
-                if isinstance(msg, dict):
-                    text = msg.get("text") or msg.get("content") or ""
-                    if text:
-                        parts.append(f"RECENT: {text[:150]}")  # Last 150 chars each
-
-        return " ".join(parts) if parts else "empty conversation"
+        return conversation_digest(conv)
 
     def _get_conversation_timestamp(self, conv: Any) -> float:
-        """Extract timestamp from conversation for recency sorting.
-
-        Returns unix timestamp, or 0 if not available.
-        """
-        if isinstance(conv, dict):
-            # Try common timestamp fields
-            for field in ("updated_at", "updatedAt", "createdAt", "created_at", "timestamp"):
-                if field in conv:
-                    val = conv[field]
-                    if isinstance(val, (int, float)):
-                        return float(val)
-        return 0.0
+        return conversation_timestamp(conv)
 
     def _conversation_to_text(self, conv: Any) -> str:
-        """Convert a conversation dict to readable text with structure preserved.
-
-        Handles Claude conversation format with role/text pairs and preserves
-        metadata like rep_name and model used.
-        """
-        parts = []
-        if isinstance(conv, dict):
-            # Extract and display metadata header
-            metadata = self._get_conversation_metadata(conv)
-            if metadata:
-                meta_str = " | ".join(f"{k}={v}" for k, v in metadata.items())
-                parts.append(f"[{meta_str}]")
-                parts.append("")
-
-            # Render message turns
-            messages = conv.get("messages") or conv.get("turns") or []
-            for msg in messages:
-                if isinstance(msg, dict):
-                    role = msg.get("role", "unknown")
-                    text = msg.get("text") or msg.get("content") or ""
-                    # Format: "role: text" with role in caps for clarity
-                    parts.append(f"{role.upper()}: {text}")
-                else:
-                    parts.append(str(msg))
-
-        return "\n".join(parts)
+        return conversation_to_text(conv)
 
     def read_section(
         self,
@@ -268,17 +103,10 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
         rel_path is expected to be a conversation id (session name, or filename stem).
         Looks up the conversation using the stored mapping.
         """
-        # Extract the conversation id from the path (just the filename, no directory)
-        conv_id = rel_path.split("/")[-1]
-
-        # Try direct lookup first (if the exact key exists in _conversations)
-        unique_key = None
-        if conv_id in self._conversations:
-            unique_key = conv_id
-        # Then try the lookup map (filename stem → unique key)
-        elif conv_id in self._conv_id_lookup:
-            unique_key = self._conv_id_lookup[conv_id]
-        else:
+        # Resolve the conversation id / filename stem / path tail to a unique key.
+        unique_key = resolve_conv_key(rel_path, self._conversations, self._conv_id_lookup)
+        if unique_key is None:
+            conv_id = rel_path.split("/")[-1]
             return Observation(kind="error", error=f"conversation not found: {conv_id}")
 
         conv_text = self._conversation_to_text(self._conversations[unique_key])

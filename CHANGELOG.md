@@ -6,7 +6,81 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **Selection/render algorithm extracted into pure module-level functions in `conversation_format`.**
+  `select_current_slice(messages, query, *, recent_turns, max_chars)` and
+  `select_related(conversations, query, *, max_convs, max_chars, get_conv_id)` are now standalone
+  pure functions in `adapters/conversation_format.py`, operating on plain message/conversation dicts
+  and returning `(rendered_text, metadata_list, truncated_flag)` tuples. The shared helpers
+  (`_msg_role`, `_is_user`, `_render_turn`, `_relevance_doc`) and constants
+  (`_USER_SCORE_BOOST=1.5`, `_USER_VERBATIM_CAP=2000`, `_AI_COMPACT_CHARS=400`) are also defined
+  at module level there. `SessionFileConversationStore.current_slice` and `.related_slices` delegate
+  to these functions after resolving keys and applying scope filtering; behavior is identical.
+  Any other `ConversationStore` backend (Mongo, etc.) can now reuse the same algorithm without
+  duplicating it.
+
+- **Per-deep-goal context + a verifier that drives context-widening and tier escalation.** When the
+  planner fans deep work into N goals, each goal now selects its OWN context instead of sharing one
+  run-level view: `_run_deep` builds a per-goal block from the wired `context_assembler.assemble(goal)`
+  plus a relevant `conversation_store.current_slice(conv_id, goal)`, and threads THAT into the goal's
+  `context_preamble`. The goal verifier (`_verify_goal` / `VERIFY_GOAL_TOOL` / `VERIFY_GOAL_PROMPT`)
+  now also returns `need_more_context` (bool) + `context_query` (string) + `next_tier` (one of the
+  registry tiers, optional), parsed robustly (a string reply is recovered with the shared
+  `_extract_json` helper; all three default to False/""/None on any parse miss). When a goal is NOT
+  met and `need_more_context` is set, the loop pulls MORE context for the next iteration
+  (`_widen_for_goal`: a fresh assembler read for the named missing context, WIDER conversation
+  retrieval via `related_slices`, and a targeted `retrieval.grep`), the widening growing each round so
+  a retry always sees more than the last, and runs the next attempt at the verifier's `next_tier`
+  (resolved through `registry.resolve_tier`, kept worker-runnable) or one rung up the deep-model
+  ladder. Bounded by the existing `deep_goal_max_iterations` cap + token budget. Visible STATUS ticks
+  fire when per-goal context is selected, when more context is fetched, and when the tier changes. NO
+  em dashes in the verifier prompt. Fully additive and guarded: with exactly one goal and no
+  assembler/store wired, behavior is byte-for-byte unchanged. `run()` forwards a `ctx_meta` (carrying
+  `conv_id`/`conv_scope`) into `_run_deep` so the per-goal helpers can reach the conversation store.
+- **`ConversationStore.current_slice` selection: minimal "always in" + user/AI asymmetry.** The
+  reference `SessionFileConversationStore.current_slice` no longer force-includes the last
+  `recent_turns` messages raw. The ONLY guaranteed turn now is the **last USER turn** (the actual
+  intent); everything else (recent AI turns, older turns) is a relevance CANDIDATE selected by
+  TF-DF-IDF, not auto-included by recency. `recent_turns` is now the "considered window" (default
+  lowered to 4): the last N turns merely join the candidate pool. USER turns are PREFERRED (a x1.5
+  score boost) and render VERBATIM (capped only if absurdly long); AI turns earn inclusion purely by
+  relevance, even the latest one, and are always COMPACTED. Per-turn relevance is LENGTH-NORMALIZED
+  so length alone never wins, and an AI turn's TF-DF-IDF *document* is its compact form so a long AI
+  answer cannot dominate df/idf. The last USER turn is guaranteed present even after `max_chars`
+  truncation (the last message is the fallback anchor when there is no user turn). `related_slices`
+  now applies the same AI compaction to its per-conversation tail. No method signatures changed (a
+  separate Mongo implementation mirrors them); the `ConversationStore` Protocol docstring documents
+  the new `recent_turns` meaning. No new LLM call is added: the no-LLM TF-DF-IDF + compaction is the
+  pruning, and Step 1 stays one resolve round-trip.
+
 ### Added
+- **`compact_message(text, *, max_chars=400)` helper** (`adapters/conversation_format.py`): compacts
+  a long message to its beginning + end plus the few most salient MIDDLE sentences/lines, selected
+  with TF-DF-IDF at sentence/newline granularity (each chunk is one document, reusing
+  `extract_terms` / `select_representatives`), joined with an ellipsis marker within `max_chars`. A
+  short message is returned unchanged. Never raises (falls back to head+tail truncation). Used to
+  compact AI turns in the conversation store so a long AI answer cannot dominate downstream df/idf.
+- **User Input Understanding (Step 1) + storage-agnostic `ConversationStore`.** The brain now
+  treats resolving WHAT the user means as a first-class step that runs ONLY when needed. A new
+  `ConversationStore` Protocol (`core/adapters.py`, with `ConversationContext` value object) offers
+  `current_slice(conv_id, query, ...)` (always the last N turns PLUS TF-DF-IDF-selected relevant
+  older turns of the SAME conversation) and `related_slices(query, scope, ...)` (TF-DF-IDF slices
+  from OTHER conversations in scope); both NEVER raise. `Orchestrator.run()` gains keyword-only
+  `conv_id` / `conv_scope` (full back-compat). When a store is wired AND a `conv_id` is present AND
+  a cheap NO-LLM gate (`_needs_context_to_understand`) flags a short/anaphoric/acknowledgement input,
+  the brain pulls the current slice and asks the model ONCE to rewrite the message into a
+  self-contained GOAL CONDITION (`RESOLVE_REQUEST_PROMPT`). A `MORE_CONTEXT_NEEDED` reply pulls
+  related conversations and retries ONCE; a `CLARIFY:` reply short-circuits the turn to a terminal
+  confirm (executor → needs_you) without running the planner. On a successful resolve it emits a
+  new streamed `EVENT_UNDERSTANDING` event (in `SURFACING_EVENTS`) and prepends the pulled
+  conversation context + resolved request to `context_view`; context SELECTION (Step 2) then targets
+  the resolved request while the planner still receives the user's LITERAL words. Self-contained
+  inputs skip Step 1 entirely (no LLM hop, ZERO added latency); with NO store wired, behavior is
+  byte-for-byte today's. New reference impl `adapters.SessionFileConversationStore` (local Claude
+  session files) reuses the TF-DF-IDF sampler and a new shared `adapters/conversation_format.py`
+  module factored out of `ClaudeConversationsAdapter` (its public behavior is unchanged). Wired via
+  `RunnerConfig.conversation_store`; the executor builds a `conv_scope` from the task and passes
+  `conv_id`/`conv_scope`, and only falls back to dumping the full transcript when no store is wired.
 - **WebSearchAdapter**: new `RetrievalAdapter` that grounds the shallow orchestrator loop in live
   web data via the Tavily API. Uses stdlib `urllib.request` only (no extra deps). Enable with
   `WEB_SEARCH_ENABLED=true` and `WEB_SEARCH_API_KEY=tvly_...` env vars. `WEB_SEARCH_MAX_RESULTS`

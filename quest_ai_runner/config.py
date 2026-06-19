@@ -31,6 +31,7 @@ from .adapters.file_context_store import (
     _BOOTSTRAP_META_FILE,
     _BOOTSTRAP_VERSION,
     _read_bootstrap_meta,
+    _write_bootstrap_meta,
 )
 from .core.model_registry import ModelRegistry
 from .core.orchestrator import Orchestrator, OrchestratorConfig
@@ -114,6 +115,14 @@ class RunnerConfig:
     # This lets a host app shrink its ALWAYS-ON core prompt to only what applies to every input.
     # Left None → no guidance, exactly today's behavior (purely additive).
     guidance_provider: Optional[GuidanceProvider] = None
+    # OPTIONAL CONVERSATION STORE (storage-agnostic conversation-history retrieval). When set, the
+    # orchestrator's User Input Understanding step (Step 1) can pull a relevant slice of the
+    # CURRENT conversation (and, if needed, related past conversations) to rewrite a short/anaphoric
+    # message ("ok do it", "the first one") into a self-contained goal condition before selecting
+    # context. The reference impl ``adapters.SessionFileConversationStore`` reads local Claude
+    # session files; a host can plug a Mongo-backed one behind the same Protocol. Left None → Step 1
+    # is a no-op (self-contained inputs add ZERO latency), exactly today's behavior.
+    conversation_store: Optional[Any] = None
 
     # --- the org's skills/corpus path (for orgs); generic, optional ---
     corpus_root: Optional[str] = None
@@ -338,6 +347,7 @@ def _bootstrap_if_needed(
         # against whatever cards exist). Otherwise we just refresh stale cards.
         meta = _read_bootstrap_meta(cards_dir)
         stored_version = meta.get("version", 0)
+        prior_interrupted = meta.get("in_progress", False)
         if stored_version < _BOOTSTRAP_VERSION:
             _tell(
                 f"Context index: algorithm updated (v{stored_version} -> v{_BOOTSTRAP_VERSION}),"
@@ -345,6 +355,12 @@ def _bootstrap_if_needed(
             )
             # Fall through to the background bootstrap path below (don't return early). The
             # incremental bootstrap dedups new/refreshed cards against the existing ones.
+        elif prior_interrupted:
+            _tell(
+                "Context index: previous re-index was interrupted, resuming in background."
+                " Chat is ready now."
+            )
+            # Fall through to the background bootstrap path to finish the interrupted run.
         else:
             # Version matches: just refresh stale cards in the background.
             _log.debug("context index: scanning %s for changes (background)", root)
@@ -384,6 +400,16 @@ def _bootstrap_if_needed(
                 lock_fd.close()
                 return
             try:
+                # Stamp in_progress=True before the expensive bootstrap runs.  If this daemon
+                # thread is killed (session exit), the next startup sees in_progress=True and
+                # retries rather than silently leaving cards in a partially-upgraded state.
+                # Concurrent sessions that lose the flock race above get the "skipping" message
+                # and exit, so only one session re-bootstraps at a time.
+                _write_bootstrap_meta(
+                    cards_dir,
+                    _read_bootstrap_meta(cards_dir).get("card_count", 0),
+                    in_progress=True,
+                )
                 n = keyword.bootstrap(root=root, provider=provider, model=model)
                 _log.info("context index: ready — %d cards written to %s", n, cards_dir)
                 if n > 0:
@@ -663,4 +689,5 @@ def build_orchestrator(
         context_assembler=resolve_context_assembler(cfg, notify=notify),
         guidance=guidance,
         input_inbox=input_inbox,
+        conversation_store=cfg.conversation_store,
     )

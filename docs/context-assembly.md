@@ -372,3 +372,60 @@ cfg = RunnerConfig(..., context_assembler=assembler)
 in `RunnerConfig`, the session wraps it with `CompositeContextAssembler([existing, turn_store])`;
 otherwise it sets the `TurnContextStore` directly. A consumer that never calls
 `InteractiveSession` can wire both explicitly, as above.
+
+## User Input Understanding (Step 1) and the `ConversationStore`
+
+The `transcript`/`TurnContextStore` machinery above answers "what context goes to the run." Before
+that, a first-class **User Input Understanding** step answers a prior question: "what does the user
+actually mean?" A short or anaphoric message ("ok do it", "the first one", "yes") cannot be acted on
+literally, and selecting context off it is wasteful. So Step 1 optionally resolves the message into a
+**goal condition** (a self-contained statement of what would satisfy the request), and only then does
+context selection (Step 2) run off that goal condition.
+
+```
+user_message --> STEP 1: Understand input --> goal_condition --> STEP 2: select context --> plan/answer/deep
+                  (pulls conversation context, only as needed)   (assemble + retrieval off the goal)
+```
+
+**`ConversationStore` (a storage-agnostic adapter, `core.adapters`).** Conversation history lives in
+different places for different consumers (local Claude session JSON under `~/.claude/sessions`; a
+Mongo collection in a server). The store hides that behind two methods, both of which NEVER raise:
+- `current_slice(conv_id, query, *, recent_turns=4, max_chars)` — a relevant slice of THE current
+  conversation.
+- `related_slices(query, scope, *, exclude_conv_id, max_convs, max_chars)` — relevant slices from
+  OTHER conversations within `scope` (`{user_id, team_ids, since, participant_id}`, interpreted by
+  the implementation).
+
+`SessionFileConversationStore` (local files) is the reference implementation; a consumer can supply
+any other backend. Wire it via `RunnerConfig.conversation_store`; `run()` takes `conv_id` +
+`conv_scope`.
+
+**Selection policy (each message is one TF-DF-IDF document).** Recency alone never admits context:
+- **Always in** = the last USER turn only (the anchor; guaranteed present even after `max_chars`
+  truncation).
+- **Considered, not auto-in** = the recent window plus older turns, all ranked by relevance.
+- USER turns are **preferred** (a x1.5 score boost) and rendered verbatim; AI turns earn inclusion by
+  relevance even when latest, and are **compacted** by `conversation_format.compact_message`
+  (beginning + end + the most salient middle sentences via sentence-level TF-DF-IDF), so a long AI
+  answer cannot dominate df/idf. Per-turn scores are length-normalized. The pure algorithm lives in
+  `conversation_format.select_current_slice` / `select_related` so any backend ranks identically.
+
+**Fast by construction.** A cheap no-LLM gate (`_needs_context_to_understand`) skips Step 1 entirely
+for self-contained messages, so the common case adds zero latency. When the gate fires, ONE cheap
+resolve call produces the goal condition; if it reports `MORE_CONTEXT_NEEDED` the store widens
+(current → related), and if it still cannot resolve it returns `CLARIFY: <question>` and `run()`
+short-circuits to a confirm asking the user. The moment the goal condition is set, an
+`EVENT_UNDERSTANDING` event streams it ("Understood as: …").
+
+## Per-goal context and verifier-driven iteration (deep runs)
+
+When the planner dispatches deep work with N goals, each goal is treated as its own goal condition
+with its OWN selected context: `_run_deep` builds a per-goal block from
+`context_assembler.assemble(goal)` plus a `conversation_store.current_slice(conv_id, goal)` and
+threads it into that goal's `context_preamble`. The goal verifier returns, alongside `met`, three
+fields that close the loop: `need_more_context` (+ a `context_query` naming what is missing) and an
+optional `next_tier`. When a goal is not met and more context is requested, the next iteration pulls
+**more** (a fresh assembler read, wider `related_slices`, a targeted retrieval grep — strictly more
+than the prior round) and runs at `registry.resolve_tier(next_tier)`, bounded by the existing
+`deep_goal_max_iterations` / token budget. This makes the reviewer, not a fixed plan, decide both
+what additional context the expensive step needs and how much model to spend on it.

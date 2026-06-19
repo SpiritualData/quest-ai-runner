@@ -41,6 +41,7 @@ from .card_metadata_generator import CardMetadataGenerator
 from .claude_cli_provider import ClaudeCliProvider
 from .claude_conversations_adapter import ClaudeConversationsAdapter
 from .composite_retrieval_adapter import CompositeRetrievalAdapter
+from .session_file_conversation_store import SessionFileConversationStore
 from .conversation_card_builder import ConversationCardBuilder
 from .feedback_processor import FeedbackProcessor
 from .file_context_store import FileContextStore
@@ -96,6 +97,7 @@ __all__ = [
     "FilesAdapter",
     "CachedDbAdapter",
     "ClaudeConversationsAdapter",
+    "SessionFileConversationStore",
     "QuestRetrievalAdapter",
     "WebSearchAdapter",
     "CompositeRetrievalAdapter",

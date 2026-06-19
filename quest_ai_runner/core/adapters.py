@@ -80,6 +80,10 @@ EVENT_EXEC = "exec"            # a deep-run EXECUTION-lifecycle tick — generat
                                # LIVE-only texture: like the chatter types it is NOT in
                                # SURFACING_EVENTS, so a BACKGROUND run drops it (the runner
                                # still posts its own milestones/result); a LIVE run shows it.
+EVENT_UNDERSTANDING = "understanding"  # Step 1 produced a goal condition (the resolved request).
+                               # Fired only when User Input Understanding actually ran (a short/
+                               # anaphoric input was resolved against conversation context). Carries
+                               # ``data`` with the goal_condition. ALWAYS surfaces (in SURFACING_EVENTS).
 EVENT_CONTEXT = "context"      # context assembled for this turn: cards selected + sources.
                                # Fired when a ContextAssembler is wired and produces card_metadata.
                                # Carries ``data`` with card_metadata list and sources (ALWAYS surfaces).
@@ -91,7 +95,7 @@ EVENT_TOKENS = "tokens"        # cumulative token counts after a model call (ALW
 
 # The event types a BACKGROUND (MilestoneSink) run forwards. Everything else is dropped as
 # intermediate chatter. Encoded ONCE here so every consumer inherits the same policy.
-SURFACING_EVENTS = frozenset({EVENT_CONTEXT, EVENT_RESULT, EVENT_DECISION, EVENT_MILESTONE, EVENT_DONE, EVENT_TOKENS})
+SURFACING_EVENTS = frozenset({EVENT_UNDERSTANDING, EVENT_CONTEXT, EVENT_RESULT, EVENT_DECISION, EVENT_MILESTONE, EVENT_DONE, EVENT_TOKENS})
 
 
 # ---------------------------------------------------------------------------
@@ -356,6 +360,56 @@ class AssembledContext:
     stale: List[str] = field(default_factory=list)
     sources: List[Dict[str, Any]] = field(default_factory=list)
     card_metadata: List[Dict[str, Any]] = field(default_factory=list)  # [{'id', 'title', 'relevance_score', 'file_count', 'files', 'adapter'}]
+
+
+# ---------------------------------------------------------------------------
+# Conversation-history retrieval (storage-agnostic): the User Input Understanding
+# step uses this to resolve a short/anaphoric message into a self-contained goal
+# condition. A local reference impl reads Claude session files; a different backend
+# (Mongo, etc.) can satisfy the same Protocol.
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ConversationContext:
+    """A rendered slice of conversation history, ready to drop into ``context_view``.
+
+    Fields:
+      ``text``      -- rendered, ready-to-inject text (role-labelled turns).
+      ``turns``     -- optional metadata of the turns included (for tracing / tests).
+      ``sources``   -- optional ``[{conv_id, label, ...}]`` describing which conversations fed it.
+      ``scanned``   -- how many turns/conversations were considered (transparency).
+      ``truncated`` -- True if some content was dropped to respect a ``max_chars`` budget.
+    """
+    text: str = ""
+    turns: List[Dict[str, Any]] = field(default_factory=list)
+    sources: List[Dict[str, Any]] = field(default_factory=list)
+    scanned: int = 0
+    truncated: bool = False
+
+
+@runtime_checkable
+class ConversationStore(Protocol):
+    """Storage-agnostic conversation-history retrieval. NEVER raises (return empty on failure).
+
+    The brain's User Input Understanding step calls these to resolve a short/anaphoric message
+    (``"ok do it"``, ``"the first one"``) into a self-contained goal condition. The reference
+    impl (``adapters.SessionFileConversationStore``) reads local Claude session files; a host can
+    implement the same Protocol over Mongo or any other backend.
+    """
+
+    def current_slice(self, conv_id: str, query: str, *, recent_turns: int = 4,
+                      max_chars: int = 6000) -> "ConversationContext":
+        """Relevant slice of the CURRENT conversation. The ONLY thing forced into the output is the
+        LAST USER turn; everything else is a relevance-selected CANDIDATE (TF-DF-IDF), not
+        auto-included by recency. ``recent_turns`` is the "considered window" (default 4): the last N
+        turns join the candidate pool but are NOT guaranteed in. USER turns are preferred and rendered
+        verbatim; AI turns earn inclusion by relevance and are compacted. Scalable for very long
+        conversations. Never raises."""
+
+    def related_slices(self, query: str, scope: Dict[str, Any], *, exclude_conv_id: Optional[str] = None,
+                       max_convs: int = 3, max_chars: int = 6000) -> "ConversationContext":
+        """TF-DF-IDF-selected slices from OTHER conversations within ``scope``
+        ({user_id, team_ids, since, participant_id} — interpreted by the impl). Never raises."""
 
 
 @runtime_checkable

@@ -48,7 +48,9 @@ from .adapters import (
     EVENT_RESULT,
     EVENT_STATUS,
     EVENT_TOKENS,
+    EVENT_UNDERSTANDING,
     ContextAssembler,
+    ConversationStore,
     DeepResult,
     DeepRunner,
     Escalation,
@@ -62,6 +64,7 @@ from .adapters import (
     ProgressSink,
     RetrievalAdapter,
 )
+from .card_filter import _extract_json
 from .context_doctrine import CACHED_HINT_GATE, MODEL_TIER_GATE, SUFFICIENCY_GATE
 from .inbox import InputInbox
 from .guard import (
@@ -555,7 +558,7 @@ _CONDENSE_DECISION_PROMPT = (
 
 VERIFY_GOAL_TOOL: Dict[str, Any] = {
     "name": "goal_verdict",
-    "description": "Judge whether the worker's run met the done-standard at the quality bar; if not, say what to do next.",
+    "description": "Judge whether the worker's run met the done-standard at the quality bar; if not, say what to do next, whether more context is needed, and which model tier to use.",
     "input_schema": {
         "type": "object",
         "properties": {
@@ -566,6 +569,19 @@ VERIFY_GOAL_TOOL: Dict[str, Any] = {
             "next_action": {"type": "string",
                             "description": "If not met: a SHORT, specific instruction for the next attempt "
                                            "(what to fix, what context/file to look at, or why it failed)."},
+            "need_more_context": {"type": "boolean",
+                                  "description": "True if the worker fell short because it did NOT have "
+                                                 "enough context (it lacked a file, a prior message, or a "
+                                                 "fact it needed). False if it had what it needed but did "
+                                                 "the work wrong or incompletely."},
+            "context_query": {"type": "string",
+                              "description": "If need_more_context is true: a SHORT search query naming "
+                                             "the missing context to pull (e.g. a file, topic, or term)."},
+            "next_tier": {"type": "string",
+                          "description": "Optional. The model tier the next attempt should use, one of: "
+                                         "fast, balanced, quality, best (or haiku, sonnet, opus). Omit to "
+                                         "keep the current tier. Raise it when the failure looks like a "
+                                         "reasoning/capability gap."},
         },
         "required": ["met"],
     },
@@ -581,8 +597,16 @@ Decide:
     clearly matches the goal and the standards).
   - met=false if the output is vague, only describes a plan, is partial, hit a limit or error, falls
     short of the quality standards, or does not clearly satisfy the goal.
-When met=false, set next_action to a SHORT, specific instruction for the next attempt: what to fix,
-what context or file to look at next, or the likely reason it failed. Do NOT use em dashes.
+When met=false:
+  - set next_action to a SHORT, specific instruction for the next attempt: what to fix, what context
+    or file to look at next, or the likely reason it failed.
+  - set need_more_context=true ONLY when the worker clearly lacked context it needed (a missing file,
+    a prior message, an unknown fact); then set context_query to a short search query naming that
+    missing context. If the worker had what it needed but did the work poorly, leave
+    need_more_context=false.
+  - optionally set next_tier to a stronger model tier (fast, balanced, quality, best) when the
+    failure looks like a reasoning or capability gap rather than missing context.
+Do NOT use em dashes.
 
 {persona}{standards}--- GOAL (done-standard) ---
 {goal}
@@ -593,6 +617,43 @@ what context or file to look at next, or the likely reason it failed. Do NOT use
 --- WORKER OUTPUT (what it reports it did) ---
 {output}
 """
+
+# STEP 1 (User Input Understanding): rewrite a short/anaphoric latest message into ONE
+# self-contained instruction (a goal condition) using ONLY the provided conversation context.
+# NO em dashes anywhere (hard brand rule). Reserved replies: MORE_CONTEXT_NEEDED / CLARIFY: <q>.
+RESOLVE_REQUEST_PROMPT = """\
+You resolve what a user's latest message means so downstream work targets the right thing.
+Given the recent conversation and the latest user message, rewrite the latest message as ONE
+self-contained instruction: a goal condition stating what would make this request satisfied.
+Use ONLY the provided context to resolve references like "it", "that", "the first one".
+Rules:
+- If the message references something NOT present in the provided context, reply exactly: MORE_CONTEXT_NEEDED
+- If it cannot be resolved even in principle without asking the user, reply: CLARIFY: <one short question>
+- Otherwise reply with ONLY the rewritten self-contained instruction, nothing else.
+Do not use em dashes. Be concise and concrete.
+
+Conversation context:
+{conv_context}
+
+Latest user message: {user_message}
+"""
+
+# Pure acknowledgements / deferrals that carry NO standalone instruction — they only make sense
+# against prior conversation. A whole message equal to one of these needs context to be understood.
+_ACK_PHRASES = frozenset({
+    "ok", "okay", "k", "yes", "yep", "yeah", "yup", "sure", "go ahead", "go for it",
+    "do it", "please do", "do that", "do so", "continue", "proceed", "carry on",
+    "same as before", "as before", "like before", "as we discussed", "as discussed",
+    "sounds good", "go", "agreed", "approved", "confirm", "confirmed",
+})
+# Anaphora / reference words that point at something earlier in the conversation. A short message
+# leaning on one of these WITHOUT a concrete noun cannot be understood on its own.
+_ANAPHORA_RE = re.compile(
+    r"\b(it|its|that|this|those|these|them|they|the first one|the second one|the last one|"
+    r"the other one|the previous one|as we discussed|as discussed|like before|as before|"
+    r"same as before)\b",
+    re.IGNORECASE,
+)
 
 # A guidance card may state a model preference for its kind of work (e.g. a "model selection" card
 # whose body contains "model: sonnet" or "preferred model: claude-opus-4-8"). This scans the
@@ -981,6 +1042,7 @@ class Orchestrator:
         context_assembler: Optional[ContextAssembler] = None,
         guidance: Optional[GuidanceProvider] = None,
         input_inbox: Optional["InputInbox"] = None,
+        conversation_store: Optional[ConversationStore] = None,
     ):
         self.retrieval = retrieval
         self.provider = provider
@@ -1020,6 +1082,11 @@ class Orchestrator:
         # "APPLICABLE GUIDANCE" block before planning, and the planner may list_guidance /
         # read_guidance on demand. Cards are opaque text. Never raises. None = today's behavior.
         self.guidance = guidance
+        # Optional storage-agnostic CONVERSATION STORE (the User Input Understanding step). When
+        # wired AND the caller passes a conv_id, the brain may pull a relevant slice of the current
+        # (and related) conversation to rewrite a short/anaphoric message into a self-contained goal
+        # condition before selecting context. Never raises. None = Step 1 is a no-op (zero latency).
+        self.conversation_store = conversation_store
 
     def get_provider_for_model(self, model: str) -> ModelProvider:
         """Auto-detect and return the provider for a given model based on name prefix.
@@ -1344,8 +1411,11 @@ class Orchestrator:
 
         Judged through the AI rep's lens (``rep_preamble``) and against the applicable GUIDANCE CARDS
         (``quality_standards`` — the quality bar the result must clear). Returns
-        ``{"met": bool, "reason": str, "next_action": str}``, or ``None`` if verification could not
-        run (the caller then trusts the worker's own outcome rather than looping blindly). Never
+        ``{"met": bool, "reason": str, "next_action": str, "need_more_context": bool,
+        "context_query": str, "next_tier": Optional[str]}``, or ``None`` if verification could not
+        run (the caller then trusts the worker's own outcome rather than looping blindly). The three
+        extra fields let the goal loop decide whether to pull MORE context for the next iteration and
+        at which model tier; they default to ``False``/``""``/``None`` on any parse miss. Never
         raises.
         """
         if not (output or "").strip():
@@ -1368,10 +1438,22 @@ class Orchestrator:
                     goal=(goal or "")[:1000], brief=(brief or "")[:2000],
                     output=(output or "")[:6000]),
                 model=model, tool_schema=VERIFY_GOAL_TOOL)
+            # A tool-schema provider returns the structured dict directly; a provider that can only
+            # return text (no forced tool_choice) returns a string. Reuse the repo's JSON-from-LLM
+            # helper to recover the object in that case, defaulting to a not-met verdict on any miss.
+            if isinstance(raw, str):
+                try:
+                    raw = json.loads(_extract_json(raw) or "{}")
+                except Exception:  # noqa: BLE001 — a parse miss is just "could not verify"
+                    raw = {}
             if isinstance(raw, dict) and "met" in raw:
+                _tier = raw.get("next_tier")
                 return {"met": bool(raw.get("met")),
                         "reason": str(raw.get("reason") or "").strip(),
-                        "next_action": str(raw.get("next_action") or "").strip()}
+                        "next_action": str(raw.get("next_action") or "").strip(),
+                        "need_more_context": bool(raw.get("need_more_context")),
+                        "context_query": str(raw.get("context_query") or "").strip(),
+                        "next_tier": (str(_tier).strip() or None) if _tier else None}
         except Exception:  # noqa: BLE001 — verification must never break the run
             log.warning("goal verification call failed", exc_info=True)
         return None
@@ -1399,6 +1481,30 @@ class Orchestrator:
             if ladder:
                 return list(ladder)
         return [fallback]
+
+    def _resolved_deep_tier(self, tier: Optional[str],
+                            deep_models: List[Optional[str]]) -> Optional[str]:
+        """Resolve a verifier-requested ``next_tier`` to a worker-runnable model id via the registry.
+
+        The deep worker is Claude Code, so the model must be a Claude id. When the tier resolves to
+        a Claude model we use it; otherwise (e.g. a Gemini/OpenAI deployment whose tiers map to
+        non-Claude ids) we fall back to the STRONGEST model already on the deep ladder so we never
+        hand the Claude worker a foreign id. Returns ``None`` if ``tier`` is empty or unresolvable,
+        so the caller keeps stepping the ladder instead. Never raises."""
+        if not (tier or "").strip():
+            return None
+        from .goal_runner import _is_claude_model  # worker-runnable check
+        try:
+            resolved = self.registry.resolve_tier(tier)
+        except Exception:  # noqa: BLE001 — an unknown tier just means "no override"
+            return None
+        if resolved and _is_claude_model(resolved):
+            return resolved
+        # Non-Claude deployment: pick the strongest Claude model already on the ladder, if any.
+        for m in reversed(deep_models):
+            if m and _is_claude_model(m):
+                return m
+        return None
 
     @staticmethod
     def _drain_pending(pending_inputs: Optional[Callable[[], List[str]]]) -> str:
@@ -1431,6 +1537,87 @@ class Orchestrator:
             f"Do this now: {nxt}"
         )
 
+    # --- per-goal context selection (each deep goal gets its OWN context) -----
+
+    def _assemble_for_goal(self, goal: str, *,
+                           ctx_meta: Optional[Dict[str, Any]]) -> str:
+        """Select PER-GOAL context for a single deep goal condition. Renders a block from the
+        wired ``context_assembler`` (targeting THIS goal, not the shared run-level message) plus a
+        relevant CURRENT-conversation slice from the wired ``conversation_store``. Returns "" when
+        neither is wired or nothing is found. Never raises — a degraded source is simply skipped."""
+        parts: List[str] = []
+        if self.context_assembler is not None and (goal or "").strip():
+            try:
+                assembled = self.context_assembler.assemble(goal, meta=ctx_meta or None)
+                cv = (getattr(assembled, "context_view", "") or "").strip()
+                if cv:
+                    parts.append("--- CONTEXT SELECTED FOR THIS GOAL ---\n" + cv)
+            except Exception:  # noqa: BLE001 — assembly must never break the run
+                log.debug("per-goal context assembly failed", exc_info=True)
+        conv_id = (ctx_meta or {}).get("conv_id")
+        if self.conversation_store is not None and conv_id and (goal or "").strip():
+            try:
+                slc = self.conversation_store.current_slice(conv_id, goal)
+                txt = (getattr(slc, "text", "") or "").strip()
+                if txt:
+                    parts.append("--- RELEVANT CONVERSATION FOR THIS GOAL ---\n" + txt)
+            except Exception:  # noqa: BLE001 — store must never break the run
+                log.debug("per-goal conversation slice failed", exc_info=True)
+        return "\n\n".join(parts)
+
+    def _widen_for_goal(self, goal: str, query: str, round_idx: int, *,
+                        ctx_meta: Optional[Dict[str, Any]]) -> str:
+        """Pull MORE context for a retry that reported it lacked context. Widens by round:
+        a fresh assembler read targeting the verifier's ``context_query``, WIDER conversation
+        retrieval (the current slice plus related OTHER conversations in scope), and a targeted
+        retrieval grep/read of the missing term. ``round_idx`` (1-based) grows the budget so each
+        retry can see more than the last. Returns "" when nothing extra is found. Never raises."""
+        q = (query or goal or "").strip()
+        if not q:
+            return ""
+        parts: List[str] = []
+        # 1) Re-run the assembler against the SPECIFIC missing context the verifier named.
+        if self.context_assembler is not None:
+            try:
+                assembled = self.context_assembler.assemble(q, meta=ctx_meta or None)
+                cv = (getattr(assembled, "context_view", "") or "").strip()
+                if cv:
+                    parts.append("--- ADDITIONAL CONTEXT (" + q[:80] + ") ---\n" + cv)
+            except Exception:  # noqa: BLE001
+                log.debug("widen assembler read failed", exc_info=True)
+        # 2) Widen the conversation: the current slice PLUS related other conversations, allowing
+        #    more characters/conversations on each successive round.
+        conv_id = (ctx_meta or {}).get("conv_id")
+        conv_scope = (ctx_meta or {}).get("conv_scope")
+        if self.conversation_store is not None and conv_scope:
+            try:
+                rel = self.conversation_store.related_slices(
+                    q, conv_scope, exclude_conv_id=conv_id or None,
+                    max_convs=min(3 + round_idx, 8),
+                    max_chars=6000 + 2000 * round_idx)
+                txt = (getattr(rel, "text", "") or "").strip()
+                if txt:
+                    parts.append("--- RELATED CONVERSATIONS ---\n" + txt)
+            except Exception:  # noqa: BLE001
+                log.debug("widen related slices failed", exc_info=True)
+        # 3) Targeted retrieval read: grep the named term across the corpus for the next attempt.
+        if self.retrieval is not None:
+            try:
+                obs = self.retrieval.grep(q, max_hits=min(10 + 5 * round_idx, 40))
+                hits = getattr(obs, "hits", None) or []
+                if hits:
+                    lines = []
+                    for h in hits[:min(10 + 5 * round_idx, 40)]:
+                        if isinstance(h, dict):
+                            lines.append(f"{h.get('rel_path','?')}:{h.get('line_no','?')}: "
+                                         f"{str(h.get('line','')).strip()[:200]}")
+                    if lines:
+                        parts.append("--- RETRIEVAL HITS (" + q[:80] + ") ---\n"
+                                     + "\n".join(lines))
+            except Exception:  # noqa: BLE001
+                log.debug("widen retrieval grep failed", exc_info=True)
+        return "\n\n".join(parts)
+
     # --- deep fan-out --------------------------------------------------------
 
     def _run_deep(self, plan: PlanDecision, user_message: str, model: str,
@@ -1440,7 +1627,8 @@ class Orchestrator:
                   gathered: Optional[List[Dict[str, Any]]] = None,
                   quality_standards: Optional[str] = None,
                   pending_inputs: Optional[Callable[[], List[str]]] = None,
-                  model_hint: Optional[str] = None) -> OrchestratorResult:
+                  model_hint: Optional[str] = None,
+                  ctx_meta: Optional[Dict[str, Any]] = None) -> OrchestratorResult:
         subtasks = (plan.deep_subtasks or [])[: self.cfg.max_deep_subtasks]
         if not subtasks:
             subtasks = [{"goal": _truncate_goal(plan.goal or f"Fully address the request: {user_message}"),
@@ -1498,6 +1686,17 @@ class Orchestrator:
             # multiple subtasks run concurrently (each closure owns its own ``fact``).
             fact = ExecutionFact(goal=goal) if exec_record is not None else None
 
+            # PER-GOAL CONTEXT: each deep goal selects its OWN context (its own assembler read +
+            # conversation slice for THIS goal), distinct from the shared run-level context_view.
+            # Built once here; ``extra_context`` accumulates additional context pulled on retries
+            # that report they did not have enough (the "look at more if it did not learn enough"
+            # widening principle). Empty when no assembler/store is wired (single-goal/no-store path
+            # is byte-for-byte unchanged). The closure mutates ``extra_context`` across iterations.
+            per_goal_context = self._assemble_for_goal(goal, ctx_meta=ctx_meta)
+            extra_context: List[str] = []
+            if per_goal_context and emit is not None:
+                emit.status(f"selected context for goal: {goal[:60]}")
+
             def _emit_one(ev: ProgressEvent) -> None:
                 # TEE: classify any EVENT_EXEC phase into the fact, then forward to the live sink.
                 try:
@@ -1531,6 +1730,13 @@ class Orchestrator:
                                 "--- RELEVANT CONTENT FOUND BY THE BRAIN ---\n"
                                 + _render_gathered(gathered)
                             )
+                        # This goal's OWN selected context, plus anything pulled by widening on a
+                        # prior retry that reported it lacked context. Each goal therefore runs with
+                        # context targeted at IT, not just the shared run-level view.
+                        if per_goal_context:
+                            preamble_parts.append(per_goal_context)
+                        if extra_context:
+                            preamble_parts.extend(extra_context)
                         if preamble_parts:
                             kwargs["context_preamble"] = "\n\n".join(preamble_parts)
                     # If named runners + classifier are registered, let the classifier pick which
@@ -1624,7 +1830,31 @@ class Orchestrator:
                         emit.status("Goal not met: " + verdict.get("reason"))
                     else:
                         emit.status("Goal not met: " + reason)
-                if tier_idx < len(deep_models) - 1:
+                # WIDEN: if the verifier says the worker lacked context, pull MORE for the next
+                # attempt (a fresh assembler read for the named missing context, wider conversation
+                # retrieval, and a targeted retrieval grep). The widening grows with each round so a
+                # retry always sees more than the last, never the same context again. Added to
+                # ``extra_context`` so it rides the next ``_do_run`` preamble for THIS goal.
+                if verdict.get("need_more_context"):
+                    widened = self._widen_for_goal(
+                        goal, verdict.get("context_query") or reason, attempt,
+                        ctx_meta=ctx_meta)
+                    if widened:
+                        extra_context.append(widened)
+                        if emit is not None:
+                            emit.status("Fetching more context for the next attempt…")
+                # TIER: prefer the verifier's explicit ``next_tier`` (resolved through the registry)
+                # when it names a real tier; otherwise step one rung up the deep-model ladder, since a
+                # capability gap is a common cause of a not-met goal. Either way the next attempt runs
+                # at the chosen tier.
+                _vt = verdict.get("next_tier")
+                _resolved_tier = self._resolved_deep_tier(_vt, deep_models) if _vt else None
+                if _resolved_tier is not None:
+                    run_model = _resolved_tier
+                    deep_models[min(tier_idx, len(deep_models) - 1)] = _resolved_tier
+                    if emit is not None:
+                        emit.status(f"Switching model tier to {_vt} for the next attempt…")
+                elif tier_idx < len(deep_models) - 1:
                     tier_idx += 1  # a capability gap is a common cause; try a stronger model next
                 if budget is not None and tokens_used >= budget:
                     if emit is not None:
@@ -1892,6 +2122,99 @@ class Orchestrator:
             pass
         return s[:_CONCISE_DECISION_LIMIT].rstrip() + " [...]"
 
+    # --- STEP 1: User Input Understanding ------------------------------------
+
+    def _needs_context_to_understand(self, msg: str) -> bool:
+        """Cheap, NO-LLM check: does this message lean on conversation context to be understood?
+
+        Returns True for short/anaphoric inputs that can't stand alone — a pure acknowledgement
+        ("ok", "go ahead"), a very short message (<= ~5 words), or one that leans on a pronoun /
+        anaphor ("it", "that", "the first one", "as we discussed") WITHOUT a concrete noun to anchor
+        it. CONSERVATIVE by design: when unsure, return False so a self-contained input skips the
+        LLM hop entirely and adds zero latency. Never raises."""
+        try:
+            s = (msg or "").strip().lower()
+            if not s:
+                return False
+            # Pure acknowledgement / deferral (whole message is one of the ack phrases): needs context.
+            if s.rstrip(".!?") in _ACK_PHRASES:
+                return True
+            words = s.split()
+            # Very short messages can't carry a self-contained instruction on their own.
+            if len(words) <= 5:
+                return True
+            # Longer messages: only treat as context-dependent when they lean on an anaphor AND have
+            # no concrete noun-like anchor. We approximate "concrete noun" as a token > 3 chars that
+            # is not itself a stopword/anaphor/ack word — conservative, so we DON'T fire on a request
+            # that names its own subject (e.g. "update the pricing docs to mention the new tier").
+            if _ANAPHORA_RE.search(s):
+                _generic = _ACK_PHRASES | {
+                    "the", "a", "an", "and", "or", "but", "to", "of", "for", "with", "please",
+                    "can", "you", "could", "would", "will", "should", "it", "its", "that", "this",
+                    "those", "these", "them", "they", "one", "first", "second", "last", "other",
+                    "previous", "as", "we", "discussed", "like", "before", "same", "now", "then",
+                }
+                has_concrete_noun = any(
+                    len(w.strip(".,!?:;\"'")) > 3 and w.strip(".,!?:;\"'") not in _generic
+                    for w in words
+                )
+                return not has_concrete_noun
+            return False
+        except Exception:  # noqa: BLE001 — the gate must never break the run
+            return False
+
+    def _understand_input(self, user_message: str, conv_id: str, conv_scope: Dict[str, Any],
+                          emit: "_Emitter"):
+        """Resolve a short/anaphoric ``user_message`` into a self-contained GOAL CONDITION using the
+        wired ``conversation_store``. Returns ``(goal_condition, conv_ctx_text, clarify_or_None)``:
+
+          * ``goal_condition``  — the rewritten self-contained instruction (defaults to the raw
+            message when resolution does not produce a better one).
+          * ``conv_ctx_text``   — the conversation-context text actually pulled (current slice plus
+            any related slice), so the caller can inject it into ``context_view``.
+          * ``clarify_or_None`` — a short question to ask the user, or None.
+
+        One cheap LLM call by default; at most TWO (a single MORE_CONTEXT_NEEDED retry after pulling
+        related conversations). Never raises (the caller also guards)."""
+        store = self.conversation_store
+        model = self.registry.resolve_tier(self.cfg.planner_tier)
+
+        cur = store.current_slice(conv_id, user_message)
+        conv_ctx_text = (cur.text or "") if cur is not None else ""
+
+        def _resolve(ctx_text: str) -> str:
+            prompt = RESOLVE_REQUEST_PROMPT.format(
+                conv_context=ctx_text or "(no prior conversation available)",
+                user_message=user_message)
+            try:
+                out = self.provider.answer([{"role": "user", "content": prompt}], model=model)
+            except Exception:  # noqa: BLE001 — provider error degrades to "no resolution"
+                return ""
+            return (out or "").strip()
+
+        reply = _resolve(conv_ctx_text)
+
+        if reply == "MORE_CONTEXT_NEEDED":
+            # Pull related past conversations and try ONCE more.
+            try:
+                rel = store.related_slices(user_message, conv_scope, exclude_conv_id=conv_id)
+            except Exception:  # noqa: BLE001
+                rel = None
+            if rel is not None and rel.text:
+                conv_ctx_text = (conv_ctx_text + "\n\n" + rel.text if conv_ctx_text else rel.text)
+            reply = _resolve(conv_ctx_text)
+            if reply == "MORE_CONTEXT_NEEDED" or reply.startswith("CLARIFY:"):
+                # Still unresolved: ask the user with a generic short question.
+                return user_message, conv_ctx_text, "Could you clarify what you'd like me to do?"
+
+        if reply.startswith("CLARIFY:"):
+            q = reply[len("CLARIFY:"):].strip() or "Could you clarify what you'd like me to do?"
+            return user_message, conv_ctx_text, q
+
+        # A successful resolution is the goal condition; fall back to the raw message if empty.
+        goal_condition = reply if reply else user_message
+        return goal_condition, conv_ctx_text, None
+
     def _run_clarify(self, plan: PlanDecision, *, quest_id: Optional[str] = None,
                      emit: Optional[_Emitter] = None) -> OrchestratorResult:
         """Surface user clarification/selection need as a decision request.
@@ -1949,6 +2272,31 @@ class Orchestrator:
         return OrchestratorResult(kind="confirm", question=question, decision_id=decision_id,
                                   rationale=plan.rationale)
 
+    def _finish_understanding_clarify(
+        self, res: OrchestratorResult, *, emit: "_Emitter", exec_record: "ExecutionRecord",
+        user_message: str, ctx_meta: Dict[str, Any]) -> OrchestratorResult:
+        """Terminate the turn on a STEP 1 (understanding) CLARIFY, mirroring the confirm branch of
+        ``run``'s ``finish``: attach the execution record, emit the decision + done events, and run
+        the best-effort ContextAssembler write-back. The planner loop is NOT run. Never raises from
+        the write-back (it is wrapped). Kept tiny and parallel to ``finish`` so a clarify produced by
+        understanding reports IDENTICALLY to a planner-produced confirm (executor → needs_you)."""
+        res.steps = 0
+        res.gathered = []
+        res.execution_record = exec_record
+        if self.context_assembler is not None:
+            try:
+                self.context_assembler.record(
+                    user_message,
+                    {"kind": res.kind, "steps": 0, "files": [], "response": res.question,
+                     **(ctx_meta or {})},
+                )
+            except Exception:  # noqa: BLE001 — write-back must never break the run
+                pass
+        emit.emit(ProgressEvent(type=EVENT_DECISION, text=res.question,
+                                decision_id=res.decision_id, result_kind="confirm"))
+        emit.emit(ProgressEvent(type=EVENT_DONE, result_kind=res.kind, step=0))
+        return res
+
     # --- the loop ------------------------------------------------------------
 
     def run(self, user_message: str, *, transcript: str = "", context_view: str = "",
@@ -1961,7 +2309,9 @@ class Orchestrator:
             attachments: Optional[List[Dict[str, Any]]] = None,
             context_meta: Optional[Dict[str, Any]] = None,
             rep_preamble: Optional[str] = None,
-            pending_inputs: Optional[Callable[[], List[str]]] = None) -> OrchestratorResult:
+            pending_inputs: Optional[Callable[[], List[str]]] = None,
+            conv_id: Optional[str] = None,
+            conv_scope: Optional[Dict[str, Any]] = None) -> OrchestratorResult:
         """Run the bounded loop for one request and return a terminal OrchestratorResult.
 
         Streaming/event interface (both lanes use the SAME emissions; the SINK decides policy):
@@ -1998,6 +2348,15 @@ class Orchestrator:
                             rep). The brain stays ignorant of its content — it forwards the string
                             to a deep runner that accepts ``context_preamble`` and leaves older
                             runners untouched. Absent/None means exactly today's behavior.
+
+        * ``conv_id``     — optional id of the CURRENT conversation. When set AND a
+                            ``conversation_store`` is wired, Step 1 (User Input Understanding) may
+                            pull a relevant slice of that conversation to resolve a short/anaphoric
+                            message into a self-contained goal condition before context selection.
+                            Absent/None (or no store) means Step 1 is a no-op (zero latency).
+        * ``conv_scope``  — optional scope dict ({user_id, team_ids, since, participant_id, ...})
+                            for finding RELATED past conversations when the current slice is not
+                            enough to resolve the message. Interpreted by the ConversationStore.
 
         ``run`` still works with NO event args (back-compat: same signature callers used before
         plus keyword-only extras), returning the terminal ``OrchestratorResult``.
@@ -2092,6 +2451,13 @@ class Orchestrator:
         _ctx_meta: Dict[str, Any] = {**(context_meta or {})}
         if quest_id is not None:
             _ctx_meta.setdefault("quest_id", quest_id)
+        # Carry the conversation identity into the context meta so PER-GOAL deep context selection
+        # (``_run_deep`` -> ``_assemble_for_goal`` / ``_widen_for_goal``) can pull a conversation
+        # slice / related conversations for each goal. Inert when no conv_id/scope is in scope.
+        if conv_id is not None:
+            _ctx_meta.setdefault("conv_id", conv_id)
+        if conv_scope is not None:
+            _ctx_meta.setdefault("conv_scope", conv_scope)
 
         # --- Mid-run user messages: auto-drain a wired inbox for THIS conversation ----------------
         # If the caller didn't pass an explicit ``pending_inputs`` but an ``input_inbox`` is wired,
@@ -2105,13 +2471,59 @@ class Orchestrator:
                 _inbox = self.input_inbox
                 pending_inputs = lambda: _inbox.drain(_conv_key)  # noqa: E731
 
+        # --- STEP 1: USER INPUT UNDERSTANDING (resolve the request) ---------------------------
+        # A short or anaphoric input ("ok do it", "the first one") can't be understood alone. Only
+        # when a ConversationStore is wired, a conv_id is present, AND a cheap keyword check says the
+        # input leans on context, do we pull a relevant slice of the conversation and ask the model
+        # ONCE to rewrite the message as a self-contained GOAL CONDITION (what success looks like).
+        # A self-contained input skips this entirely (no LLM hop, ZERO added latency). The resolved
+        # goal_condition then drives context SELECTION (Step 2) and rides along in context_view;
+        # the planner still sees the user's LITERAL words so word-for-word fidelity is preserved.
+        goal_condition = user_message
+        conv_ctx_text = ""
+        if (self.conversation_store is not None and conv_id
+                and self._needs_context_to_understand(user_message)):
+            try:
+                goal_condition, conv_ctx_text, clarify_q = self._understand_input(
+                    user_message, conv_id, conv_scope or {}, emit)
+            except Exception:  # noqa: BLE001 — understanding must never break the run
+                goal_condition, conv_ctx_text, clarify_q = user_message, "", None
+            if clarify_q:
+                # Short-circuit the turn: ask the user, do NOT run the planner loop. Reuse the
+                # clarify/confirm mechanism so the executor maps it to needs_you and chat posts it.
+                plan = PlanDecision(action="confirm", confirm_question=clarify_q,
+                                    rationale="clarification needed to understand the request")
+                res = self._run_confirm(plan, quest_id=quest_id)
+                return self._finish_understanding_clarify(
+                    res, emit=emit, exec_record=exec_record, user_message=user_message,
+                    ctx_meta=_ctx_meta)
+            # Understanding actually ran (resolved request and/or pulled conversation context):
+            # emit a streamed event so the UI shows it immediately, and prepend the pulled
+            # conversation context + resolved request to context_view as a labelled block.
+            if goal_condition != user_message or conv_ctx_text:
+                emit.emit(ProgressEvent(
+                    type=EVENT_UNDERSTANDING,
+                    text=f"Understood as: {goal_condition}",
+                    data={"goal_condition": goal_condition}))
+                _understood_block = (
+                    "--- CONVERSATION CONTEXT ---\n" + conv_ctx_text + "\n"
+                    if conv_ctx_text else ""
+                ) + f"--- UNDERSTOOD REQUEST ---\n{goal_condition}\n"
+                context_view = (_understood_block + "\n" + context_view
+                                if context_view else _understood_block)
+
         _assembled = None
         _ctx_future = None
         _ctx_executor = None
         if self.context_assembler is not None:
             try:
                 _ctx_assembler = self.context_assembler
-                _ctx_msg = user_message
+                # STEP 2 (context selection) targets the RESOLVED request: when Step 1 rewrote the
+                # message into a goal_condition, select context for THAT, not the raw anaphoric text.
+                # The planner still receives the literal ``user_message`` (literal-words fidelity);
+                # the goal_condition rides in context_view. When Step 1 did not run, goal_condition
+                # == user_message, so this is byte-for-byte the prior behavior.
+                _ctx_msg = goal_condition
 
                 def _do_assemble() -> Any:
                     return _ctx_assembler.assemble(_ctx_msg, meta=_ctx_meta or None)
@@ -2482,7 +2894,8 @@ class Orchestrator:
             res = self._run_deep(plan, user_message, self._answer_model(plan, "opus", hint=model_hint),
                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                                  gathered=gathered, quality_standards=quality_standards,
-                                 pending_inputs=pending_inputs, model_hint=model_hint)
+                                 pending_inputs=pending_inputs, model_hint=model_hint,
+                                 ctx_meta=_ctx_meta)
             # Background: categorize edited files into context cards (deep runner returns edited_files in metadata)
             if res.deep_results and any(dr.met for dr in res.deep_results):
                 self._update_context_cards_after_deep(res, context_meta)
@@ -2589,7 +3002,8 @@ class Orchestrator:
                                          emit=emit, rep_preamble=rep_preamble,
                                          exec_record=exec_record, gathered=gathered,
                                          quality_standards=quality_standards,
-                                         pending_inputs=pending_inputs, model_hint=model_hint)
+                                         pending_inputs=pending_inputs, model_hint=model_hint,
+                                         ctx_meta=_ctx_meta)
                 # Emit execution results as a separate milestone/message (not appended to answer)
                 if deep_res and deep_res.deep_results:
                     deep_output = "\n\n".join(d.output for d in deep_res.deep_results if d.output)

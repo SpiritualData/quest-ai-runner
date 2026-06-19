@@ -15,7 +15,10 @@ from .adapters import (
     EVENT_REPLAN,
     EVENT_RESULT,
     EVENT_STATUS,
+    EVENT_UNDERSTANDING,
     SURFACING_EVENTS,
+    ConversationContext,
+    ConversationStore,
     DeepResult,
     DeepRunner,
     DeepRunnerBase,
@@ -92,6 +95,9 @@ __all__ = [
     "StreamSink", "MilestoneSink", "FanoutSink", "SURFACING_EVENTS",
     "EVENT_STATUS", "EVENT_PLAN", "EVENT_READ", "EVENT_REPLAN", "EVENT_PARTIAL",
     "EVENT_EXEC", "EVENT_RESULT", "EVENT_DECISION", "EVENT_MILESTONE", "EVENT_DONE",
+    "EVENT_UNDERSTANDING",
+    # storage-agnostic conversation-history retrieval (User Input Understanding)
+    "ConversationContext", "ConversationStore",
     # registry
     "ModelRegistry", "bucket_top", "TIERS", "DEFAULT_FALLBACK_TOP",
     "is_vision_capable", "VISION_FAMILY_PATTERNS",

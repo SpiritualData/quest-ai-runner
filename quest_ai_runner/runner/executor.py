@@ -125,10 +125,21 @@ class TaskExecutor:
             on_milestone=lambda ev: self._on_milestone(task_id, conv_id, ev),
         )
 
+        # Build a scope for finding RELATED past conversations (the orchestrator's Step 1, User
+        # Input Understanding) from whatever identity the task carries. Omit missing keys so a
+        # store's best-effort scope filter only constrains on fields actually present.
+        conv_scope: Dict[str, Any] = {}
+        for _src, _dst in (("user_id", "user_id"), ("team_id", "team_id"),
+                           ("team_ids", "team_ids"), ("participant_id", "participant_id")):
+            _val = task.get(_src)
+            if _val is not None:
+                conv_scope[_dst] = _val
+
         try:
             result: OrchestratorResult = self._orch.run(
                 text, quest_id=quest_id, context_view=context_view, mode=Mode.BACKGROUND,
-                sink=sink, model_hint=model_hint, rep_preamble=rep_preamble)
+                sink=sink, model_hint=model_hint, rep_preamble=rep_preamble,
+                conv_id=conv_id, conv_scope=conv_scope or None)
         except Exception as e:  # noqa: BLE001 — brain failure -> failed report, never crash poller
             msg = f"orchestrator error: {type(e).__name__}: {e}"
             self._report_progress(task_id, "error", text=msg)
@@ -197,8 +208,12 @@ class TaskExecutor:
         API errors (builds partial context)."""
         parts = []
 
-        # Fetch prior conversation history if this task was delegated from a chat
-        if conv_id and self._retrieval:
+        # Fetch prior conversation history if this task was delegated from a chat — but ONLY as a
+        # FALLBACK when the orchestrator has no ConversationStore wired. When a store IS wired, the
+        # orchestrator's Step 1 (User Input Understanding) pulls the relevant slice itself (and
+        # resolves the request from it), so we must not also dump the full transcript here.
+        if (conv_id and self._retrieval
+                and getattr(self._orch, "conversation_store", None) is None):
             try:
                 # Try to read the EXACT conversation by its conv_id
                 obs = self._retrieval.read_section(str(conv_id))
