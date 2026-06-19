@@ -18,6 +18,11 @@ These satisfy the core interfaces; a consumer wires the ones it needs into a Run
   * FileContextStore          — ContextAssembler backed by per-card JSON files (stdlib-only). Selects
                                 relevant cards by keyword overlap, checks file freshness, and renders
                                 a context_view string for the orchestrator's pre-flight injection.
+  * ReferenceResolver         — resolves ONE typed context-card content item (a reference resolved
+                                fresh to current content, or an LLM note) into rendered text. Ships
+                                built-in ``note``/``file`` resolvers; ``build_resolver_registry``
+                                merges them with consumer-injected collection/conversation/query
+                                resolvers. NEVER raises. See reference_resolver.py.
   * VectorContextAssembler    — ContextAssembler backed by a VectorStore (semantic search with
                                 optional agentic LLM query-gen + review). Stdlib + the VectorStore
                                 Protocol only; heavy deps behind an optional extra.
@@ -50,6 +55,12 @@ from .guidance_card_manager import GuidanceCard, GuidanceCardManager
 from .hybrid_context_assembler import HybridContextAssembler
 from .quest_guidance_loader import QuestGuidanceLoader
 from .quest_retrieval_adapter import QuestRetrievalAdapter
+from .reference_resolver import (
+    ReferenceResolver,
+    NoteResolver,
+    build_resolver_registry,
+    make_file_resolver,
+)
 from .vector_context_assembler import VectorContextAssembler
 
 # GeminiProvider requires the google-generativeai optional package.
@@ -112,6 +123,10 @@ __all__ = [
     "GeminiProvider",
     "OpenAIProvider",
     "FileContextStore",
+    "ReferenceResolver",
+    "NoteResolver",
+    "build_resolver_registry",
+    "make_file_resolver",
     "VectorContextAssembler",
     "HybridContextAssembler",
     "BM25ContentStore",

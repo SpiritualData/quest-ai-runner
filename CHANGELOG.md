@@ -6,6 +6,44 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Source-agnostic context-card CONTENT (cards are no longer file-only).** A context card
+  (`adapters/file_context_store.py`) can now carry an optional top-level `content` list of TYPED
+  items, each either a REFERENCE resolved FRESH to current content on every use, or an LLM NOTE
+  (synthesized text). Files become just ONE reference type, so a card may have zero `files[]` and
+  still be selectable, renderable, and embeddable. Item shape:
+  `{"id", "type": "file|collection|conversation|query|note", "locator": {…}, "ts": <epoch float>,
+  "why": "<short>"}` (for `note`, `locator = {"text": …}`). Fully additive: a card with no `content`
+  and no resolvers wired behaves byte-for-byte as today's file-only card (the existing
+  `file_context_store` tests pass unchanged).
+- **`ReferenceResolver` framework (`adapters/reference_resolver.py`).** A tiny `ReferenceResolver`
+  Protocol (`resolve(locator, *, max_chars) -> str`, NEVER raises, returns `""` on failure) plus a
+  `{type: ReferenceResolver}` registry. Built-in resolvers ship for `note` (returns the locator
+  text) and `file` (re-reads the live file fresh through the store's own path, reflecting
+  staleness). The data-backed types (`collection`, `conversation`, `query`) are CONSUMER-INJECTED so
+  the library stays generic; an un-wired type degrades to a graceful unresolved-pointer line
+  (e.g. `[collection ref: <name>/<id> (unresolved)]`) instead of failing. `build_resolver_registry`
+  merges built-ins with consumer resolvers (consumer wins on collision). Wired through a new
+  `RunnerConfig.reference_resolvers` field and into the default `FileContextStore` in
+  `resolve_context_assembler`.
+- **Recency-bounded content resolution in `assemble()`.** Because a card's content can grow
+  unbounded, each selected card ranks its content by recency (`ts`) plus relevance to the task
+  (term overlap), resolves only the top-N within a char budget, and skips/trims the rest. New
+  `FileContextStore` constructor knobs `max_card_refs` / `max_card_ref_chars` (module constants
+  `_MAX_CARD_REFS=8`, `_MAX_CARD_REF_CHARS=4000`, `_MAX_CARD_CONTENT_ITEMS=200`). Never raises.
+- **Card-update API (read-modify-write) on `FileContextStore`.** `add_content(card_id, item)`,
+  `update_content(card_id, item_id, new_item)` (correction; appends if the id is unknown),
+  `remove_content(card_id, item_id)`, and a batched `update_card(card_id, add=, replace=, remove=)`.
+  Each is a safe atomic read-modify-write that normalizes the item, applies the recency trim, and
+  persists. `record()`/`_record_inner` are generalized to also append non-file content via
+  `outcome["content"]` (a list or single dict) without changing their file-pinning behavior. An
+  async LLM updater can use this later; the API and tests land now.
+- **No-file cards flow end to end.** `_card_term_weights` now tokenizes content `why`/note text (so
+  a pure note/collection card is IDF-selectable), and `export_for_embedding` includes note text +
+  content `why` (so such a card is vector-searchable). New built-ins exported from
+  `adapters/__init__.py`: `ReferenceResolver`, `NoteResolver`, `build_resolver_registry`,
+  `make_file_resolver`. New offline tests in `tests/test_card_content.py` (stub resolvers).
+
 ### Changed
 - **Selection/render algorithm extracted into pure module-level functions in `conversation_format`.**
   `select_current_slice(messages, query, *, recent_turns, max_chars)` and

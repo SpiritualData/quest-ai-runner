@@ -207,6 +207,32 @@ _SOURCE_FILE_WEIGHT = 1.0
 # Max length for a card summary built from docstrings/descriptions (~400 chars).
 _SUMMARY_MAX_CHARS = 400
 
+# ---------------------------------------------------------------------------
+# Source-agnostic card CONTENT model (additive to the file-only ``files[]`` list).
+# ---------------------------------------------------------------------------
+#
+# A card may carry an optional top-level ``content`` list of TYPED items. Each item is either a
+# REFERENCE (resolved FRESH to current content on every use) or an LLM NOTE (synthesized text).
+# Files become just ONE reference type, so a card can hold zero files and still be selectable,
+# renderable, and embeddable. Item shape:
+#
+#   {"id": "<stable id>", "type": "file|collection|conversation|query|note",
+#    "locator": {<type-specific pointer>}, "ts": <epoch float>, "why": "<short reason>"}
+#
+# For ``note`` the locator is ``{"text": "..."}``. References resolve through the wired
+# ``reference_resolvers`` registry (see adapters/reference_resolver.py); a card's content can grow
+# unbounded over time, so resolution is RECENCY-BOUNDED: items are ranked by recency (``ts``) plus
+# relevance to the task, and only the top-N within a char budget are resolved.
+
+# Max number of content REFERENCES resolved/rendered per card during assemble().
+_MAX_CARD_REFS = 8
+# Soft char budget for ALL resolved content of a single card (across its items).
+_MAX_CARD_REF_CHARS = 4000
+# Per-item soft char cap handed to a resolver (so one huge item can't eat the whole budget).
+_MAX_CARD_REF_ITEM_CHARS = 2000
+# Hard cap on how many content items a card retains on disk (oldest trimmed on write).
+_MAX_CARD_CONTENT_ITEMS = 200
+
 # Regex for non-Python symbol extraction (function/class names).
 _SYMBOL_RE = re.compile(
     r"""
@@ -268,6 +294,120 @@ def _path_slug(rel_path: str) -> str:
     clean = re.sub(r"[^a-z0-9]+", "-", rel_path.lower()).strip("-") or "root"
     digest = hashlib.sha256(rel_path.encode("utf-8", errors="replace")).hexdigest()[:6]
     return f"{clean}-{digest}"
+
+
+def _content_item_text(item: Dict[str, Any]) -> str:
+    """The free text a content item carries for relevance scoring (its ``why`` + any note text).
+
+    A reference contributes its ``why`` (the short reason it is on the card); a note contributes
+    both its ``why`` and its locator ``text``. This is what ``_card_term_weights`` and the
+    recency+relevance ranker tokenize so a pure note/collection card is still searchable. Never
+    raises.
+    """
+    try:
+        parts: List[str] = []
+        why = item.get("why")
+        if isinstance(why, str) and why:
+            parts.append(why)
+        if item.get("type") == "note":
+            text = (item.get("locator") or {}).get("text")
+            if isinstance(text, str) and text:
+                parts.append(text)
+        return " ".join(parts)
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _normalize_content(raw: Any) -> List[Dict[str, Any]]:
+    """Coerce a card's ``content`` field into a clean list of well-formed item dicts. Never raises.
+
+    Drops anything that is not a dict, defaults a missing ``type`` to ``note``, ensures ``locator``
+    is a dict, coerces ``ts`` to a float (0.0 when absent/bad), and synthesizes a stable ``id`` when
+    one is missing. Order is preserved. A card with no ``content`` key yields ``[]`` (backward
+    compatible: such a card behaves exactly as a file-only card).
+    """
+    out: List[Dict[str, Any]] = []
+    if not isinstance(raw, list):
+        return out
+    for idx, item in enumerate(raw):
+        if not isinstance(item, dict):
+            continue
+        itype = str(item.get("type") or "note").strip() or "note"
+        locator = item.get("locator")
+        if not isinstance(locator, dict):
+            locator = {}
+        try:
+            ts = float(item.get("ts") or 0.0)
+        except (TypeError, ValueError):
+            ts = 0.0
+        why = item.get("why")
+        why = why if isinstance(why, str) else ""
+        item_id = item.get("id")
+        if not isinstance(item_id, str) or not item_id:
+            # Stable-ish id from type + a digest of the locator + index, so updates can target it.
+            digest = hashlib.sha256(
+                (itype + json.dumps(locator, sort_keys=True, default=str)).encode(
+                    "utf-8", errors="replace"
+                )
+            ).hexdigest()[:8]
+            item_id = f"{itype}-{digest}-{idx}"
+        out.append({"id": item_id, "type": itype, "locator": locator, "ts": ts, "why": why})
+    return out
+
+
+def _rank_content_by_recency_relevance(
+    content: List[Dict[str, Any]], task_kws: Set[str], *, limit: int
+) -> List[Dict[str, Any]]:
+    """Rank content items by recency (``ts``) + relevance (term overlap), return the top ``limit``.
+
+    A card's content can grow huge over time, so resolution must be bounded. We score each item by
+    a blend: a recency component (newer ``ts`` ranks higher, normalized within the card) plus a
+    relevance component (overlap of the item's text terms with the task keywords). Relevance is
+    weighted more so a clearly on-topic-but-older item can still beat a fresh-but-irrelevant one,
+    while recency breaks ties and gently deprioritizes the stale. Never raises.
+    """
+    try:
+        if not content:
+            return []
+        ts_values = [it.get("ts", 0.0) for it in content]
+        ts_min, ts_max = min(ts_values), max(ts_values)
+        ts_span = (ts_max - ts_min) or 1.0
+
+        scored: List[tuple] = []
+        for it in content:
+            # Use the card's own tokenizer (camelCase + whitespace split, the same one assemble()
+            # tokenizes the task with) so relevance overlap is computed on a consistent vocabulary.
+            terms = _tokenize(_content_item_text(it)) if task_kws else set()
+            overlap = len(terms & task_kws) if task_kws else 0
+            recency = (it.get("ts", 0.0) - ts_min) / ts_span  # 0.0 (oldest) .. 1.0 (newest)
+            # Relevance dominates; recency is a smaller additive nudge / tie-breaker.
+            score = (2.0 * overlap) + recency
+            scored.append((score, it.get("ts", 0.0), it))
+        # Sort by score desc, then ts desc (newest first on ties).
+        scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        return [it for _, _, it in scored[: max(0, limit)]]
+    except Exception:  # noqa: BLE001
+        return content[: max(0, limit)]
+
+
+def _trim_content_by_recency(
+    content: List[Dict[str, Any]], *, max_items: int = _MAX_CARD_CONTENT_ITEMS
+) -> List[Dict[str, Any]]:
+    """Cap a card's stored content at ``max_items``, dropping the OLDEST (lowest ``ts``) first.
+
+    Applied on every read-modify-write so a card never grows without bound on disk. The kept items
+    are returned in their ORIGINAL order (only the oldest excess is removed), so ids stay stable.
+    Never raises.
+    """
+    try:
+        if len(content) <= max_items:
+            return content
+        # Find the ids of the newest ``max_items`` by ts, then keep those in original order.
+        by_recency = sorted(content, key=lambda it: it.get("ts", 0.0), reverse=True)
+        keep_ids = {it.get("id") for it in by_recency[:max_items]}
+        return [it for it in content if it.get("id") in keep_ids]
+    except Exception:  # noqa: BLE001
+        return content[:max_items]
 
 
 def _extract_symbols(file_path: Path, max_symbols: int = 30) -> List[str]:
@@ -1179,6 +1319,9 @@ class FileContextStore(ContextAssemblerBase):
         dry_run: bool = False,
         provider: Any = None,
         model: Optional[str] = None,
+        reference_resolvers: Optional[Dict[str, Any]] = None,
+        max_card_refs: int = _MAX_CARD_REFS,
+        max_card_ref_chars: int = _MAX_CARD_REF_CHARS,
     ) -> None:
         self._cards_dir = Path(cards_dir)
         self._repo_root = Path(repo_root).resolve() if repo_root else None
@@ -1200,6 +1343,23 @@ class FileContextStore(ContextAssemblerBase):
         self._confidence_threshold = confidence_threshold
         # Set to True once the lazy bootstrap has been attempted (success or failure).
         self._bootstrap_done: bool = False
+
+        # --- Source-agnostic CONTENT resolution config -------------------------------------
+        # Recency-bound limits for resolving a card's ``content`` items during assemble().
+        self._max_card_refs = max_card_refs
+        self._max_card_ref_chars = max_card_ref_chars
+        # The {type: ReferenceResolver} registry. The built-in ``file`` resolver reuses THIS store's
+        # fresh-read path (``_read_file_fresh``); ``note`` is built-in; collection/conversation/query
+        # are consumer-injected via ``reference_resolvers``. An un-wired type degrades to a graceful
+        # unresolved-pointer line at render time (never an error). Local import avoids any cycle.
+        try:
+            from .reference_resolver import build_resolver_registry
+            self._resolvers: Dict[str, Any] = build_resolver_registry(
+                file_read_text=self._read_file_fresh,
+                consumer_resolvers=reference_resolvers,
+            )
+        except Exception:  # noqa: BLE001 — resolver wiring must never break construction
+            self._resolvers = {}
 
         # In-memory card cache: {card_id: card_dict} or None when not yet loaded.
         self._cache: Optional[Dict[str, Dict[str, Any]]] = None
@@ -1232,11 +1392,82 @@ class FileContextStore(ContextAssemblerBase):
             return AssembledContext()
 
     def record(self, task_text: str, outcome: Dict[str, Any]) -> None:
-        """Upsert a card for this task and write it atomically. Never raises."""
+        """Upsert a card for this task and write it atomically. Never raises.
+
+        Beyond re-pinning files (``outcome["files"]``), ``record`` can also append source-agnostic
+        CONTENT: pass ``outcome["content"]`` as a list of content items (or single dicts) to append
+        them to the card's ``content`` list (recency-trimmed on write). This generalizes ``record``
+        so a run can accumulate notes / collection refs / conversation refs, not just files.
+        """
         try:
             self._record_inner(task_text, outcome)
         except Exception:  # noqa: BLE001
             pass
+
+    # ------------------------------------------------------------------
+    # Card-update API: read-modify-write a card's source-agnostic content.
+    # ------------------------------------------------------------------
+
+    def add_content(self, card_id: str, item: Dict[str, Any]) -> bool:
+        """Append ONE content item to ``card_id`` (creating the card if absent). Never raises.
+
+        Safe read-modify-write: loads the card, normalizes + appends the item, applies the recency
+        trim, and persists atomically. Returns True on a successful write, False otherwise. The item
+        is normalized (type defaults to ``note``, ``ts`` coerced, ``id`` synthesized when missing),
+        so a caller may pass a partial dict. An async LLM updater will use this; the API + tests are
+        built now, the updater later.
+        """
+        try:
+            return self._update_card_inner(card_id, add=[item])
+        except Exception:  # noqa: BLE001
+            return False
+
+    def update_content(self, card_id: str, item_id: str, new_item: Dict[str, Any]) -> bool:
+        """Correct/replace the content item ``item_id`` on ``card_id`` with ``new_item``. Never raises.
+
+        Read-modify-write: the matching item is replaced in place (keeping ``item_id`` unless
+        ``new_item`` supplies its own ``id``); if no item matches, ``new_item`` is appended instead.
+        Returns True on a successful write. This is how a correction lands without rewriting the
+        whole card.
+        """
+        try:
+            return self._update_card_inner(card_id, replace=[(item_id, new_item)])
+        except Exception:  # noqa: BLE001
+            return False
+
+    def remove_content(self, card_id: str, item_id: str) -> bool:
+        """Remove the content item ``item_id`` from ``card_id``. Never raises.
+
+        Read-modify-write: drops the matching item and persists. Returns True on a successful write
+        (including when the id was already absent and the card was simply re-saved unchanged).
+        """
+        try:
+            return self._update_card_inner(card_id, remove=[item_id])
+        except Exception:  # noqa: BLE001
+            return False
+
+    def update_card(
+        self,
+        card_id: str,
+        *,
+        add: Optional[List[Dict[str, Any]]] = None,
+        replace: Optional[List[Tuple[str, Dict[str, Any]]]] = None,
+        remove: Optional[List[str]] = None,
+        fields: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Apply a batch of edits to ``card_id`` in ONE read-modify-write. Never raises.
+
+        ``fields`` sets embedded card fields (``name``/``description``/``summary``); ``add`` appends
+        content items, ``replace`` is a list of ``(item_id, new_item)`` corrections, and ``remove`` is
+        a list of item ids to drop. All are applied to the same loaded card, the recency trim runs
+        once, and the card is written atomically. Returns True on success. Editing ``name``/
+        ``description``/``summary`` re-fingerprints the card so the vector store re-embeds it.
+        """
+        try:
+            return self._update_card_inner(card_id, add=add, replace=replace, remove=remove,
+                                           fields=fields)
+        except Exception:  # noqa: BLE001
+            return False
 
     # ------------------------------------------------------------------
     # Public helper: O(1) invalidation index
@@ -1787,6 +2018,12 @@ class FileContextStore(ContextAssemblerBase):
             for sym in fe.get("symbols", []):
                 _add(sym, 1.0)
 
+        # Source-agnostic CONTENT items: tokenize each item's ``why`` and any note text so a card
+        # with ZERO files (a pure note/collection card) is still selectable by IDF and vectors.
+        # Weight 2.0 — title-level signal, on par with the summary, below LLM keywords (3.0).
+        for item in _normalize_content(card.get("content")):
+            _add(_content_item_text(item), 2.0)
+
         return weights
 
     def _card_searchable_terms(self, card: Dict[str, Any]) -> Set[str]:
@@ -2041,12 +2278,22 @@ class FileContextStore(ContextAssemblerBase):
                         f"  - {fpath}{sym_note}" + (f"  -- {why}" if why else "")
                     )
 
-            file_block = "\n".join(file_lines) if file_lines else "  (no pinned files)"
+            # Source-agnostic CONTENT (references resolved fresh + LLM notes), recency-bounded.
+            content_lines = self._render_card_content(card, task_kws)
+
+            file_block = (
+                "\n".join(file_lines) if file_lines
+                else ("  (no pinned files)" if not content_lines else "")
+            )
             conventions = card.get("conventions", [])
             conv_block = (
                 "\n".join(f"  * {c}" for c in conventions[:10]) if conventions else ""
             )
-            part = f"### Card: {card_id}\n{summary}\n\nFiles:\n{file_block}"
+            part = f"### Card: {card_id}\n{summary}"
+            if file_lines or not content_lines:
+                part += f"\n\nFiles:\n{file_block}"
+            if content_lines:
+                part += "\n\nContent:\n" + "\n".join(content_lines)
             if conv_block:
                 part += f"\n\nConventions:\n{conv_block}"
 
@@ -2147,6 +2394,102 @@ class FileContextStore(ContextAssemblerBase):
             card_metadata=card_metadata,
         )
 
+    def _write_card_atomic(self, card_path: Path, card: Dict[str, Any]) -> None:
+        """Write ``card`` to ``card_path`` atomically (temp + os.replace) and mark the cache dirty.
+
+        Shared by record() and the card-update API. Respects ``dry_run`` (writes nothing). Re-raises
+        on failure so the public caller's try/except records the failure; callers above are all
+        wrapped (never raises out of the public surface).
+        """
+        if self._dry_run:
+            return
+        self._cards_dir.mkdir(parents=True, exist_ok=True)
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=str(self._cards_dir), prefix=".tmp_", suffix=".json")
+        try:
+            with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
+                json.dump(card, fh, indent=2, ensure_ascii=False)
+                fh.write("\n")
+            os.replace(tmp_path, str(card_path))
+            self._cache_dirty = True
+        except Exception:  # noqa: BLE001
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
+
+    def _update_card_inner(
+        self,
+        card_id: str,
+        *,
+        add: Optional[List[Dict[str, Any]]] = None,
+        replace: Optional[List[Tuple[str, Dict[str, Any]]]] = None,
+        remove: Optional[List[str]] = None,
+        fields: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        """Read-modify-write a card's ``content`` and embedded ``fields``: apply field edits +
+        add/replace/remove, trim, persist.
+
+        Loads the card from disk (creating a minimal one if absent), applies ``fields`` (the embedded
+        ``name``/``description``/``summary``), normalizes its existing content, applies removals, then
+        replacements (in place, append if the id is unknown), then additions, applies the recency
+        trim, and writes atomically. Returns True on a successful write. Changing ``name``/
+        ``description``/``summary`` changes the card's embedding text, so ``export_for_embedding``
+        re-fingerprints it and ``VectorStore.sync()`` re-embeds it on the next sync.
+        """
+        card_path = self._cards_dir / f"{card_id}.json"
+        card: Dict[str, Any] = {}
+        if card_path.exists():
+            try:
+                with open(card_path, "r", encoding="utf-8") as fh:
+                    loaded = json.load(fh)
+                if isinstance(loaded, dict):
+                    card = loaded
+            except Exception:  # noqa: BLE001 — corrupt card: start fresh but keep the id
+                card = {}
+        card.setdefault("id", card_id)
+
+        # 0) embedded field edits (name/description/summary). These are part of the embedding text,
+        # so changing them re-fingerprints the card and triggers re-embedding on the next sync.
+        if fields:
+            for _k in ("name", "description", "summary"):
+                if _k in fields and fields[_k] is not None:
+                    card[_k] = fields[_k]
+
+        content = _normalize_content(card.get("content"))
+
+        # 1) removals
+        if remove:
+            remove_set = {r for r in remove if r}
+            content = [it for it in content if it.get("id") not in remove_set]
+
+        # 2) replacements (correct in place; append when the id is unknown)
+        for item_id, new_raw in (replace or []):
+            normalized = _normalize_content([new_raw])
+            if not normalized:
+                continue
+            new_item = normalized[0]
+            # Keep the targeted id unless the caller explicitly supplied a different one.
+            if not (isinstance(new_raw, dict) and new_raw.get("id")):
+                new_item["id"] = item_id
+            replaced = False
+            for i, it in enumerate(content):
+                if it.get("id") == item_id:
+                    content[i] = new_item
+                    replaced = True
+                    break
+            if not replaced:
+                content.append(new_item)
+
+        # 3) additions
+        if add:
+            content.extend(_normalize_content(add))
+
+        # 4) recency trim + persist
+        card["content"] = _trim_content_by_recency(content)
+        self._write_card_atomic(card_path, card)
+        return not self._dry_run
+
     def _record_inner(self, task_text: str, outcome: Dict[str, Any]) -> None:
         card_id = _card_slug(task_text)
         card_path = self._cards_dir / f"{card_id}.json"
@@ -2208,6 +2551,18 @@ class FileContextStore(ContextAssemblerBase):
         if ts:
             card["provenance"]["last_verified_at"] = str(ts)
 
+        # Generalized: append any source-agnostic CONTENT items the outcome carries (notes,
+        # collection/conversation refs) to the card's content list, then recency-trim. A single
+        # dict is accepted as well as a list. This keeps record()'s file-pinning intact while
+        # letting a run accumulate non-file content on the same card.
+        raw_content = outcome.get("content")
+        if raw_content:
+            if isinstance(raw_content, dict):
+                raw_content = [raw_content]
+            existing_content = _normalize_content(card.get("content"))
+            existing_content.extend(_normalize_content(raw_content))
+            card["content"] = _trim_content_by_recency(existing_content)
+
         # Atomic write via tmp + os.replace (skip if dry-run mode).
         if not self._dry_run:
             self._cards_dir.mkdir(parents=True, exist_ok=True)
@@ -2227,6 +2582,86 @@ class FileContextStore(ContextAssemblerBase):
                 except OSError:
                     pass
                 raise  # re-raise so the outer try/except in record() catches it
+
+    def _read_file_fresh(self, path: str, max_chars: int = _MAX_CARD_REF_ITEM_CHARS) -> str:
+        """Read a file's CURRENT content fresh, capped at ``max_chars``. Never raises; "" on failure.
+
+        This is the fresh-read path the built-in ``file`` ReferenceResolver uses: a ``file`` content
+        item is never a stale snapshot, it re-reads the live file every time the card is used.
+        Resolves a relative path against ``repo_root`` (the same convention as ``_fingerprint``), so
+        a path pinned by a run reads the real file regardless of the process cwd. Returns the head of
+        the file (up to ``max_chars``), with a trailing ellipsis when truncated.
+        """
+        try:
+            p = Path(path)
+            if not p.is_absolute() and self._repo_root is not None:
+                p = self._repo_root / path
+            if not p.exists() or not p.is_file():
+                return ""
+            try:
+                if p.stat().st_size > _BOOTSTRAP_MAX_BYTES:
+                    # Big file: read only the head we need rather than the whole thing.
+                    with open(p, "r", encoding="utf-8", errors="replace") as fh:
+                        text = fh.read(max_chars + 1)
+                else:
+                    text = p.read_text(encoding="utf-8", errors="replace")
+            except OSError:
+                return ""
+            if len(text) > max_chars:
+                text = text[: max_chars - 1].rstrip() + "…"
+            return text
+        except Exception:  # noqa: BLE001
+            return ""
+
+    def _render_card_content(self, card: Dict[str, Any], task_kws: Set[str]) -> List[str]:
+        """Render a card's source-agnostic ``content`` items into context lines. Never raises.
+
+        Recency-bounded: ranks the card's content by recency (``ts``) + relevance to ``task_kws``,
+        then resolves only the top ``_max_card_refs`` items within the ``_max_card_ref_chars`` char
+        budget (skipping/trimming the rest). Each item resolves FRESH through the wired resolver for
+        its ``type``; a type with no resolver renders a graceful unresolved-pointer line. Returns a
+        list of rendered lines (possibly empty), ready to fold into the card's view block.
+        """
+        lines: List[str] = []
+        try:
+            content = _normalize_content(card.get("content"))
+            if not content:
+                return lines
+            from .reference_resolver import _render_unresolved
+            ranked = _rank_content_by_recency_relevance(
+                content, task_kws, limit=self._max_card_refs
+            )
+            budget = self._max_card_ref_chars
+            for item in ranked:
+                if budget <= 0:
+                    break
+                itype = item.get("type", "note")
+                locator = item.get("locator", {})
+                why = item.get("why", "")
+                resolver = self._resolvers.get(itype)
+                item_cap = min(self._max_card_ref_chars, budget, _MAX_CARD_REF_ITEM_CHARS)
+                if resolver is not None:
+                    rendered = ""
+                    try:
+                        rendered = resolver.resolve(locator, max_chars=item_cap) or ""
+                    except Exception:  # noqa: BLE001 — a resolver must never break assembly
+                        rendered = ""
+                    if not rendered:
+                        # Resolved to nothing (e.g. a deleted file): surface it, don't drop silently.
+                        rendered = _render_unresolved(itype, locator)
+                else:
+                    # No resolver wired for this type: graceful unresolved-pointer line.
+                    rendered = _render_unresolved(itype, locator)
+                if len(rendered) > budget:
+                    rendered = rendered[: budget - 1].rstrip() + "…"
+                budget -= len(rendered)
+                header = f"  - ({itype})" + (f" {why}" if why else "")
+                lines.append(header)
+                for rl in rendered.splitlines() or [rendered]:
+                    lines.append(f"      {rl}")
+        except Exception:  # noqa: BLE001
+            return lines
+        return lines
 
     def _fingerprint(self, path: str) -> Dict[str, Any]:
         """Compute current sha256 + mtime + (optional) git_sha for a file path.
@@ -2345,8 +2780,20 @@ class FileContextStore(ContextAssemblerBase):
             result: List[Dict[str, Any]] = []
             for card_id, card in cards.items():
                 try:
-                    # --- Text: prefer docstring-rich description, fall back to summary ---
-                    text = card.get("description") or card.get("summary") or ""
+                    # --- Text: the topic NAME, then the docstring-rich description (fall back to
+                    # summary), then the card's source-agnostic CONTENT (note text + each item's
+                    # ``why``) so a pure note/collection card with NO description/summary is still
+                    # embeddable, and the topic name is part of the embedded vector. ---
+                    _name = (card.get("name") or "").strip()
+                    _body = card.get("description") or card.get("summary") or ""
+                    text = (f"{_name}\n{_body}".strip() if _name else _body)
+                    content_items = _normalize_content(card.get("content"))
+                    if content_items:
+                        content_text = " ".join(
+                            t for t in (_content_item_text(it) for it in content_items) if t
+                        )
+                        if content_text:
+                            text = (text + " " + content_text).strip() if text else content_text
                     if not text:
                         continue
 
@@ -2372,21 +2819,17 @@ class FileContextStore(ContextAssemblerBase):
                         "kind": "bootstrap",
                     }
 
-                    # --- Fingerprint: hash of all stored file sha256 values ---
-                    # If file content changes -> bootstrap() rewrites the card with new
-                    # sha256 values -> fingerprint changes -> sync() re-embeds.
+                    # --- Fingerprint: hash of all stored file sha256 values AND the embedded text.
+                    # Including the text means the card re-embeds when EITHER its files change OR its
+                    # embedded name/description/content change (the async updater rewrites those, and
+                    # the vector store must re-embed on the next sync) -- not only on file changes. ---
                     fp_parts: List[str] = []
                     for fe in card.get("files", []):
                         s = fe.get("sha256") or ""
                         if s:
                             fp_parts.append(s)
-                    if fp_parts:
-                        fingerprint = _hl.sha256(
-                            "|".join(sorted(fp_parts)).encode("utf-8")
-                        ).hexdigest()[:16]
-                    else:
-                        # No file shas: use a hash of the text so re-bootstrap changes it.
-                        fingerprint = _hl.sha256(text.encode("utf-8")).hexdigest()[:16]
+                    fp_basis = "|".join(sorted(fp_parts)) + "\x00" + text
+                    fingerprint = _hl.sha256(fp_basis.encode("utf-8")).hexdigest()[:16]
 
                     result.append({
                         "id": f"card:{card_id}",
