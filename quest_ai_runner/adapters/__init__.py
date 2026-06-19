@@ -49,6 +49,11 @@ from .composite_retrieval_adapter import CompositeRetrievalAdapter
 from .session_file_conversation_store import SessionFileConversationStore
 from .conversation_card_builder import ConversationCardBuilder
 from .feedback_processor import FeedbackProcessor
+from .card_repository import (
+    CardRepository,
+    FilesystemCardRepository,
+    card_embed_text,
+)
 from .file_context_store import FileContextStore
 from .files_adapter import FilesAdapter
 from .guidance_card_manager import GuidanceCard, GuidanceCardManager
@@ -104,6 +109,17 @@ except ImportError:
     make_voyage_embedder = None  # type: ignore[assignment]
     make_openai_embedder = None  # type: ignore[assignment]
 
+# QdrantCardRepository + QdrantCardVectorStore: a generic Qdrant-backed CardRepository (cards persist
+# as points in one collection, optionally tenant-scoped) and a query-only vector arm over the SAME
+# collection. Behind the [qdrant] optional extra, same guarded pattern as QdrantVectorStore.
+try:
+    from .qdrant_card_repository import QdrantCardRepository, QdrantCardVectorStore
+    _QDRANT_CARDS_AVAILABLE = True
+except ImportError:
+    _QDRANT_CARDS_AVAILABLE = False
+    QdrantCardRepository = None  # type: ignore[assignment,misc]
+    QdrantCardVectorStore = None  # type: ignore[assignment,misc]
+
 __all__ = [
     "FilesAdapter",
     "CachedDbAdapter",
@@ -131,6 +147,11 @@ __all__ = [
     "HybridContextAssembler",
     "BM25ContentStore",
     "QdrantVectorStore",
+    "QdrantCardRepository",
+    "QdrantCardVectorStore",
     "make_voyage_embedder",
     "make_openai_embedder",
+    "CardRepository",
+    "FilesystemCardRepository",
+    "card_embed_text",
 ]

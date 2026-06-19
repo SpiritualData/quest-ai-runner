@@ -26,12 +26,53 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from typing import Any, Dict, Optional, Protocol, Tuple, runtime_checkable
+from typing import Any, Dict, List, Optional, Protocol, Tuple, runtime_checkable
 
 # Name of the bootstrap meta sidecar written next to cards on the filesystem. The filesystem repo
 # ignores it when enumerating cards (it is store meta-state, not a card). Kept in sync with
 # ``file_context_store._BOOTSTRAP_META_FILE``.
 _BOOTSTRAP_META_FILE = "bootstrap_meta.json"
+
+
+def card_embed_text(card: Dict[str, Any]) -> str:
+    """The canonical text to embed/search for a context card. SHARED, single source of truth.
+
+    Both ``FileContextStore.export_for_embedding`` (the vector arm's seed/sync text) and any
+    embedding ``CardRepository`` (e.g. ``QdrantCardRepository``, which embeds on write) build a
+    card's embed-text from THIS one helper, so the two can never drift: the topic NAME, then the
+    docstring-rich ``description`` (falling back to ``summary``), then the card's source-agnostic
+    CONTENT (each item's ``why`` + any ``note`` locator text), then its ``keywords``. A pure
+    note/collection card with no description is therefore still embeddable and searchable. Never
+    raises (returns ``""`` on any error)."""
+    try:
+        name = (card.get("name") or "").strip()
+        body = card.get("description") or card.get("summary") or ""
+        text = f"{name}\n{body}".strip() if name else body
+        content = card.get("content")
+        if isinstance(content, list):
+            parts: List[str] = []
+            for item in content:
+                if not isinstance(item, dict):
+                    continue
+                why = item.get("why")
+                if isinstance(why, str) and why:
+                    parts.append(why)
+                if item.get("type") == "note":
+                    note_text = (item.get("locator") or {}).get("text")
+                    if isinstance(note_text, str) and note_text:
+                        parts.append(note_text)
+            if parts:
+                content_text = " ".join(parts)
+                text = (text + " " + content_text).strip() if text else content_text
+        # Keywords are also part of how a card is found; fold them in for both vector + text search.
+        kws = card.get("keywords")
+        if isinstance(kws, list) and kws:
+            kw_text = " ".join(str(k) for k in kws if str(k).strip())
+            if kw_text:
+                text = (text + " " + kw_text).strip() if text else kw_text
+        return text
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 @runtime_checkable

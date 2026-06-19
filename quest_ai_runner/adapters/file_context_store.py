@@ -45,7 +45,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase
 from ._walk import effective_skip_dirs, prune_dirnames
-from .card_repository import CardRepository, FilesystemCardRepository
+from .card_repository import CardRepository, FilesystemCardRepository, card_embed_text
 from .tfdfidf_sampling import extract_terms as tfdfidf_extract_terms, select_representatives
 
 _log = logging.getLogger("quest-ai-runner.context")
@@ -2722,20 +2722,13 @@ class FileContextStore(ContextAssemblerBase):
             result: List[Dict[str, Any]] = []
             for card_id, card in cards.items():
                 try:
-                    # --- Text: the topic NAME, then the docstring-rich description (fall back to
-                    # summary), then the card's source-agnostic CONTENT (note text + each item's
-                    # ``why``) so a pure note/collection card with NO description/summary is still
-                    # embeddable, and the topic name is part of the embedded vector. ---
-                    _name = (card.get("name") or "").strip()
-                    _body = card.get("description") or card.get("summary") or ""
-                    text = (f"{_name}\n{_body}".strip() if _name else _body)
-                    content_items = _normalize_content(card.get("content"))
-                    if content_items:
-                        content_text = " ".join(
-                            t for t in (_content_item_text(it) for it in content_items) if t
-                        )
-                        if content_text:
-                            text = (text + " " + content_text).strip() if text else content_text
+                    # --- Text: the SHARED card embed-text helper (``card_embed_text``) — the topic
+                    # NAME, the docstring-rich description (fall back to summary), the card's
+                    # source-agnostic CONTENT (note text + each item's ``why``), then keywords — so a
+                    # pure note/collection card with NO description/summary is still embeddable and the
+                    # topic name is part of the embedded vector. Using the shared helper guarantees the
+                    # vector arm's seed/sync text and an embedding repo's write-time text NEVER drift. ---
+                    text = card_embed_text(card)
                     if not text:
                         continue
 

@@ -43,9 +43,14 @@ of the above, route it through config or an adapter instead.
 
 ## 🔒 Hard rule #2 — the generic boundary holds
 
-New capabilities go **behind one of the four adapter interfaces** (`RetrievalAdapter`,
-`ModelProvider`, `DeepRunner`, `EscalationSink`) or into `RunnerConfig` — never as a special case
-inside the brain. The brain must stay ignorant of who is calling it.
+New capabilities go **behind one of the adapter interfaces** (`RetrievalAdapter`, `ModelProvider`,
+`DeepRunner`, `EscalationSink`, `ContextAssembler`, `CardRepository`, `VectorStore`,
+`ConversationStore`, …) or into `RunnerConfig` — never as a special case inside the brain. The brain
+must stay ignorant of who is calling it.
+
+When we build a feature here and in a consumer we maintain (e.g. quest-backend), put the reusable
+adapter implementation in THIS repo (parameterized by connection/config), not duplicated in the
+consumer; the consumer just wires it. (Anyone using the repo is of course free to write their own.)
 
 Nothing here is frozen. This is pre-release and single-consumer, so the public API in
 `quest_ai_runner.core` (`Mode`, `StreamSink`, `MilestoneSink`, `ProgressEvent`, `Orchestrator`) is

@@ -435,6 +435,97 @@ def _bootstrap_if_needed(
     threading.Thread(target=_bg, daemon=True, name="qar-bootstrap").start()
 
 
+# --- Env vars the CARD-PERSISTENCE backend reads (documented here so config is discoverable) -------
+# QAR_CARDS_BACKEND      — "file" (DEFAULT) or "qdrant". "file" keeps today's per-card-JSON behavior
+#                          byte-for-byte. "qdrant" persists cards as points in ONE Qdrant collection
+#                          via the generic ``QdrantCardRepository`` (no cards_dir), with a query-only
+#                          ``QdrantCardVectorStore`` as the vector arm (each card embedded once).
+# QAR_CARDS_COLLECTION   — (qdrant) the Qdrant collection cards live in (default "quest_ai_cards").
+# QAR_QDRANT_URL         — (qdrant) the Qdrant server url; falls back to QAR_VECTOR_QDRANT_URL. When
+#                          unset, an EMBEDDED local Qdrant under ``<cards_dir>/cards-qdrant`` is used.
+# QAR_QDRANT_API_KEY     — (qdrant) the Qdrant api key; falls back to QAR_VECTOR_QDRANT_API_KEY.
+# QAR_EMBEDDER_BACKEND   — (qdrant) "voyage" | "openai" | (unset/fastembed); selects the card embedder
+#                          (same selector the auto vector store uses). Voyage uses asymmetric
+#                          document/query embedders matching a backend's production setup.
+# VOYAGE_EMBEDDING_SIZE  — (qdrant, voyage) the embedding dimension (default 1024).
+
+
+def _qar_embedders(backend: str) -> tuple:
+    """Resolve (doc_embedder, query_embedder, vector_size) for ``QAR_EMBEDDER_BACKEND``.
+
+    "voyage" → asymmetric Voyage document/query embedders (dim from VOYAGE_EMBEDDING_SIZE, default
+    1024); "openai" → one symmetric OpenAI embedder for both roles (dim 1536); anything else (unset
+    or "fastembed") → the local fastembed default (one symmetric callable, dim 384). Returns
+    ``(None, None, 0)`` on any failure so the caller can degrade. Never raises.
+    """
+    try:
+        if backend == "voyage":
+            from .adapters.qdrant_vector_store import make_voyage_embedder
+            try:
+                vsize = int(os.getenv("VOYAGE_EMBEDDING_SIZE") or 1024)
+            except (TypeError, ValueError):
+                vsize = 1024
+            return (
+                make_voyage_embedder(input_type="document"),
+                make_voyage_embedder(input_type="query"),
+                vsize,
+            )
+        if backend == "openai":
+            from .adapters.qdrant_vector_store import make_openai_embedder
+            emb = make_openai_embedder()
+            return (emb, emb, 1536)
+        # Local fastembed default (symmetric).
+        from fastembed import TextEmbedding
+        _model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+
+        def _fastembed(texts):
+            return [list(v) for v in _model.embed(texts)]
+
+        return (_fastembed, _fastembed, 384)
+    except Exception:  # noqa: BLE001
+        return (None, None, 0)
+
+
+def _build_qdrant_card_repo_from_env(cards_dir: str) -> tuple:
+    """Build a ``(QdrantCardRepository, QdrantCardVectorStore)`` pair from env, or ``(None, None)``.
+
+    Reads ``QAR_CARDS_COLLECTION`` / ``QAR_QDRANT_URL`` / ``QAR_QDRANT_API_KEY`` and the
+    ``QAR_EMBEDDER_BACKEND`` embedder. When no url is set, an EMBEDDED local Qdrant under
+    ``<cards_dir>/cards-qdrant`` is used. Returns ``(None, None)`` on any failure (caller degrades to
+    the filesystem backend). Never raises. NOTE: this default wiring is UNSCOPED (single-tenant) —
+    a multi-tenant consumer wires its own scoped ``QdrantCardRepository`` per tenant instead.
+    """
+    try:
+        from .adapters import QdrantCardRepository, QdrantCardVectorStore
+        if QdrantCardRepository is None:  # [qdrant] extra not installed
+            return (None, None)
+        collection = (os.getenv("QAR_CARDS_COLLECTION") or "").strip() or "quest_ai_cards"
+        url = (os.getenv("QAR_QDRANT_URL") or os.getenv("QAR_VECTOR_QDRANT_URL") or "").strip() or None
+        api_key = (
+            os.getenv("QAR_QDRANT_API_KEY") or os.getenv("QAR_VECTOR_QDRANT_API_KEY") or ""
+        ).strip() or None
+        path = None if url else os.path.join(cards_dir, "cards-qdrant")
+        backend = (os.getenv("QAR_EMBEDDER_BACKEND") or "").strip().lower()
+        doc_emb, qry_emb, vsize = _qar_embedders(backend)
+        if doc_emb is None or qry_emb is None:
+            _log.warning("context index: QAR_CARDS_BACKEND=qdrant but no embedder could be built; "
+                         "falling back to the file backend")
+            return (None, None)
+        repo = QdrantCardRepository(
+            collection=collection, embedder=doc_emb, vector_size=vsize,
+            client=None, url=url, api_key=api_key, path=path,
+        )
+        vstore = QdrantCardVectorStore(
+            collection=collection, query_embedder=qry_emb,
+            client=None, url=url, api_key=api_key, path=path,
+        )
+        return (repo, vstore)
+    except Exception:  # noqa: BLE001
+        _log.warning("context index: QAR_CARDS_BACKEND=qdrant repo build failed; falling back to "
+                     "the file backend", exc_info=True)
+        return (None, None)
+
+
 def resolve_context_assembler(
     cfg: RunnerConfig,
     *,
@@ -465,6 +556,17 @@ def resolve_context_assembler(
         # cards genuinely relevant to the user's task are injected.
         from .core.model_registry import ModelRegistry as _MR
         _registry = _MR(cfg.model_provider, fallback=cfg.model_fallback or None)
+
+        # CARD-PERSISTENCE backend: "file" (DEFAULT, byte-for-byte today's per-card-JSON behavior) or
+        # "qdrant" (cards persist as points in one Qdrant collection via the generic
+        # QdrantCardRepository, with a query-only QdrantCardVectorStore as the vector arm so each card
+        # is embedded once). Any failure to build the qdrant repo degrades to the file backend.
+        _cards_backend = (os.getenv("QAR_CARDS_BACKEND") or "").strip().lower() or "file"
+        _card_repository = None
+        _cards_vector_store = None  # set only for the qdrant backend (query-only, one embedding/card)
+        if _cards_backend == "qdrant":
+            _card_repository, _cards_vector_store = _build_qdrant_card_repo_from_env(cards_dir)
+
         keyword = FileContextStore(
             cards_dir, repo_root=root, auto_bootstrap=False,
             provider=cfg.model_provider,
@@ -472,6 +574,9 @@ def resolve_context_assembler(
             # Source-agnostic card content: consumer-injected resolvers for the data-backed
             # reference types (collection/conversation/query). file/note are built in.
             reference_resolvers=cfg.reference_resolvers,
+            # qdrant backend: route ALL card persistence through the Qdrant repo (no cards_dir). None
+            # (file backend) keeps the default FilesystemCardRepository(cards_dir).
+            card_repository=_card_repository,
         )
         # If a vector store is configured, the default becomes a HYBRID: keyword/IDF FUSED with
         # semantic vector search (the two are complementary). Otherwise keyword-only.
@@ -487,12 +592,16 @@ def resolve_context_assembler(
             model=_registry.resolve_tier("balanced"),
         )
 
-        # Resolve the vector store: explicit instance > auto-build local Qdrant > None.
-        # When the [qdrant] extra is installed and no explicit store is configured, we auto-build
-        # an embedded QdrantVectorStore (local filesystem, no server) so hybrid search is ON by
-        # default without any consumer config.  Keyword-only is the fallback when the extra is
-        # missing.
+        # Resolve the vector store: explicit instance > qdrant-cards query-only arm > auto-build
+        # local Qdrant > None. For the qdrant CARD backend, the repo already embedded each card on
+        # write, so its vector arm is QUERY-ONLY (the QdrantCardVectorStore over the SAME collection)
+        # and must NOT be replaced by an auto-built embedding store. When the [qdrant] extra is
+        # installed and no explicit store is configured (file backend), we auto-build an embedded
+        # QdrantVectorStore (local filesystem, no server) so hybrid search is ON by default without
+        # any consumer config. Keyword-only is the fallback when the extra is missing.
         vector_store = cfg.vector_store
+        if vector_store is None and _cards_vector_store is not None:
+            vector_store = _cards_vector_store
         if vector_store is None:
             try:
                 from .adapters import QdrantVectorStore as _QdrantVS

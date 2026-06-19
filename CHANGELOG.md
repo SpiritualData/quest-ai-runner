@@ -44,6 +44,30 @@ All notable changes to this project are documented here. The format is based on
   its existing IDF ranking / confidence gate / recency over them); when absent or returning `None`
   the store falls back to today's in-app IDF over `load_all()`. Purely additive: the default
   `FilesystemCardRepository` does NOT implement `search_cards`, so its behavior is unchanged.
+- **Generic Qdrant-backed card persistence: `QdrantCardRepository` + `QdrantCardVectorStore`
+  (`adapters/qdrant_card_repository.py`, behind the `[qdrant]` extra).** A reusable
+  `CardRepository` that persists context cards as points in ONE Qdrant collection (no `cards_dir`),
+  so any consumer can store cards in Qdrant by wiring config/connection only — no consumer
+  reimplements a card repo. The connection mirrors `QdrantVectorStore`: pass an existing `client=`,
+  OR `url=`/`api_key=` for a server, OR neither for an EMBEDDED local Qdrant under `path`. It takes
+  an `embedder` callable (`texts -> vectors`, e.g. `make_voyage_embedder`), a `collection`, a
+  `vector_size`, and an OPTIONAL `scope` dict (payload key/values for multi-tenant isolation, e.g.
+  `{"user_id": ...}`) — every read/write/delete/search is filtered by `scope` so a scoped card
+  never leaks. `write` derives the card's embed-text via the NEW shared `card_embed_text` helper
+  (so it MATCHES `FileContextStore.export_for_embedding`), embeds it ONCE, and upserts one point
+  `{id from (scope, card_id), vector, payload: card + scope + a flat _search_text field}`;
+  `search_cards` uses a Qdrant full-text index + `MatchText`. `QdrantCardVectorStore` is a
+  query-only `VectorStore` over the SAME collection (`upsert`/`sync` are no-ops), so each card is
+  embedded exactly once. All methods are best-effort and never raise. Wired by env via
+  `QAR_CARDS_BACKEND` (`file` default | `qdrant`): when `qdrant`, `resolve_context_assembler`
+  builds a `QdrantCardRepository` from `QAR_CARDS_COLLECTION` / `QAR_QDRANT_URL` /
+  `QAR_QDRANT_API_KEY` + the `QAR_EMBEDDER_BACKEND` embedder and passes it as the default
+  `FileContextStore(card_repository=...)`, with the query-only `QdrantCardVectorStore` as the vector
+  arm; `file` keeps today's behavior byte-for-byte.
+- **Shared `card_embed_text` helper (`adapters/card_repository.py`).** The single source of truth for
+  a card's embed/search text (name + description/summary + content note/why + keywords). Both
+  `FileContextStore.export_for_embedding` and `QdrantCardRepository.write` call it, so the vector
+  arm's seed/sync text and an embedding repo's write-time text can never drift.
 - **Source-agnostic context-card CONTENT (cards are no longer file-only).** A context card
   (`adapters/file_context_store.py`) can now carry an optional top-level `content` list of TYPED
   items, each either a REFERENCE resolved FRESH to current content on every use, or an LLM NOTE
