@@ -687,9 +687,9 @@ class _TurnRenderer:
         if not self._ai_label_printed:
             # Print label on its own line with proper spacing (Claude Code style)
             if self._c._color or self._c._rich:
-                self._c.line(f"{_BOLD}{_CYAN}{self._rep_name}{_RESET}")
+                self._c.line(f"{_BOLD}{_CYAN}{self._rep_name} (AI):{_RESET}")
             else:
-                self._c.line(f"{self._rep_name}")
+                self._c.line(f"{self._rep_name} (AI):")
             self._ai_label_printed = True
 
     def _display(self, kind: str, text: str, prefix: str = "") -> None:
