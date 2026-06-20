@@ -220,6 +220,33 @@ def test_met_on_first_try_does_not_iterate():
     assert len(runner.calls) == 1
 
 
+def test_deferred_handoff_runs_once_and_is_not_reverified():
+    """REGRESSION: an ASYNC HAND-OFF deep runner (e.g. a chat runner that queues a tracked task and
+    returns a ``DeepResult(met=True, deferred=True, output="task #N launched")`` sentinel) must run
+    EXACTLY ONCE. The goal loop must trust its ``met`` and stop, NOT re-verify the sentinel output
+    against the goal — which always fails and would relaunch a fresh task every iteration (the
+    runaway loop that spawned phantom tasks and left chat with no reply).
+
+    The verifier is scripted to ALWAYS return not-met; before the fix the loop would re-verify and
+    iterate up to deep_goal_max_iterations, calling run_goal that many times. After the fix it runs
+    once and never verifies."""
+    plan = {"action": "deep", "goal": "Confirm receipt",
+            "deep_subtasks": [{"goal": "Confirm the message was received", "brief": "confirm"}],
+            "rationale": "deep"}
+    # Verdict would reject forever if it were ever consulted.
+    provider = ScriptedProvider(plans=[plan], verdicts=[{"met": False, "reason": "sentinel"}])
+    runner = RecordingRunner([
+        DeepResult(met=True, output="task #2097 launched", deferred=True),
+    ])
+
+    res = _orch(provider, runner).run("confirm you got this")
+
+    assert res.kind == "deep"
+    assert len(runner.calls) == 1, "deferred hand-off must not relaunch a fresh task per iteration"
+    assert provider.verify_calls == 0, "a deferred hand-off sentinel must not be re-verified"
+    assert all(d.met for d in res.deep_results)
+
+
 def test_single_goal_no_store_no_assembler_unchanged():
     """With no assembler and no store, a single-goal deep run carries NEITHER a per-goal context
     block NOR a widened-context block, so the new code adds nothing to the preamble (its presence is

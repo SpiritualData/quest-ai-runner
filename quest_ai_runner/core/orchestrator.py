@@ -2228,6 +2228,13 @@ class Orchestrator:
                 run_brief = current_brief if not _new else (current_brief + "\n\n" + _new)
                 res = _do_run(run_brief, run_model)
                 tokens_used += max(0, getattr(res, "tokens", 0) or 0)
+                # ASYNC HAND-OFF: the runner queued the real run to finish out-of-band (its
+                # ``output`` is a "task #N launched"-style sentinel, not work product). Re-verifying
+                # that sentinel against the goal would ALWAYS fail and relaunch a fresh task every
+                # iteration (a runaway loop). Trust the hand-off's own ``met`` and stop; the real
+                # outcome is verified when it reflects back.
+                if getattr(res, "deferred", False):
+                    break
                 # A human-decision escalation, or a hard failure with NO output (binary missing,
                 # timeout, silent no-op), is terminal — do not verify or iterate.
                 if res.decision_id or (res.error and not (res.output or "").strip()):

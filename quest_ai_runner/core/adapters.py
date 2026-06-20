@@ -184,6 +184,13 @@ class DeepResult:
     output: str = ""
     error: Optional[str] = None
     decision_id: Optional[str] = None   # set if the run needed a human decision instead
+    # ASYNC HAND-OFF marker. True = this runner did NOT execute the goal inline; it queued the real
+    # run to finish out-of-band and report its outcome back later (e.g. a chat deep runner that
+    # creates a tracked task and returns a "task #N launched" sentinel). When set, the goal loop
+    # trusts ``met`` and STOPS — it must not re-verify the sentinel ``output`` against the goal
+    # (that always fails) nor relaunch, which would spawn a fresh task every iteration. The real
+    # result is verified when it reflects back, not here. Inline runners leave this False.
+    deferred: bool = False
     # Resource usage the worker reported for THIS run, when available (0 / 0.0 if the runner does
     # not report it). The goal loop accumulates these to enforce an overall token budget instead of
     # a fixed attempt count.

@@ -7,6 +7,17 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Async hand-off deep runners no longer trigger a runaway relaunch loop.** A `DeepRunner` that
+  does not execute inline but queues the real run to finish out-of-band (e.g. a chat runner that
+  creates a tracked task and returns a `DeepResult(met=True, output="task #N launched")` sentinel)
+  was being re-verified by the deep-goal loop: the verifier judged the sentinel `output` against
+  the goal, found it not-met, escalated the model and RELAUNCHED a fresh task — every iteration, up
+  to `deep_goal_max_iterations`. The result was N phantom tasks per message and a stream that ended
+  in error with no reply. `DeepResult` gains a `deferred: bool = False` flag; when a run is
+  `deferred`, the goal loop TRUSTS its `met` and stops (no re-verify, no relaunch). The real outcome
+  is verified when it reflects back. Inline runners are unaffected (default `False`). Regression test
+  in `tests/test_per_goal_context_iteration.py::test_deferred_handoff_runs_once_and_is_not_reverified`.
+
 - **Context-card RETRIEVAL quality: vector-selected cards now RESOLVE their references, and an
   unrelated query returns no card.** Two retrieval bugs made learned cards unusable end to end even
   though card LEARNING was correct:
