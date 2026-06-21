@@ -412,6 +412,54 @@ def test_plain_informational_answer_does_not_escalate():
     assert not runner.calls, "informational answer must not escalate to a deep run"
 
 
+def test_message_requests_change_distinguishes_questions_from_commands():
+    # Regression: a QUESTION that merely mentions an action verb ("how would I add X?") was being
+    # auto-escalated into a task instead of answered. _message_requests_change must read INTENT:
+    # questions -> False (answer), commands -> True (execute).
+    from quest_ai_runner.core.orchestrator import _message_requests_change
+
+    # COMMANDS (the user is directing the work) -> should execute.
+    for cmd in [
+        "fix the back button",
+        "add a field to the form",
+        "update my goal to be more ambitious",
+        "refactor the date logic",
+        "can you fix the date bug?",
+        "could you add a measurable outcome?",
+        "please update the endpoint",
+        "the system incorrectly assigns dates to actions",  # bug report = implicit command
+    ]:
+        assert _message_requests_change(cmd) is True, f"command should escalate: {cmd!r}"
+
+    # QUESTIONS (the user is asking ABOUT something, even with an action verb) -> should answer.
+    for q in [
+        "how would I add a new field to the form?",
+        "what would it take to fix the back button?",
+        "should we refactor the date logic?",
+        "why does the build break on mobile?",
+        "how does the date logic work?",
+        "is it possible to add SSO?",
+        "what's the best way to update a goal?",
+        "do you think we should change this?",
+    ]:
+        assert _message_requests_change(q) is False, f"question should NOT escalate: {q!r}"
+
+
+def test_question_with_change_verb_is_answered_not_executed():
+    # End-to-end: the planner answers a question that happens to contain a change verb ("add"),
+    # and the message-intent fallback must NOT turn it into a deep task.
+    provider = StubProvider(
+        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "inform"}],
+        answer_text="You'd add it in the form schema, then wire it to the submit handler.",
+    )
+    runner = StubDeepRunner(met=True)
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run(
+        "how would I add a new field to the form?"
+    )
+    assert res.kind == "answer"
+    assert not runner.calls, "a question must be answered, never auto-executed as a task"
+
+
 # --- per-step planner-view leaning (compress older gathered) --------------------------------
 
 def _read_obs(path: str, body: str) -> dict:

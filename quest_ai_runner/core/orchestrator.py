@@ -128,11 +128,34 @@ Choose exactly one action via the `decide` tool. You run in a LOOP: after a "rea
 called again with what was read, so you can narrow in -- grep to locate, read the matching
 section, then answer -- exactly like a careful human reading the real source.
 
-CODE / FILE CHANGE TASKS (highest priority):
-  If the request means changing code or files (fix bug, implement feature, refactor, edit/apply
-  a file, expand/collapse/toggle/show/hide a UI element, etc.), choose action="deep" IMMEDIATELY.
+QUESTION vs COMMAND -- DECIDE THIS FIRST, BEFORE ANYTHING ELSE:
+  Read the user's message and judge what they actually want from you:
+    * A QUESTION / REQUEST FOR INFORMATION -- they want to be TOLD, SHOWN, or ADVISED
+      something: an explanation, a status, a summary, a comparison, your opinion, or a
+      "what would it take / how would I / should we ..." Answer it ("answer", after a
+      "read" when it's about substance). DO NOT execute work or open a task for a question,
+      EVEN WHEN it mentions action words like "fix", "add", "change", "build", "update",
+      "show". "How does the back button work?", "What would it take to add SSO?", "Should
+      we refactor this?", "Why is the build failing?", "Can you explain how X works?" are
+      all QUESTIONS -- answer them, do not do the work.
+    * A COMMAND / DIRECTIVE -- they are telling you to GO DO the work NOW: "fix the back
+      button", "add a field to the form", "update my goal", "build the endpoint", and the
+      polite-imperative forms aimed at you, "can you fix ...", "please add ...". THIS is the
+      kind of request that becomes "deep".
+  The test is INTENT, not keywords -- the SAME verb appears in both a question and a command.
+  An interrogative opener ("how / what / why / which / should we / would it / is it / do you
+  ...") or a message that asks ABOUT something and ends in "?" is a QUESTION -> answer. A
+  plain imperative, or a polite imperative directed at you ("can you ...", "please ..."), is
+  a COMMAND -> deep. When you are genuinely torn, ANSWER (and you may offer to do the work) --
+  never silently turn a question into a task.
+
+CODE / FILE CHANGE COMMANDS (once you've judged it's a COMMAND, this is highest priority):
+  If the user is DIRECTING a change to code or files (fix bug, implement feature, refactor,
+  edit/apply a file, expand/collapse/toggle/show/hide a UI element, etc.) -- NOT merely asking
+  about one -- choose action="deep" IMMEDIATELY.
   Do NOT read first. The deep runner is a full coding agent -- it explores and edits itself.
-  Describing a fix instead of executing is a FAILURE.
+  Describing a fix instead of executing is a FAILURE. (But explaining a fix when the user only
+  ASKED how it works is correct -- that was a question, not a command.)
 
   WHEN SEARCHES RETURN NOTHING: if you searched/grepped for a component, file, or symbol and
   got no results (or "pattern not found"), that is NOT a reason to answer with generic advice.
@@ -151,11 +174,13 @@ CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
   "deep" immediately and let the runner do it. NEVER describe work in an answer; ALWAYS execute it.
   NEVER say "if you provide the file name I can help" -- find the file yourself via "deep".
 
-  Recognize code-change tasks by keywords: "fix", "bug", "break", "implement", "build", "refactor",
-  "edit", "update", "change", "add", "remove", "delete", "rewrite", "apply", "make", "expand",
-  "collapse", "toggle", "show", "hide", "open", "close", "display", "render". If the user asks
-  you to change something, escalate to "deep" immediately -- do NOT answer about what you think
-  the fix should be.
+  These verbs often signal a code-change task: "fix", "bug", "break", "implement", "build",
+  "refactor", "edit", "update", "change", "add", "remove", "delete", "rewrite", "apply", "make",
+  "expand", "collapse", "toggle", "show", "hide", "open", "close", "display", "render". When the
+  user DIRECTS such a change (a command, per the QUESTION vs COMMAND gate above), escalate to
+  "deep" immediately -- do NOT answer about what you think the fix should be. But when the user
+  is only ASKING about it ("how would I ...", "what would it take to ...", "why does ... break?"),
+  that is a question -- ANSWER it; the same verb in a question is not a command to act.
 
   If you have already read and gathered context, and now realize execution is needed: choose
   action="answer" WITH deferred_deep. The answer can acknowledge what was found, but deferred_deep
@@ -920,11 +945,21 @@ _WRONGNESS_RE = re.compile(
     r"should\b.{0,60}\bbut\b|instead\s+of)\b",
     re.IGNORECASE,
 )
-# A purely interrogative opener: when the message is just a how/what/why question with no imperative
-# change verb, it wants an explanation, not an edit. Used to avoid auto-editing on "how do I…?".
+# A purely interrogative opener: when the message ASKS ABOUT something (information, explanation,
+# or opinion), it wants an answer, not an edit -- even if it also mentions an action verb ("how
+# would I add X?", "should we refactor Y?"). Used to avoid auto-executing a question as a task.
 _INFO_QUESTION_RE = re.compile(
-    r"^\s*(?:how|what|what['’]?s|why|which|who|when|where|explain|describe|tell\s+me|"
-    r"can\s+you\s+explain|is\s+there|are\s+there|do\s+you|does\s+it|should\s+i)\b",
+    r"^\s*(?:how|what|what['’]?s|why|which|who|whom|whose|when|where|explain|describe|summari[sz]e|"
+    r"tell\s+me|walk\s+me\s+through|is\s+it|are\s+there|is\s+there|do\s+you|does\s+it|did\s+you|"
+    r"would\s+it|could\s+we|should\s+(?:i|we|it)|do\s+we|is\s+it\s+possible)\b",
+    re.IGNORECASE,
+)
+# A POLITE IMPERATIVE aimed at the assistant ("can you fix…", "could you add…", "please update…").
+# This reads like a question but is really a COMMAND to perform the action -- keep treating it as a
+# change request. Distinguishes "can you add a field" (do it) from "should we add a field?" (advise).
+_POLITE_COMMAND_RE = re.compile(
+    r"^\s*(?:please\b|(?:can|could|would|will)\s+you\b|i'?d\s+like\s+you\s+to\b|"
+    r"i\s+(?:want|need)\s+you\s+to\b|let'?s\b|go\s+ahead\b)",
     re.IGNORECASE,
 )
 
@@ -935,8 +970,11 @@ def _message_requests_change(message: Optional[str]) -> bool:
     Keyed off the STABLE user message rather than the (highly variable) answer text, because the
     cheap planner often misroutes an actionable request to "answer" and then only DESCRIBES the
     change. This is the reliable signal that the turn should have executed work. Conservative on
-    pure questions: a how/what/why explanation request with no imperative change verb returns False
-    so an informational ask is never auto-escalated into a file-editing run. Never raises.
+    QUESTIONS: an interrogative message that ASKS ABOUT something (information, explanation, or
+    opinion) returns False even when it mentions an action verb ("how would I add X?", "should we
+    refactor Y?"), so a question is never auto-escalated into a file-editing task. A polite
+    imperative aimed at the assistant ("can you add…", "please fix…") is still a command and
+    returns True. Never raises.
     """
     if not message or not message.strip():
         return False
@@ -946,10 +984,20 @@ def _message_requests_change(message: Optional[str]) -> bool:
         has_wrongness = bool(_WRONGNESS_RE.search(m))
         if not (has_verb or has_wrongness):
             return False
-        # A leading interrogative with NO imperative change verb is an explanation request: don't
-        # escalate (e.g. "how does the date logic work?"). A bug statement ("it incorrectly X") or
-        # an imperative ("fix the date bug") is a change request even if it also reads as a report.
-        if _INFO_QUESTION_RE.search(m) and not has_verb:
+        # A polite imperative directed at the assistant ("can you fix…", "please add…") IS a
+        # command even though it is phrased as a question -- keep escalating it.
+        if _POLITE_COMMAND_RE.search(m):
+            return True
+        # An interrogative message ASKS ABOUT something (explanation, status, opinion) -- answer
+        # it, do not execute, even if it mentions a change verb ("how would I add X?", "should we
+        # refactor Y?", "what would it take to fix Z?"). This is the fix for questions being
+        # mishandled as tasks.
+        if _INFO_QUESTION_RE.search(m):
+            return False
+        # A message that ends in "?" with no imperative change verb reads as a question, not a
+        # command (e.g. "the back button doesn't work?"). A bug statement ("it incorrectly X") or
+        # a plain imperative ("fix the date bug") still escalates.
+        if m.endswith("?") and not has_verb:
             return False
         return True
     except Exception:  # noqa: BLE001

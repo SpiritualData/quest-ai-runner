@@ -7,6 +7,22 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **The planner now distinguishes a QUESTION from a COMMAND, so asking ABOUT something is answered
+  instead of being executed as a task.** Routing was keyword-driven: a message containing an action
+  verb ("fix", "add", "change", "build", "update", "show"…) was treated as work to do, even when the
+  user was only ASKING — "how would I add a field?", "what would it take to fix the back button?",
+  "should we refactor this?" These were mis-handled as deep tasks instead of being answered. Two
+  changes fix it: (1) the `PLANNER_PROMPT` now opens with an explicit QUESTION-vs-COMMAND gate that
+  decides intent BEFORE the code-change rule — an interrogative ("how/what/why/should we/is it…") or
+  a "?" message that asks about something is a QUESTION → answer; a plain or polite imperative ("fix
+  X", "can you add…", "please update…") is a COMMAND → deep; when torn, answer. (2) the message-intent
+  escalation fallback `_message_requests_change()` no longer auto-escalates a question that merely
+  contains a change verb: an interrogative message returns `False` (answer), while a polite imperative
+  aimed at the assistant ("can you fix…", "please add…") still returns `True` (execute). Genuine
+  commands and bug reports are unaffected. Regression tests in
+  `tests/test_orchestrator.py::test_message_requests_change_distinguishes_questions_from_commands` and
+  `::test_question_with_change_verb_is_answered_not_executed`.
+
 - **Async hand-off deep runners no longer trigger a runaway relaunch loop.** A `DeepRunner` that
   does not execute inline but queues the real run to finish out-of-band (e.g. a chat runner that
   creates a tracked task and returns a `DeepResult(met=True, output="task #N launched")` sentinel)
