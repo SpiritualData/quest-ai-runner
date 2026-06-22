@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Progress narration no longer repeats itself.** When narration is on, the per-step beats were
+  drifting into the same line reworded several times ("looking up the details of your marathon
+  quest" six times). Two changes: (1) the planner's narration instructions are tighter and the
+  re-plan instruction now tells it to react to what it just found in GATHERED and say what that
+  makes it check next (bridge insight to intent), not narrate a read in isolation; (2) `Narrator`
+  now backstops with a normalized near-duplicate check (`_is_repeat`/`_norm`) so a paraphrase of an
+  earlier beat is dropped, not just an exact echo. Narration tests in `tests/test_ux_features.py`.
+
 - **The planner now distinguishes a QUESTION from a COMMAND, so asking ABOUT something is answered
   instead of being executed as a task.** Routing was keyword-driven: a message containing an action
   verb ("fix", "add", "change", "build", "update", "show"…) was treated as work to do, even when the

@@ -291,22 +291,20 @@ the user explicitly asks you to.
 # rationale conversationally, in the selected rep's voice, in the call it already makes). The
 # orchestrator picks which instruction to inject per run via the {rationale_instruction} slot.
 _RATIONALE_INSTRUCTION_PLAIN = "Always fill `rationale` (one sentence) and set `model_tier`."
-# Step 0: no gathered data yet — say what you're about to do, briefly.
+# Step 0: no data yet. Say what you're about to look at, specifically. Also set `model_tier`.
 _RATIONALE_INSTRUCTION_NARRATE = (
-    "For `rationale`: ONE short spoken line saying what you are doing right now — read aloud, "
-    "thinking out loud mid-task. Be specific (name what you're looking at, not just 'details'). "
-    "No em dashes, no greeting, no markdown. Return empty if nothing worth saying. Also set `model_tier`."
+    "`rationale` = ONE spoken line, thinking out loud, naming the specific thing you're about to "
+    "look at (not 'details'). No em dashes, greeting, or markdown. Empty if nothing worth saying. "
+    "Also set `model_tier`."
 )
-# Re-plan steps (step > 0): gathered data is in the prompt — react to what you found AND say
-# what that's driving next. Each beat should bridge insight to intent.
+# Re-plan steps (step > 0): data is in GATHERED. React to it like a coach, then say what it makes
+# you do next. Bridge insight to intent, never narrate a read in isolation. Also set `model_tier`.
 _RATIONALE_INSTRUCTION_NARRATE_REPLAN = (
-    "For `rationale`: you just read new data (see GATHERED above). Write ONE short spoken line "
-    "that bridges what you noticed with what you're doing because of it — the way a coach thinks "
-    "out loud: 'your second marathon goal was reset recently, so I want to see what changed "
-    "around that time' or 'your pacing data looks steady early but drops off, let me check your "
-    "training load'. Be opinionated and specific. Never just describe the next read in isolation. "
-    "Check the 'Already said' list and never repeat or echo it. Return empty if nothing "
-    "genuinely new to say. No em dashes, no greeting, no markdown. Also set `model_tier`."
+    "`rationale` = ONE spoken line reacting to what you just found in GATHERED and what that makes "
+    "you check next (e.g. 'your pace holds early but drops at mile 18, so I'll look at your training "
+    "load'). Be specific and opinionated; don't just name the next read. Never repeat anything in "
+    "'Already said'. No em dashes, greeting, or markdown. Empty if nothing genuinely new. Also set "
+    "`model_tier`."
 )
 
 # Assemble the final format()-able prompt. The gate constants from context_doctrine have NO
@@ -1483,9 +1481,39 @@ class Narrator:
         if not self.enabled or not line:
             return
         clean = line.strip()
-        if clean and clean in self._said:
+        if clean and self._is_repeat(clean):
             return
         self._say(clean)
+
+    def _is_repeat(self, line: str) -> bool:
+        """True if ``line`` repeats or near-repeats something already said this turn.
+
+        Catches not just exact echoes but paraphrases (the bug was six lines that all meant
+        "looking up your marathon quest"): compare on a normalized word set and treat a high
+        overlap as a repeat. This is the backstop; the planner prompt is the primary defense.
+        """
+        norm = self._norm(line)
+        if not norm:
+            return False
+        for prev in self._said:
+            p = self._norm(prev)
+            if not p:
+                continue
+            if norm == p:
+                return True
+            shared = len(norm & p)
+            # >=70% of the shorter line's words shared → same beat reworded.
+            if shared and shared / min(len(norm), len(p)) >= 0.7:
+                return True
+        return False
+
+    @staticmethod
+    def _norm(line: str) -> frozenset:
+        words = re.findall(r"[a-z0-9']+", line.lower())
+        stop = {"the", "a", "an", "to", "of", "your", "you", "i", "i'm", "im", "and", "for",
+                "on", "at", "is", "it", "this", "that", "let", "me", "now", "so", "what",
+                "into", "look", "looking", "check", "checking", "see", "want"}
+        return frozenset(w for w in words if w not in stop)
 
     def _safe_gen(self, moment: str) -> Optional[str]:
         try:
