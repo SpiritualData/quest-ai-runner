@@ -291,15 +291,22 @@ the user explicitly asks you to.
 # rationale conversationally, in the selected rep's voice, in the call it already makes). The
 # orchestrator picks which instruction to inject per run via the {rationale_instruction} slot.
 _RATIONALE_INSTRUCTION_PLAIN = "Always fill `rationale` (one sentence) and set `model_tier`."
+# Step 0: no gathered data yet — say what you're about to do, briefly.
 _RATIONALE_INSTRUCTION_NARRATE = (
-    "For `rationale`: ONE short spoken line in your own voice, showing what you are noticing or "
-    "doing right now — read aloud, like thinking out loud mid-task. Rules: (1) Check the 'Already "
-    "said' list above and never repeat or echo it. (2) Each beat must move FORWARD: if you already "
-    "said you're looking something up, say what you found or noticed instead — never repeat "
-    "'looking up / fetching / pulling up' for the same kind of thing. (3) Be specific, not generic "
-    "('your goals are spread across three areas' beats 'looking up your details'). (4) Return empty "
-    "string if nothing new is worth saying. No em dashes. No greeting, preamble, or markdown. "
-    "Also set `model_tier`."
+    "For `rationale`: ONE short spoken line saying what you are doing right now — read aloud, "
+    "thinking out loud mid-task. Be specific (name what you're looking at, not just 'details'). "
+    "No em dashes, no greeting, no markdown. Return empty if nothing worth saying. Also set `model_tier`."
+)
+# Re-plan steps (step > 0): gathered data is in the prompt — react to what you found, not what
+# you're about to do next. Each beat should carry an insight or observation from the data.
+_RATIONALE_INSTRUCTION_NARRATE_REPLAN = (
+    "For `rationale`: you just read new data (see GATHERED above). Write ONE short spoken line "
+    "that shares a genuine reaction, observation, or inference from what you found — the way a "
+    "coach or analyst thinks out loud as they learn something. Be opinionated and specific: "
+    "'your second marathon quest was reset recently, which tells me something shifted' beats "
+    "'I am reading your quest details'. NEVER describe what you are about to read next. "
+    "Check the 'Already said' list and never repeat or echo it. Return empty if nothing "
+    "genuinely interesting stands out. No em dashes, no greeting, no markdown. Also set `model_tier`."
 )
 
 # Assemble the final format()-able prompt. The gate constants from context_doctrine have NO
@@ -1776,7 +1783,8 @@ class Orchestrator:
             max_subq=self.cfg.max_subquestions,
             max_deep=self.cfg.max_deep_subtasks,
             rationale_instruction=(
-                _RATIONALE_INSTRUCTION_NARRATE if narrate else _RATIONALE_INSTRUCTION_PLAIN),
+                (_RATIONALE_INSTRUCTION_NARRATE_REPLAN if step > 0 else _RATIONALE_INSTRUCTION_NARRATE)
+                if narrate else _RATIONALE_INSTRUCTION_PLAIN),
         )
         preamble_parts: List[str] = []
         if narrate and persona.strip():
