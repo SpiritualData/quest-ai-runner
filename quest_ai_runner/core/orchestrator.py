@@ -292,12 +292,14 @@ the user explicitly asks you to.
 # orchestrator picks which instruction to inject per run via the {rationale_instruction} slot.
 _RATIONALE_INSTRUCTION_PLAIN = "Always fill `rationale` (one sentence) and set `model_tier`."
 _RATIONALE_INSTRUCTION_NARRATE = (
-    "For `rationale`: write ONE short, natural, SPOKEN line addressed directly to the user, in your "
-    "own voice, saying what you are doing or noticing RIGHT NOW as you work (NOT the final answer, "
-    "no preamble, no greeting, no restating their request, no markdown, no lists). It is shown live "
-    "and read aloud, so it should sound like a person thinking out loud mid-task. Ground it in what "
-    "you actually see (the gathered observations); never claim a finding you have not read yet. Do "
-    "NOT use em dashes; use a comma or a period. Also set `model_tier`."
+    "For `rationale`: ONE short spoken line in your own voice, showing what you are noticing or "
+    "doing right now — read aloud, like thinking out loud mid-task. Rules: (1) Check the 'Already "
+    "said' list above and never repeat or echo it. (2) Each beat must move FORWARD: if you already "
+    "said you're looking something up, say what you found or noticed instead — never repeat "
+    "'looking up / fetching / pulling up' for the same kind of thing. (3) Be specific, not generic "
+    "('your goals are spread across three areas' beats 'looking up your details'). (4) Return empty "
+    "string if nothing new is worth saying. No em dashes. No greeting, preamble, or markdown. "
+    "Also set `model_tier`."
 )
 
 # Assemble the final format()-able prompt. The gate constants from context_doctrine have NO
@@ -1747,7 +1749,8 @@ class Orchestrator:
 
     def _plan(self, user_message: str, transcript: str, context_view: str,
               gathered: List[Dict[str, Any]], *, step: int = 0,
-              narrate: bool = False, persona: str = "") -> PlanDecision:
+              narrate: bool = False, persona: str = "",
+              already_said: Optional[List[str]] = None) -> PlanDecision:
         # Step 1 (step == 0) always sees the FULL transcript + context_view. On later re-plan
         # steps, if the consumer opted in, swap the (unchanged) transcript + context_view for a
         # short reference note — the planner's job there is to react to the NEW gathered
@@ -1775,9 +1778,19 @@ class Orchestrator:
             rationale_instruction=(
                 _RATIONALE_INSTRUCTION_NARRATE if narrate else _RATIONALE_INSTRUCTION_PLAIN),
         )
+        preamble_parts: List[str] = []
         if narrate and persona.strip():
-            prompt = ("--- SPEAK AS THIS PERSONA (for your `rationale` line only) ---\n"
-                      + persona.strip()[:1500] + "\n\n" + prompt)
+            preamble_parts.append(
+                "--- SPEAK AS THIS PERSONA (for your `rationale` line only) ---\n"
+                + persona.strip()[:1500]
+            )
+        if narrate and already_said:
+            preamble_parts.append(
+                "--- ALREADY SAID OUT LOUD THIS TURN (do NOT repeat, echo, or paraphrase) ---\n"
+                + "\n".join(f"• {s}" for s in already_said)
+            )
+        if preamble_parts:
+            prompt = "\n\n".join(preamble_parts) + "\n\n" + prompt
         model = self.registry.resolve_tier(self.cfg.planner_tier)
         provider = self.get_provider_for_model(model)
         raw = provider.plan(prompt, model=model, tool_schema=DECIDE_TOOL)
@@ -3523,7 +3536,8 @@ class Orchestrator:
 
             try:
                 plan = self._plan(user_message, transcript, context_view, gathered, step=step,
-                                  narrate=narrator.enabled, persona=rep_preamble or "")
+                                  narrate=narrator.enabled, persona=rep_preamble or "",
+                                  already_said=narrator._said if narrator.enabled else None)
             except Exception as e:  # noqa: BLE001 — planner failure -> grounded fallback answer
                 log.exception(
                     f"Planner failed on step {steps}: {e}. Falling back to grounded answer."

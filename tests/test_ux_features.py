@@ -239,7 +239,7 @@ class TestInstantAck:
 
         # The planner prompt for this run carried the conversational rationale instruction AND the
         # injected persona (Approach B: the planner writes the beat in the rep's voice, no extra call).
-        assert any("SPOKEN line" in p for p in provider.plan_prompts), \
+        assert any("spoken line" in p.lower() for p in provider.plan_prompts), \
             "Planner prompt should switch to the conversational rationale instruction when narrating"
         assert any("Maya" in p for p in provider.plan_prompts), \
             "Planner prompt should carry the rep persona when narrating"
@@ -253,7 +253,7 @@ class TestInstantAck:
         orch.run("plain question", mode=Mode.LIVE, sink=StreamSink(lambda _: None),
                  rep_preamble="You are Maya.")
         assert provider.plan_prompts
-        assert all("SPOKEN line" not in p for p in provider.plan_prompts)
+        assert all("spoken line" not in p.lower() for p in provider.plan_prompts)
         assert any("one sentence" in p for p in provider.plan_prompts)
 
     def test_instant_ack_prompt_forbids_em_dashes(self):
