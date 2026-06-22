@@ -297,16 +297,16 @@ _RATIONALE_INSTRUCTION_NARRATE = (
     "thinking out loud mid-task. Be specific (name what you're looking at, not just 'details'). "
     "No em dashes, no greeting, no markdown. Return empty if nothing worth saying. Also set `model_tier`."
 )
-# Re-plan steps (step > 0): gathered data is in the prompt — react to what you found, not what
-# you're about to do next. Each beat should carry an insight or observation from the data.
+# Re-plan steps (step > 0): gathered data is in the prompt — react to what you found AND say
+# what that's driving next. Each beat should bridge insight to intent.
 _RATIONALE_INSTRUCTION_NARRATE_REPLAN = (
     "For `rationale`: you just read new data (see GATHERED above). Write ONE short spoken line "
-    "that shares a genuine reaction, observation, or inference from what you found — the way a "
-    "coach or analyst thinks out loud as they learn something. Be opinionated and specific: "
-    "'your second marathon quest was reset recently, which tells me something shifted' beats "
-    "'I am reading your quest details'. NEVER describe what you are about to read next. "
+    "that bridges what you noticed with what you're doing because of it — the way a coach thinks "
+    "out loud: 'your second marathon goal was reset recently, so I want to see what changed "
+    "around that time' or 'your pacing data looks steady early but drops off, let me check your "
+    "training load'. Be opinionated and specific. Never just describe the next read in isolation. "
     "Check the 'Already said' list and never repeat or echo it. Return empty if nothing "
-    "genuinely interesting stands out. No em dashes, no greeting, no markdown. Also set `model_tier`."
+    "genuinely new to say. No em dashes, no greeting, no markdown. Also set `model_tier`."
 )
 
 # Assemble the final format()-able prompt. The gate constants from context_doctrine have NO
