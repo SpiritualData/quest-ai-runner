@@ -61,6 +61,8 @@ import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
+from .adapters.retry_utils import format_provider_error
+
 try:
     import yaml
 except ImportError:
@@ -1311,7 +1313,9 @@ class InteractiveSession:
                     if item is _DONE_ITEM:
                         break
                     if isinstance(item, Exception):
-                        raise item
+                        friendly = format_provider_error(item)
+                        self._console.line(f"\n  Error: {friendly}\n")
+                        return
                     if self._cancelled.is_set():
                         break
                     if isinstance(item, OrchestratorResult):

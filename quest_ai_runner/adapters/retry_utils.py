@@ -57,6 +57,43 @@ def parse_json_with_retry(
     raise last_err if last_err is not None else ValueError(f"{label}: parse failed")
 
 
+def format_provider_error(exc: Exception) -> str:
+    """Return a user-friendly error string for known provider errors, or the raw str() otherwise.
+
+    Detects billing, auth, and quota errors by inspecting the exception type and message so callers
+    can show actionable guidance instead of a raw SDK traceback.
+    """
+    exc_str = str(exc)
+    exc_type = type(exc).__name__
+
+    # Google Gemini billing / dunning block (403 PERMISSION_DENIED)
+    if "ClientError" in exc_type and "403" in exc_str:
+        if "dunning" in exc_str.lower() or "PERMISSION_DENIED" in exc_str:
+            return (
+                "Google Gemini billing issue: your Google Cloud project has been blocked "
+                "(overdue payment or spending limit). "
+                "Fix it at console.cloud.google.com/billing, then retry. "
+                "If the block persists, update GOOGLE_API_KEY in your .env to a key from a "
+                "project with active billing."
+            )
+
+    # Generic 403 from any Google SDK
+    if "403" in exc_str and "PERMISSION_DENIED" in exc_str:
+        return (
+            "Permission denied by the AI provider (403). "
+            "Check your API key and billing status, then retry."
+        )
+
+    # Rate limit / quota exhausted
+    if "429" in exc_str or "quota" in exc_str.lower() or "RateLimitError" in exc_type:
+        return (
+            "Rate limit or quota exceeded. Wait a moment and try again, "
+            "or switch to a model with higher quota."
+        )
+
+    return str(exc)
+
+
 def is_transient_error(exc: Exception) -> bool:
     """Identify transient errors worth retrying."""
     exc_str = str(exc)

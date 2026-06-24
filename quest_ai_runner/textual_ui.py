@@ -37,6 +37,7 @@ from rich.markdown import Markdown as RichMarkdown
 from rich.text import Text
 import logging
 
+from .adapters.retry_utils import format_provider_error
 from .interactive import (
     InteractiveSession,
     _BANNER,
@@ -1000,7 +1001,8 @@ class QuestAITerminal(App):
         self._deep_detail.hide()
 
         if error is not None:
-            log.write(f"  [red]Error:[/red] {error}")
+            friendly = format_provider_error(error)
+            log.write(f"  [red]Error:[/red] {friendly}")
         elif cancelled:
             self._console.dim("  Cancelled.")
             s._last_user = user_text
