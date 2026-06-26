@@ -157,10 +157,14 @@ CODE / FILE CHANGE COMMANDS (once you've judged it's a COMMAND, this is highest 
   Describing a fix instead of executing is a FAILURE. (But explaining a fix when the user only
   ASKED how it works is correct -- that was a question, not a command.)
 
-  WHEN SEARCHES RETURN NOTHING: if you searched/grepped for a component, file, or symbol and
-  got no results (or "pattern not found"), that is NOT a reason to answer with generic advice.
-  Choose "deep" -- the deep runner can grep and browse the codebase itself. Never give a
-  'here is how you would implement this' guide when the user asked you to actually do it.
+  WHEN SEARCHES RETURN NOTHING (code/file tasks only): if you searched/grepped for a component,
+  file, or symbol for a COMMAND/change request and got no results, that is NOT a reason to
+  answer with generic advice. Choose "deep" -- the deep runner can grep and browse the codebase.
+  Never give a 'here is how you would implement this' guide when the user asked you to do it.
+  EXCEPTION: for QUESTION / INFORMATION requests (recall, status, history, "what did we find
+  about X", "tell me recent findings"), if searches return nothing that IS a valid answer --
+  respond with "searched but found nothing relevant" rather than spawning a deep task. Do NOT
+  escalate informational questions to deep just because the search returned empty.
 
 CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
   The CONTEXT below only LOCATES what exists (a one-line summary per item). It is NOT a
