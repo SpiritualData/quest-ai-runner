@@ -26,25 +26,37 @@ from typing import Optional
 log = logging.getLogger("quest-ai-runner.usage")
 
 
+DEFAULT_DAILY_TOKEN_LIMIT = 2_000_000  # 2M tokens/day when nothing is configured
+
+
 @dataclass
 class DailyUsageLimits:
     """Daily token budget. ``None`` = disabled (no cap enforced)."""
 
-    max_daily_tokens: Optional[int] = None
+    max_daily_tokens: Optional[int] = DEFAULT_DAILY_TOKEN_LIMIT
 
     @classmethod
     def from_env(cls, env=None) -> "DailyUsageLimits":
+        """Read ``QAR_DAILY_TOKEN_LIMIT`` from env.
+
+        Unset → default 2,000,000 tokens/day (protects against runaway costs).
+        Set to 0 / "off" / "none" → disabled entirely.
+        Set to a positive integer → that many tokens per day.
+        """
         env = env or os.environ
         raw = (env.get("QAR_DAILY_TOKEN_LIMIT") or "").strip().lower()
         if not raw:
-            return cls()  # not configured; disabled
+            return cls()  # default: 2M tokens/day
         if raw in ("0", "off", "none", "false", "disabled"):
             return cls(max_daily_tokens=None)
         try:
             limit = int(raw)
             return cls(max_daily_tokens=limit if limit > 0 else None)
         except ValueError:
-            log.warning("ignoring QAR_DAILY_TOKEN_LIMIT=%r — not an integer; limit disabled", raw)
+            log.warning(
+                "ignoring QAR_DAILY_TOKEN_LIMIT=%r — not an integer; using default %s",
+                raw, f"{DEFAULT_DAILY_TOKEN_LIMIT:,}",
+            )
             return cls()
 
     def enabled(self) -> bool:

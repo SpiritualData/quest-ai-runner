@@ -97,9 +97,10 @@ class Poller:
                 else ResourceLimits.from_env()
             resource_guard = ResourceGuard(limits)
         self.resources = resource_guard
-        # Daily token budget (opt-in via QAR_DAILY_TOKEN_LIMIT): consumer-supplied tracker >
-        # auto-created from env when the env var is set > None (disabled, no limit enforced).
-        if config.usage_tracker is None and os.getenv("QAR_DAILY_TOKEN_LIMIT"):
+        # Daily token budget: consumer-supplied tracker > auto-created from env.
+        # ON BY DEFAULT (2M tokens/day) so an unconfigured deployment cannot rack up unexpected
+        # API charges. Override with QAR_DAILY_TOKEN_LIMIT=<n>; disable with QAR_DAILY_TOKEN_LIMIT=0.
+        if config.usage_tracker is None:
             try:
                 from ..usage import DailyUsageTracker
                 config.usage_tracker = DailyUsageTracker.from_env()

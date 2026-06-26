@@ -31,14 +31,13 @@ Env it reads:
                                                    limit by this percent before resuming (default 10)
   QAR_RESOURCE_CHECK_INTERVAL (optional, secs)   — re-check cadence while paused (default 30)
   QAR_DAILY_TOKEN_LIMIT (optional, tokens)       — daily cap on shallow API tokens (input + output
-                                                   combined). When exceeded, the poller pauses new
-                                                   task pickup until midnight UTC and any in-flight
-                                                   chat turn returns a user-facing limit message
-                                                   with instructions to raise the cap. Set to a
-                                                   positive integer to enable (e.g. 2000000 for 2M
-                                                   tokens/day). Set to 0 or "off" to disable. The
-                                                   deep-runner (Claude Code, subscription-based) is
-                                                   NOT counted. Unset = no limit.
+                                                   combined). Default: 2,000,000 tokens/day when
+                                                   unset. When exceeded, the poller pauses new task
+                                                   pickup until midnight UTC and any in-flight chat
+                                                   turn returns a message with instructions to raise
+                                                   the cap. Set to a larger number to raise it; set
+                                                   to 0 or "off" to disable entirely. The deep-runner
+                                                   (Claude Code, subscription-based) is NOT counted.
   QAR_DAILY_USAGE_PATH (optional)                — JSON file for persisting today's token count
                                                    across restarts (default: ./qar_daily_usage.json;
                                                    gitignored by this repo).

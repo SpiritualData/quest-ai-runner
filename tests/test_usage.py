@@ -14,10 +14,11 @@ from quest_ai_runner.usage import DailyUsageLimits, DailyUsageTracker
 # DailyUsageLimits.from_env
 # ---------------------------------------------------------------------------
 
-def test_limits_from_env_unset_means_disabled():
+def test_limits_from_env_unset_uses_default():
+    from quest_ai_runner.usage import DEFAULT_DAILY_TOKEN_LIMIT
     limits = DailyUsageLimits.from_env({})
-    assert not limits.enabled()
-    assert limits.max_daily_tokens is None
+    assert limits.enabled()
+    assert limits.max_daily_tokens == DEFAULT_DAILY_TOKEN_LIMIT
 
 
 def test_limits_from_env_parses_integer():
@@ -32,9 +33,11 @@ def test_limits_from_env_disable_keywords():
         assert not limits.enabled(), f"expected disabled for {val!r}"
 
 
-def test_limits_from_env_garbage_value_disables(caplog):
+def test_limits_from_env_garbage_value_falls_back_to_default(caplog):
+    from quest_ai_runner.usage import DEFAULT_DAILY_TOKEN_LIMIT
     limits = DailyUsageLimits.from_env({"QAR_DAILY_TOKEN_LIMIT": "lots"})
-    assert not limits.enabled()
+    assert limits.enabled()
+    assert limits.max_daily_tokens == DEFAULT_DAILY_TOKEN_LIMIT
     assert any("ignoring" in r.message for r in caplog.records)
 
 
@@ -272,8 +275,8 @@ def test_poller_resumes_after_day_rollover():
     assert poller.run_once() == ["task-3"]   # resumed after reset
 
 
-def test_poller_with_no_tracker_behaves_as_before():
-    """Backward compat: no usage_tracker => normal scan, no daily-limit logic."""
+def test_poller_default_limit_does_not_block_normal_scan():
+    """Default-on tracker with 0 tokens used must not block a normal scan."""
     from tests.test_runner import MockQuestClient
     from tests.conftest import StubProvider
     from quest_ai_runner.config import RunnerConfig
@@ -287,10 +290,10 @@ def test_poller_with_no_tracker_behaves_as_before():
     cfg = RunnerConfig(
         quest_base_url="http://x", quest_api_key="qsk_test", team_id="team1",
         retrieval=StubRetrieval({"README.md": "fact"}), model_provider=provider,
-        usage_tracker=None,
     )
     poller = Poller(cfg, state_path=None, client=client,
                     resource_guard=ResourceGuard(ResourceLimits()))
-    # QAR_DAILY_TOKEN_LIMIT not in env, so tracker stays None.
-    assert poller._usage_tracker is None
+    # Tracker auto-created with default limit; 0 tokens used -> not over limit.
+    assert poller._usage_tracker is not None
+    assert not poller._usage_tracker.over_limit()
     assert poller.run_once() == ["task-4"]
