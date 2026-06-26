@@ -219,6 +219,55 @@ def test_answer_not_verified_without_a_quality_bar():
     assert provider.answer_calls == 1
 
 
+def test_answer_goal_verifier_none_retries_not_silently_accepts():
+    # A None verdict (verifier call fails — no "met" key in response) must RETRY, not silently
+    # accept the answer. With max_iterations=3: attempt 1 returns None (retry), attempt 2 returns
+    # met=True. Result: 2 plan calls for verification, 1 answer generation (no regeneration needed
+    # since met=True on retry).
+    card = _GCard("g1", "Quality bar", "always", "Be specific.")
+    provider = StubProvider(
+        decisions=[
+            {"action": "answer", "model_tier": "sonnet", "rationale": "answer"},
+            {},  # no "met" key -> _verify_goal returns None -> should retry, not accept
+            {"met": True, "reason": "complete on retry"},
+        ],
+        answer_text="Let me check the files and pull up the logs...",
+    )
+    res = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider),
+                       guidance=_StubGuidance([card]),
+                       config=OrchestratorConfig(answer_goal_max_iterations=3)).run("what's the state?")
+    assert res.kind == "answer"
+    # 1 plan call (action=answer) + 2 verify calls (None then met=True) = 3 total
+    assert provider.plan_calls == 3
+
+
+def test_answer_goal_verifier_none_exhausted_accepts():
+    # If ALL verify calls return None (verifier always fails), best-effort accept after exhausting
+    # attempts rather than blocking the turn.
+    card = _GCard("g1", "Quality bar", "always", "Be specific.")
+    provider = StubProvider(
+        decisions=[
+            {"action": "answer", "model_tier": "sonnet", "rationale": "answer"},
+            {},  # None verdict on only attempt (max_iterations=2 means 1 verify call)
+        ],
+        answer_text="Let me pull up the data...",
+    )
+    res = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider),
+                       guidance=_StubGuidance([card]),
+                       config=OrchestratorConfig(answer_goal_max_iterations=2)).run("what's the state?")
+    assert res.kind == "answer"  # accepted after exhausting attempts, turn must complete
+
+
+def test_verify_goal_prompt_rejects_future_intent():
+    # The VERIFY_GOAL_PROMPT must explicitly instruct the verifier that future-intent language
+    # ("Let me check", "I'm pulling up", etc.) is met=false.
+    from quest_ai_runner.core.orchestrator import VERIFY_GOAL_PROMPT
+    assert "Let me check" in VERIFY_GOAL_PROMPT
+    assert "pulling" in VERIFY_GOAL_PROMPT  # "I'm pulling up" may wrap
+    assert "Future intent is NOT a result" in VERIFY_GOAL_PROMPT
+    assert "met=false" in VERIFY_GOAL_PROMPT
+
+
 def test_goal_loop_iterates_until_verified_met():
     # Our own goal loop (replaces Claude Code /goal): the worker runs, the brain VERIFIES the
     # done-standard, and if not met it re-runs with steering. Here verify says not-met on attempt 1,
