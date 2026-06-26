@@ -445,6 +445,9 @@ class QuestAITerminal(App):
         # When set, the next submitted line is a menu selection, not a turn.
         self._pending_select: Optional[Callable[[str], None]] = None
 
+        # Stable session key for the input inbox so mid-turn messages can be queued.
+        self._session_id = str(id(self))
+
         # Event-type constants, resolved lazily on first event.
         self._ev: Optional[dict] = None
         self._console: Optional[_RichLogConsole] = None
@@ -538,7 +541,11 @@ class QuestAITerminal(App):
             return
 
         if self._turn_active:
-            # A turn is in flight; ignore extra submissions (input is disabled too).
+            # Queue the message for the orchestrator to drain between goal-loop steps.
+            inbox = getattr(self.sess._orch, "input_inbox", None)
+            if inbox is not None:
+                inbox.push(self._session_id, line)
+            self._tlog.write(Text(f"  ↑ queued: {line}", style="dim"))
             return
 
         if line.startswith("/"):
@@ -820,11 +827,11 @@ class QuestAITerminal(App):
             self._tlog.write(Text(f"❯ {user_text}", style="bold cyan"))
             self._tlog.write(Text(""))
 
-        # Loading strip on, prompt off until the turn ends.
+        # Loading strip on; keep input enabled so mid-turn messages can be queued.
         self._activity.set_status("thinking…")
         self._activity.display = True
         inp = self.query_one("#prompt", Input)
-        inp.disabled = True
+        inp.placeholder = "Type to queue a message for the next step…"
 
         self._run_stream(user_text)
 
@@ -843,12 +850,16 @@ class QuestAITerminal(App):
         final: Optional["OrchestratorResult"] = None
         error: Optional[Exception] = None
         try:
+            _inbox = getattr(s._orch, "input_inbox", None)
+            _sid = self._session_id
+            _pending = (lambda: _inbox.drain(_sid)) if _inbox is not None else None
             for item in s._orch.run_stream(
                 user_text,
                 transcript=s._last_transcript(),
                 quest_id=s._goal_id,
                 rep_preamble=s._effective_preamble(),
                 model_hint=model_hint,
+                pending_inputs=_pending,
             ):
                 if self._cancel.is_set():
                     break
@@ -1045,7 +1056,7 @@ class QuestAITerminal(App):
 
         self._turn_active = False
         inp = self.query_one("#prompt", Input)
-        inp.disabled = False
+        inp.placeholder = "Ask anything…   (/help for commands, Esc to cancel, d=expand agent, Tab=cycle)"
         inp.focus()
 
         # Auto-execute a planned-but-unexecuted deep turn (matches interactive.py).
