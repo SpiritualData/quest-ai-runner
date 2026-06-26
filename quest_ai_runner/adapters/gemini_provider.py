@@ -30,7 +30,6 @@ class GeminiProvider(ModelProviderBase):
         self._client = None
         self._models_cache: Optional[List[str]] = None
         self._models_cached_at = 0.0
-        # Token counts not tracked by Gemini SDK (no usage field); just initialize to 0.
         self.tokens_in: int = 0
         self.tokens_out: int = 0
 
@@ -65,6 +64,10 @@ class GeminiProvider(ModelProviderBase):
                 contents=prompt,
                 config={"response_mime_type": "application/json"},
             )
+            meta = getattr(response, "usage_metadata", None)
+            if meta:
+                self.tokens_in += getattr(meta, "prompt_token_count", 0) or 0
+                self.tokens_out += getattr(meta, "candidates_token_count", 0) or 0
             return response.text
 
         try:
@@ -108,6 +111,10 @@ class GeminiProvider(ModelProviderBase):
             model=model,
             contents=full_prompt
         )
+        meta = getattr(response, "usage_metadata", None)
+        if meta:
+            self.tokens_in += getattr(meta, "prompt_token_count", 0) or 0
+            self.tokens_out += getattr(meta, "candidates_token_count", 0) or 0
         return response.text if response and response.text else ""
 
     @retry_transient(max_retries=2, base_delay=1.0)

@@ -41,6 +41,8 @@ class MultiProvider(ModelProvider):
         self.primary = primary
         self.providers = providers or {}
         self.call_count = 0
+        self.tokens_in: int = 0
+        self.tokens_out: int = 0
         self._usage_tracker = usage_tracker
 
     def _get_provider_for_model(self, model: str) -> ModelProvider:
@@ -69,14 +71,16 @@ class MultiProvider(ModelProvider):
         return self.primary
 
     def _record_token_delta(self, provider: ModelProvider, before_in: int, before_out: int) -> None:
-        """Record the token delta from one LLM call to the usage tracker, if configured."""
-        if self._usage_tracker is None:
-            return
+        """Record the token delta from one LLM call; update own totals and the usage tracker."""
         after_in = getattr(provider, "tokens_in", 0)
         after_out = getattr(provider, "tokens_out", 0)
         delta_in = max(0, after_in - before_in)
         delta_out = max(0, after_out - before_out)
-        if delta_in > 0 or delta_out > 0:
+        if delta_in == 0 and delta_out == 0:
+            return
+        self.tokens_in += delta_in
+        self.tokens_out += delta_out
+        if self._usage_tracker is not None:
             try:
                 self._usage_tracker.record(delta_in, delta_out)
             except Exception:  # noqa: BLE001 — token tracking must never break a call
