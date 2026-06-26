@@ -686,13 +686,21 @@ up", "I'll look at", "I'm going to", "I will now", "I'm searching", or any other
 what the worker is ABOUT to do rather than reporting what it DID, set met=false. The worker must have
 actually executed the task and reported the outcome -- not described its plan to do so.
 
+CRITICAL: Absence of context can be the correct answer. If the goal asks about prior conversation
+history, prior messages, or what was previously said, and the CONVERSATION HISTORY below confirms
+there is no prior history (it is empty or shows only the current message), then an answer of
+"there is no prior history" or "this is the start of the session" IS the complete and correct
+answer -- set met=true. Do NOT set need_more_context=true when the history IS shown and it is
+simply empty. Only set need_more_context=true when the history is ABSENT from the context
+entirely (not shown at all) and the answer could not have known whether history exists.
+
 When met=false:
   - set next_action to a SHORT, specific instruction for the next attempt: what to fix, what context
     or file to look at next, or the likely reason it failed.
   - set need_more_context=true ONLY when the worker clearly lacked context it needed (a missing file,
-    a prior message, an unknown fact); then set context_query to a short search query naming that
-    missing context. If the worker had what it needed but did the work poorly, leave
-    need_more_context=false.
+    a prior message, an unknown fact that is NOT shown in the context below); then set context_query
+    to a short search query naming that missing context. If the worker had what it needed but did the
+    work poorly, leave need_more_context=false.
   - optionally set next_tier to a stronger model tier (fast, balanced, quality, best) when the
     failure looks like a reasoning or capability gap rather than missing context.
 Do NOT use em dashes.
@@ -702,6 +710,9 @@ Do NOT use em dashes.
 
 --- TASK BRIEF ---
 {brief}
+
+--- CONVERSATION HISTORY (what the worker had access to; empty means no prior turns exist) ---
+{transcript}
 
 --- WORKER OUTPUT (what it reports it did) ---
 {output}
@@ -1938,7 +1949,8 @@ class Orchestrator:
 
     def _verify_goal(self, goal: str, brief: str, output: str, *,
                      rep_preamble: Optional[str] = None,
-                     quality_standards: Optional[str] = None) -> Optional[Dict[str, Any]]:
+                     quality_standards: Optional[str] = None,
+                     transcript: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Decide whether the worker's run met the done-standard AT THE QUALITY BAR.
 
         Judged through the AI rep's lens (``rep_preamble``) and against the applicable GUIDANCE CARDS
@@ -1964,10 +1976,12 @@ class Orchestrator:
                          + quality_standards.strip()[:3000] + "\n\n")
         try:
             model = self.registry.resolve_tier(self.cfg.planner_tier)
+            transcript_section = (transcript or "").strip()[:2000] or "(no prior turns)"
             raw = self.provider.plan(
                 VERIFY_GOAL_PROMPT.format(
                     persona=persona, standards=standards,
                     goal=(goal or "")[:1000], brief=(brief or "")[:2000],
+                    transcript=transcript_section,
                     output=(output or "")[:6000]),
                 model=model, tool_schema=VERIFY_GOAL_TOOL)
             # A tool-schema provider returns the structured dict directly; a provider that can only
@@ -3847,7 +3861,8 @@ class Orchestrator:
                 for _attempt in range(1, _max):  # at most _max-1 regenerations after the first answer
                     verdict = self._verify_goal(overall_goal, user_message, text,
                                                 rep_preamble=rep_preamble,
-                                                quality_standards=quality_standards)
+                                                quality_standards=quality_standards,
+                                                transcript=transcript)
                     if verdict is not None and verdict.get("met"):
                         if emit is not None:
                             emit.status("answer verified against the goal.")
