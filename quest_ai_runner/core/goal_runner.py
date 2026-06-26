@@ -138,9 +138,12 @@ def compose_goal_prompt(goal: str, brief: str, *, preamble: str = "") -> str:
     if goal_text:
         body_parts.append("GOAL (the done-standard your work must satisfy):\n" + goal_text)
     body_parts.append(
-        "EFFICIENCY: The context above shows the relevant files/sources already identified by the "
-        "brain. Use them as your starting point. Only explore further if the provided context is "
-        "insufficient to complete the goal. Avoid redundant exploration of files already listed above."
+        "CONTEXT USAGE: The brain has already identified the relevant files and sources above — "
+        "treat that as your starting point and work from it directly. "
+        "Do NOT run an Explore phase or broad codebase-wide discovery sweep. "
+        "Targeted lookups are fine: grep for a specific symbol, read a specific file, "
+        "or run a quick find to locate something the context didn't cover. "
+        "Avoid any broad exploration that duplicates what the context already provides."
     )
     body_parts.append(
         "When done, summarize CONCRETELY what you changed (the files and the actual edits/actions). "
