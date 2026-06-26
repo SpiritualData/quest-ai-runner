@@ -98,6 +98,7 @@ def is_transient_error(exc: Exception) -> bool:
     """Identify transient errors worth retrying."""
     exc_str = str(exc)
     exc_type = type(exc).__name__
+    exc_module = getattr(type(exc), "__module__", "") or ""
 
     # Gemini SDK: google.genai.errors.ServerError with 503/429
     if "ServerError" in exc_type or "RateLimitError" in exc_type:
@@ -106,6 +107,11 @@ def is_transient_error(exc: Exception) -> bool:
 
     # Generic timeout / connection errors
     if any(keyword in exc_type.lower() for keyword in ["timeout", "connectionerror", "httperror"]):
+        return True
+
+    # httpx / httpcore transport-layer errors — all are transient (server closed mid-stream,
+    # network blip, RemoteProtocolError, ConnectError, ReadError, etc.)
+    if exc_module.startswith("httpx") or exc_module.startswith("httpcore"):
         return True
 
     # Anthropic SDK: RateLimitError, APIStatusError with 429/503
