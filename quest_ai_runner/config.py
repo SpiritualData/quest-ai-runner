@@ -151,6 +151,14 @@ class RunnerConfig:
     # host is overloaded and resumes once resources recover — queued tasks just wait, unharmed.
     resource_limits: Optional[ResourceLimits] = None
 
+    # --- daily token budget (opt-in; see quest_ai_runner/usage.py) ---
+    # Tracks shallow-orchestrator API tokens (plan + answer + context indexing) per UTC day and
+    # pauses new task pickup when the daily limit is exceeded. Counts only the per-token-billed
+    # providers (Anthropic, OpenAI, Gemini); the deep-runner runs on subscription and is excluded.
+    # None = read QAR_DAILY_TOKEN_LIMIT from env at poller construction (unset = disabled). Pass
+    # an explicit DailyUsageTracker to inject one in code (useful for tests and custom consumers).
+    usage_tracker: Optional[Any] = None
+
     # --- AI-rep skill-file sync (opt-in; OFF by default) ---
     # When set, the poller pulls the latest AI-rep profile from Quest into the rep's local Claude
     # skill file RIGHT BEFORE running that rep's task, so the spawned agent behaves as the current
@@ -754,7 +762,8 @@ def build_orchestrator(
     if cfg.model_provider and all_providers:
         if isinstance(cfg.model_provider, _real_types):
             original_provider = cfg.model_provider
-            cfg.model_provider = MultiProvider(original_provider, all_providers)
+            cfg.model_provider = MultiProvider(
+                original_provider, all_providers, usage_tracker=cfg.usage_tracker)
             _log.debug("Wrapped primary provider with MultiProvider for intelligent routing")
 
     # Also wrap vision_provider if configured (used for image description fallback)

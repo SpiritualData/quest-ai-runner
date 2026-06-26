@@ -17,9 +17,10 @@ env/
 htmlcov/
 *.log
 
-# Local runner state (signature dedup store)
+# Local runner state (signature dedup store + daily token usage)
 qar_state.json
 *_state.json
+qar_daily_usage.json
 
 # ContextAssembler cards (FileContextStore) — machine-written, mutate every run, rebuildable.
 # Treat as local state, not source: inspectable/diffable locally but not committed. Promote

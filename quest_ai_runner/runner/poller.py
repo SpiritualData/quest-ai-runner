@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -96,6 +97,16 @@ class Poller:
                 else ResourceLimits.from_env()
             resource_guard = ResourceGuard(limits)
         self.resources = resource_guard
+        # Daily token budget (opt-in via QAR_DAILY_TOKEN_LIMIT): consumer-supplied tracker >
+        # auto-created from env when the env var is set > None (disabled, no limit enforced).
+        if config.usage_tracker is None and os.getenv("QAR_DAILY_TOKEN_LIMIT"):
+            try:
+                from ..usage import DailyUsageTracker
+                config.usage_tracker = DailyUsageTracker.from_env()
+            except Exception:  # noqa: BLE001 — tracking must never break the runner
+                log.debug("daily usage tracker could not be created; token limit disabled",
+                          exc_info=True)
+        self._usage_tracker = config.usage_tracker
         self.client = client or QuestClient(
             config.quest_base_url, config.quest_api_key, team_id=config.team_id)
         # Default the escalation sink to a Quest decision-request sink if the consumer didn't set one.
@@ -133,6 +144,15 @@ class Poller:
         if self.resources.check():
             log.info("host overloaded — skipping task pickup this scan; queued tasks will run "
                      "once resources recover")
+            return []
+        # Daily token budget gate: pause new pickup when the day's API token limit is exceeded.
+        # Lossless for the same reason: unclaimed tasks stay queued and run on a later scan (or
+        # the next UTC day once the counter resets at midnight).
+        if self._usage_tracker and self._usage_tracker.over_limit():
+            log.warning(
+                "daily token limit reached (%s) — pausing task pickup until midnight UTC",
+                self._usage_tracker.status(),
+            )
             return []
         try:
             # Use discovery_team_id when set (allows owner-scoped discovery on a personal lane while
@@ -190,6 +210,13 @@ class Poller:
         # re-discovered and runs on a later scan once resources recover.
         if self.resources.check():
             log.info("host overloaded — deferring task %s to a later scan", task_id)
+            return None
+        # Re-check daily token budget per-task: a task earlier in this batch may have pushed us over.
+        if self._usage_tracker and self._usage_tracker.over_limit():
+            log.info(
+                "daily token limit reached mid-scan (%s) — deferring task %s",
+                self._usage_tracker.status(), task_id,
+            )
             return None
         # Resolve WHO will run this (the AI representation/skill) so we can stamp it on the claim:
         # the rep slug if a rep_sync_resolver maps this task to a skill dir, else the runner label.
