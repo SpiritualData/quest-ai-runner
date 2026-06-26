@@ -676,6 +676,12 @@ Decide:
     clearly matches the goal and the standards).
   - met=false if the output is vague, only describes a plan, is partial, hit a limit or error, falls
     short of the quality standards, or does not clearly satisfy the goal.
+
+CRITICAL: Future intent is NOT a result. If the output says things like "Let me check", "I'm pulling
+up", "I'll look at", "I'm going to", "I will now", "I'm searching", or any other phrase that describes
+what the worker is ABOUT to do rather than reporting what it DID, set met=false. The worker must have
+actually executed the task and reported the outcome -- not described its plan to do so.
+
 When met=false:
   - set next_action to a SHORT, specific instruction for the next attempt: what to fix, what context
     or file to look at next, or the likely reason it failed.
@@ -3838,10 +3844,19 @@ class Orchestrator:
                     verdict = self._verify_goal(overall_goal, user_message, text,
                                                 rep_preamble=rep_preamble,
                                                 quality_standards=quality_standards)
-                    if verdict is None or verdict.get("met"):
-                        if emit is not None and verdict and verdict.get("met"):
+                    if verdict is not None and verdict.get("met"):
+                        if emit is not None:
                             emit.status("answer verified against the goal.")
                         break
+                    if verdict is None:
+                        # Verifier call failed (LLM error, parse failure, etc.) — do not silently
+                        # accept. Retry on the next attempt; if this was the last attempt, accept
+                        # with a warning rather than blocking the turn.
+                        log.warning("goal verifier returned None (attempt %d/%d) — retrying",
+                                    _attempt, _max - 1)
+                        if _attempt >= _max - 1:
+                            break  # out of attempts, best-effort accept
+                        continue  # retry the verification call
                     # When the verifier says the answer lacked the context needed to be definitive,
                     # escalate to deep so it can search further. Regenerating with the SAME gathered
                     # context won't help — the deep runner can grep/read on its own.
