@@ -7,6 +7,19 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **The instant "thinking out loud" line now actually shows while context is being searched (terminal
+  UIs).** The orchestrator emits the narration/instant-ack beat as `EVENT_PARTIAL` tagged
+  `data={"narration": True}`, and the frontend already consumed that key, but both terminal sessions
+  (`interactive.py`, `textual_ui.py`) still gated on the legacy `data["ack"]` flag. So the immediate
+  acknowledgment was never recognized: the Textual UI misrouted it into the discarded answer buffer
+  (the real answer comes from `final.text`), and nothing appeared during the search. Both consumers
+  now recognize `data["narration"]` (keeping `ack` for back-compat) and render it as a dim line.
+  Regression test `test_instant_ack_emits_narration_flagged_partial`.
+- **The context-search status reads "searching context…" instead of "searching corpus…".** That
+  stage is the `ContextAssembler.assemble()` call (a hybrid keyword + vector search over the wired
+  context cards plus turn history), not a single named source. "searching context" names the stage
+  (STAGE 2: FIND CONTEXT) honestly and matches what the user expects to see.
+
 - **Direct follow-ups are answered from the conversation instead of triggering a fresh corpus
   search.** When a user asked a follow-up whose answer the assistant had JUST given (e.g. it
   described a plan and its file path, then the user asked "what's the filepath?"), the planner still

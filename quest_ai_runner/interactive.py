@@ -763,7 +763,10 @@ class _TurnRenderer:
 
         # All output types go through unified _display() method
         if t == ev["partial"]:
-            is_ack = isinstance(data, dict) and data.get("ack")
+            # Narration beats (the instant ack + the planner's conversational rationale) come as
+            # EVENT_PARTIAL tagged data={"narration": True} (legacy: "ack"). Show them as a dim
+            # note above the spinner; never let them start the streamed-answer path.
+            is_ack = isinstance(data, dict) and (data.get("narration") or data.get("ack"))
             if is_ack:
                 # Instant ack: show as a dim note above the spinner, then restart it.
                 # Do NOT set _partial_started/_in_partial — the real result still shows normally.

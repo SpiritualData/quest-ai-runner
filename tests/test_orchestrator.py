@@ -906,3 +906,41 @@ def test_no_attachments_is_unchanged_behavior():
     # Final answer message is a plain string (no content-block list when there are no attachments).
     assert isinstance(provider.answer_contents[-1], str)
     assert "ATTACHMENTS" not in provider.plan_prompts[0]
+
+
+# --- narration / instant-ack beat contract --------------------------------------------------
+
+class _CapturingSink:
+    """A minimal ProgressSink that records every event the orchestrator emits."""
+
+    def __init__(self):
+        self.events = []
+
+    def update(self, event, mode):
+        self.events.append(event)
+
+
+def test_instant_ack_emits_narration_flagged_partial():
+    """The instant-ack / narration beat must be emitted as EVENT_PARTIAL tagged
+    data={'narration': True}. The terminal UIs (interactive.py, textual_ui.py) gate on that flag to
+    render it as a dim "thinking out loud" line; if the flag is missing or renamed they misroute the
+    beat into the streamed-answer buffer and the immediate response never shows. Regression for the
+    narration/ack key mismatch.
+    """
+    from quest_ai_runner.core.orchestrator import EVENT_PARTIAL
+
+    provider = StubProvider(decisions=[
+        {"action": "answer", "rationale": "chit-chat", "model_tier": "haiku"},
+    ])
+    orch = Orchestrator(retrieval=StubRetrieval({"README.md": "x"}), provider=provider,
+                        registry=ModelRegistry(provider),
+                        config=OrchestratorConfig(instant_ack=True))
+    sink = _CapturingSink()
+    orch.run("hello there", sink=sink)
+
+    narration = [e for e in sink.events
+                 if e.type == EVENT_PARTIAL and isinstance(e.data, dict) and e.data.get("narration")]
+    assert narration, "instant_ack should emit at least one narration-flagged EVENT_PARTIAL beat"
+    # The exact predicate the terminal UIs use to recognize a narration beat (vs an answer token).
+    for e in narration:
+        assert e.data.get("narration") or e.data.get("ack")

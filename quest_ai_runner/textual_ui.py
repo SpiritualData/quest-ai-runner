@@ -922,7 +922,10 @@ class QuestAITerminal(App):
         log = self._tlog
 
         if t == ev["partial"]:
-            is_ack = isinstance(data, dict) and data.get("ack")
+            # Narration beats (the instant ack + the planner's conversational rationale) come as
+            # EVENT_PARTIAL tagged data={"narration": True} (legacy: "ack"). Show them as dim
+            # "thinking out loud" lines; never let them start the answer buffer.
+            is_ack = isinstance(data, dict) and (data.get("narration") or data.get("ack"))
             if is_ack:
                 if text:
                     log.write(Text(f"  {text}", style="dim"))
