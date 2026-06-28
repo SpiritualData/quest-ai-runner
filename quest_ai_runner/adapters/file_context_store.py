@@ -51,6 +51,7 @@ from .card_content_render import (
     MAX_CARD_REF_ITEM_CHARS as _MAX_CARD_REF_ITEM_CHARS,
     MAX_CARD_REFS as _MAX_CARD_REFS,
     content_item_text as _content_item_text,
+    dedupe_content as _dedupe_content,
     normalize_content as _normalize_content,
     rank_content_by_recency_relevance as _rank_content_by_recency_relevance,
     render_card_content,
@@ -2377,6 +2378,12 @@ class FileContextStore(ContextAssemblerBase):
         if add:
             content.extend(_normalize_content(add))
 
+        # 3b) collapse duplicate references (same collection id / file path / note) into one merged
+        # item, keeping the existing item's stable id and the newest ts + freshest why, so re-adding
+        # a reference across deep runs never bloats the card. Existing content precedes additions, so
+        # an existing item keeps its id while picking up the newer ts/why from the re-add.
+        content = _dedupe_content(content)
+
         # 4) recency trim + persist
         card["content"] = _trim_content_by_recency(content)
         self._write_card_atomic(card_id, card)
@@ -2446,6 +2453,9 @@ class FileContextStore(ContextAssemblerBase):
                 raw_content = [raw_content]
             existing_content = _normalize_content(card.get("content"))
             existing_content.extend(_normalize_content(raw_content))
+            # Collapse duplicate references (same collection id / file path / note) before trimming,
+            # so re-recording the same source on a card merges instead of accumulating copies.
+            existing_content = _dedupe_content(existing_content)
             card["content"] = _trim_content_by_recency(existing_content)
 
         # Persist via the repository (skip if dry-run mode). Re-raise on failure so the outer

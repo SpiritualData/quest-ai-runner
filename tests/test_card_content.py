@@ -23,6 +23,10 @@ from quest_ai_runner.adapters.file_context_store import (
     _rank_content_by_recency_relevance,
     _trim_content_by_recency,
 )
+from quest_ai_runner.adapters.card_content_render import (
+    content_identity_key,
+    dedupe_content,
+)
 from quest_ai_runner.adapters.reference_resolver import (
     NoteResolver,
     ReferenceResolver,
@@ -394,3 +398,56 @@ class TestBackwardCompat:
         assert "Files:" in ac.context_view
         assert "mod.py" in ac.context_view
         assert "Content:" not in ac.context_view
+
+
+# ---------------------------------------------------------------------------
+# Reference DEDUP on write: re-adding the same collection id / file path / note
+# merges into the existing item (newest ts + freshest why) instead of bloating.
+# ---------------------------------------------------------------------------
+
+class TestContentDedup:
+    def test_identity_key_by_locator(self):
+        # collection -> id; file -> path; note -> text; case/space-insensitive.
+        assert content_identity_key(
+            {"type": "collection", "locator": {"id": "COL-1", "name": "Pricing"}}
+        ) == content_identity_key(
+            {"type": "collection", "locator": {"id": "col-1", "name": "Other"}}
+        )
+        assert content_identity_key({"type": "file", "locator": {"path": "a/b.py"}}) \
+            == content_identity_key({"type": "file", "locator": {"path": "a/b.py"}})
+        # different collections do NOT collapse
+        assert content_identity_key({"type": "collection", "locator": {"id": "x"}}) \
+            != content_identity_key({"type": "collection", "locator": {"id": "y"}})
+
+    def test_dedupe_keeps_first_id_newest_ts_freshest_why(self):
+        items = [
+            {"id": "keep", "type": "collection", "locator": {"id": "c1"}, "ts": 10.0, "why": "old"},
+            {"id": "dropme", "type": "collection", "locator": {"id": "c1"}, "ts": 20.0, "why": "new"},
+        ]
+        out = dedupe_content(items)
+        assert len(out) == 1
+        assert out[0]["id"] == "keep"          # first occurrence's stable id wins
+        assert out[0]["ts"] == 20.0            # refreshed to the newest
+        assert out[0]["why"] == "new"          # freshest non-empty why
+
+    def test_dedupe_preserves_distinct_refs_and_order(self):
+        items = [
+            {"id": "a", "type": "file", "locator": {"path": "a.py"}, "ts": 1.0, "why": ""},
+            {"id": "b", "type": "file", "locator": {"path": "b.py"}, "ts": 1.0, "why": ""},
+            {"id": "a2", "type": "file", "locator": {"path": "a.py"}, "ts": 2.0, "why": "x"},
+        ]
+        out = dedupe_content(items)
+        assert [it["id"] for it in out] == ["a", "b"]
+        assert out[0]["ts"] == 2.0 and out[0]["why"] == "x"
+
+    def test_add_content_merges_duplicate_reference_on_real_store(self, tmp_path):
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        store = FileContextStore(str(cards_dir), confidence_threshold=0.0)
+        ref = {"type": "collection", "locator": {"id": "col-9", "name": "Tiers"}, "why": "first"}
+        store.add_content("topic-card", ref)
+        store.add_content("topic-card", {**ref, "why": "second"})
+        card = json.loads((cards_dir / "topic-card.json").read_text(encoding="utf-8"))
+        cols = [c for c in card["content"] if c.get("type") == "collection"]
+        assert len(cols) == 1                  # merged, not duplicated
+        assert cols[0]["why"] == "second"      # freshest why retained

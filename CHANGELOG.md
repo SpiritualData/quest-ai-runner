@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **Card content de-duplicates references on write (no more accumulating the same pointer).** The
+  post-deep card updater (and `record()`) appended content items with no dedup, so re-adding the
+  same collection id / file path / note across runs stored duplicate items until the recency-trim
+  dropped the oldest. New `content_identity_key()` + `dedupe_content()` (in `card_content_render.py`)
+  collapse items that point at the SAME reference (collection by id, file by path, note by text) into
+  one merged item, keeping the existing item's stable id and refreshing to the newest `ts` + freshest
+  non-empty `why`. Applied in `FileContextStore._update_card_inner` (after additions, before the
+  recency-trim) and in `_record_inner`. Within one card / user scope only; lossless (no information
+  dropped on merge). Tests in `tests/test_card_content.py::TestContentDedup`.
+
 ### Fixed
 - **Narration beats no longer assert ungrounded conclusions before the search finishes.** The
   relayed planner-rationale beats (the conversational "thinking out loud" lines) were told to be

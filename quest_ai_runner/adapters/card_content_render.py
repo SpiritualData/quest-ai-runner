@@ -124,6 +124,66 @@ def normalize_content(raw: Any) -> List[Dict[str, Any]]:
     return out
 
 
+def content_identity_key(item: Dict[str, Any]) -> str:
+    """A stable identity for a content item, used to DEDUPE references that point at the SAME thing.
+
+    Two items are the same reference when they point at the same external target: a collection with
+    the same id (else the same name), a file at the same path, otherwise a note identified by its
+    text. Anything else falls back to the full ``(type, locator)`` shape. The key is lowercased and
+    stripped so trivial casing/whitespace differences still collapse. Returns a hashable string.
+    Never raises.
+    """
+    try:
+        itype = str(item.get("type") or "note").strip() or "note"
+        loc = item.get("locator") if isinstance(item.get("locator"), dict) else {}
+        salient: Any = None
+        if itype == "collection":
+            salient = loc.get("id") or loc.get("name")
+        elif itype == "file":
+            salient = loc.get("path")
+        elif itype == "note":
+            salient = (loc.get("text") or "").strip()
+        if salient:
+            return f"{itype}:{str(salient).strip().lower()}"
+        return itype + ":" + json.dumps(loc, sort_keys=True, default=str)
+    except Exception:  # noqa: BLE001
+        return str(item.get("type") or "note")
+
+
+def dedupe_content(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Collapse content items that point at the SAME reference into ONE merged item per identity.
+
+    Within a single card, re-adding the same collection id / file path / note across deep runs must
+    NOT accumulate duplicates. For each identity (see ``content_identity_key``) we keep the FIRST
+    occurrence's stable ``id`` (so existing update targets stay valid), refresh ``ts`` to the NEWEST
+    seen, and prefer the freshest non-empty ``why``. Order follows first appearance. Because existing
+    card content is passed before freshly-added items, an existing item always wins identity (its id
+    is preserved) while picking up the newer ts/why from the re-add. Pure; never raises.
+    """
+    try:
+        by_key: Dict[str, Dict[str, Any]] = {}
+        order: List[str] = []
+        for it in items:
+            key = content_identity_key(it)
+            if key not in by_key:
+                by_key[key] = dict(it)
+                order.append(key)
+                continue
+            cur = by_key[key]
+            cur_ts = float(cur.get("ts") or 0.0)
+            new_ts = float(it.get("ts") or 0.0)
+            new_why = (it.get("why") or "").strip() if isinstance(it.get("why"), str) else ""
+            if new_ts >= cur_ts:
+                cur["ts"] = it.get("ts", cur.get("ts"))
+                if new_why:
+                    cur["why"] = it.get("why")
+            elif not ((cur.get("why") or "").strip()) and new_why:
+                cur["why"] = it.get("why")
+        return [by_key[key] for key in order]
+    except Exception:  # noqa: BLE001
+        return items
+
+
 def rank_content_by_recency_relevance(
     content: List[Dict[str, Any]], task_kws: Set[str], *, limit: int
 ) -> List[Dict[str, Any]]:
