@@ -7,6 +7,17 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **The instant response now goes out the moment it is generated, never sequenced behind context
+  search or guidance.** The narration first beat was generated in the background but only EMITTED at
+  `Narrator.flush_first()`, which the orchestrator calls after the (potentially slow) guidance
+  `select()` and the search-status emission. So even though the one-sentence ack was ready in ~1s, it
+  could not appear until the main pipeline reached that point. The first beat now emits ITSELF from
+  its background thread the instant the model returns (`Narrator.begin` → `_gen_and_say`), decoupled
+  from the main pipeline; `flush_first()` is now only a join barrier that preserves ordering (the ack
+  still precedes the planner's later relay beats). Emit is lock-guarded so the background ack and a
+  main-thread relay beat never interleave. Safe because every consumer funnels events through a
+  thread-safe queue (`run_stream`) or marshals to the UI thread. Regression test
+  `test_narrator_first_beat_emits_from_background_without_flush`.
 - **The instant "thinking out loud" line now actually shows while context is being searched (terminal
   UIs).** The orchestrator emits the narration/instant-ack beat as `EVENT_PARTIAL` tagged
   `data={"narration": True}`, and the frontend already consumed that key, but both terminal sessions

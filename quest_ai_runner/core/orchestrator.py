@@ -1562,6 +1562,9 @@ class Narrator:
         self._said: List[str] = []
         self._first_future: Optional[Any] = None
         self._executor: Optional[ThreadPoolExecutor] = None
+        # Guards _said + the emit call so the background first beat (emitted from its own thread the
+        # instant it is ready) and a main-thread relay() beat never interleave their append+emit.
+        self._lock = threading.Lock()
 
     def _gen(self, moment: str) -> Optional[str]:
         msgs: List[Dict[str, str]] = [{"role": "system", "content": self._system}]
@@ -1583,33 +1586,54 @@ class Narrator:
         line = line.strip().replace("—", ", ").replace(" -- ", ", ")
         if not line:
             return
-        self._said.append(line)
         # Emit with a trailing space so consecutive beats (ack, then each per-step beat) read as
         # separate sentences when a consumer streams them into one bubble, instead of running
         # together ("...this.I'm pulling up..."). The clean line (no trailing space) is what we
         # store for dedup. A consumer that replaces the bubble on `done` discards the spacing anyway.
-        try:
-            self._emit.emit(ProgressEvent(type=EVENT_PARTIAL, text=line + " ", data={"narration": True}))
-        except Exception:  # noqa: BLE001 — narration must never break the run
-            pass
+        # Locked: the ack beat emits from the background thread while relay() beats emit from the
+        # main thread; the lock keeps append+emit atomic so the two never interleave.
+        with self._lock:
+            self._said.append(line)
+            try:
+                self._emit.emit(ProgressEvent(type=EVENT_PARTIAL, text=line + " ",
+                                              data={"narration": True}))
+            except Exception:  # noqa: BLE001 — narration must never break the run
+                pass
 
     def begin(self, user_message: str) -> None:
-        """Start the first beat concurrently (about the user's new message)."""
+        """Start the first beat concurrently AND emit it the instant it is ready.
+
+        The background task generates the one-sentence ack and emits it ITSELF (``_gen_and_say``),
+        so the instant response goes out the moment the model returns, never sequenced behind the
+        main pipeline's context search or guidance selection. Ordering vs later beats is preserved
+        by ``flush_first()`` (a join barrier the orchestrator runs before the planner loop emits any
+        relay beat), so the ack always precedes the planner's rationale.
+        """
         if not self.enabled:
             return
         moment = f"the user just sent a new message: {(user_message or '')[:300]}"
         try:
             self._executor = ThreadPoolExecutor(max_workers=1)
-            self._first_future = self._executor.submit(self._safe_gen, moment)
+            self._first_future = self._executor.submit(self._gen_and_say, moment)
         except Exception:  # noqa: BLE001
             self._first_future = None
 
+    def _gen_and_say(self, moment: str) -> None:
+        """Generate the first beat and emit it immediately from this background thread."""
+        try:
+            self._say(self._gen(moment))
+        except Exception:  # noqa: BLE001 — narration must never break the run
+            pass
+
     def flush_first(self) -> None:
-        """Collect and emit the first beat (called once context assembly is underway)."""
+        """Join barrier: wait for the background first beat to finish emitting before the planner
+        loop emits any later (relay) beat, so the ack always comes first. The beat emits ITSELF the
+        instant it is ready (see ``begin`` / ``_gen_and_say``), so this no longer emits — it only
+        joins and cleans up. A timeout just proceeds (a very slow beat still emits when ready)."""
         if self._first_future is None:
             return
         try:
-            self._say(self._first_future.result(timeout=5.0))
+            self._first_future.result(timeout=5.0)
         except Exception:  # noqa: BLE001 — timeout / cancelled / provider error: skip
             pass
         finally:
@@ -1663,12 +1687,6 @@ class Narrator:
                 "on", "at", "is", "it", "this", "that", "let", "me", "now", "so", "what",
                 "into", "look", "looking", "check", "checking", "see", "want"}
         return frozenset(w for w in words if w not in stop)
-
-    def _safe_gen(self, moment: str) -> Optional[str]:
-        try:
-            return self._gen(moment)
-        except Exception:  # noqa: BLE001
-            return None
 
 
 class Orchestrator:
@@ -3572,10 +3590,13 @@ class Orchestrator:
                 except Exception:  # noqa: BLE001
                     pass
 
-        # --- Narrator: emit the first beat once it is ready -----------------------------------
-        # The first conversational beat has been generating concurrently with context assembly.
-        # Collect+emit it NOW (it should be ~done), before the planner loop, so its background
-        # thread is cleaned up before run() returns. A timeout/failure just skips it.
+        # --- Narrator: ordering barrier for the first beat ------------------------------------
+        # The first conversational beat EMITS ITSELF from its background thread the instant the model
+        # returns (see Narrator.begin / _gen_and_say), so the instant response already went out as
+        # early as possible, concurrently with context assembly + guidance and never sequenced behind
+        # them. This is only a JOIN barrier: it waits for that emit to finish before the planner loop
+        # emits any relay beat, so the ack always precedes the planner's rationale, then cleans up the
+        # background thread before run() returns. A timeout just proceeds.
         narrator.flush_first()
 
         # --- ContextAssembler: collect the background assemble() result -----------------------

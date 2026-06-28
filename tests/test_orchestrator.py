@@ -944,3 +944,35 @@ def test_instant_ack_emits_narration_flagged_partial():
     # The exact predicate the terminal UIs use to recognize a narration beat (vs an answer token).
     for e in narration:
         assert e.data.get("narration") or e.data.get("ack")
+
+
+def test_narrator_first_beat_emits_from_background_without_flush():
+    """The instant response must go out the moment the model returns, NOT wait for the main pipeline
+    (context search, guidance) to reach flush_first(). The first beat emits itself from its
+    background thread; flush_first() is only an ordering join. Proven by asserting the beat is
+    already in the sink once begin()'s background future completes, before flush_first() is called.
+    """
+    from quest_ai_runner.core.orchestrator import Narrator, _Emitter, Mode, EVENT_PARTIAL
+
+    events = []
+
+    class _Sink:
+        def update(self, ev, mode):
+            events.append(ev)
+
+    class _Provider:
+        def answer(self, messages, *, model, system=None):
+            return "Looking into the multilingual plan now."
+
+    emit = _Emitter(_Sink(), Mode.LIVE, lambda _m: None)
+    narrator = Narrator(provider=_Provider(), model="m", emit=emit, enabled=True)
+    narrator.begin("what are the gaps in multilingual support?")
+    # Wait for the BACKGROUND beat to finish WITHOUT calling flush_first().
+    narrator._first_future.result(timeout=5.0)
+
+    beats = [e for e in events if e.type == EVENT_PARTIAL and e.data.get("narration")]
+    assert beats, "the first beat must emit itself from the background thread, before flush_first()"
+    # flush_first() must NOT double-emit (it only joins now).
+    narrator.flush_first()
+    beats_after = [e for e in events if e.type == EVENT_PARTIAL and e.data.get("narration")]
+    assert len(beats_after) == len(beats), "flush_first must not re-emit the already-emitted beat"
