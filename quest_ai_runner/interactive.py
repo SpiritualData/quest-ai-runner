@@ -814,14 +814,14 @@ class _TurnRenderer:
                 label = f"▸ {action}" if action else "▸ plan"
                 self._display("step", text, label)
                 self._panel.start()
-            self._panel.set_phase("planning…")
+            self._panel.set_phase("Planning…")
         elif t == ev["replan"]:
             self._panel.inc_replans()
             if text:
                 self._panel.stop()
                 self._display("step", text, "↺ replan")
                 self._panel.start()
-            self._panel.set_phase("re-planning…")
+            self._panel.set_phase("Re-planning…")
         elif t == ev["context"]:
             # Display selected context cards + their sources + relevant files
             card_meta = data.get("card_metadata") or []
@@ -918,9 +918,9 @@ class _TurnRenderer:
                 self._panel.start()
         elif t == ev["status"]:
             # Show user-friendly status messages
-            status = text or "thinking…"
-            if status == "thinking…":
-                self._panel.set_phase("thinking…")
+            status = text or "Thinking…"
+            if status == "Thinking…":
+                self._panel.set_phase("Thinking…")
             else:
                 self._panel.set_phase(status)
         elif t == ev["read"]:

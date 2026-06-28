@@ -159,7 +159,7 @@ class ActivityBar(Static):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._text = "thinking…"
+        self._text = "Thinking…"
         self._frame = 0
         self._timer = None
         self.display = False
@@ -946,7 +946,7 @@ class QuestAITerminal(App):
             self._tlog.write(Text(""))
 
         # Loading strip on; keep input enabled so mid-turn messages can be queued.
-        self._activity.set_status("thinking…")
+        self._activity.set_status("Thinking…")
         self._activity.display = True
         inp = self.query_one("#prompt", Input)
         inp.placeholder = "Type to queue a message for the next step…"
@@ -1021,11 +1021,11 @@ class QuestAITerminal(App):
             # Accumulate streamed answer; render once at the end (calm display).
             self._partial_started = True
             self._answer_parts.append(text)
-            self._activity.set_status("answering…")
+            self._activity.set_status("Answering…")
             return
 
         if t == ev["status"]:
-            self._activity.set_status(text or "thinking…")
+            self._activity.set_status(text or "Thinking…")
 
         elif t == ev["plan"]:
             if action == "deep":
@@ -1034,13 +1034,13 @@ class QuestAITerminal(App):
             elif text:
                 label = f"▸ {action}" if action else "▸ plan"
                 log.write(Text(f"  {label}  {text}", style="dim"))
-            self._activity.set_status("planning…")
+            self._activity.set_status("Planning…")
 
         elif t == ev["replan"]:
             self._ctx.inc_replans()
             if text:
                 log.write(Text(f"  ↺ replan  {text}", style="dim"))
-            self._activity.set_status("re-planning…")
+            self._activity.set_status("Re-planning…")
 
         elif t == ev["read"]:
             paths = data.get("sources") or []
@@ -1100,7 +1100,7 @@ class QuestAITerminal(App):
             if self._deep_event_count % 10 == 0:
                 n = len(self._deep._runs)
                 self._deep_view.show(self._deep.get_dashboard(), n_runs=n)
-            self._activity.set_status("executing…")
+            self._activity.set_status("Executing…")
             # A terminal phase means this deep task is finished: persist its full
             # output to the scrollback transcript now, so it stays readable after
             # the live deep widgets are gone. Each task leaves a permanent record.
@@ -1334,7 +1334,7 @@ class QuestAITerminal(App):
     def action_cancel(self) -> None:
         if self._turn_active:
             self._cancel.set()
-            self._activity.set_status("cancelling…")
+            self._activity.set_status("Cancelling…")
         elif self._pending_select is not None:
             self._pending_select = None
             self._console.dim("  Cancelled.")

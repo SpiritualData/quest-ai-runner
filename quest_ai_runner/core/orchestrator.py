@@ -2633,7 +2633,7 @@ class Orchestrator:
             # task's final output to the same run it streamed.
             captured_run_id: Dict[str, Optional[str]] = {"id": None}
             if per_goal_context and emit is not None:
-                emit.status(f"selected context for goal: {goal[:60]}")
+                emit.status(f"Selected context for goal: {goal[:60]}")
 
             def _emit_one(ev: ProgressEvent) -> None:
                 # TEE: classify any EVENT_EXEC phase into the fact, then forward to the live sink.
@@ -2815,7 +2815,7 @@ class Orchestrator:
                     tier_idx += 1  # a capability gap is a common cause; try a stronger model next
                 if budget is not None and tokens_used >= budget:
                     if emit is not None:
-                        emit.status(f"deep token budget reached ({tokens_used}/{budget}); stopping.")
+                        emit.status(f"Deep token budget reached ({tokens_used}/{budget}); stopping.")
                     break
                 current_brief = self._augment_brief(base_brief, res.output or "", verdict)
 
@@ -3143,7 +3143,7 @@ class Orchestrator:
                     future_context=future_context, ctx_meta=ctx_meta)
                 if n and emit is not None:
                     try:
-                        emit.status(f"updated {n} context card(s) for next time.")
+                        emit.status(f"Updated {n} context card(s) for next time.")
                     except Exception:  # noqa: BLE001
                         pass
             except Exception:  # noqa: BLE001 — the background updater must never raise out
@@ -3787,7 +3787,7 @@ class Orchestrator:
                     # This is the ContextAssembler.assemble() call: a hybrid keyword + vector
                     # search over the wired context (cards + turn history), not a single named
                     # source. "searching context" names the stage honestly (STAGE 2: FIND CONTEXT).
-                    emit.status("searching context…")
+                    emit.status("Searching context…")
                 except Exception:  # noqa: BLE001
                     pass
             except Exception:  # noqa: BLE001 -- assembly setup failure must never break the run
@@ -4197,8 +4197,8 @@ class Orchestrator:
             return self._grounded_answer(user_message, transcript, cv, gathered, model,
                                          False, native_blocks=native_blocks)
 
-        emit.status(f"answering {len(plan.subquestions)} parts in parallel…"
-                    if len(plan.subquestions) >= 2 else "answering")
+        emit.status(f"Answering {len(plan.subquestions)} parts in parallel…"
+                    if len(plan.subquestions) >= 2 else "Answering")
         text = _gen_answer(None)
         _ti = getattr(self.provider, 'tokens_in', 0)
         _to = getattr(self.provider, 'tokens_out', 0)
@@ -4216,7 +4216,7 @@ class Orchestrator:
                 should_defer_deep = {"goal": f"Execute what the answer describes: {user_message}",
                                       "rationale": "planner indicated answer contains work to execute"}
                 if emit is not None:
-                    emit.status("executing described work now…")
+                    emit.status("Executing described work now…")
             # Fallback: regex pattern matching for false claims (safety net for bad planner output).
             # When verify_claims is enabled the guard handles false claims; skip here to avoid
             # the deferred deep run interfering with the guard's remediation logic.
@@ -4224,7 +4224,7 @@ class Orchestrator:
                 should_defer_deep = {"goal": f"Execute what was claimed: {user_message}",
                                       "rationale": "auto-detected false claim in answer (fallback)"}
                 if emit is not None:
-                    emit.status("executing claimed work now…")
+                    emit.status("Executing claimed work now…")
             # Fallback: the answer DESCRIBES executable work it never did ("I need to update X",
             # "to fix this I need to..."). The cheap planner frequently forgets to set
             # answer_contains_work_to_execute on code/file-change tasks, so without this net the
@@ -4235,7 +4235,7 @@ class Orchestrator:
                 should_defer_deep = {"goal": f"Execute the work the answer describes: {user_message}",
                                       "rationale": "auto-detected unexecuted work in answer (fallback)"}
                 if emit is not None:
-                    emit.status("executing described work now…")
+                    emit.status("Executing described work now…")
             # Decisive fallback, keyed off the STABLE USER MESSAGE (not the variable answer text):
             # the user asked for a CHANGE (fix/implement/"it incorrectly X"…), a deep runner is
             # available, yet the planner routed to "answer" and nothing executed this turn. The
@@ -4262,7 +4262,7 @@ class Orchestrator:
                     "rationale": "user message requests a change but turn only proposed it (message-intent fallback)",
                 }
                 if emit is not None:
-                    emit.status("you asked for a change, making it now…")
+                    emit.status("You asked for a change, making it now…")
 
         # True once a deferred deep run has produced substantive output that we folded back into the
         # final answer. Gates the post-deep goal-verification loop below so a deferred-deep turn is
@@ -4271,9 +4271,9 @@ class Orchestrator:
         if should_defer_deep:
             try:
                 if not plan.deferred_deep:
-                    emit.status("executing follow-up work…")
+                    emit.status("Executing follow-up work…")
                 else:
-                    emit.status("queuing follow-up work…")
+                    emit.status("Queuing follow-up work…")
                 deferred_plan = PlanDecision(
                     action="deep",
                     goal=_truncate_goal(should_defer_deep.get("goal") or f"Execute: {user_message}"),
@@ -4304,7 +4304,7 @@ class Orchestrator:
                     ).strip()
                 if deep_output:
                     if emit is not None:
-                        emit.status("writing up what was done…")
+                        emit.status("Writing up what was done…")
                     text = self._synthesize_after_deep(
                         user_message, prior_answer=text, deep_output=deep_output,
                         transcript=transcript, model=model, rep_preamble=rep_preamble)
@@ -4339,7 +4339,7 @@ class Orchestrator:
                                                 transcript=transcript)
                     if verdict is not None and verdict.get("met"):
                         if emit is not None:
-                            emit.status("answer verified against the goal.")
+                            emit.status("Answer verified against the goal.")
                         break
                     if verdict is None:
                         # Verifier call failed (LLM error, parse failure, etc.) — do not silently
@@ -4355,7 +4355,7 @@ class Orchestrator:
                     # context won't help — the deep runner can grep/read on its own.
                     if verdict.get("need_more_context") and self.deep_runner is not None:
                         if emit is not None:
-                            emit.status("need more context to answer — searching further…")
+                            emit.status("Need more context to answer — searching further…")
                         _context_q = verdict.get("context_query") or user_message
                         _esc_plan = PlanDecision(
                             action="deep",
@@ -4379,7 +4379,7 @@ class Orchestrator:
                         self._kickoff_card_update(_esc_res, _esc_plan, user_message, _ctx_meta, emit)
                         return finish(_esc_res)
                     if emit is not None:
-                        emit.status("answer not yet at the bar, improving it…")
+                        emit.status("Answer not yet at the bar, improving it…")
                     _new = self._drain_pending(pending_inputs)
                     steer = (f"Why your previous answer fell short: "
                              f"{verdict.get('reason') or 'it did not meet the quality bar'}. "
