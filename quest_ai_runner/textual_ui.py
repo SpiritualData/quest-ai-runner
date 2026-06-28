@@ -358,7 +358,7 @@ class DeepDetailPanel(Static):
 class QuestAITerminal(App):
     """Textual REPL over an `InteractiveSession`'s orchestrator brain."""
 
-    mouse = "all"
+    ENABLE_MOUSE = False
 
     CSS = """
     Screen { background: $surface; }
