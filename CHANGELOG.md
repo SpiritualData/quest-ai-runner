@@ -99,6 +99,18 @@ All notable changes to this project are documented here. The format is based on
   raw-score gate. Generic by construction: all resolution still goes through the injected resolver
   registry (a type with no resolver degrades to an unresolved-pointer line).
 
+### Changed
+- **Terminal UI: deep-run output is bigger live, scrollable when expanded, and kept on screen after
+  each task finishes.** The calm inline deep dashboard now shows a few legible lines per run (3 for a
+  single run, tightening to 2/1 as runs go concurrent) instead of a single cramped line. The expanded
+  detail panel (`d`) is now a real scroll region holding a run's ENTIRE history (it no longer caps at
+  a 22-line tail): it grows to fill the screen, auto-follows the tail, and pages back/forward with
+  `PgUp`/`PgDn` (paging up pauses follow; scrolling back to the bottom resumes it). Most importantly,
+  each deep task's FULL output is now written into the scrollback transcript the moment it finishes
+  (detected via the `EVENT_EXEC` terminal phase, with a turn-end flush as a fallback for cancelled or
+  phase-less runs), so what each deep task did stays readable after the live widgets are hidden.
+  Tests in `tests/test_deep_output_ui.py`.
+
 ### Added
 - **Conversational stage narration: one continuous "thinking out loud" train of thought
   (`OrchestratorConfig.narrate`, `narration_system_prompt`).** When `narrate=True`, the orchestrator

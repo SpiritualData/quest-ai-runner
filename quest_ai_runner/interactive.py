@@ -597,7 +597,11 @@ class _DeepRunTracker:
                 return ""
 
             if lines_per_run is None:
-                lines_per_run = 1
+                # Scale to keep the inline block calm but actually legible: a
+                # single run gets a few lines (the common case the user reads),
+                # concurrent runs tighten so the block doesn't balloon.
+                n = len(self._runs)
+                lines_per_run = 3 if n <= 1 else (2 if n == 2 else 1)
 
             lines = []
             for run_id, info in sorted(self._runs.items()):

@@ -30,7 +30,7 @@ from typing import Callable, List, Optional, TYPE_CHECKING
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal  # kept for layout elsewhere if needed
+from textual.containers import Horizontal, VerticalScroll  # Horizontal kept for layout elsewhere if needed
 from textual.widgets import Footer, Header, Input, RichLog, Static
 
 from rich.markdown import Markdown as RichMarkdown
@@ -289,21 +289,21 @@ class DeepActivity(Static):
     def render(self):
         if not self._dashboard.strip():
             return Text("")
-        hint = "  [d] expand  [Tab] next agent" if self._n_runs > 1 else "  [d] expand"
+        hint = "  [d] expand & scroll  [Tab] next agent" if self._n_runs > 1 else "  [d] expand & scroll full output"
         t = Text.from_ansi(self._dashboard + f"\x1b[2m\n{hint}\x1b[0m")
         t.no_wrap = False
         return t
 
 
-class DeepDetailPanel(Static):
-    """Expanded tail-view of one deep run's live exec output.
+class DeepDetailPanel(VerticalScroll):
+    """Expanded, scrollable view of one deep run's full live exec output.
 
-    Hidden by default. Press ``d`` to toggle; ``Tab`` to cycle runs.
-    Always shows the last N lines so the view stays anchored to current
-    activity without needing a scrollbar.
+    Hidden by default. Press ``d`` to toggle, ``Tab`` to cycle runs. Unlike the
+    calm inline dashboard (a few lines), this holds the run's ENTIRE output and
+    grows to fill the screen so there's room to actually read it. New lines
+    auto-follow the tail; page back through history with PgUp/PgDn (the body is a
+    real scroll region). Scrolling back to the bottom resumes following.
     """
-
-    MAX_LINES = 22
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -312,45 +312,69 @@ class DeepDetailPanel(Static):
         self._lines: List[str] = []
         self._pos: int = 1
         self._total: int = 1
+        self._follow: bool = True
         self.display = False
+        # Inner Static holds the rendered text; this container scrolls it.
+        self._body = Static(id="deep-detail-body")
+
+    def compose(self) -> ComposeResult:
+        yield self._body
 
     def open_for(self, run_id: str, goal: str, existing_lines: List[str],
                  pos: int = 1, total: int = 1) -> None:
         self._run_id = run_id
         self._goal = goal
-        self._lines = list(existing_lines)
+        self._lines = [ln.strip() for ln in existing_lines if ln and ln.strip()]
         self._pos = pos
         self._total = total
+        self._follow = True
         self.display = True
-        self.refresh()
+        self._rerender()
 
     def push_line(self, run_id: str, line: str) -> None:
         """Append a new output line if this run is the one currently displayed."""
         if self._run_id == run_id and line.strip():
             self._lines.append(line.strip())
-            self.refresh()
+            self._rerender()
 
     def hide(self) -> None:
         self._run_id = None
         self.display = False
-        self.refresh()
+        self._rerender()
 
     @property
     def active_run_id(self) -> Optional[str]:
         return self._run_id
 
-    def render(self):
+    def page_back(self) -> None:
+        """Scroll up a page and stop auto-following the tail."""
+        self._follow = False
+        self.scroll_page_up(animate=False)
+
+    def page_forward(self) -> None:
+        """Scroll down a page; resume following once we're back at the bottom."""
+        self.scroll_page_down(animate=False)
+        if self.scroll_offset.y >= self.max_scroll_y - 1:
+            self._follow = True
+
+    def _rerender(self) -> None:
         if not self._run_id:
-            return Text("")
+            self._body.update(Text(""))
+            return
         pos_str = f"agent {self._pos}/{self._total}  " if self._total > 1 else ""
-        nav_hint = "  [Tab] next  [d] close" if self._total > 1 else "  [d] close"
+        if self._total > 1:
+            nav_hint = "  PgUp/PgDn scroll · [Tab] next · [d] close"
+        else:
+            nav_hint = "  PgUp/PgDn scroll · [d] close"
         header = f"⎅ {pos_str}{self._goal[:60]}"
-        tail = self._lines[-self.MAX_LINES:]
-        body = "\n".join(f"  {ln}" for ln in tail)
+        body = "\n".join(f"  {ln}" for ln in self._lines)
         footer = f"\x1b[2m{nav_hint}\x1b[0m"
         t = Text.from_ansi(f"\x1b[1;36m{header}\x1b[0m\n{body}\n{footer}")
         t.no_wrap = False
-        return t
+        self._body.update(t)
+        if self._follow:
+            # Defer until after layout so virtual size reflects the new lines.
+            self.call_after_refresh(self.scroll_end, animate=False)
 
 
 # ── Main app ──────────────────────────────────────────────────────────────────
@@ -379,7 +403,7 @@ class QuestAITerminal(App):
 
     #deep {
         height: auto;
-        max-height: 10;
+        max-height: 12;
         border-left: thick $warning 40%;
         padding: 0 1;
         margin: 0 1;
@@ -388,14 +412,17 @@ class QuestAITerminal(App):
     }
 
     #deep-detail {
-        height: auto;
-        max-height: 26;
+        height: 2fr;
         border-left: thick $warning 80%;
         border-top: dashed $warning 40%;
         padding: 0 1;
         margin: 0 1;
         color: $text-muted;
-        overflow: hidden hidden;
+        scrollbar-size-vertical: 1;
+    }
+
+    #deep-detail-body {
+        height: auto;
     }
 
     #activity {
@@ -419,6 +446,8 @@ class QuestAITerminal(App):
         Binding("ctrl+y", "copy_last", "Copy last reply", show=True),
         Binding("d", "toggle_deep_detail", "Expand agent", show=True),
         Binding("tab", "cycle_deep_run", "Next agent", show=True),
+        Binding("pageup", "deep_scroll_up", "Scroll agent up", show=False),
+        Binding("pagedown", "deep_scroll_down", "Scroll agent down", show=False),
     ]
 
     def __init__(self, session: InteractiveSession, verbosity: int = 0, **kwargs) -> None:
@@ -440,6 +469,9 @@ class QuestAITerminal(App):
         self._deep = _DeepRunTracker()
         self._deep_seen: set = set()
         self._deep_event_count = 0
+        # Deep runs whose full output has already been written to the scrollback
+        # transcript, so we persist each task's output exactly once.
+        self._deep_flushed: set = set()
 
         # When set, the next submitted line is a menu selection, not a turn.
         self._pending_select: Optional[Callable[[str], None]] = None
@@ -461,7 +493,7 @@ class QuestAITerminal(App):
         yield DeepActivity(id="deep")
         yield DeepDetailPanel(id="deep-detail")
         yield ActivityBar(id="activity")
-        yield Input(id="prompt", placeholder="Ask anything…   (/help for commands, Esc to cancel, d=expand agent, Tab=cycle)")
+        yield Input(id="prompt", placeholder="Ask anything…   (/help, Esc to cancel, d=expand agent, Tab=cycle, PgUp/PgDn=scroll)")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -818,6 +850,7 @@ class QuestAITerminal(App):
         self._deep = _DeepRunTracker()
         self._deep_seen = set()
         self._deep_event_count = 0
+        self._deep_flushed = set()
         self._ctx.reset()
         self._deep_view.hide()
         self._deep_detail.hide()
@@ -963,16 +996,10 @@ class QuestAITerminal(App):
             if run_id not in self._deep_seen:
                 self._deep_seen.add(run_id)
                 self._deep.add_run(run_id, goal or "Executing work…")
-                # Write the goal header to the transcript ONCE per run — and only
-                # when it's a real goal, not the generic "executing…" fallback.
-                if goal:
-                    log.write(Text(""))
-                    log.write(Text(goal, style="bold cyan"))
-                pass
             self._cur_deep_run = run_id
             if text:
                 self._deep.update_run_output(run_id, text)
-                # Push to detail panel live (no throttle — it's just a tail view).
+                # Push to detail panel live (it scrolls / holds full history).
                 self._deep_detail.push_line(run_id, text)
             # Throttle dashboard redraws to every 10 events to avoid flicker.
             self._deep_event_count += 1
@@ -980,6 +1007,14 @@ class QuestAITerminal(App):
                 n = len(self._deep._runs)
                 self._deep_view.show(self._deep.get_dashboard(), n_runs=n)
             self._activity.set_status("executing…")
+            # A terminal phase means this deep task is finished: persist its full
+            # output to the scrollback transcript now, so it stays readable after
+            # the live deep widgets are gone. Each task leaves a permanent record.
+            from .core.guard import classify_exec_phase
+            outcome = classify_exec_phase(data.get("phase") if isinstance(data, dict) else None)
+            if outcome is not None:
+                self._deep.set_run_status(run_id, "done" if outcome == "success" else "error")
+                self._flush_deep_run(run_id)
 
         elif t == ev["milestone"]:
             if text:
@@ -1007,6 +1042,9 @@ class QuestAITerminal(App):
         log = self._tlog
         self._activity.display = False
         self._ctx.display = False
+        # Persist any deep task output that didn't already emit a terminal phase
+        # (incl. cancelled/errored turns) before the live widgets disappear.
+        self._flush_pending_deep_runs()
         self._deep_view.hide()
         self._deep_detail.hide()
 
@@ -1201,6 +1239,57 @@ class QuestAITerminal(App):
         existing = list(info.get("exec_lines", []))
         self._deep_detail.open_for(run_id, info["goal"], existing, pos=pos, total=total)
 
+    def _flush_deep_run(self, run_id: str) -> None:
+        """Write one deep run's full output into the scrollback transcript, once.
+
+        The live deep widgets are ephemeral (hidden when the turn ends), so
+        without this a finished task's output would vanish. We write the goal,
+        the complete captured exec output, and a status line exactly once per run
+        (tracked in ``_deep_flushed``) so every deep task leaves a permanent,
+        scrollable record on the terminal.
+        """
+        if run_id in self._deep_flushed:
+            return
+        with self._deep._lock:
+            info = self._deep._runs.get(run_id)
+            snap = dict(info) if info else None
+        if not snap:
+            return
+        lines = [l.strip() for l in (snap.get("exec_lines") or []) if l and l.strip()]
+        # Mark flushed regardless so we never reconsider this run; skip writing an
+        # empty block when nothing was captured.
+        self._deep_flushed.add(run_id)
+        if not lines:
+            return
+        log = self._tlog
+        goal = (snap.get("goal") or "").strip()
+        status = snap.get("status") or "running"
+        elapsed = time.time() - snap.get("started", time.time())
+        mins, secs = divmod(int(elapsed), 60)
+        time_str = f"{mins}m{secs}s" if mins else f"{secs}s"
+        log.write(Text(""))
+        if goal:
+            log.write(Text(f"⎅ {goal}", style="bold cyan"))
+        # Write as plain styled Text (not markup) so arbitrary output containing
+        # brackets can't be misparsed as Rich markup.
+        for ln in lines:
+            log.write(Text(f"    {ln}", style="dim"))
+        if status == "error":
+            log.write(Text(f"  ✗ deep task ended with an error · {time_str}", style="red"))
+        else:
+            log.write(Text(f"  ✓ deep task complete · {time_str}", style="green"))
+        log.write(Text(""))
+
+    def _flush_pending_deep_runs(self) -> None:
+        """Flush any deep runs that didn't already emit a terminal phase.
+
+        Covers runs with no explicit done/error tick and the cancel/error paths.
+        """
+        with self._deep._lock:
+            run_ids = sorted(self._deep._runs.keys())
+        for rid in run_ids:
+            self._flush_deep_run(rid)
+
     def action_toggle_deep_detail(self) -> None:
         """Toggle the expanded detail view for the current deep run (key: d)."""
         if self._deep_detail.display:
@@ -1217,6 +1306,19 @@ class QuestAITerminal(App):
         if run_id is None:
             return
         self._open_detail_for(run_id)
+
+    def action_deep_scroll_up(self) -> None:
+        """Page back through the expanded agent output (key: PgUp).
+
+        No-op unless the detail panel is open, so PgUp/PgDn stay free otherwise.
+        """
+        if self._deep_detail.display:
+            self._deep_detail.page_back()
+
+    def action_deep_scroll_down(self) -> None:
+        """Page forward through the expanded agent output (key: PgDn)."""
+        if self._deep_detail.display:
+            self._deep_detail.page_forward()
 
 
 if __name__ == "__main__":
