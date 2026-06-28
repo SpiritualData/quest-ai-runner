@@ -24,6 +24,7 @@ from quest_ai_runner.core.orchestrator import (
     _card_update_store,
     _normalize_card_edits,
     _parse_future_context,
+    _strip_future_context,
 )
 
 from .conftest import StubRetrieval
@@ -163,6 +164,35 @@ def test_parser_uses_last_delimiter_occurrence():
     assert "keep this" in section
     assert "x9" in section
     assert "just the instruction" not in section
+
+
+# --------------------------------------------------------------------------- user-facing stripping
+
+
+def test_strip_removes_future_context_from_user_output():
+    # The FUTURE-CONTEXT section is internal plumbing for the card updater; it must be removed from
+    # any deep output shown to the user. The deliverable above the delimiter is kept verbatim.
+    shown = _strip_future_context(_WORKER_OUTPUT)
+    assert "I implemented the thing and verified it." in shown
+    assert FUTURE_CONTEXT_DELIMITER not in shown
+    assert "col-123" not in shown                 # the internal bullets are gone
+    assert not shown.endswith("\n")               # trailing whitespace trimmed
+
+
+def test_strip_is_noop_without_delimiter():
+    assert _strip_future_context("just a normal result") == "just a normal result"
+    assert _strip_future_context("") == ""
+    assert _strip_future_context(None) == ""
+
+
+def test_strip_and_parse_are_complementary():
+    # Stripping (user-facing) and parsing (learning) split the same output at the same point:
+    # together they cover it with no overlap of the delimiter line.
+    shown = _strip_future_context(_WORKER_OUTPUT)
+    learned = _parse_future_context(_WORKER_OUTPUT)
+    assert FUTURE_CONTEXT_DELIMITER not in shown
+    assert FUTURE_CONTEXT_DELIMITER not in learned
+    assert "col-123" in learned and "col-123" not in shown
 
 
 # --------------------------------------------------------------------------- capability detection

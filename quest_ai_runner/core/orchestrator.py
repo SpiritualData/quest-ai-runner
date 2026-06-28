@@ -1153,6 +1153,28 @@ def _parse_future_context(output: Optional[str]) -> str:
         return ""
 
 
+def _strip_future_context(output: Optional[str]) -> str:
+    """Remove the worker's FUTURE-CONTEXT section from output destined for the USER.
+
+    The deep brief asks the worker to END its output with the ``FUTURE_CONTEXT_DELIMITER`` line plus
+    bullets, which the async card updater parses out (see ``_parse_future_context``). That section is
+    internal plumbing for learning, NOT part of the deliverable, so it must never reach the user.
+    This cuts from the LAST delimiter occurrence to the end (symmetric with the parser, which reads
+    from that same point) and trims trailing whitespace. Returns the output unchanged when the
+    delimiter is absent. Operates on a COPY -- never mutate ``DeepResult.output``, which stays the
+    raw source the card updater parses. Never raises.
+    """
+    if not output or not isinstance(output, str):
+        return output or ""
+    try:
+        idx = output.rfind(FUTURE_CONTEXT_DELIMITER)
+        if idx < 0:
+            return output
+        return output[:idx].rstrip()
+    except Exception:  # noqa: BLE001
+        return output
+
+
 def _card_update_store(assembler: Any) -> Optional[Any]:
     """Return the underlying card store that exposes the card-update API, or None. Never raises.
 
@@ -2503,7 +2525,7 @@ class Orchestrator:
                 res.error = res.error or ("goal not yet met: " + reason)
                 if emit is not None:
                     # Always show what was attempted (the output) first
-                    output_text = (res.output or "").strip()
+                    output_text = _strip_future_context(res.output).strip()
                     if output_text:
                         emit.emit(ProgressEvent(type=EVENT_MILESTONE,
                                                text=f"Worker output:\n{output_text[:600]}",
@@ -2564,7 +2586,7 @@ class Orchestrator:
                 # just a "Completed" line); the terminal renders it in full under the goal header.
                 emit.emit(ProgressEvent(type=EVENT_MILESTONE, text=f"Completed: {goal}",
                                         data={"goal": goal,
-                                              "deep_output": (res.output or "").strip() or None}))
+                                              "deep_output": _strip_future_context(res.output).strip() or None}))
             return res
 
         # Handle nested task groups for sequential dependencies:
@@ -3701,7 +3723,9 @@ class Orchestrator:
                 emit.emit(ProgressEvent(type=EVENT_DECISION, text=res.question,
                                         decision_id=res.decision_id, result_kind="confirm"))
             elif res.kind == "deep":
-                out = "\n\n".join(d.output for d in res.deep_results if d.output) or None
+                out = "\n\n".join(
+                    s for s in (_strip_future_context(d.output) for d in res.deep_results) if s
+                ) or None
                 emit.emit(ProgressEvent(type=EVENT_RESULT, text=out, result_kind="deep"))
             emit.emit(ProgressEvent(type=EVENT_DONE, result_kind=res.kind, step=steps))
             return res
@@ -3978,7 +4002,9 @@ class Orchestrator:
                 # and flag the turn so the goal loop below still holds it to the overall goal.
                 deep_output = ""
                 if deep_res and deep_res.deep_results:
-                    deep_output = "\n\n".join(d.output for d in deep_res.deep_results if d.output).strip()
+                    deep_output = "\n\n".join(
+                        s for s in (_strip_future_context(d.output) for d in deep_res.deep_results) if s
+                    ).strip()
                 if deep_output:
                     if emit is not None:
                         emit.status("writing up what was done…")

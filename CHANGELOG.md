@@ -20,6 +20,18 @@ All notable changes to this project are documented here. The format is based on
   context cards plus turn history), not a single named source. "searching context" names the stage
   (STAGE 2: FIND CONTEXT) honestly and matches what the user expects to see.
 
+- **The internal FUTURE-CONTEXT section no longer leaks into the deep output shown to the user.**
+  When the async card updater is active, the deep worker is asked to END its output with a
+  `=== FUTURE CONTEXT (for similar requests by this user) ===` section that the updater parses to
+  learn reusable pointers. That section is plumbing, not part of the deliverable, but it was being
+  shown verbatim at the end of the user-facing deep result. New `_strip_future_context()` removes it
+  from every user-facing surface (the final deep `EVENT_RESULT`, the `deep_output` milestone, the
+  "Worker output" not-met milestone, and the deferred-deep fold-in) while `DeepResult.output` stays
+  raw so `_parse_future_context()` / the card updater still see it. Stripping and parsing split the
+  output at the same delimiter, so they are complementary with no overlap. Tests
+  `test_strip_removes_future_context_from_user_output`, `test_strip_is_noop_without_delimiter`,
+  `test_strip_and_parse_are_complementary`.
+
 - **Direct follow-ups are answered from the conversation instead of triggering a fresh corpus
   search.** When a user asked a follow-up whose answer the assistant had JUST given (e.g. it
   described a plan and its file path, then the user asked "what's the filepath?"), the planner still
