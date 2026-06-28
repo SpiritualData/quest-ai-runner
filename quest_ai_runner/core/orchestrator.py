@@ -218,6 +218,11 @@ The four actions:
     (up to {max_reads}), including several describe_* calls at once. After the read you'll be
     re-invoked with the results in GATHERED.
   - "answer": you have ENOUGH real content in GATHERED -- or it's chit-chat needing no reading.
+    A DISCOVERY/CAPABILITY listing (the "AVAILABLE CAPABILITIES" menu from list_operations /
+    list_sources / describe_*) is NOT real content: it only tells you what you COULD call or read.
+    For a substantive request you MUST first read/grep the actual sources (or run a real query) to
+    gather facts before you "answer"; answering from just the capability menu, or replying with
+    which discovery operations you would run, is a FAILURE -- gather first, then answer.
     Use "answer" ONLY to INFORM (explain, summarize, advise). If the user asked you to CHANGE
     something (create/add/update/edit/delete/mark/set/rename their data or artifacts, OR fix/
     implement/build/refactor CODE OR FILES), that is an ACTION -- do NOT just describe the change in
@@ -1173,6 +1178,25 @@ def _card_update_store(assembler: Any) -> Optional[Any]:
     return None
 
 
+# Discovery specs return a CAPABILITY/SOURCE MENU (what the assistant CAN call or look in), not
+# content to answer from. They inform the PLANNER's choice of action; they must NEVER be handed to
+# the answer LLM as "content read for this answer" (that makes it answer FROM the menu instead of
+# gathering real material — the "I have these operations, shall I run discovery?" failure mode).
+# ``read_guidance`` is deliberately excluded: it returns actual instructions, which ARE grounding.
+_DISCOVERY_SPEC_KEYS = ("list_operations", "list_sources", "list_guidance",
+                        "describe_operation", "describe_source")
+
+
+def _is_discovery_spec(spec: Any) -> bool:
+    """True if a read spec only DISCOVERS capabilities/sources (a menu), not real content."""
+    return isinstance(spec, dict) and any(spec.get(k) for k in _DISCOVERY_SPEC_KEYS)
+
+
+def _is_discovery_obs(obs: Any) -> bool:
+    """True if a gathered observation is a tagged discovery/capability listing (menu, not content)."""
+    return isinstance(obs, dict) and bool(obs.get("discovery"))
+
+
 def _render_gathered(gathered: List[Dict[str, Any]]) -> str:
     if not gathered:
         return "[]"
@@ -1192,7 +1216,15 @@ def _render_gathered(gathered: List[Dict[str, Any]]) -> str:
             )
         elif kind in ("read", "query"):
             loc = obs.get("locator", "")
-            parts.append(f"{kind.upper()} {obs.get('rel_path') or ''} [{loc}]:\n{obs.get('text', '')}")
+            if _is_discovery_obs(obs):
+                # A capability/source MENU, labeled so the reader treats it as "what I could call",
+                # not as facts gathered. (The answer path drops these entirely; see _grounding_block.)
+                parts.append(
+                    f"AVAILABLE CAPABILITIES [{loc}] — a MENU of what you can call or look in, NOT "
+                    f"content and NOT an answer; you still need to read/grep/query the actual sources "
+                    f"to gather facts before answering:\n{obs.get('text', '')}")
+            else:
+                parts.append(f"{kind.upper()} {obs.get('rel_path') or ''} [{loc}]:\n{obs.get('text', '')}")
         elif kind == "error":
             parts.append(f"(gather error: {obs.get('error')})")
     return "\n\n".join(parts)
@@ -1315,9 +1347,14 @@ def _grounding_block(context_view: str, gathered: List[Dict[str, Any]], partial:
     answer_context_view = _strip_discovery_section(context_view)
 
     parts = ["--- GROUNDING CONTEXT (use this; do not fabricate beyond it) ---", answer_context_view or "(none)"]
-    if gathered:
+    # Discovery/capability listings (list_operations/list_sources/describe_*) are a menu of what the
+    # assistant COULD do, not material to answer from — drop them here so the answer grounds only on
+    # real content. When nothing real was gathered, the section is omitted and the answer LLM will
+    # honestly say it lacks context instead of answering from the operations menu.
+    content_gathered = [o for o in (gathered or []) if not _is_discovery_obs(o)]
+    if content_gathered:
         parts.append("\n--- ACTUAL CONTENT READ FOR THIS ANSWER ---")
-        parts.append(_render_gathered(gathered))
+        parts.append(_render_gathered(content_gathered))
     if partial:
         parts.append(
             "NOTE: this is a BEST-EFFORT answer assembled before fully exploring; if the content "
@@ -1781,9 +1818,16 @@ class Orchestrator:
         specs = [s for s in (reads or [])[: self.cfg.max_reads_per_step] if isinstance(s, dict)]
         if not specs:
             return []
+        def _tagged(obs: Observation, spec: Dict[str, Any]) -> Dict[str, Any]:
+            # Tag discovery/capability listings so the answer path can exclude them (menu, not content).
+            d = obs.to_dict()
+            if _is_discovery_spec(spec):
+                d["discovery"] = True
+            return d
+
         if len(specs) == 1:
             obs = self._exec_one_read(specs[0], guidance_selected_ids)
-            return [obs.to_dict()] if obs is not None else []
+            return [_tagged(obs, specs[0])] if obs is not None else []
         workers = min(self.cfg.max_parallel, len(specs))
         results: List[Optional[Observation]] = [None] * len(specs)
         with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -1796,7 +1840,7 @@ class Orchestrator:
                 except Exception as e:  # noqa: BLE001
                     log.warning(f"Read operation failed: {type(e).__name__}: {e}", exc_info=True)
                     results[i] = Observation(kind="error", error=type(e).__name__)
-        return [r.to_dict() for r in results if r is not None]
+        return [_tagged(r, specs[i]) for i, r in enumerate(results) if r is not None]
 
     # --- execution directive detection (LLM-based, FORCE deep when user explicitly rejects planning) ----
 
@@ -2350,10 +2394,14 @@ class Orchestrator:
                         # subgoal (multi) does NOT inherit that whole pile -- it is handed ONLY its
                         # own focused context so it concentrates on its piece (it can still search for
                         # more if it falls short, via the widening below).
-                        if gathered and not multi:
+                        # Exclude discovery/capability listings (the operations/sources MENU): they
+                        # are planner-only routing aids, not content the worker should ground on (the
+                        # worker has its own tools). Pass forward only the real content the brain read.
+                        _brain_content = [o for o in (gathered or []) if not _is_discovery_obs(o)]
+                        if _brain_content and not multi:
                             preamble_parts.append(
                                 "--- RELEVANT CONTENT FOUND BY THE BRAIN ---\n"
-                                + _render_gathered(gathered)
+                                + _render_gathered(_brain_content)
                             )
                         # This goal's OWN selected context, plus anything pulled by widening on a
                         # prior retry that reported it lacked context. Each goal therefore runs with
@@ -2497,9 +2545,12 @@ class Orchestrator:
                     fact.error = fact.error or res.error
                 exec_record.facts.append(fact)
             if emit is not None and res.met:
-                # A completed subtask is a real milestone — surfaces even in BACKGROUND.
+                # A completed subtask is a real milestone — surfaces even in BACKGROUND. Carry the
+                # FULL task output so consumers can show exactly what THIS deep task produced (not
+                # just a "Completed" line); the terminal renders it in full under the goal header.
                 emit.emit(ProgressEvent(type=EVENT_MILESTONE, text=f"Completed: {goal}",
-                                        data={"goal": goal}))
+                                        data={"goal": goal,
+                                              "deep_output": (res.output or "").strip() or None}))
             return res
 
         # Handle nested task groups for sequential dependencies:
@@ -3653,7 +3704,9 @@ class Orchestrator:
                     try:
                         ops_obs = self._exec_one_read({"list_operations": True})
                         if ops_obs is not None:
-                            gathered.append(ops_obs.to_dict())
+                            _ops = ops_obs.to_dict()
+                            _ops["discovery"] = True  # a capability menu, not answer content
+                            gathered.append(_ops)
                     except Exception as e:  # noqa: BLE001
                         log.debug(f"Auto-injection of list_operations failed: {type(e).__name__}: {e}")
 

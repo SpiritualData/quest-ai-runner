@@ -187,6 +187,34 @@ def test_deferred_deep_output_is_folded_into_final_answer():
     assert provider.answer_calls >= 2  # pre-deep proposal + post-deep synthesis
 
 
+def test_discovery_listing_is_not_answer_grounding_content():
+    # A capability MENU (list_operations and friends) must inform the planner but NEVER be presented
+    # to the answer LLM as content to answer from — otherwise the model answers from the menu ("I
+    # have these operations, shall I run discovery?") instead of gathering real material.
+    from quest_ai_runner.core.orchestrator import _grounding_block, _render_gathered
+
+    discovery = {"kind": "query", "locator": "list_operations", "discovery": True,
+                 "text": "OPERATION: discover_goals — list goals"}
+    content = {"kind": "read", "rel_path": "i18n.md", "locator": "head",
+               "text": "REAL_FILE_CONTENT: the app uses an i18n string table."}
+
+    # Answer grounding: the menu is excluded; the real file content is kept.
+    block = _grounding_block("", [discovery, content], False)
+    assert "REAL_FILE_CONTENT" in block
+    assert "OPERATION: discover_goals" not in block
+    assert "ACTUAL CONTENT READ FOR THIS ANSWER" in block  # the real content section is present
+
+    # When ONLY a discovery menu was gathered, there is NO answer-content section at all (so the
+    # answer LLM grounds on nothing and says so, rather than answering from the menu).
+    only_menu = _grounding_block("", [discovery], False)
+    assert "ACTUAL CONTENT READ FOR THIS ANSWER" not in only_menu
+
+    # The planner-facing render labels the menu as capabilities, not as gathered facts.
+    planner_view = _render_gathered([discovery])
+    assert "AVAILABLE CAPABILITIES" in planner_view
+    assert "NOT" in planner_view  # explicitly flagged as not content/answer
+
+
 class _GCard:
     def __init__(self, id, title, relevance, body):
         self.id, self.title, self.relevance, self.body = id, title, relevance, body

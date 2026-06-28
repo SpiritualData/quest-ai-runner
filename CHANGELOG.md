@@ -7,6 +7,24 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Capability/discovery menus no longer pollute the answer (the planner stops answering from the
+  operations list).** The auto-injected `list_operations` menu (and any `list_sources`/`describe_*`
+  discovery read) was added to `gathered` and rendered to the answer LLM as "ACTUAL CONTENT READ FOR
+  THIS ANSWER" — so for a substantive request the model answered FROM the menu ("I have these
+  operations; shall I run discover_goals / grep?") instead of gathering the real material (codebase,
+  conversation). Discovery observations are now tagged (`discovery: true`) at the read site and: (1)
+  excluded from the answer grounding entirely (`_grounding_block`) — when only a menu was gathered,
+  there is no answer-content section, so the model grounds on real context or says it lacks it; (2)
+  excluded from a single-goal deep run's `context_preamble` (the worker has its own tools and does
+  not need the orchestrator's operations menu); (3) relabeled in the planner/worker view as
+  "AVAILABLE CAPABILITIES — a MENU of what you can call, NOT content"; and (4) the planner prompt now
+  states a capability listing is not "real content" and it must read actual sources before
+  answering. Regression test `test_discovery_listing_is_not_answer_grounding_content`.
+
+- **Each finished deep task now carries its FULL output on the completion milestone**
+  (`data.deep_output`), so a consumer can show exactly what the task produced rather than only a
+  "Completed: <goal>" line.
+
 - **A deferred deep run's output is now folded into the final answer, instead of being discarded.**
   When the planner routed to `answer` but the turn then escalated to a deferred deep run (because the
   message requested a change, or the answer only described unexecuted work), the deep worker did the
