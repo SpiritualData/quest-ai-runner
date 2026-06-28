@@ -451,3 +451,59 @@ class TestContentDedup:
         cols = [c for c in card["content"] if c.get("type") == "collection"]
         assert len(cols) == 1                  # merged, not duplicated
         assert cols[0]["why"] == "second"      # freshest why retained
+
+
+# ---------------------------------------------------------------------------
+# Recency/usage RANKING boost (keyword arm): a recently-used or recently-updated
+# card wins a near-tie, but the confidence gate still uses the un-boosted score.
+# ---------------------------------------------------------------------------
+
+class TestRecencyBoost:
+    def _store(self, tmp_path, **kw):
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        kw.setdefault("confidence_threshold", 0.0)
+        return FileContextStore(str(cards_dir), **kw), cards_dir
+
+    def test_no_history_card_factor_is_one(self, tmp_path):
+        store, _ = self._store(tmp_path)
+        card = {"id": "x", "usage_count": 0, "content": []}
+        assert store._recency_boost_factor(card) == 1.0
+
+    def test_recent_and_used_card_is_boosted_within_cap(self, tmp_path):
+        store, _ = self._store(tmp_path, recency_boost_max=0.20)
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).timestamp()
+        card = {"id": "x", "usage_count": 10,
+                "content": [{"id": "i", "type": "note", "locator": {"text": "t"}, "ts": now}]}
+        f = store._recency_boost_factor(card)
+        assert 1.0 < f <= 1.20 + 1e-9          # boosted, but never beyond the cap
+
+    def test_boost_disabled_returns_one(self, tmp_path):
+        store, _ = self._store(tmp_path, recency_boost_max=0.0)
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).timestamp()
+        card = {"id": "x", "usage_count": 99,
+                "content": [{"id": "i", "type": "note", "locator": {"text": "t"}, "ts": now}]}
+        assert store._recency_boost_factor(card) == 1.0
+
+    def test_boost_breaks_near_tie_but_gate_uses_unboosted_score(self, tmp_path):
+        # Two cards share the same keyword (equal relevance). One has usage + fresh content, so it
+        # ranks first. A third card shares NO keyword: the boost must not pull it in past the gate.
+        store, cards_dir = self._store(tmp_path, confidence_threshold=0.5, recency_boost_max=0.20)
+        from datetime import datetime, timezone
+        now = datetime.now(timezone.utc).timestamp()
+        _write(cards_dir, _content_card("plain", keywords=["alpha"], content=[]))
+        boosted = _content_card("boosted", keywords=["alpha"],
+                                content=[{"id": "i", "type": "note", "locator": {"text": "t"},
+                                          "ts": now, "why": ""}])
+        boosted["usage_count"] = 5
+        _write(cards_dir, boosted)
+        _write(cards_dir, _content_card("offtopic", keywords=["zeta"], content=[]))
+        ac = store.assemble("alpha")
+        view = ac.context_view
+        # The off-topic card is gated out (its un-boosted relevance is below the floor).
+        assert "offtopic" not in view
+        # Both alpha cards are present; the boosted one is ranked ahead of the plain one.
+        assert "boosted" in view and "plain" in view
+        assert view.index("boosted") < view.index("plain")

@@ -7,6 +7,15 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- **Recently-used / recently-updated cards win a near-tie in keyword retrieval (bounded boost).**
+  In the keyword arm, `usage_count` and `last_verified_at` were only TIE-BREAKERS, so a card the user
+  just relied on did not actually resurface more readily. `FileContextStore` now applies a small
+  bounded multiplier (`_recency_boost_factor`, default cap +20%, configurable via the new
+  `recency_boost_max` constructor arg, set 0.0 to disable) to the RANKING score, blending a usage
+  signal (saturating at 5 uses) with a recency signal (newest content `ts`, 30-day half-life). The
+  CONFIDENCE GATE still uses the un-boosted relevance score, so an irrelevant-but-recent card is never
+  resurrected; a card with no history is unaffected (factor 1.0). Tests in
+  `tests/test_card_content.py::TestRecencyBoost` (including gate-independence).
 - **Card content de-duplicates references on write (no more accumulating the same pointer).** The
   post-deep card updater (and `record()`) appended content items with no dedup, so re-adding the
   same collection id / file path / note across runs stored duplicate items until the recency-trim

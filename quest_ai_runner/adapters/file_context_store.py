@@ -218,6 +218,15 @@ _TEST_PATH_RE = re.compile(
 _TEST_FILE_WEIGHT = 0.5
 _SOURCE_FILE_WEIGHT = 1.0
 
+# RECENCY/USAGE RANKING BOOST (keyword arm). A card the user recently relied on or that was just
+# updated should resurface more readily on a NEAR-TIE, without ever overriding genuine relevance.
+# The boost is a small bounded multiplier applied to the RANKING score only; the confidence GATE
+# always uses the un-boosted relevance score, so a recently-used-but-irrelevant card is never
+# resurrected. Set the max to 0.0 (constructor arg) to disable entirely.
+_RECENCY_BOOST_MAX_DEFAULT = 0.20          # at most +20% to the ranking score, never the gate
+_RECENCY_BOOST_HALF_LIFE_DAYS = 30.0       # recency component half-life (matches the vector arm)
+_RECENCY_BOOST_USAGE_CAP = 5.0             # usage_count saturates here (5+ uses = full usage signal)
+
 # Max length for a card summary built from docstrings/descriptions (~400 chars).
 _SUMMARY_MAX_CHARS = 400
 
@@ -1223,6 +1232,7 @@ class FileContextStore(ContextAssemblerBase):
         max_card_refs: int = _MAX_CARD_REFS,
         max_card_ref_chars: int = _MAX_CARD_REF_CHARS,
         card_repository: Optional[CardRepository] = None,
+        recency_boost_max: float = _RECENCY_BOOST_MAX_DEFAULT,
     ) -> None:
         self._cards_dir = Path(cards_dir)
         # Card PERSISTENCE is pluggable behind a CardRepository. Default: per-card JSON files under
@@ -1245,6 +1255,9 @@ class FileContextStore(ContextAssemblerBase):
         # confidence guess that could cost the agent a wasted glance. Set to 0.0 to inject any
         # positive match (old behaviour).
         self._confidence_threshold = confidence_threshold
+        # RECENCY/USAGE ranking boost cap (keyword arm). Clamped to >= 0.0; 0.0 disables the boost.
+        # Applied only to the ranking score, never to the confidence gate (see _recency_boost_factor).
+        self._recency_boost_max = max(0.0, float(recency_boost_max))
         # Set to True once the lazy bootstrap has been attempted (success or failure).
         self._bootstrap_done: bool = False
 
@@ -1274,6 +1287,35 @@ class FileContextStore(ContextAssemblerBase):
         # whatever opaque change-stamp that repo returns. _load_all() reloads when it changes. The
         # initial sentinel never matches a real revision, so the first _load_all() always loads.
         self._cache_dir_stamp: Any = (0.0, 0)
+
+    def _recency_boost_factor(self, card: Dict[str, Any]) -> float:
+        """A small bounded multiplier (1.0 .. 1.0+max) that nudges a recently-used / recently-updated
+        card up the RANKING, used ONLY after the confidence gate has passed on the un-boosted score.
+
+        Blends two real signals, each normalized to 0..1: usage (``usage_count`` saturating at
+        ``_RECENCY_BOOST_USAGE_CAP``) and recency (the newest content ``ts``, decayed by a 30-day
+        half-life). With no usage and no timestamped content the factor is exactly 1.0 (no effect),
+        so cards without history rank purely on relevance. Returns 1.0 when the boost is disabled
+        (max == 0.0). Never raises.
+        """
+        if self._recency_boost_max <= 0.0:
+            return 1.0
+        try:
+            usage = float(card.get("usage_count", 0) or 0.0)
+            usage_norm = (min(usage, _RECENCY_BOOST_USAGE_CAP) / _RECENCY_BOOST_USAGE_CAP
+                          if _RECENCY_BOOST_USAGE_CAP > 0 else 0.0)
+            content = card.get("content") or []
+            ts_values = [float(it.get("ts") or 0.0) for it in content if isinstance(it, dict)]
+            newest = max(ts_values) if ts_values else 0.0
+            recency_norm = 0.0
+            if newest > 0.0:
+                now = datetime.now(timezone.utc).timestamp()
+                age_days = max(0.0, (now - newest) / 86400.0)
+                recency_norm = 0.5 ** (age_days / _RECENCY_BOOST_HALF_LIFE_DAYS)
+            signal = 0.5 * usage_norm + 0.5 * recency_norm   # 0..1
+            return 1.0 + self._recency_boost_max * signal
+        except Exception:  # noqa: BLE001
+            return 1.0
 
     # ------------------------------------------------------------------
     # Public API: ContextAssemblerBase implementation
@@ -2041,7 +2083,11 @@ class FileContextStore(ContextAssemblerBase):
                 idf_score_map[cid] = score
                 usage = card.get("usage_count", 0)
                 verified_at = card.get("provenance", {}).get("last_verified_at", "") or ""
-                scored.append((-score, -usage, -len(verified_at), verified_at, card))
+                # Gate on the un-boosted relevance score above; rank by a recency/usage-boosted
+                # score so a card the user just relied on wins a near-tie (bounded, never resurrects
+                # an irrelevant card because the gate already passed on relevance alone).
+                rank_score = score * self._recency_boost_factor(card)
+                scored.append((-rank_score, -usage, -len(verified_at), verified_at, card))
 
         if not scored:
             return self._fallback_file_search(task_kws)
