@@ -447,19 +447,27 @@ def _monitor_claude_session(
         session_timeout = 15.0
         session_start = time.time()
 
+        # Snapshot JSONL files that already exist so we never mistake the parent session
+        # (or any other pre-existing session) for a new deep-runner subprocess session.
+        # mtime alone is insufficient: the parent session's JSONL gets a new mtime whenever
+        # Claude does anything in this conversation, which can push it past cutoff_time.
+        pre_existing_files: set = {str(f) for f in project_dir.rglob("*.jsonl")}
+        _log.debug("pre-existing session files excluded from monitoring: %d", len(pre_existing_files))
+
         while not stop_event.is_set():
             # Periodically check for new session files
             try:
                 # Find all JSONL files in the project dir and subdirs
                 for jsonl_file in project_dir.rglob("*.jsonl"):
                     try:
-                        mtime = jsonl_file.stat().st_mtime
-                        # Only monitor files created after we started
-                        if mtime < cutoff_time:
+                        file_key = str(jsonl_file)
+                        # Skip files that existed before the subprocess started — these are other
+                        # Claude sessions (e.g. the parent assistant session) that must not be
+                        # mistaken for the deep-runner subprocess we're monitoring.
+                        if file_key in pre_existing_files:
                             continue
 
                         # Track file position, not content hash (simpler, no duplicates)
-                        file_key = str(jsonl_file)
                         if file_key not in watched_files:
                             _log.debug("detected new session file: %s", jsonl_file.name)
                             watched_files[file_key] = 0  # Start from beginning
