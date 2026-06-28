@@ -26,6 +26,13 @@ All notable changes to this project are documented here. The format is based on
   `tests/test_per_goal_context_iteration.py` (deep preamble rendered_section + pointer swap).
 
 ### Added
+- **Expandable "What I'll remember" panel in the Textual terminal UI.** After a deep
+  run completes, the orchestrator's FUTURE-CONTEXT bullets (what the AI noted for
+  next time) are now surfaced in a collapsible `FutureContextPanel`. A dim hint line
+  appears in the transcript ("f: What I'll remember  (N items)"); press `f` to toggle
+  the panel open or closed. The panel is never shown when there is nothing to remember.
+  A pure helper `_build_future_context_text()` builds the Rich Text and is testable
+  offline without a Textual event loop. New tests in `tests/test_future_context_ui.py`.
 - **Consolidating holistic context filter (one LLM pass over the merged card set).** After both
   retrieval arms each filter their own cards, `HybridContextAssembler` now runs a single
   consolidating LLM call over the merged, deduped card set that (a) drops tangential or redundant

@@ -377,6 +377,62 @@ class DeepDetailPanel(VerticalScroll):
             self.call_after_refresh(self.scroll_end, animate=False)
 
 
+def _build_future_context_text(bullets: str) -> Optional[Text]:
+    """Build the Rich Text to display in the future-context panel.
+
+    Returns ``None`` when ``bullets`` is empty so callers can gate visibility.
+    This is a pure function with no Textual dependencies — testable offline.
+    """
+    cleaned = bullets.strip()
+    if not cleaned:
+        return None
+    lines = [ln for ln in cleaned.splitlines() if ln.strip()]
+    if not lines:
+        return None
+    body = "\n".join(f"  {ln}" for ln in lines)
+    hint = "\x1b[2m  [f] close\x1b[0m"
+    t = Text.from_ansi(f"\x1b[1;32mWhat I'll remember\x1b[0m\n{body}\n{hint}")
+    t.no_wrap = False
+    return t
+
+
+class FutureContextPanel(VerticalScroll):
+    """Expandable panel showing what the AI will remember for next time.
+
+    Hidden by default. Press ``f`` to toggle after a deep run completes.
+    Content is the FUTURE-CONTEXT section parsed from deep results: a plain
+    newline-joined string of bullet lines (e.g. "- collection: Pricing tiers").
+    The panel is never shown when the content is empty.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._bullets: str = ""
+        self.display = False
+        self._body = Static(id="future-context-body")
+
+    def compose(self) -> ComposeResult:
+        yield self._body
+
+    def load(self, bullets: str) -> None:
+        """Store the bullet lines without changing visibility.
+
+        Call ``display = True`` (or ``action_toggle_future_context``) after
+        loading to make the panel visible.
+        """
+        self._bullets = bullets.strip()
+
+    def hide(self) -> None:
+        """Clear content and hide the panel."""
+        self._bullets = ""
+        self.display = False
+        self._rerender()
+
+    def _rerender(self) -> None:
+        t = _build_future_context_text(self._bullets)
+        self._body.update(t if t is not None else Text(""))
+
+
 # ── Main app ──────────────────────────────────────────────────────────────────
 
 class QuestAITerminal(App):
@@ -425,6 +481,20 @@ class QuestAITerminal(App):
         height: auto;
     }
 
+    #future-context {
+        height: auto;
+        max-height: 10;
+        border-left: thick $success 60%;
+        padding: 0 1;
+        margin: 0 1;
+        color: $text-muted;
+        scrollbar-size-vertical: 1;
+    }
+
+    #future-context-body {
+        height: auto;
+    }
+
     #activity {
         height: 1;
         padding: 0 1;
@@ -445,6 +515,7 @@ class QuestAITerminal(App):
         Binding("ctrl+l", "clear_log", "Clear screen"),
         Binding("ctrl+y", "copy_last", "Copy last reply", show=True),
         Binding("d", "toggle_deep_detail", "Expand agent", show=True),
+        Binding("f", "toggle_future_context", "What I'll remember", show=False),
         Binding("tab", "cycle_deep_run", "Next agent", show=True),
         Binding("pageup", "scroll_up_or_agent", "Scroll up", show=True, priority=True),
         Binding("pagedown", "scroll_down_or_agent", "Scroll down", show=True, priority=True),
@@ -473,6 +544,10 @@ class QuestAITerminal(App):
         # transcript, so we persist each task's output exactly once.
         self._deep_flushed: set = set()
 
+        # Future context captured from the last deep result event (if any).
+        # Shown in the FutureContextPanel after the turn ends.
+        self._future_context: str = ""
+
         # When set, the next submitted line is a menu selection, not a turn.
         self._pending_select: Optional[Callable[[str], None]] = None
 
@@ -492,6 +567,7 @@ class QuestAITerminal(App):
         yield ContextPanel(id="context")
         yield DeepActivity(id="deep")
         yield DeepDetailPanel(id="deep-detail")
+        yield FutureContextPanel(id="future-context")
         yield ActivityBar(id="activity")
         yield Input(id="prompt", placeholder="Ask anything…   (/help, Esc to cancel, d=expand agent, Tab=cycle, PgUp/PgDn=scroll)")
         yield Footer()
@@ -502,6 +578,7 @@ class QuestAITerminal(App):
         self._ctx = self.query_one("#context", ContextPanel)
         self._deep_view = self.query_one("#deep", DeepActivity)
         self._deep_detail = self.query_one("#deep-detail", DeepDetailPanel)
+        self._future_ctx_panel = self.query_one("#future-context", FutureContextPanel)
         self._activity = self.query_one("#activity", ActivityBar)
         inp = self.query_one("#prompt", Input)
 
@@ -851,9 +928,11 @@ class QuestAITerminal(App):
         self._deep_seen = set()
         self._deep_event_count = 0
         self._deep_flushed = set()
+        self._future_context = ""
         self._ctx.reset()
         self._deep_view.hide()
         self._deep_detail.hide()
+        self._future_ctx_panel.hide()
 
         if echo:
             self._tlog.write(Text(f"❯ {user_text}", style="bold cyan"))
@@ -913,11 +992,13 @@ class QuestAITerminal(App):
             text = (event.get("text") or "").rstrip()
             action = event.get("action") or ""
             data = event.get("data") or {}
+            result_kind = event.get("result_kind") or ""
         else:
             t = event.type
             text = (event.text or "").rstrip()
             action = getattr(event, "action", None) or ""
             data = event.data or {}
+            result_kind = getattr(event, "result_kind", None) or ""
         ev = self._types()
         log = self._tlog
 
@@ -1032,6 +1113,11 @@ class QuestAITerminal(App):
             # Non-streamed answers arrive here; streamed ones are in _answer_parts.
             if not self._partial_started and text:
                 self._answer_parts.append(text)
+            # Capture future context from deep result events.
+            if result_kind == "deep" and isinstance(data, dict):
+                fc = (data.get("future_context") or "").strip()
+                if fc:
+                    self._future_context = fc
 
         elif t == ev["decision"]:
             log.write(Text(""))
@@ -1089,6 +1175,18 @@ class QuestAITerminal(App):
             s._turn_count += 1
             log.write(Text(""))
             self._write_footer(final, elapsed)
+            # If the deep run produced future context, load the panel and show a
+            # subtle hint in the transcript so the user knows it is available.
+            if self._future_context:
+                self._future_ctx_panel.load(self._future_context)
+                count = sum(
+                    1 for ln in self._future_context.splitlines() if ln.strip()
+                )
+                plural = "s" if count != 1 else ""
+                log.write(Text(
+                    f"  [f] What I'll remember  ({count} item{plural})",
+                    style="dim",
+                ))
 
         log.write(Text(""))
         self._console.rule()
@@ -1309,6 +1407,19 @@ class QuestAITerminal(App):
         if run_id is None:
             return
         self._open_detail_for(run_id)
+
+    def action_toggle_future_context(self) -> None:
+        """Toggle the future-context panel (key: f).
+
+        Only opens the panel when there is non-empty future context from the
+        most recent deep run. Pressing 'f' when the panel is open closes it;
+        when there is nothing to show the action is a no-op.
+        """
+        if self._future_ctx_panel.display:
+            self._future_ctx_panel.display = False
+        elif self._future_context:
+            self._future_ctx_panel._rerender()
+            self._future_ctx_panel.display = True
 
     def action_scroll_up_or_agent(self) -> None:
         """PageUp: scroll transcript up; if agent detail panel is open, scroll that instead."""
