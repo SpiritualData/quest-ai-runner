@@ -49,6 +49,181 @@ def _extract_json(text: str) -> str:
     return ""
 
 
+# ---------------------------------------------------------------------------
+# Consolidating holistic filter: ONE LLM call over the MERGED card set.
+# ---------------------------------------------------------------------------
+# After both retrieval arms each filter their own cards, the hybrid runs this single consolidating
+# pass over the union: it drops tangential/redundant cards ACROSS arms, reranks them, and prunes
+# which content ITEMS inside each kept card survive. The content is never rewritten here, the LLM
+# only selects card ids + item ids (and a per-item delivery tag), so everything stays VERBATIM.
+
+# Bound the consolidation prompt so a huge card set can never blow up the call.
+_CONSOLIDATE_MAX_CARDS = 40        # cards shown to the consolidator
+_CONSOLIDATE_MAX_ITEMS = 20        # items shown per card
+_CONSOLIDATE_MAX_PREVIEW = 200     # chars of preview shown per item
+
+_CONSOLIDATE_PROMPT = """You are a context relevance editor. Given a task and a set of context \
+cards, select ONLY the cards and the specific content items that genuinely help with the task, in \
+priority order.
+
+TASK:
+{task}
+
+CARDS (each card lists its content items with a short preview):
+{cards_block}
+
+Rules:
+- Keep only cards relevant to the task. Drop tangential or redundant cards entirely.
+- Order the kept cards by usefulness, most useful first.
+- Within each kept card, keep only the items that add something. Drop redundant or off-topic items.
+- Some cards list NO items (they are file/reference cards whose value is their summary and file \
+listings). Judge them at the CARD level: to keep one, return it with an empty "items" list; to drop \
+it, omit it.
+- For each kept item, choose how to deliver it:
+  "paste" (the default): the item's content is included directly.
+  "pointer": only for a file the worker can open by itself later, when pasting its full text now is \
+not needed.
+  When unsure, use "paste".
+
+Respond with ONLY valid JSON (no markdown, no prose). The "cards" list is in priority order:
+{{
+  "cards": [
+    {{"card_id": "<card id>", "items": [{{"item_id": "<item id>", "deliver": "paste"}}]}}
+  ]
+}}
+Return only the cards and items you are keeping."""
+
+
+def _consolidate_keep_all(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Graceful fallback verdict: keep EVERY card and EVERY item, deliver=paste, order preserved.
+
+    This is the "never worse" output: the consolidated selection equals exactly the mechanical
+    merge, so when no provider is wired (or anything fails) behavior is identical to today.
+    """
+    out: List[Dict[str, Any]] = []
+    for card in cards:
+        items = card.get("items") or []
+        out.append({
+            "card_id": card.get("id", ""),
+            "items": [
+                {"item_id": it.get("id", ""), "deliver": "paste"}
+                for it in items if isinstance(it, dict)
+            ],
+        })
+    return out
+
+
+def _validate_consolidation(
+    parsed: Any, cards: List[Dict[str, Any]]
+) -> Optional[List[Dict[str, Any]]]:
+    """Validate an LLM consolidation verdict against the known cards/items. None on hard failure.
+
+    ``parsed`` is the decoded LLM JSON: either the ``{"cards": [...]}`` wrapper (the shape the
+    prompt asks for, which ``_extract_json`` decodes cleanly) or a bare list. Returns the cleaned,
+    ordered keep-list (only known card ids, only known item ids within their card, each appearing
+    once, ``deliver`` normalized to "paste"|"pointer"). Cards/items the LLM did not name are DROPPED.
+    Returns None when the shape is unusable or no kept card survives, so the caller can fall back to
+    keep-all (the never-worse guarantee).
+    """
+    if isinstance(parsed, dict):
+        parsed = parsed.get("cards")
+    if not isinstance(parsed, list):
+        return None
+    # Map each known card id to its set of known item ids (preserves which items are real).
+    known: Dict[str, set] = {}
+    for card in cards:
+        cid = card.get("id", "")
+        if not cid:
+            continue
+        known[cid] = {
+            it.get("id", "") for it in (card.get("items") or []) if isinstance(it, dict)
+        }
+    out: List[Dict[str, Any]] = []
+    seen_cards: set = set()
+    for entry in parsed:
+        if not isinstance(entry, dict):
+            continue
+        cid = entry.get("card_id", "")
+        if cid not in known or cid in seen_cards:
+            continue
+        kept_items: List[Dict[str, Any]] = []
+        seen_items: set = set()
+        for it in (entry.get("items") or []):
+            if not isinstance(it, dict):
+                continue
+            iid = it.get("item_id", "")
+            if iid not in known[cid] or iid in seen_items:
+                continue
+            deliver = "pointer" if it.get("deliver") == "pointer" else "paste"
+            kept_items.append({"item_id": iid, "deliver": deliver})
+            seen_items.add(iid)
+        if not kept_items and known[cid]:
+            # An ITEM-BEARING card whose every item was pruned is a fully-dropped card.
+            continue
+        # A file-only card (no known items) named by the LLM is kept WHOLE with an empty item list:
+        # it has nothing to prune, but its rendered section (summary + file listings) still matters.
+        seen_cards.add(cid)
+        out.append({"card_id": cid, "items": kept_items})
+    if not out:
+        return None
+    return out
+
+
+def consolidate_context(
+    task: str,
+    cards: List[Dict[str, Any]],
+    *,
+    model_provider: Optional[ModelProvider] = None,
+    model: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """ONE holistic LLM pass over the merged card set: drop, rerank, and prune content items.
+
+    ``cards`` is the merged card set, each ``{"id", "title", "items": [{id, type, why, preview}]}``
+    (the previews come from ``render_card_content_blocks``). Returns the CONSOLIDATOR OUTPUT, an
+    ordered keep-list ``[{"card_id", "items": [{"item_id", "deliver": "paste"|"pointer"}]}]``, kept
+    cards first in priority order, only the surviving item ids per card.
+
+    The LLM selects ids ONLY, never rewrites content, so everything stays VERBATIM. Graceful: when
+    ``model_provider`` is None, or the call/parse/validation fails, returns keep-all with
+    deliver=paste in the original order (identical to the mechanical merge). Never raises.
+    """
+    if not cards:
+        return []
+    if model_provider is None:
+        return _consolidate_keep_all(cards)
+    try:
+        card_lines: List[str] = []
+        for card in cards[:_CONSOLIDATE_MAX_CARDS]:
+            cid = card.get("id", "")
+            title = card.get("title", "") or "(untitled)"
+            # A card-level preview (used mainly for item-less file/reference cards) so the LLM can
+            # judge their relevance without any item lines below.
+            preview = (card.get("preview", "") or "")[:_CONSOLIDATE_MAX_PREVIEW]
+            head = f"[{cid}] {title}"
+            if preview and preview != title:
+                head += f" :: {preview}"
+            card_lines.append(head)
+            for it in (card.get("items") or [])[:_CONSOLIDATE_MAX_ITEMS]:
+                if not isinstance(it, dict):
+                    continue
+                iid = it.get("id", "")
+                itype = it.get("type", "note")
+                why = (it.get("why", "") or "").strip()
+                preview = (it.get("preview", "") or "")[:_CONSOLIDATE_MAX_PREVIEW]
+                meta = " | ".join(p for p in (why, preview) if p)
+                card_lines.append(f"  - ({iid}) {itype}" + (f": {meta}" if meta else ""))
+        prompt = _CONSOLIDATE_PROMPT.format(task=task, cards_block="\n".join(card_lines))
+        raw = model_provider.answer([{"role": "user", "content": prompt}], model=model)
+        parsed = json.loads(_extract_json(raw or "") or "[]")
+        result = _validate_consolidation(parsed, cards)
+        if result is None:
+            return _consolidate_keep_all(cards)
+        return result
+    except Exception as e:  # noqa: BLE001
+        _log.debug("consolidate_context failed, keeping all cards/items: %s", e)
+        return _consolidate_keep_all(cards)
+
+
 @dataclass
 class CardMetadata:
     """Metadata for a selected context card.

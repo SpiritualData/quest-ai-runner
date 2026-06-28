@@ -286,3 +286,121 @@ def test_per_goal_conversation_slice_included_when_store_wired():
     pre = runner.calls[0]["context_preamble"] or ""
     assert "conv-slice-for" in pre
     assert any("Handle the migration" in q for q in store.current_calls)
+
+
+# --------------------------------------------------------------------------- deep preamble: paste vs pointer
+
+
+class ItemsAssembler:
+    """A ContextAssembler whose AssembledContext carries structured ``card_metadata`` items, so the
+    deep preamble can materialize each item paste-vs-pointer by its ``deliver`` tag."""
+
+    def __init__(self, card_metadata: List[Dict[str, Any]], context_view: str = ""):
+        self._cm = card_metadata
+        self._view = context_view
+
+    def assemble(self, task_text: str, *, meta: Optional[Dict[str, Any]] = None) -> AssembledContext:
+        return AssembledContext(
+            context_view=self._view,
+            card_ids=[m["id"] for m in self._cm],
+            card_metadata=[dict(m) for m in self._cm],
+        )
+
+    def record(self, task_text: str, outcome: Dict[str, Any]) -> None:
+        return None
+
+
+def test_deep_preamble_renders_pointer_for_file_and_pastes_others():
+    """A file item tagged deliver=pointer becomes a POINTER line (the worker re-reads the file);
+    a non-file item (and any deliver=paste item) is pasted VERBATIM."""
+    plan = {"action": "deep", "goal": "Do the work",
+            "deep_subtasks": [{"goal": "Implement feature X", "brief": "implement X"}],
+            "rationale": "deep"}
+    provider = ScriptedProvider(plans=[plan], verdicts=[{"met": True}])
+    runner = RecordingRunner([DeepResult(met=True, output="done")])
+    assembler = ItemsAssembler([
+        {
+            "id": "card-1", "title": "Feature X wiring", "adapter": "keyword",
+            "items": [
+                {"id": "f1", "type": "file", "why": "entry point",
+                 "locator": {"path": "src/feature_x.py"},
+                 "text": "FULL_FILE_TEXT_SHOULD_NOT_PASTE", "preview": "p",
+                 "pointer_eligible": True, "deliver": "pointer"},
+                {"id": "n1", "type": "note", "why": "rule",
+                 "locator": {"text": "always validate X"},
+                 "text": "PASTED_NOTE_TEXT", "preview": "p",
+                 "pointer_eligible": False, "deliver": "paste"},
+            ],
+        },
+    ])
+
+    res = _orch(provider, runner, context_assembler=assembler).run("build X")
+
+    assert res.kind == "deep"
+    assert len(runner.calls) == 1
+    pre = runner.calls[0]["context_preamble"] or ""
+    # The file is delivered as a pointer (path named), NOT its full text.
+    assert "src/feature_x.py" in pre
+    assert "read this file fresh if needed" in pre
+    assert "FULL_FILE_TEXT_SHOULD_NOT_PASTE" not in pre
+    # The note is pasted verbatim.
+    assert "PASTED_NOTE_TEXT" in pre
+    # No em dashes leaked into the materialized pointer line.
+    assert "—" not in pre
+
+
+def test_deep_preamble_falls_back_to_context_view_when_no_items():
+    """A file-only assembled context (no structured items) keeps using context_view verbatim."""
+    plan = {"action": "deep", "goal": "Do the work",
+            "deep_subtasks": [{"goal": "Implement feature X", "brief": "implement X"}],
+            "rationale": "deep"}
+    provider = ScriptedProvider(plans=[plan], verdicts=[{"met": True}])
+    runner = RecordingRunner([DeepResult(met=True, output="done")])
+    assembler = ItemsAssembler(
+        [{"id": "c1", "title": "T", "adapter": "keyword"}],  # no items
+        context_view="LEGACY_VIEW_TEXT",
+    )
+
+    _orch(provider, runner, context_assembler=assembler).run("build X")
+
+    pre = runner.calls[0]["context_preamble"] or ""
+    assert "LEGACY_VIEW_TEXT" in pre
+
+
+def test_deep_preamble_pastes_rendered_section_and_swaps_pointer():
+    """When a card carries a VERBATIM rendered_section, the deep preamble pastes it whole (summary +
+    file listings survive), swapping only a pointer-delivered file item's fragment for a pointer
+    line so the file body is not duplicated."""
+    plan = {"action": "deep", "goal": "Do the work",
+            "deep_subtasks": [{"goal": "Implement feature X", "brief": "implement X"}],
+            "rationale": "deep"}
+    provider = ScriptedProvider(plans=[plan], verdicts=[{"met": True}])
+    runner = RecordingRunner([DeepResult(met=True, output="done")])
+    # The file item's fragment in the section uses the same layout render_block_lines emits.
+    frag_f1 = "  - (file) entry point\n      FULL_FILE_BODY_DO_NOT_PASTE"
+    rendered_section = (
+        "### Card: kw-a\nSUMMARY_A\n\nFiles:\n  - src/feature_x.py\n\nContent:\n" + frag_f1
+    )
+    assembler = ItemsAssembler([
+        {
+            "id": "kw-a", "title": "SUMMARY_A", "adapter": "keyword",
+            "rendered_section": rendered_section,
+            "items": [
+                {"id": "f1", "type": "file", "why": "entry point",
+                 "locator": {"path": "src/feature_x.py"},
+                 "text": "FULL_FILE_BODY_DO_NOT_PASTE", "preview": "p",
+                 "pointer_eligible": True, "deliver": "pointer"},
+            ],
+        },
+    ])
+
+    _orch(provider, runner, context_assembler=assembler).run("build X")
+
+    pre = runner.calls[0]["context_preamble"] or ""
+    # Summary + file listing from the verbatim section survive (the regression fix).
+    assert "SUMMARY_A" in pre
+    assert "src/feature_x.py" in pre
+    # The pointer-delivered file's full body is NOT pasted; a pointer line replaces it.
+    assert "FULL_FILE_BODY_DO_NOT_PASTE" not in pre
+    assert "read this file fresh if needed" in pre
+    assert "—" not in pre  # no em dashes leaked

@@ -7,6 +7,49 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Hybrid consolidation no longer guts a card's non-item content.** The consolidating rebuild used
+  to reconstruct `context_view` from each card's content `items` alone, pasting only `item.text`
+  under a `### <title>` header. That silently dropped everything a rendered card section carries
+  beyond its items: a keyword card's summary, its file PATH LISTINGS (the core value of the IDF arm,
+  which are not content items), and its conventions. A keyword card with no items was skipped
+  entirely. The rebuild now starts from each surviving card's VERBATIM `rendered_section` (the whole
+  block both arms already emit). Both arms attach `rendered_section` to their `card_metadata`
+  (`adapters/file_context_store.py`, `adapters/vector_context_assembler.py`); item pruning is applied
+  by REMOVING the pruned items' exact rendered fragments from that verbatim section (never
+  re-synthesizing it), with a guard that leaves the section intact when a fragment cannot be located.
+  Item-less file/reference cards now participate in consolidation too (`consolidate_context` /
+  `_validate_consolidation` in `core/card_filter.py` keep a named card with an empty items list as
+  "keep the whole card"). The orchestrator's deep preamble (`_materialize_deep_context`) likewise
+  pastes each card's verbatim `rendered_section`, swapping only a pointer-delivered file item's
+  fragment for a pointer line. New tests in `tests/test_vector_context.py` (mixed item/file-only,
+  prune-by-removal, drop), `tests/test_consolidate_context.py` (file-only card keep/drop), and
+  `tests/test_per_goal_context_iteration.py` (deep preamble rendered_section + pointer swap).
+
+### Added
+- **Consolidating holistic context filter (one LLM pass over the merged card set).** After both
+  retrieval arms each filter their own cards, `HybridContextAssembler` now runs a single
+  consolidating LLM call over the merged, deduped card set that (a) drops tangential or redundant
+  cards across arms, (b) reranks the survivors, and (c) prunes which content ITEMS inside each kept
+  card survive. Content stays VERBATIM (the model selects card ids and item ids only, it never
+  rewrites text), via the new `consolidate_context()` in `core/card_filter.py` (parsed with the
+  existing `_extract_json`). The hybrid then rebuilds `context_view` from only the surviving
+  cards/items, in the returned order, under `### <title>` headers. It engages only when a
+  `model_provider` is wired (the balanced tier, set in `config.py`) and at least one merged card
+  carries structured items; on no provider or any failure it falls back to exactly the prior
+  mechanical merge (the never-worse guarantee). Each arm now attaches structured `items` (and a
+  `title`) to its `card_metadata`, built by the new `render_card_content_blocks()` in
+  `adapters/card_content_render.py` (which `render_card_content` is refactored to reuse, byte for
+  byte). New tests: `tests/test_consolidate_context.py`, plus consolidation cases in
+  `tests/test_vector_context.py`.
+- **Deep preamble materializes context paste-vs-pointer.** The per-goal DEEP context is now rendered
+  from the assembled `card_metadata` items: a file item tagged `deliver="pointer"` (and
+  `pointer_eligible`) becomes a short pointer line naming the path (the worker re-reads the file with
+  its own tools), while everything else is pasted verbatim. The planner/answer path still uses the
+  fully-pasted `context_view`. The `EVENT_CONTEXT` event now carries a lightweight projection of the
+  card metadata (ids, titles, per-type counts, file paths) instead of dumping each item's full text.
+  File-only deployments with no structured items keep using `context_view` unchanged.
+
+### Fixed
 - **The instant response now goes out the moment it is generated, never sequenced behind context
   search or guidance.** The narration first beat was generated in the background but only EMITTED at
   `Narrator.flush_first()`, which the orchestrator calls after the (potentially slow) guidance

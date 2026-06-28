@@ -682,7 +682,17 @@ def resolve_context_assembler(
                 query_model=query_model,
                 seed_source=keyword.export_for_embedding,
             )
-            file_assembler = HybridContextAssembler(keyword=keyword, vector=vector)
+            # Wire the consolidating LLM pass: one holistic filter over the merged card set that
+            # drops/reranks cards across arms and prunes their content items (content stays verbatim).
+            # Uses the balanced tier (filtering/judgment work). Falls back to the mechanical merge
+            # when no provider is wired or anything fails.
+            consolidate_model = registry.resolve_tier("balanced")
+            file_assembler = HybridContextAssembler(
+                keyword=keyword,
+                vector=vector,
+                model_provider=cfg.model_provider,
+                model=consolidate_model,
+            )
         else:
             file_assembler = keyword
         return CompositeContextAssembler([file_assembler, turn_store])

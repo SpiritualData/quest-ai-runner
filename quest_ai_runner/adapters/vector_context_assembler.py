@@ -58,6 +58,7 @@ from .card_content_render import (
     MAX_CARD_REF_CHARS,
     MAX_CARD_REFS,
     render_card_content,
+    render_card_content_blocks,
     tokenize as _tokenize,
 )
 from .reference_resolver import build_resolver_registry
@@ -478,6 +479,14 @@ class VectorContextAssembler(ContextAssemblerBase):
     def _render_hits(self, hits: List[VectorHit], task_text: str = "") -> str:
         """Render a list of VectorHits into a human-readable context view string.
 
+        Thin join over ``_render_hit_sections`` (the per-hit form), kept so callers/tests that want
+        the whole view as one string are unchanged.
+        """
+        return "\n\n---\n\n".join(self._render_hit_sections(hits, task_text))
+
+    def _render_hit_sections(self, hits: List[VectorHit], task_text: str = "") -> List[str]:
+        """Render each VectorHit into its OWN rendered section, aligned with ``hits`` order.
+
         When a hit carries a rich task-to-context payload (``paths``, ``symbols``,
         ``task``, ``summary``), those fields are surfaced so the consuming agent
         immediately knows where to read.  The age of the association (derived from
@@ -545,7 +554,7 @@ class VectorContextAssembler(ContextAssemblerBase):
                     part_lines.append("  content:")
                     part_lines.extend(content_lines)
             parts.append("\n".join(part_lines))
-        return "\n\n---\n\n".join(parts)
+        return parts
 
     def _assemble_inner(
         self, task_text: str, *, meta: Optional[Dict[str, Any]] = None
@@ -607,7 +616,13 @@ class VectorContextAssembler(ContextAssemblerBase):
         kept = [h for _, h in kept_decayed]
 
         # Step e: render (pass task_text so card-content references rank + resolve against it).
-        context_view = self._render_hits(kept, task_text)
+        # Render per-hit sections so each hit's VERBATIM block can be attached to its card_metadata
+        # (rendered_section), then join them for the context_view exactly as before.
+        hit_sections = self._render_hit_sections(kept, task_text)
+        context_view = "\n\n---\n\n".join(hit_sections)
+        rendered_by_id: Dict[str, str] = {
+            h.id: hit_sections[i] for i, h in enumerate(kept) if i < len(hit_sections)
+        }
         card_ids = [h.id for h in kept]
 
         # --- Context transparency: classify each hit as task_memory vs vector bootstrap --------
@@ -652,12 +667,27 @@ class VectorContextAssembler(ContextAssemblerBase):
 
         # --- Card metadata: populate selection info for UI display and transparency ---------
         # Build metadata for each selected vector hit so the orchestrator can emit which cards were chosen.
+        task_kws = _tokenize(task_text) if task_text else set()
         card_metadata: List[Dict[str, Any]] = []
         for h in kept:
             payload = h.payload or {}
             hit_paths = payload.get("paths") or []
             # Determine adapter type from payload
             adapter_type = "task_memory" if payload.get("task") else "vector"
+            # Structured content ITEMS (resolved FRESH) when the hit carries a card ``content`` list,
+            # the same blocks the view rendered. These feed the consolidating filter and the deep
+            # preamble's paste-vs-pointer materialization. Hits without ``content`` yield [].
+            content = payload.get("content")
+            item_blocks = (
+                render_card_content_blocks(
+                    {"content": content},
+                    self._resolvers,
+                    task_kws=task_kws,
+                    max_refs=self._max_card_refs,
+                    max_ref_chars=self._max_card_ref_chars,
+                )
+                if content else []
+            )
             card_metadata.append({
                 "id": h.id,
                 "title": h.text[:100] if h.text else "(no text)",  # first 100 chars as title
@@ -665,6 +695,11 @@ class VectorContextAssembler(ContextAssemblerBase):
                 "file_count": len(hit_paths),
                 "files": hit_paths[:3],  # top 3 files
                 "adapter": adapter_type,
+                "items": item_blocks,
+                # The VERBATIM rendered block this hit contributed to context_view, so the hybrid
+                # consolidator rebuilds from it (a hit's payload fields + resolved content, not just
+                # its content items) instead of dropping them when consolidation engages.
+                "rendered_section": rendered_by_id.get(h.id, ""),
             })
 
         return AssembledContext(

@@ -54,6 +54,7 @@ from .card_content_render import (
     normalize_content as _normalize_content,
     rank_content_by_recency_relevance as _rank_content_by_recency_relevance,
     render_card_content,
+    render_card_content_blocks,
     tokenize as _tokenize,
 )
 from .card_repository import CardRepository, FilesystemCardRepository, card_embed_text
@@ -2253,7 +2254,7 @@ class FileContextStore(ContextAssemblerBase):
         # Use the LLM-judged relevance score when available; otherwise use the normalized IDF score.
         _max_idf = max(idf_score_map.values()) if idf_score_map else 1.0
         card_metadata: List[Dict[str, Any]] = []
-        for card in top_cards:
+        for ci, card in enumerate(top_cards):
             card_id = card.get("id", "")
             llm_cm = llm_meta_map.get(card_id)
             # LLM-ranked files (already relevance-ordered), else mtime-sorted files
@@ -2266,6 +2267,16 @@ class FileContextStore(ContextAssemblerBase):
                     for fe in card.get("_sorted_files", card.get("files", []))[:3]
                 ]
                 relevance_score = idf_score_map.get(card_id, 0.0) / _max_idf
+            # Structured content ITEMS (id/type/why/locator/text/preview/pointer_eligible) resolved
+            # FRESH, the same blocks that fed this card's view lines. The consolidating filter selects
+            # from these, and the deep preamble materializes paste-vs-pointer from their locators.
+            item_blocks = render_card_content_blocks(
+                card,
+                self._resolvers,
+                task_kws=task_kws,
+                max_refs=self._max_card_refs,
+                max_ref_chars=self._max_card_ref_chars,
+            )
             card_metadata.append({
                 "id": card_id,
                 "title": card.get("summary", ""),
@@ -2273,6 +2284,13 @@ class FileContextStore(ContextAssemblerBase):
                 "file_count": len(card.get("files", [])),
                 "files": display_files,
                 "adapter": "keyword",
+                "items": item_blocks,
+                # The VERBATIM rendered section this card contributed to context_view (the whole
+                # ``### Card: ...`` block: summary + Files listing + Content + Conventions). The hybrid
+                # consolidator rebuilds from this so a keyword card's file listings are never lost when
+                # consolidation engages (they are NOT content items). top_cards and view_parts are built
+                # in lockstep above, so view_parts[ci] is this card's section.
+                "rendered_section": view_parts[ci] if ci < len(view_parts) else "",
             })
 
         # Clean up the temp sort key we stashed on card dicts (they're in-memory cache copies).

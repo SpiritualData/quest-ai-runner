@@ -159,7 +159,20 @@ def rank_content_by_recency_relevance(
         return content[: max(0, limit)]
 
 
-def render_card_content(
+def _preview_of(text: str, *, max_chars: int = 160) -> str:
+    """Short single-line snippet of ``text`` (~``max_chars``) for the consolidator LLM only.
+
+    Collapses all whitespace runs to single spaces so the preview is one compact line, then caps at
+    ``max_chars``. Never raises (returns "" on any failure).
+    """
+    try:
+        flat = re.sub(r"\s+", " ", str(text or "")).strip()
+        return flat[:max_chars]
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def render_card_content_blocks(
     card: Dict[str, Any],
     resolvers: Dict[str, Any],
     *,
@@ -167,24 +180,31 @@ def render_card_content(
     max_refs: int = MAX_CARD_REFS,
     max_ref_chars: int = MAX_CARD_REF_CHARS,
     max_ref_item_chars: int = MAX_CARD_REF_ITEM_CHARS,
-) -> List[str]:
-    """Render a card's source-agnostic ``content`` items into context lines. Never raises.
+) -> List[Dict[str, Any]]:
+    """Resolve a card's ``content`` items into structured ITEM BLOCKS. Never raises.
 
-    THE shared resolution routine for BOTH retrieval arms. Recency-bounded: ranks the card's content
-    by recency (``ts``) + relevance to ``task_kws``, then resolves only the top ``max_refs`` items
-    within the ``max_ref_chars`` char budget (skipping/trimming the rest). Each item resolves FRESH
-    through the ``resolvers`` registry entry for its ``type``; a type with no resolver renders a
-    graceful unresolved-pointer line. Returns a list of rendered lines (possibly empty), ready to
-    fold into a card's view block.
+    The structured sibling of ``render_card_content``: same recency-bounded ranking and the same
+    FRESH per-item resolution + char budgeting, but it returns one dict PER surviving item instead
+    of flattened lines. Each block carries::
+
+        {"id": str, "type": "file|collection|conversation|query|note", "why": str,
+         "locator": dict,            # the typed reference pointer (for pointer materialization)
+         "text": str,               # resolved VERBATIM rendered content (post-truncation), as today
+         "preview": str,            # short single-line snippet of text, for the consolidator LLM
+         "pointer_eligible": bool}  # True ONLY for type=="file" (a worker can re-read a file itself)
+
+    ``render_card_content`` builds its lines from these blocks, so the two stay byte-for-byte in
+    sync. The blocks additionally power the consolidating filter (which selects item ids) and the
+    deep preamble's paste-vs-pointer materialization (``locator`` + ``pointer_eligible``).
 
     ``resolvers`` is a ``{type: ReferenceResolver}`` registry (see ``reference_resolver.py``).
     ``task_kws`` is the tokenized task text (use ``tokenize()``), used to rank which items resolve.
     """
-    lines: List[str] = []
+    blocks: List[Dict[str, Any]] = []
     try:
         content = normalize_content(card.get("content"))
         if not content:
-            return lines
+            return blocks
         ranked = rank_content_by_recency_relevance(content, task_kws, limit=max_refs)
         budget = max_ref_chars
         for item in ranked:
@@ -210,10 +230,77 @@ def render_card_content(
             if len(rendered) > budget:
                 rendered = rendered[: budget - 1].rstrip() + "…"
             budget -= len(rendered)
-            header = f"  - ({itype})" + (f" {why}" if why else "")
-            lines.append(header)
-            for rl in rendered.splitlines() or [rendered]:
-                lines.append(f"      {rl}")
+            blocks.append({
+                "id": item.get("id", ""),
+                "type": itype,
+                "why": why,
+                "locator": locator if isinstance(locator, dict) else {},
+                "text": rendered,
+                "preview": _preview_of(rendered),
+                # Only a file can be re-read fresh by the deep worker's own fs tools, so only a file
+                # item may ever be delivered as a POINTER instead of pasted content.
+                "pointer_eligible": (itype == "file"),
+            })
+    except Exception:  # noqa: BLE001
+        return blocks
+    return blocks
+
+
+def render_block_lines(block: Dict[str, Any]) -> List[str]:
+    """Render ONE content block to its context lines (header + indented body).
+
+    THE single layout authority for a content item: ``  - (<type>) <why>`` header followed by the
+    block's VERBATIM ``text`` indented six spaces per line. Both ``render_card_content`` (which joins
+    these across a card's blocks) and the prune-by-removal logic in the hybrid consolidator rely on
+    this exact formatting, so the per-item fragment they reconstruct is a verbatim substring of the
+    card's rendered section. Keep this the ONE place that decides item line layout.
+    """
+    itype = block.get("type", "note")
+    why = block.get("why", "")
+    rendered = block.get("text", "")
+    lines = [f"  - ({itype})" + (f" {why}" if why else "")]
+    for rl in rendered.splitlines() or [rendered]:
+        lines.append(f"      {rl}")
+    return lines
+
+
+def render_card_content(
+    card: Dict[str, Any],
+    resolvers: Dict[str, Any],
+    *,
+    task_kws: Set[str],
+    max_refs: int = MAX_CARD_REFS,
+    max_ref_chars: int = MAX_CARD_REF_CHARS,
+    max_ref_item_chars: int = MAX_CARD_REF_ITEM_CHARS,
+) -> List[str]:
+    """Render a card's source-agnostic ``content`` items into context lines. Never raises.
+
+    THE shared resolution routine for BOTH retrieval arms. Recency-bounded: ranks the card's content
+    by recency (``ts``) + relevance to ``task_kws``, then resolves only the top ``max_refs`` items
+    within the ``max_ref_chars`` char budget (skipping/trimming the rest). Each item resolves FRESH
+    through the ``resolvers`` registry entry for its ``type``; a type with no resolver renders a
+    graceful unresolved-pointer line. Returns a list of rendered lines (possibly empty), ready to
+    fold into a card's view block.
+
+    Implemented on top of ``render_card_content_blocks`` (the structured form): each block's
+    verbatim ``text`` is flattened back into the ``  - (type) why`` header + indented body lines, so
+    this function's output is byte-for-byte identical to the prior inline implementation.
+
+    ``resolvers`` is a ``{type: ReferenceResolver}`` registry (see ``reference_resolver.py``).
+    ``task_kws`` is the tokenized task text (use ``tokenize()``), used to rank which items resolve.
+    """
+    lines: List[str] = []
+    try:
+        blocks = render_card_content_blocks(
+            card,
+            resolvers,
+            task_kws=task_kws,
+            max_refs=max_refs,
+            max_ref_chars=max_ref_chars,
+            max_ref_item_chars=max_ref_item_chars,
+        )
+        for block in blocks:
+            lines.extend(render_block_lines(block))
     except Exception:  # noqa: BLE001
         return lines
     return lines

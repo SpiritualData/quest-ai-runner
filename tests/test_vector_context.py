@@ -1894,3 +1894,271 @@ class TestVectorArmCardResolution:
         ac = asm.assemble("billing two three four")
         assert ac.card_ids == []
         assert ac.context_view == ""
+
+
+# ---------------------------------------------------------------------------
+# HybridContextAssembler: the consolidating LLM pass (Phase 1)
+# ---------------------------------------------------------------------------
+
+class _ConsolidatingProvider:
+    """A ModelProvider whose ``answer()`` returns a scripted consolidation verdict."""
+
+    def __init__(self, scripted: str):
+        self._scripted = scripted
+        self.answer_calls = 0
+
+    def plan(self, prompt, *, model, tool_schema):  # pragma: no cover - unused
+        return {"action": "answer"}
+
+    def answer(self, messages, *, model=None, system=None) -> str:
+        self.answer_calls += 1
+        return self._scripted
+
+    def list_models(self) -> List[str]:
+        return ["stub-model"]
+
+
+class _ItemsAssembler:
+    """A stub ContextAssembler that returns card_metadata carrying structured ``items`` blocks."""
+
+    def __init__(self, view: str, card_metadata: List[Dict[str, Any]]):
+        self._view = view
+        self._cm = card_metadata
+
+    def assemble(self, task_text, *, meta=None):
+        return AssembledContext(
+            context_view=self._view,
+            card_ids=[m["id"] for m in self._cm],
+            card_metadata=[dict(m) for m in self._cm],
+        )
+
+    def record(self, task_text, outcome):
+        pass
+
+
+def _kw_card():
+    return {
+        "id": "kw-card", "title": "Keyword billing", "adapter": "keyword",
+        "items": [
+            {"id": "k1", "type": "file", "why": "entry", "locator": {"path": "billing.py"},
+             "text": "PASTE_K1_TEXT", "preview": "PASTE_K1_TEXT", "pointer_eligible": True},
+            {"id": "k2", "type": "note", "why": "redundant", "locator": {"text": "old"},
+             "text": "PASTE_K2_TEXT", "preview": "PASTE_K2_TEXT", "pointer_eligible": False},
+        ],
+    }
+
+
+def _vec_card():
+    return {
+        "id": "vec-card", "title": "Vector theme", "adapter": "vector",
+        "items": [
+            {"id": "v1", "type": "collection", "why": "palette", "locator": {"name": "theme"},
+             "text": "PASTE_V1_TEXT", "preview": "PASTE_V1_TEXT", "pointer_eligible": False},
+        ],
+    }
+
+
+class TestHybridConsolidation:
+    def test_no_provider_keeps_mechanical_merge(self):
+        kw = _ItemsAssembler("kw view", [_kw_card()])
+        vec = _ItemsAssembler("vec view", [_vec_card()])
+        hybrid = HybridContextAssembler(keyword=kw, vector=vec)  # no provider
+        ac = hybrid.assemble("billing")
+        # Mechanical merge: both arm views present, both card ids kept.
+        assert "kw view" in ac.context_view and "vec view" in ac.context_view
+        assert ac.card_ids == ["kw-card", "vec-card"]
+
+    def test_consolidation_drops_and_reranks_and_prunes(self):
+        # Verdict: keep vec-card first, then kw-card with only k1 (drop k2).
+        prov = _ConsolidatingProvider(
+            '{"cards": ['
+            '{"card_id": "vec-card", "items": [{"item_id": "v1", "deliver": "paste"}]},'
+            '{"card_id": "kw-card", "items": [{"item_id": "k1", "deliver": "pointer"}]}'
+            ']}'
+        )
+        kw = _ItemsAssembler("kw view", [_kw_card()])
+        vec = _ItemsAssembler("vec view", [_vec_card()])
+        hybrid = HybridContextAssembler(keyword=kw, vector=vec, model_provider=prov, model="m")
+        ac = hybrid.assemble("billing")
+        assert prov.answer_calls == 1  # exactly ONE consolidating call
+        # Reranked: vec-card before kw-card.
+        assert ac.card_ids == ["vec-card", "kw-card"]
+        # Rebuilt view pastes surviving items verbatim under their titles.
+        assert "### Vector theme" in ac.context_view
+        assert "PASTE_V1_TEXT" in ac.context_view
+        assert "PASTE_K1_TEXT" in ac.context_view
+        # Pruned item k2 is gone from both view and metadata.
+        assert "PASTE_K2_TEXT" not in ac.context_view
+        kw_meta = next(m for m in ac.card_metadata if m["id"] == "kw-card")
+        assert [it["id"] for it in kw_meta["items"]] == ["k1"]
+        # Delivery tag recorded for the deep preamble.
+        assert kw_meta["items"][0]["deliver"] == "pointer"
+
+    def test_parse_failure_falls_back_to_mechanical(self):
+        prov = _ConsolidatingProvider("not json")
+        kw = _ItemsAssembler("kw view", [_kw_card()])
+        vec = _ItemsAssembler("vec view", [_vec_card()])
+        hybrid = HybridContextAssembler(keyword=kw, vector=vec, model_provider=prov, model="m")
+        ac = hybrid.assemble("billing")
+        # consolidate_context keep-all -> rebuilt view from ALL items (both cards survive).
+        assert ac.card_ids == ["kw-card", "vec-card"]
+        assert "PASTE_K1_TEXT" in ac.context_view
+        assert "PASTE_V1_TEXT" in ac.context_view
+
+    def test_consolidate_disabled_keeps_mechanical_merge(self):
+        prov = _ConsolidatingProvider('{"cards": []}')
+        kw = _ItemsAssembler("kw view", [_kw_card()])
+        vec = _ItemsAssembler("vec view", [_vec_card()])
+        hybrid = HybridContextAssembler(
+            keyword=kw, vector=vec, model_provider=prov, model="m", consolidate=False,
+        )
+        ac = hybrid.assemble("billing")
+        assert "kw view" in ac.context_view and "vec view" in ac.context_view
+        assert prov.answer_calls == 0  # never called when consolidate=False
+
+    def test_no_items_skips_consolidation(self):
+        # Cards without ``items`` -> consolidation never engages -> mechanical merge.
+        prov = _ConsolidatingProvider('{"cards": []}')
+        kw = _ItemsAssembler("kw view", [{"id": "a", "title": "A", "adapter": "keyword"}])
+        vec = _ItemsAssembler("vec view", [{"id": "b", "title": "B", "adapter": "vector"}])
+        hybrid = HybridContextAssembler(keyword=kw, vector=vec, model_provider=prov, model="m")
+        ac = hybrid.assemble("billing")
+        assert prov.answer_calls == 0
+        assert "kw view" in ac.context_view and "vec view" in ac.context_view
+
+
+# ---------------------------------------------------------------------------
+# HybridContextAssembler consolidation rebuilds from each card's VERBATIM
+# rendered_section, NOT from content items alone (the regression fix).
+# ---------------------------------------------------------------------------
+
+def _rs_item_card():
+    """An ITEM-BEARING keyword card whose rendered_section holds its summary + file listing + the
+    VERBATIM rendered fragments of BOTH its content items (the format real arms emit)."""
+    frag_a1 = "  - (note) why1\n      ITEM_A1_TEXT"
+    frag_a2 = "  - (note) why2\n      ITEM_A2_TEXT"
+    rendered_section = (
+        "### Card: kw-a\nSUMMARY_A\n\n"
+        "Files:\n  - billing.py\n\n"
+        "Content:\n" + frag_a1 + "\n" + frag_a2
+    )
+    return {
+        "id": "kw-a", "title": "SUMMARY_A", "adapter": "keyword",
+        "rendered_section": rendered_section,
+        "items": [
+            {"id": "a1", "type": "note", "why": "why1", "locator": {"text": "n1"},
+             "text": "ITEM_A1_TEXT", "preview": "ITEM_A1_TEXT", "pointer_eligible": False},
+            {"id": "a2", "type": "note", "why": "why2", "locator": {"text": "n2"},
+             "text": "ITEM_A2_TEXT", "preview": "ITEM_A2_TEXT", "pointer_eligible": False},
+        ],
+    }
+
+
+def _rs_fileonly_card():
+    """A FILE-ONLY keyword card: no content items, value lives in its summary + file listings."""
+    return {
+        "id": "kw-b", "title": "SUMMARY_B", "adapter": "keyword",
+        "rendered_section": "### Card: kw-b\nSUMMARY_B\n\nFiles:\n  - other.py\n  - util.py",
+        "items": [],
+    }
+
+
+class TestHybridConsolidationVerbatimRebuild:
+    def test_mixed_item_and_file_only_cards_both_kept(self):
+        # Keep BOTH: the item-bearing card (a1) and the FILE-ONLY card (empty items).
+        prov = _ConsolidatingProvider(
+            '{"cards": ['
+            '{"card_id": "kw-a", "items": [{"item_id": "a1", "deliver": "paste"}]},'
+            '{"card_id": "kw-b", "items": []}'
+            ']}'
+        )
+        kw = _ItemsAssembler("kw view", [_rs_item_card(), _rs_fileonly_card()])
+        vec = _ItemsAssembler("", [])
+        hybrid = HybridContextAssembler(keyword=kw, vector=vec, model_provider=prov, model="m")
+        ac = hybrid.assemble("billing")
+        assert ac.card_ids == ["kw-a", "kw-b"]
+        # Item-bearing card's verbatim section survived.
+        assert "### Card: kw-a" in ac.context_view
+        assert "SUMMARY_A" in ac.context_view and "ITEM_A1_TEXT" in ac.context_view
+        # FILE-ONLY card's summary + file listings are NOT dropped (the core regression).
+        assert "### Card: kw-b" in ac.context_view
+        assert "SUMMARY_B" in ac.context_view
+        assert "other.py" in ac.context_view and "util.py" in ac.context_view
+
+    def test_prune_removes_only_the_dropped_item_verbatim(self):
+        # Keep kw-a but only a1; a2 must be removed by string removal, summary/header preserved.
+        prov = _ConsolidatingProvider(
+            '{"cards": [{"card_id": "kw-a", "items": [{"item_id": "a1", "deliver": "paste"}]}]}'
+        )
+        kw = _ItemsAssembler("kw view", [_rs_item_card()])
+        vec = _ItemsAssembler("", [])
+        hybrid = HybridContextAssembler(keyword=kw, vector=vec, model_provider=prov, model="m")
+        ac = hybrid.assemble("billing")
+        assert ac.card_ids == ["kw-a"]
+        # Header + summary + the KEPT item survive.
+        assert "### Card: kw-a" in ac.context_view
+        assert "SUMMARY_A" in ac.context_view
+        assert "ITEM_A1_TEXT" in ac.context_view
+        assert "billing.py" in ac.context_view
+        # The PRUNED item's verbatim text is gone.
+        assert "ITEM_A2_TEXT" not in ac.context_view
+        assert "why2" not in ac.context_view
+        # Metadata reflects the prune AND keeps rendered_section consistent (pruned).
+        meta = next(m for m in ac.card_metadata if m["id"] == "kw-a")
+        assert [it["id"] for it in meta["items"]] == ["a1"]
+        assert "ITEM_A2_TEXT" not in meta["rendered_section"]
+
+    def test_drop_removes_tangential_card_section(self):
+        # Two item-bearing cards; the consolidator drops the tangential one entirely.
+        tangential = {
+            "id": "tan-b", "title": "TANGENT", "adapter": "vector",
+            "rendered_section": "### Vector hit: tan-b\n  text: TANGENT_TEXT",
+            "items": [
+                {"id": "t1", "type": "note", "why": "off", "locator": {"text": "x"},
+                 "text": "TANGENT_TEXT", "preview": "TANGENT_TEXT", "pointer_eligible": False},
+            ],
+        }
+        prov = _ConsolidatingProvider(
+            '{"cards": [{"card_id": "kw-a", "items": [{"item_id": "a1", "deliver": "paste"},'
+            '{"item_id": "a2", "deliver": "paste"}]}]}'
+        )
+        kw = _ItemsAssembler("kw view", [_rs_item_card()])
+        vec = _ItemsAssembler("vec view", [tangential])
+        hybrid = HybridContextAssembler(keyword=kw, vector=vec, model_provider=prov, model="m")
+        ac = hybrid.assemble("billing")
+        assert ac.card_ids == ["kw-a"]
+        # Dropped card's section is entirely absent.
+        assert "TANGENT_TEXT" not in ac.context_view
+        assert "tan-b" not in ac.context_view
+        # Kept card with ALL items kept -> no pruning -> full verbatim section.
+        assert "ITEM_A1_TEXT" in ac.context_view and "ITEM_A2_TEXT" in ac.context_view
+
+    def test_verbatim_rebuild_keeps_fallbacks_unchanged(self):
+        # No provider / parse failure / all-failure still return the mechanical merge unchanged,
+        # even when cards carry rendered_section.
+        kw = _ItemsAssembler("kw view", [_rs_item_card(), _rs_fileonly_card()])
+        vec = _ItemsAssembler("vec view", [])
+        # (a) no provider -> mechanical merge (both arm views verbatim).
+        ac = HybridContextAssembler(keyword=kw, vector=vec).assemble("billing")
+        assert "kw view" in ac.context_view
+        assert ac.card_ids == ["kw-a", "kw-b"]
+        # (b) parse failure -> consolidate keep-all -> all sections rebuilt, nothing dropped.
+        prov = _ConsolidatingProvider("not json")
+        ac2 = HybridContextAssembler(
+            keyword=kw, vector=vec, model_provider=prov, model="m"
+        ).assemble("billing")
+        assert ac2.card_ids == ["kw-a", "kw-b"]
+        assert "ITEM_A1_TEXT" in ac2.context_view and "ITEM_A2_TEXT" in ac2.context_view
+        assert "SUMMARY_B" in ac2.context_view
+
+    def test_vector_assembler_attaches_rendered_section(self):
+        # The vector arm attaches each hit's verbatim rendered block to its card_metadata.
+        store = FakeVectorStore()
+        store.upsert([{"id": "doc-1", "text": "billing pipeline entry", "payload": {}}])
+        asm = VectorContextAssembler(store, confidence_min_score=0.0)
+        ac = asm.assemble("billing")
+        assert ac.card_metadata
+        rs = ac.card_metadata[0]["rendered_section"]
+        assert "doc-1" in rs
+        # The attached section is a verbatim slice of the context_view.
+        assert rs in ac.context_view

@@ -1401,6 +1401,59 @@ def _strip_discovery_section(context_view: str) -> str:
     return context_view
 
 
+def _project_card_metadata_for_event(card_meta: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Project assembled ``card_metadata`` into a LIGHTWEIGHT shape for EVENT_CONTEXT. Never raises.
+
+    Each card's structured ``items`` now carry the full resolved ``text`` (and preview/locator),
+    which is too heavy to stream in an event. This keeps the existing display fields (id, title,
+    relevance_score, file_count, files, adapter) and summarizes the items as a count, per-type
+    counts, lightweight per-item descriptors (id/type/why only), and any file paths, WITHOUT dumping
+    each item's full text. Cards with no items keep exactly their prior shape.
+    """
+    out: List[Dict[str, Any]] = []
+    try:
+        for cm in (card_meta or []):
+            if not isinstance(cm, dict):
+                continue
+            proj: Dict[str, Any] = {
+                "id": cm.get("id", ""),
+                "title": cm.get("title", ""),
+                "relevance_score": cm.get("relevance_score"),
+                "file_count": cm.get("file_count"),
+                "files": cm.get("files"),
+                "adapter": cm.get("adapter", ""),
+            }
+            items = cm.get("items") or []
+            if items:
+                type_counts: Dict[str, int] = {}
+                file_paths: List[str] = []
+                light_items: List[Dict[str, Any]] = []
+                for it in items:
+                    if not isinstance(it, dict):
+                        continue
+                    itype = it.get("type", "note")
+                    type_counts[itype] = type_counts.get(itype, 0) + 1
+                    light_items.append({
+                        "id": it.get("id", ""),
+                        "type": itype,
+                        "why": it.get("why", ""),
+                        "deliver": it.get("deliver", "paste"),
+                    })
+                    locator = it.get("locator") if isinstance(it.get("locator"), dict) else {}
+                    path = locator.get("path")
+                    if path and path not in file_paths:
+                        file_paths.append(path)
+                proj["item_count"] = len(light_items)
+                proj["item_type_counts"] = type_counts
+                proj["items"] = light_items  # id/type/why/deliver only, NOT the full item text
+                if file_paths:
+                    proj["item_file_paths"] = file_paths
+            out.append(proj)
+    except Exception:  # noqa: BLE001 — projection must never break event emission
+        return card_meta or []
+    return out
+
+
 def _grounding_block(context_view: str, gathered: List[Dict[str, Any]], partial: bool) -> str:
     # For the answer LLM, strip out the discovery block (which is planner-specific).
     # The answer LLM should produce text, not JSON command structures.
@@ -2280,7 +2333,7 @@ class Orchestrator:
         if self.context_assembler is not None and (goal or "").strip():
             try:
                 assembled = self.context_assembler.assemble(goal, meta=ctx_meta or None)
-                cv = (getattr(assembled, "context_view", "") or "").strip()
+                cv = self._materialize_deep_context(assembled)
                 if cv:
                     parts.append("--- CONTEXT SELECTED FOR THIS GOAL ---\n" + cv)
             except Exception:  # noqa: BLE001 — assembly must never break the run
@@ -2295,6 +2348,96 @@ class Orchestrator:
             except Exception:  # noqa: BLE001 — store must never break the run
                 log.debug("per-goal conversation slice failed", exc_info=True)
         return "\n\n".join(parts)
+
+    @staticmethod
+    def _materialize_deep_context(assembled: Any) -> str:
+        """Render the per-goal DEEP context from the assembled ``card_metadata``, choosing PASTE vs
+        POINTER per item. Never raises.
+
+        Each card carries its VERBATIM ``rendered_section`` (its whole rendered block: summary + file
+        listings + content + conventions) plus its structured items (each ``{type, why, locator,
+        text, deliver, pointer_eligible}``). When a card has a ``rendered_section`` we paste it
+        VERBATIM, except that each item the consolidator tagged ``deliver=="pointer"`` (only ever a
+        file, since the worker can re-read it) has its pasted text fragment SWAPPED for a short
+        pointer line, so the file's full body is not duplicated. A card WITHOUT a ``rendered_section``
+        (e.g. a stub assembler or a deployment that emits only items) falls back to the prior
+        item-only rebuild under a ``### <title>`` header. When the assembled context carries neither
+        sections nor items (e.g. a file-only deployment), this falls back to the plain
+        ``context_view`` (today's behavior, byte-for-byte), so the change is never worse.
+        """
+        def _frag(it: dict) -> str:
+            # The exact fragment a content item contributed to a rendered section (header + indented
+            # body). MUST mirror adapters.card_content_render.render_block_lines; kept inline so the
+            # core brain never imports an adapter. Keep the two in sync.
+            itype = it.get("type", "note")
+            why = it.get("why", "")
+            text = it.get("text", "") or ""
+            lines = [f"  - ({itype})" + (f" {why}" if why else "")]
+            for rl in text.splitlines() or [text]:
+                lines.append(f"      {rl}")
+            return "\n".join(lines)
+
+        try:
+            cms = [cm for cm in (getattr(assembled, "card_metadata", None) or [])
+                   if isinstance(cm, dict)]
+            has_sections = any(cm.get("rendered_section") for cm in cms)
+            has_items = any(cm.get("items") for cm in cms)
+            if not has_sections and not has_items:
+                return (getattr(assembled, "context_view", "") or "").strip()
+            blocks: List[str] = []
+            for cm in cms:
+                items = cm.get("items") or []
+                rendered = cm.get("rendered_section") or ""
+                if rendered:
+                    # Paste the VERBATIM section; swap each pointer-delivered file item's fragment for
+                    # a pointer line (guard: only swap if the fragment is found in the section).
+                    section = rendered
+                    for it in items:
+                        if not isinstance(it, dict):
+                            continue
+                        locator = it.get("locator") if isinstance(it.get("locator"), dict) else {}
+                        path = locator.get("path")
+                        if it.get("deliver") == "pointer" and it.get("pointer_eligible") and path:
+                            why = (it.get("why") or "").strip()
+                            pointer_line = (
+                                f"  - (file) {why} -> read this file fresh if needed: {path}"
+                            )
+                            frag = _frag(it)
+                            if frag and frag in section:
+                                section = section.replace(frag, pointer_line, 1)
+                            else:
+                                raw = it.get("text", "")
+                                if raw and raw in section:
+                                    section = section.replace(raw, pointer_line, 1)
+                    if section.strip():
+                        blocks.append(section)
+                    continue
+                # No rendered_section: prior item-only rebuild.
+                if not items:
+                    continue
+                title = cm.get("title") or cm.get("id") or "context"
+                lines: List[str] = []
+                for it in items:
+                    if not isinstance(it, dict):
+                        continue
+                    locator = it.get("locator") if isinstance(it.get("locator"), dict) else {}
+                    path = locator.get("path")
+                    if it.get("deliver") == "pointer" and it.get("pointer_eligible") and path:
+                        why = (it.get("why") or "").strip()
+                        # NB: a pointer is ALWAYS a file (the worker can open it itself).
+                        lines.append(
+                            f"- (file) {why} -> read this file fresh if needed: {path}"
+                        )
+                    else:
+                        text = it.get("text") or ""
+                        if text:
+                            lines.append(text)
+                if lines:
+                    blocks.append(f"### {title}\n" + "\n".join(lines))
+            rendered_all = "\n\n---\n\n".join(blocks).strip()
+            return rendered_all or (getattr(assembled, "context_view", "") or "").strip()
+        except Exception:  # noqa: BLE001 — materialization must never break the run
+            return (getattr(assembled, "context_view", "") or "").strip()
 
     def _widen_for_goal(self, goal: str, query: str, round_idx: int, *,
                         ctx_meta: Optional[Dict[str, Any]]) -> str:
@@ -3642,11 +3785,15 @@ class Orchestrator:
                     _card_titles = [c.get("title", c.get("id", "?"))[:50] for c in _card_meta]
                     _text = "Selected cards: " + ", ".join(_card_titles) + "." if _card_titles else ""
                     log.debug(f"Emitting EVENT_CONTEXT: {_text}")
+                    # LIGHTWEIGHT projection: the card_metadata items now carry each item's full
+                    # resolved ``text`` (heavy). Project to id/title/type-counts/file-paths so the
+                    # event stays small and never dumps full item text into the stream.
+                    _card_meta_light = _project_card_metadata_for_event(_card_meta)
                     emit.emit(ProgressEvent(
                         type=EVENT_CONTEXT,
                         text=_text,
                         data={
-                            "card_metadata": _card_meta,
+                            "card_metadata": _card_meta_light,
                             "sources": _sources,
                             "card_count": len(_card_meta),
                             "source_count": len(_sources),
