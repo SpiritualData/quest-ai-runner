@@ -25,6 +25,7 @@ from __future__ import annotations
 import os
 import threading
 import time
+from collections import OrderedDict
 from typing import Callable, List, Optional, TYPE_CHECKING
 
 from textual import work
@@ -289,7 +290,7 @@ class DeepActivity(Static):
     def render(self):
         if not self._dashboard.strip():
             return Text("")
-        hint = "  [d] expand & scroll  [Tab] next agent" if self._n_runs > 1 else "  [d] expand & scroll full output"
+        hint = "  [Alt+D] expand & scroll  [Tab] next agent" if self._n_runs > 1 else "  [Alt+D] expand & scroll full output"
         t = Text.from_ansi(self._dashboard + f"\x1b[2m\n{hint}\x1b[0m")
         t.no_wrap = False
         return t
@@ -363,9 +364,9 @@ class DeepDetailPanel(VerticalScroll):
             return
         pos_str = f"agent {self._pos}/{self._total}  " if self._total > 1 else ""
         if self._total > 1:
-            nav_hint = "  PgUp/PgDn scroll · [Tab] next · [d] close"
+            nav_hint = "  PgUp/PgDn scroll · [Tab] next · [Alt+D] close"
         else:
-            nav_hint = "  PgUp/PgDn scroll · [d] close"
+            nav_hint = "  PgUp/PgDn scroll · [Alt+D] close"
         header = f"⎅ {pos_str}{self._goal[:60]}"
         body = "\n".join(f"  {ln}" for ln in self._lines)
         footer = f"\x1b[2m{nav_hint}\x1b[0m"
@@ -514,7 +515,7 @@ class QuestAITerminal(App):
         Binding("escape", "cancel", "Cancel turn"),
         Binding("ctrl+l", "clear_log", "Clear screen"),
         Binding("ctrl+y", "copy_last", "Copy last reply", show=True),
-        Binding("d", "toggle_deep_detail", "Expand agent", show=True),
+        Binding("alt+d", "toggle_deep_detail", "Expand agent", show=True),
         Binding("alt+c", "toggle_future_context", "Context used", show=True),
         Binding("tab", "cycle_deep_run", "Next agent", show=True),
         Binding("pageup", "scroll_up_or_agent", "Scroll up", show=True, priority=True),
@@ -543,6 +544,12 @@ class QuestAITerminal(App):
         # Deep runs whose full output has already been written to the scrollback
         # transcript, so we persist each task's output exactly once.
         self._deep_flushed: set = set()
+        # Archive of FINISHED deep runs (run_id -> snapshot), kept ACROSS turns so the Alt+D detail
+        # panel can replay a task's full actions even after the turn ends and after later turns
+        # rebuild the live ``_deep`` tracker. Deliberately NOT reset by _begin_turn; capped to the
+        # most recent runs so it can't grow without bound.
+        self._deep_archive: "OrderedDict[str, dict]" = OrderedDict()
+        self._DEEP_ARCHIVE_MAX = 20
 
         # Future context captured from the last deep result event (if any).
         # Shown in the FutureContextPanel after the turn ends.
@@ -569,7 +576,7 @@ class QuestAITerminal(App):
         yield DeepDetailPanel(id="deep-detail")
         yield FutureContextPanel(id="future-context")
         yield ActivityBar(id="activity")
-        yield Input(id="prompt", placeholder="Ask anything…   (/help, Esc to cancel, d=expand agent, Tab=cycle, PgUp/PgDn=scroll)")
+        yield Input(id="prompt", placeholder="Ask anything…   (/help, Esc to cancel, Alt+D=expand agent, Tab=cycle, PgUp/PgDn=scroll)")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -1204,7 +1211,7 @@ class QuestAITerminal(App):
 
         self._turn_active = False
         inp = self.query_one("#prompt", Input)
-        inp.placeholder = "Ask anything…   (/help for commands, Esc to cancel, d=expand agent, Tab=cycle)"
+        inp.placeholder = "Ask anything…   (/help for commands, Esc to cancel, Alt+D=expand agent, Tab=cycle)"
         inp.focus()
 
         # Auto-execute a planned-but-unexecuted deep turn (matches interactive.py).
@@ -1338,13 +1345,26 @@ class QuestAITerminal(App):
     def action_quit(self) -> None:
         self.exit()
 
+    def _available_deep_runs(self) -> "OrderedDict[str, dict]":
+        """Runs the Alt+D detail panel can open, in chronological order.
+
+        While a turn has live/just-finished runs they win (the live tracker, not yet rebuilt for the
+        next turn); otherwise we fall back to the cross-turn archive of finished runs, so Alt+D still
+        works after the run is done and even after later (non-deep) turns.
+        """
+        with self._deep._lock:
+            live = OrderedDict(self._deep._runs)
+        if live:
+            return live
+        return OrderedDict(self._deep_archive)
+
     def _open_detail_for(self, run_id: str) -> None:
         """Open the detail panel for a specific run_id, computing pos/total."""
-        with self._deep._lock:
-            info = self._deep._runs.get(run_id)
-            run_ids = sorted(self._deep._runs.keys())
+        runs = self._available_deep_runs()
+        info = runs.get(run_id)
         if info is None:
             return
+        run_ids = sorted(runs.keys())
         pos = run_ids.index(run_id) + 1 if run_id in run_ids else 1
         total = len(run_ids)
         existing = list(info.get("exec_lines", []))
@@ -1404,7 +1424,7 @@ class QuestAITerminal(App):
         compact SUMMARY (not a replay): the SUBGOAL it was assigned (header), a one-line activity
         roll-up of what it touched, and — most important — its FINAL OUTPUT (the worker's own
         summary of what it did). The full step-by-step trace stays available live and in the detail
-        panel ('d'); the permanent record stays readable.
+        panel (Alt+D); the permanent record stays readable.
         """
         if run_id in self._deep_flushed:
             return
@@ -1420,6 +1440,15 @@ class QuestAITerminal(App):
         self._deep_flushed.add(run_id)
         if not lines and not final_output:
             return
+        # Archive this finished run (with its full captured actions) so Alt+D can replay it later,
+        # even after the live tracker is rebuilt for the next turn. Only runs with actual actions are
+        # worth keeping (the detail panel shows the step trace); cap to the most recent.
+        if lines:
+            archived = dict(snap)
+            archived["exec_lines"] = list(lines)
+            self._deep_archive[run_id] = archived
+            while len(self._deep_archive) > self._DEEP_ARCHIVE_MAX:
+                self._deep_archive.popitem(last=False)
         log = self._tlog
         goal = (snap.get("goal") or "").strip()
         status = snap.get("status") or "running"
@@ -1455,6 +1484,10 @@ class QuestAITerminal(App):
             log.write(Text(f"  ✗ deep task ended with an error · {time_str}", style="red"))
         else:
             log.write(Text(f"  ✓ deep task complete · {time_str}", style="green"))
+        # Point at the full per-action trace (the summary above is a roll-up). Only when there are
+        # actions to replay; the panel stays available after the turn via the archive.
+        if lines:
+            log.write(Text("  Alt+D: see every action", style="dim"))
         log.write(Text(""))
 
     def _flush_pending_deep_runs(self) -> None:
@@ -1468,7 +1501,11 @@ class QuestAITerminal(App):
             self._flush_deep_run(rid)
 
     def action_toggle_deep_detail(self) -> None:
-        """Toggle the expanded detail view for the current deep run (key: d)."""
+        """Toggle the expanded detail view for the current deep run (key: Alt+D).
+
+        Alt+D (not a bare 'd') because the prompt Input consumes printable keys, so a plain 'd'
+        would be typed into the message instead of toggling. Alt+D is not consumed and fires reliably.
+        """
         if self._deep_detail.display:
             self._deep_detail.hide()
             return

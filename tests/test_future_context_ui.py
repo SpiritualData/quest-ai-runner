@@ -99,6 +99,23 @@ def test_toggle_is_bound_to_alt_c_not_a_bare_letter():
     assert not any(len(k) == 1 for k in keys)
 
 
+def test_deep_detail_toggle_is_alt_d():
+    keys = {b.key for b in QuestAITerminal.BINDINGS
+            if getattr(b, "action", None) == "toggle_deep_detail"}
+    assert "alt+d" in keys
+    assert not any(len(k) == 1 for k in keys)
+
+
+def test_no_binding_uses_a_bare_printable_letter():
+    # A bare printable-letter binding never fires while the prompt Input is focused (it gets typed),
+    # so every action key must be a modified chord or a non-printable key. Guards against regressing
+    # any toggle back to a bare letter.
+    bare = [b.key for b in QuestAITerminal.BINDINGS
+            if isinstance(getattr(b, "key", None), str)
+            and len(b.key) == 1 and b.key.isprintable() and b.key.isalnum()]
+    assert bare == [], f"bare printable-letter bindings will be swallowed by the input: {bare}"
+
+
 def test_build_text_strips_blank_lines():
     """Blank lines within bullets are filtered; non-blank lines still appear."""
     t = _build_future_context_text("- first\n\n- second")

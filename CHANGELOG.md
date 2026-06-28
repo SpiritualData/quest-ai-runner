@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Terminal UI toggles use Alt-chords, not bare letters (which were swallowed by the prompt).** The
+  "expand agent" toggle was bound to a bare `d` and the context panel to a bare `f`. Textual's `Input`
+  consumes printable keys (it calls `event.stop()` + `event.prevent_default()`), so while the prompt
+  is focused (almost always) a bare letter is typed into the message instead of firing the binding.
+  Both now use Alt-chords that are not consumed: **Alt+D** (expand agent) and **Alt+C** (context it
+  used), with all hints/placeholders updated to match. A regression test asserts no binding uses a
+  bare printable letter (`tests/test_future_context_ui.py`).
+
 ### Changed
 - **Deep-task display: show the subgoal (live + record) and summarize what it did instead of a
   wall.** A deep task used to surface as a flat grey wall headed by "Executing work…": the subgoal
