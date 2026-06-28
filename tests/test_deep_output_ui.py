@@ -132,7 +132,7 @@ def test_empty_run_writes_no_block_but_is_marked():
 
 
 def test_final_output_rendered_in_record():
-    """The worker's final result is shown under a 'result' header, not just the step trace."""
+    """The worker's final result is shown under a 'result' header, not the per-op trace."""
     app, log = _make_app()
     app._deep.add_run("r1", "Fix the bug")
     app._deep.update_run_output("r1", "Read: /a/b.py")
@@ -142,9 +142,47 @@ def test_final_output_rendered_in_record():
 
     body = "\n".join(log.lines)
     assert "⎅ Fix the bug" in body
+    assert "1 read" in body                 # rolled up, not the path
+    assert "/a/b.py" not in body            # individual file ops are NOT replayed
     assert "result" in body
     assert "Patched the off-by-one in foo()." in body
     assert "Committed as abc123." in body
+
+
+def test_activity_summary_rolls_up_tool_actions():
+    """Many tool ops collapse into one counts line, not a wall of read/write lines."""
+    app, log = _make_app()
+    app._deep.add_run("r1", "Do the work")
+    for p in ("Read: /a.py", "Read: /b.py", "Read: /c.py", "Edit: /a.py",
+              "$ pytest -q", "Using Agent", "I weighed the options."):
+        app._deep.update_run_output("r1", p)
+    app._deep.set_final_output("r1", "All done.")
+    app._flush_deep_run("r1")
+
+    body = "\n".join(log.lines)
+    assert "3 reads" in body
+    assert "1 edit" in body
+    assert "1 command" in body
+    assert "1 tool call" in body
+    # No individual file paths and no narration when a result exists — that's the wall we cut.
+    assert "/a.py" not in body
+    assert "I weighed the options." not in body
+    assert "All done." in body
+
+
+def test_narration_shown_when_no_result():
+    """An errored/incomplete run with no result still shows the worker's own words."""
+    app, log = _make_app()
+    app._deep.add_run("r1", "Try the thing")
+    app._deep.update_run_output("r1", "Read: /x.py")        # counted, not shown
+    app._deep.update_run_output("r1", "I think the issue is in the parser.")
+    app._deep.set_run_status("r1", "error")
+    app._flush_deep_run("r1")
+
+    body = "\n".join(log.lines)
+    assert "1 read" in body
+    assert "I think the issue is in the parser." in body
+    assert "✗ deep task ended with an error" in body
 
 
 def test_final_output_alone_is_enough_to_flush():
@@ -165,18 +203,14 @@ def test_goal_updated_when_real_subgoal_arrives_later():
         assert t._runs["r1"]["goal"] == "Investigate the narrator latency"
 
 
-def test_exec_lines_styled_by_type():
-    """Tool actions, commands and narration get distinct styles (not one flat grey)."""
-    cmd = QuestAITerminal._style_exec_line("$ pytest -q")
-    read = QuestAITerminal._style_exec_line("Read: /x/y.py")
-    narr = QuestAITerminal._style_exec_line("I'll investigate the UI now.")
-    # Plain text is preserved for each...
-    assert cmd.plain.strip() == "$ pytest -q"
-    assert read.plain.strip() == "Read: /x/y.py"
-    assert narr.plain.strip() == "I'll investigate the UI now."
-    # ...and they carry different styling (commands/tools are marked, narration stays bright).
-    assert cmd.spans and read.spans
-    assert not narr.spans  # narration is the readable default, no dimming
+def test_summarize_exec_lines_counts_and_narration():
+    """The summarizer rolls tool ops into counts and returns narration separately."""
+    summary, narration = QuestAITerminal._summarize_exec_lines([
+        "Read: /a", "Read: /b", "Edit: /a", "$ ls", "WebSearch: x",
+        "Using Agent", "[thinking] hmm", "I planned the change.",
+    ])
+    assert summary == "2 reads · 1 edit · 1 command · 1 search · 1 tool call"
+    assert narration == ["I planned the change."]  # thinking is dropped, tool ops are not narration
 
 
 # --- expanded detail panel: full history + scroll follow -------------------

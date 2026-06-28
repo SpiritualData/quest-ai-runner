@@ -1352,41 +1352,60 @@ class QuestAITerminal(App):
         self._deep_detail.open_for(run_id, info["goal"], existing, pos=pos, total=total)
 
     @staticmethod
-    def _style_exec_line(ln: str) -> Text:
-        """Style one captured exec line by what it is, so the trace reads instead of being a
-        flat grey wall: tool actions get a quiet colored marker, the worker's own narration stays
-        bright/readable, thinking is dimmed. Built as plain Text (never markup) so arbitrary worker
-        output containing brackets can't be misparsed.
+    def _summarize_exec_lines(lines: List[str]) -> tuple:
+        """Condense a deep run's captured exec lines into (activity_summary, narration).
+
+        The scrollback record is a SUMMARY, not a replay: instead of one line per read/write/command
+        (a wall the user doesn't want), we roll the mechanical tool actions up into a single counts
+        line ("12 reads · 3 edits · 2 commands") and return the worker's own narration separately so
+        a run with no structured result can still show what it was doing in its own words.
         """
-        s = ln.strip()
-        if s.startswith("$ "):  # a shell command the worker ran
-            t = Text("    ")
-            t.append("$ ", style="yellow")
-            t.append(s[2:], style="yellow dim")
-            return t
-        # File / web tool actions: "<verb>: <target>" — color the verb, dim the target.
-        for verb, color in (("Read:", "cyan"), ("Write:", "green"), ("Edit:", "green"),
-                            ("WebSearch:", "magenta"), ("WebFetch:", "magenta")):
-            if s.startswith(verb):
-                t = Text("    ")
-                t.append(verb, style=color)
-                t.append(s[len(verb):], style="dim")
-                return t
-        if s.startswith("Using "):  # a tool with no concise target (e.g. "Using Agent")
-            return Text(f"    {s}", style="blue dim")
-        if s.startswith("[thinking]"):
-            return Text(f"    {s}", style="italic dim")
-        # Everything else is the worker thinking out loud — the readable part. Keep it bright.
-        return Text(f"    {s}")
+        reads = writes = cmds = searches = tools = 0
+        narration: List[str] = []
+        for ln in lines:
+            s = ln.strip()
+            if not s:
+                continue
+            if s.startswith("Read:"):
+                reads += 1
+            elif s.startswith(("Write:", "Edit:")):
+                writes += 1
+            elif s.startswith("$ "):
+                cmds += 1
+            elif s.startswith(("WebSearch:", "WebFetch:")):
+                searches += 1
+            elif s.startswith("Using "):
+                tools += 1
+            elif s.startswith("[thinking]"):
+                continue  # internal reasoning — not part of the "what it did" summary
+            else:
+                narration.append(s)
+
+        def _plural(n: int, one: str, many: str) -> str:
+            return f"{n} {one if n == 1 else many}"
+
+        parts: List[str] = []
+        if reads:
+            parts.append(_plural(reads, "read", "reads"))
+        if writes:
+            parts.append(_plural(writes, "edit", "edits"))
+        if cmds:
+            parts.append(_plural(cmds, "command", "commands"))
+        if searches:
+            parts.append(_plural(searches, "search", "searches"))
+        if tools:
+            parts.append(_plural(tools, "tool call", "tool calls"))
+        return " · ".join(parts), narration
 
     def _flush_deep_run(self, run_id: str) -> None:
         """Write one deep run's record into the scrollback transcript, once.
 
         The live deep widgets are ephemeral (hidden when the turn ends), so without this a finished
-        task's output would vanish. We write, exactly once per run (tracked in ``_deep_flushed``),
-        three things in order of importance: the SUBGOAL it was assigned (header), the styled trace
-        of steps it took, and — most important — its FINAL OUTPUT, so every deep task leaves a
-        permanent, scrollable record of what it was for and what it produced.
+        task's output would vanish. We write, exactly once per run (tracked in ``_deep_flushed``), a
+        compact SUMMARY (not a replay): the SUBGOAL it was assigned (header), a one-line activity
+        roll-up of what it touched, and — most important — its FINAL OUTPUT (the worker's own
+        summary of what it did). The full step-by-step trace stays available live and in the detail
+        panel ('d'); the permanent record stays readable.
         """
         if run_id in self._deep_flushed:
             return
@@ -1408,24 +1427,31 @@ class QuestAITerminal(App):
         elapsed = time.time() - snap.get("started", time.time())
         mins, secs = divmod(int(elapsed), 60)
         time_str = f"{mins}m{secs}s" if mins else f"{secs}s"
+        summary, narration = self._summarize_exec_lines(lines)
 
         log.write(Text(""))
         # 1) The subgoal this task was assigned — the most important orientation.
         log.write(Text(f"⎅ {goal}" if goal else "⎅ deep task", style="bold cyan"))
-        # 2) The trace of steps, styled by type so it reads instead of being a flat grey wall.
-        if lines:
-            log.write(Text("  steps", style="dim"))
-            for ln in lines:
-                log.write(self._style_exec_line(ln))
-        # 3) The final output — what the task actually produced. Rendered as bright text inside a
-        # left rule so it stands clearly apart from the dim trace above.
+        # 2) A one-line roll-up of activity, instead of every read/write/command.
+        if summary:
+            log.write(Text(f"  {summary}", style="dim"))
         if final_output:
+            # 3) The final output — the worker's own summary of what it did. Bright, inside a left
+            # rule so it stands clearly apart. This is the "what it did" the user wants to read.
             log.write(Text(""))
             log.write(Text("  result", style="bold green"))
             for oln in final_output.splitlines():
                 t = Text("  │ ", style="green")
                 t.append(oln)
                 log.write(t)
+        elif narration:
+            # No structured result (e.g. an errored/incomplete run): fall back to the worker's own
+            # words so the record still says what it was doing, capped so it never becomes a wall.
+            tail = narration[-6:]
+            if len(narration) > len(tail):
+                log.write(Text(f"  … {len(narration) - len(tail)} earlier steps", style="dim"))
+            for nl in tail:
+                log.write(Text(f"  {nl}"))
         if status == "error":
             log.write(Text(f"  ✗ deep task ended with an error · {time_str}", style="red"))
         else:

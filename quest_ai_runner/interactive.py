@@ -623,13 +623,20 @@ class _DeepRunTracker:
                 mins, secs = divmod(int(elapsed), 60)
                 time_str = f"{mins}m{secs}s" if mins > 0 else f"{secs}s"
 
-                goal = info['goal'][:60]
-                lines.append(f"{status_icon} {time_str}: {goal}")
+                # The SUBGOAL this run is working on: its own prominent (bold cyan) header line so
+                # the user always sees WHAT the live actions below are for. Shown fully (generous cap
+                # vs the old 60 chars that cut sentences mid-word); the renderer wraps if needed.
+                goal = " ".join((info['goal'] or "").split())
+                if len(goal) > 160:
+                    goal = goal[:160].rstrip() + "…"
+                lines.append(f"\x1b[1;36m⎅ {goal}\x1b[0m" if goal else "\x1b[1;36m⎅ deep task\x1b[0m")
+                # Status + elapsed sit under the subgoal, then the latest live action lines.
+                lines.append(f"\x1b[2m  {status_icon} {time_str}\x1b[0m")
 
                 if info['output']:
                     output_lines = [l.strip() for l in info['output'].split('\n') if l.strip()]
                     for ol in output_lines[-lines_per_run:]:
-                        prefix = "    → " if '/' in ol else "    "
+                        prefix = "  → " if '/' in ol else "    "
                         lines.append(f"{prefix}{ol}")
 
             return "\n".join(lines)

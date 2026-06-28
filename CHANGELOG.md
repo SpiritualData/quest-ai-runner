@@ -7,17 +7,21 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
-- **Deep-task scrollback record now shows the subgoal and the final result, with a styled trace.**
-  A finished deep task used to flush as a flat grey wall of step lines headed by "Executing work…"
-  (the subgoal it was assigned was never shown, and its final output was emitted on a milestone but
-  never rendered). Now: (1) `Orchestrator` stamps each subgoal's `goal` onto its `EVENT_EXEC` events
-  and tags the completion `EVENT_MILESTONE` with the run's `run_id`, so the consumer can show WHICH
-  subgoal a run served and attach that run's final output to it; (2) the Textual UI's
-  `_DeepRunTracker` gained `set_final_output()`/`update_goal()`, and `_flush_deep_run` now renders a
-  bold subgoal header, the step trace styled by type (`_style_exec_line`: shell commands, file/web
-  tool actions, and worker narration each get distinct styling instead of uniform dim), and the
-  worker's full final output under a `result` rule. A run with only a result (no captured steps) is
-  still recorded. Tests in `tests/test_deep_output_ui.py`.
+- **Deep-task display: show the subgoal (live + record) and summarize what it did instead of a
+  wall.** A deep task used to surface as a flat grey wall headed by "Executing work…": the subgoal
+  it was assigned was never shown, its final output (emitted on a milestone) was never rendered, and
+  the permanent record replayed every single read/write. Now:
+  (1) `Orchestrator` stamps each subgoal's `goal` onto its `EVENT_EXEC` events and tags the
+  completion `EVENT_MILESTONE` with the run's `run_id`, so a consumer can show WHICH subgoal a run
+  serves and attach that run's final output to it.
+  (2) The live dashboard (`_DeepRunTracker.get_dashboard`) renders the subgoal as its own prominent
+  (bold cyan) header line above the live action lines, shown fully instead of cut at 60 chars.
+  (3) The scrollback record (`_flush_deep_run`) is now a SUMMARY, not a replay: the subgoal header, a
+  one-line activity roll-up (`_summarize_exec_lines`, e.g. "12 reads · 3 edits · 2 commands"), and
+  the worker's full final output under a `result` rule. The per-operation trace stays available live
+  and in the detail panel ('d'). A run with no structured result falls back to the worker's own
+  narration (capped); a run with only a result is still recorded. New `_DeepRunTracker`
+  `set_final_output()`/`update_goal()`. Tests in `tests/test_deep_output_ui.py`.
 
 ### Added
 - **Semantic card dedup/merge: the post-deep updater merges into a clear twin instead of creating
