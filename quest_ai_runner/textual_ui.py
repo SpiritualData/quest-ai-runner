@@ -446,8 +446,8 @@ class QuestAITerminal(App):
         Binding("ctrl+y", "copy_last", "Copy last reply", show=True),
         Binding("d", "toggle_deep_detail", "Expand agent", show=True),
         Binding("tab", "cycle_deep_run", "Next agent", show=True),
-        Binding("pageup", "deep_scroll_up", "Scroll agent up", show=False),
-        Binding("pagedown", "deep_scroll_down", "Scroll agent down", show=False),
+        Binding("pageup", "scroll_up_or_agent", "Scroll up", show=True, priority=True),
+        Binding("pagedown", "scroll_down_or_agent", "Scroll down", show=True, priority=True),
     ]
 
     def __init__(self, session: InteractiveSession, verbosity: int = 0, **kwargs) -> None:
@@ -1307,18 +1307,19 @@ class QuestAITerminal(App):
             return
         self._open_detail_for(run_id)
 
-    def action_deep_scroll_up(self) -> None:
-        """Page back through the expanded agent output (key: PgUp).
-
-        No-op unless the detail panel is open, so PgUp/PgDn stay free otherwise.
-        """
+    def action_scroll_up_or_agent(self) -> None:
+        """PageUp: scroll transcript up; if agent detail panel is open, scroll that instead."""
         if self._deep_detail.display:
             self._deep_detail.page_back()
+        else:
+            self._tlog.scroll_page_up(animate=False)
 
-    def action_deep_scroll_down(self) -> None:
-        """Page forward through the expanded agent output (key: PgDn)."""
+    def action_scroll_down_or_agent(self) -> None:
+        """PageDown: scroll transcript down; if agent detail panel is open, scroll that instead."""
         if self._deep_detail.display:
             self._deep_detail.page_forward()
+        else:
+            self._tlog.scroll_page_down(animate=False)
 
 
 if __name__ == "__main__":
