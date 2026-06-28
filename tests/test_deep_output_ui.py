@@ -131,6 +131,54 @@ def test_empty_run_writes_no_block_but_is_marked():
     assert "r1" in app._deep_flushed  # but won't be reconsidered
 
 
+def test_final_output_rendered_in_record():
+    """The worker's final result is shown under a 'result' header, not just the step trace."""
+    app, log = _make_app()
+    app._deep.add_run("r1", "Fix the bug")
+    app._deep.update_run_output("r1", "Read: /a/b.py")
+    app._deep.set_final_output("r1", "Patched the off-by-one in foo().\nCommitted as abc123.")
+    app._deep.set_run_status("r1", "done")
+    app._flush_deep_run("r1")
+
+    body = "\n".join(log.lines)
+    assert "⎅ Fix the bug" in body
+    assert "result" in body
+    assert "Patched the off-by-one in foo()." in body
+    assert "Committed as abc123." in body
+
+
+def test_final_output_alone_is_enough_to_flush():
+    """A run that produced a result but had no captured steps still leaves a record."""
+    app, log = _make_app()
+    app._deep.add_run("r1", "Answer the question")
+    app._deep.set_final_output("r1", "The answer is 42.")
+    app._flush_deep_run("r1")
+    assert any("The answer is 42." in ln for ln in log.lines)
+
+
+def test_goal_updated_when_real_subgoal_arrives_later():
+    """A placeholder goal is replaced once the real subgoal is known."""
+    t = _DeepRunTracker()
+    t.add_run("r1", "Executing work…")
+    t.update_goal("r1", "Investigate the narrator latency")
+    with t._lock:
+        assert t._runs["r1"]["goal"] == "Investigate the narrator latency"
+
+
+def test_exec_lines_styled_by_type():
+    """Tool actions, commands and narration get distinct styles (not one flat grey)."""
+    cmd = QuestAITerminal._style_exec_line("$ pytest -q")
+    read = QuestAITerminal._style_exec_line("Read: /x/y.py")
+    narr = QuestAITerminal._style_exec_line("I'll investigate the UI now.")
+    # Plain text is preserved for each...
+    assert cmd.plain.strip() == "$ pytest -q"
+    assert read.plain.strip() == "Read: /x/y.py"
+    assert narr.plain.strip() == "I'll investigate the UI now."
+    # ...and they carry different styling (commands/tools are marked, narration stays bright).
+    assert cmd.spans and read.spans
+    assert not narr.spans  # narration is the readable default, no dimming
+
+
 # --- expanded detail panel: full history + scroll follow -------------------
 
 @pytest.mark.asyncio

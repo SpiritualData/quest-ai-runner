@@ -2628,12 +2628,26 @@ class Orchestrator:
             # is byte-for-byte unchanged). The closure mutates ``extra_context`` across iterations.
             per_goal_context = self._assemble_for_goal(goal, ctx_meta=ctx_meta)
             extra_context: List[str] = []
+            # The runner picks the run_id (from its session file); we learn it from the first exec
+            # event and reuse it to label the completion milestone, so the consumer can attach this
+            # task's final output to the same run it streamed.
+            captured_run_id: Dict[str, Optional[str]] = {"id": None}
             if per_goal_context and emit is not None:
                 emit.status(f"selected context for goal: {goal[:60]}")
 
             def _emit_one(ev: ProgressEvent) -> None:
                 # TEE: classify any EVENT_EXEC phase into the fact, then forward to the live sink.
                 try:
+                    if getattr(ev, "type", None) == EVENT_EXEC and isinstance(ev.data, dict):
+                        # The runner-level exec event knows its run_id but not WHICH subgoal it
+                        # serves (the brain owns that). Stamp this subgoal's text onto the event so
+                        # the consumer can show "what this deep task was assigned to do", and capture
+                        # the run_id so the completion milestone below can be tied back to this run.
+                        if not ev.data.get("goal"):
+                            ev.data["goal"] = goal
+                        rid = ev.data.get("run_id")
+                        if rid:
+                            captured_run_id["id"] = rid
                     if fact is not None and getattr(ev, "type", None) == EVENT_EXEC:
                         phase = (ev.data or {}).get("phase") if isinstance(ev.data, dict) else None
                         cls = classify_exec_phase(phase)
@@ -2820,6 +2834,7 @@ class Orchestrator:
                 # just a "Completed" line); the terminal renders it in full under the goal header.
                 emit.emit(ProgressEvent(type=EVENT_MILESTONE, text=f"Completed: {goal}",
                                         data={"goal": goal,
+                                              "run_id": captured_run_id["id"],
                                               "deep_output": _strip_future_context(res.output).strip() or None}))
             return res
 

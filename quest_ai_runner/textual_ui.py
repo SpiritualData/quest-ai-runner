@@ -1080,6 +1080,9 @@ class QuestAITerminal(App):
             if run_id not in self._deep_seen:
                 self._deep_seen.add(run_id)
                 self._deep.add_run(run_id, goal or "Executing work…")
+            elif goal:
+                # A later event may carry the real subgoal even if the first didn't; keep it current.
+                self._deep.update_goal(run_id, goal)
             self._cur_deep_run = run_id
             if text:
                 self._deep.update_run_output(run_id, text)
@@ -1101,6 +1104,14 @@ class QuestAITerminal(App):
                 self._flush_deep_run(run_id)
 
         elif t == ev["milestone"]:
+            # A completed deep subtask carries its full output; stash it on the run so the
+            # scrollback record can show what the task actually produced (the result), not just
+            # the trace of steps it took.
+            if isinstance(data, dict):
+                rid = data.get("run_id")
+                deep_out = data.get("deep_output")
+                if rid and deep_out:
+                    self._deep.set_final_output(rid, deep_out)
             if text:
                 # Show the first sentence of the goal as a clean completion line.
                 first = text.split(".")[0].strip()
@@ -1340,14 +1351,42 @@ class QuestAITerminal(App):
         existing = list(info.get("exec_lines", []))
         self._deep_detail.open_for(run_id, info["goal"], existing, pos=pos, total=total)
 
-    def _flush_deep_run(self, run_id: str) -> None:
-        """Write one deep run's full output into the scrollback transcript, once.
+    @staticmethod
+    def _style_exec_line(ln: str) -> Text:
+        """Style one captured exec line by what it is, so the trace reads instead of being a
+        flat grey wall: tool actions get a quiet colored marker, the worker's own narration stays
+        bright/readable, thinking is dimmed. Built as plain Text (never markup) so arbitrary worker
+        output containing brackets can't be misparsed.
+        """
+        s = ln.strip()
+        if s.startswith("$ "):  # a shell command the worker ran
+            t = Text("    ")
+            t.append("$ ", style="yellow")
+            t.append(s[2:], style="yellow dim")
+            return t
+        # File / web tool actions: "<verb>: <target>" — color the verb, dim the target.
+        for verb, color in (("Read:", "cyan"), ("Write:", "green"), ("Edit:", "green"),
+                            ("WebSearch:", "magenta"), ("WebFetch:", "magenta")):
+            if s.startswith(verb):
+                t = Text("    ")
+                t.append(verb, style=color)
+                t.append(s[len(verb):], style="dim")
+                return t
+        if s.startswith("Using "):  # a tool with no concise target (e.g. "Using Agent")
+            return Text(f"    {s}", style="blue dim")
+        if s.startswith("[thinking]"):
+            return Text(f"    {s}", style="italic dim")
+        # Everything else is the worker thinking out loud — the readable part. Keep it bright.
+        return Text(f"    {s}")
 
-        The live deep widgets are ephemeral (hidden when the turn ends), so
-        without this a finished task's output would vanish. We write the goal,
-        the complete captured exec output, and a status line exactly once per run
-        (tracked in ``_deep_flushed``) so every deep task leaves a permanent,
-        scrollable record on the terminal.
+    def _flush_deep_run(self, run_id: str) -> None:
+        """Write one deep run's record into the scrollback transcript, once.
+
+        The live deep widgets are ephemeral (hidden when the turn ends), so without this a finished
+        task's output would vanish. We write, exactly once per run (tracked in ``_deep_flushed``),
+        three things in order of importance: the SUBGOAL it was assigned (header), the styled trace
+        of steps it took, and — most important — its FINAL OUTPUT, so every deep task leaves a
+        permanent, scrollable record of what it was for and what it produced.
         """
         if run_id in self._deep_flushed:
             return
@@ -1357,10 +1396,11 @@ class QuestAITerminal(App):
         if not snap:
             return
         lines = [l.strip() for l in (snap.get("exec_lines") or []) if l and l.strip()]
+        final_output = (snap.get("final_output") or "").strip()
         # Mark flushed regardless so we never reconsider this run; skip writing an
-        # empty block when nothing was captured.
+        # empty block when nothing at all was captured.
         self._deep_flushed.add(run_id)
-        if not lines:
+        if not lines and not final_output:
             return
         log = self._tlog
         goal = (snap.get("goal") or "").strip()
@@ -1368,13 +1408,24 @@ class QuestAITerminal(App):
         elapsed = time.time() - snap.get("started", time.time())
         mins, secs = divmod(int(elapsed), 60)
         time_str = f"{mins}m{secs}s" if mins else f"{secs}s"
+
         log.write(Text(""))
-        if goal:
-            log.write(Text(f"⎅ {goal}", style="bold cyan"))
-        # Write as plain styled Text (not markup) so arbitrary output containing
-        # brackets can't be misparsed as Rich markup.
-        for ln in lines:
-            log.write(Text(f"    {ln}", style="dim"))
+        # 1) The subgoal this task was assigned — the most important orientation.
+        log.write(Text(f"⎅ {goal}" if goal else "⎅ deep task", style="bold cyan"))
+        # 2) The trace of steps, styled by type so it reads instead of being a flat grey wall.
+        if lines:
+            log.write(Text("  steps", style="dim"))
+            for ln in lines:
+                log.write(self._style_exec_line(ln))
+        # 3) The final output — what the task actually produced. Rendered as bright text inside a
+        # left rule so it stands clearly apart from the dim trace above.
+        if final_output:
+            log.write(Text(""))
+            log.write(Text("  result", style="bold green"))
+            for oln in final_output.splitlines():
+                t = Text("  │ ", style="green")
+                t.append(oln)
+                log.write(t)
         if status == "error":
             log.write(Text(f"  ✗ deep task ended with an error · {time_str}", style="red"))
         else:

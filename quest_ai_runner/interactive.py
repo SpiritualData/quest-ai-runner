@@ -566,9 +566,22 @@ class _DeepRunTracker:
                 'output': '',
                 'started': time.time(),
                 'exec_lines': [],  # accumulate exec events for this run
+                'final_output': '',  # the worker's final result, set on completion
             }
             if self._active_run_id is None:
                 self._active_run_id = run_id
+
+    def set_final_output(self, run_id: str, text: str) -> None:
+        """Record a deep run's final worker output (its result, not a progress tick)."""
+        with self._lock:
+            if run_id in self._runs and text:
+                self._runs[run_id]['final_output'] = text
+
+    def update_goal(self, run_id: str, goal: str) -> None:
+        """Set/refine a run's goal text once the real subgoal is known."""
+        with self._lock:
+            if run_id in self._runs and goal:
+                self._runs[run_id]['goal'] = goal
 
     def update_run_output(self, run_id: str, text: str) -> None:
         """Add output to a deep run's progress."""

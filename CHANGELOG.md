@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **Deep-task scrollback record now shows the subgoal and the final result, with a styled trace.**
+  A finished deep task used to flush as a flat grey wall of step lines headed by "Executing work…"
+  (the subgoal it was assigned was never shown, and its final output was emitted on a milestone but
+  never rendered). Now: (1) `Orchestrator` stamps each subgoal's `goal` onto its `EVENT_EXEC` events
+  and tags the completion `EVENT_MILESTONE` with the run's `run_id`, so the consumer can show WHICH
+  subgoal a run served and attach that run's final output to it; (2) the Textual UI's
+  `_DeepRunTracker` gained `set_final_output()`/`update_goal()`, and `_flush_deep_run` now renders a
+  bold subgoal header, the step trace styled by type (`_style_exec_line`: shell commands, file/web
+  tool actions, and worker narration each get distinct styling instead of uniform dim), and the
+  worker's full final output under a `result` rule. A run with only a result (no captured steps) is
+  still recorded. Tests in `tests/test_deep_output_ui.py`.
+
 ### Added
 - **Semantic card dedup/merge: the post-deep updater merges into a clear twin instead of creating
   one.** When `Orchestrator._update_cards_after_deep` would CREATE a new context card, it now first
