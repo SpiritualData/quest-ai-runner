@@ -317,17 +317,22 @@ _RATIONALE_INSTRUCTION_PLAIN = "Always fill `rationale` (one sentence) and set `
 # Step 0: no data yet. Say what you're about to look at, specifically. Also set `model_tier`.
 _RATIONALE_INSTRUCTION_NARRATE = (
     "`rationale` = ONE spoken line, thinking out loud, naming the specific thing you're about to "
-    "look at (not 'details'). No em dashes, greeting, or markdown. Empty if nothing worth saying. "
-    "Also set `model_tier`."
+    "look at (not 'details'). You have NOT read anything yet, so name what you're going to check, "
+    "never what you expect to find or conclude. No em dashes, greeting, or markdown. Empty if "
+    "nothing worth saying. Also set `model_tier`."
 )
 # Re-plan steps (step > 0): data is in GATHERED. React to it like a coach, then say what it makes
 # you do next. Bridge insight to intent, never narrate a read in isolation. Also set `model_tier`.
 _RATIONALE_INSTRUCTION_NARRATE_REPLAN = (
-    "`rationale` = ONE spoken line reacting to what you just found in GATHERED and what that makes "
-    "you check next (e.g. 'your pace holds early but drops at mile 18, so I'll look at your training "
-    "load'). Be specific and opinionated; don't just name the next read. Never repeat anything in "
-    "'Already said'. No em dashes, greeting, or markdown. Empty if nothing genuinely new. Also set "
-    "`model_tier`."
+    "`rationale` = ONE spoken line reacting to what you ACTUALLY found in GATHERED and what that "
+    "makes you check next (e.g. 'your pace holds early but drops at mile 18, so I'll look at your "
+    "training load'). Be specific and opinionated about what to check NEXT, but stay honest about "
+    "how much you've actually seen: speak only to what GATHERED shows. If you have NOT found "
+    "something yet, say so ('I haven't found a spec for that yet'), never claim it doesn't exist or "
+    "that some other thing must be true instead. Do not state a gap, cause, or conclusion as settled "
+    "before you've read enough to back it; while it's still a hunch, voice it as a hunch or a "
+    "question, not a fact. Never repeat anything in 'Already said'. No em dashes, greeting, or "
+    "markdown. Empty if nothing genuinely new. Also set `model_tier`."
 )
 
 # Assemble the final format()-able prompt. The gate constants from context_doctrine have NO

@@ -7,6 +7,15 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Narration beats no longer assert ungrounded conclusions before the search finishes.** The
+  relayed planner-rationale beats (the conversational "thinking out loud" lines) were told to be
+  "specific and opinionated," which pushed the model to declare conclusions from partial GATHERED
+  (e.g. "I'm not seeing a spec, so we must be relying on native translation") before it had read
+  enough. The re-plan rationale instruction now requires the beat to speak only to what GATHERED
+  actually shows, to state an absence as "I haven't found X yet" (never as "X doesn't exist" or a
+  substitute fact), and to voice an unconfirmed hunch as a hunch or question, not a settled fact. The
+  step-0 instruction now forbids naming what it expects to find before any read. Test
+  `test_narration_rationale_instructions_demand_grounding_discipline`.
 - **Hybrid consolidation no longer guts a card's non-item content.** The consolidating rebuild used
   to reconstruct `context_view` from each card's content `items` alone, pasting only `item.text`
   under a `### <title>` header. That silently dropped everything a rendered card section carries

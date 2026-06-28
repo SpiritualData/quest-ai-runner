@@ -976,3 +976,24 @@ def test_narrator_first_beat_emits_from_background_without_flush():
     narrator.flush_first()
     beats_after = [e for e in events if e.type == EVENT_PARTIAL and e.data.get("narration")]
     assert len(beats_after) == len(beats), "flush_first must not re-emit the already-emitted beat"
+
+
+def test_narration_rationale_instructions_demand_grounding_discipline():
+    """The relayed planner-rationale beats must not assert ungrounded conclusions before the search
+    is complete. Step 0 (nothing read yet) must name what it's about to check, not what it expects;
+    re-plan beats must speak only to what GATHERED shows and voice unconfirmed hunches as hunches.
+    """
+    from quest_ai_runner.core.orchestrator import (
+        _RATIONALE_INSTRUCTION_NARRATE,
+        _RATIONALE_INSTRUCTION_NARRATE_REPLAN,
+    )
+
+    # Step 0: must forbid stating expected findings/conclusions before any read.
+    assert "never what you expect to find or conclude" in _RATIONALE_INSTRUCTION_NARRATE
+
+    # Re-plan: must require honesty about how much was actually seen, and hedge unconfirmed hunches.
+    replan = _RATIONALE_INSTRUCTION_NARRATE_REPLAN
+    assert "what you ACTUALLY found in GATHERED" in replan
+    assert "I haven't found" in replan                       # absence stated as not-found-yet
+    assert "not a fact" in replan                            # hunches voiced as hunches
+    assert "settled" in replan                               # no conclusion stated as settled early
