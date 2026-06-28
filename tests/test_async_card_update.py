@@ -22,6 +22,7 @@ from quest_ai_runner.core.orchestrator import (
     Orchestrator,
     OrchestratorConfig,
     _card_update_store,
+    _future_context_for_display,
     _normalize_card_edits,
     _parse_future_context,
     _strip_future_context,
@@ -193,6 +194,36 @@ def test_strip_and_parse_are_complementary():
     assert FUTURE_CONTEXT_DELIMITER not in shown
     assert FUTURE_CONTEXT_DELIMITER not in learned
     assert "col-123" in learned and "col-123" not in shown
+
+
+# --------------------------------------------------------------------------- display collector
+
+
+class _R:
+    def __init__(self, output):
+        self.output = output
+
+
+def test_future_context_for_display_collects_bullets():
+    out = _future_context_for_display([_R(_WORKER_OUTPUT)])
+    assert "Pricing tiers" in out and "col-123" in out
+    assert "backend/pricing.py" in out
+    assert FUTURE_CONTEXT_DELIMITER not in out
+    assert "I implemented the thing" not in out          # only the bullets, not the deliverable
+
+
+def test_future_context_for_display_drops_none_placeholder():
+    none_out = f"did the work\n\n{FUTURE_CONTEXT_DELIMITER}\n- (none)\n"
+    assert _future_context_for_display([_R(none_out)]) == ""
+    assert _future_context_for_display([_R("no section at all")]) == ""
+    assert _future_context_for_display([]) == ""
+
+
+def test_future_context_for_display_merges_multiple_results():
+    a = f"a\n\n{FUTURE_CONTEXT_DELIMITER}\n- from A (id: a1)\n"
+    b = f"b\n\n{FUTURE_CONTEXT_DELIMITER}\n- from B (id: b2)\n"
+    out = _future_context_for_display([_R(a), _R(b)])
+    assert "from A" in out and "from B" in out
 
 
 # --------------------------------------------------------------------------- capability detection

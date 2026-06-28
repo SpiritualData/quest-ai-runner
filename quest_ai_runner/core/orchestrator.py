@@ -1175,6 +1175,30 @@ def _strip_future_context(output: Optional[str]) -> str:
         return output
 
 
+def _future_context_for_display(results: Any) -> str:
+    """Collect the FUTURE-CONTEXT bullets across deep results into ONE display string for the user.
+
+    This is the same section the async card updater learns from (see ``_parse_future_context``),
+    surfaced so a consumer can show it as an expandable "what I'll remember for next time" panel on
+    a deep-output message. Drops the worker's "(none)" placeholder so an empty section yields "" (the
+    UI then shows nothing). Returns "" when there is nothing worth showing. Never raises.
+    """
+    try:
+        parts: List[str] = []
+        for d in (results or []):
+            section = _parse_future_context(getattr(d, "output", None))
+            if not section:
+                continue
+            # Drop pure "(none)" placeholders; keep real bullets verbatim.
+            kept = [ln for ln in section.splitlines()
+                    if ln.strip().lower().lstrip("- ").strip() not in ("(none)", "none", "")]
+            if kept:
+                parts.append("\n".join(kept))
+        return "\n".join(parts).strip()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def _card_update_store(assembler: Any) -> Optional[Any]:
     """Return the underlying card store that exposes the card-update API, or None. Never raises.
 
@@ -3726,7 +3750,12 @@ class Orchestrator:
                 out = "\n\n".join(
                     s for s in (_strip_future_context(d.output) for d in res.deep_results) if s
                 ) or None
-                emit.emit(ProgressEvent(type=EVENT_RESULT, text=out, result_kind="deep"))
+                # Surface the internal FUTURE-CONTEXT bullets as structured data (NOT in the message
+                # body) so a consumer can show them as an expandable "what I'll remember" panel.
+                _future = _future_context_for_display(res.deep_results)
+                emit.emit(ProgressEvent(
+                    type=EVENT_RESULT, text=out, result_kind="deep",
+                    data={"future_context": _future} if _future else {}))
             emit.emit(ProgressEvent(type=EVENT_DONE, result_kind=res.kind, step=steps))
             return res
 
