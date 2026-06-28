@@ -35,11 +35,18 @@ These satisfy the core interfaces; a consumer wires the ones it needs into a Run
                                 ModelProvider and searches IN PARALLEL. Requires the [bm25] extra.
   * QdrantVectorStore         — VectorStoreBase backed by a local-filesystem or remote Qdrant
                                 instance. Requires the [qdrant] optional extra.
+  * QuestContextAdapter       — HTTP client for ``POST /api/quest-context/resolve`` (the Quest
+                                context hub). Returns merged context string; degrades gracefully
+                                on failures. ``build_quest_resolvers(adapter)`` builds a
+                                ``{collection, query}`` ReferenceResolver dict ready to inject
+                                into ``RunnerConfig.reference_resolvers`` so a QAR resolves
+                                Quest refs through the hub instead of leaving them unresolved.
 
 The DeepRunner reference (SubprocessGoalRunner) lives in core.goal_runner; the EscalationSink
 reference (the Quest team decision-request) lives in runner.quest_client.
 """
 from .anthropic_provider import AnthropicProvider
+from .quest_context_adapter import QuestContextAdapter, build_quest_resolvers
 from .cached_db_adapter import CachedDbAdapter
 from .web_search_adapter import WebSearchAdapter
 from .card_metadata_generator import CardMetadataGenerator
@@ -154,4 +161,6 @@ __all__ = [
     "CardRepository",
     "FilesystemCardRepository",
     "card_embed_text",
+    "QuestContextAdapter",
+    "build_quest_resolvers",
 ]
