@@ -71,6 +71,11 @@ _MAX_SCOPE_CARDS = 2000
 # Repo-internal payload fields stripped before a stored card dict is returned to the store.
 _INTERNAL_FIELDS = {"card_id", _SEARCH_TEXT_FIELD, "updated_at"}
 
+# How many top vector hits ``find_similar_card`` scans for a same-user twin. Small + bounded: a true
+# near-duplicate ranks at the very top, and a few extra rows absorb other tenants' cards interleaved
+# in a shared (unscoped) collection before this user's best candidate.
+_SIMILAR_CARD_TOP_K = 16
+
 
 def _point_id(scope: Dict[str, Any], card_id: str) -> int:
     """Deterministic unsigned-int point id from ``(scope, card_id)``.
@@ -459,6 +464,72 @@ class QdrantCardRepository:
             return out
         except Exception as e:  # noqa: BLE001 — native search is best-effort; fall back to in-app IDF
             logger.debug("QdrantCardRepository.search_cards failed; falling back to IDF: %s", e)
+            return None
+
+    # ------------------------------------------------------------------
+    # OPTIONAL semantic dedup: find an existing card SIMILAR to a proposed one.
+    # ------------------------------------------------------------------
+
+    def find_similar_card(
+        self, text: str, *, user_id: Optional[str] = None, min_score: float
+    ) -> Optional[str]:
+        """Return the ``card_id`` of an EXISTING card whose embedding is cosine-similar to ``text`` at
+        or above ``min_score``, restricted to ``user_id``'s id-namespace, or ``None``.
+
+        This powers the orchestrator's post-deep semantic CARD-MERGE: before a near-duplicate card is
+        created, the brain asks "is there already a card like this for this user?" It reuses the SAME
+        document ``embedder`` and the SAME cards collection this repo embeds cards into on ``write``
+        (NO second embedding path): it embeds ``text`` once, runs a scoped Qdrant vector search (the
+        collection's distance is COSINE, so the returned score IS cosine similarity in roughly [-1, 1]),
+        and returns the single best card that (a) is in this user's ``u:<user_id>:`` id-namespace and
+        (b) clears ``min_score``. User-scope isolation is enforced HERE: a card outside the user's
+        namespace is never returned, so a merge can never cross users even on a shared collection.
+        Returns ``None`` when nothing clears the threshold, when the text is empty, or on any failure.
+        Best-effort: NEVER raises.
+        """
+        try:
+            q = (text or "").strip()
+            if not q or self._client is None:
+                return None
+            try:
+                threshold = float(min_score)
+            except (TypeError, ValueError):
+                return None
+            if not self._ensure_collection_and_index():
+                return None
+            try:
+                vecs = self._embed([q])
+            except Exception as e:  # noqa: BLE001 — embedder down: cannot compare, skip the merge
+                logger.debug("QdrantCardRepository.find_similar_card: embedding failed: %s", e)
+                return None
+            if not vecs or not vecs[0]:
+                return None
+            results = self._client.query_points(
+                collection_name=self._collection,
+                query=list(vecs[0]),
+                query_filter=self._scope_filter(),
+                limit=_SIMILAR_CARD_TOP_K,
+                with_payload=True,
+                with_vectors=False,
+            ).points
+            # Hits are score-descending. Skip any card outside this user's namespace (defense in depth
+            # on top of the repo-level scope filter), then the FIRST eligible card is the best twin:
+            # return it iff it clears the threshold (no lower-ranked card could clear it either).
+            prefix = f"u:{user_id}:" if user_id else None
+            for r in results:
+                payload = dict(r.payload) if r.payload else {}
+                if not self._in_scope(payload):
+                    continue
+                cid = payload.get("card_id") or payload.get("id")
+                if not cid:
+                    continue
+                cid = str(cid)
+                if prefix is not None and not cid.startswith(prefix):
+                    continue
+                return cid if float(r.score) >= threshold else None
+            return None
+        except Exception as e:  # noqa: BLE001 — best-effort; a merge failure must never break a run
+            logger.debug("QdrantCardRepository.find_similar_card failed: %s", e)
             return None
 
 

@@ -187,6 +187,35 @@ def test_vector_store_finds_card_after_write(tmp_path):
     assert other.search(card_embed_text(repo.read("habits")), top_k=5) == []
 
 
+def test_find_similar_card_matches_within_user_scope(tmp_path):
+    """find_similar_card returns a clear twin in the SAME user namespace, and only above the floor."""
+    repo = _repo(tmp_path)
+    repo.write("u:u1:dreams", _sample_card(
+        "u:u1:dreams", "Dreams topic", "Recurring flying dreams.", ["dream", "flying"]))
+    # The stub embeds identical text to an identical vector -> cosine ~1.0 -> matches at a high floor.
+    text = card_embed_text(repo.read("u:u1:dreams"))
+    assert repo.find_similar_card(text, user_id="u1", min_score=0.99) == "u:u1:dreams"
+    # An impossibly high floor (> 1.0) can never be cleared -> no match (threshold gating).
+    assert repo.find_similar_card(text, user_id="u1", min_score=1.01) is None
+
+
+def test_find_similar_card_user_scope_isolation(tmp_path):
+    """Two users hold IDENTICAL-content cards; a lookup never crosses the user namespace."""
+    repo = _repo(tmp_path)
+    repo.write("u:u1:dreams", _sample_card("u:u1:dreams", "Dreams topic", "Flying dreams.", ["dream"]))
+    repo.write("u:u2:dreams", _sample_card("u:u2:dreams", "Dreams topic", "Flying dreams.", ["dream"]))
+    # Same content => same vector => both score ~1.0; the prefix filter picks the right user's card.
+    text = card_embed_text(repo.read("u:u1:dreams"))
+    assert repo.find_similar_card(text, user_id="u1", min_score=0.99) == "u:u1:dreams"
+    assert repo.find_similar_card(text, user_id="u2", min_score=0.99) == "u:u2:dreams"
+
+
+def test_find_similar_card_none_for_empty_text(tmp_path):
+    repo = _repo(tmp_path)
+    repo.write("u:u1:dreams", _sample_card("u:u1:dreams", "Dreams", "flying dreams", ["dream"]))
+    assert repo.find_similar_card("", user_id="u1", min_score=0.5) is None
+
+
 def test_embed_text_helper_matches_export(tmp_path):
     """The shared card_embed_text helper and FileContextStore.export_for_embedding agree."""
     repo = _repo(tmp_path)

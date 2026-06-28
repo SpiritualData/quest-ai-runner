@@ -106,6 +106,16 @@ DEFAULT_PLANNER_COMPRESS_OVER = 6    # leave gathered untouched until it exceeds
 # final ANSWER (which always gets the full transcript + context_view). Default off → byte-for-byte
 # current behavior unless a consumer opts in.
 DEFAULT_PLANNER_ABBREVIATE_REPEAT_CONTEXT = False
+# CARD MERGE (semantic dedup). When the post-deep card updater would CREATE a NEW card, it first asks
+# the vector-backed card store whether a sufficiently-similar card already exists for THIS user (by
+# embedding COSINE similarity) and, if so, UPDATES that card instead of creating a near-duplicate
+# twin. This default is the COSINE floor a candidate must clear to count as the "same" card: HIGH on
+# purpose, so only a CLEAR twin merges and an unrelated card is never collapsed. A value of 1.0
+# effectively DISABLES the behavior (cosine ~never reaches a clean 1.0 except an identical card), as
+# does a card store with no embeddings (the keyword-only FileContextStore exposes no
+# ``find_similar_card``, so the updater silently degrades to create-as-before). Override via
+# ``OrchestratorConfig.card_merge_similarity``.
+DEFAULT_CARD_MERGE_SIMILARITY = 0.85
 
 
 # ===========================================================================
@@ -515,6 +525,12 @@ class OrchestratorConfig:
     async_card_update_max_cards: int = 6
     # Hard cap on edit OPERATIONS (add/replace/remove items + field edits) applied per card.
     async_card_update_max_edits_per_card: int = 12
+    # SEMANTIC CARD-MERGE threshold (cosine). When the updater would CREATE a new card, it first asks
+    # the card store's optional ``find_similar_card`` capability whether a card this similar already
+    # exists for THIS user and, if so, redirects the edit to UPDATE that card (no near-duplicate twin).
+    # HIGH by default (clear-twin only); 1.0 effectively disables the behavior, and a store without
+    # embeddings (no ``find_similar_card``) skips it entirely. See DEFAULT_CARD_MERGE_SIMILARITY.
+    card_merge_similarity: float = DEFAULT_CARD_MERGE_SIMILARITY
 
 
 @dataclass
@@ -910,6 +926,34 @@ def _normalize_card_edits(raw: Any) -> List[Dict[str, Any]]:
     except Exception:  # noqa: BLE001
         pass
     return []
+
+
+def _proposed_card_text(edit: Dict[str, Any]) -> str:
+    """Build the text that REPRESENTS a would-be-created card from a card-updater edit, for the
+    semantic-merge similarity check. Mirrors ``card_repository.card_embed_text`` (the canonical card
+    embed text) WITHOUT importing it, so the brain keeps no dependency on a concrete adapter module:
+    the topic NAME and DESCRIPTION, then each ``add`` item's ``why`` and any ``note`` text. Returns
+    "" when there is nothing to match on (then the caller skips the merge and creates as before).
+    Never raises."""
+    try:
+        parts: List[str] = []
+        for _k in ("name", "description"):
+            v = edit.get(_k)
+            if isinstance(v, str) and v.strip():
+                parts.append(v.strip())
+        for it in (edit.get("add") or []):
+            if not isinstance(it, dict):
+                continue
+            why = it.get("why")
+            if isinstance(why, str) and why.strip():
+                parts.append(why.strip())
+            if it.get("type") == "note":
+                note_text = (it.get("locator") or {}).get("text")
+                if isinstance(note_text, str) and note_text.strip():
+                    parts.append(note_text.strip())
+        return " ".join(parts).strip()
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 # STEP 1 (User Input Understanding): rewrite a short/anaphoric latest message into ONE
@@ -2911,6 +2955,14 @@ class Orchestrator:
             user_id = (ctx_meta or {}).get("user_id")
             current_cards = self._select_current_cards(request, ctx_meta)
             current_view = self._render_cards_for_updater(current_cards)
+            # The user-scoped ids of the cards we SHOWED the updater (its CURRENT CARDS). These are
+            # exactly the ids it can reference for an UPDATE; any other id is a would-be CREATE and is
+            # eligible for the semantic-merge redirect below.
+            known_ids = {
+                self._scoped_card_id(str(c.get("id")), user_id)
+                for c in current_cards
+                if isinstance(c, dict) and c.get("id")
+            }
 
             model = self.registry.resolve_tier(self.cfg.planner_tier)
             prompt = CARD_UPDATE_PROMPT.format(
@@ -2928,7 +2980,7 @@ class Orchestrator:
                 edits = self._call_card_updater(prompt, model)
             if not edits:
                 return 0
-            return self._apply_card_edits(store, edits, user_id)
+            return self._apply_card_edits(store, edits, user_id, known_card_ids=known_ids)
         except Exception:  # noqa: BLE001 — the updater must never affect the run
             log.debug("post-deep card update failed", exc_info=True)
             return 0
@@ -2957,17 +3009,45 @@ class Orchestrator:
         return _normalize_card_edits(raw)
 
     def _apply_card_edits(self, store: Any, edits: List[Dict[str, Any]],
-                          user_id: Optional[str]) -> int:
+                          user_id: Optional[str],
+                          known_card_ids: Optional[set] = None) -> int:
         """Apply parsed card edits via the card-update API, user-scoped + bounded. Returns the count
-        of cards written. Never raises (each card edit is independently guarded)."""
+        of cards written. Never raises (each card edit is independently guarded).
+
+        SEMANTIC CARD-MERGE (item 3): for an edit that would CREATE a new card (its user-scoped id is
+        NOT one of ``known_card_ids`` -- the cards the updater was actually shown, the only ids it can
+        target for an update), first ask the store's OPTIONAL ``find_similar_card`` capability whether
+        a sufficiently-similar card already exists in THIS user's scope; if so, REDIRECT the edit to
+        UPDATE that card (merging the proposed fields + content) instead of creating a near-duplicate
+        twin. The capability is detected by duck-typing (``callable(getattr(store, ...))``), so a card
+        store without embeddings (the keyword-only ``FileContextStore``) is skipped entirely and the
+        edit creates as before. Disabled when the threshold is >= 1.0. Any miss/error -> create as
+        before; an edit that already targets a known existing card id is left untouched.
+        """
         written = 0
         max_cards = max(0, self.cfg.async_card_update_max_cards)
         max_edits = max(0, self.cfg.async_card_update_max_edits_per_card)
+        known = known_card_ids or set()
+        finder = getattr(store, "find_similar_card", None)
+        merge_threshold = float(getattr(self.cfg, "card_merge_similarity",
+                                        DEFAULT_CARD_MERGE_SIMILARITY))
+        merge_enabled = callable(finder) and merge_threshold < 1.0
         for edit in edits[:max_cards]:
             try:
                 cid = self._scoped_card_id(str(edit.get("card_id") or "").strip(), user_id)
                 if not cid:
                     continue
+                # If this edit would CREATE a new card, try to redirect it onto a clear existing twin
+                # for the SAME user (embedding similarity) rather than minting a near-duplicate.
+                if merge_enabled and cid not in known:
+                    try:
+                        text = _proposed_card_text(edit)
+                        if text:
+                            match = finder(text, user_id=user_id, min_score=merge_threshold)
+                            if isinstance(match, str) and match.strip():
+                                cid = match.strip()
+                    except Exception:  # noqa: BLE001 — merge is best-effort: fall back to create
+                        log.debug("card-merge similarity check failed", exc_info=True)
                 fields: Dict[str, Any] = {}
                 for _k in ("name", "description"):
                     v = edit.get(_k)

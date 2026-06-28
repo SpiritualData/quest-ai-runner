@@ -1418,6 +1418,33 @@ class FileContextStore(ContextAssemblerBase):
         except Exception:  # noqa: BLE001
             return False
 
+    def find_similar_card(
+        self, text: str, *, user_id: Optional[str] = None, min_score: float
+    ) -> Optional[str]:
+        """Return the id of an existing card whose embedding is cosine-similar to ``text`` at or above
+        ``min_score``, restricted to ``user_id``'s scope, or ``None``. Never raises.
+
+        This is the OPTIONAL semantic-dedup capability the orchestrator's post-deep card updater
+        probes (by duck-typing) before creating a near-duplicate card. It DELEGATES to the persistence
+        repository's own ``find_similar_card`` when present (e.g. ``QdrantCardRepository``, which
+        embeds every card on write and can vector-search them) -- reusing the SAME embedding + vector
+        search the card vector arm uses, never a second embedding path. When the repo has NO
+        embeddings (the default ``FilesystemCardRepository``), this returns ``None``, so a keyword-only
+        store cleanly degrades to create-as-before with no fuzzy/string fallback. Detected by
+        duck-typing (``callable``), never an isinstance check, so any repo exposing the method
+        participates.
+        """
+        try:
+            finder = getattr(self._repo, "find_similar_card", None)
+            if not callable(finder):
+                return None
+            if not (text or "").strip():
+                return None
+            result = finder(text, user_id=user_id, min_score=min_score)
+            return result if isinstance(result, str) and result.strip() else None
+        except Exception:  # noqa: BLE001 — semantic dedup is best-effort
+            return None
+
     # ------------------------------------------------------------------
     # Public helper: O(1) invalidation index
     # ------------------------------------------------------------------

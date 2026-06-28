@@ -18,6 +18,7 @@ from quest_ai_runner.core.adapters import AssembledContext, DeepResult
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import (
     DEEP_FUTURE_CONTEXT_INSTRUCTION,
+    DEFAULT_CARD_MERGE_SIMILARITY,
     FUTURE_CONTEXT_DELIMITER,
     Orchestrator,
     OrchestratorConfig,
@@ -25,6 +26,7 @@ from quest_ai_runner.core.orchestrator import (
     _future_context_for_display,
     _normalize_card_edits,
     _parse_future_context,
+    _proposed_card_text,
     _strip_future_context,
 )
 
@@ -394,6 +396,124 @@ def test_no_card_update_store_no_call_no_instruction():
     assert res.kind == "deep"
     assert all(DEEP_FUTURE_CONTEXT_INSTRUCTION not in b for b in runner.briefs)
     assert provider.updater_calls == 0
+
+
+# --------------------------------------------------------------------------- semantic card-merge
+# When the updater would CREATE a new card, it first asks the store's OPTIONAL find_similar_card
+# capability whether a sufficiently-similar card already exists for THIS user and, if so, redirects
+# the edit to UPDATE that card instead of minting a near-duplicate twin. Detected by duck-typing;
+# absent capability or a 1.0 threshold => create-as-before; never crosses user scopes.
+
+
+class SimilarCardStore(RecordingCardStore):
+    """A card-update store that ALSO exposes the optional ``find_similar_card`` vector capability."""
+
+    def __init__(self, *, similar_id=None, only_for_user=None, current_cards=None):
+        super().__init__(current_cards=current_cards)
+        self._similar_id = similar_id
+        self._only_for_user = only_for_user
+        self.find_calls: List[Dict[str, Any]] = []
+
+    def find_similar_card(self, text, *, user_id=None, min_score):
+        self.find_calls.append({"text": text, "user_id": user_id, "min_score": min_score})
+        # Enforce user-scope isolation: only surface a match for the expected user's scope.
+        if self._only_for_user is not None and user_id != self._only_for_user:
+            return None
+        return self._similar_id
+
+
+def _run_updater(provider, store, *, cfg_kw=None, ctx_meta=None):
+    orch = _orch(provider, _Runner(_WORKER_OUTPUT), assembler=store, cfg_kw=cfg_kw or {})
+    return orch._update_cards_after_deep(
+        request="capture this", executed="BRIEF: x\n\nRESULT: y",
+        future_context="", ctx_meta=ctx_meta or {"user_id": "u1"},
+    )
+
+
+def test_proposed_card_text_builds_from_name_description_and_notes():
+    text = _proposed_card_text({
+        "card_id": "x", "name": "Dreams and stress", "description": "How they correlate.",
+        "add": [{"type": "note", "locator": {"text": "runs 5k"}, "why": "habit"}],
+    })
+    assert "Dreams and stress" in text and "How they correlate." in text
+    assert "habit" in text and "runs 5k" in text
+    assert _proposed_card_text({"card_id": "x"}) == ""  # nothing to match on
+
+
+def test_merge_redirects_create_to_similar_existing_card():
+    """A would-be NEW card is redirected to UPDATE the similar existing card (no twin)."""
+    edits = {"edits": [{"card_id": "newslug", "name": "Dreams and stress",
+                        "add": [{"type": "note", "locator": {"text": "fact"}}]}]}
+    store = SimilarCardStore(similar_id="u:u1:dreams")  # no current cards -> create candidate
+    n = _run_updater(CardEditProvider(edits), store)
+    assert n == 1
+    # find_similar_card consulted with the user + default threshold; proposed text carries the name.
+    assert len(store.find_calls) == 1
+    assert store.find_calls[0]["user_id"] == "u1"
+    assert store.find_calls[0]["min_score"] == DEFAULT_CARD_MERGE_SIMILARITY
+    assert "Dreams and stress" in store.find_calls[0]["text"]
+    # The write targets the EXISTING similar card, not a new u:u1:newslug twin; fields/content merged.
+    assert len(store.update_calls) == 1
+    assert store.update_calls[0]["card_id"] == "u:u1:dreams"
+    assert store.update_calls[0]["fields"]["name"] == "Dreams and stress"
+    assert store.update_calls[0]["add"][0]["locator"]["text"] == "fact"
+
+
+def test_no_merge_when_no_similar_card_creates_as_before():
+    edits = {"edits": [{"card_id": "newslug",
+                        "add": [{"type": "note", "locator": {"text": "fact"}}]}]}
+    store = SimilarCardStore(similar_id=None)
+    n = _run_updater(CardEditProvider(edits), store)
+    assert n == 1
+    assert len(store.find_calls) == 1
+    # No match -> the new card is created under the user-scoped slug, exactly as before.
+    assert store.update_calls[0]["card_id"] == "u:u1:newslug"
+
+
+def test_no_find_similar_capability_unchanged():
+    """A store WITHOUT find_similar_card (plain RecordingCardStore) behaves exactly as before."""
+    edits = {"edits": [{"card_id": "newslug",
+                        "add": [{"type": "note", "locator": {"text": "fact"}}]}]}
+    store = RecordingCardStore()
+    n = _run_updater(CardEditProvider(edits), store)
+    assert n == 1
+    assert store.update_calls[0]["card_id"] == "u:u1:newslug"  # created, no error
+
+
+def test_merge_never_uses_another_users_match():
+    """A similar card that belongs to a DIFFERENT user is not used (scope isolation)."""
+    edits = {"edits": [{"card_id": "newslug",
+                        "add": [{"type": "note", "locator": {"text": "fact"}}]}]}
+    # The store only returns the match for user u1; the run is for u2.
+    store = SimilarCardStore(similar_id="u:u1:dreams", only_for_user="u1")
+    n = _run_updater(CardEditProvider(edits), store, ctx_meta={"user_id": "u2"})
+    assert n == 1
+    assert store.find_calls[0]["user_id"] == "u2"
+    # No cross-user merge: a fresh u2-scoped card is created instead.
+    assert store.update_calls[0]["card_id"] == "u:u2:newslug"
+
+
+def test_merge_skips_edits_targeting_existing_card():
+    """An edit that targets a card the updater was shown (an UPDATE) never calls find_similar_card."""
+    edits = {"edits": [{"card_id": "u:u1:dreams",
+                        "add": [{"type": "note", "locator": {"text": "fact"}}]}]}
+    store = SimilarCardStore(similar_id="u:u1:OTHER",
+                             current_cards=[{"id": "u:u1:dreams", "title": "Dreams"}])
+    n = _run_updater(CardEditProvider(edits), store)
+    assert n == 1
+    assert store.find_calls == []  # existing-id edit left untouched
+    assert store.update_calls[0]["card_id"] == "u:u1:dreams"
+
+
+def test_merge_disabled_at_threshold_one():
+    """card_merge_similarity == 1.0 disables the merge (find_similar_card never consulted)."""
+    edits = {"edits": [{"card_id": "newslug",
+                        "add": [{"type": "note", "locator": {"text": "fact"}}]}]}
+    store = SimilarCardStore(similar_id="u:u1:dreams")
+    n = _run_updater(CardEditProvider(edits), store, cfg_kw={"card_merge_similarity": 1.0})
+    assert n == 1
+    assert store.find_calls == []
+    assert store.update_calls[0]["card_id"] == "u:u1:newslug"
 
 
 # --------------------------------------------------------------------------- edit normalization

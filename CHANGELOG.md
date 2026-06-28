@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Semantic card dedup/merge: the post-deep updater merges into a clear twin instead of creating
+  one.** When `Orchestrator._update_cards_after_deep` would CREATE a new context card, it now first
+  asks the card store's OPTIONAL `find_similar_card(text, *, user_id, min_score)` capability whether a
+  sufficiently-similar card already exists for THIS user (by embedding COSINE similarity) and, if so,
+  REDIRECTS the edit to UPDATE that card (merging the proposed name/description + content) rather than
+  minting a near-duplicate. The capability is detected by duck-typing, exactly like the existing
+  card-update detection: `QdrantCardRepository.find_similar_card` implements it by reusing the SAME
+  document embedder + cards collection it already embeds cards into on write (no second embedding
+  path), scoped to the user's `u:<user_id>:` id-namespace so a merge can never cross users;
+  `FileContextStore.find_similar_card` delegates to the repo when present. A store with no embeddings
+  (the default `FilesystemCardRepository`) exposes nothing, so the updater cleanly degrades to
+  create-as-before (no string/fuzzy fallback). Threshold is the new `OrchestratorConfig`
+  `card_merge_similarity` (default `DEFAULT_CARD_MERGE_SIMILARITY` = 0.85, clear-twin only); a value
+  of `1.0` disables the behavior. Edits that already target a shown existing card are untouched, and
+  the whole path is best-effort (any miss/error -> create as before). Tests in
+  `tests/test_async_card_update.py` (orchestrator wiring: redirect, no-match, capability-absent,
+  user-scope isolation, existing-id-untouched, threshold-1.0 disable) and
+  `tests/test_qdrant_card_repository.py` (offline embedded-Qdrant: same-user match, cross-user
+  isolation, threshold gating).
+
 ### Changed
 - **Recently-used / recently-updated cards win a near-tie in keyword retrieval (bounded boost).**
   In the keyword arm, `usage_count` and `last_verified_at` were only TIE-BREAKERS, so a card the user
