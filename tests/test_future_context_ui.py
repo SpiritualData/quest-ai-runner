@@ -78,7 +78,7 @@ def test_build_text_includes_header_and_bullets():
     )
     assert t is not None
     plain = t.plain
-    assert "What I'll remember" in plain
+    assert "Context it used" in plain
     assert "col-123" in plain
     assert "metric units" in plain
 
@@ -87,6 +87,16 @@ def test_build_text_empty_returns_none():
     assert _build_future_context_text("") is None
     assert _build_future_context_text("   ") is None
     assert _build_future_context_text("\n\n") is None
+
+
+def test_toggle_is_bound_to_alt_c_not_a_bare_letter():
+    # The prompt Input consumes printable keys, so a bare 'c'/'f' would be typed into the message
+    # instead of toggling. The toggle must use a modified key (alt+c) to fire reliably while typing.
+    keys = {b.key: b.action for b in QuestAITerminal.BINDINGS
+            if hasattr(b, "action") and b.action == "toggle_future_context"}
+    assert "alt+c" in keys
+    # No bare single-letter binding maps to the toggle.
+    assert not any(len(k) == 1 for k in keys)
 
 
 def test_build_text_strips_blank_lines():

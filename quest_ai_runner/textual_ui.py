@@ -378,7 +378,7 @@ class DeepDetailPanel(VerticalScroll):
 
 
 def _build_future_context_text(bullets: str) -> Optional[Text]:
-    """Build the Rich Text to display in the future-context panel.
+    """Build the Rich Text to display in the "context it used" panel.
 
     Returns ``None`` when ``bullets`` is empty so callers can gate visibility.
     This is a pure function with no Textual dependencies — testable offline.
@@ -390,19 +390,19 @@ def _build_future_context_text(bullets: str) -> Optional[Text]:
     if not lines:
         return None
     body = "\n".join(f"  {ln}" for ln in lines)
-    hint = "\x1b[2m  [f] close\x1b[0m"
-    t = Text.from_ansi(f"\x1b[1;32mWhat I'll remember\x1b[0m\n{body}\n{hint}")
+    hint = "\x1b[2m  [Alt+C] close\x1b[0m"
+    t = Text.from_ansi(f"\x1b[1;32mContext it used\x1b[0m\n{body}\n{hint}")
     t.no_wrap = False
     return t
 
 
 class FutureContextPanel(VerticalScroll):
-    """Expandable panel showing what the AI will remember for next time.
+    """Expandable panel showing the context the AI used and judged important for this run.
 
-    Hidden by default. Press ``f`` to toggle after a deep run completes.
-    Content is the FUTURE-CONTEXT section parsed from deep results: a plain
-    newline-joined string of bullet lines (e.g. "- collection: Pricing tiers").
-    The panel is never shown when the content is empty.
+    From the user's view this is "what context it relied on / considered important for what it did,"
+    not internal memory plumbing. Hidden by default. Press ``Alt+C`` to toggle after a deep run
+    completes. Content is the FUTURE-CONTEXT section parsed from deep results: a plain newline-joined
+    string of bullet lines (e.g. "- collection: Pricing tiers"). Never shown when the content is empty.
     """
 
     def __init__(self, *args, **kwargs):
@@ -515,7 +515,7 @@ class QuestAITerminal(App):
         Binding("ctrl+l", "clear_log", "Clear screen"),
         Binding("ctrl+y", "copy_last", "Copy last reply", show=True),
         Binding("d", "toggle_deep_detail", "Expand agent", show=True),
-        Binding("f", "toggle_future_context", "What I'll remember", show=False),
+        Binding("alt+c", "toggle_future_context", "Context used", show=True),
         Binding("tab", "cycle_deep_run", "Next agent", show=True),
         Binding("pageup", "scroll_up_or_agent", "Scroll up", show=True, priority=True),
         Binding("pagedown", "scroll_down_or_agent", "Scroll down", show=True, priority=True),
@@ -1186,16 +1186,15 @@ class QuestAITerminal(App):
             s._turn_count += 1
             log.write(Text(""))
             self._write_footer(final, elapsed)
-            # If the deep run produced future context, load the panel and show a
+            # If the deep run flagged the context it used, load the panel and show a
             # subtle hint in the transcript so the user knows it is available.
             if self._future_context:
                 self._future_ctx_panel.load(self._future_context)
                 count = sum(
                     1 for ln in self._future_context.splitlines() if ln.strip()
                 )
-                plural = "s" if count != 1 else ""
                 log.write(Text(
-                    f"  [f] What I'll remember  ({count} item{plural})",
+                    f"  [Alt+C] Context it used  ({count})",
                     style="dim",
                 ))
 
@@ -1486,11 +1485,12 @@ class QuestAITerminal(App):
         self._open_detail_for(run_id)
 
     def action_toggle_future_context(self) -> None:
-        """Toggle the future-context panel (key: f).
+        """Toggle the "context it used" panel (key: Alt+C).
 
-        Only opens the panel when there is non-empty future context from the
-        most recent deep run. Pressing 'f' when the panel is open closes it;
-        when there is nothing to show the action is a no-op.
+        Alt+C is used (not a bare letter) because the prompt Input consumes printable keys, so a
+        plain 'c' would be typed into the message instead of toggling. Only opens when there is
+        non-empty context from the most recent deep run. Pressing Alt+C again closes it; when there
+        is nothing to show the action is a no-op.
         """
         if self._future_ctx_panel.display:
             self._future_ctx_panel.display = False
