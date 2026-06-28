@@ -173,6 +173,18 @@ CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
   THEN answer grounded in it. Only pure chit-chat/meta ("you there?", "thanks") may be answered
   WITHOUT reading.
 
+  BUT FIRST -- ANSWER FROM THE CONVERSATION WHEN IT'S ALREADY THERE: before you choose "read",
+  check the RECENT TRANSCRIPT and GATHERED. If the answer is ALREADY present there, answer straight
+  from it -- do NOT re-search the corpus for something this conversation just established. This is
+  the common case for a DIRECT FOLLOW-UP about what you JUST said: you described a plan, a file, a
+  number, a name, or a decision in the prior turn and the user now asks about that same thing
+  ("what's the filepath?", "where is it?", "which one?", "what was that number?", "say that again").
+  The prior turn holds the answer -- give it. Only "read" when the current message genuinely needs
+  substance the transcript/GATHERED does NOT already contain (a new topic, deeper detail you never
+  pulled, or verification the prior turn explicitly left open). When in doubt between re-reading and
+  answering from a clear prior statement, ANSWER -- re-grepping for a fact you just stated wastes the
+  user's time.
+
   CRITICAL: Do NOT answer with "I need to X" or "I should X" or "To fix this, I need to...".
   These are NOT answers -- they are unexecuted tasks. If you realize work needs doing, choose
   "deep" immediately and let the runner do it. NEVER describe work in an answer; ALWAYS execute it.
@@ -283,8 +295,10 @@ DEEP FAN-OUT (optional, for "deep"): if the work splits into INDEPENDENT subtask
 
 --- RECENT TRANSCRIPT (prior completed exchanges, most recent last) ---
 NOTE: The transcript shows COMPLETED PRIOR WORK. The USER'S MESSAGE above is the NEW, CURRENT
-REQUEST. Focus entirely on that message. Do NOT redo, continue, or reference prior tasks unless
-the user explicitly asks you to.
+REQUEST. Focus entirely on that message. Do NOT redo or continue prior tasks unless the user
+explicitly asks you to. EXCEPTION: when the message is a DIRECT FOLLOW-UP about what you JUST said
+(e.g. "what's the filepath?", "which one?", "say that again"), the transcript is exactly where the
+answer lives -- use it and answer from it instead of re-searching the corpus.
 {transcript}
 
 --- CONTEXT (compact; LOCATES content, does NOT replace reading it) ---
@@ -3463,7 +3477,10 @@ class Orchestrator:
                 _ctx_executor = ThreadPoolExecutor(max_workers=1)
                 _ctx_future = _ctx_executor.submit(_do_assemble)
                 try:
-                    emit.status("searching corpus…")
+                    # This is the ContextAssembler.assemble() call: a hybrid keyword + vector
+                    # search over the wired context (cards + turn history), not a single named
+                    # source. "searching context" names the stage honestly (STAGE 2: FIND CONTEXT).
+                    emit.status("searching context…")
                 except Exception:  # noqa: BLE001
                     pass
             except Exception:  # noqa: BLE001 -- assembly setup failure must never break the run

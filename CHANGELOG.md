@@ -7,6 +7,18 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Direct follow-ups are answered from the conversation instead of triggering a fresh corpus
+  search.** When a user asked a follow-up whose answer the assistant had JUST given (e.g. it
+  described a plan and its file path, then the user asked "what's the filepath?"), the planner still
+  ran a full read/grep loop over the corpus — slow, and pointless because the answer was already in
+  the transcript it was handed. The planner prompt now leads with a TRANSCRIPT-FIRST principle:
+  before choosing `read`, check the RECENT TRANSCRIPT and GATHERED, and if the answer is already
+  there (the common direct-follow-up case) answer straight from it; only `read` when the current
+  message genuinely needs substance the conversation does not already contain. The transcript NOTE
+  carries a matching carve-out so a direct follow-up is treated as the user explicitly asking about
+  the prior turn. Regression test
+  `test_planner_prompt_instructs_answering_followups_from_transcript`.
+
 - **Capability/discovery menus no longer pollute the answer (the planner stops answering from the
   operations list).** The auto-injected `list_operations` menu (and any `list_sources`/`describe_*`
   discovery read) was added to `gathered` and rendered to the answer LLM as "ACTUAL CONTENT READ FOR

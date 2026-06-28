@@ -711,6 +711,28 @@ def test_repeat_context_on_does_not_abbreviate_when_empty():
         assert "unchanged since step 1" not in p
 
 
+# --- direct follow-up: answer from the transcript instead of re-searching ------------------------
+
+def test_planner_prompt_instructs_answering_followups_from_transcript():
+    # The planner the model sees on a direct follow-up must carry BOTH the transcript that holds
+    # the answer AND the explicit instruction to answer from it instead of re-searching the corpus.
+    # Guards the fix for: "what's the filepath?" right after the AI described the plan + its file
+    # triggering a fresh corpus search instead of answering from the conversation.
+    provider = StubProvider(decisions=[
+        {"action": "answer", "model_tier": "haiku", "rationale": "already in transcript"},
+    ])
+    transcript = ("USER: what's the current plan?\n"
+                  "ASSISTANT: the plan lives at docs/PLAN_X.md and covers steps A, B, C")
+    retrieval = StubRetrieval({"docs/PLAN_X.md": "should-not-be-read"})
+    res = _orch(provider, retrieval).run("what's the filepath?", transcript=transcript)
+    assert res.kind == "answer"
+    assert retrieval.read_calls == []        # answered from the conversation, no re-search
+    step0 = provider.plan_prompts[0]
+    assert "docs/PLAN_X.md" in step0         # the answering fact was in front of the planner
+    assert "ANSWER FROM THE CONVERSATION WHEN IT'S ALREADY THERE" in step0
+    assert "DIRECT FOLLOW-UP" in step0
+
+
 # ---------------------------------------------------------------------------
 # Per-run model hint (model_hint= kwarg on run / run_stream).
 # ---------------------------------------------------------------------------
