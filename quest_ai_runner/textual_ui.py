@@ -1509,16 +1509,31 @@ class QuestAITerminal(App):
         if self._deep_detail.display:
             self._deep_detail.hide()
             return
-        run_id = self._cur_deep_run or self._deep.get_active_run()
-        if run_id is None:
+        runs = self._available_deep_runs()
+        if not runs:
             return
+        # Prefer the run currently/last streaming this turn; otherwise open the most recent finished
+        # one (last inserted), so Alt+D shows a deep task's actions even after it's done.
+        run_id = self._cur_deep_run or self._deep.get_active_run()
+        if run_id not in runs:
+            run_id = next(reversed(runs))
         self._open_detail_for(run_id)
 
     def action_cycle_deep_run(self) -> None:
-        """Cycle the detail panel to the next deep run (key: Tab)."""
-        run_id = self._deep.next_run()
-        if run_id is None:
+        """Cycle the detail panel to the next deep run (key: Tab).
+
+        Cycles over whatever runs are available — the live tracker during a turn, or the finished-run
+        archive afterwards — keyed off the panel's currently-shown run so it works post-turn too.
+        """
+        runs = self._available_deep_runs()
+        if not runs:
             return
+        run_ids = sorted(runs.keys())
+        cur = self._deep_detail.active_run_id
+        if cur in run_ids:
+            run_id = run_ids[(run_ids.index(cur) + 1) % len(run_ids)]
+        else:
+            run_id = run_ids[0]
         self._open_detail_for(run_id)
 
     def action_toggle_future_context(self) -> None:

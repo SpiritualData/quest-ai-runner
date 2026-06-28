@@ -28,9 +28,15 @@ All notable changes to this project are documented here. The format is based on
   (3) The scrollback record (`_flush_deep_run`) is now a SUMMARY, not a replay: the subgoal header, a
   one-line activity roll-up (`_summarize_exec_lines`, e.g. "12 reads · 3 edits · 2 commands"), and
   the worker's full final output under a `result` rule. The per-operation trace stays available live
-  and in the detail panel ('d'). A run with no structured result falls back to the worker's own
+  and in the detail panel (Alt+D). A run with no structured result falls back to the worker's own
   narration (capped); a run with only a result is still recorded. New `_DeepRunTracker`
-  `set_final_output()`/`update_goal()`. Tests in `tests/test_deep_output_ui.py`.
+  `set_final_output()`/`update_goal()`.
+  (4) The Alt+D detail panel (full per-action trace) now works AFTER a run finishes: finished runs
+  with actions are kept in a capped cross-turn archive (`_deep_archive`), so Alt+D/Tab can replay a
+  task's every action even after later turns rebuild the live tracker. `_open_detail_for` and the
+  toggle/cycle actions source from live runs first, else the archive (toggle opens the most recent
+  finished run); the scrollback summary shows an "Alt+D: see every action" hint when there are
+  actions. Tests in `tests/test_deep_output_ui.py`.
 
 ### Added
 - **Semantic card dedup/merge: the post-deep updater merges into a clear twin instead of creating

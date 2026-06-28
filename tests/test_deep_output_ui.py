@@ -170,6 +170,57 @@ def test_activity_summary_rolls_up_tool_actions():
     assert "All done." in body
 
 
+def test_finished_run_archived_for_later_replay():
+    """A finished run with actions is kept in the cross-turn archive (with its full trace)."""
+    app, log = _make_app()
+    app._deep.add_run("r1", "Do work")
+    app._deep.update_run_output("r1", "Read: /a.py")
+    app._deep.update_run_output("r1", "I changed the parser.")
+    app._deep.set_run_status("r1", "done")
+    app._flush_deep_run("r1")
+
+    assert "r1" in app._deep_archive
+    assert app._deep_archive["r1"]["exec_lines"]  # full per-action trace retained
+
+
+def test_detail_available_after_tracker_reset():
+    """Alt+D can still find a run after the next turn rebuilds the live tracker."""
+    app, log = _make_app()
+    app._deep.add_run("r1", "Do work")
+    app._deep.update_run_output("r1", "Read: /a.py")
+    app._flush_deep_run("r1")
+
+    # Simulate the next turn rebuilding the live tracker (as _begin_turn does).
+    app._deep = _DeepRunTracker()
+
+    runs = app._available_deep_runs()
+    assert "r1" in runs               # falls back to the archive
+    assert runs["r1"]["exec_lines"]   # with the full trace to replay
+
+
+def test_result_only_run_not_archived():
+    """A run with a result but no captured actions has nothing to replay, so it isn't archived."""
+    app, log = _make_app()
+    app._deep.add_run("r1", "Answer")
+    app._deep.set_final_output("r1", "42.")
+    app._flush_deep_run("r1")
+    assert "r1" not in app._deep_archive
+
+
+def test_actions_hint_shown_only_when_there_are_actions():
+    app, log = _make_app()
+    app._deep.add_run("r1", "Do work")
+    app._deep.update_run_output("r1", "Read: /a.py")
+    app._flush_deep_run("r1")
+    assert any("Alt+D" in ln for ln in log.lines)
+
+    app2, log2 = _make_app()
+    app2._deep.add_run("r2", "Answer")
+    app2._deep.set_final_output("r2", "42.")
+    app2._flush_deep_run("r2")
+    assert not any("Alt+D" in ln for ln in log2.lines)  # no actions -> no hint
+
+
 def test_narration_shown_when_no_result():
     """An errored/incomplete run with no result still shows the worker's own words."""
     app, log = _make_app()
