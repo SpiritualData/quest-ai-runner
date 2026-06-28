@@ -7,6 +7,20 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **A deferred deep run's output is now folded into the final answer, instead of being discarded.**
+  When the planner routed to `answer` but the turn then escalated to a deferred deep run (because the
+  message requested a change, or the answer only described unexecuted work), the deep worker did the
+  real work but the user-facing reply stayed the pre-deep proposal — typically a "shall I proceed?"
+  stub with zero awareness of what the deep run produced. The deliverable was emitted only as a side
+  milestone (which some consumers, e.g. the Textual UI, truncate to its first sentence), so the real
+  result was effectively lost and the turn looked like it stopped to ask permission for work it had
+  already finished. Now, after a deferred deep run produces substantive output, the orchestrator
+  re-synthesizes the final reply grounded in that output (new `SYNTHESIZE_AFTER_DEEP_PROMPT` +
+  `_synthesize_after_deep`), grounds `context_view` in it, and still holds the synthesized reply to
+  the overall goal via the answer-goal-verification loop (so the turn keeps going if the deliverable
+  is incomplete rather than stopping half-done). Regression test
+  `test_deferred_deep_output_is_folded_into_final_answer` in `tests/test_orchestrator.py`.
+
 - **Progress narration no longer repeats itself.** When narration is on, the per-step beats were
   drifting into the same line reworded several times ("looking up the details of your marathon
   quest" six times). Two changes: (1) the planner's narration instructions are tighter and the

@@ -159,6 +159,34 @@ def test_answer_describing_unexecuted_work_escalates_to_deep():
     assert runner.calls, "expected a deferred deep run to execute the described work"
 
 
+def test_deferred_deep_output_is_folded_into_final_answer():
+    # Regression: a deferred deep run did the real work, but the user-facing reply stayed the
+    # pre-deep proposal (which reads as "shall I proceed?") with NO awareness of what the deep run
+    # produced — the deliverable was emitted only as a side milestone (and truncated by some
+    # consumers). The final answer must be RE-SYNTHESIZED grounded in the deep run's output, so the
+    # user sees the real deliverable, not a stale proposal.
+    provider = StubProvider(
+        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "describe"}],
+        answer_text="I need to update the architecture; let me know if you want me to proceed.",
+    )
+    deliverable = "MULTILANG_PLAN_DELIVERABLE: phase 1 extract strings, phase 2 Spanish locale."
+    runner = StubDeepRunner(met=True, output=deliverable)
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run(
+        "the system incorrectly assigns dates to actions"
+    )
+    assert res.kind == "answer"
+    assert runner.calls, "expected a deferred deep run to execute the work"
+    # The FINAL answer call (the synthesis) must be grounded in the deep output and use the
+    # after-deep synthesis prompt — proving the reply now reflects what was actually produced.
+    joined = "\n".join(
+        (m["content"] if isinstance(m["content"], str) else str(m["content"]))
+        for m in provider.last_answer_messages
+    )
+    assert deliverable in joined, "final answer was not grounded in the deep run's output"
+    assert "ACTUAL RESULT OF THE WORK YOU JUST DID" in joined, "expected the after-deep synthesis path"
+    assert provider.answer_calls >= 2  # pre-deep proposal + post-deep synthesis
+
+
 class _GCard:
     def __init__(self, id, title, relevance, body):
         self.id, self.title, self.relevance, self.body = id, title, relevance, body

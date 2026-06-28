@@ -919,6 +919,37 @@ Do not use em dashes. Be concise and concrete.
 Latest user message: {user_message}
 """
 
+# Synthesize the FINAL user-facing reply after a deferred deep run, grounding it in what the deep
+# run ACTUALLY did/produced. Without this, a deferred-deep turn returns the pre-deep proposal (which
+# typically reads as "shall I proceed?"), discarding the real deliverable the deep run created.
+SYNTHESIZE_AFTER_DEEP_PROMPT = """\
+You already DID the work the user asked for. Below is the user's request, the proposal you made
+before doing it, and the ACTUAL OUTPUT/RESULT of the work you just carried out. Write the final
+reply to the user.
+
+Rules:
+- Report and PRESENT what was actually done or produced, grounded in the RESULT below. This is the
+  deliverable, not a plan to do it later. Do NOT say "I will", "I would recommend", "shall I", "let
+  me know if you want me to", or ask permission to start work that is already finished.
+- If the request asked you to PLAN/REVIEW/ANALYZE/DESIGN something, the RESULT contains that
+  plan/review/analysis. Present it clearly and usefully to the user (organize it, keep the substance).
+- If the request asked you to CHANGE/FIX/BUILD something, state concretely what was changed, then
+  briefly note anything left open.
+- Drop tool-runner noise (session logs, "Running…", internal markers). Keep only what helps the user.
+- If the RESULT genuinely shows the work is incomplete, say plainly what is done and what remains
+  with a concrete next step. Do not pretend completeness.
+- Write in the assistant's own voice. Be concise and concrete. Never use em dashes.
+
+=== USER REQUEST ===
+{request}
+
+=== YOUR PRE-WORK PROPOSAL (context only; may be obsolete now that the work is done) ===
+{proposal}
+
+=== ACTUAL RESULT OF THE WORK YOU JUST DID ===
+{result}
+"""
+
 # Pure acknowledgements / deferrals that carry NO standalone instruction — they only make sense
 # against prior conversation. A whole message equal to one of these needs context to be understood.
 _ACK_PHRASES = frozenset({
@@ -1888,6 +1919,38 @@ class Orchestrator:
             messages.append({"role": "user", "content": user_message})
         provider = self.get_provider_for_model(model)
         return provider.answer(messages, model=model)
+
+    def _synthesize_after_deep(self, user_message: str, *, prior_answer: str, deep_output: str,
+                               transcript: str, model: str,
+                               rep_preamble: Optional[str] = None) -> str:
+        """Rewrite the final reply to REPORT what a (deferred) deep run actually did/produced.
+
+        After a deferred deep run, the pre-deep answer is a proposal that usually reads as "shall I
+        proceed?", while the real deliverable lives in the deep run's output. This folds that output
+        back into one user-facing reply grounded in what was actually done, in the rep's voice. One
+        LLM call. Never raises: on any failure it falls back to the deep output itself (the real
+        work), and only then to the prior answer, so the user always sees the substance.
+        """
+        out = (deep_output or "").strip()
+        try:
+            prompt = SYNTHESIZE_AFTER_DEEP_PROMPT.format(
+                request=user_message,
+                proposal=(prior_answer or "(none)").strip()[:4000],
+                result=out[:24000],
+            )
+            messages: List[Dict[str, Any]] = []
+            if rep_preamble:
+                messages.append({"role": "user", "content": rep_preamble})
+            if transcript:
+                messages.append({"role": "user", "content": transcript})
+            messages.append({"role": "user", "content": prompt})
+            provider = self.get_provider_for_model(model)
+            synthesized = provider.answer(messages, model=model)
+            if isinstance(synthesized, str) and synthesized.strip():
+                return synthesized.strip()
+        except Exception:  # noqa: BLE001 — synthesis must never break the turn
+            log.warning("post-deep synthesis failed; falling back to deep output", exc_info=True)
+        return out or (prior_answer or "")
 
     def _answer_subquestions(self, user_message: str, transcript: str, context_view: str,
                              gathered: List[Dict[str, Any]], model: str,
@@ -3810,6 +3873,10 @@ class Orchestrator:
                 if emit is not None:
                     emit.status("you asked for a change, making it now…")
 
+        # True once a deferred deep run has produced substantive output that we folded back into the
+        # final answer. Gates the post-deep goal-verification loop below so a deferred-deep turn is
+        # still held to the overall goal (grounded in what the deep run actually produced).
+        _deferred_deep_grounded = False
         if should_defer_deep:
             try:
                 if not plan.deferred_deep:
@@ -3832,13 +3899,25 @@ class Orchestrator:
                                          quality_standards=quality_standards,
                                          pending_inputs=pending_inputs, model_hint=model_hint,
                                          ctx_meta=_ctx_meta)
-                # Emit execution results as a separate milestone/message (not appended to answer)
+                # FOLD THE DEEP OUTPUT BACK INTO THE FINAL ANSWER. The pre-deep `text` is a proposal
+                # ("shall I proceed?"); the real deliverable is what the deep run just produced. If we
+                # only emit it as a side milestone, the user-facing reply stays the stale proposal with
+                # no awareness of the work (and some consumers truncate a milestone to its first line),
+                # so the substance is lost. Re-synthesize the reply grounded in the deep output, ground
+                # the context_view in it too (so any goal-verification regeneration stays aware of it),
+                # and flag the turn so the goal loop below still holds it to the overall goal.
+                deep_output = ""
                 if deep_res and deep_res.deep_results:
-                    deep_output = "\n\n".join(d.output for d in deep_res.deep_results if d.output)
-                    if deep_output and emit is not None:
-                        emit.emit(ProgressEvent(type=EVENT_MILESTONE,
-                                                text=deep_output,
-                                                data={"execution_results": True}))
+                    deep_output = "\n\n".join(d.output for d in deep_res.deep_results if d.output).strip()
+                if deep_output:
+                    if emit is not None:
+                        emit.status("writing up what was done…")
+                    text = self._synthesize_after_deep(
+                        user_message, prior_answer=text, deep_output=deep_output,
+                        transcript=transcript, model=model, rep_preamble=rep_preamble)
+                    _deep_block = "--- WHAT WAS JUST EXECUTED (deep run output) ---\n" + deep_output
+                    context_view = (context_view + "\n\n" + _deep_block) if context_view else _deep_block
+                    _deferred_deep_grounded = True
                 # Async, best-effort: prepare this user's cards for next time from the deferred run.
                 self._kickoff_card_update(deep_res, deferred_plan, user_message, _ctx_meta, emit)
             except Exception as e:  # noqa: BLE001 — deferred work must never break the answer
@@ -3850,9 +3929,11 @@ class Orchestrator:
         # meets the bar or attempts run out. When the verifier says the answer lacks the context needed
         # to be definitive (need_more_context=True), escalate to deep so the deep runner can search
         # further — never accept "I couldn't find it" as a final answer when more searching is possible.
-        # Engages whenever we are not deferring to a deep run (which ran its own verification).
-        # Best-effort: never breaks the turn.
-        if not should_defer_deep and self.cfg.answer_goal_max_iterations > 1:
+        # Engages whenever we are not deferring to a deep run (which ran its own verification), OR a
+        # deferred deep DID run and we folded its output into the answer — in that case we still hold
+        # the synthesized reply to the overall goal so the turn keeps going if the deliverable is
+        # incomplete, instead of stopping at a half-done result. Best-effort: never breaks the turn.
+        if (not should_defer_deep or _deferred_deep_grounded) and self.cfg.answer_goal_max_iterations > 1:
             try:
                 overall_goal = (plan.goal or "").strip() or (
                     "Fully and correctly answer the user's request to their satisfaction: "
