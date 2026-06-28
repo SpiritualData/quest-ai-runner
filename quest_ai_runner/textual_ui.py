@@ -358,8 +358,6 @@ class DeepDetailPanel(Static):
 class QuestAITerminal(App):
     """Textual REPL over an `InteractiveSession`'s orchestrator brain."""
 
-    ENABLE_MOUSE = False
-
     CSS = """
     Screen { background: $surface; }
 
@@ -418,6 +416,7 @@ class QuestAITerminal(App):
         Binding("ctrl+c", "quit", "Quit", priority=True),
         Binding("escape", "cancel", "Cancel turn"),
         Binding("ctrl+l", "clear_log", "Clear screen"),
+        Binding("ctrl+y", "copy_last", "Copy last reply", show=True),
         Binding("d", "toggle_deep_detail", "Expand agent", show=True),
         Binding("tab", "cycle_deep_run", "Next agent", show=True),
     ]
@@ -1150,6 +1149,31 @@ class QuestAITerminal(App):
         self._tlog.write(t)
 
     # -- actions ---------------------------------------------------------------
+
+    def action_copy_last(self) -> None:
+        """Copy the last AI response to the system clipboard (Ctrl+Y)."""
+        text = "\n".join(self._answer_parts).strip() if self._answer_parts else ""
+        if not text and self.sess._last_assistant:
+            text = self.sess._last_assistant
+        if not text:
+            self._tlog.write(Text("  (nothing to copy)", style="dim"))
+            return
+        copied = False
+        for cmd in (["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"],
+                    ["wl-copy"]):
+            try:
+                import subprocess
+                subprocess.run(cmd, input=text.encode(), check=True,
+                               capture_output=True, timeout=2)
+                copied = True
+                break
+            except Exception:  # noqa: BLE001
+                continue
+        if copied:
+            preview = text[:60].replace("\n", " ")
+            self._tlog.write(Text(f"  Copied: {preview}…" if len(text) > 60 else f"  Copied: {preview}", style="dim"))
+        else:
+            self._tlog.write(Text("  (clipboard tool not found — install xclip or xsel)", style="dim"))
 
     def action_cancel(self) -> None:
         if self._turn_active:
