@@ -97,10 +97,15 @@ def test_list_guidance_returns_catalog():
     res = _orch(provider, StubRetrieval(), guidance=g).run("what can you help with?")
     assert res.kind == "answer"
     assert g.list_calls == 1
-    joined = "\n".join(m["content"] for m in provider.last_answer_messages)
+    # The catalog is a capability MENU: it informs the PLANNER (so the brain knows which cards it
+    # could read_guidance) but is kept out of the answer grounding, so the brain reads the matching
+    # card for real content before answering rather than answering from the menu.
+    planner_view = "\n".join(provider.plan_prompts)
     # Catalog carries id + title + relevance (no body).
-    assert "quest_creation" in joined and "Creating a quest" in joined
-    assert "Ask for the outcome" not in joined         # body is NOT in the catalog
+    assert "quest_creation" in planner_view and "Creating a quest" in planner_view
+    assert "Ask for the outcome" not in planner_view    # body is NOT in the catalog
+    answer = "\n".join(m["content"] for m in provider.last_answer_messages)
+    assert "quest_creation" not in answer               # menu is excluded from the answer
 
 
 def test_read_guidance_returns_card_body():

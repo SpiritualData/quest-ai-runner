@@ -47,7 +47,7 @@ all = [
     "fastembed>=0.3",
     "bm25s>=0.2",
 ]
-dev = ["pytest>=7.0"]
+dev = ["pytest>=7.0", "pytest-asyncio>=0.23"]
 
 [project.urls]
 Homepage = "https://github.com/SpiritualData/quest-ai-runner"
@@ -64,3 +64,6 @@ include = ["quest_ai_runner*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Async TUI tests (textual's run_test harness) are marked @pytest.mark.asyncio explicitly,
+# so keep strict mode — only marked coroutines run on the event loop.
+asyncio_mode = "strict"

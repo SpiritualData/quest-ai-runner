@@ -1,6 +1,7 @@
 """Discovery tools: the brain learns what sources/operations exist via list_*/describe_*.
 
-These prove (1) discovery specs flow into the grounding through the same path as a read,
+These prove (1) discovery specs inform the PLANNER (as a capability menu) but are kept OUT of
+the answer grounding, so the brain answers from real content it gathered, not from the menu,
 (2) several describe_* calls in one step fan out in parallel, (3) an adapter that predates
 the discovery methods degrades gracefully (back-compat), and (4) the built-in FilesAdapter
 enumerates real files + outlines.
@@ -49,7 +50,7 @@ def _orch(provider, retrieval, **kw):
                         registry=ModelRegistry(provider), **kw)
 
 
-def test_list_sources_flows_into_grounding():
+def test_list_sources_informs_planner_not_answer():
     provider = StubProvider(decisions=[
         {"action": "read", "reads": [{"list_sources": True}], "rationale": "what exists?"},
         {"action": "answer", "rationale": "now I know"},
@@ -58,8 +59,12 @@ def test_list_sources_flows_into_grounding():
     res = _orch(provider, retrieval).run("what can you see?")
     assert res.kind == "answer"
     assert retrieval.discovery_calls == ["list_operations", "list_sources"]
-    joined = "\n".join(m["content"] for m in provider.last_answer_messages)
-    assert "the planning tree" in joined          # the listing reached the answer's grounding
+    # The listing reaches the PLANNER (so the brain knows what it can call) ...
+    planner_view = "\n".join(provider.plan_prompts)
+    assert "the planning tree" in planner_view
+    # ... but a capability menu is NEVER presented to the answer LLM as content to answer from.
+    answer = "\n".join(m["content"] for m in provider.last_answer_messages)
+    assert "the planning tree" not in answer
 
 
 def test_describe_specs_fan_out_in_parallel():
@@ -76,8 +81,11 @@ def test_describe_specs_fan_out_in_parallel():
     assert res.kind == "answer"
     assert set(retrieval.discovery_calls) == {
         "describe_source:goals", "describe_source:quests", "list_operations"}
-    joined = "\n".join(m["content"] for m in provider.last_answer_messages)
-    assert "FIELDS OF goals" in joined and "FIELDS OF quests" in joined
+    # The fanned-out describe results inform the planner, but stay out of the answer grounding.
+    planner_view = "\n".join(provider.plan_prompts)
+    assert "FIELDS OF goals" in planner_view and "FIELDS OF quests" in planner_view
+    answer = "\n".join(m["content"] for m in provider.last_answer_messages)
+    assert "FIELDS OF goals" not in answer
 
 
 def test_describe_operation_drilldown():
@@ -90,8 +98,11 @@ def test_describe_operation_drilldown():
     res = _orch(provider, retrieval).run("how do I get insights?")
     assert res.kind == "answer"
     assert retrieval.discovery_calls == ["list_operations", "list_operations", "describe_operation:get_insights"]
-    joined = "\n".join(m["content"] for m in provider.last_answer_messages)
-    assert "SIGNATURE OF get_insights" in joined
+    # The drilled-down signature informs the planner; it is not answer grounding content.
+    planner_view = "\n".join(provider.plan_prompts)
+    assert "SIGNATURE OF get_insights" in planner_view
+    answer = "\n".join(m["content"] for m in provider.last_answer_messages)
+    assert "SIGNATURE OF get_insights" not in answer
 
 
 def test_discovery_on_legacy_adapter_degrades_gracefully():
@@ -103,9 +114,11 @@ def test_discovery_on_legacy_adapter_degrades_gracefully():
     ])
     retrieval = StubRetrieval({"README.md": "x"})   # plain stub, no list_sources
     res = _orch(provider, retrieval).run("what exists?")
-    assert res.kind == "answer"
-    joined = "\n".join(m["content"] for m in provider.last_answer_messages)
-    assert "not supported" in joined
+    assert res.kind == "answer"                      # degrades gracefully, never raises
+    # The benign "not supported" observation is a capability listing: it informs the planner
+    # (so it stops trying discovery), but is excluded from the answer grounding like any menu.
+    planner_view = "\n".join(provider.plan_prompts)
+    assert "not supported" in planner_view
 
 
 def test_files_adapter_discovery():
@@ -242,6 +255,10 @@ def test_cached_db_discovery_via_orchestrator():
     orch = _orch(provider, db)
     res = orch.run("what can I store and do?")
     assert res.kind == "answer"
-    joined = "\n".join(m["content"] for m in provider.last_answer_messages)
-    assert "user goals" in joined
-    assert "add_goal" in joined
+    # CachedDbAdapter discovery flows through the orchestrator into the PLANNER view (a capability
+    # menu), but is kept out of the answer grounding like any other discovery listing.
+    planner_view = "\n".join(provider.plan_prompts)
+    assert "user goals" in planner_view
+    assert "add_goal" in planner_view
+    answer = "\n".join(m["content"] for m in provider.last_answer_messages)
+    assert "user goals" not in answer
