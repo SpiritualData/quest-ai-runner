@@ -7,6 +7,11 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **`ClaudeConversationsAdapter` now wired into the default retrieval stack.** The adapter was fully
+  implemented and tested but never instantiated in `_config_from_env()`, so past Claude Code session
+  transcripts were invisible to grep during both interactive chat and task runs. It is now added by
+  default (searching `~/.claude/sessions` or `QAR_CLAUDE_SESSIONS_DIR`). Disable with
+  `QAR_CONVERSATION_SEARCH=false`.
 - **Terminal UI toggles use Alt-chords, not bare letters (which were swallowed by the prompt).** The
   "expand agent" toggle was bound to a bare `d` and the context panel to a bare `f`. Textual's `Input`
   consumes printable keys (it calls `event.stop()` + `event.prevent_default()`), so while the prompt

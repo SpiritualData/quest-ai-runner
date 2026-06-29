@@ -63,6 +63,12 @@ Env it reads:
   WEB_SEARCH_API_KEY (optional)                 — Tavily API key (tvly_...). Required when
                                                    WEB_SEARCH_ENABLED=true.
   WEB_SEARCH_MAX_RESULTS (optional)             — max results per web search call (default 5).
+  QAR_CONVERSATION_SEARCH (optional)           — set to "false"/"0"/"off" to disable searching
+                                                   past Claude Code session transcripts during grep.
+                                                   Enabled by default. Uses ~/.claude/sessions unless
+                                                   QAR_CLAUDE_SESSIONS_DIR is set.
+  QAR_CLAUDE_SESSIONS_DIR (optional)          — explicit path to the Claude Code sessions directory
+                                                   to search (default: ~/.claude/sessions).
 
 chat-specific env vars (all optional):
   QAR_REP_NAME (optional)                        — display name for the AI representative shown in
@@ -81,7 +87,7 @@ import logging
 import os
 import sys
 
-from .adapters import AnthropicProvider, ClaudeCliProvider, CompositeRetrievalAdapter, FilesAdapter, GeminiProvider, OpenAIProvider, WebSearchAdapter
+from .adapters import AnthropicProvider, ClaudeCliProvider, ClaudeConversationsAdapter, CompositeRetrievalAdapter, FilesAdapter, GeminiProvider, OpenAIProvider, WebSearchAdapter
 from .config import RunnerConfig
 from .core.adapters import ModelProvider
 from .core.goal_runner import SubprocessConfig, SubprocessGoalRunner
@@ -163,6 +169,24 @@ def _config_from_env() -> RunnerConfig:
             retrieval = CompositeRetrievalAdapter([retrieval, web_adapter])
         else:
             retrieval = web_adapter
+
+    # Add Claude conversation search unless explicitly disabled.
+    # Searches ~/.claude/sessions (or QAR_CLAUDE_SESSIONS_DIR) so past conversations
+    # are reachable via grep during interactive and task sessions.
+    _conv_search = (os.getenv("QAR_CONVERSATION_SEARCH") or "").strip().lower()
+    if _conv_search not in ("false", "0", "off", "no"):
+        sessions_dir = os.getenv("QAR_CLAUDE_SESSIONS_DIR") or None
+        try:
+            conv_adapter = ClaudeConversationsAdapter(
+                corpus_root=corpus,
+                sessions_dir=sessions_dir,
+            )
+            if retrieval is not None:
+                retrieval = CompositeRetrievalAdapter([retrieval, conv_adapter])
+            else:
+                retrieval = conv_adapter
+        except Exception:
+            pass  # conversations adapter is optional; don't break startup if sessions dir is missing
 
     # QAR_DEEP_WORKING_DIR defaults to QAR_CORPUS_ROOT so only one env var is needed.
     deep_dir = os.getenv("QAR_DEEP_WORKING_DIR") or corpus
