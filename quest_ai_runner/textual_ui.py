@@ -1175,8 +1175,8 @@ class QuestAITerminal(App):
             answer = final.text or ("\n".join(self._answer_parts).strip() or None)
             if answer:
                 if not self._ai_label_shown:
-                    log.write(Text(f"{self.rep_name} (AI):", style="bold cyan"))
                     log.write(Text(""))
+                    log.write(Text(f"{self.rep_name} (AI):", style="bold cyan"))
                     self._ai_label_shown = True
                 self._console.markdown(answer)
             s._last_user = user_text
