@@ -1,4 +1,4 @@
-"""Conversation-turn cards for the ContextAssembler system -- stdlib only."""
+"""Conversation-turn cards for the ContextAssembler system."""
 import datetime
 import hashlib
 import json
@@ -7,6 +7,8 @@ import re
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from quest_ai_runner.adapters.tfdfidf_sampling import select_representatives
 
 # ---------------------------------------------------------------------------
 # Stopword set (same set as the original turn_memory so keyword extraction
@@ -93,7 +95,7 @@ class TurnContextStore:
         return cards
 
     def _recency_boost(self, created_at: str) -> float:
-        """Multiplicative recency boost: recent cards score higher. Half-life = 7 days."""
+        """Multiplicative recency boost passed to select_representatives. Half-life = 7 days."""
         try:
             ts = datetime.datetime.fromisoformat(created_at.replace("Z", "+00:00"))
             now = datetime.datetime.now(datetime.timezone.utc)
@@ -113,76 +115,46 @@ class TurnContextStore:
             if not cards:
                 return AssembledContext()
 
-            from quest_ai_runner.adapters.tfdfidf_sampling import compute_idf
-
-            # Use _keywords() for natural-language term extraction (extract_terms is for file paths).
-            # compute_idf() from tfdfidf_sampling provides the smoothed IDF formula.
             query_terms = set(_keywords(task_text))
-            card_term_sets = [set(c.get("keywords", [])) for c in cards]
-            idf = compute_idf(card_term_sets)
+            card_kw: Dict[int, set] = {i: set(c.get("keywords", [])) for i, c in enumerate(cards)}
 
-            scored = [
-                (
-                    sum(idf.get(t, 1.0) for t in query_terms if t in card_terms)
-                    * self._recency_boost(c.get("created_at", "")),
-                    i,
-                    c,
-                )
-                for i, (c, card_terms) in enumerate(zip(cards, card_term_sets))
-            ]
-            scored.sort(key=lambda x: (-x[0], -x[1]))  # highest score, most recent first
+            # Pre-filter to cards with any query overlap, then delegate scoring and
+            # selection entirely to select_representatives (TF-DF-IDF + recency boost).
+            overlapping = [i for i, kw in card_kw.items() if kw & query_terms]
+            selected_indices = set(select_representatives(
+                items=overlapping,
+                get_terms=lambda i: card_kw[i],
+                samples_per_group=self._max_older,
+                get_score_boost=lambda i: self._recency_boost(cards[i].get("created_at", "")),
+            ))
 
-            # All candidates: most recent first, limited to 2x max_older headroom
-            all_candidates = [
-                card for score, idx, card in scored
-                if score > 0
-            ][: (self._max_older + 1) * 2]
-            # Always include the last turn as a candidate even if IDF score is 0
-            last = cards[-1]
-            if last not in all_candidates:
-                all_candidates = [last] + all_candidates
+            # Always include the most recent card.
+            selected_indices.add(len(cards) - 1)
 
-            # LLM filter across all candidates (including the most recent turn)
-            if self._provider is not None and all_candidates:
+            # LLM filter over the selected set (optional, falls back silently).
+            if self._provider is not None and selected_indices:
                 try:
                     from .card_filter import filter_cards_by_relevance
                     candidate_dicts = [
-                        {
-                            "id": c.get("id", f"turn-{i}"),
-                            "title": c.get("user", ""),
-                            "files": [],
-                            "adapter": "turn",
-                        }
-                        for i, c in enumerate(all_candidates)
+                        {"id": str(i), "title": cards[i].get("user", ""), "files": [], "adapter": "turn"}
+                        for i in selected_indices
                     ]
-                    kept = filter_cards_by_relevance(
+                    kept_ids = {m.id for m in filter_cards_by_relevance(
                         task_text, candidate_dicts,
                         model_provider=self._provider, model=self._model,
-                    )
-                    kept_ids = {m.id for m in kept}
-                    all_candidates = [
-                        c for c in all_candidates
-                        if c.get("id", "") in kept_ids
-                    ]
+                    )}
+                    # Always keep the most recent card even if the LLM filters it.
+                    kept_ids.add(str(len(cards) - 1))
+                    selected_indices = {i for i in selected_indices if str(i) in kept_ids}
                 except Exception:
-                    pass  # silently fall back to IDF selection
+                    pass
 
-            selected: Dict[int, Dict[str, Any]] = {}
-            for card in all_candidates:
-                if len(selected) >= self._max_older + 1:
-                    break
-                selected[id(card)] = card
-
-            # Restore chronological order
-            ordered = [c for c in cards if id(c) in selected]
-
+            ordered = [cards[i] for i in sorted(selected_indices)]
             lines = ["--- RELEVANT PAST CONVERSATIONS ---"]
             for card in ordered:
-                user = card.get("user", "")
-                asst = card.get("assistant_summary", "")
-                date = card.get("created_at", "")[:10]  # YYYY-MM-DD
-                lines.append(f"[{date}] User: {user}")
-                lines.append(f"         AI: {asst}")
+                date = card.get("created_at", "")[:10]
+                lines.append(f"[{date}] User: {card.get('user', '')}")
+                lines.append(f"         AI: {card.get('assistant_summary', '')}")
             return AssembledContext(context_view="\n".join(lines))
         except Exception:
             from .adapters import AssembledContext
