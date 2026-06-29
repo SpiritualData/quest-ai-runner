@@ -1134,13 +1134,11 @@ class QuestAITerminal(App):
             _pending = (lambda: _inbox.drain(_sid)) if _inbox is not None else None
             for item in s._orch.run_stream(
                 user_text,
-                transcript=s._relevant_transcript(user_text),
+                transcript=s._last_transcript(),
                 quest_id=s._goal_id,
                 rep_preamble=s._effective_preamble(),
                 model_hint=model_hint,
                 pending_inputs=_pending,
-                conv_id=s._conv_store.CONV_ID if hasattr(s, "_conv_store") else None,
-                conv_scope={},
             ):
                 if self._cancel.is_set():
                     break
@@ -1332,6 +1330,7 @@ class QuestAITerminal(App):
             s._last_user = user_text
             s._last_assistant = "[cancelled by user]"
             s._session_history.append((user_text, "[cancelled by user]"))
+            s._write_session_file()
             ctx = getattr(s._orch, "context_assembler", None)
             if ctx is not None:
                 try:
@@ -1361,6 +1360,7 @@ class QuestAITerminal(App):
             else:
                 s._last_assistant = final.text or ""
             s._session_history.append((user_text, s._last_assistant))
+            s._write_session_file()
             s._turn_count += 1
             log.write(Text(""))
             self._write_footer(final, elapsed)

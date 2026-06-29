@@ -53,10 +53,12 @@ Example workflow (task execution):
 from __future__ import annotations
 
 import json
+import os
 import queue as _queue
 import sys
 import threading
 import time
+import uuid as _uuid
 import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, List, Optional, Tuple
@@ -1177,70 +1179,6 @@ _BANNER = """\
 """
 
 
-class _InMemoryConversationStore:
-    """ConversationStore over the current chat session's in-memory turn history.
-
-    current_slice: TF-DF-IDF relevance selection over _session_history (not linear).
-    related_slices: delegates to a lazy-loaded SessionFileConversationStore so past
-    Claude Code sessions (from ~/.claude/sessions) are also reachable.
-
-    Mirrors quest-backend's _load_transcript + _load_recent_sessions pattern but
-    without any database or files: everything is in-memory for the current session,
-    and cross-session context comes from the local Claude session files.
-    Never raises from its public methods.
-    """
-
-    CONV_ID = "_chat_session"
-
-    def __init__(self, session: "InteractiveSession") -> None:
-        self._session = session
-        self._file_store: Optional[Any] = None  # lazy SessionFileConversationStore
-
-    def _get_file_store(self) -> Optional[Any]:
-        if self._file_store is None:
-            try:
-                from .adapters.session_file_conversation_store import SessionFileConversationStore
-                self._file_store = SessionFileConversationStore()
-            except Exception:
-                return None
-        return self._file_store
-
-    def current_slice(self, conv_id: str, query: str, *, recent_turns: int = 6,
-                      max_chars: int = 5000) -> Any:
-        try:
-            from .core.adapters import ConversationContext
-            from .adapters.conversation_format import select_current_slice
-            messages = []
-            for user_text, asst_text in (self._session._session_history or []):
-                messages.append({"role": "user", "content": user_text})
-                messages.append({"role": "assistant", "content": asst_text})
-            if not messages:
-                return ConversationContext(scanned=0)
-            text, turns_meta, truncated = select_current_slice(
-                messages, query, recent_turns=recent_turns, max_chars=max_chars
-            )
-            return ConversationContext(
-                text=text, turns=turns_meta,
-                sources=[{"conv_id": self.CONV_ID, "label": "current session"}],
-                scanned=len(messages), truncated=truncated,
-            )
-        except Exception:
-            from .core.adapters import ConversationContext
-            return ConversationContext(scanned=0)
-
-    def related_slices(self, query: str, scope: dict, *, exclude_conv_id: Optional[str] = None,
-                       max_convs: int = 3, max_chars: int = 4000) -> Any:
-        try:
-            from .core.adapters import ConversationContext
-            store = self._get_file_store()
-            if store is None:
-                return ConversationContext(scanned=0)
-            return store.related_slices(query, scope, max_convs=max_convs, max_chars=max_chars)
-        except Exception:
-            from .core.adapters import ConversationContext
-            return ConversationContext(scanned=0)
-
-
 class InteractiveSession:
     """Multi-turn interactive session over a RunnerConfig's orchestrator."""
 
@@ -1276,13 +1214,17 @@ class InteractiveSession:
         self._last_user: str = ""
         self._last_assistant: str = ""
         self._turn_count: int = 0
-        # Accumulated conversation history — the ConversationStore reads from this.
+        # Accumulated conversation history — written to disk so the ClaudeConversationsAdapter
+        # can surface prior QAR sessions in future conversations.
         self._session_history: List[Tuple[str, str]] = []  # [(user_text, assistant_text), ...]
-        # Wire an in-memory ConversationStore over _session_history BEFORE building the
-        # orchestrator so the brain's Step 1 (anaphora resolution) can use it from turn 1.
-        self._conv_store = _InMemoryConversationStore(self)
-        if cfg.conversation_store is None:
-            cfg.conversation_store = self._conv_store
+        # Session file: write turns here so next session's adapter finds them.
+        _sessions_dir = Path(os.getenv("QAR_CLAUDE_SESSIONS_DIR") or (Path.home() / ".claude" / "sessions"))
+        self._session_file: Optional[Path] = None
+        try:
+            _sessions_dir.mkdir(parents=True, exist_ok=True)
+            self._session_file = _sessions_dir / f"qar_chat_{_uuid.uuid4().hex}.json"
+        except Exception:
+            pass
 
         self._orch: "Orchestrator" = build_orchestrator(
             cfg, notify=notify_and_log
@@ -1335,23 +1277,27 @@ class InteractiveSession:
 
     # -- one turn --------------------------------------------------------------
 
-    def _relevant_transcript(self, query: str) -> str:
-        """Relevance-selected transcript: current session (TF-DF-IDF) + past Claude sessions.
-
-        Mirrors quest-backend's _load_transcript + _load_recent_sessions: past sessions as a
-        labeled preamble, then the current conversation's relevant slice. The ConversationStore
-        decides what's included — not a linear window. Returns "" when there is no history.
-        """
-        store = getattr(self, "_conv_store", None)
-        if store is None:
+    def _last_transcript(self) -> str:
+        """Return the immediately preceding exchange as a minimal transcript string."""
+        if not self._session_history:
             return ""
-        past = store.related_slices(query, scope={}, max_convs=3, max_chars=3000)
-        past_text = (past.text or "").strip() if past else ""
-        cur = store.current_slice(store.CONV_ID, query, max_chars=4000)
-        cur_text = (cur.text or "").strip() if cur else ""
-        if past_text and cur_text:
-            return past_text + "\n\n--- Current conversation ---\n" + cur_text
-        return past_text or cur_text
+        user, asst = self._session_history[-1]
+        return f"User: {user}\nAssistant: {asst}"
+
+    def _write_session_file(self) -> None:
+        """Persist session history to disk so future sessions can recall it via the adapter."""
+        if not self._session_file or not self._session_history:
+            return
+        try:
+            messages = []
+            for user_text, asst_text in self._session_history:
+                messages.append({"role": "user", "content": user_text})
+                messages.append({"role": "assistant", "content": asst_text})
+            self._session_file.write_text(
+                json.dumps({"messages": messages}, ensure_ascii=False), encoding="utf-8"
+            )
+        except Exception:
+            pass
 
     def _effective_preamble(self) -> Optional[str]:
         """Combine the system prompt and persona into the rep_preamble passed to the orchestrator."""
@@ -1397,12 +1343,10 @@ class InteractiveSession:
                 # steps show actions taken. Same pipeline for regular turns and /execute deep runs.
                 for it in self._orch.run_stream(
                     user_text,
-                    transcript=self._relevant_transcript(user_text),
+                    transcript=self._last_transcript(),
                     quest_id=self._goal_id,
                     rep_preamble=self._effective_preamble(),
                     model_hint=model_hint,
-                    conv_id=_InMemoryConversationStore.CONV_ID,
-                    conv_scope={},
                 ):
                     _iq.put(it)
             except Exception as e:  # noqa: BLE001
@@ -1447,6 +1391,7 @@ class InteractiveSession:
             self._last_user = user_text
             self._last_assistant = "[cancelled by user]"
             self._session_history.append((user_text, "[cancelled by user]"))
+            self._write_session_file()
             # Also persist to TurnContextStore so it survives across more turns.
             _ctx = getattr(self._orch, "context_assembler", None)
             if _ctx is not None:
@@ -1513,6 +1458,7 @@ class InteractiveSession:
             else:
                 self._last_assistant = final.text or ""
             self._session_history.append((user_text, self._last_assistant))
+            self._write_session_file()
             self._turn_count += 1
             self._console.line("")
             self._print_turn_footer(final, panel, elapsed)
