@@ -1595,7 +1595,7 @@ class QuestAITerminal(App):
 
         log.write(Text(""))
         # 1) The subgoal this task was assigned — the most important orientation.
-        log.write(Text(f"⎅ {goal}" if goal else "⎅ deep task", style="bold cyan"))
+        log.write(Text(f"⎅ {goal}" if goal else "⎅ Deep task", style="bold cyan"))
         # 2) A one-line roll-up of activity, instead of every read/write/command.
         if summary:
             log.write(Text(f"  {summary}", style="dim"))
@@ -1617,9 +1617,9 @@ class QuestAITerminal(App):
             for nl in tail:
                 log.write(Text(f"  {nl}"))
         if status == "error":
-            log.write(Text(f"  ✗ deep task ended with an error · {time_str}", style="red"))
+            log.write(Text(f"  ✗ Deep task ended with an error · {time_str}", style="red"))
         else:
-            log.write(Text(f"  ✓ deep task complete · {time_str}", style="green"))
+            log.write(Text(f"  ✓ Deep task complete · {time_str}", style="green"))
         # Point at the full per-action trace (the summary above is a roll-up). Only when there are
         # actions to replay; the panel stays available after the turn via the archive.
         if lines:
