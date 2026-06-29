@@ -464,6 +464,26 @@ class FutureContextPanel(VerticalScroll):
         self._body.update(t if t is not None else Text(""))
 
 
+# ── Transcript widget ─────────────────────────────────────────────────────────
+#
+# Standard RichLog with auto_scroll=True yanks the view to the bottom on every
+# write(), fighting any manual scroll the user makes during an active turn.
+# TranscriptLog overrides write() to only auto-scroll when the view is already
+# at the tail — so scrolling up actually sticks until the user returns to the bottom.
+
+class TranscriptLog(RichLog):
+    """RichLog that respects manual scroll position during streaming."""
+
+    def write(self, content, width=None, expand=False, shrink=True,
+              scroll_end=None, animate=False):
+        if scroll_end is None and self.auto_scroll:
+            # Checked BEFORE new content is added: if the user is at (or within 1
+            # line of) the current tail, follow; otherwise leave them where they are.
+            scroll_end = self.scroll_y >= self.max_scroll_y - 1
+        return super().write(content, width=width, expand=expand, shrink=shrink,
+                             scroll_end=scroll_end, animate=animate)
+
+
 # ── Main app ──────────────────────────────────────────────────────────────────
 
 class QuestAITerminal(App):
@@ -622,8 +642,8 @@ class QuestAITerminal(App):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield RichLog(id="transcript", max_lines=20000, wrap=True,
-                      highlight=True, markup=True, auto_scroll=True)
+        yield TranscriptLog(id="transcript", max_lines=20000, wrap=True,
+                            highlight=True, markup=True, auto_scroll=True)
         yield ContextPanel(id="context")
         yield DeepActivity(id="deep")
         yield DeepDetailPanel(id="deep-detail")
@@ -635,7 +655,7 @@ class QuestAITerminal(App):
 
     def on_mount(self) -> None:
         self._ui_thread_id = threading.get_ident()
-        self._tlog = self.query_one("#transcript", RichLog)
+        self._tlog = self.query_one("#transcript", TranscriptLog)
         self._ctx = self.query_one("#context", ContextPanel)
         self._deep_view = self.query_one("#deep", DeepActivity)
         self._deep_detail = self.query_one("#deep-detail", DeepDetailPanel)
@@ -1705,14 +1725,16 @@ class QuestAITerminal(App):
             self._tlog.scroll_page_down(animate=False)
 
     def on_mouse_scroll_up(self, event) -> None:
-        """Mouse wheel / trackpad scroll up — route to transcript or detail panel."""
+        """Mouse wheel / trackpad up when not over a scrollable widget — route to transcript."""
+        event.stop()
         if self._deep_detail.display:
             self._deep_detail.scroll_up(animate=False)
         else:
             self._tlog.scroll_up(animate=False)
 
     def on_mouse_scroll_down(self, event) -> None:
-        """Mouse wheel / trackpad scroll down — route to transcript or detail panel."""
+        """Mouse wheel / trackpad down when not over a scrollable widget — route to transcript."""
+        event.stop()
         if self._deep_detail.display:
             self._deep_detail.scroll_down(animate=False)
         else:
