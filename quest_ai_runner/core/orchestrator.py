@@ -4322,11 +4322,9 @@ class Orchestrator:
         # meets the bar or attempts run out. When the verifier says the answer lacks the context needed
         # to be definitive (need_more_context=True), escalate to deep so the deep runner can search
         # further — never accept "I couldn't find it" as a final answer when more searching is possible.
-        # Engages whenever we are not deferring to a deep run (which ran its own verification), OR a
-        # deferred deep DID run and we folded its output into the answer — in that case we still hold
-        # the synthesized reply to the overall goal so the turn keeps going if the deliverable is
-        # incomplete, instead of stopping at a half-done result. Best-effort: never breaks the turn.
-        if (not should_defer_deep or _deferred_deep_grounded) and self.cfg.answer_goal_max_iterations > 1:
+        # Always runs — even when a deferred deep fired but produced no output (in that case the
+        # pre-deep proposal still needs to be held to the goal bar). Best-effort: never breaks the turn.
+        if self.cfg.answer_goal_max_iterations > 1:
             try:
                 overall_goal = (plan.goal or "").strip() or (
                     "Fully and correctly answer the user's request to their satisfaction: "
@@ -4378,6 +4376,12 @@ class Orchestrator:
                         # Async, best-effort: prepare this user's cards for next time.
                         self._kickoff_card_update(_esc_res, _esc_plan, user_message, _ctx_meta, emit)
                         return finish(_esc_res)
+                    # Goal not met: surface the current answer as a milestone so the user sees
+                    # progress while we continue iterating toward the goal.
+                    if emit is not None and text:
+                        emit.emit(ProgressEvent(type=EVENT_MILESTONE, text=text,
+                                                data={"goal_not_met": True,
+                                                      "reason": verdict.get("reason") or ""}))
                     if emit is not None:
                         emit.status("Answer not yet at the bar, improving it…")
                     _new = self._drain_pending(pending_inputs)
