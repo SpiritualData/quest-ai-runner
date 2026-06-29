@@ -1031,6 +1031,8 @@ class QuestAITerminal(App):
         self._deep_detail.hide()
         self._future_ctx_panel.hide()
 
+        self.title = "Quest AI Runner"
+
         if echo:
             self._tlog.write(Text(f"❯ {user_text}", style="bold cyan"))
             self._tlog.write(Text(""))
@@ -1145,6 +1147,10 @@ class QuestAITerminal(App):
             sources = data.get("sources") or []
             if card_meta:
                 self._ctx.set_cards(card_meta)
+                top = max(card_meta, key=lambda c: c.get("relevance_score", 0) or 0)
+                top_title = top.get("title") or top.get("id") or ""
+                if top_title:
+                    self.title = top_title
                 log.write("[dim]Context cards selected:[/dim]")
                 for card in card_meta:
                     cid = card.get("id", "?")
