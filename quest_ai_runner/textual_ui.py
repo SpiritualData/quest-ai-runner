@@ -148,6 +148,35 @@ class _RichLogHandler(logging.Handler):
 
 # ── Live widgets ────────────────────────────────────────────────────────────
 
+class NarrationBar(Static):
+    """Single line that shows the AI's current thinking beat, updating in place.
+
+    Each new beat replaces the previous text rather than appending to the log,
+    so beats appear one at a time as they arrive instead of all at once.
+    Hidden when there is no active narration.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._text = ""
+        self.display = False
+
+    def say(self, text: str) -> None:
+        self._text = text.strip()
+        self.display = bool(self._text)
+        self.refresh()
+
+    def clear(self) -> None:
+        self._text = ""
+        self.display = False
+        self.refresh()
+
+    def render(self):
+        t = Text()
+        t.append("  " + self._text, style="italic dim")
+        return t
+
+
 class ActivityBar(Static):
     """Three animated dots + status text in one line.
 
@@ -496,6 +525,12 @@ class QuestAITerminal(App):
         height: auto;
     }
 
+    #narration {
+        height: 1;
+        padding: 0 1;
+        margin: 0 0;
+    }
+
     #activity {
         height: 1;
         padding: 0 1;
@@ -592,6 +627,7 @@ class QuestAITerminal(App):
         yield DeepActivity(id="deep")
         yield DeepDetailPanel(id="deep-detail")
         yield FutureContextPanel(id="future-context")
+        yield NarrationBar(id="narration")
         yield ActivityBar(id="activity")
         yield Input(id="prompt", placeholder="Ask anything…   (/help, Esc to cancel, Alt+D=expand agent, Tab=cycle, PgUp/PgDn=scroll)")
         yield Footer()
@@ -604,6 +640,7 @@ class QuestAITerminal(App):
         self._deep_detail = self.query_one("#deep-detail", DeepDetailPanel)
         self._future_ctx_panel = self.query_one("#future-context", FutureContextPanel)
         self._activity = self.query_one("#activity", ActivityBar)
+        self._narration = self.query_one("#narration", NarrationBar)
         inp = self.query_one("#prompt", Input)
 
         # Slash-command autocompletion, like the prompt_toolkit completer.
@@ -1027,6 +1064,7 @@ class QuestAITerminal(App):
         self._deep_flushed = set()
         self._future_context = ""
         self._ctx.reset()
+        self._narration.clear()
         self._deep_view.hide()
         self._deep_detail.hide()
         self._future_ctx_panel.hide()
@@ -1103,12 +1141,13 @@ class QuestAITerminal(App):
 
         if t == ev["partial"]:
             # Narration beats (the instant ack + the planner's conversational rationale) come as
-            # EVENT_PARTIAL tagged data={"narration": True} (legacy: "ack"). Show them as dim
-            # "thinking out loud" lines; never let them start the answer buffer.
+            # EVENT_PARTIAL tagged data={"narration": True} (legacy: "ack"). Update the live
+            # NarrationBar in place so each beat replaces the previous one — beats arrive one at a
+            # time as the AI progresses rather than all stacking up at once.
             is_ack = isinstance(data, dict) and (data.get("narration") or data.get("ack"))
             if is_ack:
                 if text:
-                    log.write(Text(f"  {text}", style="dim"))
+                    self._narration.say(text.strip())
                 return
             # Accumulate streamed answer; render once at the end (calm display).
             self._partial_started = True
@@ -1244,6 +1283,7 @@ class QuestAITerminal(App):
         s = self.sess
         log = self._tlog
         self._activity.display = False
+        self._narration.clear()
         self._ctx.display = False
         # Persist any deep task output that didn't already emit a terminal phase
         # (incl. cancelled/errored turns) before the live widgets disappear.
