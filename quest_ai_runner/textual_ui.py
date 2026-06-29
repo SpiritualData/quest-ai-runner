@@ -1055,6 +1055,15 @@ class QuestAITerminal(App):
 
     # -- turn lifecycle --------------------------------------------------------
 
+    def _set_terminal_title(self, title: str) -> None:
+        """Update both the Textual header and the terminal window/pane title."""
+        self.title = title
+        try:
+            if hasattr(self, "_driver") and self._driver is not None:
+                self._driver.write(f"\033]0;{title}\007")
+        except Exception:
+            pass
+
     def _types(self) -> dict:
         if self._ev is None:
             from .core.adapters import (
@@ -1091,7 +1100,7 @@ class QuestAITerminal(App):
         self._deep_detail.hide()
         self._future_ctx_panel.hide()
 
-        self.title = "Quest AI Runner"
+        self._set_terminal_title("Quest AI Runner")
 
         if echo:
             self._tlog.write(Text(f"❯ {user_text}", style="bold cyan"))
@@ -1213,7 +1222,7 @@ class QuestAITerminal(App):
                 top = max(card_meta, key=lambda c: c.get("relevance_score", 0) or 0)
                 top_title = top.get("title") or top.get("id") or ""
                 if top_title:
-                    self.title = top_title
+                    self._set_terminal_title(top_title)
                 log.write("[dim]Context cards selected:[/dim]")
                 for card in card_meta:
                     cid = card.get("id", "?")
