@@ -694,8 +694,6 @@ class QuestAITerminal(App):
         if session._model_hint:
             parts.append(f"model: {session._model_hint}")
         c.dim("  " + "  •  ".join(parts))
-        for notice in getattr(session, "_startup_notices", []):
-            c.dim(f"  {notice}")
         c.line("")
         # Replay any messages the user typed before the session was ready.
         for queued_line in self._pre_session_queue:
@@ -723,8 +721,6 @@ class QuestAITerminal(App):
         if self.sess._model_hint:
             parts.append(f"model: {self.sess._model_hint}")
         c.dim("  " + "  •  ".join(parts))
-        for notice in getattr(self.sess, "_startup_notices", []):
-            c.dim(f"  {notice}")
         c.line("")
 
     # -- input dispatch --------------------------------------------------------
