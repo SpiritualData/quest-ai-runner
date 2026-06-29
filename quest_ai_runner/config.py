@@ -616,6 +616,15 @@ def resolve_context_assembler(
                 if _QdrantVS is not None:
                     if notify:
                         notify("Loading context index...")
+                    # QAR_QDRANT_URL / QDRANT_URL: connect to a running Qdrant server.
+                    # Preferred over embedded path — supports concurrent QAR instances.
+                    # Falls back to an embedded local path when neither is set.
+                    qdrant_url = (
+                        os.getenv("QAR_QDRANT_URL")
+                        or os.getenv("QAR_VECTOR_QDRANT_URL")
+                        or os.getenv("QDRANT_URL")
+                        or ""
+                    ).strip() or None
                     qdrant_path = os.path.join(cards_dir, "qdrant")
                     # QAR_EMBEDDER_BACKEND selects the embedding backend for the auto-built
                     # vector store: "voyage" uses Voyage AI (asymmetric document/query embedders,
@@ -624,23 +633,26 @@ def resolve_context_assembler(
                     backend = (os.getenv("QAR_EMBEDDER_BACKEND") or "").strip().lower()
                     _LOCAL_QDRANT_URL = "http://localhost:6333"
 
-                    def _try_qdrant_local_server(**kw):
-                        """Try connecting to a locally running Qdrant server (no path lock)."""
-                        try:
-                            store = _QdrantVS(url=_LOCAL_QDRANT_URL, **kw)
-                            _log.info("context index: connected to local Qdrant server at %s",
-                                      _LOCAL_QDRANT_URL)
-                            return store
-                        except Exception:  # noqa: BLE001
-                            return None
+                    def _open_qdrant(**kw):
+                        """Open QdrantVectorStore via URL (preferred) or embedded path.
 
-                    def _try_qdrant(path, **kw):
-                        """Open QdrantVectorStore (embedded path). On lock contention, try the
-                        local Qdrant server (localhost:6333) so multiple QAR instances can share
-                        the same index. If the server is also unavailable, emit a visible warning
-                        and return None (caller falls back to keyword-only search)."""
+                        URL mode (QAR_QDRANT_URL / QDRANT_URL set): connects to a running
+                        Qdrant server — supports concurrent QAR instances with no locking.
+
+                        Embedded mode (no URL): opens the local path. On lock contention
+                        (another QAR instance holds it), falls back to localhost:6333 and,
+                        if that is also unavailable, emits a visible warning and returns None.
+                        """
+                        if qdrant_url:
+                            try:
+                                return _QdrantVS(url=qdrant_url, **kw)
+                            except Exception as e:  # noqa: BLE001
+                                _log.warning("context index: Qdrant server at %s failed: %s",
+                                             qdrant_url, e)
+                                return None
+                        # Embedded path.
                         try:
-                            return _QdrantVS(path=path, **kw)
+                            return _QdrantVS(path=qdrant_path, **kw)
                         except RuntimeError as e:
                             if "already accessed" not in str(e):
                                 _log.warning("context index: Qdrant open failed: %s", e)
@@ -648,18 +660,19 @@ def resolve_context_assembler(
                         except Exception as e:  # noqa: BLE001
                             _log.warning("context index: Qdrant open failed: %s", e)
                             return None
-                        # Embedded path is locked — another QAR instance holds it.
-                        # Try the local server (supports concurrent access).
-                        store = _try_qdrant_local_server(**kw)
-                        if store is not None:
+                        # Embedded path locked — try the local server as a fallback.
+                        try:
+                            store = _QdrantVS(url=_LOCAL_QDRANT_URL, **kw)
+                            _log.info("context index: embedded Qdrant locked; connected to "
+                                      "local server at %s", _LOCAL_QDRANT_URL)
                             return store
-                        # Neither embedded nor server available.
+                        except Exception:  # noqa: BLE001
+                            pass
                         msg = (
                             "Vector search unavailable: Qdrant path is locked by another QAR "
-                            "instance and no local server was found at %s. "
-                            "To share the index across instances, start a Qdrant server "
-                            "(docker run -p 6333:6333 qdrant/qdrant) and set "
-                            "QAR_QDRANT_URL=http://localhost:6333." % _LOCAL_QDRANT_URL
+                            "instance and no local server responded at %s. "
+                            "Set QDRANT_URL or QAR_QDRANT_URL to a running Qdrant server "
+                            "(e.g. docker run -p 6333:6333 qdrant/qdrant)." % _LOCAL_QDRANT_URL
                         )
                         _log.warning("context index: %s", msg)
                         if notify:
@@ -669,8 +682,7 @@ def resolve_context_assembler(
                     if backend == "voyage":
                         try:
                             from .adapters.qdrant_vector_store import make_voyage_embedder
-                            vector_store = _try_qdrant(
-                                qdrant_path,
+                            vector_store = _open_qdrant(
                                 embedder=make_voyage_embedder(input_type="document"),
                                 query_embedder=make_voyage_embedder(input_type="query"),
                             )
@@ -680,13 +692,12 @@ def resolve_context_assembler(
                                 "embedder could not be built — falling back to fastembed",
                             )
                         if vector_store is None:
-                            vector_store = _try_qdrant(qdrant_path)
+                            vector_store = _open_qdrant()
                     elif backend == "openai":
                         try:
                             from .adapters.qdrant_vector_store import make_openai_embedder
                             embedder = make_openai_embedder()
-                            vector_store = _try_qdrant(
-                                qdrant_path,
+                            vector_store = _open_qdrant(
                                 embedder=embedder,
                                 query_embedder=embedder,
                             )
@@ -696,9 +707,9 @@ def resolve_context_assembler(
                                 "embedder could not be built — falling back to fastembed",
                             )
                         if vector_store is None:
-                            vector_store = _try_qdrant(qdrant_path)
+                            vector_store = _open_qdrant()
                     else:
-                        vector_store = _try_qdrant(qdrant_path)
+                        vector_store = _open_qdrant()
             except (ImportError, Exception):  # noqa: BLE001
                 # qdrant-client / fastembed not installed, or construction failed: keyword-only.
                 vector_store = None
