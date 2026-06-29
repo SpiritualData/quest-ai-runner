@@ -46,6 +46,27 @@ def extract_terms(text: str, stopwords: Optional[Set[str]] = None) -> set:
     return terms
 
 
+def compute_idf(corpus_term_sets: List[Set]) -> Dict[str, float]:
+    """Compute smoothed IDF weights over a corpus of term sets.
+
+    Uses the same formula as select_representatives:
+        IDF(t) = log((N+1) / (df(t)+1)) + 1
+
+    Args:
+        corpus_term_sets: One set of terms per document in the corpus.
+
+    Returns:
+        Mapping of term → IDF weight. Terms absent from the corpus get weight 1.0
+        (the smoothed floor) when looked up with .get(term, 1.0).
+    """
+    N = len(corpus_term_sets)
+    df: Dict[str, int] = {}
+    for terms in corpus_term_sets:
+        for term in terms:
+            df[term] = df.get(term, 0) + 1
+    return {term: math.log((N + 1) / (count + 1)) + 1.0 for term, count in df.items()}
+
+
 def select_representatives(
     items: List[str],
     get_terms: Callable[[str], set],
@@ -81,13 +102,8 @@ def select_representatives(
     for item in items:
         groups.setdefault(get_group(item), []).append(item)
 
-    N_items = len(items)
-
-    # corpus_df: how many items contain each term (denominator for global IDF)
-    corpus_df: Dict[str, int] = {}
-    for terms in all_terms_per_item.values():
-        for term in terms:
-            corpus_df[term] = corpus_df.get(term, 0) + 1
+    # corpus IDF weights: shared formula via compute_idf()
+    idf_weights = compute_idf(list(all_terms_per_item.values()))
 
     # group_df: per-group term counts (cluster DF — the "DF" in TF-DF-IDF)
     group_df: Dict[str, Dict[str, int]] = {}
@@ -114,8 +130,7 @@ def select_representatives(
             score = 0.0
             for term in terms:
                 cluster_df = gdf.get(term, 1)
-                n_t = corpus_df.get(term, 1)
-                idf = math.log((N_items + 1) / (n_t + 1)) + 1.0
+                idf = idf_weights.get(term, 1.0)
                 score += cluster_df * idf  # TF=1 (binary), so tf × cluster_df × idf = cluster_df × idf
 
             boost = get_score_boost(item) if get_score_boost else 1.0

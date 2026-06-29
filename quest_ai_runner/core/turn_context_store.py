@@ -2,6 +2,7 @@
 import datetime
 import hashlib
 import json
+import math
 import re
 import time
 from pathlib import Path
@@ -91,12 +92,15 @@ class TurnContextStore:
                 pass
         return cards
 
-    def _idf_score(self, query_kw: List[str], card_kw: List[str]) -> float:
-        """Simple overlap score: count of shared keywords."""
-        if not query_kw or not card_kw:
-            return 0.0
-        card_set = set(card_kw)
-        return sum(1 for w in query_kw if w in card_set)
+    def _recency_boost(self, created_at: str) -> float:
+        """Multiplicative recency boost: recent cards score higher. Half-life = 7 days."""
+        try:
+            ts = datetime.datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+            now = datetime.datetime.now(datetime.timezone.utc)
+            days_old = (now - ts).total_seconds() / 86400.0
+            return 1.0 + math.exp(-days_old * math.log(2) / 7.0)
+        except Exception:
+            return 1.0
 
     def assemble(
         self, task_text: str, *, meta: Optional[Dict[str, Any]] = None
@@ -109,10 +113,22 @@ class TurnContextStore:
             if not cards:
                 return AssembledContext()
 
-            query_kw = _keywords(task_text)
+            from quest_ai_runner.adapters.tfdfidf_sampling import compute_idf
+
+            # Use _keywords() for natural-language term extraction (extract_terms is for file paths).
+            # compute_idf() from tfdfidf_sampling provides the smoothed IDF formula.
+            query_terms = set(_keywords(task_text))
+            card_term_sets = [set(c.get("keywords", [])) for c in cards]
+            idf = compute_idf(card_term_sets)
+
             scored = [
-                (self._idf_score(query_kw, c.get("keywords", [])), i, c)
-                for i, c in enumerate(cards)
+                (
+                    sum(idf.get(t, 1.0) for t in query_terms if t in card_terms)
+                    * self._recency_boost(c.get("created_at", "")),
+                    i,
+                    c,
+                )
+                for i, (c, card_terms) in enumerate(zip(cards, card_term_sets))
             ]
             scored.sort(key=lambda x: (-x[0], -x[1]))  # highest score, most recent first
 
@@ -191,7 +207,7 @@ class TurnContextStore:
 
             user_kw = _keywords(task_text)
             asst_kw = _keywords(response)
-            all_kw = list(dict.fromkeys(user_kw + asst_kw))  # dedup, preserve order
+            all_kw = list(dict.fromkeys(user_kw + asst_kw))
 
             asst_summary = response
             if self._max_assistant_chars and len(asst_summary) > self._max_assistant_chars:
