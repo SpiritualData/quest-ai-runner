@@ -1214,15 +1214,14 @@ class InteractiveSession:
         self._last_user: str = ""
         self._last_assistant: str = ""
         self._turn_count: int = 0
-        # Accumulated conversation history — written to disk so the ClaudeConversationsAdapter
-        # can surface prior QAR sessions in future conversations.
+        # Accumulated conversation history — written to disk so future QAR sessions can recall it.
         self._session_history: List[Tuple[str, str]] = []  # [(user_text, assistant_text), ...]
-        # Session file: write turns here so next session's adapter finds them.
-        _sessions_dir = Path(os.getenv("QAR_CLAUDE_SESSIONS_DIR") or (Path.home() / ".claude" / "sessions"))
+        # QAR owns this directory. ~/.claude/sessions is Claude Code's territory (read-only for QAR).
+        _conv_dir = Path(os.getenv("QAR_CHAT_HISTORY_DIR") or (Path.home() / ".quest-ai-runner" / "conversations"))
         self._session_file: Optional[Path] = None
         try:
-            _sessions_dir.mkdir(parents=True, exist_ok=True)
-            self._session_file = _sessions_dir / f"qar_chat_{_uuid.uuid4().hex}.json"
+            _conv_dir.mkdir(parents=True, exist_ok=True)
+            self._session_file = _conv_dir / f"qar_chat_{_uuid.uuid4().hex}.json"
         except Exception:
             pass
 

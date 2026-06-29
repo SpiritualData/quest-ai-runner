@@ -69,6 +69,10 @@ Env it reads:
                                                    QAR_CLAUDE_SESSIONS_DIR is set.
   QAR_CLAUDE_SESSIONS_DIR (optional)          — explicit path to the Claude Code sessions directory
                                                    to search (default: ~/.claude/sessions).
+                                                   QAR reads this directory but never writes to it.
+  QAR_CHAT_HISTORY_DIR (optional)             — directory where QAR writes its own chat session
+                                                   history (default: ~/.quest-ai-runner/conversations).
+                                                   Written by QAR; read back by QAR in future sessions.
 
 chat-specific env vars (all optional):
   QAR_REP_NAME (optional)                        — display name for the AI representative shown in
@@ -170,23 +174,35 @@ def _config_from_env() -> RunnerConfig:
         else:
             retrieval = web_adapter
 
-    # Add Claude conversation search unless explicitly disabled.
-    # Searches ~/.claude/sessions (or QAR_CLAUDE_SESSIONS_DIR) so past conversations
-    # are reachable via grep during interactive and task sessions.
+    # Add conversation search unless explicitly disabled. Two separate adapters:
+    # 1. Claude Code sessions (~/.claude/sessions) — read-only; written by Claude Code, not QAR.
+    # 2. QAR's own chat history (~/.quest-ai-runner/conversations) — read+write by QAR.
     _conv_search = (os.getenv("QAR_CONVERSATION_SEARCH") or "").strip().lower()
     if _conv_search not in ("false", "0", "off", "no"):
+        conv_adapters = []
+        # Claude Code sessions (read-only for QAR)
         sessions_dir = os.getenv("QAR_CLAUDE_SESSIONS_DIR") or None
         try:
-            conv_adapter = ClaudeConversationsAdapter(
+            conv_adapters.append(ClaudeConversationsAdapter(
                 corpus_root=corpus,
                 sessions_dir=sessions_dir,
-            )
-            if retrieval is not None:
-                retrieval = CompositeRetrievalAdapter([retrieval, conv_adapter])
-            else:
-                retrieval = conv_adapter
+            ))
         except Exception:
-            pass  # conversations adapter is optional; don't break startup if sessions dir is missing
+            pass
+        # QAR's own chat history (read+write by QAR)
+        chat_history_dir = os.getenv("QAR_CHAT_HISTORY_DIR") or str(
+            Path.home() / ".quest-ai-runner" / "conversations"
+        )
+        if chat_history_dir:
+            try:
+                conv_adapters.append(ClaudeConversationsAdapter(sessions_dir=chat_history_dir))
+            except Exception:
+                pass
+        for adapter in conv_adapters:
+            if retrieval is not None:
+                retrieval = CompositeRetrievalAdapter([retrieval, adapter])
+            else:
+                retrieval = adapter
 
     # QAR_DEEP_WORKING_DIR defaults to QAR_CORPUS_ROOT so only one env var is needed.
     deep_dir = os.getenv("QAR_DEEP_WORKING_DIR") or corpus
