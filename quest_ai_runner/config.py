@@ -565,14 +565,51 @@ def resolve_context_assembler(
         from .core.model_registry import ModelRegistry as _MR
         _registry = _MR(cfg.model_provider, fallback=cfg.model_fallback or None)
 
-        # CARD-PERSISTENCE backend: "file" (DEFAULT, byte-for-byte today's per-card-JSON behavior) or
-        # "qdrant" (cards persist as points in one Qdrant collection via the generic
-        # QdrantCardRepository, with a query-only QdrantCardVectorStore as the vector arm so each card
-        # is embedded once). Any failure to build the qdrant repo degrades to the file backend.
+        # CARD-PERSISTENCE backend: "file" (DEFAULT), "qdrant", or "quest" (API-backed).
+        # "quest": when QAR_QUEST_API_URL + QAR_QUEST_API_KEY + QAR_USER_ID are set, cards
+        # are persisted to quest-backend's /api/cards endpoint instead of locally. Cards carry
+        # an inline preview so Quest AI can use them immediately without a local round-trip.
+        # "qdrant": cards persist as points in one Qdrant collection (no cards_dir dependency).
+        # "file" (default): per-card JSON files under cards_dir (stdlib only, zero deps).
         _cards_backend = (os.getenv("QAR_CARDS_BACKEND") or "").strip().lower() or "file"
         _card_repository = None
         _cards_vector_store = None  # set only for the qdrant backend (query-only, one embedding/card)
-        if _cards_backend == "qdrant":
+
+        # Quest API backend: auto-detected when the three required env vars are present and no
+        # explicit backend override is set (or the override is "quest").
+        _quest_api_url = (os.getenv("QAR_QUEST_API_URL") or "").strip()
+        _quest_api_key = (os.getenv("QAR_QUEST_API_KEY") or "").strip()
+        _quest_user_id = (os.getenv("QAR_USER_ID") or "").strip()
+        _quest_cards_active = (
+            _cards_backend == "quest"
+            or (
+                _cards_backend == "file"
+                and _quest_api_url
+                and _quest_api_key
+                and _quest_user_id
+            )
+        )
+        if _quest_cards_active and _quest_api_url and _quest_api_key and _quest_user_id:
+            try:
+                from .adapters.quest_api_card_repository import QuestApiCardRepository
+                _card_repository = QuestApiCardRepository(
+                    base_url=_quest_api_url,
+                    api_key=_quest_api_key,
+                    user_id=_quest_user_id,
+                )
+                _log.info(
+                    "context index: using quest-backend card API (%s, user %s...%s)",
+                    _quest_api_url,
+                    _quest_user_id[:4] if len(_quest_user_id) >= 4 else _quest_user_id,
+                    _quest_user_id[-4:] if len(_quest_user_id) >= 4 else "",
+                )
+            except Exception:  # noqa: BLE001
+                _log.warning(
+                    "context index: QuestApiCardRepository build failed; falling back to "
+                    "local file backend", exc_info=True,
+                )
+                _card_repository = None
+        elif _cards_backend == "qdrant":
             _card_repository, _cards_vector_store = _build_qdrant_card_repo_from_env(cards_dir)
 
         keyword = FileContextStore(
