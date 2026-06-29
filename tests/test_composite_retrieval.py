@@ -106,7 +106,7 @@ def test_claude_conversations_adapter_loads_sessions(temp_sessions):
     # Test with explicit sessions_dir
     adapter = ClaudeConversationsAdapter(sessions_dir=str(temp_sessions))
 
-    # Check that both sessions were loaded
+    adapter._ensure_loaded()
     assert adapter._conversations
     assert "design_discussion" in adapter._conversations
     assert "error_handling" in adapter._conversations
@@ -222,6 +222,7 @@ def test_claude_conversations_adapter_corpus_root(temp_corpus, temp_sessions):
     # Test with corpus_root (should auto-discover corpus/conversations/)
     adapter = ClaudeConversationsAdapter(corpus_root=str(temp_corpus))
 
+    adapter._ensure_loaded()
     assert adapter._conversations
     assert "conversations:design_discussion" in adapter._conversations
     assert "conversations:error_handling" in adapter._conversations
@@ -244,6 +245,7 @@ def test_claude_conversations_adapter_recursive_discovery(temp_corpus, temp_sess
     # Should find conversations in nested .claude and conversations/ directories
     adapter = ClaudeConversationsAdapter(corpus_root=str(temp_corpus))
 
+    adapter._ensure_loaded()
     assert adapter._conversations
     # Conversations in .claude dir
     assert any("docs:.claude:" in cid for cid in adapter._conversations.keys())
@@ -255,6 +257,7 @@ def test_conversation_filepath_tracking(temp_sessions):
     """Test that filepaths are tracked for each conversation."""
     adapter = ClaudeConversationsAdapter(sessions_dir=str(temp_sessions))
 
+    adapter._ensure_loaded()
     # Check that filepaths are stored
     assert adapter._conversation_filepaths
     assert "design_discussion" in adapter._conversation_filepaths
@@ -270,6 +273,7 @@ def test_conversation_filepath_tracking(temp_sessions):
 def test_conversation_digest_extraction(temp_sessions):
     """Test that digests are correctly extracted from conversations."""
     adapter = ClaudeConversationsAdapter(sessions_dir=str(temp_sessions))
+    adapter._ensure_loaded()
     conv = adapter._conversations["design_discussion"]
 
     digest = adapter._get_conversation_digest(conv)
@@ -303,6 +307,7 @@ def test_conversation_clustering_small_set(temp_sessions):
     """Test clustering with a small number of conversations."""
     adapter = ClaudeConversationsAdapter(sessions_dir=str(temp_sessions))
 
+    adapter._ensure_loaded()
     conv_ids = list(adapter._conversations.keys())
     digests = {cid: adapter._get_conversation_digest(adapter._conversations[cid]) for cid in conv_ids}
     timestamps = {cid: adapter._get_conversation_timestamp(adapter._conversations[cid]) for cid in conv_ids}
@@ -334,6 +339,7 @@ def test_claude_conversations_adapter_read_by_filename_with_corpus_root(temp_cor
     # Create adapter with corpus_root (uses full paths as keys)
     adapter = ClaudeConversationsAdapter(corpus_root=str(temp_corpus))
 
+    adapter._ensure_loaded()
     # Verify conversations are stored with full path keys
     assert "conversations:design_discussion" in adapter._conversations
     assert "conversations:error_handling" in adapter._conversations

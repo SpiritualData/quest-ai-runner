@@ -579,6 +579,8 @@ class QuestAITerminal(App):
         # Event-type constants, resolved lazily on first event.
         self._ev: Optional[dict] = None
         self._console: Optional[_RichLogConsole] = None
+        # Messages typed before the session finishes initializing (deferred-init path only).
+        self._pre_session_queue: List[str] = []
 
     # -- layout ----------------------------------------------------------------
 
@@ -642,7 +644,7 @@ class QuestAITerminal(App):
             # Deferred init: show UI immediately, build the session in a background worker.
             self._console = _RichLogConsole(self, self._tlog)
             self._console.dim("  Starting up...")
-            inp.disabled = True
+            inp.focus()
             self.run_worker(self._build_session_worker, exclusive=True, thread=True)
 
     def _build_session_worker(self) -> None:
@@ -669,9 +671,10 @@ class QuestAITerminal(App):
         self._deferred_persona = None
         self._deferred_goal_id = None
         self._print_header()
-        inp = self.query_one("#prompt", Input)
-        inp.disabled = False
-        inp.focus()
+        # Replay any messages the user typed before the session was ready.
+        for queued_line in self._pre_session_queue:
+            self._begin_turn(queued_line, echo=True)
+        self._pre_session_queue.clear()
 
     def _startup_failed(self, exc: Exception) -> None:
         """Called on the UI thread when session init fails — show the error and quit."""
@@ -701,6 +704,13 @@ class QuestAITerminal(App):
         line = (event.value or "").strip()
         event.input.value = ""
         if not line:
+            return
+
+        # Session still initializing — queue the message for replay once ready.
+        if self.sess is None:
+            self._pre_session_queue.append(line)
+            if self._tlog:
+                self._tlog.write(Text(f"  (queued — starting up...)", style="dim"))
             return
 
         # Menu selection mode (a picker is awaiting a number).

@@ -57,12 +57,16 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
         self.corpus_root = Path(corpus_root) if corpus_root else None
         self.sessions_dir = Path(sessions_dir) if sessions_dir else Path.home() / ".claude" / "sessions"
         self._conversations: Dict[str, Any] = {}
-        self._conversation_filepaths: Dict[str, Path] = {}  # Track filepath for each conversation
-        self._conv_id_lookup: Dict[str, str] = {}  # Map from filename stem to unique key (for faster lookup)
-        self._load_conversations()
+        self._conversation_filepaths: Dict[str, Path] = {}
+        self._conv_id_lookup: Dict[str, str] = {}
+        self._loaded = False  # lazy: scan deferred until first actual use
+
+    def _ensure_loaded(self) -> None:
+        if not self._loaded:
+            self._load_conversations()
 
     def _load_conversations(self) -> None:
-        """Load all .json conversation files (delegates to the shared loader).
+        """Scan and load all .json conversation files (delegates to the shared loader).
 
         If corpus_root is set, recursively scans for .claude/ dirs, conversations/ subdirs, and
         *.json files at any depth; otherwise uses the explicit sessions_dir.
@@ -70,6 +74,7 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
         self._conversations, self._conversation_filepaths, self._conv_id_lookup = load_conversations(
             self.corpus_root, self.sessions_dir
         )
+        self._loaded = True
 
     # Thin instance wrappers over the shared, module-level helpers — kept so existing call sites
     # (and any external callers) keep working with identical behavior.
@@ -103,6 +108,7 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
         rel_path is expected to be a conversation id (session name, or filename stem).
         Looks up the conversation using the stored mapping.
         """
+        self._ensure_loaded()
         # Resolve the conversation id / filename stem / path tail to a unique key.
         unique_key = resolve_conv_key(rel_path, self._conversations, self._conv_id_lookup)
         if unique_key is None:
@@ -137,6 +143,7 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
         except re.error as e:
             return Observation(kind="error", pattern=pattern, error=f"invalid regex: {e}")
 
+        self._ensure_loaded()
         hits: List[Dict[str, Any]] = []
         for conv_id, conv_data in self._conversations.items():
             conv_text = self._conversation_to_text(conv_data)
@@ -202,6 +209,7 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
         - "query": optional query text for reranking (not used yet, reserved)
         - "use_tfidf": use TF-DF-IDF sampling instead of clustering (default True)
         """
+        self._ensure_loaded()
         if not self._conversations:
             return Observation(kind="error", error="no conversations available")
 
@@ -309,6 +317,7 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
         conversations, including previous/unrelated ones. Prefer explicit read_section()
         by specific conversation ID when possible.
         """
+        self._ensure_loaded()
         if not self._conversations:
             return Observation(kind="error", error="no conversations loaded")
 
@@ -317,6 +326,7 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
 
     def describe_source(self, name: str, *, path: Optional[str] = None) -> Observation:
         """Describe a conversation by id."""
+        self._ensure_loaded()
         if name not in self._conversations:
             return Observation(kind="error", error=f"conversation not found: {name}")
 
