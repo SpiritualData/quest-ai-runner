@@ -659,7 +659,7 @@ class QuestAITerminal(App):
 
             def _live_notice(msg: str) -> None:
                 if _active[0]:
-                    self.call_from_thread(self._console.dim, f"  {msg}")
+                    self.call_from_thread(self.notify, msg, timeout=8)
 
             session = InteractiveSession(
                 self._deferred_config,
