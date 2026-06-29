@@ -522,12 +522,27 @@ class QuestAITerminal(App):
         Binding("pagedown", "scroll_down_or_agent", "Scroll down", show=True, priority=True),
     ]
 
-    def __init__(self, session: InteractiveSession, verbosity: int = 0, **kwargs) -> None:
+    def __init__(
+        self,
+        session: Optional[InteractiveSession],
+        verbosity: int = 0,
+        *,
+        _config=None,
+        _rep_name: str = "Assistant",
+        _persona: Optional[str] = None,
+        _goal_id: Optional[str] = None,
+        **kwargs,
+    ) -> None:
         super().__init__(**kwargs)
-        self.sess = session
-        self.rep_name = session._rep_name
+        self.sess = session  # None until _finish_startup when built lazily
+        self.rep_name = session._rep_name if session is not None else _rep_name
         self.title = "Quest AI Runner"
         self.verbosity = verbosity
+        # Deferred-init args (used when session=None; cleared after startup).
+        self._deferred_config = _config
+        self._deferred_rep_name = _rep_name
+        self._deferred_persona = _persona
+        self._deferred_goal_id = _goal_id
 
         # Per-turn streaming state (reset by _begin_turn).
         self._turn_active = False
@@ -602,10 +617,6 @@ class QuestAITerminal(App):
         self._deep_view.hide()
         self._activity.display = False
 
-        # Redirect the session's console into our transcript and print the header.
-        self._console = _RichLogConsole(self, self._tlog)
-        self.sess._console = self._console
-
         # Capture Python logging output into the RichLog (not stderr) for proper wrapping.
         root_logger = logging.getLogger()
         root_logger.handlers.clear()  # Remove stderr handler from basicConfig
@@ -621,8 +632,52 @@ class QuestAITerminal(App):
         root_logger.addHandler(log_handler)
         root_logger.setLevel(log_level)
 
+        if self.sess is not None:
+            # Session was pre-built (direct call) — wire console and show header immediately.
+            self._console = _RichLogConsole(self, self._tlog)
+            self.sess._console = self._console
+            self._print_header()
+            inp.focus()
+        else:
+            # Deferred init: show UI immediately, build the session in a background worker.
+            self._console = _RichLogConsole(self, self._tlog)
+            self._console.dim("  Starting up...")
+            inp.disabled = True
+            self.run_worker(self._build_session_worker, exclusive=True, thread=True)
+
+    def _build_session_worker(self) -> None:
+        """Worker thread: build InteractiveSession (loads embedder, Qdrant, etc.) then hand off."""
+        try:
+            from .interactive import InteractiveSession
+            session = InteractiveSession(
+                self._deferred_config,
+                rep_name=self._deferred_rep_name,
+                persona=self._deferred_persona,
+                goal_id=self._deferred_goal_id,
+            )
+            self.call_from_thread(self._finish_startup, session)
+        except Exception as exc:  # noqa: BLE001
+            self.call_from_thread(self._startup_failed, exc)
+
+    def _finish_startup(self, session: InteractiveSession) -> None:
+        """Called on the UI thread once the session is ready."""
+        self.sess = session
+        self.rep_name = session._rep_name
+        session._console = self._console
+        self._deferred_config = None
+        self._deferred_rep_name = None
+        self._deferred_persona = None
+        self._deferred_goal_id = None
         self._print_header()
+        inp = self.query_one("#prompt", Input)
+        inp.disabled = False
         inp.focus()
+
+    def _startup_failed(self, exc: Exception) -> None:
+        """Called on the UI thread when session init fails — show the error and quit."""
+        if self._console:
+            self._console.write(f"[red]Startup failed: {exc}[/red]")
+        self.exit(1)
 
     def _print_header(self) -> None:
         c = self._console

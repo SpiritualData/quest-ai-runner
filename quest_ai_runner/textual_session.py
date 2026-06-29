@@ -27,15 +27,18 @@ def start_textual_interactive(
     goal_id: Optional[str] = None,
     verbosity: int = 0,
 ) -> None:
-    """Build an InteractiveSession and run it under the Textual UI until quit."""
-    from .interactive import InteractiveSession
+    """Launch the Textual UI immediately, build the InteractiveSession in a background worker."""
     from .textual_ui import QuestAITerminal
 
-    session = InteractiveSession(
-        config, rep_name=rep_name, persona=persona, goal_id=goal_id
-    )
     try:
-        QuestAITerminal(session, verbosity=verbosity).run(mouse=False)
+        QuestAITerminal(
+            None,
+            verbosity=verbosity,
+            _config=config,
+            _rep_name=rep_name,
+            _persona=persona,
+            _goal_id=goal_id,
+        ).run(mouse=False)
     except KeyboardInterrupt:
         # Ctrl+C pressed — exit cleanly without traceback
         pass
