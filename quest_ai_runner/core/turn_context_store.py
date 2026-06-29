@@ -3,30 +3,11 @@ import datetime
 import hashlib
 import json
 import math
-import re
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.adapters.tfdfidf_sampling import select_representatives
-
-# ---------------------------------------------------------------------------
-# Stopword set (same set as the original turn_memory so keyword extraction
-# is consistent across the two modules).
-# ---------------------------------------------------------------------------
-
-_STOP = frozenset("""
-a an the is are was were be been being have has had do does did will would could should may
-might shall can need to of in on at by for with about as into through during before after
-above below from and or but not this that these those i you he she it we they what which
-who how when where why all both each few more most other some such no nor so yet either
-neither s t re ve ll d m
-""".split())
-
-
-def _keywords(text: str) -> List[str]:
-    words = re.findall(r"[a-z0-9_]+", text.lower())
-    return [w for w in words if w not in _STOP and len(w) > 2]
+from quest_ai_runner.adapters.tfdfidf_sampling import keywords_from_text, select_representatives
 
 
 def _now_iso() -> str:
@@ -115,7 +96,7 @@ class TurnContextStore:
             if not cards:
                 return AssembledContext()
 
-            query_terms = set(_keywords(task_text))
+            query_terms = set(keywords_from_text(task_text))
             card_kw: Dict[int, set] = {i: set(c.get("keywords", [])) for i, c in enumerate(cards)}
 
             # Pre-filter to cards with any query overlap, then delegate scoring and
@@ -177,8 +158,8 @@ class TurnContextStore:
                     pass
                 existing = existing[1:]
 
-            user_kw = _keywords(task_text)
-            asst_kw = _keywords(response)
+            user_kw = keywords_from_text(task_text)
+            asst_kw = keywords_from_text(response)
             all_kw = list(dict.fromkeys(user_kw + asst_kw))
 
             asst_summary = response

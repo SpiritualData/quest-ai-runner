@@ -21,6 +21,26 @@ import re
 from typing import Callable, Dict, List, Optional, Set
 
 
+_NL_STOP: frozenset = frozenset("""
+a an the is are was were be been being have has had do does did will would could should may
+might shall can need to of in on at by for with about as into through during before after
+above below from and or but not this that these those i you he she it we they what which
+who how when where why all both each few more most other some such no nor so yet either
+neither s t re ve ll d m
+""".split())
+
+
+def keywords_from_text(text: str) -> List[str]:
+    """Extract keywords from natural language text using word-level tokenisation.
+
+    Splits on non-alphanumeric characters, filters stopwords and short tokens.
+    Use this for conversational / prose text (turn cards, session messages).
+    Use ``extract_terms`` for file paths, code identifiers, and digests.
+    """
+    words = re.findall(r"[a-z0-9_]+", text.lower())
+    return [w for w in words if w not in _NL_STOP and len(w) > 2]
+
+
 def extract_terms(text: str, stopwords: Optional[Set[str]] = None) -> set:
     """Extract distinctive terms from text.
 

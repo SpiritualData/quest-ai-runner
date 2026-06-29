@@ -140,3 +140,17 @@ def test_claude_sessions_grep_does_not_match_unrelated(claude_sessions_dir):
     adapter = ClaudeConversationsAdapter(sessions_dir=str(claude_sessions_dir))
     result = adapter.grep("zzz_nonexistent_term_xyzzy")
     assert not result.hits
+
+
+def test_claude_sessions_assemble_surfaces_multilingual(claude_sessions_dir):
+    """ClaudeConversationsAdapter.assemble() must inject the multilingual session
+    as pre-flight context without the planner having to call grep first.
+    """
+    adapter = ClaudeConversationsAdapter(sessions_dir=str(claude_sessions_dir))
+    result = adapter.assemble(QUERY)
+
+    assert result.context_view, "assemble() returned empty context"
+    assert "multilingual" in result.context_view.lower(), (
+        "The multilingual session was not surfaced in pre-flight context — "
+        "TF-DF-IDF keyword scoring via select_representatives may not be ranking it."
+    )

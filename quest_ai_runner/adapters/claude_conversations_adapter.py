@@ -16,7 +16,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from quest_ai_runner.core.adapters import Observation, RetrievalAdapter
+from quest_ai_runner.core.adapters import AssembledContext, Observation, RetrievalAdapter
 from .conversation_format import (
     conversation_digest,
     conversation_metadata,
@@ -26,7 +26,7 @@ from .conversation_format import (
     load_conversations,
     resolve_conv_key,
 )
-from .tfdfidf_sampling import extract_terms, select_representatives
+from .tfdfidf_sampling import extract_terms, keywords_from_text, select_representatives
 
 
 class ClaudeConversationsAdapter(RetrievalAdapter):
@@ -164,33 +164,74 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
 
         return Observation(kind="grep", pattern=pattern, hits=hits)
 
+    def _recency_boost(self, cid: str) -> float:
+        """Multiplicative recency boost for a conversation. Half-life = 7 days."""
+        import math, time as _time
+        ts = self._get_conversation_timestamp(self._conversations[cid])
+        if ts <= 0:
+            return 1.0
+        days_old = (_time.time() - ts) / 86400.0
+        return 1.0 + math.exp(-days_old * math.log(2) / 7.0)
+
     def _select_representative_conversations(
         self, conv_ids: List[str], samples_per_cluster: int = 2
     ) -> List[str]:
-        """Select representative conversations using shared TF-DF-IDF heuristic.
-
-        Uses the shared select_representatives() function, extracting terms from
-        digests and weighting by recency.
-        """
+        """Select representative conversations using TF-DF-IDF + recency."""
         if not conv_ids:
             return []
-
-        # Create helper functions that close over self
-        def get_digest_terms(cid: str) -> set:
-            digest = self._get_conversation_digest(self._conversations[cid])
-            return extract_terms(digest)
-
-        def get_recency_boost(cid: str) -> float:
-            timestamp = self._get_conversation_timestamp(self._conversations[cid])
-            # Small boost for recent conversations
-            return 1.0 + (timestamp / 1e11) if timestamp > 0 else 1.0
-
         return select_representatives(
             conv_ids,
-            get_terms=get_digest_terms,
+            get_terms=lambda cid: extract_terms(self._get_conversation_digest(self._conversations[cid])),
             samples_per_group=samples_per_cluster,
-            get_score_boost=get_recency_boost,
+            get_score_boost=self._recency_boost,
         )
+
+    def assemble(
+        self, task_text: str, *, meta: Optional[Dict[str, Any]] = None
+    ) -> AssembledContext:
+        """Pre-flight context: inject digests of Claude sessions relevant to task_text.
+
+        Uses keywords_from_text for natural-language term extraction and
+        select_representatives (TF-DF-IDF + recency) to pick the best sessions.
+        Never raises.
+        """
+        try:
+            self._ensure_loaded()
+            if not self._conversations:
+                return AssembledContext()
+
+            query_terms = set(keywords_from_text(task_text))
+            conv_kw = {
+                cid: set(keywords_from_text(
+                    self._get_conversation_digest(conv)
+                ))
+                for cid, conv in self._conversations.items()
+            }
+
+            overlapping = [cid for cid, kw in conv_kw.items() if kw & query_terms]
+            if not overlapping:
+                return AssembledContext()
+
+            selected = select_representatives(
+                items=overlapping,
+                get_terms=lambda cid: conv_kw[cid],
+                samples_per_group=4,
+                get_score_boost=self._recency_boost,
+            )
+
+            if not selected:
+                return AssembledContext()
+
+            lines = ["--- RELEVANT PAST CLAUDE SESSIONS ---"]
+            for cid in selected:
+                lines.append(f"[session: {cid}]")
+                lines.append(self._get_conversation_digest(self._conversations[cid]))
+            return AssembledContext(context_view="\n".join(lines))
+        except Exception:
+            return AssembledContext()
+
+    def record(self, task_text: str, outcome: Dict[str, Any]) -> None:
+        pass  # sessions are written by Claude Code; QAR reads them only
 
     def query(self, spec: Dict[str, Any]) -> Observation:
         """Smart conversation retrieval via TF-DF-IDF sampling.

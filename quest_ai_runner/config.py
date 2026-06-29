@@ -622,20 +622,49 @@ def resolve_context_assembler(
                     # matching the backend's production setup), anything else (unset or
                     # "fastembed") uses the bare store's default local fastembed embedder.
                     backend = (os.getenv("QAR_EMBEDDER_BACKEND") or "").strip().lower()
+                    _LOCAL_QDRANT_URL = "http://localhost:6333"
+
+                    def _try_qdrant_local_server(**kw):
+                        """Try connecting to a locally running Qdrant server (no path lock)."""
+                        try:
+                            store = _QdrantVS(url=_LOCAL_QDRANT_URL, **kw)
+                            _log.info("context index: connected to local Qdrant server at %s",
+                                      _LOCAL_QDRANT_URL)
+                            return store
+                        except Exception:  # noqa: BLE001
+                            return None
+
                     def _try_qdrant(path, **kw):
-                        """Open QdrantVectorStore; returns None if the path is already locked."""
+                        """Open QdrantVectorStore (embedded path). On lock contention, try the
+                        local Qdrant server (localhost:6333) so multiple QAR instances can share
+                        the same index. If the server is also unavailable, emit a visible warning
+                        and return None (caller falls back to keyword-only search)."""
                         try:
                             return _QdrantVS(path=path, **kw)
                         except RuntimeError as e:
-                            if "already accessed" in str(e):
-                                _log.debug("context index: Qdrant path locked by another process; "
-                                           "falling back to keyword-only")
-                            else:
+                            if "already accessed" not in str(e):
                                 _log.warning("context index: Qdrant open failed: %s", e)
-                            return None
+                                return None
                         except Exception as e:  # noqa: BLE001
                             _log.warning("context index: Qdrant open failed: %s", e)
                             return None
+                        # Embedded path is locked — another QAR instance holds it.
+                        # Try the local server (supports concurrent access).
+                        store = _try_qdrant_local_server(**kw)
+                        if store is not None:
+                            return store
+                        # Neither embedded nor server available.
+                        msg = (
+                            "Vector search unavailable: Qdrant path is locked by another QAR "
+                            "instance and no local server was found at %s. "
+                            "To share the index across instances, start a Qdrant server "
+                            "(docker run -p 6333:6333 qdrant/qdrant) and set "
+                            "QAR_QDRANT_URL=http://localhost:6333." % _LOCAL_QDRANT_URL
+                        )
+                        _log.warning("context index: %s", msg)
+                        if notify:
+                            notify(msg)
+                        return None
 
                     if backend == "voyage":
                         try:
@@ -712,7 +741,24 @@ def resolve_context_assembler(
             )
         else:
             file_assembler = keyword
-        return CompositeContextAssembler([file_assembler, turn_store])
+
+        # Claude session assembler: injects relevant Claude Code session digests
+        # as pre-flight context alongside turn cards, using the same TF-DF-IDF
+        # + recency selection as TurnContextStore.
+        sessions_dir = os.getenv("QAR_CLAUDE_SESSIONS_DIR") or None
+        try:
+            from .adapters import ClaudeConversationsAdapter
+            claude_assembler = ClaudeConversationsAdapter(
+                corpus_root=root,
+                sessions_dir=sessions_dir,
+            )
+        except Exception:  # noqa: BLE001
+            claude_assembler = None
+
+        assemblers = [file_assembler, turn_store]
+        if claude_assembler is not None:
+            assemblers.append(claude_assembler)
+        return CompositeContextAssembler(assemblers)
     except Exception:  # noqa: BLE001 — never let context wiring break runner construction
         return None
 
