@@ -652,8 +652,14 @@ class QuestAITerminal(App):
         try:
             from .interactive import InteractiveSession
 
+            # Use a flag so we can stop forwarding notices the moment the session
+            # is returned — background threads (e.g. the bootstrap indexer) fire
+            # after that point and should not appear in the transcript.
+            _active = [True]
+
             def _live_notice(msg: str) -> None:
-                self.call_from_thread(self._console.dim, f"  {msg}")
+                if _active[0]:
+                    self.call_from_thread(self._console.dim, f"  {msg}")
 
             session = InteractiveSession(
                 self._deferred_config,
@@ -662,7 +668,7 @@ class QuestAITerminal(App):
                 goal_id=self._deferred_goal_id,
                 _startup_notify=_live_notice,
             )
-            _live_notice("Ready.")
+            _active[0] = False  # suppress any background-thread notices from here on
             self.call_from_thread(self._finish_startup, session)
         except Exception as exc:  # noqa: BLE001
             self.call_from_thread(self._startup_failed, exc)
