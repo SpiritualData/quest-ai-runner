@@ -559,6 +559,12 @@ class OrchestratorResult:
     # from provider.tokens_in / tokens_out when the provider supports tracking.
     tokens_in: int = 0
     tokens_out: int = 0
+    # Why the loop exited. One of: "verified" | "max_turns" | "escalated_deep" | "read_budget" |
+    # "unverified" | "deep_met" | "deep_not_met" | "clarify" | "confirm"
+    exit_reason: str = ""
+    # The last goal-verification verdict: {"met": bool, "reason": str, "next_action": str, ...}.
+    # Populated whenever _verify_goal ran. None when goal verification did not run this turn.
+    goal_verdict: Optional[Dict[str, Any]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -4001,6 +4007,23 @@ class Orchestrator:
                                         data={"tokens_in": _fti, "tokens_out": _fto,
                                               "total": _fti + _fto, "final": True}))
             # The terminal result + an explicit done event. RESULT/DONE always surface (both lanes).
+            # Emit a goal-verdict status line so the user sees WHY the answer was accepted
+            # or not — not just a yes/no, but the verifier's reasoning and what was missing.
+            if res.goal_verdict is not None:
+                _v = res.goal_verdict
+                _reason = (_v.get("reason") or "").strip()
+                _next = (_v.get("next_action") or "").strip()
+                if _v.get("met"):
+                    _verdict_line = f"Goal reached. {_reason}" if _reason else "Goal reached."
+                elif res.exit_reason == "escalated_deep":
+                    _verdict_line = (f"Searching further. {_reason}" if _reason
+                                     else "Searching further for a definitive answer.")
+                else:
+                    # Not met, max turns or unverified — tell the user what was missing
+                    _verdict_line = _reason or "Could not fully verify the goal was met."
+                    if _next:
+                        _verdict_line += f" To complete: {_next}"
+                emit.status(_verdict_line)
             if res.kind == "answer":
                 # Sanity check: answer text should NEVER be an orchestrator command.
                 # If it is, something went wrong in the planner/answer path.
@@ -4010,7 +4033,9 @@ class Orchestrator:
                     result_text = "I had trouble formulating a proper response to that. Please try again."
                 else:
                     result_text = res.text
-                emit.emit(ProgressEvent(type=EVENT_RESULT, text=result_text, result_kind="answer"))
+                emit.emit(ProgressEvent(type=EVENT_RESULT, text=result_text, result_kind="answer",
+                                        data={"exit_reason": res.exit_reason,
+                                              "goal_verdict": res.goal_verdict} if res.exit_reason else {}))
             elif res.kind == "confirm":
                 emit.emit(ProgressEvent(type=EVENT_DECISION, text=res.question,
                                         decision_id=res.decision_id, result_kind="confirm"))
@@ -4023,7 +4048,9 @@ class Orchestrator:
                 _future = _future_context_for_display(res.deep_results)
                 emit.emit(ProgressEvent(
                     type=EVENT_RESULT, text=out, result_kind="deep",
-                    data={"future_context": _future} if _future else {}))
+                    data={"future_context": _future,
+                          "exit_reason": res.exit_reason,
+                          "goal_verdict": res.goal_verdict} if (_future or res.exit_reason) else {}))
             emit.emit(ProgressEvent(type=EVENT_DONE, result_kind=res.kind, step=steps))
             return res
 
@@ -4149,7 +4176,8 @@ class Orchestrator:
                 text = self._grounded_answer(user_message, transcript, context_view, gathered, model,
                                              True, native_blocks=native_blocks)
                 return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
-                                                 partial=True, model=model))
+                                                 partial=True, model=model,
+                                                 exit_reason="read_budget"))
             plan.action = final = "deep"
             plan.goal = _truncate_goal(plan.goal or f"Fully address the request: {user_message}")
             plan.deep_brief = plan.deep_brief or user_message
@@ -4157,6 +4185,7 @@ class Orchestrator:
         if final == "clarify":
             # User clarification/selection needed: surface as decision-request
             res = self._run_clarify(plan, quest_id=quest_id, emit=emit)
+            res.exit_reason = "clarify"
             return finish(res)
 
         if final == "deep":
@@ -4169,6 +4198,7 @@ class Orchestrator:
                                  gathered=gathered, quality_standards=quality_standards,
                                  pending_inputs=pending_inputs, model_hint=model_hint,
                                  ctx_meta=_ctx_meta)
+            res.exit_reason = "deep_met" if (res.deep_results and all(d.met for d in res.deep_results)) else "deep_not_met"
             # Background: categorize edited files into context cards (deep runner returns edited_files in metadata)
             if res.deep_results and any(dr.met for dr in res.deep_results):
                 self._update_context_cards_after_deep(res, context_meta)
@@ -4179,6 +4209,7 @@ class Orchestrator:
 
         if final == "confirm":
             res = self._run_confirm(plan, quest_id=quest_id)
+            res.exit_reason = "confirm"
             return finish(res)
 
         # answer
@@ -4324,6 +4355,7 @@ class Orchestrator:
         # further — never accept "I couldn't find it" as a final answer when more searching is possible.
         # Always runs — even when a deferred deep fired but produced no output (in that case the
         # pre-deep proposal still needs to be held to the goal bar). Best-effort: never breaks the turn.
+        _last_verdict: Optional[Dict[str, Any]] = None
         if self.cfg.answer_goal_max_iterations > 1:
             try:
                 overall_goal = (plan.goal or "").strip() or (
@@ -4335,6 +4367,8 @@ class Orchestrator:
                                                 rep_preamble=rep_preamble,
                                                 quality_standards=quality_standards,
                                                 transcript=transcript)
+                    if verdict is not None:
+                        _last_verdict = verdict
                     if verdict is not None and verdict.get("met"):
                         if emit is not None:
                             emit.status("Answer verified against the goal.")
@@ -4373,6 +4407,8 @@ class Orchestrator:
                             gathered=gathered, quality_standards=quality_standards,
                             pending_inputs=pending_inputs, model_hint=model_hint,
                             ctx_meta=_ctx_meta)
+                        _esc_res.exit_reason = "escalated_deep"
+                        _esc_res.goal_verdict = verdict
                         # Async, best-effort: prepare this user's cards for next time.
                         self._kickoff_card_update(_esc_res, _esc_plan, user_message, _ctx_meta, emit)
                         return finish(_esc_res)
@@ -4394,8 +4430,12 @@ class Orchestrator:
             except Exception:  # noqa: BLE001 — answer verification must never break the turn
                 log.warning("answer goal verification failed", exc_info=True)
 
+        _exit_reason = "unverified"
+        if _last_verdict is not None:
+            _exit_reason = "verified" if _last_verdict.get("met") else "max_turns"
         return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
-                                         model=model))
+                                         model=model, exit_reason=_exit_reason,
+                                         goal_verdict=_last_verdict))
 
     # --- LIVE streaming convenience: a generator yielding events as they happen --------
 

@@ -301,10 +301,26 @@ class TaskExecutor:
                 self._safe(lambda: self._client.report_needs_you(task_id, text, ""))
                 self._post_conv(conv_id, text, kind="done")
                 return ExecutionOutcome(task_id, "needs_you", text)
-            self._report_progress(task_id, "done", text="Done.", output=text)
-            self._safe(lambda: self._client.report_done(task_id, text))
-            self._post_conv(conv_id, text, kind="done")
-            return ExecutionOutcome(task_id, "done", text)
+            # Append goal-verdict reasoning so the reader knows whether the goal was confirmed
+            # met, hit max iterations unverified, or was a best-effort partial answer.
+            verdict_suffix = ""
+            exit_reason = getattr(result, "exit_reason", "")
+            goal_verdict = getattr(result, "goal_verdict", None)
+            if exit_reason == "max_turns" and goal_verdict:
+                reason = (goal_verdict.get("reason") or "").strip()
+                next_action = (goal_verdict.get("next_action") or "").strip()
+                verdict_suffix = f"\n\n---\nGoal not fully verified after all attempts."
+                if reason:
+                    verdict_suffix += f" {reason}"
+                if next_action:
+                    verdict_suffix += f" To complete: {next_action}"
+            elif exit_reason == "read_budget":
+                verdict_suffix = "\n\n---\nNote: this is a best-effort answer based on context gathered so far."
+            done_text = text + verdict_suffix if verdict_suffix else text
+            self._report_progress(task_id, "done", text="Done.", output=done_text)
+            self._safe(lambda: self._client.report_done(task_id, done_text))
+            self._post_conv(conv_id, done_text, kind="done")
+            return ExecutionOutcome(task_id, "done", done_text)
 
         if result.kind == "confirm":
             summary = result.question or "A human decision is required before proceeding."
