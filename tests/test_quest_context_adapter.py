@@ -30,10 +30,22 @@ from quest_ai_runner.adapters.quest_context_adapter import (
 # ---------------------------------------------------------------------------
 
 def _mock_200(context: str = "merged context text") -> MagicMock:
-    """Build a mock urllib response that returns a 200 with the given context."""
-    payload = json.dumps({"context": context, "sources": [], "sources_visited": [], "pending_envs": []})
+    """Build a mock urllib response that returns a 200 SSE stream with the given context."""
+    assembled_payload = {
+        "event": "assembled",
+        "context": context,
+        "cards": [],
+        "sources": [],
+        "sources_visited": [],
+        "pending_envs": [],
+    }
+    sse_body = (
+        f"data: {json.dumps({'event': 'start'})}\n\n"
+        f"data: {json.dumps(assembled_payload)}\n\n"
+        f"data: {json.dumps({'event': 'done'})}\n\n"
+    )
     mock_resp = MagicMock()
-    mock_resp.read.return_value = payload.encode()
+    mock_resp.read.return_value = sse_body.encode()
     mock_resp.__enter__ = lambda s: s
     mock_resp.__exit__ = MagicMock(return_value=False)
     return mock_resp
@@ -264,7 +276,7 @@ def test_post_sends_correct_headers_and_body():
     with patch("urllib.request.urlopen", side_effect=fake_urlopen):
         result = a._post({"query": "test", "user_id": "u1"})
 
-    assert captured["url"] == "https://q.example.com/api/quest-context/resolve"
+    assert captured["url"] == "https://q.example.com/api/cards/assemble"
     assert captured["method"] == "POST"
     assert captured["auth"] == "Bearer qsk_mykey"
     assert "application/json" in captured["content_type"].lower()

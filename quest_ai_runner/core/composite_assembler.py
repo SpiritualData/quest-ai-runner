@@ -28,9 +28,14 @@ class CompositeContextAssembler:
         self._assemblers = assemblers
 
     def assemble(
-        self, task_text: str, *, meta: Optional[Dict[str, Any]] = None
+        self, task_text: str, *, meta: Optional[Dict[str, Any]] = None, on_event=None
     ) -> Any:
-        """Return concatenated context from all assemblers. Never raises."""
+        """Return concatenated context from all assemblers. Never raises.
+
+        ``on_event``, if given, is called after each inner assembler completes with
+        ``("arm_done", {"assembler": ..., "cards_found": ..., "context_chars": ...})``.
+        ``on_event`` is NOT forwarded to inner assemblers; only this composite emits it.
+        """
         from .adapters import AssembledContext
         import logging
 
@@ -59,6 +64,15 @@ class CompositeContextAssembler:
                 card_metadata.extend(getattr(result, 'card_metadata', None) or [])
                 if hint is None and result.model_tier_hint:
                     hint = result.model_tier_hint
+                if on_event is not None:
+                    try:
+                        on_event("arm_done", {
+                            "assembler": type(a).__name__,
+                            "cards_found": len(result.card_metadata or []),
+                            "context_chars": len(result.context_view or ""),
+                        })
+                    except Exception:
+                        pass
             except Exception as e:
                 _log.debug(f"Assembler {type(a).__name__} failed: {type(e).__name__}: {e}", exc_info=True)
 

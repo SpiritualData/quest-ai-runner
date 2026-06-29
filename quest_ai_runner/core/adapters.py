@@ -430,9 +430,14 @@ class ContextAssembler(Protocol):
     """
 
     def assemble(
-        self, task_text: str, *, meta: Optional[Dict[str, Any]] = None
+        self, task_text: str, *, meta: Optional[Dict[str, Any]] = None, on_event: Optional[Any] = None
     ) -> "AssembledContext":
-        """Return pre-assembled context for ``task_text``. Never raises."""
+        """Return pre-assembled context for ``task_text``. Never raises.
+
+        ``on_event``, if given, is a callable ``(event_type: str, data: dict) -> None`` that
+        receives progress events as assembly progresses. Callers that do not care about events
+        may omit it; implementations that do not support it may ignore it.
+        """
 
     def record(self, task_text: str, outcome: Dict[str, Any]) -> None:
         """Best-effort write-back of the run outcome. Never raises."""

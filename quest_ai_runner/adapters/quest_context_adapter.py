@@ -1,8 +1,10 @@
-"""QuestContextAdapter -- HTTP client for the /api/quest-context/resolve hub endpoint.
+"""QuestContextAdapter -- HTTP client for the /api/cards/assemble hub endpoint.
 
 Exposes the Quest context hub as:
   (a) a direct ``resolve(query, ...)`` call that returns the merged context string, and
-  (b) a set of ``ReferenceResolver`` implementations for the ``collection`` and ``query``
+  (b) a ``fetch(query, ...)`` call that returns both ``context`` and ``cards`` from the
+      assembled event, and
+  (c) a set of ``ReferenceResolver`` implementations for the ``collection`` and ``query``
       content-item types, assembled by ``build_quest_resolvers(adapter)``.  These let any
       out-of-process QAR (or a cockpit Orchestrator) resolve Quest collection and query
       references through the hub instead of falling back to unresolved-pointer placeholders.
@@ -17,8 +19,9 @@ Env vars (read by ``_get_base_url`` / ``_get_api_key``):
 
 HTTP is stdlib-only (``urllib.request`` + ``json``); no third-party deps.
 All I/O is synchronous and bounded by ``timeout`` (default 10 s).
-``resolve()`` NEVER raises; it returns ``""`` on any failure so a bad pointer or
-network hiccup can never break a context-assembly pass.
+The endpoint returns SSE; the adapter reads the full stream and extracts the ``assembled``
+event. ``resolve()`` and ``fetch()`` NEVER raise; they return ``""`` / empty dicts on any
+failure so a bad pointer or network hiccup can never break a context-assembly pass.
 """
 from __future__ import annotations
 
@@ -48,14 +51,14 @@ def _get_api_key() -> str:
 # ---------------------------------------------------------------------------
 
 class QuestContextAdapter:
-    """HTTP client for ``POST /api/quest-context/resolve``.
+    """HTTP client for ``POST /api/cards/assemble``.
 
     Parameterized by ``base_url`` + ``api_key`` plus optional default scope fields
     (``default_user_id``, ``default_quest_ids``, ``default_team_id``).  Per-call overrides
     take precedence over the defaults.
 
     Construction is cheap; build one instance per consumer and reuse it.
-    Never raises from ``resolve()``; returns ``""`` on any error.
+    ``resolve()`` and ``fetch()`` never raise; they return ``""`` / empty dicts on any error.
     """
 
     def __init__(
@@ -108,7 +111,7 @@ class QuestContextAdapter:
         return bool(self._base_url and self._api_key)
 
     # ------------------------------------------------------------------
-    # Core resolve
+    # Core resolve (returns context string only)
     # ------------------------------------------------------------------
 
     def resolve(
@@ -120,7 +123,7 @@ class QuestContextAdapter:
         team_id: Optional[str] = None,
         max_chars: Optional[int] = None,
     ) -> str:
-        """POST to ``/api/quest-context/resolve`` and return the merged context string.
+        """POST to ``/api/cards/assemble`` and return the merged context string.
 
         Per-call args override the instance defaults.  Returns ``""`` when:
         - the adapter is not configured (no base_url or api_key),
@@ -149,27 +152,94 @@ class QuestContextAdapter:
             return ""
 
     # ------------------------------------------------------------------
+    # fetch (returns context + cards)
+    # ------------------------------------------------------------------
+
+    def fetch(
+        self,
+        query: str,
+        *,
+        user_id: Optional[str] = None,
+        quest_ids: Optional[List[str]] = None,
+        team_id: Optional[str] = None,
+        max_chars: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """POST to ``/api/cards/assemble`` and return both context and cards.
+
+        Returns ``{"context": str, "cards": list}`` from the assembled event.
+        Returns empty values when not configured or on any error. Never raises.
+        """
+        if not self.configured:
+            return {"context": "", "cards": []}
+        try:
+            body: Dict[str, Any] = {"query": query or ""}
+            uid = user_id or self._default_user_id
+            if uid:
+                body["user_id"] = uid
+            qids = quest_ids if quest_ids is not None else self._default_quest_ids
+            if qids:
+                body["quest_ids"] = list(qids)
+            tid = team_id or self._default_team_id
+            if tid:
+                body["team_id"] = tid
+            if max_chars is not None:
+                body["max_chars"] = int(max_chars)
+
+            assembled = self._post_to_assemble(body)
+            return {
+                "context": str(assembled.get("context") or ""),
+                "cards": list(assembled.get("cards") or []),
+            }
+        except Exception:  # noqa: BLE001
+            return {"context": "", "cards": []}
+
+    # ------------------------------------------------------------------
     # Internal HTTP
     # ------------------------------------------------------------------
 
     def _post(self, body: Dict[str, Any]) -> str:
-        """POST ``body`` to the hub and return the ``context`` field (or ``""``)."""
-        url = f"{self._base_url}/api/quest-context/resolve"
+        """POST ``body`` to the hub and return the ``context`` field from the assembled event."""
+        assembled = self._post_to_assemble(body)
+        return str(assembled.get("context") or "")
+
+    def _post_to_assemble(self, body: Dict[str, Any]) -> Dict[str, Any]:
+        """POST ``body`` to ``/api/cards/assemble`` (SSE) and return the assembled event payload.
+
+        The endpoint streams SSE. This method reads the full stream, finds the ``assembled``
+        event, and returns its payload dict. Returns ``{}`` on HTTP error, network failure, or
+        if no ``assembled`` event is found.
+        """
+        url = f"{self._base_url}/api/cards/assemble"
         data = json.dumps(body).encode()
         req = urllib.request.Request(url, data=data, method="POST")
         req.add_header("Authorization", f"Bearer {self._api_key}")
         req.add_header("Content-Type", "application/json")
         try:
             with urllib.request.urlopen(req, timeout=self._timeout) as resp:
-                raw = resp.read()
-                result = json.loads(raw) if raw else {}
-                return str(result.get("context") or "")
+                raw = resp.read().decode("utf-8", errors="replace")
+                return self._parse_sse_assembled(raw)
         except urllib.error.HTTPError as exc:
-            # Swallow -- caller gets ""
+            # Swallow -- caller gets empty result
             _ = exc.read()
-            return ""
-        except Exception:  # noqa: BLE001 -- timeout, URLError, JSON parse error, etc.
-            return ""
+            return {}
+        except Exception:  # noqa: BLE001 -- timeout, URLError, decode error, etc.
+            return {}
+
+    def _parse_sse_assembled(self, raw: str) -> Dict[str, Any]:
+        """Scan SSE stream text for the ``assembled`` event and return its payload.
+
+        Lines starting with ``data: `` are parsed as JSON. The first line whose ``event``
+        field equals ``"assembled"`` is returned. Returns ``{}`` if none is found.
+        """
+        for line in raw.splitlines():
+            if line.startswith("data: "):
+                try:
+                    event = json.loads(line[6:])
+                    if event.get("event") == "assembled":
+                        return event
+                except Exception:  # noqa: BLE001 -- bad JSON on one line never stops the scan
+                    pass
+        return {}
 
 
 # ---------------------------------------------------------------------------

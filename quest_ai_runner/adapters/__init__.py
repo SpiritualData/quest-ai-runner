@@ -35,8 +35,9 @@ These satisfy the core interfaces; a consumer wires the ones it needs into a Run
                                 ModelProvider and searches IN PARALLEL. Requires the [bm25] extra.
   * QdrantVectorStore         — VectorStoreBase backed by a local-filesystem or remote Qdrant
                                 instance. Requires the [qdrant] optional extra.
-  * QuestContextAdapter       — HTTP client for ``POST /api/quest-context/resolve`` (the Quest
-                                context hub). Returns merged context string; degrades gracefully
+  * QuestContextAdapter       — HTTP client for ``POST /api/cards/assemble`` (the Quest
+                                context hub). Returns merged context string via ``resolve()``
+                                or both context and cards via ``fetch()``; degrades gracefully
                                 on failures. ``build_quest_resolvers(adapter)`` builds a
                                 ``{collection, query}`` ReferenceResolver dict ready to inject
                                 into ``RunnerConfig.reference_resolvers`` so a QAR resolves
