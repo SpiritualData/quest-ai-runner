@@ -659,7 +659,7 @@ class QuestAITerminal(App):
 
             def _live_notice(msg: str) -> None:
                 if _active[0]:
-                    self.call_from_thread(self.notify, msg, timeout=8)
+                    self.call_from_thread(setattr, self, "sub_title", msg)
 
             session = InteractiveSession(
                 self._deferred_config,
@@ -675,6 +675,7 @@ class QuestAITerminal(App):
 
     def _finish_startup(self, session: InteractiveSession) -> None:
         """Called on the UI thread once the session is ready."""
+        self.sub_title = ""  # clear any loading status from the header
         self.sess = session
         self.rep_name = session._rep_name
         session._console = self._console
