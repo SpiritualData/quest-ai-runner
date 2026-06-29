@@ -4405,7 +4405,9 @@ class Orchestrator:
                    model_hint: Optional[str] = None,
                    attachments: Optional[List[Dict[str, Any]]] = None,
                    rep_preamble: Optional[str] = None,
-                   pending_inputs: Optional[Callable[[], List[str]]] = None):
+                   pending_inputs: Optional[Callable[[], List[str]]] = None,
+                   conv_id: Optional[str] = None,
+                   conv_scope: Optional[Dict[str, Any]] = None):
         """Generator form of ``run`` for a LIVE consumer that wants to iterate events.
 
         Yields each ``ProgressEvent`` (as emitted, post-sink-policy for the given mode) and,
@@ -4439,7 +4441,8 @@ class Orchestrator:
                 res = self.run(user_message, transcript=transcript, context_view=context_view,
                                quest_id=quest_id, mode=mode, sink=sink, model_hint=model_hint,
                                attachments=attachments, rep_preamble=rep_preamble,
-                               pending_inputs=pending_inputs)
+                               pending_inputs=pending_inputs, conv_id=conv_id,
+                               conv_scope=conv_scope)
                 result_box["result"] = res
             except Exception as e:  # noqa: BLE001
                 result_box["error"] = e

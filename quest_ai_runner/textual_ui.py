@@ -1125,11 +1125,13 @@ class QuestAITerminal(App):
             _pending = (lambda: _inbox.drain(_sid)) if _inbox is not None else None
             for item in s._orch.run_stream(
                 user_text,
-                transcript=s._last_transcript(),
+                transcript=s._relevant_transcript(user_text),
                 quest_id=s._goal_id,
                 rep_preamble=s._effective_preamble(),
                 model_hint=model_hint,
                 pending_inputs=_pending,
+                conv_id=s._conv_store.CONV_ID if hasattr(s, "_conv_store") else None,
+                conv_scope={},
             ):
                 if self._cancel.is_set():
                     break
