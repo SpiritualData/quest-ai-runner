@@ -1181,7 +1181,8 @@ class InteractiveSession:
     """Multi-turn interactive session over a RunnerConfig's orchestrator."""
 
     def __init__(self, cfg: "RunnerConfig", *, rep_name: str = "Assistant",
-                 persona: Optional[str] = None, goal_id: Optional[str] = None) -> None:
+                 persona: Optional[str] = None, goal_id: Optional[str] = None,
+                 _startup_notify=None) -> None:
         # Silence background-scanning INFO logs during interactive use.
         # The context panel already shows what's being gathered turn by turn;
         # raw log lines from background threads corrupt the prompt display because
@@ -1199,8 +1200,9 @@ class InteractiveSession:
         def notify_and_log(msg: str) -> None:
             """Show bootstrap/index messages to user and queue for header."""
             self._startup_notices.append(msg)
-            # Show immediately to console if we have access (in interactive mode)
             self._console.dim(f"  {msg}")
+            if _startup_notify is not None:
+                _startup_notify(msg)
 
         self._orch: "Orchestrator" = build_orchestrator(
             cfg, notify=notify_and_log

@@ -641,9 +641,9 @@ class QuestAITerminal(App):
             self._print_header()
             inp.focus()
         else:
-            # Deferred init: show UI immediately, build the session in a background worker.
+            # Deferred init: show the static banner immediately; session line follows once ready.
             self._console = _RichLogConsole(self, self._tlog)
-            self._console.dim("  Starting up...")
+            self._print_static_banner()
             inp.focus()
             self.run_worker(self._build_session_worker, exclusive=True, thread=True)
 
@@ -651,12 +651,18 @@ class QuestAITerminal(App):
         """Worker thread: build InteractiveSession (loads embedder, Qdrant, etc.) then hand off."""
         try:
             from .interactive import InteractiveSession
+
+            def _live_notice(msg: str) -> None:
+                self.call_from_thread(self._console.dim, f"  {msg}")
+
             session = InteractiveSession(
                 self._deferred_config,
                 rep_name=self._deferred_rep_name,
                 persona=self._deferred_persona,
                 goal_id=self._deferred_goal_id,
+                _startup_notify=_live_notice,
             )
+            _live_notice("Ready.")
             self.call_from_thread(self._finish_startup, session)
         except Exception as exc:  # noqa: BLE001
             self.call_from_thread(self._startup_failed, exc)
@@ -670,7 +676,20 @@ class QuestAITerminal(App):
         self._deferred_rep_name = None
         self._deferred_persona = None
         self._deferred_goal_id = None
-        self._print_header()
+        # Banner was already shown by _print_static_banner; just add the session line.
+        c = self._console
+        parts = [f"AI: {session._rep_name}"]
+        corpus = getattr(session._cfg, "corpus_root", None)
+        if corpus:
+            parts.append(f"corpus: {corpus.split('/')[-1] if '/' in corpus else corpus}")
+        if session._goal_id:
+            parts.append(f"goal: {session._goal_id}")
+        if session._model_hint:
+            parts.append(f"model: {session._model_hint}")
+        c.dim("  " + "  •  ".join(parts))
+        for notice in getattr(session, "_startup_notices", []):
+            c.dim(f"  {notice}")
+        c.line("")
         # Replay any messages the user typed before the session was ready.
         for queued_line in self._pre_session_queue:
             self._begin_turn(queued_line, echo=True)
@@ -681,6 +700,9 @@ class QuestAITerminal(App):
         if self._console:
             self._console.write(f"[red]Startup failed: {exc}[/red]")
         self.exit(1)
+
+    def _print_static_banner(self) -> None:
+        self._console.write(_BANNER.format(B=_BOLD, C=_CYAN, R=_RESET, D=_DIM))
 
     def _print_header(self) -> None:
         c = self._console

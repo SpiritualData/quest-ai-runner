@@ -614,17 +614,34 @@ def resolve_context_assembler(
             try:
                 from .adapters import QdrantVectorStore as _QdrantVS
                 if _QdrantVS is not None:
+                    if notify:
+                        notify("Loading context index...")
                     qdrant_path = os.path.join(cards_dir, "qdrant")
                     # QAR_EMBEDDER_BACKEND selects the embedding backend for the auto-built
                     # vector store: "voyage" uses Voyage AI (asymmetric document/query embedders,
                     # matching the backend's production setup), anything else (unset or
                     # "fastembed") uses the bare store's default local fastembed embedder.
                     backend = (os.getenv("QAR_EMBEDDER_BACKEND") or "").strip().lower()
+                    def _try_qdrant(path, **kw):
+                        """Open QdrantVectorStore; returns None if the path is already locked."""
+                        try:
+                            return _QdrantVS(path=path, **kw)
+                        except RuntimeError as e:
+                            if "already accessed" in str(e):
+                                _log.debug("context index: Qdrant path locked by another process; "
+                                           "falling back to keyword-only")
+                            else:
+                                _log.warning("context index: Qdrant open failed: %s", e)
+                            return None
+                        except Exception as e:  # noqa: BLE001
+                            _log.warning("context index: Qdrant open failed: %s", e)
+                            return None
+
                     if backend == "voyage":
                         try:
                             from .adapters.qdrant_vector_store import make_voyage_embedder
-                            vector_store = _QdrantVS(
-                                path=qdrant_path,
+                            vector_store = _try_qdrant(
+                                qdrant_path,
                                 embedder=make_voyage_embedder(input_type="document"),
                                 query_embedder=make_voyage_embedder(input_type="query"),
                             )
@@ -632,15 +649,15 @@ def resolve_context_assembler(
                             _log.warning(
                                 "context index: QAR_EMBEDDER_BACKEND=voyage but the voyageai "
                                 "embedder could not be built — falling back to fastembed",
-                                exc_info=True,
                             )
-                            vector_store = _QdrantVS(path=qdrant_path)
+                        if vector_store is None:
+                            vector_store = _try_qdrant(qdrant_path)
                     elif backend == "openai":
                         try:
                             from .adapters.qdrant_vector_store import make_openai_embedder
                             embedder = make_openai_embedder()
-                            vector_store = _QdrantVS(
-                                path=qdrant_path,
+                            vector_store = _try_qdrant(
+                                qdrant_path,
                                 embedder=embedder,
                                 query_embedder=embedder,
                             )
@@ -648,11 +665,11 @@ def resolve_context_assembler(
                             _log.warning(
                                 "context index: QAR_EMBEDDER_BACKEND=openai but the openai "
                                 "embedder could not be built — falling back to fastembed",
-                                exc_info=True,
                             )
-                            vector_store = _QdrantVS(path=qdrant_path)
+                        if vector_store is None:
+                            vector_store = _try_qdrant(qdrant_path)
                     else:
-                        vector_store = _QdrantVS(path=qdrant_path)
+                        vector_store = _try_qdrant(qdrant_path)
             except (ImportError, Exception):  # noqa: BLE001
                 # qdrant-client / fastembed not installed, or construction failed: keyword-only.
                 vector_store = None
