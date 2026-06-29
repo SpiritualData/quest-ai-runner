@@ -1681,25 +1681,11 @@ class Narrator:
         msgs.append({"role": "user", "content": user})
         return self._provider.answer(msgs, model=self._model)
 
-    @staticmethod
-    def _first_sentence(text: str) -> str:
-        """Trim to the first complete sentence; strip newlines between sentences."""
-        text = " ".join(text.split())
-        m = re.search(r"[.!?](?:\s|$)", text)
-        if m:
-            return text[:m.end()].strip()
-        return text.strip()
-
     def _say(self, line: Optional[str]) -> None:
         if not line:
             return
         # Defensive brand cleanup: never speak em dashes even if the model slips one in.
         line = line.strip().replace("—", ", ").replace(" -- ", ", ")
-        if not line:
-            return
-        # Hard backstop: the prompt says ONE sentence but models sometimes ignore it.
-        # Trim to the first sentence so multi-sentence responses never flood the UI at once.
-        line = self._first_sentence(line)
         if not line:
             return
         # Emit with a trailing space so consecutive beats (ack, then each per-step beat) read as
