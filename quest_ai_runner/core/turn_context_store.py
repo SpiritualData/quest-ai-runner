@@ -97,16 +97,29 @@ class TurnContextStore:
                 return AssembledContext()
 
             query_terms = set(keywords_from_text(task_text))
+            # Per card: keep user vs AI keywords separate so user messages get a score
+            # boost — user inputs are a stronger signal of what was discussed than AI outputs.
+            # Fall back to the combined "keywords" field for cards written before this split.
+            card_user_kw: Dict[int, set] = {
+                i: set(c.get("user_keywords", c.get("keywords", []))) for i, c in enumerate(cards)
+            }
             card_kw: Dict[int, set] = {i: set(c.get("keywords", [])) for i, c in enumerate(cards)}
 
             # Pre-filter to cards with any query overlap, then delegate scoring and
             # selection entirely to select_representatives (TF-DF-IDF + recency boost).
             overlapping = [i for i, kw in card_kw.items() if kw & query_terms]
+
+            def _boost(i: int) -> float:
+                user_overlap = len(card_user_kw[i] & query_terms)
+                # Each user keyword match adds a 0.4 boost (capped at 3 terms → 1.2 max).
+                user_bonus = 0.4 * min(user_overlap, 3)
+                return (1.0 + user_bonus) * self._recency_boost(cards[i].get("created_at", ""))
+
             selected_indices = set(select_representatives(
                 items=overlapping,
                 get_terms=lambda i: card_kw[i],
                 samples_per_group=self._max_older,
-                get_score_boost=lambda i: self._recency_boost(cards[i].get("created_at", "")),
+                get_score_boost=_boost,
             ))
 
             # Always include the most recent card.
@@ -160,6 +173,8 @@ class TurnContextStore:
 
             user_kw = keywords_from_text(task_text)
             asst_kw = keywords_from_text(response)
+            # Deduplicate while preserving order; user keywords first so they score higher
+            # in IDF-based selection (user inputs are primary signal of what was discussed).
             all_kw = list(dict.fromkeys(user_kw + asst_kw))
 
             asst_summary = response
@@ -176,7 +191,9 @@ class TurnContextStore:
                 "user": task_text,
                 "assistant_summary": asst_summary,
                 "description": f"User: {task_text}\nAssistant: {response}",  # full, for vector embedding
-                "keywords": all_kw,
+                "user_keywords": user_kw,   # stored separately so assemble() can boost user-term matches
+                "ai_keywords": asst_kw,     # the last AI output's terms (also important, kept distinct)
+                "keywords": all_kw,         # combined set for backward-compat reads
                 "files_consulted": outcome.get("files") or [],
             }
             path = self._dir / f"{card_id}.json"
