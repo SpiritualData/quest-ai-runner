@@ -1603,7 +1603,7 @@ class QuestAITerminal(App):
             # 3) The final output — the worker's own summary of what it did. Bright, inside a left
             # rule so it stands clearly apart. This is the "what it did" the user wants to read.
             log.write(Text(""))
-            log.write(Text("  result", style="bold green"))
+            log.write(Text("  Result", style="bold green"))
             for oln in final_output.splitlines():
                 t = Text("  │ ", style="green")
                 t.append(oln)
