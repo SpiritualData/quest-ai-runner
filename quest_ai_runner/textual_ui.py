@@ -23,6 +23,7 @@ Install the [tui] extra:
 from __future__ import annotations
 
 import os
+import textwrap
 import threading
 import time
 from collections import OrderedDict
@@ -1604,10 +1605,13 @@ class QuestAITerminal(App):
             # rule so it stands clearly apart. This is the "what it did" the user wants to read.
             log.write(Text(""))
             log.write(Text("  Result", style="bold green"))
+            prefix = "  │ "
+            wrap_width = max(40, self.size.width - len(prefix))
             for oln in final_output.splitlines():
-                t = Text("  │ ", style="green")
-                t.append(oln)
-                log.write(t)
+                for segment in (textwrap.wrap(oln, wrap_width) if oln.strip() else [""]):
+                    t = Text(prefix, style="green")
+                    t.append(segment)
+                    log.write(t)
         elif narration:
             # No structured result (e.g. an errored/incomplete run): fall back to the worker's own
             # words so the record still says what it was doing, capped so it never becomes a wall.
