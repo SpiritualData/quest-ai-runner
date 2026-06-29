@@ -10,6 +10,7 @@ Env vars consumed by the factory (read in config.py, passed in at construction):
   QAR_QUEST_API_KEY   -- Bearer token for the quest-backend card API
   QAR_USER_ID         -- The Quest user ID (MongoDB ObjectId string) whose cards to manage
   QAR_RUNNER_ENV_ID   -- Identifies this local runner environment (default: hostname)
+  QAR_TEAM_ID         -- Quest team this runner is registered on; enables hub fan-out for full context
 
 All methods are best-effort and NEVER raise: a reader returns None / [] / False on
 any failure so the FileContextStore degrades gracefully.
@@ -69,34 +70,59 @@ def _extract_preview(card: Dict[str, Any], max_chars: int = 3000) -> str:
     return str(text)[:max_chars]
 
 
+def _runner_team_id() -> str:
+    """The team this runner is registered on: QAR_TEAM_ID env var, or empty string."""
+    return (os.getenv("QAR_TEAM_ID") or "").strip()
+
+
 def _enrich_card(card: Dict[str, Any], user_id: str) -> Dict[str, Any]:
-    """Return a copy of card enriched with source metadata and a local_preview content item."""
+    """Return a copy of card enriched with source metadata and a local_fetch content item.
+
+    The local_fetch item carries:
+    - An inline preview (immediate use, zero round-trip)
+    - team_id + runner_env_id so Quest AI's LocalFetchReferenceResolver can fan out
+      to this runner via the quest-context hub for full context when needed
+    - query so the hub knows what to ask the runner to resolve
+    """
     enriched = dict(card)
     env_id = _runner_env_id()
+    team_id = _runner_team_id()
     source_type = _detect_source_type(card)
     preview = _extract_preview(card)
+    # query: the user's original question is the most useful retrieval signal
+    query = (
+        str(card.get("user") or "")
+        or str(card.get("name") or "")
+        or str(card.get("description") or "")
+    )[:500]
 
-    # Attach runner-environment provenance.
     enriched["source_environment"] = "local"
     enriched["runner_env_id"] = env_id
+    if team_id:
+        enriched["team_id"] = team_id
 
-    # Build or extend content_items with a local_preview item so Quest AI can use
-    # this card immediately from the inline preview without fetching the local machine.
-    preview_item: Dict[str, Any] = {
-        "type": "local_preview",
+    # local_fetch: Quest AI's LocalFetchReferenceResolver tries the quest-context hub
+    # first (fanning out a context-request task to this runner env), falling back to
+    # the inline preview when the runner is offline or the hub times out.
+    fetch_item: Dict[str, Any] = {
+        "type": "local_fetch",
         "preview": preview,
         "source_type": source_type,
         "runner_env_id": env_id,
-        # source_locator carries enough for a future local_fetch escalation.
+        "team_id": team_id,
+        "query": query,
         "source_locator": {
             "card_id": card.get("id") or card.get("card_id") or "",
             "user_id": user_id,
         },
     }
     existing = list(card.get("content_items") or [])
-    # Replace any existing local_preview item (idempotent on re-write).
-    existing = [i for i in existing if not (isinstance(i, dict) and i.get("type") == "local_preview")]
-    existing.append(preview_item)
+    # Idempotent: replace any prior local_fetch / local_preview item on re-write.
+    existing = [
+        i for i in existing
+        if isinstance(i, dict) and i.get("type") not in ("local_fetch", "local_preview")
+    ]
+    existing.append(fetch_item)
     enriched["content_items"] = existing
     return enriched
 
