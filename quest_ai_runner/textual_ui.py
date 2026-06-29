@@ -1564,6 +1564,20 @@ class QuestAITerminal(App):
         else:
             self._tlog.scroll_page_down(animate=False)
 
+    def on_mouse_scroll_up(self, event) -> None:
+        """Mouse wheel / trackpad scroll up — route to transcript or detail panel."""
+        if self._deep_detail.display:
+            self._deep_detail.scroll_up(animate=False)
+        else:
+            self._tlog.scroll_up(animate=False)
+
+    def on_mouse_scroll_down(self, event) -> None:
+        """Mouse wheel / trackpad scroll down — route to transcript or detail panel."""
+        if self._deep_detail.display:
+            self._deep_detail.scroll_down(animate=False)
+        else:
+            self._tlog.scroll_down(animate=False)
+
 
 if __name__ == "__main__":
     # Manual smoke test requires a configured RunnerConfig; see textual_session.py.
