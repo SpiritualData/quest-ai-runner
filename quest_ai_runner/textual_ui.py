@@ -826,6 +826,7 @@ class QuestAITerminal(App):
             c.line(_HELP); return
         if line == "/clear":
             s._last_user = ""; s._last_assistant = ""
+            s._session_history = []
             c.dim("  Transcript cleared."); return
         if line.startswith("/rep "):
             s._rep_name = line[5:].strip()
@@ -1319,6 +1320,7 @@ class QuestAITerminal(App):
             self._console.dim("  Cancelled.")
             s._last_user = user_text
             s._last_assistant = "[cancelled by user]"
+            s._session_history.append((user_text, "[cancelled by user]"))
             ctx = getattr(s._orch, "context_assembler", None)
             if ctx is not None:
                 try:
@@ -1347,6 +1349,7 @@ class QuestAITerminal(App):
                 s._last_assistant = (f"{prefix}: {goal_str}" if goal_str else f"{prefix}.")
             else:
                 s._last_assistant = final.text or ""
+            s._session_history.append((user_text, s._last_assistant))
             s._turn_count += 1
             log.write(Text(""))
             self._write_footer(final, elapsed)

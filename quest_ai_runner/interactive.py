@@ -1216,6 +1216,8 @@ class InteractiveSession:
         self._last_user: str = ""
         self._last_assistant: str = ""
         self._turn_count: int = 0
+        # Accumulated conversation history for multi-turn transcript context.
+        self._session_history: List[Tuple[str, str]] = []  # [(user_text, assistant_text), ...]
         # Turn history for /tasks and /status commands
         self._turns: List[dict] = []  # [{user, model, tokens_in, tokens_out, elapsed, timestamp}]
         # TurnContextStore is wired automatically by resolve_context_assembler in config.py,
@@ -1264,13 +1266,18 @@ class InteractiveSession:
     # -- one turn --------------------------------------------------------------
 
     def _last_transcript(self) -> str:
-        """Return a single-turn transcript of the immediately preceding exchange."""
-        if not self._last_user:
+        """Return the accumulated session history as a transcript for the brain."""
+        if not self._session_history:
             return ""
-        asst = self._last_assistant
-        if len(asst) > 400:
-            asst = asst[:400].rstrip() + "…"
-        return f"User: {self._last_user}\nAssistant: {asst}"
+        lines = []
+        for user_text, asst_text in self._session_history:
+            lines.append(f"User: {user_text}")
+            asst_compact = asst_text if len(asst_text) <= 800 else asst_text[:800].rstrip() + "…"
+            lines.append(f"Assistant: {asst_compact}")
+        transcript = "\n".join(lines)
+        if len(transcript) > 8000:
+            transcript = "…(earlier turns trimmed)…\n" + transcript[-8000:]
+        return transcript
 
     def _effective_preamble(self) -> Optional[str]:
         """Combine the system prompt and persona into the rep_preamble passed to the orchestrator."""
@@ -1363,6 +1370,7 @@ class InteractiveSession:
             # ("try again", follow-up, etc.) has the prior question as context.
             self._last_user = user_text
             self._last_assistant = "[cancelled by user]"
+            self._session_history.append((user_text, "[cancelled by user]"))
             # Also persist to TurnContextStore so it survives across more turns.
             _ctx = getattr(self._orch, "context_assembler", None)
             if _ctx is not None:
@@ -1428,6 +1436,7 @@ class InteractiveSession:
                 self._last_assistant = (f"{prefix}: {goal_str}" if goal_str else f"{prefix}.")
             else:
                 self._last_assistant = final.text or ""
+            self._session_history.append((user_text, self._last_assistant))
             self._turn_count += 1
             self._console.line("")
             self._print_turn_footer(final, panel, elapsed)
@@ -1523,6 +1532,7 @@ class InteractiveSession:
             if line == "/clear":
                 self._last_user = ""
                 self._last_assistant = ""
+                self._session_history = []
                 self._console.dim("  Transcript cleared."); continue
             if line.startswith("/rep "):
                 self._rep_name = line[5:].strip()
@@ -1776,6 +1786,7 @@ class InteractiveSession:
             "model_hint": self._model_hint,
             "last_user": self._last_user,
             "last_assistant": self._last_assistant,
+            "session_history": self._session_history,
             "turn_count": self._turn_count,
             "turns": self._turns,
         }
@@ -1810,6 +1821,11 @@ class InteractiveSession:
         self._model_hint = payload.get("model_hint")
         self._last_user = payload.get("last_user") or ""
         self._last_assistant = payload.get("last_assistant") or ""
+        raw_history = payload.get("session_history") or []
+        self._session_history = [tuple(t) for t in raw_history if isinstance(t, (list, tuple)) and len(t) == 2]
+        # Backward compat: if no session_history saved but last_user/assistant exist, seed history.
+        if not self._session_history and self._last_user:
+            self._session_history = [(self._last_user, self._last_assistant)]
         self._turn_count = payload.get("turn_count") or 0
         self._turns = payload.get("turns") or []
         c.dim(f"  Session loaded: {name!r}  ({self._turn_count} prior turns)")
