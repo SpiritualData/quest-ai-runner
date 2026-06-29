@@ -90,6 +90,7 @@ import argparse
 import logging
 import os
 import sys
+from pathlib import Path
 
 from .adapters import AnthropicProvider, ClaudeCliProvider, ClaudeConversationsAdapter, CompositeRetrievalAdapter, FilesAdapter, GeminiProvider, OpenAIProvider, WebSearchAdapter
 from .config import RunnerConfig
