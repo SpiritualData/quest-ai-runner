@@ -33,7 +33,13 @@ class _RecordingLog:
         self.lines: list[str] = []
 
     def write(self, x) -> None:  # noqa: ANN001 - mirrors RichLog.write
-        self.lines.append(getattr(x, "plain", str(x)))
+        # Text objects expose .plain; Markdown (RichMarkdown) exposes .markup (the raw source).
+        if hasattr(x, "plain"):
+            self.lines.append(x.plain)
+        elif hasattr(x, "markup"):
+            self.lines.append(x.markup)
+        else:
+            self.lines.append(str(x))
 
 
 def _make_app() -> tuple[QuestAITerminal, _RecordingLog]:
