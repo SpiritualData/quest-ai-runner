@@ -215,6 +215,34 @@ def test_discovery_listing_is_not_answer_grounding_content():
     assert "NOT" in planner_view  # explicitly flagged as not content/answer
 
 
+def test_specificity_gate_is_woven_into_planner_deep_and_grounding():
+    # Regression guard for the "answered about a sibling topic" failure: a question about one
+    # specific subject ("result-prediction evaluation") must not be answered from a DIFFERENT
+    # subject's docs ("atom evaluation") just because both share a category word. The discipline
+    # lives in context_doctrine.SPECIFICITY_GATE and must reach every layer that can ground an
+    # answer: the planner prompt, the deep doctrine, and the answer-time grounding block.
+    from quest_ai_runner.core import context_doctrine as cd
+    from quest_ai_runner.core.orchestrator import PLANNER_PROMPT, _grounding_block
+
+    # The gate states the primary discipline (match the specific referent, not its category) and
+    # explicitly subordinates recency to it (Joshua: relevance/specificity first, time only backup).
+    gate = cd.SPECIFICITY_GATE
+    assert "sibling" in gate.lower()
+    assert "category" in gate.lower()
+    assert "NEVER overrides specificity" in gate  # recency is a backup, never an override
+
+    # Gate carries no literal braces, so the assembled planner prompt still .format()s cleanly.
+    assert "{" not in gate and "}" not in gate
+    assert "SPECIFICITY" in PLANNER_PROMPT
+    assert "SPECIFICITY" in cd.DEEP_CONTEXT_DOCTRINE
+
+    # The answer-time grounding block (where the wrong-subject answer was actually produced) now
+    # tells the model to ground ONLY in the asked subject and to flag, not answer from, a sibling.
+    block = _grounding_block("ctx", [], False)
+    assert "sibling topic" in block
+    assert "specifically about what was asked" in block
+
+
 class _GCard:
     def __init__(self, id, title, relevance, body):
         self.id, self.title, self.relevance, self.body = id, title, relevance, body

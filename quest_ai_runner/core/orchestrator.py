@@ -65,7 +65,7 @@ from .adapters import (
     RetrievalAdapter,
 )
 from .card_filter import _extract_json
-from .context_doctrine import CACHED_HINT_GATE, MODEL_TIER_GATE, SUFFICIENCY_GATE
+from .context_doctrine import CACHED_HINT_GATE, MODEL_TIER_GATE, SPECIFICITY_GATE, SUFFICIENCY_GATE
 from .inbox import InputInbox
 from .guard import (
     ExecutionFact,
@@ -353,6 +353,8 @@ PLANNER_PROMPT = (
     _PLANNER_HEAD
     + "\n--- SUFFICIENCY (read enough before acting) ---\n"
     + SUFFICIENCY_GATE + "\n\n"
+    + "\n--- SPECIFICITY (match the exact subject, not its category) ---\n"
+    + SPECIFICITY_GATE + "\n\n"
     + _PLANNER_ACTIONS
     + "\n--- " + MODEL_TIER_GATE.split("\n")[0] + "\n"
     + "\n".join(MODEL_TIER_GATE.split("\n")[1:]) + "\n\n"
@@ -1529,8 +1531,16 @@ def _grounding_block(context_view: str, gathered: List[Dict[str, Any]], partial:
             "above doesn't cover the question, say plainly that you'd need to dig further."
         )
     parts.append(
-        "Answer the user's latest message grounded in the context above. If it doesn't cover "
-        "something, say so plainly rather than inventing details."
+        "Answer the user's latest message grounded in the context above, and ONLY in the material "
+        "about the SPECIFIC subject they named. Material about a sibling topic that merely shares a "
+        "category word (a DIFFERENT evaluation, pipeline, project, or metric than the one asked "
+        "about) is NOT on point: do not answer from it and do not silently switch to it. If the "
+        "context covers only a different specific subject, say plainly you don't have material "
+        "specifically about what was asked, name what you DID find, and offer to dig in or ask which "
+        "they meant. If it doesn't cover something, say so plainly rather than inventing details. "
+        "For a current-status or 'what's next' answer, rely on the most on-subject material and note "
+        "the date or age of any dated item you use rather than presenting an old document as the "
+        "present state."
     )
     return "\n\n".join(parts)
 

@@ -28,6 +28,34 @@ SUFFICIENCY (read enough before acting):
 """
 
 # ---------------------------------------------------------------------------
+# SPECIFICITY GATE -- answer about the EXACT subject asked, not its category.
+# The primary defense against grounding an answer in a sibling topic that merely shares a
+# category word with the request (e.g. a question about one "evaluation" answered from a
+# different "evaluation"'s docs). Relevance/specificity is primary; recency is only a backup
+# tie-break, never an override. Woven into the planner prompt and the deep doctrine, and
+# enforced again at the answer/grounding layer (see orchestrator._grounding_block).
+# ---------------------------------------------------------------------------
+SPECIFICITY_GATE: str = """\
+SPECIFICITY (answer about the SPECIFIC subject asked, not its category):
+  Retrieval ranks by similarity, so material about a SIBLING topic in the same category routinely
+  surfaces alongside (or instead of) the real subject. Sharing a category word is NOT a match.
+  1. Pin the SPECIFIC referent in the request: the named subject, initiative, task, file, or
+     metric -- not just its type. "X evaluation" is a DIFFERENT subject from "Y evaluation" even
+     though both are evaluations; "the result-prediction pipeline" is not "the atom pipeline".
+  2. Before grounding an answer in any located or retrieved item, confirm it is about THAT SAME
+     referent, not merely the same kind of thing. A title, path, or snippet that overlaps on a
+     category word but is about a different specific subject does NOT qualify.
+  3. If the only material you have is about a DIFFERENT specific referent (a sibling in the same
+     category), do NOT answer as if it were on point and do NOT silently switch subjects. Either
+     issue another "read" to gather material about the ACTUAL referent, or say plainly you have
+     nothing specifically about what was asked, name what you DID find, and ask which they meant.
+  4. Recency is only a BACKUP tie-break: when two items are equally on-subject, prefer the more
+     recent, and when you state a current status or "what's next" note the date of what you used
+     instead of presenting an old document as the present. Recency NEVER overrides specificity: a
+     recent sibling-topic doc is still the wrong subject; an older on-subject doc is still right.\
+"""
+
+# ---------------------------------------------------------------------------
 # MODEL TIER GATE -- cheap by default, escalate one tier on failure.
 # ---------------------------------------------------------------------------
 MODEL_TIER_GATE: str = """\
@@ -63,6 +91,8 @@ USING A CACHED CONTEXT HINT:
 DEEP_CONTEXT_DOCTRINE: str = (
     "=== CONTEXT DOCTRINE (applies to this run) ===\n\n"
     + SUFFICIENCY_GATE
+    + "\n\n"
+    + SPECIFICITY_GATE
     + "\n\n"
     + MODEL_TIER_GATE
     + "\n\n"

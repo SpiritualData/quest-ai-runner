@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Specificity gate: answer about the EXACT subject asked, not its category.** A new
+  `SPECIFICITY_GATE` in `core/context_doctrine.py` closes the failure mode where a question about
+  one specific subject got answered from a DIFFERENT subject's material just because both shared a
+  category word (e.g. a question about "result-prediction evaluation" answered from "atom
+  evaluation" docs). Retrieval ranks by similarity, so sibling topics in the same category
+  routinely surface; the gate makes every layer that can ground an answer pin the specific referent
+  and refuse to answer from a sibling. It is woven into the planner prompt and the deep doctrine
+  (`DEEP_CONTEXT_DOCTRINE`), and enforced again at answer time in `orchestrator._grounding_block`:
+  if the context covers only a different specific subject, the model says so, names what it DID
+  find, and asks which was meant rather than silently switching subjects. Relevance/specificity is
+  primary; recency stays a backup tie-break only (the existing age-label / decay re-ranking in
+  `vector_context_assembler.py`) and never overrides specificity. Tested in
+  `tests/test_orchestrator.py::test_specificity_gate_is_woven_into_planner_deep_and_grounding`.
+
+### Fixed
+- **Guidance card conversion crashed every guidance selection.**
+  `GuidanceProvider._to_core_card` passed `description=`/`tags=` to the core `GuidanceCard`
+  dataclass, which defines only `id`/`title`/`relevance`/`body`, raising `TypeError` (caught by the
+  orchestrator, so runs proceeded with no use-case guidance). It now maps the source card's
+  `relevance` (falling back to `description`) onto `relevance`, and the two scorers read
+  `card.relevance` instead of the nonexistent `card.description`. Covered by `tests/test_guidance.py`.
+
 ### Changed
 - **Terminal UI: the AI's reasoning beats now flow into the main transcript, not a bottom strip.**
   The "thinking out loud" narration (the instant ack + the planner's conversational rationale) was
