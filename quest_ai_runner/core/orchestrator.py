@@ -2133,8 +2133,11 @@ class Orchestrator:
 
     def _grounded_answer(self, user_message: str, transcript: str, context_view: str,
                          gathered: List[Dict[str, Any]], model: str, partial: bool,
-                         native_blocks: Optional[List[Dict[str, Any]]] = None) -> str:
+                         native_blocks: Optional[List[Dict[str, Any]]] = None,
+                         rep_preamble: Optional[str] = None) -> str:
         messages = []
+        if rep_preamble:
+            messages.append({"role": "user", "content": rep_preamble})
         if transcript:
             messages.append({"role": "user", "content": transcript})
         messages.append({"role": "user", "content": _grounding_block(context_view, gathered, partial)})
@@ -3777,9 +3780,16 @@ class Orchestrator:
                     type=EVENT_UNDERSTANDING,
                     text=f"Understood as: {goal_condition}",
                     data={"goal_condition": goal_condition}))
+                # The resolver used this context to derive goal_condition, so it IS relevant.
+                # Strip the defensive hedge label added during retrieval so the answerer does
+                # not treat confirmed-useful context as uncertain background noise.
+                clean_conv_ctx = conv_ctx_text.replace(
+                    "=== OTHER PAST CONVERSATIONS (may be unrelated) ===",
+                    "=== RETRIEVED PAST CONVERSATIONS ==="
+                ) if conv_ctx_text else conv_ctx_text
                 _understood_block = (
-                    "--- CONVERSATION CONTEXT ---\n" + conv_ctx_text + "\n"
-                    if conv_ctx_text else ""
+                    "--- CONVERSATION CONTEXT ---\n" + clean_conv_ctx + "\n"
+                    if clean_conv_ctx else ""
                 ) + f"--- UNDERSTOOD REQUEST ---\n{goal_condition}\n"
                 context_view = (_understood_block + "\n" + context_view
                                 if context_view else _understood_block)
@@ -4235,11 +4245,19 @@ class Orchestrator:
             if steering:
                 cv = ((context_view + "\n\n" if context_view else "")
                       + "--- IMPROVE YOUR ANSWER (it did not yet meet the goal) ---\n" + steering)
+            # Forward the planner's reasoning so the answerer benefits from what the planner
+            # already worked out. Without this the answerer re-derives from scratch and may
+            # reach a different (wrong) conclusion, e.g. "no prior history" despite the planner
+            # having already found and summarised the conversation history correctly.
+            if plan.rationale and plan.action == "answer":
+                planner_block = f"--- PLANNER ANALYSIS ---\n{plan.rationale}"
+                cv = (cv + "\n\n" + planner_block if cv else planner_block)
             if len(plan.subquestions) >= 2:
                 return self._answer_subquestions(user_message, transcript, cv, gathered,
                                                  model, plan.subquestions, native_blocks=native_blocks)
             return self._grounded_answer(user_message, transcript, cv, gathered, model,
-                                         False, native_blocks=native_blocks)
+                                         False, native_blocks=native_blocks,
+                                         rep_preamble=rep_preamble)
 
         emit.status(f"Answering {len(plan.subquestions)} parts in parallel…"
                     if len(plan.subquestions) >= 2 else "Answering")
