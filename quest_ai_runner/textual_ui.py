@@ -508,6 +508,7 @@ class PromptTextArea(TextArea):
 
     BINDINGS = [
         Binding("enter", "submit_prompt", "Send", show=False, priority=True),
+        Binding("shift+enter", "newline_input", "New line", show=False, priority=True),
         Binding("alt+enter", "newline_input", "New line", show=False, priority=True),
     ]
 
@@ -703,7 +704,7 @@ class QuestAITerminal(App):
             tab_behavior="focus",
             show_line_numbers=False,
             compact=True,
-            placeholder="Ask anything…   Enter=send, Alt+Enter=newline   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)",
+            placeholder="Ask anything…   Enter=send, Shift+Enter=newline   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)",
         )
         yield Footer()
 
