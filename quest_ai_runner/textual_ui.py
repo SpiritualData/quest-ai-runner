@@ -1144,7 +1144,7 @@ class QuestAITerminal(App):
         if auto:
             self._auto_pass += 1
         else:
-            self._auto_pass = 0
+            self._auto_pass = 1
 
         self._set_terminal_title("Quest AI Runner")
 
@@ -1688,7 +1688,7 @@ class QuestAITerminal(App):
         summary, narration = self._summarize_exec_lines(lines)
 
         pass_num = self._auto_pass
-        pass_label = f" [Pass {pass_num}]" if pass_num > 0 else ""
+        pass_label = f" [Pass {pass_num}]"
 
         log.write(Text(""))
         # 1) The subgoal this task was assigned — the most important orientation.
