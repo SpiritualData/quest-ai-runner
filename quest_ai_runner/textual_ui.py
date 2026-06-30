@@ -498,7 +498,7 @@ class TranscriptLog(RichLog):
 # ── Multi-line prompt input ────────────────────────────────────────────────────
 
 class PromptTextArea(TextArea):
-    """Auto-expanding multi-line input. Ctrl+Enter submits; Enter adds a newline."""
+    """Auto-expanding multi-line input. Enter submits; Shift+Enter adds a newline."""
 
     class Submitted(Message):
         def __init__(self, textarea: "PromptTextArea", value: str) -> None:
@@ -507,13 +507,17 @@ class PromptTextArea(TextArea):
             self.value = value
 
     BINDINGS = [
-        Binding("ctrl+enter", "submit_prompt", "Send", show=False, priority=True),
+        Binding("enter", "submit_prompt", "Send", show=False, priority=True),
+        Binding("shift+enter", "newline_input", "New line", show=False, priority=True),
     ]
 
     MAX_LINES = 8
 
     def action_submit_prompt(self) -> None:
         self.post_message(self.Submitted(self, self.text))
+
+    def action_newline_input(self) -> None:
+        self.insert("\n")
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         line_count = self.text.count("\n") + 1
@@ -655,6 +659,9 @@ class QuestAITerminal(App):
         # Deep runs whose full output has already been written to the scrollback
         # transcript, so we persist each task's output exactly once.
         self._deep_flushed: set = set()
+        # Counts how many auto-execute passes have fired for the current user turn
+        # (0 = the user's turn itself; 1+ = chained auto passes). Reset on each real user message.
+        self._auto_pass: int = 0
         # Archive of FINISHED deep runs (run_id -> snapshot), kept ACROSS turns so the Alt+D detail
         # panel can replay a task's full actions even after the turn ends and after later turns
         # rebuild the live ``_deep`` tracker. Deliberately NOT reset by _begin_turn; capped to the
@@ -696,7 +703,7 @@ class QuestAITerminal(App):
             tab_behavior="focus",
             show_line_numbers=False,
             compact=True,
-            placeholder="Ask anything…   Ctrl+Enter=send, Enter=newline   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)",
+            placeholder="Ask anything…   Enter=send, Shift+Enter=newline   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)",
         )
         yield Footer()
 
@@ -1135,6 +1142,11 @@ class QuestAITerminal(App):
         self._deep_detail.hide()
         self._future_ctx_panel.hide()
 
+        if auto:
+            self._auto_pass += 1
+        else:
+            self._auto_pass = 0
+
         _q = user_text.replace("\n", " ").strip()[:50]
         if len(user_text.strip()) > 50:
             _q += "…"
@@ -1142,6 +1154,9 @@ class QuestAITerminal(App):
 
         if echo:
             self._tlog.write(Text(f"❯ {user_text}", style="bold cyan"))
+            self._tlog.write(Text(""))
+        elif auto:
+            self._tlog.write(Text(f"↻ Pass {self._auto_pass}: auto-executing planned work…", style="bold yellow"))
             self._tlog.write(Text(""))
 
         # Loading strip on; keep input enabled so mid-turn messages can be queued.
@@ -1424,12 +1439,18 @@ class QuestAITerminal(App):
 
         self._turn_active = False
         inp = self.query_one("#prompt", PromptTextArea)
-        inp.placeholder = "Ask anything…   Ctrl+Enter=send   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)"
+        inp.placeholder = "Ask anything…   Enter=send   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)"
         inp.focus()
 
         # Auto-execute a planned-but-unexecuted deep turn (matches interactive.py).
         if not cancelled and error is None and final is not None:
             if self._maybe_handle_deep_plan(final, run=True):
+                next_pass = self._auto_pass + 1
+                log.write(Text(
+                    f"  ↻ Planned work not yet executed — starting pass {next_pass}…",
+                    style="bold yellow",
+                ))
+                log.write(Text(""))
                 self._begin_turn(
                     "Execute it. No more planning, just code it and apply changes now.",
                     echo=False, auto=True,
@@ -1670,9 +1691,12 @@ class QuestAITerminal(App):
         time_str = f"{mins}m{secs}s" if mins else f"{secs}s"
         summary, narration = self._summarize_exec_lines(lines)
 
+        pass_num = self._auto_pass
+        pass_label = f" [Pass {pass_num}]" if pass_num > 0 else ""
+
         log.write(Text(""))
         # 1) The subgoal this task was assigned — the most important orientation.
-        log.write(Text(f"⎅ {goal}" if goal else "⎅ Deep task", style="bold cyan"))
+        log.write(Text(f"⎅{pass_label} {goal}" if goal else f"⎅{pass_label} Deep task", style="bold cyan"))
         # 2) A one-line roll-up of activity, instead of every read/write/command.
         if summary:
             log.write(Text(f"  {summary}", style="dim"))
