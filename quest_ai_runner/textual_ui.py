@@ -1356,7 +1356,10 @@ class QuestAITerminal(App):
                 prefix = "Completed" if all_met else "Attempted"
                 s._last_assistant = (f"{prefix}: {goal_str}" if goal_str else f"{prefix}.")
             else:
-                s._last_assistant = final.text or ""
+                # Use _answer_parts as fallback: what was displayed may differ from final.text
+                # when the answer streamed via EVENT_PARTIAL or when goal-check text lands in
+                # final.text instead of the actual user-facing response.
+                s._last_assistant = final.text or "\n".join(self._answer_parts).strip()
             s._session_history.append((user_text, s._last_assistant))
             s._write_session_file()
             s._turn_count += 1

@@ -1326,6 +1326,7 @@ class InteractiveSession:
 
         t0 = time.monotonic()
         final: Optional[OrchestratorResult] = None
+        _streamed_parts: List[str] = []  # accumulate displayed answer text as fallback
 
         # Feed run_stream() into a queue so the main thread can poll with a short
         # timeout and respond to ESC within ~50 ms (instead of blocking on q.get()
@@ -1377,6 +1378,19 @@ class InteractiveSession:
                         final = item
                     else:
                         renderer.render(item)
+                        # Accumulate displayed answer text so _last_assistant matches what
+                        # the user saw, even when final.text holds a goal-check string instead.
+                        _ev_dict = item if isinstance(item, dict) else {}
+                        _ev_type = _ev_dict.get("type") or ""
+                        _ev_text = (_ev_dict.get("text") or "").strip()
+                        _ev_data = _ev_dict.get("data") or {}
+                        _is_narration = isinstance(_ev_data, dict) and (
+                            _ev_data.get("narration") or _ev_data.get("ack")
+                        )
+                        if _ev_type == "partial" and not _is_narration and _ev_text:
+                            _streamed_parts.append(_ev_text)
+                        elif _ev_type == "result" and not _streamed_parts and _ev_text:
+                            _streamed_parts.append(_ev_text)
         except KeyboardInterrupt:
             self._cancelled.set()
         finally:
@@ -1455,7 +1469,10 @@ class InteractiveSession:
                 prefix = "Completed" if all_met else "Attempted"
                 self._last_assistant = (f"{prefix}: {goal_str}" if goal_str else f"{prefix}.")
             else:
-                self._last_assistant = final.text or ""
+                # Use streamed text as fallback: what was displayed may differ from final.text
+                # when the answer streams via EVENT_PARTIAL or when goal-check text lands in
+                # final.text instead of the actual user-facing response.
+                self._last_assistant = final.text or "".join(_streamed_parts).strip()
             self._session_history.append((user_text, self._last_assistant))
             self._write_session_file()
             self._turn_count += 1
