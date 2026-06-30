@@ -1098,7 +1098,10 @@ class QuestAITerminal(App):
         self._deep_detail.hide()
         self._future_ctx_panel.hide()
 
-        self._set_terminal_title("Quest AI Runner")
+        _q = user_text.replace("\n", " ").strip()[:50]
+        if len(user_text.strip()) > 50:
+            _q += "…"
+        self._set_terminal_title(_q or "Quest AI Runner")
 
         if echo:
             self._tlog.write(Text(f"❯ {user_text}", style="bold cyan"))
@@ -1213,6 +1216,7 @@ class QuestAITerminal(App):
         elif t == ev["context"]:
             card_meta = data.get("card_metadata") or []
             sources = data.get("sources") or []
+            log.write(f"[dim]Context: {len(card_meta)} card{'s' if len(card_meta) != 1 else ''}, {len(sources)} source{'s' if len(sources) != 1 else ''}[/dim]")
             if card_meta:
                 self._ctx.set_cards(card_meta)
                 top = max(card_meta, key=lambda c: c.get("relevance_score", 0) or 0)
