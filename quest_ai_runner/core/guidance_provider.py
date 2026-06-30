@@ -290,7 +290,7 @@ class UniversalGuidanceProvider(GuidanceProviderBase):
             return 0.0
 
         try:
-            searchable = f"{card.title} {card.description} {card.body}"
+            searchable = f"{card.title} {card.relevance} {card.body}"
             results = self.vector_store.search(query, collection_name="guidance", limit=1)
             for result in results or []:
                 if result.get("id") == card.id or result.get("payload", {}).get("id") == card.id:
@@ -306,7 +306,7 @@ class UniversalGuidanceProvider(GuidanceProviderBase):
         if not query_words:
             return 0
 
-        searchable = f"{card.title} {card.description}".lower()
+        searchable = f"{card.title} {card.relevance}".lower()
         card_words = set(searchable.split())
         matches = len(query_words & card_words)
         return matches * 10  # Each match worth 10 points
@@ -350,14 +350,12 @@ class UniversalGuidanceProvider(GuidanceProviderBase):
                 id=card_dict.get("id", "unknown"),
                 title=card_dict.get("title", ""),
                 body=card_dict.get("body", ""),
-                description=card_dict.get("description", ""),
-                tags=card_dict.get("tags", []) or [],
+                relevance=card_dict.get("relevance", card_dict.get("description", "")),
             )
         # Assume it's an object with attributes
         return CoreGuidanceCard(
             id=getattr(card_dict, "id", "unknown"),
             title=getattr(card_dict, "title", ""),
             body=getattr(card_dict, "body", ""),
-            description=getattr(card_dict, "description", ""),
-            tags=getattr(card_dict, "tags", []) or [],
+            relevance=getattr(card_dict, "relevance", getattr(card_dict, "description", "")),
         )
