@@ -498,7 +498,7 @@ class TranscriptLog(RichLog):
 # ── Multi-line prompt input ────────────────────────────────────────────────────
 
 class PromptTextArea(TextArea):
-    """Auto-expanding multi-line input. Enter submits; Shift+Enter adds a newline."""
+    """Auto-expanding multi-line input. Enter submits; Shift+Enter/Alt+Enter adds a newline."""
 
     class Submitted(Message):
         def __init__(self, textarea: "PromptTextArea", value: str) -> None:
@@ -506,19 +506,17 @@ class PromptTextArea(TextArea):
             self.textarea = textarea
             self.value = value
 
-    BINDINGS = [
-        Binding("enter", "submit_prompt", "Send", show=False, priority=True),
-        Binding("shift+enter", "newline_input", "New line", show=False, priority=True),
-        Binding("alt+enter", "newline_input", "New line", show=False, priority=True),
-    ]
-
     MAX_LINES = 8
 
-    def action_submit_prompt(self) -> None:
-        self.post_message(self.Submitted(self, self.text))
-
-    def action_newline_input(self) -> None:
-        self.insert("\n")
+    def on_key(self, event) -> None:
+        if event.key == "enter":
+            event.prevent_default()
+            event.stop()
+            self.post_message(self.Submitted(self, self.text))
+        elif event.key in ("shift+enter", "alt+enter"):
+            event.prevent_default()
+            event.stop()
+            self.insert("\n")
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         line_count = self.text.count("\n") + 1
