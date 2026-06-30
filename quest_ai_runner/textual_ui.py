@@ -517,7 +517,8 @@ class PromptTextArea(TextArea):
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         line_count = self.text.count("\n") + 1
-        new_height = min(max(line_count, 1), self.MAX_LINES)
+        # +2 for the tall CSS border (1 top + 1 bottom cell)
+        new_height = min(max(line_count, 1), self.MAX_LINES) + 2
         self.styles.height = new_height
 
 
@@ -599,8 +600,8 @@ class QuestAITerminal(App):
         margin: 0 1 1 1;
         border: tall $accent 60%;
         background: $panel;
-        height: 1;
-        max-height: 8;
+        height: 3;
+        max-height: 10;
     }
     #prompt:focus { border: tall $accent; }
     """
@@ -694,6 +695,7 @@ class QuestAITerminal(App):
             soft_wrap=True,
             tab_behavior="focus",
             show_line_numbers=False,
+            compact=True,
             placeholder="Ask anything…   Ctrl+Enter=send, Enter=newline   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)",
         )
         yield Footer()
@@ -820,7 +822,7 @@ class QuestAITerminal(App):
     def on_prompt_text_area_submitted(self, event: PromptTextArea.Submitted) -> None:
         line = (event.value or "").strip()
         event.textarea.clear()
-        event.textarea.styles.height = 1
+        event.textarea.styles.height = 3
         if not line:
             return
 
