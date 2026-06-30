@@ -1179,6 +1179,69 @@ _BANNER = """\
 """
 
 
+class ChatSessionStore:
+    """ConversationStore for an active chat session.
+
+    current_slice  — TF-DF-IDF selection over the in-memory _session_history (the current session).
+    related_slices — delegates to SessionFileConversationStore over the QAR conversations dir so
+                     prior QAR sessions are also reachable for anaphora resolution.
+
+    This is NOT a RetrievalAdapter and does NOT duplicate the ClaudeConversationsAdapter.
+    The orchestrator's Step 1 (anaphora resolution) calls this protocol specifically to expand
+    short/context-dependent messages into self-contained goal conditions before planning.
+    """
+
+    def __init__(self, session_history: "List[Tuple[str, str]]",
+                 conv_dir: Optional["Path"] = None) -> None:
+        self._history = session_history
+        self._file_store: Optional[Any] = None
+        self._conv_dir = conv_dir
+
+    def _get_file_store(self) -> Optional[Any]:
+        if self._file_store is None and self._conv_dir is not None:
+            try:
+                from .adapters.session_file_conversation_store import SessionFileConversationStore
+                self._file_store = SessionFileConversationStore(sessions_dir=str(self._conv_dir))
+            except Exception:
+                pass
+        return self._file_store
+
+    def current_slice(self, conv_id: str, query: str, **kwargs) -> Any:
+        try:
+            from .core.adapters import ConversationContext
+            from .adapters.conversation_format import select_current_slice
+            messages = []
+            for u, a in self._history:
+                messages.append({"role": "user", "content": u})
+                messages.append({"role": "assistant", "content": a})
+            if not messages:
+                return ConversationContext(scanned=0)
+            recent_turns = kwargs.get("recent_turns", 4)
+            max_chars = kwargs.get("max_chars", 6000)
+            text, turns_meta, truncated = select_current_slice(
+                messages, query, recent_turns=recent_turns, max_chars=max_chars
+            )
+            return ConversationContext(
+                text=text, turns=turns_meta,
+                sources=[{"conv_id": conv_id, "label": "current session"}],
+                scanned=len(messages), truncated=truncated,
+            )
+        except Exception:
+            from .core.adapters import ConversationContext
+            return ConversationContext(scanned=0)
+
+    def related_slices(self, query: str, scope: Any, **kwargs) -> Any:
+        try:
+            store = self._get_file_store()
+            if store is None:
+                from .core.adapters import ConversationContext
+                return ConversationContext(scanned=0)
+            return store.related_slices(query, scope or {}, **kwargs)
+        except Exception:
+            from .core.adapters import ConversationContext
+            return ConversationContext(scanned=0)
+
+
 class InteractiveSession:
     """Multi-turn interactive session over a RunnerConfig's orchestrator."""
 
@@ -1219,11 +1282,18 @@ class InteractiveSession:
         # QAR owns this directory. ~/.claude/sessions is Claude Code's territory (read-only for QAR).
         _conv_dir = Path(os.getenv("QAR_CHAT_HISTORY_DIR") or (Path.home() / ".quest-ai-runner" / "conversations"))
         self._session_file: Optional[Path] = None
+        self._conv_id: Optional[str] = None
         try:
             _conv_dir.mkdir(parents=True, exist_ok=True)
             self._session_file = _conv_dir / f"qar_chat_{_uuid.uuid4().hex}.json"
+            self._conv_id = self._session_file.stem
         except Exception:
             pass
+
+        # Wire Stage 1 anaphora resolution: in-memory current-session context +
+        # past QAR session files for cross-session recall.  Must be set before
+        # build_orchestrator() so the orchestrator picks it up.
+        cfg.conversation_store = ChatSessionStore(self._session_history, conv_dir=_conv_dir)
 
         self._orch: "Orchestrator" = build_orchestrator(
             cfg, notify=notify_and_log
@@ -1347,6 +1417,7 @@ class InteractiveSession:
                     quest_id=self._goal_id,
                     rep_preamble=self._effective_preamble(),
                     model_hint=model_hint,
+                    conv_id=self._conv_id,
                 ):
                     _iq.put(it)
             except Exception as e:  # noqa: BLE001

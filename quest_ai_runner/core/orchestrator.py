@@ -3426,17 +3426,15 @@ class Orchestrator:
             any related slice), so the caller can inject it into ``context_view``.
           * ``clarify_or_None`` — a short question to ask the user, or None.
 
-        One cheap LLM call by default; at most TWO (a single MORE_CONTEXT_NEEDED retry after pulling
-        related conversations). Never raises (the caller also guards)."""
+        Iterative context expansion — stops as soon as the LLM resolves the message:
+          1. Last 1 exchange (cheap — covers the vast majority of follow-up messages).
+          2. Last 3 exchanges (if MORE_CONTEXT_NEEDED — catches multi-turn threads).
+          3. Related past sessions (if still MORE_CONTEXT_NEEDED — cross-session recall).
+          4. Escalate to CLARIFY if still unresolved.
+
+        At most THREE LLM calls. Never raises (the caller also guards)."""
         store = self.conversation_store
         model = self.registry.resolve_tier(self.cfg.planner_tier)
-
-        cur = store.current_slice(conv_id, user_message)
-        cur_text = (cur.text or "") if cur is not None else ""
-        # Label the CURRENT conversation distinctly from any OTHER conversations pulled on widening,
-        # so the resolver only borrows a referent from another thread when it clearly continues it
-        # (otherwise a bare "do it" / "the third one" must CLARIFY, never grab an unrelated list).
-        conv_ctx_text = (f"=== CURRENT CONVERSATION ===\n{cur_text}" if cur_text else "")
 
         def _resolve(ctx_text: str) -> str:
             prompt = RESOLVE_REQUEST_PROMPT.format(
@@ -3448,10 +3446,25 @@ class Orchestrator:
                 return ""
             return (out or "").strip()
 
+        def _current_block(recent_turns: int) -> str:
+            cur = store.current_slice(conv_id, user_message, recent_turns=recent_turns)
+            cur_text = (cur.text or "") if cur is not None else ""
+            # Label the CURRENT conversation distinctly from any OTHER conversations pulled on
+            # widening, so the resolver only borrows a referent when it clearly continues it
+            # (a bare "do it" / "the third one" must CLARIFY, never grab an unrelated list).
+            return f"=== CURRENT CONVERSATION ===\n{cur_text}" if cur_text else ""
+
+        # Step 1: last 1 exchange — covers most follow-ups ("ok do it", "yes", "repeat that").
+        conv_ctx_text = _current_block(recent_turns=1)
         reply = _resolve(conv_ctx_text)
 
         if reply == "MORE_CONTEXT_NEEDED":
-            # Pull related past conversations and try ONCE more, clearly marked as possibly unrelated.
+            # Step 2: expand to last 3 exchanges — covers multi-turn threads.
+            conv_ctx_text = _current_block(recent_turns=3)
+            reply = _resolve(conv_ctx_text)
+
+        if reply == "MORE_CONTEXT_NEEDED":
+            # Step 3: pull related past sessions alongside the expanded current slice.
             try:
                 rel = store.related_slices(user_message, conv_scope, exclude_conv_id=conv_id)
             except Exception:  # noqa: BLE001
@@ -3461,12 +3474,12 @@ class Orchestrator:
                 conv_ctx_text = (conv_ctx_text + "\n\n" + related_block if conv_ctx_text
                                  else related_block)
             reply = _resolve(conv_ctx_text)
-            if reply == "MORE_CONTEXT_NEEDED" or reply.startswith("CLARIFY:"):
-                # Still unresolved: ask the user with a generic short question.
-                return user_message, conv_ctx_text, "Could you clarify what you'd like me to do?"
 
-        if reply.startswith("CLARIFY:"):
-            q = reply[len("CLARIFY:"):].strip() or "Could you clarify what you'd like me to do?"
+        if reply == "MORE_CONTEXT_NEEDED" or reply.startswith("CLARIFY:"):
+            if reply.startswith("CLARIFY:"):
+                q = reply[len("CLARIFY:"):].strip() or "Could you clarify what you'd like me to do?"
+            else:
+                q = "Could you clarify what you'd like me to do?"
             return user_message, conv_ctx_text, q
 
         # A successful resolution is the goal condition; fall back to the raw message if empty.

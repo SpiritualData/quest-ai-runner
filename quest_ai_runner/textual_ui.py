@@ -23,7 +23,6 @@ Install the [tui] extra:
 from __future__ import annotations
 
 import os
-import textwrap
 import threading
 import time
 from collections import OrderedDict
@@ -388,15 +387,26 @@ class DeepDetailPanel(VerticalScroll):
         if self.scroll_offset.y >= self.max_scroll_y - 1:
             self._follow = True
 
+    def on_mouse_scroll_up(self, event) -> None:
+        """Mouse wheel up: stop auto-following the tail (same intent as page_back)."""
+        self._follow = False
+
+    def on_mouse_scroll_down(self, event) -> None:
+        """Mouse wheel down: resume following if scrolled back to the tail."""
+        def _check_tail() -> None:
+            if self.scroll_y >= self.max_scroll_y - 1:
+                self._follow = True
+        self.call_after_refresh(_check_tail)
+
     def _rerender(self) -> None:
         if not self._run_id:
             self._body.update(Text(""))
             return
         pos_str = f"agent {self._pos}/{self._total}  " if self._total > 1 else ""
         if self._total > 1:
-            nav_hint = "  PgUp/PgDn scroll · [Tab] next · [Alt+D] close"
+            nav_hint = "  scroll/PgUp/PgDn · [Tab] next · [Alt+D] close"
         else:
-            nav_hint = "  PgUp/PgDn scroll · [Alt+D] close"
+            nav_hint = "  scroll/PgUp/PgDn · [Alt+D] close"
         header = f"⎅ {pos_str}{self._goal[:60]}"
         body = "\n".join(f"  {ln}" for ln in self._lines)
         footer = f"\x1b[2m{nav_hint}\x1b[0m"
@@ -1140,6 +1150,7 @@ class QuestAITerminal(App):
                 rep_preamble=s._effective_preamble(),
                 model_hint=model_hint,
                 pending_inputs=_pending,
+                conv_id=s._conv_id,
             ):
                 if self._cancel.is_set():
                     break
@@ -1640,17 +1651,9 @@ class QuestAITerminal(App):
         if summary:
             log.write(Text(f"  {summary}", style="dim"))
         if final_output:
-            # 3) The final output — the worker's own summary of what it did. Bright, inside a left
-            # rule so it stands clearly apart. This is the "what it did" the user wants to read.
             log.write(Text(""))
-            log.write(Text("  Result", style="bold green"))
-            prefix = "  │ "
-            wrap_width = max(40, self.size.width - len(prefix))
-            for oln in final_output.splitlines():
-                for segment in (textwrap.wrap(oln, wrap_width) if oln.strip() else [""]):
-                    t = Text(prefix, style="green")
-                    t.append(segment)
-                    log.write(t)
+            log.write(Text("  result", style="bold green"))
+            log.write(RichMarkdown(final_output, code_theme="monokai"))
         elif narration:
             # No structured result (e.g. an errored/incomplete run): fall back to the worker's own
             # words so the record still says what it was doing, capped so it never becomes a wall.
@@ -1660,9 +1663,9 @@ class QuestAITerminal(App):
             for nl in tail:
                 log.write(Text(f"  {nl}"))
         if status == "error":
-            log.write(Text(f"  ✗ Deep task ended with an error · {time_str}", style="red"))
+            log.write(Text(f"  ✗ deep task ended with an error · {time_str}", style="red"))
         else:
-            log.write(Text(f"  ✓ Deep task complete · {time_str}", style="green"))
+            log.write(Text(f"  ✓ deep task complete · {time_str}", style="green"))
         # Point at the full per-action trace (the summary above is a roll-up). Only when there are
         # actions to replay; the panel stays available after the turn via the archive.
         if lines:
@@ -1744,20 +1747,37 @@ class QuestAITerminal(App):
             self._tlog.scroll_page_down(animate=False)
 
     def on_mouse_scroll_up(self, event) -> None:
-        """Mouse wheel / trackpad up when not over a scrollable widget — route to transcript."""
+        """Mouse wheel up — routes to the active scroll target, same logic as PageUp."""
         event.stop()
+        delta = self.scroll_sensitivity_y
         if self._deep_detail.display:
-            self._deep_detail.scroll_up(animate=False)
+            self._deep_detail._follow = False
+            self._deep_detail.scroll_to(
+                y=max(0, self._deep_detail.scroll_target_y - delta),
+                animate=False,
+            )
         else:
-            self._tlog.scroll_up(animate=False)
+            self._tlog.scroll_to(
+                y=max(0, self._tlog.scroll_target_y - delta),
+                animate=False,
+            )
 
     def on_mouse_scroll_down(self, event) -> None:
-        """Mouse wheel / trackpad down when not over a scrollable widget — route to transcript."""
+        """Mouse wheel down — routes to the active scroll target, same logic as PageDown."""
         event.stop()
+        delta = self.scroll_sensitivity_y
         if self._deep_detail.display:
-            self._deep_detail.scroll_down(animate=False)
+            self._deep_detail.scroll_to(
+                y=self._deep_detail.scroll_target_y + delta,
+                animate=False,
+            )
+            if self._deep_detail.scroll_y >= self._deep_detail.max_scroll_y - 1:
+                self._deep_detail._follow = True
         else:
-            self._tlog.scroll_down(animate=False)
+            self._tlog.scroll_to(
+                y=self._tlog.scroll_target_y + delta,
+                animate=False,
+            )
 
 
 if __name__ == "__main__":

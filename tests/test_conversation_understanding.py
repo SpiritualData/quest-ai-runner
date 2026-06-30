@@ -301,11 +301,16 @@ def test_step1_resolves_ambiguous_message_and_emits_understanding():
 
 
 def test_step1_more_context_needed_triggers_related_then_resolves():
+    # The iterative expansion now has three steps:
+    #   1. recent_turns=1  →  MORE_CONTEXT_NEEDED  (just last exchange)
+    #   2. recent_turns=3  →  MORE_CONTEXT_NEEDED  (expand within session)
+    #   3. related_slices  →  resolves
     store = _FakeStore()
     provider = _ScriptedProvider(
         answers=[
-            "MORE_CONTEXT_NEEDED",                               # first resolve reply
-            "Edit the pricing doc to add the annual plan row.",  # after related_slices
+            "MORE_CONTEXT_NEEDED",                               # step 1: recent_turns=1
+            "MORE_CONTEXT_NEEDED",                               # step 2: recent_turns=3
+            "Edit the pricing doc to add the annual plan row.",  # step 3: after related_slices
         ],
         decisions=[{"action": "answer", "rationale": "ok"}],
     )
@@ -315,10 +320,12 @@ def test_step1_more_context_needed_triggers_related_then_resolves():
                    conv_scope={"user_id": "u1"}, mode=Mode.LIVE)
 
     assert res.kind == "answer"
-    # related_slices was consulted with the scope and the current conv excluded.
-    assert store.related_calls, "expected related_slices to be called after MORE_CONTEXT_NEEDED"
+    # current_slice was called twice before escalating (once per within-session expansion step).
+    assert len(store.current_calls) == 2
+    # related_slices was then consulted with the scope and the current conv excluded.
+    assert store.related_calls, "expected related_slices to be called after two MORE_CONTEXT_NEEDED"
     assert store.related_calls[0][2] == "conv1"
-    # Resolved on the second pass.
+    # Resolved on the third pass.
     understanding = [e for e in sink.events if e.type == EVENT_UNDERSTANDING]
     assert understanding
     assert understanding[0].data.get("goal_condition") == \
