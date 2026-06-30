@@ -32,7 +32,8 @@ from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, VerticalScroll  # Horizontal kept for layout elsewhere if needed
-from textual.widgets import Footer, Header, Input, RichLog, Static
+from textual.message import Message
+from textual.widgets import Footer, Header, Input, RichLog, Static, TextArea
 
 from rich.markdown import Markdown as RichMarkdown
 from rich.text import Text
@@ -494,6 +495,32 @@ class TranscriptLog(RichLog):
                              scroll_end=scroll_end, animate=animate)
 
 
+# ── Multi-line prompt input ────────────────────────────────────────────────────
+
+class PromptTextArea(TextArea):
+    """Auto-expanding multi-line input. Ctrl+Enter submits; Enter adds a newline."""
+
+    class Submitted(Message):
+        def __init__(self, textarea: "PromptTextArea", value: str) -> None:
+            super().__init__()
+            self.textarea = textarea
+            self.value = value
+
+    BINDINGS = [
+        Binding("ctrl+enter", "submit_prompt", "Send", show=False, priority=True),
+    ]
+
+    MAX_LINES = 8
+
+    def action_submit_prompt(self) -> None:
+        self.post_message(self.Submitted(self, self.text))
+
+    def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        line_count = self.text.count("\n") + 1
+        new_height = min(max(line_count, 1), self.MAX_LINES)
+        self.styles.height = new_height
+
+
 # ── Main app ──────────────────────────────────────────────────────────────────
 
 class QuestAITerminal(App):
@@ -572,6 +599,8 @@ class QuestAITerminal(App):
         margin: 0 1 1 1;
         border: tall $accent 60%;
         background: $panel;
+        height: 1;
+        max-height: 8;
     }
     #prompt:focus { border: tall $accent; }
     """
@@ -660,7 +689,13 @@ class QuestAITerminal(App):
         yield FutureContextPanel(id="future-context")
         yield NarrationBar(id="narration")
         yield ActivityBar(id="activity")
-        yield Input(id="prompt", placeholder="Ask anything…   (/help, Esc to cancel, Alt+D=expand agent, Tab=cycle, PgUp/PgDn=scroll)")
+        yield PromptTextArea(
+            id="prompt",
+            soft_wrap=True,
+            tab_behavior="focus",
+            show_line_numbers=False,
+            placeholder="Ask anything…   Ctrl+Enter=send, Enter=newline   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)",
+        )
         yield Footer()
 
     def on_mount(self) -> None:
@@ -672,17 +707,6 @@ class QuestAITerminal(App):
         self._future_ctx_panel = self.query_one("#future-context", FutureContextPanel)
         self._activity = self.query_one("#activity", ActivityBar)
         self._narration = self.query_one("#narration", NarrationBar)
-        inp = self.query_one("#prompt", Input)
-
-        # Slash-command autocompletion, like the prompt_toolkit completer.
-        try:
-            from textual.suggester import SuggestFromList
-            inp.suggester = SuggestFromList(
-                [c.strip() for c in _SLASH_COMMANDS], case_sensitive=False
-            )
-        except Exception:  # noqa: BLE001
-            pass
-
         self._ctx.reset()
         self._deep_view.hide()
         self._activity.display = False
@@ -707,12 +731,12 @@ class QuestAITerminal(App):
             self._console = _RichLogConsole(self, self._tlog)
             self.sess._console = self._console
             self._print_header()
-            inp.focus()
+            self.query_one("#prompt", PromptTextArea).focus()
         else:
             # Deferred init: show the static banner immediately; session line follows once ready.
             self._console = _RichLogConsole(self, self._tlog)
             self._print_static_banner()
-            inp.focus()
+            self.query_one("#prompt", PromptTextArea).focus()
             self.run_worker(self._build_session_worker, exclusive=True, thread=True)
 
     def _build_session_worker(self) -> None:
@@ -793,9 +817,10 @@ class QuestAITerminal(App):
 
     # -- input dispatch --------------------------------------------------------
 
-    def on_input_submitted(self, event: Input.Submitted) -> None:
+    def on_prompt_text_area_submitted(self, event: PromptTextArea.Submitted) -> None:
         line = (event.value or "").strip()
-        event.input.value = ""
+        event.textarea.clear()
+        event.textarea.styles.height = 1
         if not line:
             return
 
@@ -1120,8 +1145,7 @@ class QuestAITerminal(App):
         # Loading strip on; keep input enabled so mid-turn messages can be queued.
         self._activity.set_status("Thinking…")
         self._activity.display = True
-        inp = self.query_one("#prompt", Input)
-        inp.placeholder = "Type to queue a message for the next step…"
+        self.query_one("#prompt", PromptTextArea).placeholder = "Type to queue a message for the next step…"
 
         self._run_stream(user_text)
 
@@ -1397,8 +1421,8 @@ class QuestAITerminal(App):
         log.write(Text(""))
 
         self._turn_active = False
-        inp = self.query_one("#prompt", Input)
-        inp.placeholder = "Ask anything…   (/help for commands, Esc to cancel, Alt+D=expand agent, Tab=cycle)"
+        inp = self.query_one("#prompt", PromptTextArea)
+        inp.placeholder = "Ask anything…   Ctrl+Enter=send   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)"
         inp.focus()
 
         # Auto-execute a planned-but-unexecuted deep turn (matches interactive.py).
@@ -1653,7 +1677,7 @@ class QuestAITerminal(App):
         if final_output:
             log.write(Text(""))
             log.write(Text("  result", style="bold green"))
-            log.write(RichMarkdown(final_output, code_theme="monokai"))
+            self._console.markdown(final_output)
         elif narration:
             # No structured result (e.g. an errored/incomplete run): fall back to the worker's own
             # words so the record still says what it was doing, capped so it never becomes a wall.

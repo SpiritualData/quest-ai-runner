@@ -42,12 +42,27 @@ class _RecordingLog:
             self.lines.append(str(x))
 
 
+class _FakeConsole:
+    """Minimal console stub that routes markdown() into the recording log."""
+
+    def __init__(self, log: _RecordingLog) -> None:
+        self._log = log
+
+    def markdown(self, text: str) -> None:
+        # Store the raw markdown source so test assertions can match against it.
+        class _MD:
+            def __init__(self, t: str) -> None:
+                self.markup = t
+        self._log.write(_MD(text))
+
+
 def _make_app() -> tuple[QuestAITerminal, _RecordingLog]:
     app = QuestAITerminal(_FakeSession())
     app._deep = _DeepRunTracker()
     app._deep_flushed = set()
     log = _RecordingLog()
     app._tlog = log
+    app._console = _FakeConsole(log)
     return app, log
 
 
