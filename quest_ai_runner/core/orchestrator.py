@@ -3913,33 +3913,32 @@ class Orchestrator:
 
         # --- CONTEXT EVENT: emit EVENT_CONTEXT showing which cards were selected -----------
         # Dedicated event for context assembly: card selection + sources. Surfaces in all modes.
+        # Always emitted when assembly ran (even with 0 cards + 0 sources) so consumers
+        # can show "assembly ran but found nothing" without needing a separate signal.
         # Never raises.
         if _assembled is not None:
             try:
                 _card_meta = getattr(_assembled, "card_metadata", None) or []
                 _sources = getattr(_assembled, "sources", None) or []
                 log.debug(f"Assembled context: {len(_card_meta)} cards, {len(_sources)} sources")
-                if _card_meta or _sources:
-                    # Build human-readable card summary for text field.
-                    _card_titles = [c.get("title", c.get("id", "?"))[:50] for c in _card_meta]
-                    _text = "Selected cards: " + ", ".join(_card_titles) + "." if _card_titles else ""
-                    log.debug(f"Emitting EVENT_CONTEXT: {_text}")
-                    # LIGHTWEIGHT projection: the card_metadata items now carry each item's full
-                    # resolved ``text`` (heavy). Project to id/title/type-counts/file-paths so the
-                    # event stays small and never dumps full item text into the stream.
-                    _card_meta_light = _project_card_metadata_for_event(_card_meta)
-                    emit.emit(ProgressEvent(
-                        type=EVENT_CONTEXT,
-                        text=_text,
-                        data={
-                            "card_metadata": _card_meta_light,
-                            "sources": _sources,
-                            "card_count": len(_card_meta),
-                            "source_count": len(_sources),
-                        }
-                    ))
-                else:
-                    log.debug("No card metadata or sources to emit")
+                # Build human-readable card summary for text field.
+                _card_titles = [c.get("title", c.get("id", "?"))[:50] for c in _card_meta]
+                _text = "Selected cards: " + ", ".join(_card_titles) + "." if _card_titles else ""
+                log.debug(f"Emitting EVENT_CONTEXT: {_text}")
+                # LIGHTWEIGHT projection: the card_metadata items now carry each item's full
+                # resolved ``text`` (heavy). Project to id/title/type-counts/file-paths so the
+                # event stays small and never dumps full item text into the stream.
+                _card_meta_light = _project_card_metadata_for_event(_card_meta)
+                emit.emit(ProgressEvent(
+                    type=EVENT_CONTEXT,
+                    text=_text,
+                    data={
+                        "card_metadata": _card_meta_light,
+                        "sources": _sources,
+                        "card_count": len(_card_meta),
+                        "source_count": len(_sources),
+                    }
+                ))
             except Exception as e:  # noqa: BLE001
                 log.error(f"Failed to emit EVENT_CONTEXT: {e}", exc_info=True)
 
