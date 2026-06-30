@@ -1148,10 +1148,7 @@ class QuestAITerminal(App):
         else:
             self._auto_pass = 0
 
-        _q = user_text.replace("\n", " ").strip()[:50]
-        if len(user_text.strip()) > 50:
-            _q += "…"
-        self._set_terminal_title(_q or "Quest AI Runner")
+        self._set_terminal_title("Quest AI Runner")
 
         if echo:
             self._tlog.write(Text(f"❯ {user_text}", style="bold cyan"))
