@@ -7,6 +7,16 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Terminal UI: mouse-wheel scrolling works again, and text selection works without Shift.** The
+  Textual app was launched with `.run(mouse=False)` (added so the terminal could do native drag-to-
+  select), which disables ALL mouse reporting — so the scroll wheel did nothing and the
+  `on_mouse_scroll_*` handlers never fired. A Textual app runs in the alternate-screen buffer where
+  the terminal has no scrollback of its own, so the app must consume wheel events itself, which
+  requires mouse reporting on. It now launches with `mouse=True` (Textual's default), so: the wheel
+  scrolls the transcript; a plain click-drag produces Textual's own in-app selection (no Shift
+  needed); **Ctrl+C** copies that selection via OSC-52 (works locally and over SSH/mobile) and only
+  quits when nothing is selected; Shift+drag remains as the terminal-native selection fallback; and
+  Ctrl+Y still copies the last AI reply. Tested in `tests/test_copy_or_quit.py`.
 - **`ClaudeConversationsAdapter` now wired into the default retrieval stack.** The adapter was fully
   implemented and tested but never instantiated in `_config_from_env()`, so past Claude Code session
   transcripts were invisible to grep during both interactive chat and task runs. It is now added by

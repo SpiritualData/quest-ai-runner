@@ -31,6 +31,20 @@ def start_textual_interactive(
     from .textual_ui import QuestAITerminal
 
     try:
+        # mouse=True (Textual's default) is REQUIRED for wheel scrolling. A Textual
+        # app runs in the alternate-screen buffer, where the terminal has no
+        # scrollback of its own — the app must consume wheel events itself, which
+        # only happens when mouse reporting is on. Passing mouse=False (as an earlier
+        # build did) disables ALL mouse input, so the scroll wheel does nothing and the
+        # on_mouse_scroll_* handlers in textual_ui.py never fire.
+        #
+        # Text selection still works with mouse on — and without holding Shift:
+        # Textual 3.0+ renders its OWN in-app selection on plain click-drag (it owns
+        # the mouse, so the terminal's native plain-drag selection is suppressed, but
+        # Textual reproduces it). Ctrl+C copies that selection via OSC-52 (works over
+        # SSH/mobile too); see action_copy_or_quit in textual_ui.py. Shift+drag remains
+        # available as the terminal-native selection fallback, and Ctrl+Y copies the
+        # last AI reply. So scroll + selection + copy all work at once.
         QuestAITerminal(
             None,
             verbosity=verbosity,
@@ -38,7 +52,7 @@ def start_textual_interactive(
             _rep_name=rep_name,
             _persona=persona,
             _goal_id=goal_id,
-        ).run(mouse=False)
+        ).run(mouse=True)
     except KeyboardInterrupt:
         # Ctrl+C pressed — exit cleanly without traceback
         pass

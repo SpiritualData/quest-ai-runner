@@ -610,7 +610,7 @@ class QuestAITerminal(App):
     """
 
     BINDINGS = [
-        Binding("ctrl+c", "quit", "Quit", priority=True),
+        Binding("ctrl+c", "copy_or_quit", "Copy / Quit", priority=True),
         Binding("escape", "cancel", "Cancel turn"),
         Binding("ctrl+l", "clear_log", "Clear screen"),
         Binding("ctrl+y", "copy_last", "Copy last reply", show=True),
@@ -1573,6 +1573,32 @@ class QuestAITerminal(App):
         self._tlog.clear()
 
     def action_quit(self) -> None:
+        self.exit()
+
+    def action_copy_or_quit(self) -> None:
+        """Ctrl+C: copy the current text selection if there is one, else quit.
+
+        Mirrors Claude Code / Textual's own convention. Because the app runs with mouse
+        reporting on (see textual_session.py), a plain click-drag produces a Textual
+        in-app selection (no Shift needed); this copies it to the clipboard via OSC-52
+        (works locally and over SSH/mobile), clears the highlight, and stays running.
+        With nothing selected, Ctrl+C quits as before. This is a priority binding so it
+        fires reliably even while the prompt TextArea is focused.
+        """
+        try:
+            selection = self.screen.get_selected_text()
+        except Exception:  # noqa: BLE001
+            selection = None
+        if selection and selection.strip():
+            self.copy_to_clipboard(selection)
+            try:
+                self.clear_selection()
+            except Exception:  # noqa: BLE001
+                pass
+            preview = " ".join(selection.split())
+            preview = (preview[:60] + "…") if len(preview) > 60 else preview
+            self._tlog.write(Text(f"  Copied: {preview}", style="dim"))
+            return
         self.exit()
 
     def _available_deep_runs(self) -> "OrderedDict[str, dict]":
