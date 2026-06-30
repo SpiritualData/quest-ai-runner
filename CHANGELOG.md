@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **Terminal UI: the AI's reasoning beats now flow into the main transcript, not a bottom strip.**
+  The "thinking out loud" narration (the instant ack + the planner's conversational rationale) was
+  rendered in a single-line `NarrationBar` pinned above the prompt, updating in place so each beat
+  replaced the last. It now writes each beat into the scrolling transcript feed inline, above where
+  the answer lands, so the reasoning of what's happening reads as part of the conversation in order
+  rather than flashing by at the bottom. Exact consecutive repeats are dropped. The `NarrationBar`
+  widget is removed. Tested in `tests/test_future_context_ui.py`.
+
 ### Fixed
 - **Terminal UI: mouse-wheel scrolling works again, and text selection works without Shift.** The
   Textual app was launched with `.run(mouse=False)` (added so the terminal could do native drag-to-

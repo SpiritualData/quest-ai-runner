@@ -221,3 +221,34 @@ def test_deep_result_whitespace_only_not_stored():
     app._answer_parts = []
     app._handle_event(event)
     assert app._future_context == ""
+
+
+# ---------------------------------------------------------------------------
+# Narration beats render INTO the transcript feed (not a separate bottom bar)
+# ---------------------------------------------------------------------------
+
+def test_narration_beat_written_to_transcript_feed():
+    """An EVENT_PARTIAL tagged data={narration:True} lands in the main transcript log,
+    so the reasoning of what's happening reads inline above the answer."""
+    app, log = _make_app()
+    app._last_narration = ""
+    event = {
+        "type": "partial",
+        "text": "Looking through the codebase for where this is handled…",
+        "data": {"narration": True},
+    }
+    app._handle_event(event)
+    body = "\n".join(log.lines)
+    assert "Looking through the codebase" in body
+    assert app._last_narration == "Looking through the codebase for where this is handled…"
+
+
+def test_narration_beat_consecutive_duplicate_not_doubled():
+    """A re-emitted identical beat is dropped so it doesn't stack twice in the feed."""
+    app, log = _make_app()
+    app._last_narration = ""
+    event = {"type": "partial", "text": "Same beat", "data": {"narration": True}}
+    app._handle_event(event)
+    app._handle_event(event)
+    hits = [ln for ln in log.lines if "Same beat" in ln]
+    assert len(hits) == 1
