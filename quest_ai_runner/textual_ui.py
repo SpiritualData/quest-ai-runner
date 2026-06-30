@@ -792,8 +792,6 @@ class QuestAITerminal(App):
         # Session still initializing — queue the message for replay once ready.
         if self.sess is None:
             self._pre_session_queue.append(line)
-            if self._tlog:
-                self._tlog.write(Text(f"  (queued — starting up...)", style="dim"))
             return
 
         # Menu selection mode (a picker is awaiting a number).
