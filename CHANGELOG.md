@@ -114,10 +114,18 @@ All notable changes to this project are documented here. The format is based on
   `on_mouse_scroll_*` handlers never fired. A Textual app runs in the alternate-screen buffer where
   the terminal has no scrollback of its own, so the app must consume wheel events itself, which
   requires mouse reporting on. It now launches with `mouse=True` (Textual's default), so: the wheel
-  scrolls the transcript; a plain click-drag produces Textual's own in-app selection (no Shift
-  needed); **Ctrl+C** copies that selection via OSC-52 (works locally and over SSH/mobile) and only
-  quits when nothing is selected; Shift+drag remains as the terminal-native selection fallback; and
-  Ctrl+Y still copies the last AI reply. Tested in `tests/test_copy_or_quit.py`.
+  scrolls the transcript; a plain click-drag produces Textual's own in-app selection where the
+  terminal/multiplexer forwards drag motion (some terminals and tmux still require **Shift+drag**,
+  which also works as the terminal-native selection); **Ctrl+C** copies the selection via OSC-52
+  (works locally and over SSH/mobile) and only quits when nothing is selected; and Ctrl+Y still
+  copies the last AI reply. Tested in `tests/test_copy_or_quit.py`.
+- **Terminal UI: click anywhere to start typing.** The transcript (a `RichLog`) and the scrollable
+  side panels are focusable by default, so clicking them moved keyboard focus off the message input
+  and keystrokes went to the transcript instead of the prompt — you had to click precisely in the
+  input to type. The transcript is now non-focusable, and an app-level `on_click` sends focus back to
+  the prompt for any click (covering the still-focusable side panels), so a click anywhere leaves the
+  cursor in the message box. Wheel scroll, PageUp/PageDown, and drag-to-select are all unaffected.
+  Tested in `tests/test_click_focus.py`.
 - **`ClaudeConversationsAdapter` now wired into the default retrieval stack.** The adapter was fully
   implemented and tested but never instantiated in `_config_from_env()`, so past Claude Code session
   transcripts were invisible to grep during both interactive chat and task runs. It is now added by

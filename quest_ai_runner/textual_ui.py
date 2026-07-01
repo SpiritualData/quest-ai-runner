@@ -542,6 +542,14 @@ class FutureContextPanel(VerticalScroll):
 class TranscriptLog(RichLog):
     """RichLog that respects manual scroll position during streaming."""
 
+    # A RichLog is focusable by default, so clicking the transcript would move
+    # keyboard focus off the message input and your keystrokes would go here
+    # instead of the prompt. Make it non-focusable: the prompt keeps focus, wheel
+    # scrolling still works (it targets the widget under the pointer, not the
+    # focused one), PageUp/PageDown are handled by the app's global bindings, and
+    # drag-to-select is unaffected (selection is gated on allow_select, not focus).
+    can_focus = False
+
     def write(self, content, width=None, expand=False, shrink=True,
               scroll_end=None, animate=False):
         if scroll_end is None and self.auto_scroll:
@@ -1885,6 +1893,23 @@ class QuestAITerminal(App):
             self._deep_detail.page_forward()
         else:
             self._tlog.scroll_page_down(animate=False)
+
+    def on_click(self, event) -> None:
+        """Click anywhere to start typing: send focus back to the message input.
+
+        The transcript is now non-focusable, but the scrollable side panels
+        (deep-detail, future-context) still take focus on click. Rather than special-
+        case each, we catch the bubbled Click here and refocus the prompt, so a click
+        anywhere in the terminal leaves the cursor in the message box ready to type.
+        Drag-to-select is unaffected: a selection left on the screen is not cleared by
+        a focus change, and Ctrl+C still copies it.
+        """
+        try:
+            prompt = self.query_one("#prompt", PromptTextArea)
+        except Exception:  # noqa: BLE001
+            return
+        if self.focused is not prompt:
+            prompt.focus()
 
     def on_mouse_scroll_up(self, event) -> None:
         """Mouse wheel up — routes to the active scroll target, same logic as PageUp."""
