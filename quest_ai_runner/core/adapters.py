@@ -635,11 +635,14 @@ class GuidanceCard:
                        (the catalog carries id + title + relevance, NOT the body, so it stays cheap).
       ``body``      -- the full instruction text. Empty in catalog (``list``) results; populated
                        by ``read`` / ``select``. The brain never interprets it — it just renders it.
+      ``tags``      -- optional scope/operation tags used by UniversalGuidanceProvider for
+                       hierarchical selection (e.g. "scope:global", "operation:plan").
     """
     id: str
     title: str
     relevance: str
     body: str = ""
+    tags: List[str] = field(default_factory=list)
 
 
 @runtime_checkable

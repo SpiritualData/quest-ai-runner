@@ -351,6 +351,7 @@ class UniversalGuidanceProvider(GuidanceProviderBase):
                 title=card_dict.get("title", ""),
                 body=card_dict.get("body", ""),
                 relevance=card_dict.get("relevance", card_dict.get("description", "")),
+                tags=list(card_dict.get("tags") or []),
             )
         # Assume it's an object with attributes
         return CoreGuidanceCard(
@@ -358,4 +359,5 @@ class UniversalGuidanceProvider(GuidanceProviderBase):
             title=getattr(card_dict, "title", ""),
             body=getattr(card_dict, "body", ""),
             relevance=getattr(card_dict, "relevance", getattr(card_dict, "description", "")),
+            tags=list(getattr(card_dict, "tags", None) or []),
         )
