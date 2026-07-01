@@ -4,6 +4,11 @@ These satisfy the core interfaces; a consumer wires the ones it needs into a Run
   * FilesAdapter              — RetrievalAdapter over a configured file root (quest-docs + corpus).
   * CachedDbAdapter           — RetrievalAdapter: live DB reads via a short-TTL cache (no file sync).
   * ClaudeConversationsAdapter — RetrievalAdapter over Claude Code session transcripts (local directory).
+  * GoogleChatAdapter         — RetrievalAdapter over Google Chat spaces/threads/messages (read +
+                                discovery + pre-flight assemble). Auth is injected via a token
+                                provider (``static_token_provider`` or, for a Google Workspace,
+                                ``service_account_token_provider`` with domain-wide delegation —
+                                the latter needs the optional [google] extra). HTTP is stdlib-only.
   * QuestRetrievalAdapter     — RetrievalAdapter: query Quest API for goal/quest context, notes, related goals.
   * WebSearchAdapter          — RetrievalAdapter that searches the live web via the Tavily API (stdlib
                                 urllib only; no extra deps). Enable with WEB_SEARCH_ENABLED=true +
@@ -53,6 +58,11 @@ from .web_search_adapter import WebSearchAdapter
 from .card_metadata_generator import CardMetadataGenerator
 from .claude_cli_provider import ClaudeCliProvider
 from .claude_conversations_adapter import ClaudeConversationsAdapter
+from .google_chat_adapter import (
+    GoogleChatAdapter,
+    static_token_provider,
+    service_account_token_provider,
+)
 from .composite_retrieval_adapter import CompositeRetrievalAdapter
 from .session_file_conversation_store import SessionFileConversationStore
 from .conversation_card_builder import ConversationCardBuilder
@@ -133,6 +143,9 @@ __all__ = [
     "FilesAdapter",
     "CachedDbAdapter",
     "ClaudeConversationsAdapter",
+    "GoogleChatAdapter",
+    "static_token_provider",
+    "service_account_token_provider",
     "SessionFileConversationStore",
     "QuestRetrievalAdapter",
     "WebSearchAdapter",

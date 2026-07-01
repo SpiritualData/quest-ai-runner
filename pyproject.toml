@@ -40,10 +40,14 @@ anthropic = ["anthropic>=0.40"]
 gemini = ["google-genai>=2.0"]
 qdrant = ["qdrant-client>=1.7", "fastembed>=0.3"]
 bm25 = ["bm25s>=0.2"]
+# GoogleChatAdapter's service_account_token_provider (domain-wide delegation for a Google
+# Workspace). The adapter itself is stdlib-only; only this token provider needs google-auth.
+google = ["google-auth>=2.0"]
 # All production providers (TUI is now core, not optional)
 all = [
     "anthropic>=0.40",
     "google-genai>=2.0",
+    "google-auth>=2.0",
     "qdrant-client>=1.7",
     "fastembed>=0.3",
     "bm25s>=0.2",
