@@ -62,6 +62,7 @@ from .card_content_render import (
     tokenize as _tokenize,
 )
 from .reference_resolver import build_resolver_registry
+from .specificity import SpecificityResult, rerank_factor, score_candidates
 
 # Type alias for a seed source callable: returns a list of items suitable for
 # ``VectorStore.sync()`` (each has id/text/payload/fingerprint keys).
@@ -81,6 +82,27 @@ def _snippet(text: str, lines: int = _SNIPPET_LINES) -> str:
     """Return the first ``lines`` non-empty lines of ``text``."""
     parts = [l for l in text.splitlines() if l.strip()][:lines]
     return " | ".join(parts) if parts else text[:120]
+
+
+def _hit_searchable_text(hit: VectorHit) -> str:
+    """Concatenate the text that identifies WHAT a hit is about, for specificity scoring.
+
+    Pulls the hit's own text plus the identifying payload fields (task, summary, paths, symbols,
+    id) so the specificity scorer sees the distinguishing terms of the referent, not just an
+    embedding. Never raises."""
+    payload = hit.payload or {}
+    parts: List[str] = [str(hit.id or "")]
+    for key in ("task", "summary", "path"):
+        val = payload.get(key)
+        if val:
+            parts.append(str(val))
+    for key in ("paths", "symbols"):
+        seq = payload.get(key) or []
+        if isinstance(seq, (list, tuple)):
+            parts.extend(str(x) for x in seq)
+    if hit.text:
+        parts.append(str(hit.text))
+    return " ".join(p for p in parts if p)
 
 
 def _task_slug(task_text: str) -> str:
@@ -484,13 +506,24 @@ class VectorContextAssembler(ContextAssemblerBase):
         """
         return "\n\n---\n\n".join(self._render_hit_sections(hits, task_text))
 
-    def _render_hit_sections(self, hits: List[VectorHit], task_text: str = "") -> List[str]:
+    def _render_hit_sections(
+        self,
+        hits: List[VectorHit],
+        task_text: str = "",
+        spec_by_id: Optional[Dict[str, "SpecificityResult"]] = None,
+    ) -> List[str]:
         """Render each VectorHit into its OWN rendered section, aligned with ``hits`` order.
 
         When a hit carries a rich task-to-context payload (``paths``, ``symbols``,
         ``task``, ``summary``), those fields are surfaced so the consuming agent
         immediately knows where to read.  The age of the association (derived from
         the ``ts`` payload field) is shown when present.
+
+        When ``spec_by_id`` carries a specificity result for a hit, a SUBJECT-MATCH line is added:
+        a positive line when the hit covers the query's distinguishing terms, and an explicit
+        WEAK/adjacent warning (naming the missing distinguishing terms) when it only shares the
+        category. This hands the answering model a grounded on-subject-vs-sibling signal rather
+        than making it infer specificity from the text.
 
         When a hit carries a card ``content`` list (the ``QdrantCardVectorStore``
         forwards it for card hits), its source-agnostic references are resolved
@@ -503,6 +536,24 @@ class VectorContextAssembler(ContextAssemblerBase):
         parts: List[str] = []
         for hit in hits:
             part_lines = [f"### Vector hit: {hit.id}  (score={hit.score:.3f})"]
+            # Subject-match (specificity) annotation: tells the reader whether this hit is about the
+            # SPECIFIC subject asked or only an adjacent sibling that shares the category.
+            sr = spec_by_id.get(hit.id) if spec_by_id else None
+            if sr is not None and sr.informative:
+                if sr.is_specific:
+                    matched = ", ".join(sr.matched[:4])
+                    part_lines.append(
+                        f"  subject match: on-subject ({matched})" if matched
+                        else "  subject match: on-subject"
+                    )
+                else:
+                    missing = ", ".join(sr.missing[:4]) or "the distinguishing terms of your request"
+                    part_lines.append(
+                        f"  subject match: WEAK. This shares category terms with your request but "
+                        f"NOT its distinguishing terms (missing: {missing}). It is likely an "
+                        f"ADJACENT topic, not the specific subject asked about. Do not answer from "
+                        f"it as if it were on-subject."
+                    )
             # Age annotation from ts payload field.
             ts = hit.payload.get("ts") if hit.payload else None
             if ts is not None:
@@ -575,11 +626,24 @@ class VectorContextAssembler(ContextAssemblerBase):
         if self._provider is not None:
             candidates = self._llm_review(task_text, candidates)
 
-        # Step d: recency decay — re-rank by age-decayed effective score.
+        # Step d: re-rank by an effective score = raw similarity x SPECIFICITY x recency.
+        # SPECIFICITY is the PRIMARY key: it prefers a candidate about the SAME specific subject the
+        # query names over a sibling that only shares the category (e.g. a query about
+        # "result-prediction evaluation" must not be led by an "atom evaluation" doc just because
+        # both are evaluations). Recency is the SECONDARY factor. Neither GATES: the confidence floor
+        # below stays on the RAW similarity, so a still-similar hit is only re-ordered and labeled,
+        # never dropped. The specificity factor floors at 0.3 (see rerank_factor) so it re-orders
+        # decisively without zeroing a hit out, and it is neutral (1.0) when the query has no
+        # discriminating structure to judge on -- so this is never worse than recency alone.
+        spec_results = score_candidates(task_text, [_hit_searchable_text(h) for h in candidates])
+        spec_by_id: Dict[str, SpecificityResult] = {
+            h.id: sr for h, sr in zip(candidates, spec_results)
+        }
+
         now = self._clock()
         half_life = self._half_life_days
         decayed: List[tuple] = []  # (effective_score, hit)
-        for h in candidates:
+        for h, sr in zip(candidates, spec_results):
             ts = h.payload.get("ts") if h.payload else None
             if ts is not None:
                 try:
@@ -590,13 +654,14 @@ class VectorContextAssembler(ContextAssemblerBase):
                 age_days = None
 
             if age_days is not None:
-                effective = h.score * (0.5 ** (age_days / half_life))
+                recency = 0.5 ** (age_days / half_life)
             else:
                 # No ts (e.g. a card embedding): neutral mild decay for ORDERING only. The
                 # confidence gate below uses the RAW score, so a ts-less card is never pushed
                 # below the floor by this decay; it only affects rank vs dated hits.
-                effective = h.score * 0.5
+                recency = 0.5
 
+            effective = h.score * rerank_factor(sr) * recency
             decayed.append((effective, h))
 
         # Confidence gate applies to the RAW similarity score (not the decayed score): the floor is a
@@ -618,7 +683,7 @@ class VectorContextAssembler(ContextAssemblerBase):
         # Step e: render (pass task_text so card-content references rank + resolve against it).
         # Render per-hit sections so each hit's VERBATIM block can be attached to its card_metadata
         # (rendered_section), then join them for the context_view exactly as before.
-        hit_sections = self._render_hit_sections(kept, task_text)
+        hit_sections = self._render_hit_sections(kept, task_text, spec_by_id=spec_by_id)
         context_view = "\n\n---\n\n".join(hit_sections)
         rendered_by_id: Dict[str, str] = {
             h.id: hit_sections[i] for i, h in enumerate(kept) if i < len(hit_sections)
@@ -688,6 +753,7 @@ class VectorContextAssembler(ContextAssemblerBase):
                 )
                 if content else []
             )
+            sr = spec_by_id.get(h.id) if spec_by_id else None
             card_metadata.append({
                 "id": h.id,
                 "title": h.text[:100] if h.text else "(no text)",  # first 100 chars as title
@@ -700,6 +766,18 @@ class VectorContextAssembler(ContextAssemblerBase):
                 # consolidator rebuilds from it (a hit's payload fields + resolved content, not just
                 # its content items) instead of dropping them when consolidation engages.
                 "rendered_section": rendered_by_id.get(h.id, ""),
+                # Structured SPECIFICITY signal for consumers/UI: whether this hit matches the
+                # SPECIFIC subject asked (vs an adjacent sibling), the score, and which
+                # distinguishing terms it covered/missed. Absent-key-safe when non-informative.
+                "specificity": (
+                    {
+                        "score": round(sr.score, 3),
+                        "on_subject": sr.is_specific,
+                        "matched_terms": sr.matched,
+                        "missing_terms": sr.missing,
+                    }
+                    if sr is not None and sr.informative else None
+                ),
             })
 
         return AssembledContext(

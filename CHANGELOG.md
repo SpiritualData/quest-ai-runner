@@ -7,6 +7,26 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Specificity ranking signal: prefer the exact subject over a same-category sibling, and tell the
+  model which is which.** Dense retrieval ranks by topical similarity, so a query about one subject
+  ("result-prediction evaluation") pulls back siblings that share the category head ("evaluation")
+  but are a different specific thing ("atom evaluation"), and they score nearly as high. New
+  model-free scorer `adapters/specificity.py` measures each query term's power to PARTITION the
+  retrieved neighborhood (`p*(1-p)` over candidate document frequency): the term in every candidate
+  (the shared category) and a generic ask-word absent from every candidate both fall to zero
+  weight, leaving the distinguishing terms of the real subject. A candidate's specificity is the
+  fraction of that distinguishing mass it covers. Wired into `VectorContextAssembler` as the
+  PRIMARY re-rank key (ahead of the existing recency decay, which stays a secondary factor), so a
+  sibling with higher raw similarity is demoted below the true subject. It never gates (the
+  similarity floor still decides inclusion) and is neutral when the query has no discriminating
+  structure, so it is never worse than ranking without it. The signal is surfaced to the answering
+  model as a per-hit "subject match: on-subject / WEAK (missing: ...)" label and as structured
+  `specificity` fields on `card_metadata`, so the model reads a grounded on-subject-vs-adjacent
+  signal instead of inferring it (pairs with the `SPECIFICITY_GATE` prompt discipline). No model
+  call, no global corpus, no word list, no new dependency. Tested in `tests/test_specificity.py`.
+  Honest boundary: it distinguishes among retrieved candidates; when the true subject was never
+  retrieved at all it goes neutral (left to the similarity floor, the prompt gate, and a future
+  cross-encoder/NLI increment).
 - **Specificity gate: answer about the EXACT subject asked, not its category.** A new
   `SPECIFICITY_GATE` in `core/context_doctrine.py` closes the failure mode where a question about
   one specific subject got answered from a DIFFERENT subject's material just because both shared a
