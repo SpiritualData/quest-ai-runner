@@ -23,6 +23,7 @@ Install the [tui] extra:
 from __future__ import annotations
 
 import os
+import shutil
 import threading
 import time
 from collections import OrderedDict
@@ -55,6 +56,11 @@ from .interactive import (
 if TYPE_CHECKING:
     from .config import RunnerConfig
     from .core.orchestrator import OrchestratorResult
+
+
+# Prompt placeholder shown while a turn is waiting on the user's reply to a decision question
+# raised mid-turn (EVENT_DECISION) — makes it obvious the AI is paused for input, not just idle.
+_AWAITING_DECISION_PLACEHOLDER = "Reply to the question above to continue…"
 
 
 # ── RichLog-backed console adapter ─────────────────────────────────────────────
@@ -390,6 +396,86 @@ class DeepDetailPanel(VerticalScroll):
             self.call_after_refresh(self.scroll_end, animate=False)
 
 
+_CLIPBOARD_COMMANDS = (
+    ["xclip", "-selection", "clipboard"],
+    ["xsel", "--clipboard", "--input"],
+    ["wl-copy"],
+)
+
+
+def _copy_to_clipboard_tool(text: str, which=shutil.which, run=None) -> tuple:
+    """Try each known clipboard CLI tool; return ``(copied, message)``.
+
+    Distinguishes two failure modes so the user knows what to do next:
+      - no clipboard tool is installed at all -> tell them to install one
+      - a tool IS installed but the call failed (e.g. no display/session) -> show that error
+    ``which``/``run`` are injectable so this is testable without a real clipboard.
+    """
+    if run is None:
+        import subprocess
+        run = subprocess.run
+
+    any_installed = False
+    last_error: Optional[str] = None
+    for cmd in _CLIPBOARD_COMMANDS:
+        if which(cmd[0]) is None:
+            continue
+        any_installed = True
+        try:
+            run(cmd, input=text.encode(), check=True, capture_output=True, timeout=2)
+            return True, ""
+        except Exception as exc:  # noqa: BLE001
+            last_error = str(exc)
+            continue
+
+    if not any_installed:
+        return False, "(clipboard tool not found, install xclip or xsel)"
+    return False, f"(clipboard tool found but copy failed: {last_error})"
+
+
+def _build_shallow_context_bullets(cards: List[dict]) -> str:
+    """Build "context it used" bullet lines from shallow-turn context cards.
+
+    Mirrors the bullet format deep runs produce for the FutureContextPanel, so a shallow
+    turn's context cards can reuse the same Alt+C panel and footer hint instead of being
+    discarded once the turn ends. Returns an empty string when there is nothing to show.
+    """
+    lines: List[str] = []
+    for card in cards or []:
+        title = card.get("title") or card.get("id") or "(no title)"
+        adapter = card.get("adapter") or ""
+        label = f"{adapter}: {title}" if adapter else title
+        lines.append(f"- {label}")
+    return "\n".join(lines)
+
+
+def _missing_model_provider_message(env=None, which=shutil.which) -> Optional[str]:
+    """Return a clear error message when no model provider can be reached, else ``None``.
+
+    Zero-config first run: with no API-key env vars set, the config falls back to
+    ``ClaudeCliProvider``, which needs the ``claude`` CLI on PATH. If it isn't installed, the
+    session build hangs waiting on a subprocess that will never start. Detect that case up
+    front so the user gets an actionable message instead of a blank alternate screen.
+    A pure function (env/which injectable) so it is testable offline.
+    """
+    env = env if env is not None else os.environ
+    backend = (env.get("QAR_MODEL_BACKEND") or "").strip().lower()
+    has_key = bool(
+        env.get("OPENAI_API_KEY") or env.get("GOOGLE_API_KEY") or env.get("ANTHROPIC_API_KEY")
+    )
+    if backend and backend != "claude_cli":
+        return None  # an explicit non-CLI backend is configured; let it fail its own way
+    if has_key:
+        return None
+    if which("claude") is not None:
+        return None
+    return (
+        "No AI provider is configured. Set ANTHROPIC_API_KEY (or OPENAI_API_KEY / "
+        "GOOGLE_API_KEY) to use a hosted model, or install the claude CLI and log in "
+        "to use your Claude subscription."
+    )
+
+
 def _build_future_context_text(bullets: str) -> Optional[Text]:
     """Build the Rich Text to display in the "context it used" panel.
 
@@ -639,6 +725,11 @@ class QuestAITerminal(App):
         # Shown in the FutureContextPanel after the turn ends.
         self._future_context: str = ""
 
+        # True while the AI is awaiting the user's reply to an EVENT_DECISION question raised
+        # mid-turn. Drives the prompt placeholder + a visually distinct rendering of the
+        # question; cleared as soon as the user submits their next message.
+        self._awaiting_decision: bool = False
+
         # When set, the next submitted line is a menu selection, not a turn.
         self._pending_select: Optional[Callable[[str], None]] = None
 
@@ -715,6 +806,11 @@ class QuestAITerminal(App):
     def _build_session_worker(self) -> None:
         """Worker thread: build InteractiveSession (loads embedder, Qdrant, etc.) then hand off."""
         try:
+            missing = _missing_model_provider_message()
+            if missing is not None:
+                self.call_from_thread(self._startup_failed, RuntimeError(missing))
+                return
+
             from .interactive import InteractiveSession
 
             # Use a flag so we can stop forwarding notices the moment the session
@@ -796,6 +892,9 @@ class QuestAITerminal(App):
         event.textarea.styles.height = 3
         if not line:
             return
+
+        # Any submitted message answers a pending decision question, if there was one.
+        self._awaiting_decision = False
 
         # Session still initializing — queue the message for replay once ready.
         if self.sess is None:
@@ -1323,8 +1422,12 @@ class QuestAITerminal(App):
                     self._future_context = fc
 
         elif t == ev["decision"]:
+            self._awaiting_decision = True
             log.write(Text(""))
-            log.write(f"  [yellow]?[/yellow] {text}")
+            # Rendered visually distinct (yellow border prefix) so a question the AI needs
+            # answered before it can continue doesn't blend into the rest of the transcript.
+            log.write(Text(f"  ┃ {text}", style="bold yellow"))
+            self.query_one("#prompt", PromptTextArea).placeholder = _AWAITING_DECISION_PLACEHOLDER
         # done: terminal signal only.
 
     def _finish_turn(self, user_text: str, final, elapsed: float,
@@ -1386,12 +1489,14 @@ class QuestAITerminal(App):
             log.write(Text(""))
             self._write_footer(final, elapsed)
             # If the deep run flagged the context it used, load the panel and show a
-            # subtle hint in the transcript so the user knows it is available.
-            if self._future_context:
-                self._future_ctx_panel.load(self._future_context)
-                count = sum(
-                    1 for ln in self._future_context.splitlines() if ln.strip()
-                )
+            # subtle hint in the transcript so the user knows it is available. Shallow
+            # turns don't get a future_context bullet list from the orchestrator, but they
+            # do gather context cards (shown live in the ContextPanel) — reuse the same
+            # Alt+C panel/hint for those instead of letting the cards be discarded.
+            context_bullets = self._future_context or _build_shallow_context_bullets(self._ctx.cards)
+            if context_bullets:
+                self._future_ctx_panel.load(context_bullets)
+                count = sum(1 for ln in context_bullets.splitlines() if ln.strip())
                 log.write(Text(
                     f"  [Alt+C] Context it used  ({count})",
                     style="dim",
@@ -1403,7 +1508,12 @@ class QuestAITerminal(App):
 
         self._turn_active = False
         inp = self.query_one("#prompt", PromptTextArea)
-        inp.placeholder = "Ask anything…   Enter=send   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)"
+        # A decision question leaves the prompt awaiting the user's reply; don't clobber that
+        # placeholder with the normal one until they actually answer it.
+        if self._awaiting_decision:
+            inp.placeholder = _AWAITING_DECISION_PLACEHOLDER
+        else:
+            inp.placeholder = "Ask anything…   Enter=send   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)"
         inp.focus()
 
         # Auto-execute a planned-but-unexecuted deep turn (matches interactive.py).
@@ -1512,22 +1622,12 @@ class QuestAITerminal(App):
         if not text:
             self._tlog.write(Text("  (nothing to copy)", style="dim"))
             return
-        copied = False
-        for cmd in (["xclip", "-selection", "clipboard"], ["xsel", "--clipboard", "--input"],
-                    ["wl-copy"]):
-            try:
-                import subprocess
-                subprocess.run(cmd, input=text.encode(), check=True,
-                               capture_output=True, timeout=2)
-                copied = True
-                break
-            except Exception:  # noqa: BLE001
-                continue
+        copied, message = _copy_to_clipboard_tool(text)
         if copied:
             preview = text[:60].replace("\n", " ")
             self._tlog.write(Text(f"  Copied: {preview}…" if len(text) > 60 else f"  Copied: {preview}", style="dim"))
         else:
-            self._tlog.write(Text("  (clipboard tool not found — install xclip or xsel)", style="dim"))
+            self._tlog.write(Text(f"  {message}", style="dim"))
 
     def action_cancel(self) -> None:
         if self._turn_active:

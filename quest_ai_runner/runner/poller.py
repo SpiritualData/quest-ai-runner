@@ -23,7 +23,7 @@ import json
 import logging
 import os
 import threading
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -52,7 +52,10 @@ class StateStore:
 
     def __init__(self, path: Optional[str]):
         self._path = Path(path) if path else None
-        self._handled: set = set()
+        # Insertion-ordered set of handled signatures (dict keys preserve insertion order; values
+        # are unused). This lets the save-time cap evict the OLDEST entries first instead of an
+        # arbitrary subset (a plain ``set`` has no defined iteration order).
+        self._handled: Dict[str, None] = {}
         self._lock = threading.Lock()
         self._load()
 
@@ -60,7 +63,9 @@ class StateStore:
         if self._path and self._path.exists():
             try:
                 data = json.loads(self._path.read_text())
-                self._handled = set(data.get("handled", []))
+                # Backward compatible: an existing file's "handled" list becomes the dict's keys,
+                # in the same (oldest-first) order they were written.
+                self._handled = dict.fromkeys(data.get("handled", []))
             except (json.JSONDecodeError, OSError):
                 log.warning("state file corrupt/unreadable; starting fresh")
 
@@ -69,9 +74,17 @@ class StateStore:
             return
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            # Cap the stored set so it can't grow unbounded over a long-running service.
+            # Cap the stored set so it can't grow unbounded over a long-running service. Dict keys
+            # preserve insertion order, so this drops the OLDEST entries first (not an arbitrary
+            # subset), keeping the most-recently-marked 5000 signatures.
             recent = list(self._handled)[-5000:]
-            self._path.write_text(json.dumps({"handled": recent}, indent=2))
+            payload = json.dumps({"handled": recent}, indent=2)
+            # Atomic write: write to a temp file in the same directory, then os.replace() so a
+            # crash/interruption mid-write can never leave a corrupt/partial state file — the
+            # replace is a single filesystem operation.
+            tmp_path = self._path.with_suffix(self._path.suffix + ".tmp")
+            tmp_path.write_text(payload)
+            os.replace(tmp_path, self._path)
         except OSError as e:
             log.warning("could not persist state: %s", e)
 
@@ -81,7 +94,7 @@ class StateStore:
 
     def mark(self, sig: str):
         with self._lock:
-            self._handled.add(sig)
+            self._handled[sig] = None
             self._save()
 
 
@@ -176,7 +189,10 @@ class Poller:
         workers = max(1, min(self.cfg.max_concurrent_tasks, len(fresh)))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {pool.submit(self._handle_one, t): t for t in fresh}
-            for fut in futures:
+            # Drive handling/logging in COMPLETION order (as_completed), not submission order —
+            # so a fast task is reported as soon as it finishes instead of waiting behind a
+            # slower task that happened to be submitted first.
+            for fut in as_completed(futures):
                 try:
                     tid = fut.result()
                     if tid:
@@ -223,14 +239,15 @@ class Poller:
         # the rep slug if a rep_sync_resolver maps this task to a skill dir, else the runner label.
         target = self._resolve_rep_target(task)
         handler = self._handler_label(target)
-        # Mark BEFORE running so a crash mid-run doesn't cause a re-fire loop (backend claim also guards).
-        self.state.mark(sig)
-        try:
-            self.client.claim(task_id, handler=handler)
-        except QuestApiError as e:
-            # Already claimed by another worker, or transient — skip; the backend is the source of truth.
-            log.info("could not claim task %s (%s) — skipping", task_id, e)
+        # Claim FIRST: claim() now returns None on failure (already claimed by another worker, or a
+        # transient API error) instead of an ambiguous {}. Only mark the signature handled AFTER a
+        # successful claim, so a failed claim leaves the task un-marked and it is re-offered on a
+        # later scan. Mark BEFORE running (not after) so a crash mid-run still doesn't cause a
+        # re-fire loop — the backend claim (in_progress) is the second guard either way.
+        if self.client.claim(task_id, handler=handler) is None:
+            log.info("could not claim task %s — skipping (will be re-offered later)", task_id)
             return None
+        self.state.mark(sig)
         # Opt-in: refresh this rep's skill file from its Quest profile right before running, so the
         # spawned agent reflects the latest persona + learned corrections. Best-effort: a sync
         # failure is logged and the task still runs (it just uses the last-synced skill file).

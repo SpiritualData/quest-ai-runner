@@ -92,6 +92,8 @@ import os
 import sys
 from pathlib import Path
 
+import shutil
+
 from .adapters import AnthropicProvider, ClaudeCliProvider, ClaudeConversationsAdapter, CompositeRetrievalAdapter, FilesAdapter, GeminiProvider, OpenAIProvider, WebSearchAdapter
 from .config import RunnerConfig
 from .core.adapters import ModelProvider
@@ -271,6 +273,39 @@ def _config_from_env() -> RunnerConfig:
     return cfg
 
 
+def _check_chat_prerequisites(env=None, which=shutil.which) -> List[str]:
+    """Validate what `chat` needs before it can run, without opening the TUI.
+
+    Returns a list of human-readable problems; an empty list means chat is ready to start.
+    Checks: a model provider must be reachable (an API key env var, or the claude CLI on PATH
+    for the keyless default), and the corpus/context store path, if configured, must exist.
+    A pure function (env/which injectable) so it is testable offline.
+    """
+    env = env if env is not None else os.environ
+    problems: List[str] = []
+
+    backend = (env.get("QAR_MODEL_BACKEND") or "").strip().lower()
+    has_key = bool(
+        env.get("OPENAI_API_KEY") or env.get("GOOGLE_API_KEY") or env.get("ANTHROPIC_API_KEY")
+    )
+    if not backend or backend == "claude_cli":
+        if not has_key and which("claude") is None:
+            problems.append(
+                "no model provider available: set ANTHROPIC_API_KEY (or OPENAI_API_KEY / "
+                "GOOGLE_API_KEY), or install the claude CLI and log in"
+            )
+
+    corpus = env.get("QAR_CORPUS_ROOT")
+    if corpus and not os.path.isdir(corpus):
+        problems.append(f"QAR_CORPUS_ROOT is set but does not exist: {corpus}")
+
+    cards_dir = env.get("QAR_CONTEXT_CARDS_DIR")
+    if cards_dir and not os.path.isdir(cards_dir):
+        problems.append(f"QAR_CONTEXT_CARDS_DIR is set but does not exist: {cards_dir}")
+
+    return problems
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="quest-ai-runner",
                                      description="Poll Quest for due AI tasks and execute them.")
@@ -287,6 +322,9 @@ def main(argv=None) -> int:
                         help="path to a persona/skill file injected into every turn "
                              "(default: QAR_REP_PERSONA_FILE env var)")
     chat_p.add_argument("--goal-id", default=None, help="attach session to this Quest goal id")
+    chat_p.add_argument("--check", action="store_true",
+                        help="validate chat prerequisites (model provider, context store) and exit, "
+                             "without opening the terminal UI")
 
     # --- send subcommand: enqueue a new AI task -------------------------------
     send_p = sub.add_parser("send", help="enqueue a new AI task and print its id")
@@ -336,9 +374,12 @@ def main(argv=None) -> int:
     poll_p.add_argument("--once", action="store_true", help="one scan then exit (cron mode)")
     poll_p.add_argument("--check", action="store_true", help="validate config + key, then exit")
 
-    # Legacy: flags directly on the root command (no subcommand given) stay working.
-    parser.add_argument("--once", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--check", action="store_true", help=argparse.SUPPRESS)
+    # Legacy: flags directly on the root command (no subcommand given) stay working; also
+    # documented on `poll` above. Kept visible (not argparse.SUPPRESS) so `-h` shows them.
+    parser.add_argument("--once", action="store_true",
+                        help="poll mode: one scan then exit (cron mode); same as 'poll --once'")
+    parser.add_argument("--check", action="store_true",
+                        help="poll mode: validate config + key, then exit; same as 'poll --check'")
 
     args = parser.parse_args(argv)
 
@@ -353,6 +394,15 @@ def main(argv=None) -> int:
 
     # --- chat -----------------------------------------------------------------
     if args.command == "chat":
+        if getattr(args, "check", False):
+            chat_problems = _check_chat_prerequisites()
+            if chat_problems:
+                for p in chat_problems:
+                    log.error("chat not ready: %s", p)
+                return 1
+            log.info("chat prerequisites OK")
+            return 0
+
         cfg = _config_from_env()
         # chat only needs a model provider — Quest credentials and a retrieval
         # adapter are optional (no corpus = no grounding, but still works).

@@ -252,3 +252,105 @@ def test_narration_beat_consecutive_duplicate_not_doubled():
     app._handle_event(event)
     hits = [ln for ln in log.lines if "Same beat" in ln]
     assert len(hits) == 1
+
+
+# ---------------------------------------------------------------------------
+# Context showcase: shallow turns keep their context cards accessible too
+# (not just deep turns with a future_context bullet list from the orchestrator)
+# ---------------------------------------------------------------------------
+
+from quest_ai_runner.textual_ui import _build_shallow_context_bullets  # noqa: E402
+
+
+def test_build_shallow_context_bullets_from_cards():
+    cards = [
+        {"id": "card-1", "title": "Pricing tiers", "adapter": "keyword"},
+        {"id": "card-2", "title": "Refund policy", "adapter": "vector"},
+    ]
+    bullets = _build_shallow_context_bullets(cards)
+    assert "keyword: Pricing tiers" in bullets
+    assert "vector: Refund policy" in bullets
+
+
+def test_build_shallow_context_bullets_empty_when_no_cards():
+    assert _build_shallow_context_bullets([]) == ""
+    assert _build_shallow_context_bullets(None) == ""
+
+
+def test_build_shallow_context_bullets_falls_back_to_id_when_no_title():
+    bullets = _build_shallow_context_bullets([{"id": "card-1", "adapter": "keyword"}])
+    assert "card-1" in bullets
+
+
+def test_build_shallow_context_bullets_no_em_dash():
+    bullets = _build_shallow_context_bullets([{"id": "c1", "title": "x", "adapter": "keyword"}])
+    assert "—" not in bullets
+
+
+class _FakeFinalAnswer:
+    """Minimal OrchestratorResult-like stand-in for a shallow (answer) turn."""
+    kind = "answer"
+    text = "Here is your answer."
+    deep_results = []
+    goals = []
+    tokens_in = 10
+    tokens_out = 20
+    model = "claude-sonnet-4-6"
+    steps = 1
+
+
+class _FakeSessionForFinishTurn:
+    """A session stand-in with just enough surface for _finish_turn (and the on_mount header
+    it triggers, since QuestAITerminal is driven through a real app run_test() here) to work."""
+    _rep_name = "Tester"
+    _cfg = type("Cfg", (), {"corpus_root": None})()
+    _goal_id = None
+    _model_hint = None
+
+    def __init__(self) -> None:
+        self._last_user = ""
+        self._last_assistant = ""
+        self._session_history: list = []
+        self._turn_count = 0
+        self._turns: list = []
+        self._orch = type("Orch", (), {"context_assembler": None})()
+
+    def _write_session_file(self) -> None:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_shallow_turn_with_context_cards_shows_alt_c_hint():
+    """A shallow (non-deep) turn that gathered context cards gets the same
+    "[Alt+C] Context it used" footer hint that deep turns get, and the cards survive
+    into the FutureContextPanel instead of being discarded when the turn ends."""
+    app = QuestAITerminal(_FakeSessionForFinishTurn())
+    async with app.run_test():
+        app._ctx.set_cards([
+            {"id": "card-1", "title": "Pricing tiers", "adapter": "keyword"},
+        ])
+        app._future_context = ""  # shallow turns never populate this from the orchestrator
+        app._answer_parts = []
+        app._auto_pass = 1
+
+        app._finish_turn("what are the pricing tiers?", _FakeFinalAnswer(), 1.2,
+                         cancelled=False, error=None)
+
+        # The panel picked up bullets built from the ContextPanel's cards (not discarded).
+        assert "Pricing tiers" in app._future_ctx_panel._bullets
+
+
+@pytest.mark.asyncio
+async def test_shallow_turn_without_context_cards_no_panel_load():
+    """A shallow turn that gathered no context cards leaves the panel empty (nothing to show)."""
+    app = QuestAITerminal(_FakeSessionForFinishTurn())
+    async with app.run_test():
+        app._ctx.reset()
+        app._future_context = ""
+        app._answer_parts = []
+        app._auto_pass = 1
+
+        app._finish_turn("a plain question", _FakeFinalAnswer(), 0.8,
+                         cancelled=False, error=None)
+
+        assert app._future_ctx_panel._bullets == ""

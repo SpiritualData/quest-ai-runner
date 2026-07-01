@@ -16,11 +16,14 @@ it can be unit-tested against a mock Quest client + stub brain with no network.
 """
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
 from ..core.adapters import Mode, ProgressEvent
 from ..core.orchestrator import Orchestrator, OrchestratorResult
+
+log = logging.getLogger("quest-ai-runner.executor")
 
 
 @dataclass
@@ -367,8 +370,8 @@ class TaskExecutor:
     def _safe(self, fn):
         try:
             fn()
-        except Exception as e:  # noqa: BLE001
-            print(f"[executor] report failed: {type(e).__name__}: {e}")
+        except Exception:  # noqa: BLE001
+            log.error("report failed", exc_info=True)
 
     def _safe_report_failed(self, task_id: str, msg: str):
         self._safe(lambda: self._client.report_failed(task_id, msg))

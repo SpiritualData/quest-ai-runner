@@ -70,15 +70,6 @@ try:
 except ImportError:
     yaml = None  # type: ignore
 
-# Emit deprecation warning when this module is imported
-warnings.warn(
-    "The ANSI interactive.py module is deprecated. Use the Textual UI instead "
-    "(textual_ui.py) by installing the [tui] extra: pip install quest-ai-runner[tui]. "
-    "This module is kept for ANSI-only fallback compatibility only.",
-    DeprecationWarning,
-    stacklevel=2
-)
-
 if TYPE_CHECKING:
     from .config import RunnerConfig
     from .core.orchestrator import Orchestrator, OrchestratorResult, ProgressEvent
@@ -977,7 +968,7 @@ class _TurnRenderer:
         elif t == ev["milestone"]:
             self._panel.stop()
             if text:
-                self._display("markup", text)
+                self._display("milestone", text)
             self._panel.start()
         elif t == ev["result"]:
             if not self._partial_started and text:
@@ -1164,6 +1155,11 @@ Keys:
   Ctrl+C         Clear input line (twice within 2s to exit)
   Ctrl+D         Exit
   Ctrl+R         Search input history (fuzzy, incremental)
+
+Companion CLI commands (run outside this session, e.g. in another terminal):
+
+  quest-ai-runner search-context "<query>"   See which context cards a query would surface
+  quest-ai-runner bootstrap --dry-run        Estimate cost/time to index this corpus, before running it
 """
 
 _BANNER = """\
@@ -1602,6 +1598,16 @@ class InteractiveSession:
     # -- REPL ------------------------------------------------------------------
 
     def run(self) -> None:
+        # Emit the deprecation warning only when the ANSI rendering path actually runs, not
+        # merely when this module is imported (textual_ui.py imports names from here even
+        # though the recommended Textual UI is what actually serves the session).
+        warnings.warn(
+            "The ANSI interactive.py module is deprecated. Use the Textual UI instead "
+            "(textual_ui.py) by installing the [tui] extra: pip install quest-ai-runner[tui]. "
+            "This module is kept for ANSI-only fallback compatibility only.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._print_header()
         last_ctrl_c: list = [0.0]   # shared with the prompt_toolkit key binding
         session = _make_prompt_session(last_ctrl_c)
@@ -2306,6 +2312,27 @@ class InteractiveSession:
         c.line("")
         c.dim(f"  Speed:  fastest {fastest:.1f}s  ·  slowest {slowest:.1f}s  ·  avg {avg_time:.1f}s")
         c.line("")
+
+        usage_line = self._daily_usage_status()
+        if usage_line:
+            c.dim(f"  Daily budget:  {usage_line}")
+            c.line("")
+
+    def _daily_usage_status(self) -> Optional[str]:
+        """Read-only daily-usage status line for /status, or None if no usage file exists.
+
+        Instantiates a DailyUsageTracker from the same env path the poller uses
+        (QAR_DAILY_USAGE_PATH, default ./qar_daily_usage.json) purely to read today's tally;
+        this session never records against it (only the poller/orchestrator calls do that).
+        """
+        try:
+            path = (os.getenv("QAR_DAILY_USAGE_PATH") or "").strip() or "./qar_daily_usage.json"
+            if not os.path.exists(path):
+                return None
+            from .usage import DailyUsageTracker
+            return DailyUsageTracker.from_env().status()
+        except Exception:  # noqa: BLE001 — status display must never break /status
+            return None
 
 
 # ── Public entry point ────────────────────────────────────────────────────────

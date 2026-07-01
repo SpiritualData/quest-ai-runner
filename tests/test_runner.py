@@ -1,4 +1,5 @@
 """Runner: discover -> claim -> run -> report, against a MOCK Quest client (no network)."""
+import logging
 from datetime import datetime, timedelta, timezone
 
 from quest_ai_runner.core.model_registry import ModelRegistry
@@ -248,6 +249,24 @@ def test_executor_chat_post_failure_never_breaks_the_task():
     assert client.reports and client.reports[0][1] == "done"
 
 
+def test_executor_safe_logs_report_failure_at_error_with_traceback(caplog):
+    """_safe() must log a swallowed report failure at ERROR with a traceback (exc_info), via the
+    module logger, not print() to stdout — so it shows up in normal log capture/aggregation."""
+    class BoomReportClient(MockQuestClient):
+        def report_done(self, task_id, result):
+            raise RuntimeError("report_done failed")
+
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = BoomReportClient([])
+    ex = TaskExecutor(client, _brain(provider))
+    with caplog.at_level(logging.ERROR, logger="quest-ai-runner.executor"):
+        out = ex.execute({"id": "t9b", "text": "say hi"})
+    assert out.status == "done"  # the report failure never breaks the task's own outcome
+    error_records = [r for r in caplog.records if r.levelno == logging.ERROR]
+    assert any("report failed" in r.message for r in error_records)
+    assert any(r.exc_info is not None for r in error_records)  # traceback captured
+
+
 def test_executor_posts_progress_for_team_conv_id_verbatim():
     """A team-chat-delegated task carries a ``team:{team_id}`` conv id (not a ``qaconv_`` id).
 
@@ -374,12 +393,66 @@ def test_poller_dedup_skips_already_handled():
     assert client.claimed == ["task-3"]            # claimed exactly once
 
 
+def test_poller_skips_execution_when_claim_fails_and_reoffers_later():
+    """claim() returning None (already claimed elsewhere / transient API error) must not execute
+    the task, and must NOT permanently mark it handled — so it is re-offered on a later scan."""
+    class _ClaimFailsClient(MockQuestClient):
+        def claim(self, task_id, handler=None):
+            self.claimed.append(task_id)
+            return None
+
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = _ClaimFailsClient([{"id": "task-4", "text": "x", "status": "queued", "team_id": "team1"}])
+    poller = _poller_with(client, provider)
+
+    handled = poller.run_once()
+    assert handled == []                    # not executed
+    assert client.reports == []             # no report was filed
+    assert provider.plan_calls == 0         # the brain never ran
+
+    # The signature was NOT marked, so the same due task is re-offered on the next scan.
+    assert poller.run_once() == []          # still fails to claim, still not executed
+    assert client.claimed == ["task-4", "task-4"]   # attempted to claim on each scan
+
+
 def test_poller_unconfigured_degrades_to_empty():
     provider = StubProvider(decisions=[])
     client = MockQuestClient([])
     client.configured = False
     poller = _poller_with(client, provider)
     assert poller.run_once() == []                 # logs + returns, never crashes
+
+
+def test_poller_handles_futures_in_completion_order_not_submission_order():
+    """run_once() must drive per-task handling via as_completed(), so a FAST task is handled/
+    logged as soon as it finishes rather than waiting behind a SLOW task submitted earlier."""
+    import time
+
+    provider = StubProvider(decisions=[])
+    client = MockQuestClient([
+        {"id": "slow-task", "text": "x", "status": "queued", "team_id": "team1"},
+        {"id": "fast-task", "text": "x", "status": "queued", "team_id": "team1"},
+    ])
+    poller = _poller_with(client, provider)
+
+    completion_order = []
+    real_handle_one = poller._handle_one
+
+    def _fake_handle_one(task):
+        task_id = task.get("id")
+        if task_id == "slow-task":
+            time.sleep(0.2)
+        else:
+            time.sleep(0.01)
+        completion_order.append(task_id)
+        return task_id
+
+    poller._handle_one = _fake_handle_one
+    handled = poller.run_once()
+
+    # Both ran, but the FAST one (submitted second) completed and was recorded first.
+    assert completion_order == ["fast-task", "slow-task"]
+    assert handled == ["fast-task", "slow-task"]  # run_once's return order follows completion too
 
 
 def test_task_signature_is_stable_and_status_sensitive():

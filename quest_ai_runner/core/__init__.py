@@ -9,6 +9,7 @@ from .adapters import (
     EVENT_DONE,
     EVENT_EXEC,
     EVENT_MILESTONE,
+    EVENT_OVERSEER,
     EVENT_PARTIAL,
     EVENT_PLAN,
     EVENT_READ,
@@ -82,6 +83,13 @@ from .guard import (
     text_claims_action,
     verify_supported,
 )
+from .overseer import (
+    OVERSEE_TOOL,
+    OVERSEER_PROMPT,
+    OverseerSignal,
+    build_digest,
+    oversee,
+)
 from .turn_context_store import TurnContextStore
 from .composite_assembler import CompositeContextAssembler
 
@@ -95,7 +103,7 @@ __all__ = [
     "StreamSink", "MilestoneSink", "FanoutSink", "SURFACING_EVENTS",
     "EVENT_STATUS", "EVENT_PLAN", "EVENT_READ", "EVENT_REPLAN", "EVENT_PARTIAL",
     "EVENT_EXEC", "EVENT_RESULT", "EVENT_DECISION", "EVENT_MILESTONE", "EVENT_DONE",
-    "EVENT_UNDERSTANDING",
+    "EVENT_UNDERSTANDING", "EVENT_OVERSEER",
     # storage-agnostic conversation-history retrieval (User Input Understanding)
     "ConversationContext", "ConversationStore",
     # registry
@@ -114,6 +122,8 @@ __all__ = [
     # goal runner
     "GoalRunner", "SubprocessGoalRunner", "SubprocessConfig", "compose_goal_prompt",
     "ESCALATION_MARKER", "extract_escalation_id",
+    # minimal-intervention overseer
+    "OverseerSignal", "oversee", "build_digest", "OVERSEE_TOOL", "OVERSEER_PROMPT",
     # turn context store + composite assembler (replace TurnMemory)
     "TurnContextStore", "CompositeContextAssembler",
 ]

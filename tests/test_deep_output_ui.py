@@ -24,6 +24,9 @@ class _FakeSession:
     """Minimal stand-in so QuestAITerminal can be constructed without a brain."""
     _rep_name = "Tester"
     _console = None
+    _cfg = None
+    _goal_id = None
+    _model_hint = None
 
 
 class _RecordingLog:
@@ -66,6 +69,25 @@ def _make_app() -> tuple[QuestAITerminal, _RecordingLog]:
     return app, log
 
 
+async def _make_app_after_begin_turn(goal_text: str) -> tuple[QuestAITerminal, _RecordingLog]:
+    """Like ``_make_app``, but drives a real ``_begin_turn`` first so ``_auto_pass`` is set the
+    way it is in a live turn (1, not the pre-turn default of 0). ``_begin_turn`` needs a mounted
+    app (it touches real widgets and queries ``#prompt``), so this runs under ``app.run_test()``.
+    The real orchestrator worker it kicks off is replaced with a no-op — this harness is only
+    exercising the header/turn-counter bookkeeping, not a live run."""
+    app = QuestAITerminal(_FakeSession())
+    app._run_stream = lambda user_text: None  # skip the real orchestrator worker
+    async with app.run_test() as pilot:
+        app._begin_turn(goal_text, echo=True, auto=False)
+        await pilot.pause()
+    app._deep = _DeepRunTracker()
+    app._deep_flushed = set()
+    log = _RecordingLog()
+    app._tlog = log
+    app._console = _FakeConsole(log)
+    return app, log
+
+
 # --- inline dashboard scaling ---------------------------------------------
 
 def test_dashboard_shows_three_lines_for_a_single_run():
@@ -98,8 +120,9 @@ def test_dashboard_tightens_with_more_concurrent_runs():
 
 # --- per-task output persistence ------------------------------------------
 
-def test_finished_deep_task_output_persisted_to_transcript():
-    app, log = _make_app()
+@pytest.mark.asyncio
+async def test_finished_deep_task_output_persisted_to_transcript():
+    app, log = await _make_app_after_begin_turn("Build the thing")
     app._deep.add_run("r1", "Build the thing")
     app._deep.update_run_output("r1", "reading file [a].py")  # brackets must survive
     app._deep.update_run_output("r1", "wrote patch")
@@ -108,7 +131,7 @@ def test_finished_deep_task_output_persisted_to_transcript():
     app._flush_deep_run("r1")
 
     body = "\n".join(log.lines)
-    assert "⎅ Build the thing" in body
+    assert "⎅ [Pass 1] Build the thing" in body
     assert "reading file [a].py" in body  # not misparsed as markup
     assert "wrote patch" in body
     assert "✓ deep task complete" in body
@@ -152,9 +175,10 @@ def test_empty_run_writes_no_block_but_is_marked():
     assert "r1" in app._deep_flushed  # but won't be reconsidered
 
 
-def test_final_output_rendered_in_record():
+@pytest.mark.asyncio
+async def test_final_output_rendered_in_record():
     """The worker's final result is shown under a 'result' header, not the per-op trace."""
-    app, log = _make_app()
+    app, log = await _make_app_after_begin_turn("Fix the bug")
     app._deep.add_run("r1", "Fix the bug")
     app._deep.update_run_output("r1", "Read: /a/b.py")
     app._deep.set_final_output("r1", "Patched the off-by-one in foo().\nCommitted as abc123.")
@@ -162,7 +186,7 @@ def test_final_output_rendered_in_record():
     app._flush_deep_run("r1")
 
     body = "\n".join(log.lines)
-    assert "⎅ Fix the bug" in body
+    assert "⎅ [Pass 1] Fix the bug" in body
     assert "1 read" in body                 # rolled up, not the path
     assert "/a/b.py" not in body            # individual file ops are NOT replayed
     assert "result" in body

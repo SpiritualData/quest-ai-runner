@@ -117,11 +117,16 @@ class DailyUsageTracker:
             return
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
-            self._path.write_text(json.dumps({
+            payload = json.dumps({
                 "date": self._date,
                 "tokens_in": self._tokens_in,
                 "tokens_out": self._tokens_out,
-            }, indent=2))
+            }, indent=2)
+            # Atomic write: temp file + os.replace(), so a crash/interruption mid-write can never
+            # leave a corrupt/partial usage file behind (the replace is a single fs operation).
+            tmp_path = self._path.with_suffix(self._path.suffix + ".tmp")
+            tmp_path.write_text(payload)
+            os.replace(tmp_path, self._path)
         except OSError as e:
             log.warning("could not save daily usage file: %s", e)
 

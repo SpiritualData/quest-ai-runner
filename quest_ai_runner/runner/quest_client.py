@@ -152,13 +152,18 @@ class QuestClient:
 
     # --- claim / report ------------------------------------------------------
 
-    def claim(self, task_id: str, handler: Optional[str] = None) -> Dict[str, Any]:
+    def claim(self, task_id: str, handler: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """PATCH -> in_progress (backend-aware dedup: a claimed task won't re-fire).
 
         When ``handler`` is given (the slug of the AI representation/skill that will run this task,
         e.g. ``"joshua"`` / ``"subham"``, or a runner label), it is stamped on the task so the
         Quest task-detail modal can show "handled by X". Omit it and the claim body is unchanged
-        (fully backward compatible)."""
+        (fully backward compatible).
+
+        Returns the PATCHed task dict on success, or ``None`` on failure (API error or unconfigured
+        client) — the caller MUST treat ``None`` as "not claimed" and not proceed to execute the
+        task, since an empty dict would be indistinguishable from a successful-but-empty response.
+        """
         body: Dict[str, Any] = {"status": "in_progress"}
         if handler:
             body["handler"] = handler
@@ -166,7 +171,7 @@ class QuestClient:
             return self._request("PATCH", f"/api/assistant-tasks/{task_id}", body=body)
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("claim failed for task %s: %s", task_id, e)
-            return {}
+            return None
 
     def report_done(self, task_id: str, result: str) -> Dict[str, Any]:
         try:

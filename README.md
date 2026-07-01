@@ -52,11 +52,13 @@ QUEST_BASE_URL=... QUEST_API_KEY=qsk_... QAR_CORPUS_ROOT=... quest-ai-runner --o
 - **Streaming & live events** — LIVE mode streams partial results to the user; BACKGROUND mode runs detached and reports back. Handoff between the two is seamless.
 - **Extensible adapters** — Four clean interfaces (Retrieval, ModelProvider, DeepRunner, EscalationSink) are Protocol-based, so you implement only what you need.
 - **Discovery-driven planning** — The brain learns source structure at runtime, never needing a static schema blob in the prompt.
+- **Minimal-intervention overseer** — An optional, off-by-default watcher: a high-quality model reads a tiny capped digest of the run (never the full gathered text) and almost always says nothing, occasionally sending one small signal (redirect / answer now / escalate) that corrects course. Fails safe on any error. See [The minimal-intervention overseer](docs/overseer.md).
 
 ## Documentation
 
 - [Quickstart tutorial](docs/quickstart.md) — install, ground the brain, run the executor lane.
 - [TF-DF-IDF Sampling](docs/TF_DF_IDF_SAMPLING.md) — smart context selection: 62% fewer tokens, zero external deps.
+- [The minimal-intervention overseer](docs/overseer.md) — a cheap, high-quality watcher that almost always stays silent.
 - [Architecture Standards](docs/ARCHITECTURE_STANDARDS.md) — brain / runner / adapters, why `core` is `core`, and the standards code here must follow.
 - [Writing a consumer](docs/writing-a-consumer.md) — wire the library to your own Quest backend.
 - [Implementing adapters](docs/adapters.md) — the four interfaces and how to build your own.

@@ -606,3 +606,130 @@ class TestContextTransparency:
 
         assert result.kind == "answer"
         assert any(e["type"] == "done" for e in events)
+
+
+# ---------------------------------------------------------------------------
+# Daily usage line in /status (InteractiveSession._daily_usage_status)
+# ---------------------------------------------------------------------------
+
+class TestDailyUsageStatus:
+    """InteractiveSession._daily_usage_status() reads DailyUsageTracker read-only for /status."""
+
+    def _make_session_stub(self):
+        """A bare object carrying just enough for _daily_usage_status to run unbound."""
+        from quest_ai_runner.interactive import InteractiveSession
+        return InteractiveSession.__new__(InteractiveSession)
+
+    def test_no_usage_file_returns_none(self, tmp_path, monkeypatch):
+        """When no usage file exists at the configured path, no status line is shown."""
+        missing_path = tmp_path / "does_not_exist.json"
+        monkeypatch.setenv("QAR_DAILY_USAGE_PATH", str(missing_path))
+        sess = self._make_session_stub()
+        assert sess._daily_usage_status() is None
+
+    def test_usage_file_present_returns_status_line(self, tmp_path, monkeypatch):
+        """When the usage file exists, the tracker's status() line is returned."""
+        usage_path = tmp_path / "qar_daily_usage.json"
+        usage_path.write_text(json.dumps({
+            "date": __import__("datetime").date.today().isoformat(),
+            "tokens_in": 1000,
+            "tokens_out": 500,
+        }))
+        monkeypatch.setenv("QAR_DAILY_USAGE_PATH", str(usage_path))
+        monkeypatch.setenv("QAR_DAILY_TOKEN_LIMIT", "2000000")
+        sess = self._make_session_stub()
+        status = sess._daily_usage_status()
+        assert status is not None
+        assert "1,500" in status
+        assert "tokens today" in status
+
+    def test_status_line_reflects_no_limit(self, tmp_path, monkeypatch):
+        """With the daily limit disabled, the status line says so instead of a percentage."""
+        usage_path = tmp_path / "qar_daily_usage.json"
+        usage_path.write_text(json.dumps({
+            "date": __import__("datetime").date.today().isoformat(),
+            "tokens_in": 10,
+            "tokens_out": 20,
+        }))
+        monkeypatch.setenv("QAR_DAILY_USAGE_PATH", str(usage_path))
+        monkeypatch.setenv("QAR_DAILY_TOKEN_LIMIT", "off")
+        sess = self._make_session_stub()
+        status = sess._daily_usage_status()
+        assert status is not None
+        assert "no limit" in status
+
+    def test_daily_usage_never_raises_on_corrupt_file(self, tmp_path, monkeypatch):
+        """A corrupt usage file must not break /status; falls back to None or a fresh tracker."""
+        usage_path = tmp_path / "qar_daily_usage.json"
+        usage_path.write_text("{not valid json")
+        monkeypatch.setenv("QAR_DAILY_USAGE_PATH", str(usage_path))
+        sess = self._make_session_stub()
+        # Should not raise, regardless of what it returns.
+        sess._daily_usage_status()
+
+
+# ---------------------------------------------------------------------------
+# Dead milestone branch fix: _display("milestone", ...) not the nonexistent "markup"
+# ---------------------------------------------------------------------------
+
+class TestMilestoneDisplayBranch:
+    """_TurnRenderer's EVENT_MILESTONE handler must route through a branch _display() handles."""
+
+    def _make_renderer(self):
+        from quest_ai_runner.interactive import _Console, _ContextPanel, _TurnRenderer
+        console = _Console()
+        console._rich = None
+        console._color = False
+        lines: List[str] = []
+        console.line = lambda s="": lines.append(s)  # type: ignore[assignment]
+        console.write = lambda s: lines.append(s)  # type: ignore[assignment]
+        console.markdown = lambda s: lines.append(s)  # type: ignore[assignment]
+        panel = _ContextPanel(console)
+        renderer = _TurnRenderer(console, panel, "Tester")
+        return renderer, lines
+
+    def test_milestone_event_renders_text(self):
+        """A milestone event with text produces visible output (not silently dropped)."""
+        renderer, lines = self._make_renderer()
+        from quest_ai_runner.core.adapters import EVENT_MILESTONE
+        event = {"type": EVENT_MILESTONE, "text": "Finished updating the file.", "data": {}}
+        renderer.render(event)
+        assert any("Finished updating the file." in ln for ln in lines), (
+            f"milestone text should be rendered; got lines: {lines}"
+        )
+
+    def test_display_milestone_kind_is_handled(self):
+        """_display('milestone', ...) exercises a real branch (not a silent no-op)."""
+        from quest_ai_runner.interactive import _Console, _ContextPanel, _TurnRenderer
+        console = _Console()
+        console._rich = None
+        console._color = False
+        lines: List[str] = []
+        console.line = lambda s="": lines.append(s)  # type: ignore[assignment]
+        console.write = lambda s: lines.append(s)  # type: ignore[assignment]
+        console.markdown = lambda s: lines.append(f"[markdown]{s}")  # type: ignore[assignment]
+        panel = _ContextPanel(console)
+        renderer = _TurnRenderer(console, panel, "Tester")
+        renderer._display("milestone", "some completion text")
+        assert any("some completion text" in ln for ln in lines)
+
+
+# ---------------------------------------------------------------------------
+# Help pointers to the companion CLI commands (search-context, bootstrap --dry-run)
+# ---------------------------------------------------------------------------
+
+class TestHelpPointers:
+    """The in-session /help text points at search-context and bootstrap --dry-run."""
+
+    def test_help_mentions_search_context(self):
+        from quest_ai_runner.interactive import _HELP
+        assert "search-context" in _HELP
+
+    def test_help_mentions_bootstrap_dry_run(self):
+        from quest_ai_runner.interactive import _HELP
+        assert "bootstrap --dry-run" in _HELP
+
+    def test_help_has_no_em_dash(self):
+        """Brand rule: no em dashes in user-facing copy, including the new help lines."""
+        from quest_ai_runner.interactive import _HELP
+        assert "—" not in _HELP

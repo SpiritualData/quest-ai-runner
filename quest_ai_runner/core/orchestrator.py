@@ -41,6 +41,7 @@ from .adapters import (
     EVENT_DONE,
     EVENT_EXEC,
     EVENT_MILESTONE,
+    EVENT_OVERSEER,
     EVENT_PARTIAL,
     EVENT_PLAN,
     EVENT_READ,
@@ -76,6 +77,7 @@ from .guard import (
     verify_supported,
 )
 from .model_registry import TIERS, ModelRegistry
+from .overseer import OverseerSignal, build_digest, oversee
 
 log = logging.getLogger("quest-ai-runner.orchestrator")
 
@@ -513,6 +515,19 @@ class OrchestratorConfig:
     # turns with no action claim. ``max_remediations`` caps SAFE re-runs (only when no action ran).
     verify_claims: bool = True
     max_remediations: int = 1
+    # MINIMAL-INTERVENTION OVERSEER. A high-quality model reads a tiny digest of the run and writes a
+    # tiny signal, watching the loop the way a person's awareness watches their own body walk: almost
+    # always silent, occasionally sending one small course correction. It is consulted at two points
+    # (inside the plan loop, and once at the answer checkpoint) and can redirect (nudge the next plan
+    # with one hint), answer_now (stop reading and answer), or escalate (hand off to deep). OFF by
+    # default; when off the run is byte-for-byte identical (zero overseer calls, no events). The
+    # overseer NEVER raises: any failure degrades to "proceed" (do nothing).
+    overseer: bool = False
+    overseer_tier: str = "best"          # the (high-quality) tier the overseer model resolves to
+    overseer_every_steps: int = 1        # consult once every N plan steps (>= overseer_min_step)
+    overseer_max_signals: int = 3        # hard cap on overseer consultations per run (both hooks)
+    overseer_min_step: int = 1           # earliest plan step (1-based) the overseer may run
+    overseer_digest_char_budget: int = 1200  # hard cap on the digest string fed to the overseer
     # ASYNC POST-DEEP CONTEXT-CARD UPDATER. After a deep task finishes (answer already delivered),
     # an ASYNC, best-effort LLM process updates THIS user's context cards to prepare for future
     # similar requests: it appends a "future context" instruction to each deep brief, parses that
@@ -562,11 +577,15 @@ class OrchestratorResult:
     tokens_in: int = 0
     tokens_out: int = 0
     # Why the loop exited. One of: "verified" | "max_turns" | "escalated_deep" | "read_budget" |
-    # "unverified" | "deep_met" | "deep_not_met" | "clarify" | "confirm"
+    # "unverified" | "deep_met" | "deep_not_met" | "clarify" | "confirm" |
+    # "overseer_answer_now" | "overseer_escalated" (set when an overseer signal decided the path).
     exit_reason: str = ""
     # The last goal-verification verdict: {"met": bool, "reason": str, "next_action": str, ...}.
     # Populated whenever _verify_goal ran. None when goal verification did not run this turn.
     goal_verdict: Optional[Dict[str, Any]] = None
+    # Every minimal-intervention OVERSEER consultation this run, oldest first, each a dict
+    # {"signal", "hint", "reason", "step"}. None when the overseer did not run (off / no consult).
+    overseer_signals: Optional[List[Dict[str, Any]]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -3275,6 +3294,72 @@ class Orchestrator:
         except Exception:  # noqa: BLE001 — kicking off the updater must never break the turn
             log.debug("card-update kickoff failed", exc_info=True)
 
+    # --- minimal-intervention overseer ---------------------------------------
+
+    def _maybe_oversee(self, *, user_message: str, step: int, plan: Optional[PlanDecision],
+                       gathered: List[Dict[str, Any]], started: float,
+                       signals: List[Dict[str, Any]], emit: Optional[_Emitter],
+                       draft_answer: Optional[str] = None) -> OverseerSignal:
+        """Consult the minimal-intervention overseer once and record + surface its signal.
+
+        Builds a cheap digest of the current run state, resolves the high-quality overseer model,
+        makes ONE structured call, appends the signal to ``signals`` (the per-run record), and emits
+        an EVENT_OVERSEER (always, including proceed). Returns the ``OverseerSignal`` so the caller
+        can apply it. Never raises: any failure degrades to ``OverseerSignal("proceed")`` and still
+        records/emits it, so the run is never distorted. The call site wraps this in try/except pass
+        (belt-and-suspenders) exactly like ``_guard_turn``.
+        """
+        cfg = self.cfg
+        # Summarize the last few observations to one line each so the FULL bodies never reach the
+        # overseer (keeps its read cost tiny). Reuses the same summarizer the planner view uses.
+        try:
+            recent = [o for o in gathered if isinstance(o, dict)][-8:]
+            obs_summaries = [_summarize_observation(o) for o in recent]
+        except Exception:  # noqa: BLE001
+            obs_summaries = []
+        gathered_chars = 0
+        try:
+            gathered_chars = sum(len(o.get("text", "")) + len(str(o.get("hits", "")))
+                                 for o in gathered if isinstance(o, dict))
+        except Exception:  # noqa: BLE001
+            gathered_chars = 0
+        tokens_in = getattr(self.provider, "tokens_in", 0) or 0
+        tokens_out = getattr(self.provider, "tokens_out", 0) or 0
+        digest = build_digest(
+            question=user_message,
+            step=step,
+            max_steps=cfg.max_steps,
+            plan_action=(plan.action if plan else ""),
+            plan_rationale=(plan.rationale if plan else ""),
+            plan_goal=(plan.goal if plan else ""),
+            observation_summaries=obs_summaries,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            elapsed_seconds=(time.monotonic() - started),
+            max_elapsed_seconds=cfg.max_elapsed_seconds,
+            gathered_chars=gathered_chars,
+            max_gathered_chars=cfg.max_gathered_chars,
+            consecutive_reads=sum(1 for o in gathered
+                                  if isinstance(o, dict) and o.get("kind") in ("read", "grep")),
+            draft_answer=draft_answer,
+            char_budget=cfg.overseer_digest_char_budget,
+        )
+        model = self.registry.resolve_tier(cfg.overseer_tier)
+        provider = self.get_provider_for_model(model)
+        signal = oversee(provider, model, digest)
+        signals.append({"signal": signal.signal, "hint": signal.hint,
+                        "reason": signal.reason, "step": step})
+        if emit is not None:
+            try:
+                emit.emit(ProgressEvent(
+                    type=EVENT_OVERSEER, step=step,
+                    action=(plan.action if plan else None),
+                    text=(signal.reason or None),
+                    data={"signal": signal.signal, "hint": signal.hint}))
+            except Exception:  # noqa: BLE001
+                pass
+        return signal
+
     # --- broken-promise guard (post-turn honesty check) ----------------------
 
     def _guard_turn(self, res: OrchestratorResult, exec_record: ExecutionRecord, *,
@@ -3647,6 +3732,10 @@ class Orchestrator:
         """
         user_message = (user_message or "").strip()
         gathered: List[Dict[str, Any]] = []
+        # Per-run record of every minimal-intervention OVERSEER consultation (both hook points), and
+        # the count both hooks share against cfg.overseer_max_signals. Stamped onto the result in
+        # finish(). Stays empty (and overseer_signals None) whenever the overseer is off.
+        overseer_signals: List[Dict[str, Any]] = []
         # Run-local durable EXECUTION FACTS (the broken-promise guard's evidence): each deep
         # subtask that actually executes records its outcome (success/failure) here, threaded like
         # ``gathered``. Attached to the OrchestratorResult in finish().
@@ -3993,6 +4082,8 @@ class Orchestrator:
             res.steps = steps
             res.gathered = gathered
             res.execution_record = exec_record
+            if overseer_signals:
+                res.overseer_signals = list(overseer_signals)
             # Collect token counts from the provider if it tracks them.
             try:
                 if hasattr(self.provider, "tokens_in"):
@@ -4089,6 +4180,10 @@ class Orchestrator:
         plan: Optional[PlanDecision] = None
         steps = 0
         consecutive_reads = 0  # Track how many steps in a row chose "read"
+        # Set by an OVERSEER signal that decided the terminal path this run, so finish() can stamp
+        # the exit_reason ("overseer_answer_now" | "overseer_escalated"). "" when the overseer did
+        # not decide the path.
+        overseer_decided = ""
         for step in range(cfg.max_steps):
             steps = step + 1
             emit.status("Planning…" if step == 0 else "Re-planning…")
@@ -4151,6 +4246,39 @@ class Orchestrator:
                 emit.emit(ProgressEvent(type=EVENT_TOKENS,
                                         data={"tokens_in": _ti, "tokens_out": _to,
                                               "total": _ti + _to}))
+
+            # --- OVERSEER hook A (in-loop): a minimal-intervention watch of the plan. Consult a
+            # high-quality model on a tiny digest; it almost always says proceed, and occasionally
+            # sends one small signal that redirects the next plan, ends reading with an answer, or
+            # escalates to deep. Gated so it stays cheap and cannot dominate a run, and wrapped so it
+            # can NEVER break the loop (any failure degrades to proceed). Off by default.
+            if (cfg.overseer and steps >= cfg.overseer_min_step
+                    and steps % max(1, cfg.overseer_every_steps) == 0
+                    and len(overseer_signals) < cfg.overseer_max_signals):
+                try:
+                    _sig = self._maybe_oversee(
+                        user_message=user_message, step=steps, plan=plan,
+                        gathered=gathered, started=started, signals=overseer_signals, emit=emit)
+                    if _sig.signal == "redirect" and _sig.hint:
+                        # Feed the correction back to the NEXT planner view exactly like the
+                        # auto-injected list_operations: append it as a gathered observation so the
+                        # planner re-reads it. Do NOT force the action; the planner decides.
+                        gathered.append({
+                            "kind": "query", "locator": "overseer",
+                            "text": f"COURSE CORRECTION: {_sig.hint}",
+                        })
+                    elif _sig.signal == "answer_now":
+                        plan.action = "answer"
+                        overseer_decided = "overseer_answer_now"
+                        break
+                    elif _sig.signal == "escalate":
+                        plan.action = "deep"
+                        plan.goal = plan.goal or f"Complete the request: {user_message}"
+                        plan.deep_brief = plan.deep_brief or user_message
+                        overseer_decided = "overseer_escalated"
+                        break
+                except Exception:  # noqa: BLE001 — the overseer must never break the loop
+                    pass
 
             if plan.action == "read":
                 if not plan.reads:
@@ -4231,6 +4359,8 @@ class Orchestrator:
                                  pending_inputs=pending_inputs, model_hint=model_hint,
                                  ctx_meta=_ctx_meta)
             res.exit_reason = "deep_met" if (res.deep_results and all(d.met for d in res.deep_results)) else "deep_not_met"
+            if overseer_decided == "overseer_escalated":
+                res.exit_reason = "overseer_escalated"
             # Background: categorize edited files into context cards (deep runner returns edited_files in metadata)
             if res.deep_results and any(dr.met for dr in res.deep_results):
                 self._update_context_cards_after_deep(res, context_meta)
@@ -4276,6 +4406,46 @@ class Orchestrator:
         if _ti or _to:
             emit.emit(ProgressEvent(type=EVENT_TOKENS,
                                     data={"tokens_in": _ti, "tokens_out": _to, "total": _ti + _to}))
+
+        # --- OVERSEER hook B (answer checkpoint): one last minimal-intervention watch, now with the
+        # DRAFT answer in the digest. It can escalate the whole turn to deep (this is not really an
+        # answer, it needs real execution), or redirect (regenerate the answer once with a one-line
+        # steering hint). proceed / answer_now accept the draft. Counted against the same per-run cap
+        # as hook A. Wrapped so it can never break the turn (any failure degrades to accepting the
+        # draft). Off by default.
+        if cfg.overseer and len(overseer_signals) < cfg.overseer_max_signals:
+            try:
+                _bsig = self._maybe_oversee(
+                    user_message=user_message, step=steps, plan=plan,
+                    gathered=gathered, started=started, signals=overseer_signals, emit=emit,
+                    draft_answer=text)
+                if _bsig.signal == "escalate" and self.deep_runner is not None:
+                    if emit is not None:
+                        emit.status("Overseer: this needs real execution, running it now…")
+                    _ov_plan = PlanDecision(
+                        action="deep",
+                        goal=_truncate_goal(plan.goal or f"Carry out the user's request: {user_message}"),
+                        deep_brief=(user_message)[:2000],
+                        rationale="overseer escalated the answer to deep execution",
+                    )
+                    _ov_model = self._answer_model(_ov_plan, "opus", hint=model_hint)
+                    _ov_res = self._run_deep(
+                        _ov_plan, user_message, _ov_model,
+                        emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
+                        gathered=gathered, quality_standards=quality_standards,
+                        pending_inputs=pending_inputs, model_hint=model_hint,
+                        ctx_meta=_ctx_meta)
+                    _ov_res.exit_reason = "overseer_escalated"
+                    self._kickoff_card_update(_ov_res, _ov_plan, user_message, _ctx_meta, emit)
+                    return finish(_ov_res)
+                if _bsig.signal == "redirect" and _bsig.hint:
+                    if emit is not None:
+                        emit.status("Overseer: refining the answer…")
+                    _steer = (f"A reviewer flagged this for one correction: {_bsig.hint}\n\n"
+                              f"--- YOUR PREVIOUS ANSWER ---\n{text}")
+                    text = _gen_answer(_steer)
+            except Exception:  # noqa: BLE001 — the overseer must never break the turn
+                pass
 
         # If deferred_deep is set, also run the deep task after returning the answer
         # OR if planner explicitly flagged answer_contains_work_to_execute
@@ -4473,6 +4643,10 @@ class Orchestrator:
         _exit_reason = "unverified"
         if _last_verdict is not None:
             _exit_reason = "verified" if _last_verdict.get("met") else "max_turns"
+        # An overseer answer_now that short-circuited the read loop to this answer wins the reason,
+        # so a consumer can see the terminal path was decided by the overseer.
+        if overseer_decided == "overseer_answer_now" and _last_verdict is None:
+            _exit_reason = "overseer_answer_now"
         return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
                                          model=model, exit_reason=_exit_reason,
                                          goal_verdict=_last_verdict))

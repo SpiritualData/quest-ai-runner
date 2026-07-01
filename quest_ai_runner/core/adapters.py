@@ -92,10 +92,14 @@ EVENT_DECISION = "decision"    # a confirm / human decision-request was raised (
 EVENT_MILESTONE = "milestone"  # an explicit, real milestone worth surfacing (ALWAYS surfaces)
 EVENT_DONE = "done"            # the run reached a terminal state (ALWAYS surfaces)
 EVENT_TOKENS = "tokens"        # cumulative token counts after a model call (ALWAYS surfaces)
+EVENT_OVERSEER = "overseer"    # a minimal-intervention OVERSEER consultation happened this run —
+                               # its signal (proceed/redirect/answer_now/escalate) + optional hint.
+                               # ALWAYS surfaces (in SURFACING_EVENTS) so a BACKGROUND run can note a
+                               # course correction; it fires on every consultation, including proceed.
 
 # The event types a BACKGROUND (MilestoneSink) run forwards. Everything else is dropped as
 # intermediate chatter. Encoded ONCE here so every consumer inherits the same policy.
-SURFACING_EVENTS = frozenset({EVENT_UNDERSTANDING, EVENT_CONTEXT, EVENT_RESULT, EVENT_DECISION, EVENT_MILESTONE, EVENT_DONE, EVENT_TOKENS})
+SURFACING_EVENTS = frozenset({EVENT_UNDERSTANDING, EVENT_CONTEXT, EVENT_RESULT, EVENT_DECISION, EVENT_MILESTONE, EVENT_DONE, EVENT_TOKENS, EVENT_OVERSEER})
 
 
 # ---------------------------------------------------------------------------
@@ -788,6 +792,7 @@ class MilestoneSink(ProgressSinkBase):
         on_result: Optional[Callable[[ProgressEvent], None]] = None,
         on_done: Optional[Callable[[ProgressEvent], None]] = None,
         on_tokens: Optional[Callable[[ProgressEvent], None]] = None,
+        on_overseer: Optional[Callable[[ProgressEvent], None]] = None,
     ):
         self._on_context = on_context
         self._on_milestone = on_milestone
@@ -795,6 +800,7 @@ class MilestoneSink(ProgressSinkBase):
         self._on_result = on_result
         self._on_done = on_done
         self._on_tokens = on_tokens
+        self._on_overseer = on_overseer
 
     def update(self, event: ProgressEvent, mode: Mode) -> None:
         if event.type not in SURFACING_EVENTS:
@@ -812,6 +818,8 @@ class MilestoneSink(ProgressSinkBase):
                 self._on_done(event)
             elif event.type == EVENT_TOKENS and self._on_tokens:
                 self._on_tokens(event)
+            elif event.type == EVENT_OVERSEER and self._on_overseer:
+                self._on_overseer(event)
         except Exception:  # noqa: BLE001 — a sink callback must not break the run
             pass
 

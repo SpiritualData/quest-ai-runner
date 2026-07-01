@@ -7,6 +7,55 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Minimal-intervention overseer.** A new, off-by-default `Orchestrator` capability
+  (`core/overseer.py`): a high-quality model reads a cheap, hard-capped digest of the current run
+  (never the full gathered text) and returns exactly one signal, almost always `proceed`. Consulted
+  at two points, after each plan step (`overseer_every_steps` cadence) and once at the answer
+  checkpoint with the draft answer included, both capped by `overseer_max_signals` per run. A
+  `redirect` feeds one short course-correction hint back to the next plan; `answer_now` stops
+  reading and answers with what's gathered; `escalate` hands the request to deep execution. Fails
+  safe on any error (degrades to `proceed`) and is byte-for-byte inert when off (the default). See
+  [docs/overseer.md](docs/overseer.md). Tested in `tests/test_overseer.py` (11 tests) plus wiring
+  coverage in `tests/test_runner.py`; the existing 162 orchestrator/runner/UI tests pass unchanged.
+- **`quest-ai-runner chat --check`** validates chat's prerequisites (a reachable model provider,
+  and `QAR_CORPUS_ROOT` / `QAR_CONTEXT_CARDS_DIR` if configured) and exits, without opening the
+  terminal UI, so a broken setup is caught before launch instead of hanging on a blank screen.
+- **Terminal UI: first-run missing-provider detection.** With no API key env vars set, chat falls
+  back to the `claude` CLI provider; if that binary isn't on PATH, session setup used to hang
+  silently. `textual_ui.py` now checks up front and shows an actionable error naming exactly which
+  env var or install step is missing.
+- **Terminal UI: decision-awaiting prompt state.** While the AI is paused on a mid-turn question
+  (`EVENT_DECISION`), the input placeholder changes to "Reply to the question above to continue…"
+  and the question renders with a distinct yellow border prefix, so a pending question doesn't
+  blend into the rest of the transcript.
+- **Terminal UI: `/status` shows today's token budget** (via the existing `DailyUsageTracker`),
+  read-only, when a usage file exists.
+- **Terminal UI: shallow turns reuse the "context it used" panel.** Previously only deep runs
+  populated the Alt+C future-context panel; shallow turns gathered context cards but discarded them
+  at turn end. They now render through the same panel via `_build_shallow_context_bullets`.
+
+### Fixed
+- **Poller: `claim()` returned an ambiguous `{}` on failure, indistinguishable from a
+  successful-but-empty response.** It now returns `None` on failure and the poller only marks a
+  task's signature handled after a successful claim, so a failed claim (already claimed elsewhere,
+  or a transient API error) leaves the task un-marked and it is correctly re-offered on a later
+  scan instead of silently dropped.
+- **Poller: task completion was reported in submission order, not completion order.** `Poller.run`
+  now drains the worker pool with `as_completed` so a fast task is claimed/reported as soon as it
+  finishes rather than waiting behind a slower task submitted earlier.
+- **`StateStore` / `DailyUsageTracker`: non-atomic writes could leave a corrupt file on a
+  crash mid-write.** Both now write to a temp file and `os.replace()` into place, a single
+  filesystem operation.
+- **`StateStore`'s handled-signature cap evicted an arbitrary subset**, since a plain `set` has no
+  defined iteration order. It's now an insertion-ordered dict, so the cap evicts the oldest entries
+  first.
+- **Terminal UI: clipboard-copy failure gave one generic message** regardless of whether no
+  clipboard tool was installed versus a tool being present but failing (e.g. no display). The two
+  cases are now distinguished (`_copy_to_clipboard_tool`), each with an actionable message.
+- **`interactive.py`'s deprecation warning fired on import**, including when `textual_ui.py`
+  imports names from it (which is the recommended path), rather than only when the deprecated ANSI
+  rendering path actually runs. Moved to `InteractiveSession.run()`.
+
 - **Specificity ranking signal: prefer the exact subject over a same-category sibling, and tell the
   model which is which.** Dense retrieval ranks by topical similarity, so a query about one subject
   ("result-prediction evaluation") pulls back siblings that share the category head ("evaluation")

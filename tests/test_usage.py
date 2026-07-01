@@ -150,6 +150,40 @@ def test_tracker_corrupt_file_starts_fresh(tmp_path):
     assert t.total_tokens() == 0
 
 
+def test_tracker_failed_write_leaves_previous_file_intact(tmp_path, monkeypatch):
+    """_save() writes via temp-file + os.replace(); if the temp write raises partway, the
+    previously-saved usage file must be untouched, and a later, un-interrupted record() still
+    round-trips normally."""
+    from pathlib import Path as _Path
+
+    path = str(tmp_path / "usage.json")
+    t = DailyUsageTracker(path=path, limits=DailyUsageLimits(max_daily_tokens=5000))
+    t.record(100, 50)
+    good_content = (tmp_path / "usage.json").read_text()
+
+    real_write_text = _Path.write_text
+    calls = {"n": 0}
+
+    def _flaky_write_text(self, *args, **kwargs):
+        if self.suffix == ".tmp" and calls["n"] == 0:
+            calls["n"] += 1
+            raise OSError("simulated disk-full mid-write")
+        return real_write_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(_Path, "write_text", _flaky_write_text)
+    t.record(200, 0)  # this record's write fails partway
+
+    # The on-disk file must still be exactly the last GOOD content (untouched).
+    assert (tmp_path / "usage.json").read_text() == good_content
+
+    monkeypatch.setattr(_Path, "write_text", real_write_text)
+
+    # Normal roundtrip still works after the failure is past.
+    t.record(50, 0)
+    t2 = DailyUsageTracker(path=path, limits=DailyUsageLimits(max_daily_tokens=5000))
+    assert t2.total_tokens() == t.total_tokens()
+
+
 # ---------------------------------------------------------------------------
 # MultiProvider — token recording and limit-reached responses
 # ---------------------------------------------------------------------------

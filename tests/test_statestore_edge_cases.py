@@ -175,13 +175,6 @@ class TestStateStoreConcurrentWrites:
 
         This prevents the state file from growing unbounded over years of
         operation. The last save to disk keeps only 5000 signatures.
-
-        NOTE: Because the cap uses list(set)[-5000:] on an unordered set, it keeps
-        a pseudo-random subset of 5000 signatures, not necessarily the newest ones.
-        This is a potential issue for production: with 6000 signatures, exactly 1000
-        are dropped, but which ones are unpredictable due to set iteration order.
-        The file size is capped (good), but semantically this doesn't guarantee
-        the NEWEST 5000 are kept.
         """
         with tempfile.TemporaryDirectory() as tmpdir:
             path = os.path.join(tmpdir, "state.json")
@@ -196,6 +189,66 @@ class TestStateStoreConcurrentWrites:
                 if store2.seen(f"sig-{i}"):
                     count += 1
             assert count == 5000  # Exactly 5000 are retained (1000 dropped)
+
+    def test_cap_evicts_oldest_first(self):
+        """The 5000 cap keeps the NEWEST signatures and drops the OLDEST ones.
+
+        StateStore now tracks insertion order (a dict, not a plain set), so the eviction at save
+        time is deterministic: the oldest-marked signatures are the ones dropped, not an arbitrary
+        subset picked by set iteration order.
+        """
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "state.json")
+            store = StateStore(path)
+            for i in range(6000):
+                store.mark(f"sig-{i}")
+            store2 = StateStore(path)
+            # The oldest 1000 (sig-0 .. sig-999) were evicted.
+            for i in range(1000):
+                assert store2.seen(f"sig-{i}") is False
+            # The newest 5000 (sig-1000 .. sig-5999) survive.
+            for i in range(1000, 6000):
+                assert store2.seen(f"sig-{i}") is True
+
+
+class TestStateStoreAtomicWrite:
+    """Edge case: the write itself is interrupted partway through."""
+
+    def test_failed_write_leaves_previous_file_intact(self, monkeypatch):
+        """If the temp-file write raises partway, the previously-saved state file must be
+        untouched (the atomic temp+replace never gets to the replace step), and a later,
+        un-interrupted mark() still round-trips normally."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = os.path.join(tmpdir, "state.json")
+            store = StateStore(path)
+            store.mark("sig-good-1")
+            store.mark("sig-good-2")
+            good_content = Path(path).read_text()
+
+            real_write_text = Path.write_text
+            calls = {"n": 0}
+
+            def _flaky_write_text(self, *args, **kwargs):
+                # Only fail the temp file used by StateStore._save, not unrelated writes.
+                if self.suffix == ".tmp" and calls["n"] == 0:
+                    calls["n"] += 1
+                    raise OSError("simulated disk-full mid-write")
+                return real_write_text(self, *args, **kwargs)
+
+            monkeypatch.setattr(Path, "write_text", _flaky_write_text)
+            store.mark("sig-bad")  # the write for this mark fails partway
+
+            # The on-disk file must still be exactly the last GOOD content (untouched).
+            assert Path(path).read_text() == good_content
+
+            monkeypatch.setattr(Path, "write_text", real_write_text)
+
+            # Normal roundtrip still works after the failure is past.
+            store.mark("sig-good-3")
+            store2 = StateStore(path)
+            assert store2.seen("sig-good-1") is True
+            assert store2.seen("sig-good-2") is True
+            assert store2.seen("sig-good-3") is True
 
 
 class TestStateStoreFileCorruption:
