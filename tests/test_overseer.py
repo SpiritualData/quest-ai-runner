@@ -300,6 +300,21 @@ def test_overseer_prompt_forbids_em_dashes():
     assert "em dash" in OVERSEER_PROMPT.lower()
 
 
+def test_overseer_prompt_flags_action_requests_and_promising_drafts():
+    """Qualitative testing showed the overseer let action requests (make a change / run / commit)
+    slide by as 'proceed', and let a draft that only PROMISES the work pass at the answer
+    checkpoint. The prompt must keep the guidance that fixes both, so those escalate cases don't
+    silently regress if the prompt is later edited.
+    """
+    low = OVERSEER_PROMPT.lower()
+    # An action REQUEST met by a read-and-answer plan is an escalate, not a proceed.
+    assert "action verb" in low
+    assert "escalate" in low
+    # A draft that only recommends/promises the work has not done it: escalate.
+    assert "draft answer" in low
+    assert "promises" in low or "promise" in low
+
+
 # ---------------------------------------------------------------------------
 # (i) EVENT_OVERSEER passes through a MilestoneSink (BACKGROUND); EVENT_PLAN does not.
 # ---------------------------------------------------------------------------

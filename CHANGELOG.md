@@ -15,7 +15,7 @@ All notable changes to this project are documented here. The format is based on
   `redirect` feeds one short course-correction hint back to the next plan; `answer_now` stops
   reading and answers with what's gathered; `escalate` hands the request to deep execution. Fails
   safe on any error (degrades to `proceed`) and is byte-for-byte inert when off (the default). See
-  [docs/overseer.md](docs/overseer.md). Tested in `tests/test_overseer.py` (11 tests) plus wiring
+  [docs/overseer.md](docs/overseer.md). Tested in `tests/test_overseer.py` (12 tests) plus wiring
   coverage in `tests/test_runner.py`; the existing 162 orchestrator/runner/UI tests pass unchanged.
 - **`quest-ai-runner chat --check`** validates chat's prerequisites (a reachable model provider,
   and `QAR_CORPUS_ROOT` / `QAR_CONTEXT_CARDS_DIR` if configured) and exits, without opening the

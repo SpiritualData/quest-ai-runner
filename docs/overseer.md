@@ -40,9 +40,9 @@ not change any existing run until a consumer opts in. What's true today, by cons
   break a turn.
 - **Off means byte-for-byte identical.** With `overseer=False` (the default), zero overseer calls
   are made and zero `EVENT_OVERSEER` events are emitted; nothing about the existing loop changes.
-- **Tested.** 11 unit tests in `tests/test_overseer.py` (digest building, truncation, signal
-  parsing, safe-default fallback) plus wiring tests in `tests/test_runner.py`. 162 pre-existing
-  orchestrator/runner/UI tests still pass unmodified.
+- **Tested.** 12 unit tests in `tests/test_overseer.py` (digest building, truncation, signal
+  parsing, safe-default fallback, prompt guidance) plus wiring tests in `tests/test_runner.py`. 162
+  pre-existing orchestrator/runner/UI tests still pass unmodified.
 
 ## What isn't claimed yet
 
