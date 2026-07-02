@@ -131,6 +131,27 @@ class MultiProvider(ModelProvider):
         self._record_token_delta(provider, before_in, before_out)
         return result
 
+    def supports_web_search(self, model: Optional[str] = None) -> bool:
+        """Whether the provider that would handle ``model`` supports native web search."""
+        provider = self._get_provider_for_model(model) if model else self.primary
+        fn = getattr(provider, "supports_web_search", None)
+        try:
+            return bool(fn(model)) if callable(fn) else False
+        except Exception:  # noqa: BLE001 — capability probe must never raise
+            return False
+
+    def web_search(self, query: str, *, model: str, max_results: int = 5) -> Dict[str, Any]:
+        """Route a native web search to the correct provider for ``model``."""
+        if self._usage_tracker and self._usage_tracker.over_limit():
+            return {"answer": self._limit_message(), "results": []}
+        provider = self._get_provider_for_model(model)
+        before_in = getattr(provider, "tokens_in", 0)
+        before_out = getattr(provider, "tokens_out", 0)
+        self.call_count += 1
+        result = provider.web_search(query, model=model, max_results=max_results)
+        self._record_token_delta(provider, before_in, before_out)
+        return result
+
     def list_models(self) -> List[str]:
         """List all models from all providers."""
         all_models = []

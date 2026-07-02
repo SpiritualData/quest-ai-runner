@@ -13,6 +13,10 @@ These satisfy the core interfaces; a consumer wires the ones it needs into a Run
   * WebSearchAdapter          — RetrievalAdapter that searches the live web via the Tavily API (stdlib
                                 urllib only; no extra deps). Enable with WEB_SEARCH_ENABLED=true +
                                 WEB_SEARCH_API_KEY env vars, or pass api_key= at construction.
+  * ProviderWebSearchAdapter  — RetrievalAdapter that searches the live web via the model provider's
+                                NATIVE tool (Anthropic web_search / Gemini Google Search grounding),
+                                reusing the LLM key (no separate web-search key). The key-free default;
+                                wired automatically by build_orchestrator unless WEB_SEARCH_ENABLED=false.
   * CompositeRetrievalAdapter — RetrievalAdapter that runs multiple adapters IN PARALLEL, merging
                                 results. Query files, databases, conversations, Quest, task memory together.
   * AnthropicProvider         — ModelProvider (plan / answer / live models.list bucketing). Needs an
@@ -55,6 +59,7 @@ from .anthropic_provider import AnthropicProvider
 from .quest_context_adapter import QuestContextAdapter, build_quest_resolvers
 from .cached_db_adapter import CachedDbAdapter
 from .web_search_adapter import WebSearchAdapter
+from .provider_web_search_adapter import ProviderWebSearchAdapter
 from .card_metadata_generator import CardMetadataGenerator
 from .claude_cli_provider import ClaudeCliProvider
 from .claude_conversations_adapter import ClaudeConversationsAdapter
@@ -149,6 +154,7 @@ __all__ = [
     "SessionFileConversationStore",
     "QuestRetrievalAdapter",
     "WebSearchAdapter",
+    "ProviderWebSearchAdapter",
     "CompositeRetrievalAdapter",
     "ConversationCardBuilder",
     "CardMetadataGenerator",

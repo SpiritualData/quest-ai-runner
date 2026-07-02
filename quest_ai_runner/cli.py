@@ -56,12 +56,15 @@ Env it reads:
   ANTHROPIC_API_KEY (optional)                   — only for the "anthropic" backend (per-token
                                                    billing). NOT needed for the keyless claude_cli
                                                    backend, which runs on Claude Code's subscription.
-  WEB_SEARCH_ENABLED (optional)                 — set to "true" to enable live web search in the
-                                                   shallow orchestrator via the Tavily API. Requires
-                                                   WEB_SEARCH_API_KEY. Get a key at tavily.com (free
-                                                   tier: 500 searches/month).
-  WEB_SEARCH_API_KEY (optional)                 — Tavily API key (tvly_...). Required when
-                                                   WEB_SEARCH_ENABLED=true.
+  WEB_SEARCH_ENABLED (optional)                 — web search is ON by default and needs NO extra key:
+                                                   it uses the model provider's native tool (Claude's
+                                                   web_search / Gemini's Google Search grounding),
+                                                   reusing the LLM key. Set to "false" to disable.
+                                                   See docs/web-search.md.
+  WEB_SEARCH_API_KEY (optional)                 — Tavily API key (tvly_...). When set, Tavily is used
+                                                   instead of the native provider search. Get a key at
+                                                   tavily.com (free tier: 500 searches/month).
+  WEB_SEARCH_TIER (optional)                    — model tier for native web search (default balanced).
   WEB_SEARCH_MAX_RESULTS (optional)             — max results per web search call (default 5).
   QAR_CONVERSATION_SEARCH (optional)           — set to "false"/"0"/"off" to disable searching
                                                    past Claude Code session transcripts during grep.

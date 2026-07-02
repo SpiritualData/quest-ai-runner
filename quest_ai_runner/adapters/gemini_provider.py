@@ -117,6 +117,52 @@ class GeminiProvider(ModelProviderBase):
             self.tokens_out += getattr(meta, "candidates_token_count", 0) or 0
         return response.text if response and response.text else ""
 
+    def supports_web_search(self, model: Optional[str] = None) -> bool:
+        """Gemini grounds on Google Search natively; available whenever the key is set."""
+        return bool(self._api_key)
+
+    @retry_transient(max_retries=3, base_delay=1.0)
+    def web_search(self, query: str, *, model: str, max_results: int = 5) -> Dict[str, Any]:
+        """Search the live web via Gemini's Google Search grounding tool (no extra key).
+
+        Returns ``{"answer": <grounded text>, "results": [{"title","url","snippet"}, ...]}``.
+        """
+        client = self._get_client()
+        from google.genai import types
+
+        tool = types.Tool(google_search=types.GoogleSearch())
+        self.call_count += 1
+        response = client.models.generate_content(
+            model=model,
+            contents=query,
+            config=types.GenerateContentConfig(tools=[tool]),
+        )
+        meta = getattr(response, "usage_metadata", None)
+        if meta:
+            self.tokens_in += getattr(meta, "prompt_token_count", 0) or 0
+            self.tokens_out += getattr(meta, "candidates_token_count", 0) or 0
+
+        answer = getattr(response, "text", "") or ""
+        results: List[Dict[str, str]] = []
+        for cand in (getattr(response, "candidates", None) or []):
+            gm = getattr(cand, "grounding_metadata", None)
+            if not gm:
+                continue
+            for chunk in (getattr(gm, "grounding_chunks", None) or []):
+                web = getattr(chunk, "web", None)
+                if web is None:
+                    continue
+                results.append({
+                    "title": getattr(web, "title", "") or "",
+                    "url": getattr(web, "uri", "") or "",
+                    "snippet": "",
+                })
+                if len(results) >= max_results:
+                    break
+            if len(results) >= max_results:
+                break
+        return {"answer": answer, "results": results}
+
     @retry_transient(max_retries=2, base_delay=1.0)
     def _list_models_api(self) -> List[str]:
         """Call Gemini API to list models; wrapped by list_models() for caching."""

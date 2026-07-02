@@ -198,6 +198,23 @@ class RunnerConfig:
         return problems
 
 
+def _retrieval_has_web_search(retrieval) -> bool:
+    """True if a web-search adapter (Tavily or provider-native) is already in the stack."""
+    if retrieval is None:
+        return False
+    try:
+        from .adapters.web_search_adapter import WebSearchAdapter as _WSA
+        from .adapters.provider_web_search_adapter import ProviderWebSearchAdapter as _PWSA
+        from .adapters.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
+    except Exception:  # noqa: BLE001
+        return False
+    if isinstance(retrieval, (_WSA, _PWSA)):
+        return True
+    if isinstance(retrieval, _CRA):
+        return any(isinstance(a, (_WSA, _PWSA)) for a in getattr(retrieval, "adapters", []))
+    return False
+
+
 def derive_capabilities(cfg: RunnerConfig) -> Dict[str, bool]:
     """Derive the {web, corpus, code} capabilities the runner can HONESTLY report from its config.
 
@@ -245,18 +262,25 @@ def derive_capabilities(cfg: RunnerConfig) -> Dict[str, bool]:
             except Exception:  # noqa: BLE001 — capability detection must never break the runner
                 web = False
 
-    # If no deep-runner web capability, check the retrieval stack for a WebSearchAdapter.
+    # If no deep-runner web capability, check the retrieval stack for a web-search adapter:
+    # a Tavily WebSearchAdapter (needs its key) OR a provider-native ProviderWebSearchAdapter.
     if not web and retrieval is not None:
         try:
             from .adapters.web_search_adapter import WebSearchAdapter as _WSA
+            from .adapters.provider_web_search_adapter import ProviderWebSearchAdapter as _PWSA
             from .adapters.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
-            if isinstance(retrieval, _WSA):
-                web = bool(getattr(retrieval, "_api_key", ""))
-            elif isinstance(retrieval, _CRA):
-                web = any(
-                    isinstance(a, _WSA) and bool(getattr(a, "_api_key", ""))
-                    for a in getattr(retrieval, "adapters", [])
-                )
+
+            def _is_web(a) -> bool:
+                if isinstance(a, _WSA):
+                    return bool(getattr(a, "_api_key", ""))
+                if isinstance(a, _PWSA):
+                    return True
+                return False
+
+            if isinstance(retrieval, _CRA):
+                web = any(_is_web(a) for a in getattr(retrieval, "adapters", []))
+            else:
+                web = _is_web(retrieval)
         except Exception:  # noqa: BLE001 — capability detection must never break the runner
             pass
 
@@ -892,6 +916,44 @@ def build_orchestrator(
         original_vision_provider = cfg.vision_provider
         cfg.vision_provider = MultiProvider(original_vision_provider, all_providers)
         _log.debug("Wrapped vision provider with MultiProvider for intelligent routing")
+
+    # Web search as a STANDARD, key-free capability. If a Tavily WebSearchAdapter is already in
+    # the retrieval stack (WEB_SEARCH_API_KEY set), keep it. Otherwise, unless web search is
+    # explicitly disabled (WEB_SEARCH_ENABLED=false), wire a ProviderWebSearchAdapter when the
+    # model provider supports NATIVE web search (Anthropic web_search tool / Gemini Google Search
+    # grounding) — reusing the LLM key, so no separate web-search key is needed. This is what lets
+    # ordinary AI tasks ("find marathons near Portland", "suggest a product") ground on the live web
+    # without spawning Claude Code or requiring an external environment.
+    _web_disabled = (os.getenv("WEB_SEARCH_ENABLED") or "").strip().lower() in ("false", "0", "off", "no")
+    if not _web_disabled and not _retrieval_has_web_search(cfg.retrieval):
+        try:
+            provider = cfg.model_provider
+            supports = getattr(provider, "supports_web_search", None)
+            if provider is not None and callable(supports):
+                from .core.model_registry import ModelRegistry as _WReg
+                _wreg = _WReg(provider, fallback=cfg.model_fallback or None)
+                web_tier = (os.getenv("WEB_SEARCH_TIER") or "balanced").strip() or "balanced"
+                web_model = _wreg.resolve_tier(web_tier)
+                if web_model and supports(web_model):
+                    from .adapters.provider_web_search_adapter import ProviderWebSearchAdapter
+                    from .adapters.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
+                    try:
+                        _wmax = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5"))
+                    except ValueError:
+                        _wmax = 5
+                    native_web = ProviderWebSearchAdapter(provider, model=web_model, max_results=_wmax)
+                    if cfg.retrieval is None:
+                        cfg.retrieval = native_web
+                    elif isinstance(cfg.retrieval, _CRA):
+                        cfg.retrieval = _CRA(
+                            list(cfg.retrieval.adapters) + [native_web],
+                            max_workers=cfg.retrieval.max_workers,
+                        )
+                    else:
+                        cfg.retrieval = _CRA([cfg.retrieval, native_web])
+                    _log.info("Native web search enabled (%s, model=%s)", type(provider).__name__, web_model)
+        except Exception as e:  # noqa: BLE001 — web search is optional; never break the build
+            _log.debug("native web search not wired: %s", e)
 
     # Auto-enable guidance provider if not configured
     guidance = cfg.guidance_provider

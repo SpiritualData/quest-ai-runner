@@ -1,6 +1,11 @@
 # Web Search Implementation for quest-ai-runner
 
-**Status:** Proposal for extending quest-ai-runner with web search capability
+**Status:** IMPLEMENTED (2026-07-01). Web search now ships by default with NO extra key, via the
+model provider's native tool (Claude `web_search` / Gemini Google Search grounding), in addition to
+the Tavily path described below. Canonical user docs: [`docs/web-search.md`](docs/web-search.md).
+The sections below are the original Tavily-only proposal, kept for history.
+
+**Original status:** Proposal for extending quest-ai-runner with web search capability
 
 **Date:** 2026-06-17
 

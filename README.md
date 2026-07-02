@@ -49,6 +49,7 @@ QUEST_BASE_URL=... QUEST_API_KEY=qsk_... QAR_CORPUS_ROOT=... quest-ai-runner --o
 
 - **Smart Context Selection (TF-DF-IDF sampling)** — Instead of reading all files or sampling randomly, the runner uses a linguistic heuristic to select the *most representative* items from each group. **62% fewer tokens** on typical codebases, zero external dependencies. See [TF-DF-IDF Sampling](docs/TF_DF_IDF_SAMPLING.md) for details.
 - **Multi-source retrieval** — Composite retrieval adapter lets you query files, databases, Claude conversations, vector stores, etc., all in one orchestrator.
+- **Web search (default, no extra key)**: the runner grounds answers on the live web using the model provider's own tool (Claude's `web_search` / Gemini's Google Search grounding), reusing the LLM key, so tasks like "find marathons near Portland" return current, cited results with no separate search key and no Claude Code subprocess. A dedicated Tavily key is supported as an alternative. See [Web search](docs/web-search.md).
 - **Streaming & live events** — LIVE mode streams partial results to the user; BACKGROUND mode runs detached and reports back. Handoff between the two is seamless.
 - **Extensible adapters** — Four clean interfaces (Retrieval, ModelProvider, DeepRunner, EscalationSink) are Protocol-based, so you implement only what you need.
 - **Discovery-driven planning** — The brain learns source structure at runtime, never needing a static schema blob in the prompt.

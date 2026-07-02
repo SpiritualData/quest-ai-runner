@@ -7,6 +7,28 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Native, key-free web search (default-on).** The runner can now ground answers on the live
+  web using the model provider's OWN web-search tool, reusing the LLM key it already has, with no
+  separate web-search key and no Claude Code subprocess. New `ProviderWebSearchAdapter`
+  (`adapters/provider_web_search_adapter.py`) is a `RetrievalAdapter` backed by a `ModelProvider`'s
+  native search: `AnthropicProvider.web_search` uses Claude's `web_search` server tool and
+  `GeminiProvider.web_search` uses Gemini's Google Search grounding (both added, plus routing in
+  `MultiProvider` and the optional `supports_web_search`/`web_search` hooks on `ModelProviderBase`).
+  `build_orchestrator` wires it into the retrieval stack automatically whenever the provider
+  supports it, so the planner discovers "web" as a source out of the box. Opt out with
+  `WEB_SEARCH_ENABLED=false`; a Tavily `WEB_SEARCH_API_KEY` still takes precedence when set. This
+  is what lets ordinary AI tasks (e.g. "find marathons near Portland", "suggest a product") return
+  current, grounded results instead of "I couldn't find anything". `derive_capabilities` reports
+  `web:true` when a native or Tavily web adapter is wired. See [docs/web-search.md](docs/web-search.md).
+
+### Fixed
+- **Web-search spec parsing.** The planner emits varied/nested query shapes (e.g.
+  `{"query": {"operation": "web_search", "params": {"query": "..."}}}`); both web adapters
+  previously read `spec["query"]` directly and passed a nested dict to the search API, which failed.
+  A shared `coerce_web_query` (`adapters/web_query_spec.py`) now robustly flattens these shapes;
+  `WebSearchAdapter` (Tavily) and `ProviderWebSearchAdapter` both use it.
+
+### Added (earlier)
 - **Minimal-intervention overseer.** A new, off-by-default `Orchestrator` capability
   (`core/overseer.py`): a high-quality model reads a cheap, hard-capped digest of the current run
   (never the full gathered text) and returns exactly one signal, almost always `proceed`. Consulted

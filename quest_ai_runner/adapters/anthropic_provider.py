@@ -88,6 +88,52 @@ class AnthropicProvider(ModelProviderBase):
             self.tokens_out += getattr(resp.usage, "output_tokens", 0) or 0
         return "".join(getattr(b, "text", "") for b in resp.content if getattr(b, "type", None) == "text")
 
+    def supports_web_search(self, model: Optional[str] = None) -> bool:
+        """Claude ships a native web_search server tool; available whenever the key is set."""
+        return bool(self._api_key)
+
+    @retry_transient(max_retries=3, base_delay=1.0)
+    def web_search(self, query: str, *, model: str, max_results: int = 5) -> Dict[str, Any]:
+        """Search the live web via Claude's native web_search server tool (no extra key).
+
+        Returns ``{"answer": <synthesized text>, "results": [{"title","url","snippet"}, ...]}``.
+        ``max_results`` also caps the number of server-side searches (Anthropic's max_uses,
+        1..5) so a single call stays fast and cheap.
+        """
+        client = self._get_client()
+        max_uses = max(1, min(int(max_results), 5))
+        self.call_count += 1
+        resp = client.messages.create(
+            model=model,
+            max_tokens=self.max_answer_tokens,
+            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": max_uses}],
+            messages=[{"role": "user", "content": query}],
+        )
+        if hasattr(resp, "usage"):
+            self.tokens_in += getattr(resp.usage, "input_tokens", 0) or 0
+            self.tokens_out += getattr(resp.usage, "output_tokens", 0) or 0
+
+        answer_parts: List[str] = []
+        results: List[Dict[str, str]] = []
+        seen = set()
+
+        def _add(title: str, url: str, snippet: str = "") -> None:
+            if url and url not in seen:
+                seen.add(url)
+                results.append({"title": title or "", "url": url, "snippet": snippet or ""})
+
+        for block in resp.content:
+            btype = getattr(block, "type", None)
+            if btype == "text":
+                answer_parts.append(getattr(block, "text", "") or "")
+                for cit in (getattr(block, "citations", None) or []):
+                    _add(getattr(cit, "title", ""), getattr(cit, "url", ""), getattr(cit, "cited_text", ""))
+            elif btype == "web_search_tool_result":
+                for r in (getattr(block, "content", None) or []):
+                    if getattr(r, "type", None) == "web_search_result":
+                        _add(getattr(r, "title", ""), getattr(r, "url", ""))
+        return {"answer": "".join(answer_parts), "results": results[:max_results]}
+
     @retry_transient(max_retries=2, base_delay=1.0)
     def _list_models_api(self) -> List[str]:
         """Call Anthropic API to list models; wrapped by list_models() for caching."""

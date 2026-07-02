@@ -25,6 +25,7 @@ import urllib.request
 from typing import Any, Dict, List, Optional
 
 from ..core.adapters import Observation, RetrievalAdapterBase
+from .web_query_spec import coerce_web_query
 
 _log = logging.getLogger("quest-ai-runner.web-search")
 
@@ -220,20 +221,23 @@ class WebSearchAdapter(RetrievalAdapterBase):
             if not self._api_key:
                 return Observation(kind="error", error="web search not configured: WEB_SEARCH_API_KEY missing")
 
-            # Extract query from spec
-            q = spec.get("q") or spec.get("query") or spec.get("search") or ""
+            # Extract query from spec. The planner emits varied/nested shapes, e.g.
+            # {"query": {"operation": "web_search", "params": {"query": "..."}}}, so coerce
+            # robustly to a flat query string rather than passing a nested dict to Tavily.
+            parsed = coerce_web_query(spec)
+            q = parsed["q"]
             if not q:
                 return Observation(kind="error", error="web search query: spec must have a 'q' or 'query' key")
 
             # Optional enrichments
-            topic = spec.get("topic", "")
-            scope = spec.get("scope", "")
+            topic = parsed["topic"]
+            scope = parsed["scope"]
             if topic:
                 q = f"{q} {topic}"
             if scope:
                 q = f"{q} {scope}"
 
-            max_results = spec.get("max_results") or self._max_results
+            max_results = parsed["max_results"] or self._max_results
             resp = self._search(q, max_results=max_results)
 
             parts: List[str] = []

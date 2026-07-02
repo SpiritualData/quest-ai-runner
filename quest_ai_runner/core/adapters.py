@@ -281,6 +281,22 @@ class ModelProvider(Protocol):
     def list_models(self) -> List[str]:
         """The live, latest-first model id list (model_registry buckets it into tiers)."""
 
+    def supports_web_search(self, model: Optional[str] = None) -> bool:
+        """Whether this provider can search the live web natively (no extra API key).
+
+        Optional capability. Providers that wrap an SDK with a built-in web-search tool
+        (Anthropic's ``web_search`` server tool, Gemini's Google Search grounding) return
+        True when their LLM key is configured; others return False.
+        """
+
+    def web_search(self, query: str, *, model: str, max_results: int = 5) -> Dict[str, Any]:
+        """Search the live web via the provider's NATIVE tool and return a result dict.
+
+        Returns ``{"answer": <synthesized text>, "results": [{"title","url","snippet"}, ...]}``.
+        Uses the same LLM API key the provider already has (no separate web-search key).
+        Callers should gate on ``supports_web_search(model)`` first.
+        """
+
 
 @runtime_checkable
 class DeepRunner(Protocol):
@@ -743,6 +759,14 @@ class ModelProviderBase(abc.ABC):
     def answer(self, messages, *, model, system=None) -> str: ...
     @abc.abstractmethod
     def list_models(self) -> List[str]: ...
+
+    # Optional NATIVE web-search capability. Non-abstract so existing providers keep
+    # satisfying the ABC; a provider whose SDK ships a web-search tool overrides both.
+    def supports_web_search(self, model: Optional[str] = None) -> bool:
+        return False
+
+    def web_search(self, query: str, *, model: str, max_results: int = 5) -> Dict[str, Any]:
+        raise NotImplementedError("web search not supported by this provider")
 
 
 class DeepRunnerBase(abc.ABC):
