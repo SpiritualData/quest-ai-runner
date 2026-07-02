@@ -174,6 +174,16 @@ All notable changes to this project are documented here. The format is based on
   the prompt for any click (covering the still-focusable side panels), so a click anywhere leaves the
   cursor in the message box. Wheel scroll, PageUp/PageDown, and drag-to-select are all unaffected.
   Tested in `tests/test_click_focus.py`.
+- **Terminal UI: drag-to-select and copy the transcript actually works now.** A stock `RichLog`
+  stores pre-rendered `Strip`s and its `render_line` returns them verbatim — it never paints
+  Textual's `screen--selection` highlight and its text extraction doesn't fire, so dragging over the
+  transcript did *nothing* (no highlight, no copy), regardless of terminal/tmux native-selection
+  behavior. `TranscriptLog` now implements selection itself: it captures the mouse on press, tracks
+  the range in content coordinates (auto-scrolling when the drag runs past an edge), paints the
+  selection background in `render_line` (background only, so highlighted text stays readable), and
+  copies the selected text to the clipboard on release with a subtle "Copied: …" confirmation. A
+  plain click (no drag) just refocuses the input. Works over SSH/mobile via OSC-52. Tested in
+  `tests/test_transcript_selection.py`; verified end-to-end under a headless Textual mount.
 - **`ClaudeConversationsAdapter` now wired into the default retrieval stack.** The adapter was fully
   implemented and tested but never instantiated in `_config_from_env()`, so past Claude Code session
   transcripts were invisible to grep during both interactive chat and task runs. It is now added by
