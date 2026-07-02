@@ -15,8 +15,22 @@ All notable changes to this project are documented here. The format is based on
   `redirect` feeds one short course-correction hint back to the next plan; `answer_now` stops
   reading and answers with what's gathered; `escalate` hands the request to deep execution. Fails
   safe on any error (degrades to `proceed`) and is byte-for-byte inert when off (the default). See
-  [docs/overseer.md](docs/overseer.md). Tested in `tests/test_overseer.py` (12 tests) plus wiring
-  coverage in `tests/test_runner.py`; the existing 162 orchestrator/runner/UI tests pass unchanged.
+  [docs/overseer.md](docs/overseer.md). Tested in `tests/test_overseer.py` (14 tests) plus wiring
+  coverage; the existing orchestrator/runner/UI tests pass unchanged.
+
+### Changed
+- **Overseer hook A is now non-blocking.** The overseer's provider call runs on a per-run
+  background `ThreadPoolExecutor` (mirroring context assembly) instead of blocking the run loop:
+  hook A submits the consult on a "read" plan and keeps walking, then polls the result at the top
+  of the next plan step and applies `redirect`/`answer_now`/`escalate` one step late. Hook B (the
+  final answer checkpoint) still waits, but only up to `overseer_answer_checkpoint_timeout_seconds`
+  (default 8s). New config: `overseer_poll_timeout_seconds` (default `0.0` = never block) and
+  `overseer_answer_checkpoint_timeout_seconds`. Off (`overseer=False`) still spawns zero threads.
+- **Overseer digest is more grounded.** The digest's `REQUEST` line now uses the resolved
+  `goal_condition` (anaphora rewritten) instead of the raw message, and a new `QUALITY BAR` line
+  carries the run's `quality_standards` when present, so the overseer judges the actual request
+  against its completion bar. The old `READING: … used` line is relabeled `AGENT'S READ BUDGET: …`
+  and clarifies it is the agent's cumulative reads, not the digest's own size.
 - **`quest-ai-runner chat --check`** validates chat's prerequisites (a reachable model provider,
   and `QAR_CORPUS_ROOT` / `QAR_CONTEXT_CARDS_DIR` if configured) and exits, without opening the
   terminal UI, so a broken setup is caught before launch instead of hanging on a blank screen.

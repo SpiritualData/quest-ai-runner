@@ -6,6 +6,9 @@ touched). The overseer resolves its own model and (via a single-provider ModelRe
 provider with the planner, so a local StubProvider subclass routes plan() calls to a separate
 overseer queue by detecting the overseer prompt.
 """
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.core.adapters import (
@@ -123,11 +126,13 @@ def test_proceed_is_noop_but_emits_overseer_event():
                 config=OrchestratorConfig(overseer=True, answer_goal_max_iterations=1)).run(
         "explain X", sink=sink)
     assert res.kind == "answer"
-    # An answer on step 1 consults the overseer at both hook points (in-loop + answer checkpoint);
-    # both proceed, so both emit an EVENT_OVERSEER and neither changes the outcome.
+    # An answer on step 1 leaves the loop immediately, so hook A does NOT submit (it only fires on
+    # a "read" plan that will have a next step to apply a signal to). The answer checkpoint (hook B)
+    # still consults once, proceeds, and emits its EVENT_OVERSEER. Every COMPLETED consult emits
+    # exactly one event, so the event count matches the collected-signal count.
     assert provider.overseer_calls >= 1
     ov = [e for e in sink.events if e.type == EVENT_OVERSEER]
-    assert len(ov) == provider.overseer_calls
+    assert len(ov) == len(res.overseer_signals)
     assert all(e.data.get("signal") == "proceed" for e in ov)
     assert res.overseer_signals and all(s["signal"] == "proceed" for s in res.overseer_signals)
 
@@ -145,8 +150,11 @@ def test_redirect_injects_course_correction_into_next_planner_prompt():
         overseer_signals=[{"signal": "redirect", "hint": "focus on the config file, not the readme"}],
     )
     retrieval = StubRetrieval({"README.md": "GROUNDING content"})
+    # overseer_poll_timeout_seconds>0 makes the background hook-A consult resolve deterministically
+    # at the next poll, so the redirect is reliably applied before step 2's planner runs.
     res = _orch(provider, retrieval,
-                config=OrchestratorConfig(overseer=True, answer_goal_max_iterations=1)).run(
+                config=OrchestratorConfig(overseer=True, overseer_poll_timeout_seconds=5.0,
+                                          answer_goal_max_iterations=1)).run(
         "explain X", sink=_CaptureSink())
     assert res.kind == "answer"
     # The second planner prompt (step 2) must carry the course correction observation.
@@ -169,13 +177,18 @@ def test_answer_now_short_circuits_read_loop():
         overseer_signals=[{"signal": "answer_now", "reason": "enough gathered"}],
     )
     retrieval = StubRetrieval({"README.md": "GROUNDING content"})
+    # overseer_poll_timeout_seconds>0 makes the (now background) hook-A consult resolve
+    # deterministically at the next poll instead of relying on thread timing.
     res = _orch(provider, retrieval,
                 config=OrchestratorConfig(overseer=True, max_steps=10,
+                                          overseer_poll_timeout_seconds=5.0,
                                           answer_goal_max_iterations=1)).run("q", sink=_CaptureSink())
     assert res.kind == "answer"
     assert res.exit_reason == "overseer_answer_now"
-    assert res.steps == 1  # short-circuited on the first plan step
-    # Hook A said answer_now (step 1); the answer checkpoint (Hook B) then consults once more.
+    # Non-blocking overseer (Fix 1): the answer_now submitted while planning step 1 is applied ONE
+    # STEP LATE, at the top of step 2, which is the documented tradeoff for never stalling the loop.
+    assert res.steps == 2
+    # Hook A submitted at step 1 and its answer_now is applied at step 2's poll.
     assert provider.overseer_calls >= 1
     assert res.overseer_signals[0]["signal"] == "answer_now"
 
@@ -195,8 +208,9 @@ def test_escalate_forces_deep():
     retrieval = StubRetrieval({"README.md": "GROUNDING content"})
     runner = StubDeepRunner(met=True, output="did the deep work")
     res = _orch(provider, retrieval, deep_runner=runner,
-                config=OrchestratorConfig(overseer=True, max_steps=10)).run("do it",
-                                                                            sink=_CaptureSink())
+                config=OrchestratorConfig(overseer=True, max_steps=10,
+                                          overseer_poll_timeout_seconds=5.0)).run(
+                    "do it", sink=_CaptureSink())
     assert res.kind == "deep"
     assert res.exit_reason == "overseer_escalated"
     assert len(res.deep_results) == 1 and res.deep_results[0].met is True
@@ -233,6 +247,7 @@ def test_max_signals_caps_consultations():
     retrieval = StubRetrieval({"README.md": "GROUNDING content"})
     res = _orch(provider, retrieval,
                 config=OrchestratorConfig(overseer=True, overseer_max_signals=1, max_steps=5,
+                                          overseer_poll_timeout_seconds=5.0,
                                           answer_goal_max_iterations=1)).run("q", sink=_CaptureSink())
     assert res.kind == "answer"
     assert provider.overseer_calls == 1
@@ -330,3 +345,80 @@ def test_overseer_event_surfaces_in_milestone_sink_but_plan_does_not():
                               data={"signal": "redirect", "hint": "h"}), Mode.BACKGROUND)
     assert len(seen_overseer) == 1
     assert seen_overseer[0].data.get("signal") == "redirect"
+
+
+# ---------------------------------------------------------------------------
+# (j) Fix 2 + Fix 3: the read-budget line is unambiguous, and the QUALITY BAR line
+#     appears only when quality_standards is provided.
+# ---------------------------------------------------------------------------
+
+def test_digest_quality_bar_and_relabeled_read_budget():
+    d_with = build_digest(
+        question="do the thing", step=1, max_steps=3,
+        quality_standards="Must pass all tests and update the docs",
+        gathered_chars=5200, max_gathered_chars=40000,
+    )
+    # Fix 3: the completion bar rides in the digest as its own line.
+    assert "QUALITY BAR: Must pass all tests and update the docs" in d_with
+    # Fix 2: the read-budget line names whose budget it is and disclaims the digest-size misread.
+    assert "AGENT'S READ BUDGET:" in d_with
+    assert "NOT this digest's size" in d_with
+    assert "READING: 5200 of 40000 chars used" not in d_with  # the old ambiguous label is gone
+
+    # QUALITY BAR is omitted entirely when there is nothing to say (keeps the digest tiny).
+    d_without = build_digest(question="do the thing", step=1, max_steps=3)
+    assert "QUALITY BAR" not in d_without
+
+
+# ---------------------------------------------------------------------------
+# (k) Fix 1: the overseer consult is NON-BLOCKING. Submitting returns immediately even while the
+#     provider call is still running, and a late-resolving signal is applied on a later poll.
+# ---------------------------------------------------------------------------
+
+class _BlockingOverseerProvider(StubProvider):
+    """Overseer plan() blocks on ``release`` so a test can prove the SUBMIT caller returns before
+    the provider call completes, and that a later poll picks the signal up once it resolves."""
+
+    def __init__(self):
+        super().__init__(decisions=[])
+        self.release = threading.Event()
+        self.started = threading.Event()
+        self.finished = threading.Event()
+
+    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
+        if _OVERSEER_MARK in prompt and "minimal-intervention" in prompt.lower():
+            self.started.set()
+            self.release.wait(timeout=5)
+            self.finished.set()
+            return {"signal": "answer_now", "reason": "resolved after blocking"}
+        return super().plan(prompt, model=model, tool_schema=tool_schema)
+
+
+def test_submit_oversee_is_non_blocking_and_late_signal_applies_on_next_poll():
+    provider = _BlockingOverseerProvider()
+    orch = _orch(provider, StubRetrieval())
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        signals: List[Dict[str, Any]] = []
+        t0 = time.monotonic()
+        pending = orch._submit_oversee(executor, user_message="q", step=1, plan=None,
+                                       gathered=[], started=t0)
+        # 1) NON-BLOCKING: submit returned promptly though the provider call is still blocked.
+        assert pending is not None
+        assert time.monotonic() - t0 < 1.0
+        assert provider.started.wait(timeout=2)   # the background call did start
+        assert not provider.finished.is_set()     # ...and has NOT finished yet
+
+        # 2) A non-blocking poll (timeout=0.0) while it is still running returns None and records
+        #    nothing (the caller proceeds as if "proceed").
+        assert orch._collect_oversee(pending, signals=signals, emit=None, timeout=0.0) is None
+        assert signals == []
+
+        # 3) Let it resolve; a later poll applies the (late) signal and records exactly one entry.
+        provider.release.set()
+        sig = orch._collect_oversee(pending, signals=signals, emit=None, timeout=5.0)
+        assert sig is not None and sig.signal == "answer_now"
+        assert len(signals) == 1 and signals[0]["signal"] == "answer_now"
+    finally:
+        provider.release.set()
+        executor.shutdown(wait=False)

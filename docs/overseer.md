@@ -10,13 +10,27 @@ extreme (a cheap model driving the whole loop, or a strong model re-reasoning ev
 `core/overseer.py` implements this as an optional consultation the `Orchestrator` makes at two
 points in a run:
 
-1. **Hook A (in-loop).** After each plan step, on a cadence (`overseer_every_steps`), before the
-   step executes.
+1. **Hook A (in-loop, non-blocking).** On a cadence (`overseer_every_steps`), when the plan is a
+   "read" (the loop will continue), the consult is fired into a **background thread** and the loop
+   keeps walking without waiting. Its result is polled at the **top of the next plan step**, before
+   that step's planner runs, so a `redirect` can steer the plan we are about to make and
+   `answer_now`/`escalate` can end the loop. Applying the signal one step late is the deliberate
+   tradeoff for never stalling the walk (see "Non-blocking design" below).
 2. **Hook B (answer checkpoint).** Once, with the draft answer included in the digest, right
-   before the answer is returned to the user.
+   before the answer is returned to the user. This is the *last* look, so unlike hook A there is no
+   later step to apply a correction: hook B therefore still **waits** for its consult, but only up
+   to a strict short bound (`overseer_answer_checkpoint_timeout_seconds`, default 8s), after which
+   the draft is accepted (degrade to proceed). The call still runs on the background executor, so
+   the wait is bounded and can never hang.
 
 Each consultation is ONE structured tool call against a cheap, capped digest (never the full
-gathered text), and returns exactly one signal:
+gathered text). The digest's `REQUEST` line is the **resolved, self-contained request** (the
+orchestrator's `goal_condition`, which rewrites anaphora like "do it" into the concrete
+instruction), not the raw surface text, and it carries a `QUALITY BAR` line (the run's
+`quality_standards`) when one is in play, so the overseer judges the run against what it is actually
+trying to do and the bar it must clear. The `AGENT'S READ BUDGET` line reports the *main agent's*
+own cumulative read volume against its read cap, which is unrelated to the digest's own (tiny) size.
+The consult returns exactly one signal:
 
 | Signal | Meaning | Effect |
 |---|---|---|
@@ -39,10 +53,17 @@ not change any existing run until a consumer opts in. What's true today, by cons
   `core/orchestrator.py`) are also wrapped in `try/except: pass`, so an overseer failure can never
   break a turn.
 - **Off means byte-for-byte identical.** With `overseer=False` (the default), zero overseer calls
-  are made and zero `EVENT_OVERSEER` events are emitted; nothing about the existing loop changes.
-- **Tested.** 12 unit tests in `tests/test_overseer.py` (digest building, truncation, signal
-  parsing, safe-default fallback, prompt guidance) plus wiring tests in `tests/test_runner.py`. 162
-  pre-existing orchestrator/runner/UI tests still pass unmodified.
+  are made, zero `EVENT_OVERSEER` events are emitted, and **zero background threads are spawned**;
+  nothing about the existing loop changes.
+- **Non-blocking (hook A).** The overseer's provider call runs on a per-run background
+  `ThreadPoolExecutor` (the same idiom as context assembly), torn down `wait=False` in `finish()`,
+  so consulting the overseer never adds latency to the user-facing loop. A consult that has not
+  resolved by the next poll is simply left pending and re-checked; the loop never blocks on it.
+  `overseer_poll_timeout_seconds` is `0.0` in production (a pure `future.done()` check); tests set
+  it positive to make the async apply deterministic, and it always degrades to proceed on timeout.
+- **Tested.** 14 unit tests in `tests/test_overseer.py` (digest building incl. the `QUALITY BAR`
+  and relabeled read-budget lines, truncation, signal parsing, safe-default fallback, prompt
+  guidance, and the non-blocking submit/late-apply behavior) plus the end-to-end wiring tests.
 
 ## What isn't claimed yet
 
@@ -63,6 +84,8 @@ orch.cfg.overseer = True
 orch.cfg.overseer_tier = "best"       # a high-quality tier; see model_registry.TIERS
 orch.cfg.overseer_every_steps = 1
 orch.cfg.overseer_max_signals = 3
+orch.cfg.overseer_poll_timeout_seconds = 0.0                 # hook A: 0.0 = never block (design default)
+orch.cfg.overseer_answer_checkpoint_timeout_seconds = 8.0    # hook B: strict short wait before shipping
 ```
 
 `OrchestratorResult.overseer_signals` holds every consultation this run made

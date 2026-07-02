@@ -143,6 +143,7 @@ def build_digest(
     max_gathered_chars: int = 0,
     consecutive_reads: int = 0,
     draft_answer: Optional[str] = None,
+    quality_standards: Optional[str] = None,
     char_budget: int = 1200,
 ) -> str:
     """Build a compact, one-glance digest of the run for the overseer, capped at ``char_budget``.
@@ -150,12 +151,20 @@ def build_digest(
     Pure and never-raising. ``observation_summaries`` are already-one-lined summaries of the last
     few gathered observations (the caller produces them, e.g. via the orchestrator's
     ``_summarize_observation``, so the FULL observation bodies never reach the overseer). Everything
-    else is a small counter. The final string is hard-truncated to ``char_budget`` so the overseer's
+    else is a small counter. ``question`` should be the RESOLVED, self-contained request (the
+    orchestrator's ``goal_condition``), not the raw surface text, so the overseer judges the run
+    against what it is actually trying to do. ``quality_standards``, when present, is the written
+    completion/quality bar the result must clear; it is added as a single ``QUALITY BAR`` line so the
+    overseer can tell a done answer from an unmet one. The ``AGENT'S READ BUDGET`` line reports the
+    MAIN AGENT's own cumulative raw-read volume against its read cap, which is unrelated to this
+    digest's own (tiny) size. The final string is hard-truncated to ``char_budget`` so the overseer's
     read cost stays tiny by construction.
     """
     try:
         lines: List[str] = []
         lines.append(f"REQUEST: {_oneline(question, 300)}")
+        if quality_standards:
+            lines.append(f"QUALITY BAR: {_oneline(quality_standards, 200)}")
         lines.append(f"PASS: {step} of {max_steps}")
 
         plan_bits: List[str] = []
@@ -187,7 +196,8 @@ def build_digest(
             )
         if max_gathered_chars:
             lines.append(
-                f"READING: {gathered_chars} of {max_gathered_chars} chars used"
+                f"AGENT'S READ BUDGET: {gathered_chars} of {max_gathered_chars} chars gathered "
+                f"so far (the agent's own cumulative reads, NOT this digest's size)"
             )
         if draft_answer:
             lines.append(f"DRAFT ANSWER (first 200 chars): {_oneline(draft_answer, 200)}")

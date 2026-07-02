@@ -31,7 +31,8 @@ import logging
 import re
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -528,6 +529,18 @@ class OrchestratorConfig:
     overseer_max_signals: int = 3        # hard cap on overseer consultations per run (both hooks)
     overseer_min_step: int = 1           # earliest plan step (1-based) the overseer may run
     overseer_digest_char_budget: int = 1200  # hard cap on the digest string fed to the overseer
+    # NON-BLOCKING overseer (hook A): the overseer's provider call runs in a BACKGROUND thread and
+    # its result is polled at the top of the NEXT plan step, so consulting it never stalls the loop.
+    # 0.0 = a pure, non-blocking ``future.done()`` check (the design default: never block; if the
+    # consult has not resolved yet, proceed and re-check next step). A small positive value lets the
+    # poll briefly WAIT for a still-running consult; it always degrades to proceed on timeout so it
+    # can never hang the run. Used mainly by tests to make the async apply deterministic.
+    overseer_poll_timeout_seconds: float = 0.0
+    # Hook B (final answer checkpoint) is the LAST look before the user sees the answer, so unlike
+    # hook A there is no later step to apply a correction one step late. It therefore DOES wait for
+    # its consult, but only up to this strict short bound; on timeout the draft answer is accepted
+    # (degrade to proceed). This caps the worst-case latency the overseer can add at the very end.
+    overseer_answer_checkpoint_timeout_seconds: float = 8.0
     # ASYNC POST-DEEP CONTEXT-CARD UPDATER. After a deep task finishes (answer already delivered),
     # an ASYNC, best-effort LLM process updates THIS user's context cards to prepare for future
     # similar requests: it appends a "future context" instruction to each deep brief, parses that
@@ -2600,6 +2613,22 @@ class Orchestrator:
 
     # --- deep fan-out --------------------------------------------------------
 
+    def _has_deep_execution_capability(self) -> bool:
+        """Whether ANY execution path is wired: a single default ``deep_runner``, OR the named
+        registry (``deep_runners`` + a ``deep_runner_classifier`` to pick among them).
+
+        Several call sites used to test ``self.deep_runner is not None`` as "can we actually
+        execute deep work". That was correct back when a single runner was the only wiring style,
+        but it went STALE once the named-runner registry was added: a consumer that wires
+        ``deep_runner=None`` plus ``deep_runners``/``deep_runner_classifier`` (the multi-runner
+        dispatch style, e.g. one runner for in-app data ops, one for open-ended tasks) has real
+        execution capability, but every ``self.deep_runner is not None`` gate treated it as "no
+        runner configured" and silently skipped execution/remediation. This is the one place that
+        answers "can we run deep work at all", used by every such gate.
+        """
+        return self.deep_runner is not None or bool(
+            self.deep_runners and self.deep_runner_classifier is not None)
+
     def _run_deep(self, plan: PlanDecision, user_message: str, model: str,
                   emit: Optional[_Emitter] = None,
                   rep_preamble: Optional[str] = None,
@@ -2613,8 +2642,9 @@ class Orchestrator:
         if not subtasks:
             subtasks = [{"goal": _truncate_goal(plan.goal or f"Fully address the request: {user_message}"),
                          "brief": plan.deep_brief or user_message}]
-        if self.deep_runner is None:
-            # No runner configured: surface the goal(s) without executing (caller may spawn).
+        if not self._has_deep_execution_capability():
+            # No runner configured at all (neither a default runner nor the named registry):
+            # surface the goal(s) without executing (caller may spawn).
             goals = [(st.get("goal") or "").strip() or user_message for st in subtasks]
             # Record each goal as REQUESTED-but-not-executed (neither success nor failure) so the
             # guard knows a re-run is the SAFE remediation here (nothing actually mutated).
@@ -2623,20 +2653,6 @@ class Orchestrator:
                     exec_record.facts.append(ExecutionFact(goal=g))
             return OrchestratorResult(kind="deep", goals=goals, rationale=plan.rationale,
                                       deep_results=[])
-
-        # Pass the live emitter to the runner ONLY if its run_goal accepts an ``emit`` kwarg
-        # (or **kwargs). Decided by signature inspection — never by a try/except TypeError, which
-        # could re-invoke a runner that already ran a side effect (e.g. a data mutation).
-        # We also TEE the emitter so EVENT_EXEC phase ticks are recorded into ``exec_record``
-        # (per-subtask) for the broken-promise guard, while still streaming to the live sink.
-        wants_emit = emit is not None and _run_goal_accepts_emit(self.deep_runner)
-        wants_run_id = _run_goal_accepts_run_id(self.deep_runner)
-        # A per-task ``rep_preamble`` (e.g. an AI rep's pulled persona) and the brain's specific
-        # ``gathered`` reads are both forwarded to the deep run as a combined ``context_preamble``,
-        # ONLY to a runner whose ``run_goal`` accepts that kwarg (older signatures are untouched).
-        # We check capability regardless of whether rep_preamble or gathered are set — either alone
-        # is enough to build a useful context_preamble for the deep runner.
-        wants_preamble = _run_goal_accepts_context_preamble(self.deep_runner)
 
         # HIERARCHICAL GOAL: the overall user-level goal this turn pursues. When the work fans out
         # into parallel subgoals, each subgoal process must be told the HIGHER goal it serves, so it
@@ -2693,6 +2709,46 @@ class Orchestrator:
             if per_goal_context and emit is not None:
                 emit.status(f"Selected context for goal: {goal[:60]}")
 
+            # Resolve which runner handles THIS goal ONCE per task (not per retry — the
+            # classifier's inputs (user_message/goal/brief) don't change across retries of the
+            # same task): if named runners + a classifier are registered, the classifier picks a
+            # key; otherwise the single default ``deep_runner``. Falls back to ``deep_runner`` on
+            # any classifier failure or an unknown key.
+            active_runner = self.deep_runner
+            if self.deep_runners and self.deep_runner_classifier is not None:
+                try:
+                    key = self.deep_runner_classifier(user_message, goal, brief)
+                    if key in self.deep_runners:
+                        active_runner = self.deep_runners[key]
+                        log.debug(f"deep_runner_classifier selected runner {key!r}")
+                    else:
+                        log.warning(
+                            f"deep_runner_classifier returned unknown key {key!r}; "
+                            f"using default runner"
+                        )
+                except Exception as e:  # noqa: BLE001 — classifier failure must never block a run
+                    log.warning(f"deep_runner_classifier failed ({e}); using default runner")
+
+            # Pass the live emitter to the runner ONLY if its run_goal accepts an ``emit`` kwarg
+            # (or **kwargs). Decided by signature inspection — never by a try/except TypeError,
+            # which could re-invoke a runner that already ran a side effect (e.g. a data
+            # mutation). Checked against the ACTUAL runner resolved above — not ``self.deep_runner``,
+            # which is None when the named-runner registry is the wiring style, so this must NOT be
+            # computed against it (that silently dropped exec streaming for every named-registry
+            # consumer). We also TEE the emitter so EVENT_EXEC phase ticks are recorded into
+            # ``exec_record`` (per-subtask) for the broken-promise guard, while still streaming to
+            # the live sink.
+            wants_emit = (emit is not None and active_runner is not None
+                         and _run_goal_accepts_emit(active_runner))
+            wants_run_id = active_runner is not None and _run_goal_accepts_run_id(active_runner)
+            # A per-task ``rep_preamble`` (e.g. an AI rep's pulled persona) and the brain's specific
+            # ``gathered`` reads are both forwarded to the deep run as a combined ``context_preamble``,
+            # ONLY to a runner whose ``run_goal`` accepts that kwarg (older signatures are untouched).
+            # We check capability regardless of whether rep_preamble or gathered are set — either alone
+            # is enough to build a useful context_preamble for the deep runner.
+            wants_preamble = (active_runner is not None
+                              and _run_goal_accepts_context_preamble(active_runner))
+
             def _emit_one(ev: ProgressEvent) -> None:
                 # TEE: classify any EVENT_EXEC phase into the fact, then forward to the live sink.
                 try:
@@ -2718,11 +2774,14 @@ class Orchestrator:
                 except Exception:  # noqa: BLE001 — recording must never break the run
                     pass
                 if wants_emit and emit is not None:
-                    log.debug(f"emitting exec event: {getattr(ev, 'type', '?')}: {getattr(ev, 'text', '')[:80]}")
+                    log.debug(f"emitting exec event: {getattr(ev, 'type', '?')}: "
+                             f"{(getattr(ev, 'text', '') or '')[:80]}")
                     emit.emit(ev)
 
             def _do_run(current_brief: str, run_model: Optional[str]) -> DeepResult:
                 try:
+                    if active_runner is None:
+                        return DeepResult(met=False, error="no deep runner configured")
                     kwargs = dict(goal=goal, brief=current_brief, model=run_model,
                                   max_turns=self.cfg.deep_max_turns)
                     if wants_emit:
@@ -2760,22 +2819,8 @@ class Orchestrator:
                             preamble_parts.extend(extra_context)
                         if preamble_parts:
                             kwargs["context_preamble"] = "\n\n".join(preamble_parts)
-                    # If named runners + classifier are registered, let the classifier pick which
-                    # runner handles this goal. Falls back to self.deep_runner on any failure.
-                    active_runner = self.deep_runner
-                    if self.deep_runners and self.deep_runner_classifier is not None:
-                        try:
-                            key = self.deep_runner_classifier(user_message, goal, brief)
-                            if key in self.deep_runners:
-                                active_runner = self.deep_runners[key]
-                                log.debug(f"deep_runner_classifier selected runner {key!r}")
-                            else:
-                                log.warning(
-                                    f"deep_runner_classifier returned unknown key {key!r}; "
-                                    f"using default runner"
-                                )
-                        except Exception as e:  # noqa: BLE001 — classifier failure must never block a run
-                            log.warning(f"deep_runner_classifier failed ({e}); using default runner")
+                    # active_runner was already resolved once per task, above (not re-resolved per
+                    # retry — the classifier's inputs don't change across retries of the same task).
                     return active_runner.run_goal(**kwargs)
                 except Exception as e:  # noqa: BLE001
                     log.error(f"Deep runner failed: {type(e).__name__}: {e}", exc_info=True)
@@ -3322,19 +3367,13 @@ class Orchestrator:
 
     # --- minimal-intervention overseer ---------------------------------------
 
-    def _maybe_oversee(self, *, user_message: str, step: int, plan: Optional[PlanDecision],
-                       gathered: List[Dict[str, Any]], started: float,
-                       signals: List[Dict[str, Any]], emit: Optional[_Emitter],
-                       draft_answer: Optional[str] = None) -> OverseerSignal:
-        """Consult the minimal-intervention overseer once and record + surface its signal.
-
-        Builds a cheap digest of the current run state, resolves the high-quality overseer model,
-        makes ONE structured call, appends the signal to ``signals`` (the per-run record), and emits
-        an EVENT_OVERSEER (always, including proceed). Returns the ``OverseerSignal`` so the caller
-        can apply it. Never raises: any failure degrades to ``OverseerSignal("proceed")`` and still
-        records/emits it, so the run is never distorted. The call site wraps this in try/except pass
-        (belt-and-suspenders) exactly like ``_guard_turn``.
-        """
+    def _build_oversee_digest(self, *, user_message: str, step: int,
+                              plan: Optional[PlanDecision], gathered: List[Dict[str, Any]],
+                              started: float, draft_answer: Optional[str] = None,
+                              quality_standards: Optional[str] = None) -> str:
+        """Build the cheap, capped overseer digest for the current run state. Pure + synchronous
+        (no network): it only summarizes what is already in hand, so it is safe to run inline right
+        before submitting the ONE provider call to a background thread. Never raises."""
         cfg = self.cfg
         # Summarize the last few observations to one line each so the FULL bodies never reach the
         # overseer (keeps its read cost tiny). Reuses the same summarizer the planner view uses.
@@ -3351,7 +3390,7 @@ class Orchestrator:
             gathered_chars = 0
         tokens_in = getattr(self.provider, "tokens_in", 0) or 0
         tokens_out = getattr(self.provider, "tokens_out", 0) or 0
-        digest = build_digest(
+        return build_digest(
             question=user_message,
             step=step,
             max_steps=cfg.max_steps,
@@ -3368,11 +3407,66 @@ class Orchestrator:
             consecutive_reads=sum(1 for o in gathered
                                   if isinstance(o, dict) and o.get("kind") in ("read", "grep")),
             draft_answer=draft_answer,
+            quality_standards=quality_standards,
             char_budget=cfg.overseer_digest_char_budget,
         )
-        model = self.registry.resolve_tier(cfg.overseer_tier)
-        provider = self.get_provider_for_model(model)
-        signal = oversee(provider, model, digest)
+
+    def _submit_oversee(self, executor: ThreadPoolExecutor, *, user_message: str, step: int,
+                        plan: Optional[PlanDecision], gathered: List[Dict[str, Any]],
+                        started: float, draft_answer: Optional[str] = None,
+                        quality_standards: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """FIRE-AND-FORGET consult (Fix 1): build the cheap digest synchronously, then submit the
+        ONE overseer provider call to a BACKGROUND thread and return a pending-consultation record
+        WITHOUT waiting. Recording + emitting happen later in ``_collect_oversee`` (when the result
+        is applied), so ``overseer_signals`` only ever holds consults that actually completed. This
+        mirrors the context-assembly background-thread idiom in ``run()``. Never raises: on any
+        setup failure it returns ``None`` (the caller simply proceeds as if the overseer were off).
+        """
+        try:
+            digest = self._build_oversee_digest(
+                user_message=user_message, step=step, plan=plan, gathered=gathered,
+                started=started, draft_answer=draft_answer, quality_standards=quality_standards)
+            model = self.registry.resolve_tier(self.cfg.overseer_tier)
+            provider = self.get_provider_for_model(model)
+            # oversee() itself never raises (degrades to proceed), so the worker is safe.
+            future: Future = executor.submit(oversee, provider, model, digest)
+            return {"future": future, "step": step, "plan": plan}
+        except Exception:  # noqa: BLE001 — submission failure must never break the run
+            return None
+
+    def _collect_oversee(self, pending: Optional[Dict[str, Any]], *,
+                         signals: List[Dict[str, Any]], emit: Optional[_Emitter],
+                         timeout: float = 0.0) -> Optional[OverseerSignal]:
+        """Poll a previously-submitted consult. Returns its ``OverseerSignal`` if it has RESOLVED,
+        recording it into ``signals`` and emitting an EVENT_OVERSEER exactly as the old synchronous
+        path did (so late-resolving consults are still recorded). Returns ``None`` when it has NOT
+        resolved yet (the caller proceeds as if ``proceed``).
+
+        ``timeout=0.0`` is a pure, non-blocking ``future.done()`` check that NEVER blocks (the design
+        default). A small positive ``timeout`` lets it briefly wait for a still-running consult; on
+        timeout it returns ``None`` (proceed), so it can never hang the run. Never raises.
+        """
+        if not pending:
+            return None
+        future = pending.get("future")
+        step = pending.get("step", 0)
+        plan = pending.get("plan")
+        if future is None:
+            return None
+        try:
+            if timeout and timeout > 0:
+                try:
+                    signal = future.result(timeout=timeout)
+                except FuturesTimeoutError:
+                    return None  # still running -> proceed, re-check next opportunity
+            else:
+                if not future.done():
+                    return None  # not resolved yet -> proceed, never block
+                signal = future.result()
+        except Exception:  # noqa: BLE001 — a worker failure degrades to proceed
+            signal = OverseerSignal("proceed")
+        if not isinstance(signal, OverseerSignal):
+            signal = OverseerSignal("proceed")
         signals.append({"signal": signal.signal, "hint": signal.hint,
                         "reason": signal.reason, "step": step})
         if emit is not None:
@@ -3425,7 +3519,7 @@ class Orchestrator:
         # straight to honest correction. This is the core double-mutation safeguard.
         remediations = 0
         can_remediate = (
-            self.deep_runner is not None
+            self._has_deep_execution_capability()
             and plan is not None
             and not exec_record.any_success
             and not exec_record.any_failure
@@ -3762,6 +3856,18 @@ class Orchestrator:
         # the count both hooks share against cfg.overseer_max_signals. Stamped onto the result in
         # finish(). Stays empty (and overseer_signals None) whenever the overseer is off.
         overseer_signals: List[Dict[str, Any]] = []
+        # NON-BLOCKING overseer plumbing (Fix 1). The overseer's provider call runs in a BACKGROUND
+        # thread (same idiom as context assembly) so consulting it NEVER stalls the user-facing loop.
+        #  - ``_oversee_executor``: a single per-run worker, created lazily on first consult and torn
+        #    down (wait=False) in finish(); a still-running consult finishes on its own (bounded
+        #    network call) and is never joined synchronously.
+        #  - ``pending_oversee``: the in-flight hook-A consult submitted on a prior step, polled at
+        #    the top of the next step; kept until it resolves (re-checked each step, never dropped).
+        #  - ``overseer_submitted``: submissions counted against cfg.overseer_max_signals (a
+        #    submitted-but-uncollected consult still counts, so the shared cap holds across both hooks).
+        _oversee_executor: Optional[ThreadPoolExecutor] = None
+        pending_oversee: Optional[Dict[str, Any]] = None
+        overseer_submitted = 0
         # Run-local durable EXECUTION FACTS (the broken-promise guard's evidence): each deep
         # subtask that actually executes records its outcome (success/failure) here, threaded like
         # ``gathered``. Attached to the OrchestratorResult in finish().
@@ -4110,6 +4216,14 @@ class Orchestrator:
             res.execution_record = exec_record
             if overseer_signals:
                 res.overseer_signals = list(overseer_signals)
+            # Tear down the background overseer worker (Fix 1). ``wait=False`` mirrors the
+            # context-assembly teardown: any still-running consult (a bounded provider call) finishes
+            # on its own without blocking the return, and is never joined synchronously here.
+            if _oversee_executor is not None:
+                try:
+                    _oversee_executor.shutdown(wait=False)
+                except Exception:  # noqa: BLE001
+                    pass
             # Collect token counts from the provider if it tracks them.
             try:
                 if hasattr(self.provider, "tokens_in"):
@@ -4214,6 +4328,42 @@ class Orchestrator:
             steps = step + 1
             emit.status("Planning…" if step == 0 else "Re-planning…")
 
+            # --- OVERSEER poll (hook A, applied ONE STEP LATE): pick up a consult SUBMITTED on a
+            # prior step whose background call has since resolved (Fix 1). This runs BEFORE this
+            # step's planner so a redirect can steer the plan we are about to make. A resolved
+            # redirect is injected as a COURSE CORRECTION observation (the planner re-reads it,
+            # exactly as the old inline hook did); answer_now / escalate end the loop here. If the
+            # consult has NOT resolved yet, we simply proceed and re-check next step (never block:
+            # ``overseer_poll_timeout_seconds`` is 0.0 in production). Wrapped so it can NEVER break
+            # the loop. The one-step-late application is the intended cost of not stalling the walk.
+            if pending_oversee is not None:
+                try:
+                    _psig = self._collect_oversee(
+                        pending_oversee, signals=overseer_signals, emit=emit,
+                        timeout=cfg.overseer_poll_timeout_seconds)
+                    if _psig is not None:
+                        pending_oversee = None  # resolved -> free the slot for a fresh consult
+                        if _psig.signal == "redirect" and _psig.hint:
+                            gathered.append({
+                                "kind": "query", "locator": "overseer",
+                                "text": f"COURSE CORRECTION: {_psig.hint}",
+                            })
+                        elif _psig.signal == "answer_now":
+                            plan = plan or PlanDecision(action="answer")
+                            plan.action = "answer"
+                            overseer_decided = "overseer_answer_now"
+                            break
+                        elif _psig.signal == "escalate":
+                            plan = plan or PlanDecision(action="answer")
+                            plan.action = "deep"
+                            plan.goal = plan.goal or f"Complete the request: {user_message}"
+                            plan.deep_brief = plan.deep_brief or user_message
+                            overseer_decided = "overseer_escalated"
+                            break
+                    # else: not resolved -> keep ``pending_oversee`` and re-check next step.
+                except Exception:  # noqa: BLE001 — the overseer must never break the loop
+                    pass
+
             # AUTO-INJECT FUNCTION DISCOVERY on step 0: pre-load all available operations
             # so the planner sees them from the start, ordered by relevance. This eliminates
             # the need for the planner to first ASK for operations; they're already in hand.
@@ -4273,36 +4423,27 @@ class Orchestrator:
                                         data={"tokens_in": _ti, "tokens_out": _to,
                                               "total": _ti + _to}))
 
-            # --- OVERSEER hook A (in-loop): a minimal-intervention watch of the plan. Consult a
-            # high-quality model on a tiny digest; it almost always says proceed, and occasionally
-            # sends one small signal that redirects the next plan, ends reading with an answer, or
-            # escalates to deep. Gated so it stays cheap and cannot dominate a run, and wrapped so it
-            # can NEVER break the loop (any failure degrades to proceed). Off by default.
-            if (cfg.overseer and steps >= cfg.overseer_min_step
+            # --- OVERSEER hook A submit (in-loop, NON-BLOCKING): fire a fresh minimal-intervention
+            # consult for THIS plan into a background thread, then keep walking (Fix 1). Its result
+            # is polled at the top of the NEXT step (above), one step late. We only submit when the
+            # plan is a "read" (the loop will continue, so there IS a next step to apply a signal to)
+            # and when no consult is already in flight (one at a time). Gated so it stays cheap:
+            # cadence, min-step, and a hard cap on total submissions shared with hook B. Wrapped so
+            # it can NEVER break the loop. Off by default.
+            if (cfg.overseer and plan.action == "read" and pending_oversee is None
+                    and steps >= cfg.overseer_min_step
                     and steps % max(1, cfg.overseer_every_steps) == 0
-                    and len(overseer_signals) < cfg.overseer_max_signals):
+                    and overseer_submitted < cfg.overseer_max_signals):
                 try:
-                    _sig = self._maybe_oversee(
-                        user_message=user_message, step=steps, plan=plan,
-                        gathered=gathered, started=started, signals=overseer_signals, emit=emit)
-                    if _sig.signal == "redirect" and _sig.hint:
-                        # Feed the correction back to the NEXT planner view exactly like the
-                        # auto-injected list_operations: append it as a gathered observation so the
-                        # planner re-reads it. Do NOT force the action; the planner decides.
-                        gathered.append({
-                            "kind": "query", "locator": "overseer",
-                            "text": f"COURSE CORRECTION: {_sig.hint}",
-                        })
-                    elif _sig.signal == "answer_now":
-                        plan.action = "answer"
-                        overseer_decided = "overseer_answer_now"
-                        break
-                    elif _sig.signal == "escalate":
-                        plan.action = "deep"
-                        plan.goal = plan.goal or f"Complete the request: {user_message}"
-                        plan.deep_brief = plan.deep_brief or user_message
-                        overseer_decided = "overseer_escalated"
-                        break
+                    if _oversee_executor is None:
+                        _oversee_executor = ThreadPoolExecutor(max_workers=1)
+                    # Fix 3: judge the run against the RESOLVED request (goal_condition) and the
+                    # completion bar (quality_standards), not the raw ambiguous surface text.
+                    pending_oversee = self._submit_oversee(
+                        _oversee_executor, user_message=goal_condition, step=steps, plan=plan,
+                        gathered=gathered, started=started, quality_standards=quality_standards)
+                    if pending_oversee is not None:
+                        overseer_submitted += 1
                 except Exception:  # noqa: BLE001 — the overseer must never break the loop
                     pass
 
@@ -4439,13 +4580,32 @@ class Orchestrator:
         # steering hint). proceed / answer_now accept the draft. Counted against the same per-run cap
         # as hook A. Wrapped so it can never break the turn (any failure degrades to accepting the
         # draft). Off by default.
-        if cfg.overseer and len(overseer_signals) < cfg.overseer_max_signals:
+        #
+        # DESIGN NOTE (Fix 1, hook B vs hook A): hook B is the FINAL checkpoint before the user sees
+        # the answer, so there is NO later step to apply a correction one step late (the trick hook A
+        # uses to stay non-blocking). Firing hook B fire-and-forget would make it useless for this
+        # turn. So, uniquely, hook B still WAITS for its consult, but only up to a strict short bound
+        # (overseer_answer_checkpoint_timeout_seconds); on timeout the draft is accepted (degrade to
+        # proceed). The call still runs on the background executor, so the wait is bounded and can
+        # never hang, while a clear escalate/redirect can still correct the answer before it ships.
+        if cfg.overseer and overseer_submitted < cfg.overseer_max_signals:
             try:
-                _bsig = self._maybe_oversee(
-                    user_message=user_message, step=steps, plan=plan,
-                    gathered=gathered, started=started, signals=overseer_signals, emit=emit,
-                    draft_answer=text)
-                if _bsig.signal == "escalate" and self.deep_runner is not None:
+                if _oversee_executor is None:
+                    _oversee_executor = ThreadPoolExecutor(max_workers=1)
+                # Fix 3: judge against the RESOLVED request (goal_condition) + completion bar.
+                _bpending = self._submit_oversee(
+                    _oversee_executor, user_message=goal_condition, step=steps, plan=plan,
+                    gathered=gathered, started=started, draft_answer=text,
+                    quality_standards=quality_standards)
+                _bsig = OverseerSignal("proceed")
+                if _bpending is not None:
+                    overseer_submitted += 1
+                    _collected = self._collect_oversee(
+                        _bpending, signals=overseer_signals, emit=emit,
+                        timeout=cfg.overseer_answer_checkpoint_timeout_seconds)
+                    if _collected is not None:
+                        _bsig = _collected
+                if _bsig.signal == "escalate" and self._has_deep_execution_capability():
                     if emit is not None:
                         emit.status("Overseer: this needs real execution, running it now…")
                     _ov_plan = PlanDecision(
@@ -4477,7 +4637,7 @@ class Orchestrator:
         # OR if planner explicitly flagged answer_contains_work_to_execute
         # OR auto-detect false claims (fallback for broken prompts)
         should_defer_deep = plan.deferred_deep
-        if not should_defer_deep and self.deep_runner is not None:
+        if not should_defer_deep and self._has_deep_execution_capability():
             # Primary: trust planner's explicit flag
             if plan.answer_contains_work_to_execute:
                 should_defer_deep = {"goal": f"Execute what the answer describes: {user_message}",
@@ -4621,7 +4781,7 @@ class Orchestrator:
                     # When the verifier says the answer lacked the context needed to be definitive,
                     # escalate to deep so it can search further. Regenerating with the SAME gathered
                     # context won't help — the deep runner can grep/read on its own.
-                    if verdict.get("need_more_context") and self.deep_runner is not None:
+                    if verdict.get("need_more_context") and self._has_deep_execution_capability():
                         if emit is not None:
                             emit.status("Need more context to answer — searching further…")
                         _context_q = verdict.get("context_query") or user_message
