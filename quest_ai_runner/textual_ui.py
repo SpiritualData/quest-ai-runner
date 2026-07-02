@@ -665,10 +665,8 @@ class TranscriptLog(RichLog):
         self.release_mouse()
         text = self.selected_text
         if text:
-            try:
-                self.app.copy_to_clipboard(text)
-            except Exception:  # noqa: BLE001
-                pass
+            # The app owns the actual clipboard write + feedback (see on_transcript_log_copied);
+            # the widget just reports what was selected.
             self.post_message(self.Copied(text))
         else:
             # No drag → treat as a plain click: drop any stale highlight and let the
@@ -1392,13 +1390,14 @@ class QuestAITerminal(App):
             from .core.adapters import (
                 EVENT_CONTEXT, EVENT_STATUS, EVENT_PLAN, EVENT_READ, EVENT_REPLAN,
                 EVENT_PARTIAL, EVENT_EXEC, EVENT_RESULT, EVENT_DECISION,
-                EVENT_MILESTONE, EVENT_DONE,
+                EVENT_MILESTONE, EVENT_DONE, EVENT_UNDERSTANDING,
             )
             self._ev = dict(
                 context=EVENT_CONTEXT, status=EVENT_STATUS, plan=EVENT_PLAN,
                 read=EVENT_READ, replan=EVENT_REPLAN, partial=EVENT_PARTIAL,
                 exec=EVENT_EXEC, result=EVENT_RESULT, decision=EVENT_DECISION,
                 milestone=EVENT_MILESTONE, done=EVENT_DONE,
+                understanding=EVENT_UNDERSTANDING,
             )
         return self._ev
 
@@ -1581,6 +1580,14 @@ class QuestAITerminal(App):
                         istr = ", ".join(str(x).split("/")[-1] for x in items[:3])
                         more = f" (+{len(items) - 3} more)" if len(items) > 3 else ""
                         log.write(f"  [dim]• {label}: {istr}{more}[/dim]")
+
+        elif t == ev["understanding"]:
+            # Stage 1's resolved goal condition, surfaced the instant it's ready (well before
+            # any plan/answer). Informational only, not blocking, so it gets its own distinct
+            # look (cyan diamond) instead of the yellow decision marker below.
+            if text:
+                log.write(Text(""))
+                log.write(Text(f"  ◆ {text}", style="bold cyan"))
 
         elif t == ev["exec"]:
             run_id = data.get("run_id") or "default"
@@ -1833,20 +1840,55 @@ class QuestAITerminal(App):
 
     # -- actions ---------------------------------------------------------------
 
+    def _emit_osc52(self, text: str) -> bool:
+        """Write an OSC-52 clipboard sequence to the terminal (best effort).
+
+        Wrapped for tmux passthrough when ``$TMUX`` is set. Returns True if it was
+        written (not proof the terminal honored it). Lets copy work over SSH / on hosts
+        with no clipboard CLI, when the terminal supports OSC-52. Textual's own
+        ``copy_to_clipboard`` emits plain OSC-52 with no tmux wrapping, so we do our own.
+        """
+        if getattr(self, "_driver", None) is None:
+            return False
+        try:
+            import base64
+            b64 = base64.b64encode(text.encode("utf-8")).decode("ascii")
+            seq = f"\x1b]52;c;{b64}\x07"
+            if os.environ.get("TMUX"):
+                # tmux passthrough: DCS-wrap and double the inner ESC bytes.
+                seq = "\x1bPtmux;" + seq.replace("\x1b", "\x1b\x1b") + "\x1b\\"
+            self._driver.write(seq)
+            self._clipboard = text
+            return True
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _copy_text(self, text: str) -> tuple:
+        """Copy ``text`` as robustly as possible; return ``(ok, detail)`` for feedback.
+
+        Tries a local clipboard CLI (wl-copy/xclip/xsel) AND emits OSC-52. A local tool
+        is a definite success; OSC-52 alone is best-effort (the terminal may ignore it),
+        so we say so and point at the reliable fix.
+        """
+        tool_ok, tool_msg = _copy_to_clipboard_tool(text)
+        osc_ok = self._emit_osc52(text)
+        if tool_ok:
+            return True, "clipboard"
+        if osc_ok:
+            return True, "sent to terminal (if paste fails, install wl-clipboard/xclip)"
+        return False, tool_msg.strip("()")
+
     def action_copy_last(self) -> None:
         """Copy the last AI response to the system clipboard (Ctrl+Y)."""
         text = "\n".join(self._answer_parts).strip() if self._answer_parts else ""
         if not text and self.sess._last_assistant:
             text = self.sess._last_assistant
         if not text:
-            self._tlog.write(Text("  (nothing to copy)", style="dim"))
+            self.notify("Nothing to copy yet", title="Copy", timeout=2, severity="warning")
             return
-        copied, message = _copy_to_clipboard_tool(text)
-        if copied:
-            preview = text[:60].replace("\n", " ")
-            self._tlog.write(Text(f"  Copied: {preview}…" if len(text) > 60 else f"  Copied: {preview}", style="dim"))
-        else:
-            self._tlog.write(Text(f"  {message}", style="dim"))
+        ok, detail = self._copy_text(text)
+        self.notify(f"Last reply · {detail}", title="Copied" if ok else "Copy",
+                    timeout=2.5, severity="information" if ok else "warning")
 
     def action_cancel(self) -> None:
         if self._turn_active:
@@ -2130,10 +2172,13 @@ class QuestAITerminal(App):
             pass
 
     def on_transcript_log_copied(self, event) -> None:
-        """Show a subtle confirmation when a drag-selection is copied."""
-        preview = " ".join(event.text.split())
-        preview = (preview[:60] + "…") if len(preview) > 60 else preview
-        self._tlog.write(Text(f"  Copied: {preview}", style="dim"))
+        """Copy a drag-selection and confirm with an ephemeral toast (not scrollback)."""
+        ok, detail = self._copy_text(event.text)
+        n = len(event.text)
+        title = "Copied" if ok else "Copy"
+        self.notify(f"{n} character{'s' if n != 1 else ''} · {detail}",
+                    title=title, timeout=2.5,
+                    severity="information" if ok else "warning")
 
     def on_mouse_scroll_up(self, event) -> None:
         """Mouse wheel up — routes to the active scroll target, same logic as PageUp."""

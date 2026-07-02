@@ -49,6 +49,14 @@ All notable changes to this project are documented here. The format is based on
   at turn end. They now render through the same panel via `_build_shallow_context_bullets`.
 
 ### Fixed
+- **`EVENT_UNDERSTANDING` was silently dropped by both terminal UIs.** The orchestrator emits
+  `EVENT_UNDERSTANDING` right after Stage 1 resolves the goal condition, well before the planner
+  loop or answer generation runs, but neither `textual_ui.py`'s `_handle_event` nor
+  `interactive.py`'s `_TurnRenderer.render` had a branch for it, so the resolved "Understood as:
+  ..." text was computed and discarded. Both UIs now render it as its own line the instant it
+  arrives: a cyan diamond (`◆`) in the Textual UI (bold cyan) and the plain-terminal renderer
+  (rich / ANSI-color / plain-text fallbacks), visually distinct from the yellow `?`/`┃` used for a
+  blocking `EVENT_DECISION` question. Tested in `tests/test_understanding_event_ui.py`.
 - **Named deep-runner registry (`deep_runners` + `deep_runner_classifier`) silently never
   executed.** Several gates that decide whether the orchestrator can carry out deep work
   (`_run_deep`'s "no runner configured" bail-out, the broken-promise guard's remediation, the
@@ -184,6 +192,16 @@ All notable changes to this project are documented here. The format is based on
   copies the selected text to the clipboard on release with a subtle "Copied: …" confirmation. A
   plain click (no drag) just refocuses the input. Works over SSH/mobile via OSC-52. Tested in
   `tests/test_transcript_selection.py`; verified end-to-end under a headless Textual mount.
+- **Terminal UI: copy to clipboard now actually works, with robustness and ephemeral feedback.**
+  Both drag-select and Ctrl+Y copy paths tried only Textual's OSC-52 (which many terminals /
+  tmux setups don't honor), wrote confirmation to the scrollback (piling up on repeated
+  copies), and gave no feedback when copy failed. Now: try a local clipboard CLI
+  (wl-copy/xclip/xsel) first for a definite success; fall back to tmux-aware OSC-52
+  when no tool is installed (works over SSH if the terminal supports OSC-52); and show
+  ephemeral toasts (2.5 second notifications, not scrollback) with clear status ("Copied:
+  clipboard" vs. "sent to terminal — install wl-clipboard/xclip if paste fails"). The
+  robustness is unified in `QuestAITerminal._copy_text()` and `_emit_osc52()`, shared by
+  both Ctrl+Y (last reply) and drag-select (transcript selection).
 - **`ClaudeConversationsAdapter` now wired into the default retrieval stack.** The adapter was fully
   implemented and tested but never instantiated in `_config_from_env()`, so past Claude Code session
   transcripts were invisible to grep during both interactive chat and task runs. It is now added by
