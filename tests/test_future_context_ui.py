@@ -106,6 +106,19 @@ def test_deep_detail_toggle_is_alt_d():
     assert not any(len(k) == 1 for k in keys)
 
 
+def test_cycle_deep_run_binding_is_priority():
+    # Textual's Screen has its own built-in "tab" binding (app.focus_next), which sits closer to
+    # the focused PromptTextArea in the DOM chain and would otherwise intercept every Tab press
+    # before it reaches cycle_deep_run (the textarea itself doesn't consume Tab). Priority bindings
+    # are checked in a separate App-down pass before that normal walk, so this must stay priority=True
+    # or "Tab: next agent" silently stops working.
+    tab_bindings = [b for b in QuestAITerminal.BINDINGS
+                    if getattr(b, "action", None) == "cycle_deep_run"]
+    assert tab_bindings, "expected a cycle_deep_run binding"
+    assert all(b.key == "tab" for b in tab_bindings)
+    assert all(b.priority for b in tab_bindings)
+
+
 def test_no_binding_uses_a_bare_printable_letter():
     # A bare printable-letter binding never fires while the prompt Input is focused (it gets typed),
     # so every action key must be a modified chord or a non-printable key. Guards against regressing

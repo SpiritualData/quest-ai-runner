@@ -61,7 +61,7 @@ import time
 import uuid as _uuid
 import warnings
 from pathlib import Path
-from typing import TYPE_CHECKING, List, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 from .adapters.retry_utils import format_provider_error
 
@@ -592,15 +592,32 @@ class _DeepRunTracker:
             if run_id in self._runs:
                 self._runs[run_id]['status'] = status
 
-    def get_dashboard(self, lines_per_run: Optional[int] = None) -> str:
+    def get_dashboard(self, lines_per_run: Optional[int] = None,
+                      active_run_id: Optional[str] = None) -> str:
         """Return a dashboard summary of all runs with latest output.
 
         ``lines_per_run`` controls how many output lines are shown per agent.
         When omitted it scales automatically: 5 for one run, 3 for two, 2 for three+.
+
+        ``active_run_id`` (optional), when it names one of the runs, marks that run's header line
+        as the one Alt+D/Tab/a click would currently open, so a user with several concurrent runs
+        can see which one is selected without having to open the detail panel first.
         """
+        text, _ = self._render_dashboard(lines_per_run, active_run_id)
+        return text
+
+    def get_dashboard_with_map(self, lines_per_run: Optional[int] = None,
+                               active_run_id: Optional[str] = None) -> "Tuple[str, Dict[int, str]]":
+        """Same as ``get_dashboard``, plus a ``{row_index: run_id}`` map (0-based, matching the
+        returned text's lines) so a UI can hit-test a click's row against the run it fell within
+        (click-to-expand)."""
+        return self._render_dashboard(lines_per_run, active_run_id)
+
+    def _render_dashboard(self, lines_per_run: Optional[int],
+                          active_run_id: Optional[str]) -> "Tuple[str, Dict[int, str]]":
         with self._lock:
             if not self._runs:
-                return ""
+                return "", {}
 
             if lines_per_run is None:
                 # Scale to keep the inline block calm but actually legible: a
@@ -609,8 +626,10 @@ class _DeepRunTracker:
                 n = len(self._runs)
                 lines_per_run = 3 if n <= 1 else (2 if n == 2 else 1)
 
-            lines = []
+            lines: List[str] = []
+            row_run: Dict[int, str] = {}
             for run_id, info in sorted(self._runs.items()):
+                block_start = len(lines)
                 status_icon = "▶" if info['status'] == 'running' else ("✓" if info['status'] == 'done' else "✗")
                 elapsed = time.time() - info['started']
                 mins, secs = divmod(int(elapsed), 60)
@@ -619,10 +638,17 @@ class _DeepRunTracker:
                 # The SUBGOAL this run is working on: its own prominent (bold cyan) header line so
                 # the user always sees WHAT the live actions below are for. Shown fully (generous cap
                 # vs the old 60 chars that cut sentences mid-word); the renderer wraps if needed.
+                # The currently-selected run (what Alt+D/Tab/a click would open right now) gets a
+                # "▸" marker and a brighter (bold yellow) header instead of plain bold cyan, so it's
+                # visible at a glance which of several concurrent runs is selected.
                 goal = " ".join((info['goal'] or "").split())
                 if len(goal) > 160:
                     goal = goal[:160].rstrip() + "…"
-                lines.append(f"\x1b[1;36m⎅ {goal}\x1b[0m" if goal else "\x1b[1;36m⎅ deep task\x1b[0m")
+                goal_text = goal or "deep task"
+                if run_id == active_run_id:
+                    lines.append(f"\x1b[1;33m▸ ⎅ {goal_text}\x1b[0m")
+                else:
+                    lines.append(f"\x1b[1;36m  ⎅ {goal_text}\x1b[0m")
                 # Status + elapsed sit under the subgoal, then the latest live action lines.
                 lines.append(f"\x1b[2m  {status_icon} {time_str}\x1b[0m")
 
@@ -632,7 +658,10 @@ class _DeepRunTracker:
                         prefix = "  → " if '/' in ol else "    "
                         lines.append(f"{prefix}{ol}")
 
-            return "\n".join(lines)
+                for row in range(block_start, len(lines)):
+                    row_run[row] = run_id
+
+            return "\n".join(lines), row_run
 
     def set_active_run(self, run_id: str) -> bool:
         """Switch to viewing a specific run's detailed progress."""

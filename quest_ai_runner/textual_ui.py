@@ -27,7 +27,7 @@ import shutil
 import threading
 import time
 from collections import OrderedDict
-from typing import Callable, List, Optional, TYPE_CHECKING
+from typing import Callable, Dict, List, Optional, TYPE_CHECKING
 
 from textual import work
 from textual.app import App, ComposeResult
@@ -280,27 +280,51 @@ class DeepActivity(Static):
         super().__init__(*args, **kwargs)
         self._dashboard = ""
         self._n_runs = 0
+        self._line_map: Dict[int, str] = {}  # row (0-based) -> run_id, for click-to-expand
         self.display = False
 
-    def show(self, dashboard: str, n_runs: int = 1) -> None:
+    def show(self, dashboard: str, n_runs: int = 1, line_map: Optional[Dict[int, str]] = None) -> None:
         self._dashboard = dashboard or ""
         self._n_runs = n_runs
+        self._line_map = line_map or {}
         self.display = bool(self._dashboard.strip())
         self.refresh()
 
     def hide(self) -> None:
         self._dashboard = ""
         self._n_runs = 0
+        self._line_map = {}
         self.display = False
         self.refresh()
 
     def render(self):
         if not self._dashboard.strip():
             return Text("")
-        hint = "  [Alt+D] expand & scroll  [Tab] next agent" if self._n_runs > 1 else "  [Alt+D] expand & scroll full output"
+        hint = ("  [Alt+D/click] expand & scroll  [Tab] next agent" if self._n_runs > 1
+                else "  [Alt+D/click] expand & scroll full output")
         t = Text.from_ansi(self._dashboard + f"\x1b[2m\n{hint}\x1b[0m")
         t.no_wrap = False
         return t
+
+    def on_click(self, event) -> None:
+        """Click a run's block to expand it (the same target Alt+D would open for it).
+
+        DeepActivity renders every concurrent run as one shared block of text (no per-run
+        sub-widgets), so a click is hit-tested by ROW against ``_line_map`` (built alongside the
+        dashboard text in ``_DeepRunTracker._render_dashboard``) rather than routed to a child
+        widget. A row with no mapped run (e.g. the trailing hint line) is a no-op and the click
+        bubbles up to the App's default "refocus the prompt" handler.
+        """
+        run_id = self._line_map.get(event.y)
+        if run_id is None:
+            return
+        event.stop()
+        app = self.app
+        app._cur_deep_run = run_id
+        if app._deep_detail.display and app._deep_detail.active_run_id == run_id:
+            app._deep_detail.hide()
+        else:
+            app._open_detail_for(run_id)
 
 
 class DeepDetailPanel(VerticalScroll):
@@ -675,7 +699,12 @@ class QuestAITerminal(App):
         Binding("ctrl+y", "copy_last", "Copy last reply", show=True),
         Binding("alt+d", "toggle_deep_detail", "Expand agent", show=True),
         Binding("alt+c", "toggle_future_context", "Context used", show=True),
-        Binding("tab", "cycle_deep_run", "Next agent", show=True),
+        # priority=True: Textual's Screen has its OWN built-in "tab" binding (app.focus_next,
+        # screen.py) which, being closer to the focused PromptTextArea in the DOM chain, would
+        # otherwise intercept every Tab press before it ever reaches this action (the textarea
+        # itself doesn't consume Tab since tab_behavior="focus"). Priority bindings are checked in
+        # a separate App-down pass BEFORE that normal walk, so this wins regardless of focus.
+        Binding("tab", "cycle_deep_run", "Next agent", show=True, priority=True),
         Binding("pageup", "scroll_up_or_agent", "Scroll up", show=True, priority=True),
         Binding("pagedown", "scroll_down_or_agent", "Scroll down", show=True, priority=True),
     ]
@@ -1391,7 +1420,8 @@ class QuestAITerminal(App):
             self._deep_event_count += 1
             if self._deep_event_count % 10 == 0:
                 n = len(self._deep._runs)
-                self._deep_view.show(self._deep.get_dashboard(), n_runs=n)
+                dashboard, line_map = self._deep.get_dashboard_with_map(active_run_id=self._cur_deep_run)
+                self._deep_view.show(dashboard, n_runs=n, line_map=line_map)
             self._activity.set_status("Executing…")
             # A terminal phase means this deep task is finished: persist its full
             # output to the scrollback transcript now, so it stays readable after

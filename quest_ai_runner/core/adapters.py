@@ -290,6 +290,7 @@ class DeepRunner(Protocol):
         self, *, goal: str, brief: str, model: Optional[str] = None, max_turns: Optional[int] = None,
         emit: Optional[Callable[[ProgressEvent], None]] = None,
         context_preamble: Optional[str] = None,
+        run_id: Optional[str] = None,
     ) -> DeepResult:
         """Run an autonomous worker toward ``goal`` (a written done-standard), bounded by
         ``max_turns``. Return a DeepResult distinguishing met-vs-limit. Never raises.
@@ -306,7 +307,14 @@ class DeepRunner(Protocol):
         so the run executes with that context without mutating any shared runner state. A runner
         that accepts it should prepend it ahead of its own configured preamble (or use it in
         place of one). Like ``emit``, it is passed ONLY to runners whose ``run_goal`` accepts it,
-        so older signatures keep working and callers that pass nothing see prior behaviour."""
+        so older signatures keep working and callers that pass nothing see prior behaviour.
+
+        ``run_id`` (optional) is the STABLE id for this subgoal's whole retry sequence (the
+        orchestrator generates it once per subgoal, before its first attempt). A runner that
+        streams ``emit`` events should tag every event from every retry with this SAME id, since a
+        retry may spawn an entirely new underlying process/session — without a stable id, a
+        consumer's dashboard would otherwise show each retry as a separate duplicate run for what
+        is really one ongoing subgoal. Passed ONLY to runners whose ``run_goal`` accepts it."""
 
 
 @runtime_checkable
@@ -740,7 +748,7 @@ class ModelProviderBase(abc.ABC):
 class DeepRunnerBase(abc.ABC):
     @abc.abstractmethod
     def run_goal(self, *, goal, brief, model=None, max_turns=None, emit=None,
-                 context_preamble=None) -> DeepResult: ...
+                 context_preamble=None, run_id=None) -> DeepResult: ...
 
 
 class EscalationSinkBase(abc.ABC):

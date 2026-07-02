@@ -35,6 +35,23 @@ All notable changes to this project are documented here. The format is based on
   at turn end. They now render through the same panel via `_build_shallow_context_bullets`.
 
 ### Fixed
+- **Named deep-runner registry (`deep_runners` + `deep_runner_classifier`) silently never
+  executed.** Several gates that decide whether the orchestrator can carry out deep work
+  (`_run_deep`'s "no runner configured" bail-out, the broken-promise guard's remediation, the
+  overseer's answer-checkpoint escalation, and the "answer describes/claims unexecuted work"
+  safety nets) all tested `self.deep_runner is not None`. That was correct for the single-runner
+  wiring style, but a consumer using the newer named registry (`deep_runner=None` plus
+  `deep_runners`/`deep_runner_classifier`, e.g. one runner for in-app data ops and one for
+  open-ended tasks) has real execution capability that these checks didn't see — so a `deep` plan,
+  or a safety net trying to defer to `deep` after an answer merely described the action, silently
+  did nothing. Separately, the emit/run_id/context_preamble capability checks were computed against
+  `self.deep_runner` (always `None` for a named-registry consumer) instead of the runner actually
+  selected by the classifier, so even when execution DID happen its exec events (generated code,
+  raw output) never reached the live stream. Added `_has_deep_execution_capability()` as the one
+  place that answers "can we run deep work at all" and used it at every gate; capability checks
+  now run against the resolved per-task runner. Also fixed a latent crash in the exec-event debug
+  log line (`ev.text` can legitimately be `None`) that this fix newly exercises. Tested in
+  `tests/test_orchestrator_named_runner_registry.py`.
 - **Poller: `claim()` returned an ambiguous `{}` on failure, indistinguishable from a
   successful-but-empty response.** It now returns `None` on failure and the poller only marks a
   task's signature handled after a successful claim, so a failed claim (already claimed elsewhere,
@@ -55,6 +72,23 @@ All notable changes to this project are documented here. The format is based on
 - **`interactive.py`'s deprecation warning fired on import**, including when `textual_ui.py`
   imports names from it (which is the recommended path), rather than only when the deprecated ANSI
   rendering path actually runs. Moved to `InteractiveSession.run()`.
+- **Deep-run dashboard showed the same subgoal as multiple duplicate entries while it retried.**
+  The session monitor derived each `EVENT_EXEC`'s `run_id` from the Claude Code session file it was
+  watching, but a retry spawns a brand-new subprocess/session, so each retry got a different id and
+  the consumer's dashboard rendered it as a new, separate deep run. `run_goal` now accepts an
+  optional `run_id`; the orchestrator passes the subgoal's own stable `task_uuid` (generated once,
+  before its first attempt) so every retry reports under the same id. Opt-in via signature
+  inspection like `emit`/`context_preamble`, so runners that don't accept it are unaffected.
+- **Terminal UI: Tab ("next agent") silently did nothing.** Textual's `Screen` has its own
+  built-in `tab` binding (`app.focus_next`) which, sitting closer to the focused prompt in the DOM
+  chain, intercepted every Tab press before it ever reached `cycle_deep_run` (the prompt TextArea
+  itself doesn't consume Tab). The app's `tab` binding is now `priority=True`, which Textual checks
+  in an earlier App-wide pass before that walk, so cycling between concurrent deep runs works
+  again. Also: the collapsed dashboard now marks which run Alt+D/Tab/a click currently targets (a
+  "▸" marker and distinct color on that run's header), and a run's block in the dashboard is now
+  directly clickable (`DeepActivity.on_click` hit-tests the click's row against a `{row: run_id}`
+  map returned by the new `_DeepRunTracker.get_dashboard_with_map()`) to expand that specific run,
+  the same target Alt+D would open for it, instead of only being reachable via Alt+D/Tab.
 
 - **Specificity ranking signal: prefer the exact subject over a same-category sibling, and tell the
   model which is which.** Dense retrieval ranks by topical similarity, so a query about one subject

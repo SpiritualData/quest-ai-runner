@@ -1603,6 +1603,25 @@ def _run_goal_accepts_context_preamble(deep_runner: Any) -> bool:
     return False
 
 
+def _run_goal_accepts_run_id(deep_runner: Any) -> bool:
+    """Whether a DeepRunner's ``run_goal`` accepts a ``run_id`` keyword (or **kwargs).
+
+    Same opt-in discipline as ``_run_goal_accepts_emit``. When accepted, the orchestrator passes
+    the subgoal's own stable ``task_uuid`` as ``run_id`` so every retry (each of which may spawn a
+    brand-new underlying process/session) tags its EVENT_EXEC events with the SAME id — otherwise
+    a consumer's dashboard renders each retry as a new, duplicate deep-run entry for what is really
+    one ongoing subgoal.
+    """
+    try:
+        sig = inspect.signature(deep_runner.run_goal)
+    except (ValueError, TypeError, AttributeError):
+        return False
+    for p in sig.parameters.values():
+        if p.name == "run_id" or p.kind is inspect.Parameter.VAR_KEYWORD:
+            return True
+    return False
+
+
 class _Emitter:
     """Per-run event router. The orchestrator calls ``emit(...)`` / ``status(...)``; this
     forwards a ProgressEvent to the run's ProgressSink (chosen by Mode) and to the legacy
@@ -2611,6 +2630,7 @@ class Orchestrator:
         # We also TEE the emitter so EVENT_EXEC phase ticks are recorded into ``exec_record``
         # (per-subtask) for the broken-promise guard, while still streaming to the live sink.
         wants_emit = emit is not None and _run_goal_accepts_emit(self.deep_runner)
+        wants_run_id = _run_goal_accepts_run_id(self.deep_runner)
         # A per-task ``rep_preamble`` (e.g. an AI rep's pulled persona) and the brain's specific
         # ``gathered`` reads are both forwarded to the deep run as a combined ``context_preamble``,
         # ONLY to a runner whose ``run_goal`` accepts that kwarg (older signatures are untouched).
@@ -2707,6 +2727,12 @@ class Orchestrator:
                                   max_turns=self.cfg.deep_max_turns)
                     if wants_emit:
                         kwargs["emit"] = _emit_one
+                    if wants_run_id:
+                        # task_uuid is generated ONCE per subgoal (before the retry loop below), so
+                        # every attempt -- even one that spawns a brand-new subprocess/session --
+                        # reports under the same id. Without this, a consumer's dashboard would show
+                        # each retry as a new, duplicate deep-run entry for one ongoing subgoal.
+                        kwargs["run_id"] = task_uuid
                     if wants_preamble:
                         preamble_parts = []
                         if rep_preamble:

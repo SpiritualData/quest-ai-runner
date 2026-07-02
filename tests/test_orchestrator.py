@@ -1,4 +1,6 @@
 """Core loop: plan -> read -> re-plan -> answer, plus deep / confirm / cap fallback."""
+from typing import Any, Dict, List
+
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import (
     Orchestrator,
@@ -397,6 +399,38 @@ def test_deep_loop_escalates_model_on_not_met():
                                     deep_model_ladder=["haiku", "sonnet", "opus"],
                                     deep_goal_token_budget=None)).run("fix it")
     assert [c["model"] for c in runner.calls] == ["haiku", "sonnet", "opus"]  # escalated each retry
+
+
+class _RunIdCapturingDeepRunner:
+    """A deep runner whose ``run_goal`` accepts ``run_id`` and records it per call, so a test can
+    assert the orchestrator passes the SAME id across retries of one subgoal."""
+    def __init__(self, met: bool = True, output: str = "attempted"):
+        self._met = met
+        self._output = output
+        self.calls: List[Dict[str, Any]] = []
+
+    def run_goal(self, *, goal, brief, model=None, max_turns=None, run_id=None):
+        from quest_ai_runner.core.adapters import DeepResult
+        self.calls.append({"goal": goal, "brief": brief, "model": model, "run_id": run_id})
+        return DeepResult(met=self._met, output=self._output)
+
+
+def test_deep_retry_reuses_the_same_run_id():
+    # A retry spawns a brand-new subprocess/session under the hood, but it is still the SAME
+    # subgoal -- the orchestrator must pass the same run_id on every attempt so a consumer's
+    # dashboard doesn't render each retry as a duplicate deep-run entry.
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
+        {"met": False, "reason": "no", "next_action": "x"},
+        {"met": True, "reason": "done"},
+    ])
+    runner = _RunIdCapturingDeepRunner()
+    _orch(provider, StubRetrieval(), deep_runner=runner,
+          config=OrchestratorConfig(deep_goal_max_iterations=3)).run("fix it")
+    assert len(runner.calls) == 2, "should have re-run once after verify said not-met"
+    run_ids = [c["run_id"] for c in runner.calls]
+    assert run_ids[0] is not None
+    assert run_ids[0] == run_ids[1], "retries of the same subgoal must share one stable run_id"
 
 
 def test_deep_loop_stops_at_token_budget():

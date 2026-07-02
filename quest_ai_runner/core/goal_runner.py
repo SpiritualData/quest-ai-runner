@@ -409,11 +409,19 @@ def _monitor_claude_session(
     cutoff_time: Optional[float] = None,
     poll_interval: float = 0.1,
     max_wait_seconds: float = 30.0,
+    forced_run_id: Optional[str] = None,
 ) -> None:
     """Monitor Claude Code session files and stream updates via callback.
 
     Runs in a background thread. Polls for new JSONL lines and emits ProgressEvents
     as Claude Code produces output (thinking, tool calls, text, etc.).
+
+    ``forced_run_id``, when given, is used for every emitted event's ``run_id`` instead of
+    deriving one per session file. A goal retry spawns a brand-new subprocess (and therefore a
+    brand-new Claude Code session file each attempt); without a forced id, each attempt would be
+    tagged with a different run_id (the new session file's own stem, when the "TASK N [xxxxxxxx]"
+    marker isn't echoed back in the assistant's reply text), which a consumer's dashboard would
+    then render as a separate, duplicate deep-run entry for what is really one ongoing subgoal.
     """
     _log.info("monitor thread started for working_dir: %s", working_dir)
     if cutoff_time is None:
@@ -494,8 +502,13 @@ def _monitor_claude_session(
                                             if msg_text and msg_text.strip():
                                                 event_count += 1
 
+                                                # A caller-supplied id (the subgoal's stable task_uuid) always
+                                                # wins, so every retry's fresh subprocess/session still reports
+                                                # under the SAME run_id instead of spawning a duplicate entry.
+                                                if forced_run_id:
+                                                    run_id = forced_run_id
                                                 # Extract task UUID from Claude's output (e.g., "TASK 1 [a1b2c3d4]")
-                                                if file_key not in file_session_ids:
+                                                elif file_key not in file_session_ids:
                                                     import re
                                                     match = re.search(r'\[([a-f0-9]{8})\]', msg_text)
                                                     if match:
@@ -569,7 +582,8 @@ class SubprocessGoalRunner(DeepRunner):
     def run_goal(self, *, goal: str, brief: str, model: Optional[str] = None,
                  max_turns: Optional[int] = None,
                  emit: Optional[Callable[[ProgressEvent], None]] = None,
-                 context_preamble: Optional[str] = None) -> DeepResult:
+                 context_preamble: Optional[str] = None,
+                 run_id: Optional[str] = None) -> DeepResult:
         # ``context_preamble`` is an OPTIONAL PER-CALL override of ``self.cfg.context_preamble``.
         # When the orchestrator forwards a per-task preamble (e.g. an AI rep's pulled persona), it
         # is used for THIS run only; otherwise the runner's configured base preamble applies, so
@@ -621,6 +635,7 @@ class SubprocessGoalRunner(DeepRunner):
             monitor_thread = threading.Thread(
                 target=_monitor_claude_session,
                 args=(self.cfg.working_dir, emit, stop_monitor, cutoff_time),
+                kwargs={"forced_run_id": run_id},
                 daemon=True
             )
             monitor_thread.start()

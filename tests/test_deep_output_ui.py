@@ -118,6 +118,117 @@ def test_dashboard_tightens_with_more_concurrent_runs():
     assert len(out3) == 1  # three+ runs -> 1 line each
 
 
+def test_dashboard_line_map_hit_tests_each_runs_own_rows():
+    # get_dashboard_with_map returns a {row: run_id} map alongside the text so a click on the
+    # dashboard can be routed to the specific run whose block that row falls in.
+    t = _DeepRunTracker()
+    t.add_run("r1", "Goal one")
+    t.update_run_output("r1", "r1 output")
+    t.add_run("r2", "Goal two")
+    t.update_run_output("r2", "r2 output")
+    text, line_map = t.get_dashboard_with_map()
+    lines = text.splitlines()
+    # Every rendered row is covered, and the two runs are sorted into two contiguous blocks.
+    assert set(line_map.values()) == {"r1", "r2"}
+    assert len(line_map) == len(lines)
+    # The row carrying each run's own output line maps to that run, not the other one.
+    r1_output_row = next(i for i, ln in enumerate(lines) if "r1 output" in ln)
+    r2_output_row = next(i for i, ln in enumerate(lines) if "r2 output" in ln)
+    assert line_map[r1_output_row] == "r1"
+    assert line_map[r2_output_row] == "r2"
+    # And the header rows for each run's own goal map correctly too.
+    r1_header_row = next(i for i, ln in enumerate(lines) if "Goal one" in ln)
+    r2_header_row = next(i for i, ln in enumerate(lines) if "Goal two" in ln)
+    assert line_map[r1_header_row] == "r1"
+    assert line_map[r2_header_row] == "r2"
+
+
+def test_dashboard_marks_the_active_run():
+    # The run passed as active_run_id gets a distinct "▸" marker so a user with several concurrent
+    # runs can see, without opening the detail panel, which one Alt+D/Tab/a click would act on.
+    t = _DeepRunTracker()
+    t.add_run("r1", "Goal one")
+    t.add_run("r2", "Goal two")
+    text = t.get_dashboard(active_run_id="r2")
+    lines = text.splitlines()
+    r1_header = next(ln for ln in lines if "Goal one" in ln)
+    r2_header = next(ln for ln in lines if "Goal two" in ln)
+    assert "▸" in r2_header
+    assert "▸" not in r1_header
+
+
+def test_dashboard_with_map_empty_when_no_runs():
+    t = _DeepRunTracker()
+    text, line_map = t.get_dashboard_with_map()
+    assert text == ""
+    assert line_map == {}
+
+
+class _FakeClickEvent:
+    """Minimal stand-in for textual.events.Click: DeepActivity.on_click only reads ``.y`` and
+    calls ``.stop()``, so a full Click construction (which needs a real widget/screen) isn't
+    needed to exercise the hit-test + routing logic."""
+
+    def __init__(self, y: int) -> None:
+        self.y = y
+        self.stopped = False
+
+    def stop(self) -> None:
+        self.stopped = True
+
+
+@pytest.mark.asyncio
+async def test_click_on_dashboard_row_expands_that_runs_detail():
+    # Clicking a specific run's rendered block should open the SAME detail panel Alt+D would open
+    # for it, without needing the run to already be "current" -- unlike Alt+D (which always opens
+    # the current/most-recent run), a click lets the user pick ANY concurrent run directly.
+    app = QuestAITerminal(_FakeSession())
+    async with app.run_test() as pilot:
+        app._deep.add_run("r1", "Goal one")
+        app._deep.update_run_output("r1", "r1 output")
+        app._deep.add_run("r2", "Goal two")
+        app._deep.update_run_output("r2", "r2 output")
+        dashboard, line_map = app._deep.get_dashboard_with_map()
+        app._deep_view.show(dashboard, n_runs=2, line_map=line_map)
+        await pilot.pause()
+
+        r2_row = next(row for row, rid in line_map.items() if rid == "r2")
+        event = _FakeClickEvent(r2_row)
+        app._deep_view.on_click(event)
+        await pilot.pause()
+
+        assert event.stopped is True  # must not bubble to the App's refocus-prompt handler
+        assert app._deep_detail.display is True
+        assert app._deep_detail.active_run_id == "r2"
+
+        # Clicking the SAME run's row again closes the panel (toggle, like Alt+D).
+        event2 = _FakeClickEvent(r2_row)
+        app._deep_view.on_click(event2)
+        await pilot.pause()
+        assert app._deep_detail.display is False
+
+
+@pytest.mark.asyncio
+async def test_click_on_trailing_hint_row_is_a_noop():
+    # The dashboard's last rendered row is the "[Alt+D/click] expand..." hint, not part of any
+    # run's block -- clicking it must not open a (wrong) run, and must leave the click unstopped
+    # so it still bubbles to the App's default "refocus the prompt" handler.
+    app = QuestAITerminal(_FakeSession())
+    async with app.run_test() as pilot:
+        app._deep.add_run("r1", "Goal one")
+        dashboard, line_map = app._deep.get_dashboard_with_map()
+        app._deep_view.show(dashboard, n_runs=1, line_map=line_map)
+        await pilot.pause()
+
+        hint_row = max(line_map.keys()) + 1
+        event = _FakeClickEvent(hint_row)
+        app._deep_view.on_click(event)
+        await pilot.pause()
+
+        assert event.stopped is False
+        assert app._deep_detail.display is False
+
+
 # --- per-task output persistence ------------------------------------------
 
 @pytest.mark.asyncio
