@@ -10,27 +10,78 @@ All notable changes to this project are documented here. The format is based on
 - **Minimal-intervention overseer.** A new, off-by-default `Orchestrator` capability
   (`core/overseer.py`): a high-quality model reads a cheap, hard-capped digest of the current run
   (never the full gathered text) and returns exactly one signal, almost always `proceed`. Consulted
-  at two points, after each plan step (`overseer_every_steps` cadence) and once at the answer
-  checkpoint with the draft answer included, both capped by `overseer_max_signals` per run. A
+  at two points (both non-blocking; see below), after each "worth a look" plan step and once at the
+  answer checkpoint with the draft answer included, both capped by `overseer_max_signals` per run. A
   `redirect` feeds one short course-correction hint back to the next plan; `answer_now` stops
-  reading and answers with what's gathered; `escalate` hands the request to deep execution. Fails
-  safe on any error (degrades to `proceed`) and is byte-for-byte inert when off (the default). See
-  [docs/overseer.md](docs/overseer.md). Tested in `tests/test_overseer.py` (14 tests) plus wiring
-  coverage; the existing orchestrator/runner/UI tests pass unchanged.
+  reading and answers with what's gathered; `escalate_deep` hands ROUTINE work to deep execution;
+  `escalate_human` hands a genuine HUMAN-ONLY fork to a confirm/decision-request. Fails safe on any
+  error (degrades to `proceed`) and is byte-for-byte inert when off (the default, and never spawns a
+  thread when off). See [docs/overseer.md](docs/overseer.md). Tested in `tests/test_overseer.py`
+  plus wiring coverage; the existing orchestrator/runner/UI tests pass unchanged.
+- **`run()` now ALWAYS derives a checkable goal condition, not just for anaphoric follow-ups.**
+  This is a core `Orchestrator.run()` STAGE 1 behavior change, distinct from the overseer feature
+  above (though it feeds the overseer's `RESOLVED AS` field). Previously, `goal_condition` was only
+  computed (via an LLM rewrite) when a cheap keyword check said the message leaned on conversation
+  context; a self-contained message got zero LLM calls and `goal_condition` defaulted to the raw
+  text unchanged. Context-FETCHING (pulling conversation history to resolve anaphora) stays exactly
+  as conditional as before -- that is unchanged. But goal-condition ESTABLISHMENT (deriving a
+  concrete, checkable done-standard, mirroring the deep planner's own `goal` field) is now a
+  SEPARATE, always-on concern: a self-contained message now also gets ONE cheap-tier
+  (`resolve_tier("fast")`, never "best") LLM call via the new `Orchestrator._derive_goal_condition`,
+  which restates the message as a done-standard or echoes it unchanged if it already is one. Fails
+  safe to the raw message on any error. **This adds one LLM round trip to every turn that previously
+  had zero** (a real latency/cost tradeoff, deliberately chosen so the overseer and any other
+  goal-condition consumer always sees a checkable standard, not just a disambiguated sentence).
+  Tested in `tests/test_goal_condition_derivation.py` and updated
+  `tests/test_conversation_understanding.py` cases; several existing tests' expected `answer_calls`/
+  `answer_models` counts were bumped by one to account for the new call.
 
 ### Changed
-- **Overseer hook A is now non-blocking.** The overseer's provider call runs on a per-run
-  background `ThreadPoolExecutor` (mirroring context assembly) instead of blocking the run loop:
-  hook A submits the consult on a "read" plan and keeps walking, then polls the result at the top
-  of the next plan step and applies `redirect`/`answer_now`/`escalate` one step late. Hook B (the
-  final answer checkpoint) still waits, but only up to `overseer_answer_checkpoint_timeout_seconds`
-  (default 8s). New config: `overseer_poll_timeout_seconds` (default `0.0` = never block) and
-  `overseer_answer_checkpoint_timeout_seconds`. Off (`overseer=False`) still spawns zero threads.
-- **Overseer digest is more grounded.** The digest's `REQUEST` line now uses the resolved
-  `goal_condition` (anaphora rewritten) instead of the raw message, and a new `QUALITY BAR` line
-  carries the run's `quality_standards` when present, so the overseer judges the actual request
-  against its completion bar. The old `READING: … used` line is relabeled `AGENT'S READ BUDGET: …`
-  and clarifies it is the agent's cumulative reads, not the digest's own size.
+- **Both overseer hooks are now non-blocking.** The overseer's provider call runs on a per-run
+  background `ThreadPoolExecutor` (mirroring context assembly) instead of blocking the run loop.
+  Hook A submits on a "read" plan and keeps walking, then polls the result at the top of the next
+  plan step and applies `redirect`/`answer_now`/`escalate_deep`/`escalate_human` one step late. Hook
+  B used to wait synchronously up to a short bound on EVERY answer; it now does the same
+  non-blocking check as hook A and, if unresolved, ships the draft immediately and hands the pending
+  consult to a background finisher (`overseer_background_finish_timeout_seconds`, default 30s) that
+  raises a real decision-request for a late `escalate_human` and records a late `EVENT_OVERSEER` for
+  `redirect`/`escalate_deep` (best-effort; does not auto-launch unattended deep execution). New/
+  changed config: `overseer_poll_timeout_seconds` (default `0.0` = never block, used by both hooks),
+  `overseer_background_finish_timeout_seconds` (replaces the old
+  `overseer_answer_checkpoint_timeout_seconds`). Off (`overseer=False`) still spawns zero threads.
+- **Escalate split into `escalate_deep` / `escalate_human`.** The single `escalate` signal
+  conflated "this needs real execution" (routine, AI-doable) with "this needs a human" (identity,
+  irreversible/authorization, genuine ambiguity). They are now distinct signals; `escalate_human`
+  routes through the confirm/decision-request mechanism instead of `_run_deep`, and the prompt is
+  written to keep it rare, mirroring "AI acts first, only genuine forks go to a human."
+- **`OVERSEER_PROMPT`'s explicit "no em dashes in your output" rule removed** (a deliberate,
+  narrowly-scoped exception, requested for this specific model-facing instruction only; it does not
+  change the repo-wide no-em-dash copy convention). The authored prompt TEXT itself is still checked
+  to contain no literal em dash (`tests/test_overseer.py::test_overseer_prompt_authored_text_has_no_em_dash`).
+- **Cheap, non-LLM pre-filter gate for hook A.** Hook A no longer submits on a blind fixed cadence:
+  a free heuristic (`_oversee_worth_a_look`) only lets it submit when consecutive reads cross
+  `overseer_gate_min_consecutive_reads` (default 2), the plan repeats the previous step's action+goal
+  (`overseer_gate_repeat_plan`, default on), or time/read spend crosses `overseer_gate_spend_fraction`
+  (default 0.6) of budget. Hook B is not gated (it is a one-time final check, not a cadence).
+- **Overseer digest: grounded request, conversation history, and truncation-order fix.** The digest
+  now shows `CURRENT USER REQUEST` (the raw, verbatim message, always) plus an additional
+  `RESOLVED AS` line only when the resolved `goal_condition` differs (never a silent replacement); a
+  `QUALITY BAR` line carries `quality_standards` when present; a new `RECENT CONVERSATION` section
+  shows a few PRIOR turns in this same conversation (deduped against the current request); a new
+  `PRIOR ESCALATIONS THIS CONVERSATION` section (always present, "none yet" by default) surfaces
+  earlier-turn escalations via a new `run(prior_escalations=...)` param; and the old flat "GATHERED"
+  bullets are replaced by a numbered, kind-tagged `OPERATIONS THIS TURN` section. The digest's
+  decision-critical fields are now PROTECTED from truncation: the sheddable history sections
+  (`RECENT CONVERSATION`/`PRIOR ESCALATIONS`/`OPERATIONS THIS TURN`) are capped and dropped first, so
+  `PASS`/`CURRENT PLAN`/`RATIONALE`/`SPEND`/`TIME`/`AGENT'S READ BUDGET` always survive. The old
+  `READING: … used` line is relabeled `AGENT'S READ BUDGET: …`, clarifying it is the agent's own
+  cumulative reads, not the digest's own size. Default `overseer_digest_char_budget` raised
+  1200 -> 1600 to accommodate the new essential sections.
+- **Overseer tool schema trimmed for token efficiency.** `ClaudeCliProvider.plan()` appends the
+  entire `OVERSEE_TOOL` JSON schema as inline text on EVERY consultation (it cannot force native
+  `tool_choice`). Its field descriptions duplicated `OVERSEER_PROMPT`'s prose; they are now bare
+  mechanical minimums (full semantics live only in the prompt), cutting the appended schema block
+  from ~597 to ~318 characters (~47% smaller) per consultation.
 - **`quest-ai-runner chat --check`** validates chat's prerequisites (a reachable model provider,
   and `QAR_CORPUS_ROOT` / `QAR_CONTEXT_CARDS_DIR` if configured) and exits, without opening the
   terminal UI, so a broken setup is caught before launch instead of hanging on a blank screen.

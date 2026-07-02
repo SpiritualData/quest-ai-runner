@@ -1002,7 +1002,10 @@ def test_executor_task_model_field_reaches_provider():
     from quest_ai_runner.core.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
     expected_opus = registry.resolve_tier("opus")
-    assert provider.answer_models == [expected_opus]
+    # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
+    # first, on the cheap "fast" tier (never the hint), before the real, hinted answer call.
+    expected_fast = registry.resolve_tier("fast")
+    assert provider.answer_models == [expected_fast, expected_opus]
 
 
 def test_executor_task_without_model_field_uses_planner_tier():
@@ -1017,7 +1020,10 @@ def test_executor_task_without_model_field_uses_planner_tier():
     from quest_ai_runner.core.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
     expected_balanced = registry.resolve_tier("balanced")  # planner_tier default = balanced
-    assert provider.answer_models == [expected_balanced]
+    # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
+    # first, on the cheap "fast" tier, before the real answer call.
+    expected_fast = registry.resolve_tier("fast")
+    assert provider.answer_models == [expected_fast, expected_balanced]
 
 
 def test_executor_task_model_none_is_same_as_absent():
@@ -1032,4 +1038,7 @@ def test_executor_task_model_none_is_same_as_absent():
     from quest_ai_runner.core.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
     expected_sonnet = registry.resolve_tier("sonnet")
-    assert provider.answer_models == [expected_sonnet]
+    # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
+    # first, on the cheap "fast" tier, before the real answer call.
+    expected_fast = registry.resolve_tier("fast")
+    assert provider.answer_models == [expected_fast, expected_sonnet]

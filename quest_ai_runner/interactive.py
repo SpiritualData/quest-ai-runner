@@ -718,13 +718,14 @@ class _TurnRenderer:
             from .core.adapters import (
                 EVENT_CONTEXT, EVENT_STATUS, EVENT_PLAN, EVENT_READ, EVENT_REPLAN,
                 EVENT_PARTIAL, EVENT_EXEC, EVENT_RESULT, EVENT_DECISION,
-                EVENT_MILESTONE, EVENT_DONE,
+                EVENT_MILESTONE, EVENT_DONE, EVENT_UNDERSTANDING,
             )
             self._ev = dict(
                 context=EVENT_CONTEXT, status=EVENT_STATUS, plan=EVENT_PLAN, read=EVENT_READ,
                 replan=EVENT_REPLAN, partial=EVENT_PARTIAL, exec=EVENT_EXEC,
                 result=EVENT_RESULT, decision=EVENT_DECISION,
                 milestone=EVENT_MILESTONE, done=EVENT_DONE,
+                understanding=EVENT_UNDERSTANDING,
             )
         return self._ev
 
@@ -998,6 +999,18 @@ class _TurnRenderer:
             self._panel.stop()
             if text:
                 self._display("milestone", text)
+            self._panel.start()
+        elif t == ev["understanding"]:
+            # Stage 1's resolved goal condition, surfaced as soon as it's ready (well before any
+            # plan or answer). Informational and non-blocking (more work follows), so the spinner
+            # resumes afterward, and it gets its own look (cyan diamond) distinct from the yellow
+            # decision marker below.
+            self._panel.stop()
+            if text:
+                c = self._c
+                if c._rich:    c._rich.print(f"\n  [cyan]◆[/] {text}", highlight=False)
+                elif c._color: c.line(f"\n  {_a(_CYAN, '◆')} {text}")
+                else:          c.line(f"\n  ◆ {text}")
             self._panel.start()
         elif t == ev["result"]:
             if not self._partial_started and text:

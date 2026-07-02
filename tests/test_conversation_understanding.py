@@ -353,32 +353,44 @@ def test_step1_clarify_short_circuits_without_running_planner():
     assert EVENT_UNDERSTANDING not in sink.types()
 
 
-def test_self_contained_message_skips_step1_entirely():
-    """A concrete, self-contained request must NOT hit the conversation store or the resolve LLM
-    (zero added latency on the common path)."""
+def test_self_contained_message_skips_context_fetch_but_still_derives_goal_condition():
+    """A concrete, self-contained request must NOT hit the conversation store or the context-FETCH
+    resolve LLM (Step 1's context-fetch stays conditional -- zero added latency on the common path,
+    unchanged by Fix 13). It STILL gets Fix 13's always-on, cheap goal-condition DERIVATION call (a
+    separate concern from context-fetching): for an already-concrete instruction that call returns
+    it UNCHANGED, so goal_condition == user_message and no EVENT_UNDERSTANDING fires."""
     store = _FakeStore()
+    message = "Please update the onboarding guide to add the SSO setup section"
     provider = _ScriptedProvider(
-        answers=[],  # if Step 1 ran it would consume a scripted resolve answer; it must not.
+        # The context-fetch resolve LLM must NOT run (would consume this if it did). The cheap
+        # goal-condition derivation call DOES run and is scripted to echo the message unchanged,
+        # since it is already a clear, concrete instruction.
+        answers=[message],
         decisions=[{"action": "answer", "rationale": "ok"}],
     )
     sink = _RecordingSink()
     orch = _orch(provider, conversation_store=store)
-    res = orch.run("Please update the onboarding guide to add the SSO setup section",
-                   conv_id="conv1", sink=sink, mode=Mode.LIVE)
+    res = orch.run(message, conv_id="conv1", sink=sink, mode=Mode.LIVE)
 
     assert res.kind == "answer"
-    assert store.current_calls == []          # Step 1 never pulled context
-    assert EVENT_UNDERSTANDING not in sink.types()
+    assert store.current_calls == []          # context-FETCH never pulled conversation context
+    assert EVENT_UNDERSTANDING not in sink.types()  # unchanged goal_condition -> no event
 
 
-def test_no_conversation_store_means_no_step1():
-    """With no store wired, Step 1 is inert even for an ambiguous message (back-compat)."""
+def test_no_conversation_store_means_no_context_fetch_but_goal_condition_still_derived():
+    """With no store wired, Step 1's context-FETCH is inert even for an ambiguous message
+    (back-compat: the conversation is never consulted, unchanged by Fix 13). Fix 13's cheap
+    goal-condition DERIVATION call still runs (it needs no conversation history), so
+    EVENT_UNDERSTANDING fires when its reply differs from the raw message (this stub's generic
+    canned reply does)."""
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
     sink = _RecordingSink()
     orch = _orch(provider)  # no conversation_store
     res = orch.run("ok do it", conv_id="conv1", sink=sink, mode=Mode.LIVE)
     assert res.kind == "answer"
-    assert EVENT_UNDERSTANDING not in sink.types()
+    understanding = [e for e in sink.events if e.type == EVENT_UNDERSTANDING]
+    assert len(understanding) == 1
+    assert understanding[0].data.get("goal_condition") != "ok do it"
 
 
 def test_needs_context_gate_is_conservative():

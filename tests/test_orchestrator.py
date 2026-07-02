@@ -32,7 +32,8 @@ def test_plan_read_then_answer():
     assert retrieval.read_calls == ["README.md"]      # it actually read before answering
     # plan_calls = 2 loop steps + 1 post-answer verification call (answer_goal_max_iterations)
     assert provider.plan_calls == 3
-    assert provider.answer_calls == 1
+    # +1 for Fix 13's always-on cheap goal-condition derivation call (STAGE 1), +1 real answer.
+    assert provider.answer_calls == 2
     # The README content was injected into the grounding the answer saw.
     joined = "\n".join(m["content"] for m in provider.last_answer_messages)
     assert "pricing is $9/mo" in joined
@@ -274,7 +275,9 @@ def test_answer_verified_against_goal_regenerates_when_not_met():
                        guidance=_StubGuidance([card]),
                        config=OrchestratorConfig(answer_goal_max_iterations=2)).run("explain X")
     assert res.kind == "answer"
-    assert provider.answer_calls == 2  # regenerated once after verify said not-met
+    # +1 for Fix 13's always-on cheap goal-condition derivation call (STAGE 1), +1 real answer,
+    # +1 regenerated after verify said not-met.
+    assert provider.answer_calls == 3
 
 
 def test_answer_verified_met_no_regeneration():
@@ -290,7 +293,9 @@ def test_answer_verified_met_no_regeneration():
                        guidance=_StubGuidance([card]),
                        config=OrchestratorConfig(answer_goal_max_iterations=2)).run("explain X")
     assert res.kind == "answer"
-    assert provider.answer_calls == 1  # verified met on the first answer, no wasted regeneration
+    # +1 for Fix 13's always-on cheap goal-condition derivation call (STAGE 1), +1 real answer
+    # verified met on the first try, no wasted regeneration.
+    assert provider.answer_calls == 2
 
 
 def test_answer_not_verified_without_a_quality_bar():
@@ -302,7 +307,8 @@ def test_answer_not_verified_without_a_quality_bar():
     res = _orch(provider, StubRetrieval(),
                 config=OrchestratorConfig(answer_goal_max_iterations=2)).run("explain X")
     assert res.kind == "answer"
-    assert provider.answer_calls == 1
+    # +1 for Fix 13's always-on cheap goal-condition derivation call (STAGE 1), +1 real answer.
+    assert provider.answer_calls == 2
 
 
 def test_answer_goal_verifier_none_retries_not_silently_accepts():
@@ -828,7 +834,10 @@ def test_model_hint_overrides_planner_tier_on_answer():
     from quest_ai_runner.core.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
     expected_opus = registry.resolve_tier("opus")
-    assert provider.answer_models == [expected_opus]
+    # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
+    # first, on the cheap "fast" tier (never the hint) before the real, hinted answer call.
+    expected_fast = registry.resolve_tier("fast")
+    assert provider.answer_models == [expected_fast, expected_opus]
 
 
 def test_model_hint_does_not_touch_planner_calls():
@@ -858,7 +867,10 @@ def test_model_hint_absent_leaves_planner_tier_unchanged():
 
     res = _orch(provider, retrieval).run("q")  # no model_hint
     assert res.kind == "answer"
-    assert provider.answer_models == [expected_haiku]
+    # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
+    # first, on the cheap "fast" tier, before the real answer call.
+    expected_fast = registry.resolve_tier("fast")
+    assert provider.answer_models == [expected_fast, expected_haiku]
 
 
 def test_model_hint_on_deep_step():
@@ -890,7 +902,11 @@ def test_model_hint_unknown_value_degrades_gracefully():
     from quest_ai_runner.core.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
     expected_fallback = registry.resolve_tier("xyzzy")  # == sonnet fallback
-    assert provider.answer_models == [expected_fallback]
+    # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call
+    # first, on the cheap "fast" tier (unaffected by the answer-step hint/fallback), before the
+    # real answer call.
+    expected_fast = registry.resolve_tier("fast")
+    assert provider.answer_models == [expected_fast, expected_fallback]
 
 
 # --- attachments threading (multimodal) -------------------------------------

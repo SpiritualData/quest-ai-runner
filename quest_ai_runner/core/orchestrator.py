@@ -520,27 +520,42 @@ class OrchestratorConfig:
     # tiny signal, watching the loop the way a person's awareness watches their own body walk: almost
     # always silent, occasionally sending one small course correction. It is consulted at two points
     # (inside the plan loop, and once at the answer checkpoint) and can redirect (nudge the next plan
-    # with one hint), answer_now (stop reading and answer), or escalate (hand off to deep). OFF by
-    # default; when off the run is byte-for-byte identical (zero overseer calls, no events). The
-    # overseer NEVER raises: any failure degrades to "proceed" (do nothing).
+    # with one hint), answer_now (stop reading and answer), escalate_deep (hand off to deep execution,
+    # routine AI-doable work) or escalate_human (a genuine human-only fork). OFF by default; when off
+    # the run is byte-for-byte identical (zero overseer calls, no events, no threads). The overseer
+    # NEVER raises: any failure degrades to "proceed" (do nothing).
     overseer: bool = False
     overseer_tier: str = "best"          # the (high-quality) tier the overseer model resolves to
     overseer_every_steps: int = 1        # consult once every N plan steps (>= overseer_min_step)
     overseer_max_signals: int = 3        # hard cap on overseer consultations per run (both hooks)
     overseer_min_step: int = 1           # earliest plan step (1-based) the overseer may run
-    overseer_digest_char_budget: int = 1200  # hard cap on the digest string fed to the overseer
-    # NON-BLOCKING overseer (hook A): the overseer's provider call runs in a BACKGROUND thread and
-    # its result is polled at the top of the NEXT plan step, so consulting it never stalls the loop.
-    # 0.0 = a pure, non-blocking ``future.done()`` check (the design default: never block; if the
-    # consult has not resolved yet, proceed and re-check next step). A small positive value lets the
-    # poll briefly WAIT for a still-running consult; it always degrades to proceed on timeout so it
-    # can never hang the run. Used mainly by tests to make the async apply deterministic.
+    overseer_digest_char_budget: int = 1600  # hard cap on the digest string fed to the overseer
+    # NON-BLOCKING overseer (hooks A and B; see docs/overseer.md). The overseer's provider call runs
+    # in a BACKGROUND thread and its result is polled with this timeout, so consulting it never
+    # stalls the loop or the answer. 0.0 = a pure, non-blocking ``future.done()`` check (the design
+    # default: never block). A small positive value lets the poll briefly WAIT for a still-running
+    # consult; it always degrades to proceed (hook A) / ships the draft as-is (hook B) on timeout, so
+    # it can never hang the run. Used mainly by tests to make the async apply deterministic.
     overseer_poll_timeout_seconds: float = 0.0
-    # Hook B (final answer checkpoint) is the LAST look before the user sees the answer, so unlike
-    # hook A there is no later step to apply a correction one step late. It therefore DOES wait for
-    # its consult, but only up to this strict short bound; on timeout the draft answer is accepted
-    # (degrade to proceed). This caps the worst-case latency the overseer can add at the very end.
-    overseer_answer_checkpoint_timeout_seconds: float = 8.0
+    # Hook B (final answer checkpoint) used to WAIT synchronously up to a short bound before shipping
+    # the answer. It no longer does (Fix 11): it now does the SAME non-blocking check as hook A
+    # (``overseer_poll_timeout_seconds``) and, if the consult has not resolved yet, ships the draft
+    # immediately and hands the pending future to a BACKGROUND finisher instead of blocking every
+    # single answer. This bounds how long that background finisher will wait before giving up
+    # entirely (a late resolution past this point is simply dropped; nothing is waiting on it).
+    overseer_background_finish_timeout_seconds: float = 30.0
+    # CHEAP, NON-LLM PRE-FILTER GATE for hook A (Fix 12): submitting a consult to the expensive
+    # overseer model on a blind fixed cadence wastes calls on runs that are obviously fine. Hook A
+    # only submits when at least one free signal suggests the step is actually worth a look:
+    #   - consecutive_reads has crossed ``overseer_gate_min_consecutive_reads`` (a stuck read loop),
+    #   - the plan repeats the previous step's action+goal (``overseer_gate_repeat_plan``, a sign of
+    #     looping on the same idea), or
+    #   - elapsed time OR gathered-read volume has crossed ``overseer_gate_spend_fraction`` of budget.
+    # Hook B (the final answer checkpoint) is NOT gated by this -- it always consults (subject only
+    # to overseer_max_signals), since it is a one-time final check, not a cadence.
+    overseer_gate_min_consecutive_reads: int = 2
+    overseer_gate_repeat_plan: bool = True
+    overseer_gate_spend_fraction: float = 0.6
     # ASYNC POST-DEEP CONTEXT-CARD UPDATER. After a deep task finishes (answer already delivered),
     # an ASYNC, best-effort LLM process updates THIS user's context cards to prepare for future
     # similar requests: it appends a "future context" instruction to each deep brief, parses that
@@ -591,7 +606,8 @@ class OrchestratorResult:
     tokens_out: int = 0
     # Why the loop exited. One of: "verified" | "max_turns" | "escalated_deep" | "read_budget" |
     # "unverified" | "deep_met" | "deep_not_met" | "clarify" | "confirm" |
-    # "overseer_answer_now" | "overseer_escalated" (set when an overseer signal decided the path).
+    # "overseer_answer_now" | "overseer_escalated_deep" | "overseer_escalated_human" (set when an
+    # overseer signal decided the path).
     exit_reason: str = ""
     # The last goal-verification verdict: {"met": bool, "reason": str, "next_action": str, ...}.
     # Populated whenever _verify_goal ran. None when goal verification did not run this turn.
@@ -1003,7 +1019,9 @@ RESOLVE_REQUEST_PROMPT = """\
 You resolve what a user's latest message means so downstream work targets the right thing.
 You are given the CURRENT conversation (and sometimes OTHER past conversations that may be
 unrelated), plus the user's latest message. Rewrite the latest message as ONE self-contained
-instruction: a goal condition stating what would satisfy the request.
+instruction: a goal condition, a concrete CHECKABLE done-standard stating what would satisfy the
+request (the single condition that means the request is fully addressed), not just a
+pronouns-filled-in restatement.
 
 Resolve references ("it", "that", "the first one", "the second one", "do it", "yes") against the
 CURRENT conversation. When the CURRENT conversation contains the referent, resolve it: it lists
@@ -1025,6 +1043,25 @@ Do not use em dashes. Be concise and concrete.
 {conv_context}
 
 Latest user message: {user_message}
+"""
+
+# Fix 13: for a SELF-CONTAINED input (the cheap keyword check said it does NOT lean on conversation
+# context), derive a concise, CHECKABLE done-standard from the message ALONE, no conversation history
+# needed. This runs on EVERY turn that skips the context-fetch path above, so it must stay CHEAP (a
+# fast/balanced tier, never "best") -- see ``_derive_goal_condition``.
+DERIVE_GOAL_CONDITION_PROMPT = """\
+Restate the user's message below as ONE short, concrete, CHECKABLE done-standard: the single
+condition that would mean this request has been fully addressed. Do not add requirements the user
+did not ask for, do not change what was asked, and do not invent extra steps. If the message is
+already a clear, checkable done-standard as written (e.g. a plain question, an already-concrete
+instruction), reply with it UNCHANGED.
+
+Rules:
+- Reply with ONLY the restated instruction, nothing else. No preamble, no explanation.
+- Keep it concise: one sentence, plain and concrete.
+- Do not use em dashes.
+
+User message: {user_message}
 """
 
 # Synthesize the FINAL user-facing reply after a deferred deep run, grounding it in what the deep
@@ -1406,6 +1443,88 @@ def _summarize_observation(obs: Dict[str, Any]) -> str:
     if kind == "error":
         return f"(gather error: {obs.get('error')})"
     return _oneline(kind)
+
+
+def _oversee_worth_a_look(*, consecutive_reads: int, plan_repeats_prev: bool,
+                          elapsed_seconds: float, max_elapsed_seconds: float,
+                          gathered_chars: int, max_gathered_chars: int,
+                          min_consecutive_reads: int, gate_repeat_plan: bool,
+                          spend_fraction: float) -> bool:
+    """FREE, non-LLM heuristic gate (Fix 12): decides whether hook A's current step looks risky
+    enough to be worth waking the expensive overseer model at all, instead of consulting on a blind
+    fixed cadence regardless of how the run is actually going. True when ANY cheap signal suggests
+    drift, looping, or budget pressure:
+      - ``consecutive_reads`` has crossed ``min_consecutive_reads`` (a stuck read loop), or
+      - the plan repeats the previous step's action+goal verbatim (``plan_repeats_prev``, when
+        ``gate_repeat_plan`` is enabled -- looping on the same idea), or
+      - elapsed time OR gathered-read volume has crossed ``spend_fraction`` of its budget.
+    Pure, never raises (a bad input just fails every check -> False -> skip the consult, safe)."""
+    try:
+        if consecutive_reads >= max(1, int(min_consecutive_reads)):
+            return True
+        if gate_repeat_plan and plan_repeats_prev:
+            return True
+        if max_elapsed_seconds and (elapsed_seconds / max_elapsed_seconds) >= spend_fraction:
+            return True
+        if max_gathered_chars and (gathered_chars / max_gathered_chars) >= spend_fraction:
+            return True
+        return False
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _recent_conversation_turns(conv_ctx_text: str, *, exclude: Optional[List[str]] = None,
+                               max_turns: int = 3) -> List[str]:
+    """Extract the last few PRIOR user turns from THIS conversation's rendered context block (the
+    ``conv_ctx_text`` ``_understand_input`` builds), for the overseer digest's RECENT CONVERSATION
+    section (Fix 5a). Restricted to the "CURRENT CONVERSATION" block only -- never "OTHER PAST
+    CONVERSATIONS" (a genuinely different conversation is a different concept, out of scope here).
+    Excludes any turn matching one of ``exclude`` (the current turn's own request, raw and/or
+    resolved) so it is never duplicated against CURRENT USER REQUEST / RESOLVED AS. Never raises."""
+    try:
+        if not conv_ctx_text:
+            return []
+        marker = "=== CURRENT CONVERSATION ==="
+        idx = conv_ctx_text.find(marker)
+        if idx == -1:
+            return []
+        block = conv_ctx_text[idx + len(marker):]
+        end_idx = block.find("\n=== ")
+        if end_idx != -1:
+            block = block[:end_idx]
+        excl_norm = {" ".join(str(e or "").split()).strip().lower() for e in (exclude or []) if e}
+        turns: List[str] = []
+        for raw_line in block.splitlines():
+            line = raw_line.strip()
+            if not line.upper().startswith("USER:"):
+                continue
+            turn = line[len("USER:"):].strip()
+            if not turn:
+                continue
+            if " ".join(turn.split()).lower() in excl_norm:
+                continue
+            turns.append(turn)
+        n = max(0, int(max_turns))
+        return turns[-n:] if n else []
+    except Exception:  # noqa: BLE001
+        return []
+
+
+def _prior_escalation_lines(prior_escalations: Optional[List[Dict[str, Any]]]) -> List[str]:
+    """Format the caller-supplied ``prior_escalations`` history (Fix 7) into one-line strings for
+    the digest's PRIOR ESCALATIONS THIS CONVERSATION section, e.g. "1: escalated to deep, outcome:
+    deep_met". Tolerant of missing/odd keys. Never raises."""
+    try:
+        lines: List[str] = []
+        for i, e in enumerate(prior_escalations or [], start=1):
+            if not isinstance(e, dict):
+                continue
+            kind = str(e.get("kind") or "unknown")
+            outcome = str(e.get("outcome") or e.get("exit_reason") or "unknown")
+            lines.append(f"{i}: escalated to {kind}, outcome: {outcome}")
+        return lines
+    except Exception:  # noqa: BLE001
+        return []
 
 
 def _render_gathered_for_planner(gathered: List[Dict[str, Any]],
@@ -3367,45 +3486,77 @@ class Orchestrator:
 
     # --- minimal-intervention overseer ---------------------------------------
 
-    def _build_oversee_digest(self, *, user_message: str, step: int,
-                              plan: Optional[PlanDecision], gathered: List[Dict[str, Any]],
-                              started: float, draft_answer: Optional[str] = None,
-                              quality_standards: Optional[str] = None) -> str:
+    def _run_spend_metrics(self, gathered: List[Dict[str, Any]],
+                           started: float) -> "Tuple[int, int, float]":
+        """Cheap, pure metrics shared by the digest builder AND the Fix-12 pre-filter gate, computed
+        once so they are never duplicated: ``(gathered_chars, consecutive_reads, elapsed_seconds)``.
+        Never raises."""
+        gathered_chars = 0
+        consecutive_reads = 0
+        try:
+            gathered_chars = sum(len(o.get("text", "")) + len(str(o.get("hits", "")))
+                                 for o in gathered if isinstance(o, dict))
+            consecutive_reads = sum(1 for o in gathered
+                                    if isinstance(o, dict) and o.get("kind") in ("read", "grep"))
+        except Exception:  # noqa: BLE001
+            pass
+        elapsed_seconds = 0.0
+        try:
+            elapsed_seconds = time.monotonic() - started
+        except Exception:  # noqa: BLE001
+            pass
+        return gathered_chars, consecutive_reads, elapsed_seconds
+
+    def _oversee_operation_lines(self, gathered: List[Dict[str, Any]],
+                                 window: int = 8) -> "Tuple[List[str], int]":
+        """Build the ``operations``/``operations_total`` pair for the digest's OPERATIONS THIS TURN
+        section (Fix 5b): each entry tagged with its observation ``kind`` (read/grep/query/...),
+        e.g. ``"[read] cli.py [head]: found argparse subcommands..."``, reusing the SAME one-line
+        summarizer the planner view uses so the full observation bodies never reach the overseer.
+        ``operations_total`` is the TRUE count of operations so far (``operations`` may be a trailing
+        window when the run is long). Never raises."""
+        try:
+            ops_all = [o for o in gathered if isinstance(o, dict)]
+            recent = ops_all[-window:]
+            lines = [f"[{o.get('kind') or 'op'}] {_summarize_observation(o)}" for o in recent]
+            return lines, len(ops_all)
+        except Exception:  # noqa: BLE001
+            return [], 0
+
+    def _build_oversee_digest(self, *, user_message: str, goal_condition: Optional[str] = None,
+                              step: int, plan: Optional[PlanDecision],
+                              gathered: List[Dict[str, Any]], started: float,
+                              draft_answer: Optional[str] = None,
+                              quality_standards: Optional[str] = None,
+                              recent_conversation: Optional[List[str]] = None,
+                              prior_escalations: Optional[List[str]] = None) -> str:
         """Build the cheap, capped overseer digest for the current run state. Pure + synchronous
         (no network): it only summarizes what is already in hand, so it is safe to run inline right
         before submitting the ONE provider call to a background thread. Never raises."""
         cfg = self.cfg
-        # Summarize the last few observations to one line each so the FULL bodies never reach the
-        # overseer (keeps its read cost tiny). Reuses the same summarizer the planner view uses.
-        try:
-            recent = [o for o in gathered if isinstance(o, dict)][-8:]
-            obs_summaries = [_summarize_observation(o) for o in recent]
-        except Exception:  # noqa: BLE001
-            obs_summaries = []
-        gathered_chars = 0
-        try:
-            gathered_chars = sum(len(o.get("text", "")) + len(str(o.get("hits", "")))
-                                 for o in gathered if isinstance(o, dict))
-        except Exception:  # noqa: BLE001
-            gathered_chars = 0
+        gathered_chars, consecutive_reads, elapsed_seconds = self._run_spend_metrics(gathered, started)
+        operations, operations_total = self._oversee_operation_lines(gathered)
         tokens_in = getattr(self.provider, "tokens_in", 0) or 0
         tokens_out = getattr(self.provider, "tokens_out", 0) or 0
         return build_digest(
-            question=user_message,
+            user_message=user_message,
+            goal_condition=goal_condition,
             step=step,
             max_steps=cfg.max_steps,
             plan_action=(plan.action if plan else ""),
             plan_rationale=(plan.rationale if plan else ""),
             plan_goal=(plan.goal if plan else ""),
-            observation_summaries=obs_summaries,
+            recent_conversation=recent_conversation,
+            prior_escalations=prior_escalations,
+            operations=operations,
+            operations_total=operations_total,
             tokens_in=tokens_in,
             tokens_out=tokens_out,
-            elapsed_seconds=(time.monotonic() - started),
+            elapsed_seconds=elapsed_seconds,
             max_elapsed_seconds=cfg.max_elapsed_seconds,
             gathered_chars=gathered_chars,
             max_gathered_chars=cfg.max_gathered_chars,
-            consecutive_reads=sum(1 for o in gathered
-                                  if isinstance(o, dict) and o.get("kind") in ("read", "grep")),
+            consecutive_reads=consecutive_reads,
             draft_answer=draft_answer,
             quality_standards=quality_standards,
             char_budget=cfg.overseer_digest_char_budget,
@@ -3413,19 +3564,47 @@ class Orchestrator:
 
     def _submit_oversee(self, executor: ThreadPoolExecutor, *, user_message: str, step: int,
                         plan: Optional[PlanDecision], gathered: List[Dict[str, Any]],
-                        started: float, draft_answer: Optional[str] = None,
-                        quality_standards: Optional[str] = None) -> Optional[Dict[str, Any]]:
+                        started: float, goal_condition: Optional[str] = None,
+                        draft_answer: Optional[str] = None,
+                        quality_standards: Optional[str] = None,
+                        recent_conversation: Optional[List[str]] = None,
+                        prior_escalations: Optional[List[str]] = None,
+                        prev_plan_signature: Optional[Any] = None,
+                        gate: bool = True) -> Optional[Dict[str, Any]]:
         """FIRE-AND-FORGET consult (Fix 1): build the cheap digest synchronously, then submit the
         ONE overseer provider call to a BACKGROUND thread and return a pending-consultation record
         WITHOUT waiting. Recording + emitting happen later in ``_collect_oversee`` (when the result
         is applied), so ``overseer_signals`` only ever holds consults that actually completed. This
         mirrors the context-assembly background-thread idiom in ``run()``. Never raises: on any
-        setup failure it returns ``None`` (the caller simply proceeds as if the overseer were off).
+        setup failure -- OR when ``gate=True`` and the cheap pre-filter (Fix 12) says this step is
+        not worth a look -- it returns ``None`` (the caller simply proceeds as if the overseer were
+        off / not yet due). ``gate=False`` (used by hook B, the one-time answer checkpoint) always
+        submits, subject only to the caller's own ``overseer_max_signals`` bookkeeping.
         """
         try:
+            gathered_chars, consecutive_reads, elapsed_seconds = self._run_spend_metrics(gathered, started)
+            if gate:
+                plan_repeats_prev = bool(
+                    prev_plan_signature is not None and plan is not None
+                    and (plan.action, plan.goal) == prev_plan_signature
+                )
+                if not _oversee_worth_a_look(
+                    consecutive_reads=consecutive_reads,
+                    plan_repeats_prev=plan_repeats_prev,
+                    elapsed_seconds=elapsed_seconds,
+                    max_elapsed_seconds=self.cfg.max_elapsed_seconds,
+                    gathered_chars=gathered_chars,
+                    max_gathered_chars=self.cfg.max_gathered_chars,
+                    min_consecutive_reads=self.cfg.overseer_gate_min_consecutive_reads,
+                    gate_repeat_plan=self.cfg.overseer_gate_repeat_plan,
+                    spend_fraction=self.cfg.overseer_gate_spend_fraction,
+                ):
+                    return None
             digest = self._build_oversee_digest(
-                user_message=user_message, step=step, plan=plan, gathered=gathered,
-                started=started, draft_answer=draft_answer, quality_standards=quality_standards)
+                user_message=user_message, goal_condition=goal_condition, step=step, plan=plan,
+                gathered=gathered, started=started, draft_answer=draft_answer,
+                quality_standards=quality_standards, recent_conversation=recent_conversation,
+                prior_escalations=prior_escalations)
             model = self.registry.resolve_tier(self.cfg.overseer_tier)
             provider = self.get_provider_for_model(model)
             # oversee() itself never raises (degrades to proceed), so the worker is safe.
@@ -3479,6 +3658,70 @@ class Orchestrator:
             except Exception:  # noqa: BLE001
                 pass
         return signal
+
+    def _finish_oversee_in_background(self, pending: Optional[Dict[str, Any]], *,
+                                      emit: Optional[_Emitter],
+                                      quest_id: Optional[str] = None) -> None:
+        """Fire-and-forget continuation for hook B (Fix 11): when the answer-checkpoint consult has
+        NOT resolved by the time the answer ships, the answer is returned immediately and this
+        BACKGROUND daemon thread waits (bounded by ``overseer_background_finish_timeout_seconds``)
+        for it, then applies a BEST-EFFORT, non-authoritative follow-up -- never mutates the already-
+        returned ``OrchestratorResult`` (it may already be gone by the time this runs):
+
+          - ``escalate_human``: raises a REAL decision-request via the wired ``EscalationSink`` (the
+            same durable mechanism ``_run_confirm`` uses), so a human is notified even though the
+            stream that served this turn's answer may already be closed. This is the one case where
+            "best-effort" is still durable, since decision-requests are their own async channel.
+          - ``redirect`` / ``escalate_deep``: recorded via a late ``EVENT_OVERSEER`` (data includes
+            ``"late": True``) so a STILL-LISTENING consumer can see it, and so a caller that persists
+            these events can pass them forward as ``prior_escalations`` on the NEXT turn (see
+            ``run()``'s ``prior_escalations`` param and the digest's PRIOR ESCALATIONS THIS
+            CONVERSATION section). Deliberately does NOT autonomously launch a new deep execution
+            here: nothing is left to receive its result once the original caller has already moved on
+            with its answer, so auto-running unattended work with no supervision is out of scope; see
+            docs/overseer.md for this tradeoff.
+          - ``proceed`` / a timeout: nothing to do.
+
+        Never raises. Runs in a daemon thread so it cannot keep the process alive or crash on
+        interpreter shutdown; started best-effort (a failure to even start the thread is swallowed).
+        """
+        if not pending:
+            return
+        future = pending.get("future")
+        step = pending.get("step", 0)
+        plan = pending.get("plan")
+        if future is None:
+            return
+
+        def _bg() -> None:
+            try:
+                signal = future.result(timeout=self.cfg.overseer_background_finish_timeout_seconds)
+            except Exception:  # noqa: BLE001 — timeout or worker failure: nothing to finish
+                return
+            if not isinstance(signal, OverseerSignal) or signal.signal == "proceed":
+                return
+            if emit is not None:
+                try:
+                    emit.emit(ProgressEvent(
+                        type=EVENT_OVERSEER, step=step,
+                        action=(plan.action if plan else None),
+                        text=(signal.reason or None),
+                        data={"signal": signal.signal, "hint": signal.hint, "late": True}))
+                except Exception:  # noqa: BLE001
+                    pass
+            if signal.signal == "escalate_human" and self.escalation is not None:
+                try:
+                    q = signal.reason or "A prior response may need your input; please confirm."
+                    self.escalation.escalate(Escalation(
+                        summary=self._concise_decision_summary(q),
+                        kind="approve", quest_id=quest_id, default_on_silence="hold"))
+                except Exception:  # noqa: BLE001
+                    pass
+
+        try:
+            threading.Thread(target=_bg, daemon=True).start()
+        except Exception:  # noqa: BLE001
+            pass
 
     # --- broken-promise guard (post-turn honesty check) ----------------------
 
@@ -3704,6 +3947,32 @@ class Orchestrator:
         goal_condition = reply if reply else user_message
         return goal_condition, conv_ctx_text, None
 
+    def _derive_goal_condition(self, user_message: str) -> str:
+        """Derive a concise, CHECKABLE done-standard for a SELF-CONTAINED input (Fix 13).
+
+        Unlike ``_understand_input`` (the context-FETCH path, gated by
+        ``_needs_context_to_understand`` and only run for anaphoric/short follow-ups), this runs for
+        EVERY turn that did NOT need conversation context -- goal-condition ESTABLISHMENT is a
+        separate concern from context-fetching, and now always happens. Uses ONE cheap-tier LLM call
+        (no conversation history needed, since the message is already self-contained) to restate the
+        message as a concrete done-standard, mirroring the deep planner's own ``goal`` field in
+        spirit: "the SHORT, CHECKABLE DONE-STANDARD... the single condition that means the work is
+        COMPLETE", not just a restatement.
+
+        Fails safe: any exception, or an empty/unusable reply, degrades to the raw ``user_message``
+        unchanged (today's fallback), and never breaks the run. Deliberately uses a CHEAP tier
+        ("fast", never "best"): this adds one LLM round trip to every turn that reaches here, so it
+        must stay fast and inexpensive.
+        """
+        try:
+            model = self.registry.resolve_tier("fast")
+            prompt = DERIVE_GOAL_CONDITION_PROMPT.format(user_message=user_message)
+            out = self.provider.answer([{"role": "user", "content": prompt}], model=model)
+            out = (out or "").strip()
+            return out if out else user_message
+        except Exception:  # noqa: BLE001 — must never break the run
+            return user_message
+
     def _run_clarify(self, plan: PlanDecision, *, quest_id: Optional[str] = None,
                      emit: Optional[_Emitter] = None) -> OrchestratorResult:
         """Surface user clarification/selection need as a decision request.
@@ -3800,7 +4069,8 @@ class Orchestrator:
             rep_preamble: Optional[str] = None,
             pending_inputs: Optional[Callable[[], List[str]]] = None,
             conv_id: Optional[str] = None,
-            conv_scope: Optional[Dict[str, Any]] = None) -> OrchestratorResult:
+            conv_scope: Optional[Dict[str, Any]] = None,
+            prior_escalations: Optional[List[Dict[str, Any]]] = None) -> OrchestratorResult:
         """Run the bounded loop for one request and return a terminal OrchestratorResult.
 
         Streaming/event interface (both lanes use the SAME emissions; the SINK decides policy):
@@ -3846,6 +4116,16 @@ class Orchestrator:
         * ``conv_scope``  — optional scope dict ({user_id, team_ids, since, participant_id, ...})
                             for finding RELATED past conversations when the current slice is not
                             enough to resolve the message. Interpreted by the ConversationStore.
+        * ``prior_escalations`` — optional caller-supplied history of EARLIER turns in this SAME
+                            conversation that already escalated (to deep execution or to a human),
+                            each e.g. ``{"kind": "deep"|"human", "exit_reason": "...", "outcome":
+                            "..."}``. The brain has no persistent storage of its own (core stays
+                            domain-free; see ``adapters.ConversationStore`` for the same pattern), so
+                            a caller that wants the overseer to see this history across turns passes
+                            it forward here (e.g. sourced from the ``exit_reason``/``overseer_signals``
+                            of previous ``OrchestratorResult``s it already persisted). Feeds the
+                            overseer digest's PRIOR ESCALATIONS THIS CONVERSATION section. Absent/None
+                            means "none yet" (today's behavior, byte-for-byte, when overseer is off).
 
         ``run`` still works with NO event args (back-compat: same signature callers used before
         plus keyword-only extras), returning the terminal ``OrchestratorResult``.
@@ -3868,6 +4148,12 @@ class Orchestrator:
         _oversee_executor: Optional[ThreadPoolExecutor] = None
         pending_oversee: Optional[Dict[str, Any]] = None
         overseer_submitted = 0
+        # Previous step's plan (Fix 12's repeat-plan gate signal), captured just before each step's
+        # planner call overwrites ``plan``. None until the first plan exists.
+        _prev_plan_for_gate: Optional[PlanDecision] = None
+        # Fix 7: the caller-supplied cross-turn escalation history, pre-formatted once for the
+        # digest (see ``_prior_escalation_lines``). Computed once; reused by both hooks this run.
+        _prior_escalation_digest_lines = _prior_escalation_lines(prior_escalations)
         # Run-local durable EXECUTION FACTS (the broken-promise guard's evidence): each deep
         # subtask that actually executes records its outcome (success/failure) here, threaded like
         # ``gathered``. Attached to the OrchestratorResult in finish().
@@ -4024,6 +4310,27 @@ class Orchestrator:
                 ) + f"--- UNDERSTOOD REQUEST ---\n{goal_condition}\n"
                 context_view = (_understood_block + "\n" + context_view
                                 if context_view else _understood_block)
+        else:
+            # Fix 13: goal-condition ESTABLISHMENT is a separate concern from context-FETCHING above,
+            # and now always happens -- even for a self-contained input that needed no conversation
+            # context. One cheap-tier LLM call derives a concrete, checkable done-standard from the
+            # message alone (see ``_derive_goal_condition``; fails safe to the raw ``user_message``,
+            # never raises). This adds one LLM round trip to every turn that reaches here (a real
+            # cost/latency change from before, when this branch did nothing); see CHANGELOG.md.
+            goal_condition = self._derive_goal_condition(user_message)
+            if goal_condition != user_message:
+                emit.emit(ProgressEvent(
+                    type=EVENT_UNDERSTANDING,
+                    text=f"Understood as: {goal_condition}",
+                    data={"goal_condition": goal_condition}))
+
+        # Fix 5a: a handful of PRIOR user turns in this SAME conversation, for the overseer digest's
+        # RECENT CONVERSATION section. Computed once (from whatever ``conv_ctx_text`` STAGE 1 pulled;
+        # empty when no conversation_store/conv_id was in play), excluding the current turn's own
+        # request (raw AND resolved) so it is never duplicated against CURRENT USER REQUEST /
+        # RESOLVED AS. Reused by both overseer hooks this run. Never raises.
+        _recent_conversation_digest_lines = _recent_conversation_turns(
+            conv_ctx_text, exclude=[user_message, goal_condition])
 
         _assembled = None
         _ctx_future = None
@@ -4321,8 +4628,8 @@ class Orchestrator:
         steps = 0
         consecutive_reads = 0  # Track how many steps in a row chose "read"
         # Set by an OVERSEER signal that decided the terminal path this run, so finish() can stamp
-        # the exit_reason ("overseer_answer_now" | "overseer_escalated"). "" when the overseer did
-        # not decide the path.
+        # the exit_reason ("overseer_answer_now" | "overseer_escalated_deep" |
+        # "overseer_escalated_human"). "" when the overseer did not decide the path.
         overseer_decided = ""
         for step in range(cfg.max_steps):
             steps = step + 1
@@ -4332,10 +4639,11 @@ class Orchestrator:
             # prior step whose background call has since resolved (Fix 1). This runs BEFORE this
             # step's planner so a redirect can steer the plan we are about to make. A resolved
             # redirect is injected as a COURSE CORRECTION observation (the planner re-reads it,
-            # exactly as the old inline hook did); answer_now / escalate end the loop here. If the
-            # consult has NOT resolved yet, we simply proceed and re-check next step (never block:
-            # ``overseer_poll_timeout_seconds`` is 0.0 in production). Wrapped so it can NEVER break
-            # the loop. The one-step-late application is the intended cost of not stalling the walk.
+            # exactly as the old inline hook did); answer_now / escalate_deep / escalate_human end
+            # the loop here. If the consult has NOT resolved yet, we simply proceed and re-check next
+            # step (never block: ``overseer_poll_timeout_seconds`` is 0.0 in production). Wrapped so
+            # it can NEVER break the loop. The one-step-late application is the intended cost of not
+            # stalling the walk.
             if pending_oversee is not None:
                 try:
                     _psig = self._collect_oversee(
@@ -4353,12 +4661,23 @@ class Orchestrator:
                             plan.action = "answer"
                             overseer_decided = "overseer_answer_now"
                             break
-                        elif _psig.signal == "escalate":
+                        elif _psig.signal == "escalate_deep":
                             plan = plan or PlanDecision(action="answer")
                             plan.action = "deep"
                             plan.goal = plan.goal or f"Complete the request: {user_message}"
                             plan.deep_brief = plan.deep_brief or user_message
-                            overseer_decided = "overseer_escalated"
+                            overseer_decided = "overseer_escalated_deep"
+                            break
+                        elif _psig.signal == "escalate_human":
+                            # Genuine human-only fork (Fix 2): route through the SAME confirm /
+                            # decision-request mechanism a planner-originated confirm uses, rather
+                            # than guessing or executing. Never auto-run deep work for this signal.
+                            plan = plan or PlanDecision(action="answer")
+                            plan.action = "confirm"
+                            plan.confirm_question = (
+                                _psig.reason
+                                or f"This needs your input before I continue: {user_message}")
+                            overseer_decided = "overseer_escalated_human"
                             break
                     # else: not resolved -> keep ``pending_oversee`` and re-check next step.
                 except Exception:  # noqa: BLE001 — the overseer must never break the loop
@@ -4377,6 +4696,10 @@ class Orchestrator:
                             gathered.append(_ops)
                     except Exception as e:  # noqa: BLE001
                         log.debug(f"Auto-injection of list_operations failed: {type(e).__name__}: {e}")
+
+            # Fix 12: remember THIS step's plan (before the planner call below overwrites it) so the
+            # hook-A gate can tell whether the NEXT plan repeats it (a cheap looping signal).
+            _prev_plan_for_gate = plan
 
             try:
                 plan = self._plan(user_message, transcript, context_view, gathered, step=step,
@@ -4428,8 +4751,10 @@ class Orchestrator:
             # is polled at the top of the NEXT step (above), one step late. We only submit when the
             # plan is a "read" (the loop will continue, so there IS a next step to apply a signal to)
             # and when no consult is already in flight (one at a time). Gated so it stays cheap:
-            # cadence, min-step, and a hard cap on total submissions shared with hook B. Wrapped so
-            # it can NEVER break the loop. Off by default.
+            # cadence, min-step, a hard cap on total submissions shared with hook B, AND (Fix 12) a
+            # free non-LLM pre-filter inside ``_submit_oversee`` (``gate=True``, the default) that
+            # skips the consult entirely unless something actually looks worth a look. Wrapped so it
+            # can NEVER break the loop. Off by default.
             if (cfg.overseer and plan.action == "read" and pending_oversee is None
                     and steps >= cfg.overseer_min_step
                     and steps % max(1, cfg.overseer_every_steps) == 0
@@ -4437,11 +4762,18 @@ class Orchestrator:
                 try:
                     if _oversee_executor is None:
                         _oversee_executor = ThreadPoolExecutor(max_workers=1)
-                    # Fix 3: judge the run against the RESOLVED request (goal_condition) and the
-                    # completion bar (quality_standards), not the raw ambiguous surface text.
+                    # Fix 3/4: judge the run against the RAW request (user_message) AND the RESOLVED
+                    # request (goal_condition, when it differs) plus the completion bar
+                    # (quality_standards). Fix 5a/7: also carry this-conversation history.
+                    _prev_sig = ((_prev_plan_for_gate.action, _prev_plan_for_gate.goal)
+                                if _prev_plan_for_gate is not None else None)
                     pending_oversee = self._submit_oversee(
-                        _oversee_executor, user_message=goal_condition, step=steps, plan=plan,
-                        gathered=gathered, started=started, quality_standards=quality_standards)
+                        _oversee_executor, user_message=user_message, goal_condition=goal_condition,
+                        step=steps, plan=plan, gathered=gathered, started=started,
+                        quality_standards=quality_standards,
+                        recent_conversation=_recent_conversation_digest_lines,
+                        prior_escalations=_prior_escalation_digest_lines,
+                        prev_plan_signature=_prev_sig)
                     if pending_oversee is not None:
                         overseer_submitted += 1
                 except Exception:  # noqa: BLE001 — the overseer must never break the loop
@@ -4526,8 +4858,8 @@ class Orchestrator:
                                  pending_inputs=pending_inputs, model_hint=model_hint,
                                  ctx_meta=_ctx_meta)
             res.exit_reason = "deep_met" if (res.deep_results and all(d.met for d in res.deep_results)) else "deep_not_met"
-            if overseer_decided == "overseer_escalated":
-                res.exit_reason = "overseer_escalated"
+            if overseer_decided == "overseer_escalated_deep":
+                res.exit_reason = "overseer_escalated_deep"
             # Background: categorize edited files into context cards (deep runner returns edited_files in metadata)
             if res.deep_results and any(dr.met for dr in res.deep_results):
                 self._update_context_cards_after_deep(res, context_meta)
@@ -4538,7 +4870,11 @@ class Orchestrator:
 
         if final == "confirm":
             res = self._run_confirm(plan, quest_id=quest_id)
-            res.exit_reason = "confirm"
+            # A confirm can be planner-originated (rare) or come from an OVERSEER escalate_human
+            # signal (Fix 2); distinguish the exit_reason so a caller/consumer can tell the two apart
+            # (e.g. for building next-turn's ``prior_escalations``).
+            res.exit_reason = ("overseer_escalated_human" if overseer_decided == "overseer_escalated_human"
+                               else "confirm")
             return finish(res)
 
         # answer
@@ -4575,37 +4911,50 @@ class Orchestrator:
                                     data={"tokens_in": _ti, "tokens_out": _to, "total": _ti + _to}))
 
         # --- OVERSEER hook B (answer checkpoint): one last minimal-intervention watch, now with the
-        # DRAFT answer in the digest. It can escalate the whole turn to deep (this is not really an
-        # answer, it needs real execution), or redirect (regenerate the answer once with a one-line
-        # steering hint). proceed / answer_now accept the draft. Counted against the same per-run cap
-        # as hook A. Wrapped so it can never break the turn (any failure degrades to accepting the
-        # draft). Off by default.
+        # DRAFT answer in the digest. It can escalate_deep (this is not really an answer, it needs
+        # real execution), escalate_human (a genuine human-only fork), or redirect (regenerate the
+        # answer once with a one-line steering hint). proceed / answer_now accept the draft. Counted
+        # against the same per-run cap as hook A. Wrapped so it can never break the turn (any failure
+        # degrades to accepting the draft). Off by default. Not gated by the Fix-12 cadence heuristic
+        # (``gate=False``): this is a one-time final check, not a cadence, so it always consults.
         #
-        # DESIGN NOTE (Fix 1, hook B vs hook A): hook B is the FINAL checkpoint before the user sees
-        # the answer, so there is NO later step to apply a correction one step late (the trick hook A
-        # uses to stay non-blocking). Firing hook B fire-and-forget would make it useless for this
-        # turn. So, uniquely, hook B still WAITS for its consult, but only up to a strict short bound
-        # (overseer_answer_checkpoint_timeout_seconds); on timeout the draft is accepted (degrade to
-        # proceed). The call still runs on the background executor, so the wait is bounded and can
-        # never hang, while a clear escalate/redirect can still correct the answer before it ships.
+        # DESIGN NOTE (Fix 11, hook B non-blocking): hook B used to WAIT synchronously (up to a short
+        # bound) before shipping the answer, on EVERY turn -- real added latency even when nothing
+        # was wrong. It is now NON-BLOCKING like hook A: submit, do one quick non-blocking check
+        # (covers the rare already-resolved case), and if it has not resolved yet, SHIP THE DRAFT NOW
+        # and hand the pending consult to ``_finish_oversee_in_background`` instead of blocking. That
+        # background finisher raises a REAL decision-request for a late ``escalate_human`` (durable,
+        # reaches the human regardless of the stream) and records a late ``EVENT_OVERSEER`` for
+        # ``redirect``/``escalate_deep`` (best-effort telemetry for a consumer to fold into next
+        # turn's ``prior_escalations``); it deliberately does NOT auto-launch a new deep execution
+        # with no one left to receive its result. See ``_finish_oversee_in_background``'s docstring
+        # and docs/overseer.md for the full tradeoff. A FAST-resolving consult (the common case for a
+        # quick model) still corrects the SAME answer before it ships, exactly as before.
         if cfg.overseer and overseer_submitted < cfg.overseer_max_signals:
             try:
                 if _oversee_executor is None:
                     _oversee_executor = ThreadPoolExecutor(max_workers=1)
-                # Fix 3: judge against the RESOLVED request (goal_condition) + completion bar.
+                # Fix 3/4: the raw request (user_message) AND the resolved request (goal_condition)
+                # + completion bar + this-conversation history.
                 _bpending = self._submit_oversee(
-                    _oversee_executor, user_message=goal_condition, step=steps, plan=plan,
-                    gathered=gathered, started=started, draft_answer=text,
-                    quality_standards=quality_standards)
+                    _oversee_executor, user_message=user_message, goal_condition=goal_condition,
+                    step=steps, plan=plan, gathered=gathered, started=started, draft_answer=text,
+                    quality_standards=quality_standards,
+                    recent_conversation=_recent_conversation_digest_lines,
+                    prior_escalations=_prior_escalation_digest_lines,
+                    gate=False)
                 _bsig = OverseerSignal("proceed")
                 if _bpending is not None:
                     overseer_submitted += 1
                     _collected = self._collect_oversee(
                         _bpending, signals=overseer_signals, emit=emit,
-                        timeout=cfg.overseer_answer_checkpoint_timeout_seconds)
+                        timeout=cfg.overseer_poll_timeout_seconds)
                     if _collected is not None:
                         _bsig = _collected
-                if _bsig.signal == "escalate" and self._has_deep_execution_capability():
+                    else:
+                        # Not resolved yet: ship the draft now; a late resolution is handled async.
+                        self._finish_oversee_in_background(_bpending, emit=emit, quest_id=quest_id)
+                if _bsig.signal == "escalate_deep" and self._has_deep_execution_capability():
                     if emit is not None:
                         emit.status("Overseer: this needs real execution, running it now…")
                     _ov_plan = PlanDecision(
@@ -4621,9 +4970,25 @@ class Orchestrator:
                         gathered=gathered, quality_standards=quality_standards,
                         pending_inputs=pending_inputs, model_hint=model_hint,
                         ctx_meta=_ctx_meta)
-                    _ov_res.exit_reason = "overseer_escalated"
+                    _ov_res.exit_reason = "overseer_escalated_deep"
                     self._kickoff_card_update(_ov_res, _ov_plan, user_message, _ctx_meta, emit)
                     return finish(_ov_res)
+                if _bsig.signal == "escalate_human":
+                    # Genuine human-only fork (Fix 2): route through the SAME confirm / decision-
+                    # request mechanism as a planner-originated confirm, discarding the drafted
+                    # answer (mirrors the pre-existing escalate-to-deep precedent just above, which
+                    # also discards the draft in favor of the correct terminal path).
+                    if emit is not None:
+                        emit.status("Overseer: this needs your input before I can finish…")
+                    _confirm_plan = PlanDecision(
+                        action="confirm",
+                        confirm_question=(_bsig.reason
+                                          or f"This needs your input before I continue: {user_message}"),
+                        rationale="overseer escalated the answer to a human decision",
+                    )
+                    _confirm_res = self._run_confirm(_confirm_plan, quest_id=quest_id)
+                    _confirm_res.exit_reason = "overseer_escalated_human"
+                    return finish(_confirm_res)
                 if _bsig.signal == "redirect" and _bsig.hint:
                     if emit is not None:
                         emit.status("Overseer: refining the answer…")

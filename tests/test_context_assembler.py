@@ -643,9 +643,11 @@ class TestOrchestratorContextAssembler:
 
         orch = _make_orchestrator(assembler=HintAssembler(), provider=mock_provider)
         orch.run("some task")
-        # The answer model should be "opus" tier (registry maps it to some model id)
-        # We just check that answer() was called
-        assert len(used_models) == 1
+        # The answer model should be "opus" tier (registry maps it to some model id).
+        # Fix 13's always-on cheap goal-condition derivation call (STAGE 1) makes its OWN answer()
+        # call first (on the cheap "fast" tier), so there are TWO answer() calls now: the
+        # derivation, then the real answer.
+        assert len(used_models) == 2
 
     def test_model_tier_hint_not_applied_when_explicit_model_hint_provided(self):
         """When run() is given an explicit model_hint, AssembledContext.model_tier_hint is ignored."""
@@ -668,11 +670,14 @@ class TestOrchestratorContextAssembler:
 
         orch = _make_orchestrator(assembler=OpusHintAssembler(), provider=mock_provider)
         orch.run("some task", model_hint="haiku")
-        # The explicit model_hint="haiku" should win, not the assembled "opus"
-        assert len(used_models) == 1
+        # The explicit model_hint="haiku" should win, not the assembled "opus". Fix 13's always-on
+        # cheap goal-condition derivation call (STAGE 1) makes its OWN answer() call first (on the
+        # cheap "fast" tier, unaffected by model_hint), so there are TWO answer() calls now: the
+        # derivation, then the real, hinted answer.
+        assert len(used_models) == 2
         # Model id should be a haiku-tier model, not an opus one
         # (the registry maps "haiku" -> haiku model id, "opus" -> opus model id)
-        assert used_models[0] != ""
+        assert used_models[-1] != ""
 
     def test_assemble_exception_never_breaks_run(self):
         """An exception in assemble() must not propagate -- the run continues."""
