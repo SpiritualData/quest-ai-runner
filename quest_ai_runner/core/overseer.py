@@ -119,8 +119,14 @@ Choose EXACTLY ONE signal and return it via the provided tool:
     or commit work, fix-and-verify, take a real action). Reading and writing an answer cannot
     satisfy such a request, but this is ROUTINE, AI-doable work, not a human decision. If the REQUEST
     uses an action verb (add, fix, implement, change, create, run, commit, send, delete, refactor)
-    and the plan is only reading or drafting an answer ABOUT the work rather than executing it,
-    choose escalate_deep.
+    AND IS PHRASED AS AN INSTRUCTION to perform it (an imperative like "fix the bug", or a polite
+    command like "can you add X" / "please update Y") and the plan is only reading or drafting an
+    answer ABOUT the work rather than executing it, choose escalate_deep. Do NOT escalate_deep for a
+    QUESTION that merely mentions an action verb while asking for information, an explanation, or an
+    opinion ("how would I add X?", "what would it take to fix Y?", "should we refactor Z?", "why
+    isn't this working?"): the user wants an answer, not the change made. Judge this from the
+    REQUEST's phrasing, not the verb alone: an interrogative opener (how/what/why/is/are/would/
+    could/should we/do you/does it) asking ABOUT the work is a question even if it names an action.
   - "escalate_human": this is a genuine HUMAN-ONLY fork, not routine automatable work. Reserve this
     for identity questions, an irreversible or authorization-requiring action (e.g. an outward
     payment, a real-world commitment, deleting something unrecoverable), or a genuine ambiguity

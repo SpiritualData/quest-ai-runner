@@ -22,6 +22,15 @@ All notable changes to this project are documented here. The format is based on
   `web:true` when a native or Tavily web adapter is wired. See [docs/web-search.md](docs/web-search.md).
 
 ### Fixed
+- **Overseer no longer escalates plain questions to a deep task.** `escalate_deep`'s guidance keyed
+  off "the request uses an action verb," so a question that merely mentioned one ("how would I add
+  X?", "what would it take to fix Y?") read as an action request answered by a read-and-answer plan
+  and got escalated, i.e. a question in chat silently turned into a background task instead of being
+  answered inline. `OVERSEER_PROMPT` now requires the request be PHRASED AS AN INSTRUCTION (an
+  imperative or a polite command like "can you add X") before treating it as an action request, and
+  explicitly exempts interrogative questions that merely mention an action verb. Mirrors the
+  QUESTION-vs-COMMAND guard the planner-level fallbacks (`_message_requests_change`,
+  `_INFO_QUESTION_RE`) already had. Tested in `tests/test_overseer.py`.
 - **Web-search spec parsing.** The planner emits varied/nested query shapes (e.g.
   `{"query": {"operation": "web_search", "params": {"query": "..."}}}`); both web adapters
   previously read `spec["query"]` directly and passed a nested dict to the search API, which failed.

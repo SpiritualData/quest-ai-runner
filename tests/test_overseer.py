@@ -387,6 +387,20 @@ def test_overseer_prompt_flags_action_requests_and_promising_drafts():
     assert "promises" in low or "promise" in low
 
 
+def test_overseer_prompt_exempts_questions_that_merely_mention_an_action_verb():
+    """Regression: the overseer's escalate_deep rule keyed ONLY off "the request uses an action
+    verb", so a plain QUESTION containing one ("how would I add X?", "what would it take to fix
+    Y?") read as an action request met by a read-and-answer plan and got escalated to a deep task
+    instead of just being answered in chat. The prompt must keep the explicit QUESTION-vs-COMMAND
+    carve-out (mirroring the planner-level ``_message_requests_change``/``_INFO_QUESTION_RE`` guard
+    in orchestrator.py) so this does not silently regress if the prompt is later edited.
+    """
+    low = OVERSEER_PROMPT.lower()
+    assert "question" in low
+    assert "interrogative" in low
+    assert "how would i add" in low
+
+
 def test_overseer_prompt_biases_escalate_human_toward_genuine_forks_only():
     """Fix 2: escalate_human must be reserved for genuine human-only forks (identity, irreversible
     actions, authorization, true ambiguity), mirroring the org's "AI acts first" principle, so it
