@@ -73,9 +73,6 @@ from .guard import (
     ExecutionFact,
     ExecutionRecord,
     classify_exec_phase,
-    honest_rewrite,
-    text_claims_action,
-    verify_supported,
 )
 from .model_registry import TIERS, ModelRegistry
 from .overseer import OverseerSignal, build_digest, oversee
@@ -509,11 +506,13 @@ class OrchestratorConfig:
     # wired GuidanceProvider to pre-select (via select()) for the "APPLICABLE GUIDANCE" block
     # before planning. Only consulted when a GuidanceProvider is wired; otherwise inert.
     guidance_topk: int = 3
-    # BROKEN-PROMISE GUARD (workstream 5). At turn finalization, verify that a reply CLAIMING a
-    # completed/imminent action is actually backed by what executed this turn; auto-remediate then
-    # re-verify, else rewrite the reply to be honest and flag the result partial (so a background
-    # task maps to needs_you/failed, not done). ON by default; the structural gate keeps it free on
-    # turns with no action claim. ``max_remediations`` caps SAFE re-runs (only when no action ran).
+    # BROKEN-PROMISE CHECK, folded into the goal verification. When on, every answer turn's goal
+    # verdict also judges whether actions the reply CLAIMS it completed are backed by the turn's
+    # EXECUTION RECORD (the brain itself can never change files/data; only deep runs can). An
+    # unsupported claim remediates inside the answer goal loop: execute the work for real via a
+    # deep run when NOTHING ran this turn (safe), otherwise regenerate the reply to be honest and
+    # flag the result partial (so a background task maps to needs_you/failed, not done). ON by
+    # default. ``max_remediations`` caps the execute-for-real re-runs (only when no action ran).
     verify_claims: bool = True
     max_remediations: int = 1
     # MINIMAL-INTERVENTION OVERSEER. A high-quality model reads a tiny digest of the run and writes a
@@ -761,6 +760,12 @@ VERIFY_GOAL_TOOL: Dict[str, Any] = {
                                          "fast, balanced, quality, best (or haiku, sonnet, opus). Omit to "
                                          "keep the current tier. Raise it when the failure looks like a "
                                          "reasoning/capability gap."},
+            "claims_unexecuted": {"type": "boolean",
+                                  "description": "True if the output CLAIMS it completed a change "
+                                                 "(edited a file, saved data, sent something, changed "
+                                                 "configuration) that the EXECUTION RECORD does not "
+                                                 "show succeeding. False when no such claim is made, "
+                                                 "or every claimed change is backed by the record."},
         },
         "required": ["met"],
     },
@@ -790,7 +795,7 @@ answer -- set met=true. Do NOT set need_more_context=true when the history IS sh
 simply empty. Only set need_more_context=true when the history is ABSENT from the context
 entirely (not shown at all) and the answer could not have known whether history exists.
 
-When met=false:
+{claims_rules}When met=false:
   - set next_action to a SHORT, specific instruction for the next attempt: what to fix, what context
     or file to look at next, or the likely reason it failed.
   - set need_more_context=true ONLY when the worker clearly lacked context it needed (a missing file,
@@ -812,6 +817,26 @@ Do NOT use em dashes.
 
 --- WORKER OUTPUT (what it reports it did) ---
 {output}
+"""
+
+# Inserted into VERIFY_GOAL_PROMPT (the {claims_rules} slot) ONLY when an execution record is
+# supplied, i.e. on answer turns with verify_claims on. The record is the authoritative list of
+# mutating actions that actually ran this turn; the answering step itself can never change files,
+# code, data, or configuration, so any completed-change claim not backed by the record is false.
+VERIFY_CLAIMS_RULES = """\
+CRITICAL, honesty of completion claims: the EXECUTION RECORD below is the authoritative list of
+mutating actions that actually ran this turn (and whether each succeeded). The author of the output
+CANNOT change files, code, data, or configuration itself; such changes only happen through the
+recorded actions. If the output claims or implies it COMPLETED a change (edited or wrote a file,
+saved data, sent something, applied configuration) that the record does not show as SUCCEEDED, set
+met=false AND claims_unexecuted=true, and say in reason which claim is unbacked. An output that
+makes no completed-change claim, or that honestly says the change has NOT been made yet, is fine on
+this dimension (claims_unexecuted=false). Statements about history from before this turn are not
+completion claims.
+
+--- EXECUTION RECORD (mutating actions that actually ran this turn) ---
+{record}
+
 """
 
 # ---------------------------------------------------------------------------
@@ -2435,17 +2460,21 @@ class Orchestrator:
     def _verify_goal(self, goal: str, brief: str, output: str, *,
                      rep_preamble: Optional[str] = None,
                      quality_standards: Optional[str] = None,
-                     transcript: Optional[str] = None) -> Optional[Dict[str, Any]]:
+                     transcript: Optional[str] = None,
+                     exec_record: Optional[ExecutionRecord] = None) -> Optional[Dict[str, Any]]:
         """Decide whether the worker's run met the done-standard AT THE QUALITY BAR.
 
         Judged through the AI rep's lens (``rep_preamble``) and against the applicable GUIDANCE CARDS
-        (``quality_standards`` — the quality bar the result must clear). Returns
+        (``quality_standards`` — the quality bar the result must clear). When ``exec_record`` is
+        supplied (answer turns with ``verify_claims`` on), the SAME verdict also judges honesty of
+        completion claims: any change the output claims it completed must be backed by a SUCCEEDED
+        entry in the record, else ``met=false`` with ``claims_unexecuted=true``. Returns
         ``{"met": bool, "reason": str, "next_action": str, "need_more_context": bool,
-        "context_query": str, "next_tier": Optional[str]}``, or ``None`` if verification could not
-        run (the caller then trusts the worker's own outcome rather than looping blindly). The three
-        extra fields let the goal loop decide whether to pull MORE context for the next iteration and
-        at which model tier; they default to ``False``/``""``/``None`` on any parse miss. Never
-        raises.
+        "context_query": str, "next_tier": Optional[str], "claims_unexecuted": bool}``, or ``None``
+        if verification could not run (the caller then trusts the worker's own outcome rather than
+        looping blindly). The extra fields let the goal loop decide whether to pull MORE context for
+        the next iteration and at which model tier; they default to ``False``/``""``/``None`` on any
+        parse miss. Never raises.
         """
         if not (output or "").strip():
             # Nothing to judge — the worker reported no result. Treat as not verifiable here; the
@@ -2459,12 +2488,15 @@ class Orchestrator:
         if quality_standards and quality_standards.strip():
             standards = ("--- QUALITY STANDARDS (the bar the result must meet) ---\n"
                          + quality_standards.strip()[:3000] + "\n\n")
+        claims_rules = ""
+        if exec_record is not None:
+            claims_rules = VERIFY_CLAIMS_RULES.format(record=exec_record.summary()[:2000])
         try:
             model = self.registry.resolve_tier(self.cfg.planner_tier)
             transcript_section = (transcript or "").strip()[:2000] or "(no prior turns)"
             raw = self.provider.plan(
                 VERIFY_GOAL_PROMPT.format(
-                    persona=persona, standards=standards,
+                    persona=persona, standards=standards, claims_rules=claims_rules,
                     goal=(goal or "")[:1000], brief=(brief or "")[:2000],
                     transcript=transcript_section,
                     output=(output or "")[:6000]),
@@ -2484,7 +2516,8 @@ class Orchestrator:
                         "next_action": str(raw.get("next_action") or "").strip(),
                         "need_more_context": bool(raw.get("need_more_context")),
                         "context_query": str(raw.get("context_query") or "").strip(),
-                        "next_tier": (str(_tier).strip() or None) if _tier else None}
+                        "next_tier": (str(_tier).strip() or None) if _tier else None,
+                        "claims_unexecuted": bool(raw.get("claims_unexecuted"))}
         except Exception:  # noqa: BLE001 — verification must never break the run
             log.warning("goal verification call failed", exc_info=True)
         return None
@@ -3732,93 +3765,6 @@ class Orchestrator:
         except Exception:  # noqa: BLE001
             pass
 
-    # --- broken-promise guard (post-turn honesty check) ----------------------
-
-    def _guard_turn(self, res: OrchestratorResult, exec_record: ExecutionRecord, *,
-                    user_message: str, plan: Optional[PlanDecision],
-                    model_hint: Optional[str], emit: Optional[_Emitter],
-                    rep_preamble: Optional[str],
-                    gathered: Optional[List[Dict[str, Any]]] = None) -> None:
-        """AUTO-REMEDIATE THEN VERIFY (workstream 5). Mutates ``res`` in place when it corrects an
-        overstated claim. Never raises (the caller also wraps it, belt-and-suspenders).
-
-        Only ``answer`` results are guarded: a ``deep`` result already maps its truth via
-        ``DeepResult.met`` (a not-met deep run reports failed/needs_you, never done), and ``confirm``
-        makes no completion claim. The risk this addresses is an ANSWER that asserts it did/ will do
-        something the turn did not actually execute.
-        """
-        if not self.cfg.verify_claims:
-            return
-        if res.kind != "answer":
-            return
-        reply = res.text or ""
-        # CHEAP STRUCTURAL GATE: only engage when the reply asserts a completed/imminent action.
-        # No claim signal -> pass through unchanged, ZERO model cost (the verification call is not made).
-        if not text_claims_action(reply):
-            return
-
-        verify_model = self.registry.resolve_tier(self.cfg.planner_tier)
-        if verify_supported(self.provider, verify_model, reply, exec_record):
-            return  # claim MATCHES reality -> leave the reply and status exactly as-is.
-
-        # --- MISMATCH: the reply overstates what happened. -------------------------------------
-        # SAFE REMEDIATION (re-run) is allowed ONLY when NOTHING actually executed this turn:
-        #   - any_success  -> the action already ran successfully; re-running risks a DOUBLE mutation.
-        #   - any_failure  -> a real attempt was made; host actions aren't guaranteed idempotent, so a
-        #                     blind re-run could still double-apply a partially-applied change.
-        # So we re-run ONLY when an action was REQUESTED but produced NO recorded outcome (e.g. the
-        # planner answered without ever executing, or no deep runner was wired). Otherwise we go
-        # straight to honest correction. This is the core double-mutation safeguard.
-        remediations = 0
-        can_remediate = (
-            self._has_deep_execution_capability()
-            and plan is not None
-            and not exec_record.any_success
-            and not exec_record.any_failure
-        )
-        while (can_remediate and remediations < max(0, self.cfg.max_remediations)
-               and not exec_record.any_success):
-            remediations += 1
-            if emit is not None:
-                emit.status("That did not go through. Retrying it now...")
-            # Re-run the intended action. Reuse the planner's deep goal/brief; if the planner did not
-            # author one (it had chosen "answer"), synthesize a concrete one from the request.
-            remediate_plan = plan
-            if not (plan.goal or plan.deep_brief or plan.deep_subtasks):
-                remediate_plan = PlanDecision(
-                    action="deep",
-                    goal=f"Fully carry out the user's request: {user_message}",
-                    deep_brief=user_message,
-                    model_tier=plan.model_tier,
-                    rationale="remediation: the prior turn claimed this action without executing it",
-                )
-            deep_model = self._answer_model(remediate_plan, "opus", hint=model_hint)
-            redo = self._run_deep(remediate_plan, user_message, deep_model,
-                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
-                                  gathered=gathered)
-            # Keep the original reply ONLY if the re-run met its goal AND the original claim is now
-            # actually supported by what executed. Re-verifying (not just trusting ``met`` on a
-            # possibly-vague synthesized goal) protects the honesty guarantee for specific claims.
-            if (redo.deep_results and all(d.met for d in redo.deep_results)
-                    and verify_supported(self.provider, verify_model, reply, exec_record)):
-                if emit is not None:
-                    emit.emit(ProgressEvent(type=EVENT_MILESTONE,
-                                            text="Completed on retry.", data={"remediated": True}))
-                return
-            break  # re-run did not succeed -> fall through to honest correction.
-
-        # STILL UNMET (or remediation was unsafe/not attempted): rewrite the reply to be HONEST and
-        # flag the result so a background task maps to needs_you/failed instead of done.
-        rewrite_model = self.registry.resolve_tier(model_hint or "sonnet")
-        honest = honest_rewrite(self.provider, rewrite_model, reply, exec_record)
-        res.text = honest
-        res.partial = True
-        res.claim_corrected = True
-        if emit is not None:
-            emit.emit(ProgressEvent(type=EVENT_MILESTONE,
-                                    text="Corrected the reply to reflect what actually happened.",
-                                    data={"claim_corrected": True}))
-
     # --- clarify (user selection/clarification) --------------------------------
 
     def _concise_decision_summary(self, text: str) -> str:
@@ -4547,16 +4493,6 @@ class Orchestrator:
                     res.tokens_out = self.provider.tokens_out
             except Exception:  # noqa: BLE001
                 pass
-            # --- BROKEN-PROMISE GUARD (workstream 5): post-turn honesty check. ----------------
-            # Verify a reply that CLAIMS a completed/imminent action against what actually executed;
-            # auto-remediate (one safe re-run) then re-verify; else rewrite the reply to be honest
-            # and flag the result partial. Never raises (degrades to leaving the turn unchanged).
-            try:
-                self._guard_turn(res, exec_record, user_message=user_message, plan=plan,
-                                 model_hint=model_hint, emit=emit, rep_preamble=rep_preamble,
-                                 gathered=gathered)
-            except Exception:  # noqa: BLE001 — the guard must never break a turn
-                pass
             # Best-effort ContextAssembler write-back (learn from the outcome for next run). Pass the
             # files the brain ACTUALLY read this run (their rel_paths, from the gathered reads/greps)
             # so the card PINS them: that is what makes the loop compound and what staleness later
@@ -5018,14 +4954,6 @@ class Orchestrator:
                                       "rationale": "planner indicated answer contains work to execute"}
                 if emit is not None:
                     emit.status("Executing described work now…")
-            # Fallback: regex pattern matching for false claims (safety net for bad planner output).
-            # When verify_claims is enabled the guard handles false claims; skip here to avoid
-            # the deferred deep run interfering with the guard's remediation logic.
-            elif text_claims_action(text) and not self.cfg.verify_claims:
-                should_defer_deep = {"goal": f"Execute what was claimed: {user_message}",
-                                      "rationale": "auto-detected false claim in answer (fallback)"}
-                if emit is not None:
-                    emit.status("Executing claimed work now…")
             # Fallback: the answer DESCRIBES executable work it never did ("I need to update X",
             # "to fix this I need to..."). The cheap planner frequently forgets to set
             # answer_contains_work_to_execute on code/file-change tasks, so without this net the
@@ -5044,12 +4972,10 @@ class Orchestrator:
             # rarely produces verbatim, so an actionable request would silently end as a proposal.
             # Detecting intent from the message instead reliably catches that case. The brief carries
             # the assistant's proposed approach so the deep run APPLIES it rather than re-deriving.
-            # Skip when verify_claims is enabled AND the answer already claims completion: the guard
-            # handles that case directly (claim verification + remediation). Running the deferred
-            # deep first would mark exec_record.any_success=True, preventing the guard from remediating.
+            # (Executing here is fine even when the answer falsely claims completion: the goal
+            # verification below re-checks the folded post-deep answer against the execution record.)
             elif (_message_requests_change(user_message)
-                  and (exec_record is None or not exec_record.any_mutation_attempted)
-                  and not (self.cfg.verify_claims and text_claims_action(text))):
+                  and (exec_record is None or not exec_record.any_mutation_attempted)):
                 log.info("Escalating answer->deep: user message requests a change but the turn only "
                          "produced a proposal; running it now.")
                 _proposal = (text or "").strip()
@@ -5123,20 +5049,34 @@ class Orchestrator:
         # meets the bar or attempts run out. When the verifier says the answer lacks the context needed
         # to be definitive (need_more_context=True), escalate to deep so the deep runner can search
         # further — never accept "I couldn't find it" as a final answer when more searching is possible.
-        # Always runs — even when a deferred deep fired but produced no output (in that case the
-        # pre-deep proposal still needs to be held to the goal bar). Best-effort: never breaks the turn.
+        # With ``verify_claims`` on, the SAME verdict also checks honesty: any change the answer claims
+        # it completed must be backed by the turn's EXECUTION RECORD (claims_unexecuted). An unbacked
+        # claim remediates here: execute the work for real via a deep run when nothing ran this turn
+        # (safe, capped by max_remediations), else regenerate the reply to be honest about what
+        # actually happened. Always runs — even when a deferred deep fired but produced no output (in
+        # that case the pre-deep proposal still needs to be held to the goal bar). Best-effort: never
+        # breaks the turn.
         _last_verdict: Optional[Dict[str, Any]] = None
-        if self.cfg.answer_goal_max_iterations > 1:
+        _claim_corrected = False
+        if self.cfg.answer_goal_max_iterations > 1 or self.cfg.verify_claims:
             try:
                 overall_goal = (plan.goal or "").strip() or (
                     "Fully and correctly answer the user's request to their satisfaction: "
                     + user_message)
                 _max = max(1, self.cfg.answer_goal_max_iterations)
-                for _attempt in range(1, _max):  # at most _max-1 regenerations after the first answer
-                    verdict = self._verify_goal(overall_goal, user_message, text,
-                                                rep_preamble=rep_preamble,
-                                                quality_standards=quality_standards,
-                                                transcript=transcript)
+                if self.cfg.verify_claims:
+                    # The claim check needs at least one verification pass even when the goal loop
+                    # itself is configured off (answer_goal_max_iterations <= 1).
+                    _max = max(2, _max)
+                _remediations = 0
+                _attempt = 1
+                while _attempt < _max:  # at most _max-1 regenerations after the first answer
+                    verdict = self._verify_goal(
+                        overall_goal, user_message, text,
+                        rep_preamble=rep_preamble,
+                        quality_standards=quality_standards,
+                        transcript=transcript,
+                        exec_record=exec_record if self.cfg.verify_claims else None)
                     if verdict is not None:
                         _last_verdict = verdict
                     if verdict is not None and verdict.get("met"):
@@ -5151,7 +5091,71 @@ class Orchestrator:
                                     _attempt, _max - 1)
                         if _attempt >= _max - 1:
                             break  # out of attempts, best-effort accept
+                        _attempt += 1
                         continue  # retry the verification call
+                    # HONESTY: the answer claims a completed change the execution record does not
+                    # back. The answering step can never change files/data itself, so either DO the
+                    # work for real now (safe only when NOTHING mutated this turn; a prior success or
+                    # failure means a re-run risks a double mutation) or rewrite the reply to be
+                    # honest. A deep remediation does NOT consume a regeneration attempt: the loop
+                    # re-verifies the post-deep answer against the record on the next pass.
+                    if verdict.get("claims_unexecuted"):
+                        can_execute = (self._has_deep_execution_capability()
+                                       and exec_record is not None
+                                       and not exec_record.any_success
+                                       and not exec_record.any_failure
+                                       and _remediations < max(0, self.cfg.max_remediations))
+                        if can_execute:
+                            _remediations += 1
+                            if emit is not None:
+                                emit.status("That change was claimed but never executed, doing it now…")
+                            _rem_plan = PlanDecision(
+                                action="deep",
+                                goal=_truncate_goal(f"Carry out the user's request for real: {user_message}"),
+                                deep_brief=(f"{user_message}\n\nThe assistant REPLIED as if this was "
+                                            f"already done, but nothing actually executed. APPLY the "
+                                            f"change for real now (make the actual code/file/data "
+                                            f"changes):\n{(text or '').strip()}")[:2000],
+                                rationale="claim verification: answer claimed unexecuted work",
+                            )
+                            _rem_model = self._answer_model(_rem_plan, "opus", hint=model_hint)
+                            _rem_res = self._run_deep(_rem_plan, user_message, _rem_model,
+                                                      emit=emit, rep_preamble=rep_preamble,
+                                                      exec_record=exec_record, gathered=gathered,
+                                                      quality_standards=quality_standards,
+                                                      pending_inputs=pending_inputs,
+                                                      model_hint=model_hint, ctx_meta=_ctx_meta)
+                            _rem_out = ""
+                            if _rem_res and _rem_res.deep_results:
+                                _rem_out = "\n\n".join(
+                                    s for s in (_strip_future_context(d.output)
+                                                for d in _rem_res.deep_results) if s).strip()
+                            if _rem_out:
+                                if emit is not None:
+                                    emit.status("Writing up what was done…")
+                                text = self._synthesize_after_deep(
+                                    user_message, prior_answer=text, deep_output=_rem_out,
+                                    transcript=transcript, model=model, rep_preamble=rep_preamble)
+                                self._kickoff_card_update(_rem_res, _rem_plan, user_message,
+                                                          _ctx_meta, emit)
+                            continue  # re-verify the remediated answer (attempt not consumed)
+                        # Cannot safely re-run: correct the reply instead and flag the result so a
+                        # background task maps to needs_you/failed, never a false done.
+                        _claim_corrected = True
+                        if emit is not None:
+                            emit.status("Correcting the reply to reflect what actually happened…")
+                        _record_summary = exec_record.summary() if exec_record is not None else ""
+                        steer = ("Your previous answer claims a change was completed that did NOT "
+                                 "actually execute. What actually ran this turn:\n"
+                                 f"{_record_summary}\n\n"
+                                 "Rewrite your answer to be honest: never claim a change was made "
+                                 "when the record does not show it succeeding. Say plainly what has "
+                                 "and has not been done, and what should happen next. Do not use em "
+                                 "dashes.\n\n"
+                                 f"--- YOUR PREVIOUS ANSWER ---\n{text}")
+                        text = _gen_answer(steer)
+                        _attempt += 1
+                        continue
                     # When the verifier says the answer lacked the context needed to be definitive,
                     # escalate to deep so it can search further. Regenerating with the SAME gathered
                     # context won't help — the deep runner can grep/read on its own.
@@ -5197,6 +5201,7 @@ class Orchestrator:
                              + (_new + "\n\n" if _new else "")
                              + f"--- YOUR PREVIOUS ANSWER ---\n{text}")
                     text = _gen_answer(steer)
+                    _attempt += 1
             except Exception:  # noqa: BLE001 — answer verification must never break the turn
                 log.warning("answer goal verification failed", exc_info=True)
 
@@ -5207,9 +5212,15 @@ class Orchestrator:
         # so a consumer can see the terminal path was decided by the overseer.
         if overseer_decided == "overseer_answer_now" and _last_verdict is None:
             _exit_reason = "overseer_answer_now"
-        return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
-                                         model=model, exit_reason=_exit_reason,
-                                         goal_verdict=_last_verdict))
+        _res = OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
+                                  model=model, exit_reason=_exit_reason,
+                                  goal_verdict=_last_verdict)
+        if _claim_corrected:
+            # The reply had to be corrected for honesty and the claimed work never executed: flag
+            # the result so a background task maps to needs_you/failed, never a false done.
+            _res.claim_corrected = True
+            _res.partial = True
+        return finish(_res)
 
     # --- LIVE streaming convenience: a generator yielding events as they happen --------
 

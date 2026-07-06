@@ -1,26 +1,26 @@
-"""Broken-promise guard (workstream 5) — detection, remediation, honest correction, safety.
+"""Claim honesty inside the goal verification — remediation, honest correction, safety.
 
-The guard runs at turn finalization. It detects when an ANSWER reply CLAIMS an action that did not
-actually execute or finish, AUTO-REMEDIATES (one safe re-run) then re-verifies, and if still unmet
-rewrites the reply to be honest and flags the result so a background task maps to needs_you (not
-done). It NEVER re-runs an action that already executed (no double mutation), and on a turn with no
-action claim it does ZERO verification (no model cost).
+The answering step can never change files, code, data, or configuration itself; only deep runs
+can. Every answer turn's goal verification (``_verify_goal`` with ``verify_claims`` on) therefore
+also judges whether completed-change claims in the reply are backed by the turn's
+``ExecutionRecord`` (the ``claims_unexecuted`` verdict field; there is NO regex claim detector,
+the verification LLM reads the reply and the record together). An unbacked claim remediates in the
+answer goal loop: execute the work for real via a deep run when NOTHING ran this turn (safe),
+otherwise regenerate the reply to be honest and flag the result partial + claim_corrected so a
+background task maps to needs_you / failed, never a false done. NEVER re-runs an action that
+already executed (no double mutation).
 """
 from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.core.adapters import (
     EVENT_EXEC,
     DeepResult,
-    MilestoneSink,
-    Mode,
     ProgressEvent,
-    StreamSink,
 )
 from quest_ai_runner.core.guard import (
     ExecutionFact,
     ExecutionRecord,
     classify_exec_phase,
-    text_claims_action,
 )
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
@@ -30,47 +30,60 @@ from .conftest import StubRetrieval
 
 
 # ---------------------------------------------------------------------------
-# A provider that distinguishes the PLANNER call, the VERIFY call, and ANSWER.
+# A provider that distinguishes the PLANNER call from the GOAL-VERDICT call.
 # ---------------------------------------------------------------------------
 
 class GuardProvider:
-    """ModelProvider with separate scripted streams for plan-decisions and verify-verdicts.
+    """ModelProvider with separate scripted streams for plan decisions and goal verdicts.
 
-    ``plan()`` is used for BOTH the planner step and the guard's verification call. We tell them
-    apart by the prompt: the guard's verification prompt contains the marker "honesty checker".
+    ``plan()`` serves BOTH the planner step and the goal verification; they are told apart by the
+    tool schema name (the verification uses the ``goal_verdict`` tool). ``answer()`` returns
+    ``honest_text`` when steered to correct an unbacked claim, ``synth_text`` when reporting a
+    finished deep run, else ``answer_text``.
     """
 
     def __init__(self, *, plan_decisions: List[Dict[str, Any]],
-                 verify_verdicts: Optional[List[Dict[str, Any]]] = None,
+                 goal_verdicts: Optional[List[Dict[str, Any]]] = None,
                  answer_text: str = "Plain answer.",
-                 rewrite_text: str = "I was not able to make that change."):
+                 synth_text: str = "The change was made; here is what was done.",
+                 honest_text: str = "I was not able to make that change, so it has not been made."):
         self._plan = list(plan_decisions)
-        self._verify = list(verify_verdicts or [])
+        self._verdicts = list(goal_verdicts or [])
         self._answer_text = answer_text
-        self._rewrite_text = rewrite_text
+        self._synth_text = synth_text
+        self._honest_text = honest_text
         self.plan_calls = 0
         self.verify_calls = 0
+        self.verify_prompts: List[str] = []
         self.answer_calls = 0
-        self.rewrite_calls = 0
+        self.honest_rewrites = 0
 
     def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
-        if "honesty checker" in prompt:
+        if tool_schema.get("name") == "goal_verdict":
+            # The deep runner's INTERNAL goal verification uses the same tool but never carries an
+            # execution record; only the answer-path verification does. Script only the latter so a
+            # deep run's own goal loop can't eat the answer-loop verdicts.
+            if "EXECUTION RECORD" not in prompt:
+                return {"met": True}
             self.verify_calls += 1
-            if self._verify:
-                return self._verify.pop(0)
-            return {"verdict": "supported"}
+            self.verify_prompts.append(prompt)
+            if self._verdicts:
+                return self._verdicts.pop(0)
+            return {"met": True}
         self.plan_calls += 1
         if self._plan:
             return self._plan.pop(0)
         return {"action": "answer", "rationale": "fallback"}
 
     def answer(self, messages, *, model, system=None) -> str:
+        self.answer_calls += 1
         joined = "\n".join(
             m["content"] if isinstance(m["content"], str) else "" for m in messages)
-        if "correcting an AI assistant" in joined or "HONEST" in joined:
-            self.rewrite_calls += 1
-            return self._rewrite_text
-        self.answer_calls += 1
+        if "Rewrite your answer to be honest" in joined:
+            self.honest_rewrites += 1
+            return self._honest_text
+        if "You already DID the work the user asked for" in joined:
+            return self._synth_text
         return self._answer_text
 
     def list_models(self) -> List[str]:
@@ -78,7 +91,7 @@ class GuardProvider:
 
 
 class FailingDeepRunner:
-    """A deep runner that ALWAYS fails (never meets the goal) — to drive remediation that stays unmet."""
+    """A deep runner that ALWAYS fails (never meets the goal) — a real attempt that went wrong."""
 
     def __init__(self):
         self.calls = 0
@@ -100,7 +113,7 @@ class SucceedingDeepRunner:
         self.calls += 1
         if emit is not None:
             emit(ProgressEvent(type=EVENT_EXEC, text="done", data={"phase": "done"}))
-        return DeepResult(met=True, output="goal met")
+        return DeepResult(met=True, output="goal met: the change was applied")
 
 
 def _orch(provider, retrieval, **kw):
@@ -109,50 +122,8 @@ def _orch(provider, retrieval, **kw):
 
 
 # ---------------------------------------------------------------------------
-# Unit-level: structural gate + phase classification.
+# Unit-level: phase classification (the execution-record building block).
 # ---------------------------------------------------------------------------
-
-def test_text_claims_action_detects_completed_and_future_claims():
-    assert text_claims_action("I've added the goal for you.")
-    assert text_claims_action("I created your new quest.")
-    assert text_claims_action("Done. Your reflection is saved.")
-    assert text_claims_action("I'll update that now.")
-    assert text_claims_action("I am scheduling it for tomorrow.")
-
-
-def test_text_claims_action_detects_adverb_separated_and_file_write_claims():
-    # The real-world miss (2026-07-06): a reply claimed a file edit QAR cannot make itself,
-    # phrased with adverbs between the auxiliary and the verb, so the guard never engaged.
-    assert text_claims_action(
-        "I have now directly updated and written the changes to "
-        "start-dev-servers.sh to clean up port 3002.")
-    assert text_claims_action("I have written the updated script to disk.")
-    assert text_claims_action("I have now directly applied the fix.")
-    assert text_claims_action("I just successfully staged and committed the change.")
-    assert text_claims_action("We have updated the script accordingly.")
-
-
-def test_text_claims_action_detects_passive_result_claims():
-    assert text_claims_action("The file has been updated with the new tmux session.")
-    assert text_claims_action("Your script is now updated and ready to run.")
-    assert text_claims_action("The changes have already been written to the file.")
-
-
-def test_text_claims_action_ignores_history_and_negation():
-    # Simple past passive reports history, not this turn's work.
-    assert not text_claims_action("The config was updated in version 2 last year.")
-    # An honest not-done statement must not read as a completion claim.
-    assert not text_claims_action(
-        "The change has not been made yet; it still needs an execution run.")
-    assert not text_claims_action("I have not updated the file yet.")
-
-
-def test_text_claims_action_ignores_plain_answers():
-    assert not text_claims_action("Your quest has three goals and looks on track.")
-    assert not text_claims_action("Here is what the pricing page says: it is $9 a month.")
-    assert not text_claims_action("Thanks, glad it helped!")
-    assert not text_claims_action("")
-
 
 def test_classify_exec_phase():
     assert classify_exec_phase("done") == "success"
@@ -162,208 +133,163 @@ def test_classify_exec_phase():
 
 
 # ---------------------------------------------------------------------------
-# 1) Claim NOT supported + remediation still fails -> honest reply, not done.
+# 1) The verification receives the EXECUTION RECORD (claims rules in the prompt).
 # ---------------------------------------------------------------------------
 
-def test_unsupported_claim_remediates_then_corrects_honestly():
-    # Planner ANSWERS (claiming it acted) without ever running a deep action -> nothing executed.
+def test_answer_verification_includes_execution_record():
     provider = GuardProvider(
-        plan_decisions=[{"action": "answer", "rationale": "I will just say I did it"}],
-        verify_verdicts=[{"verdict": "unsupported"}],  # the verify call: claim NOT backed
-        answer_text="I've added the goal to your quest.",  # the (false) success claim
-        rewrite_text="I was not able to add the goal, so I have not made the change.",
+        plan_decisions=[{"action": "answer", "rationale": "info"}],
+        goal_verdicts=[{"met": True}],
+        answer_text="Your quest has three goals and is roughly half complete.",
     )
-    runner = FailingDeepRunner()  # remediation re-run FAILS -> claim stays unmet
-    res = _orch(provider, StubRetrieval(), deep_runner=runner).run("add a goal")
-
+    res = _orch(provider, StubRetrieval()).run("how is my quest doing overall these days?")
     assert res.kind == "answer"
-    # Guard engaged: it verified, attempted ONE remediation (the safe re-run, since nothing had run),
-    # the re-run failed, so it rewrote the reply to be honest and flagged the result.
-    assert provider.verify_calls == 1
-    assert runner.calls == 1                       # exactly one remediation attempt
+    assert provider.verify_calls >= 1
+    # The claims rules + record ride in the SAME goal-verification call (no separate check).
+    assert "EXECUTION RECORD" in provider.verify_prompts[0]
+    assert "NO action/operation executed this turn" in provider.verify_prompts[0]
+    assert res.claim_corrected is False
+    assert res.text == "Your quest has three goals and is roughly half complete."
+
+
+# ---------------------------------------------------------------------------
+# 2) False claim + NOTHING executed -> execute for real via deep, then re-verify.
+# ---------------------------------------------------------------------------
+
+def test_unbacked_claim_with_nothing_executed_runs_the_work_for_real():
+    # An informational question (no change-intent fallback fires), yet the answer falsely claims a
+    # completed change. The verdict flags claims_unexecuted; nothing ran, so the loop executes the
+    # work via the deep runner, folds the real output back in, and re-verifies.
+    provider = GuardProvider(
+        plan_decisions=[{"action": "answer", "rationale": "hallucinated completion"}],
+        goal_verdicts=[{"met": False, "claims_unexecuted": True,
+                        "reason": "claims a file edit the record does not show"},
+                       {"met": True}],
+        answer_text="I have now directly updated and written the changes to the script.",
+        synth_text="The script has now really been updated; the deep run applied the change.",
+    )
+    runner = SucceedingDeepRunner()
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run(
+        "what is the status of the start script update?")
+    assert res.kind == "answer"
+    assert runner.calls == 1                       # the claimed work was executed for real
+    assert res.claim_corrected is False            # claim became true, no honest correction needed
+    assert res.partial is False
+    assert "really been updated" in res.text       # the reply reports the actual executed work
+    assert res.execution_record.any_success is True
+    outcome = _report_via_executor(res)
+    assert outcome.status == "done"
+
+
+# ---------------------------------------------------------------------------
+# 3) False claim + a REAL attempt already failed -> NO re-run, honest correction.
+# ---------------------------------------------------------------------------
+
+def test_unbacked_claim_after_failed_execution_corrects_honestly_without_rerun():
+    # A change-requesting message: the message-intent fallback runs the deep work, which FAILS.
+    # The answer still claims success, so the verdict flags claims_unexecuted; because a real
+    # attempt was made (double-mutation risk), the loop must NOT re-run — it regenerates the reply
+    # to be honest and flags the result.
+    provider = GuardProvider(
+        plan_decisions=[{"action": "answer", "rationale": "claimed without doing"}],
+        goal_verdicts=[{"met": False, "claims_unexecuted": True,
+                        "reason": "record shows the action FAILED"},
+                       {"met": True}],
+        answer_text="I've added the goal to your quest.",
+        honest_text="I was not able to add the goal, so I have not made the change.",
+    )
+    runner = FailingDeepRunner()
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run("add a goal")
+    assert res.kind == "answer"
+    assert runner.calls == 1                       # the one real (failed) attempt; never re-run
+    assert provider.honest_rewrites == 1
     assert res.claim_corrected is True
     assert res.partial is True
-    assert "not able to add" in res.text           # honest, no false success
+    assert "not able to add" in res.text
     assert "I've added the goal" not in res.text
-
-    # The runner's executor maps a claim-corrected answer to needs_you, never done.
     outcome = _report_via_executor(res)
     assert outcome.status == "needs_you"
 
 
 # ---------------------------------------------------------------------------
-# 2) Claim supported by a real successful mutation -> pass-through, unchanged.
+# 4) SAFETY: an already-SUCCESSFUL action is never re-run either.
 # ---------------------------------------------------------------------------
 
-def test_supported_claim_passes_through_unchanged():
-    # Planner runs a deep action that SUCCEEDS; the deep output legitimately reports success.
+def test_unbacked_claim_after_successful_execution_never_reruns():
+    # The deferred deep run SUCCEEDS, but the verdict (hypothetically) still flags an unbacked
+    # claim (e.g. the reply also claims a second change that never ran). Re-running risks a double
+    # mutation, so the loop corrects the reply honestly instead.
+    provider = GuardProvider(
+        plan_decisions=[{"action": "answer", "rationale": "overstates"}],
+        goal_verdicts=[{"met": False, "claims_unexecuted": True,
+                        "reason": "the emailed-the-team claim is unbacked"},
+                       {"met": True}],
+        answer_text="I've added the goal and emailed the team.",
+        honest_text="The goal was added. I did not email the team.",
+    )
+    runner = SucceedingDeepRunner()
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run("add a goal")
+    assert runner.calls == 1                       # only the original run; no remediation re-run
+    assert res.claim_corrected is True
+    assert res.partial is True
+    assert "did not email" in res.text
+
+
+# ---------------------------------------------------------------------------
+# 5) A real successful deep turn passes through untouched (mapped by DeepResult.met).
+# ---------------------------------------------------------------------------
+
+def test_successful_deep_turn_passes_through_unchanged():
     provider = GuardProvider(
         plan_decisions=[{"action": "deep", "goal": "Add the goal", "deep_brief": "add it",
                          "rationale": "real work"}],
     )
     runner = SucceedingDeepRunner()
     res = _orch(provider, StubRetrieval(), deep_runner=runner).run("add a goal")
-    # A deep result is mapped by DeepResult.met, not the answer guard — it stays met, no rewrite.
     assert res.kind == "deep"
     assert res.deep_results[0].met is True
     assert res.claim_corrected is False
-    assert provider.verify_calls == 0              # guard only verifies ANSWER replies
-    # And the execution record shows the real success.
     assert res.execution_record is not None
     assert res.execution_record.any_success is True
 
 
-def test_answer_claim_supported_by_record_passes_through():
-    # An ANSWER that claims success WHILE the record confirms a successful mutation: verify says
-    # supported -> the reply and status are left exactly as-is.
-    provider = GuardProvider(
-        plan_decisions=[{"action": "answer", "rationale": "report the success"}],
-        verify_verdicts=[{"verdict": "supported"}],
-        answer_text="I've updated your quest.",
-    )
-    orch = _orch(provider, StubRetrieval())
-    # Seed a successful execution fact as if a prior step had executed (drive _guard_turn directly
-    # for a focused check that a SUPPORTED verdict is a pure pass-through).
-    res = orch.run("update my quest")
-    record = res.execution_record
-    record.facts.append(ExecutionFact(goal="update quest", succeeded=True))
-    res.text = "I've updated your quest."
-    res.partial = False
-    res.claim_corrected = False
-    orch._guard_turn(res, record, user_message="update my quest", plan=None,
-                     model_hint=None, emit=None, rep_preamble=None)
-    assert res.claim_corrected is False
-    assert res.text == "I've updated your quest."
-
-
 # ---------------------------------------------------------------------------
-# 3) No action claim -> pass-through, NO verification model call.
-# ---------------------------------------------------------------------------
-
-def test_plain_answer_skips_verification_entirely():
-    provider = GuardProvider(
-        plan_decisions=[{"action": "answer", "rationale": "chit-chat / info"}],
-        answer_text="Your quest has three goals and is roughly half complete.",
-    )
-    res = _orch(provider, StubRetrieval()).run("how is my quest doing?")
-    assert res.kind == "answer"
-    assert provider.verify_calls == 0              # structural gate: no claim -> no verify call
-    assert res.claim_corrected is False
-    assert res.text == "Your quest has three goals and is roughly half complete."
-
-
-# ---------------------------------------------------------------------------
-# 4) SAFETY: an action that already executed is NEVER re-run (no double mutation).
-# ---------------------------------------------------------------------------
-
-def test_guard_never_reruns_an_action_that_already_executed():
-    # A deep action runs once and FAILS (a real attempt happened). Then we drive the guard with an
-    # ANSWER-shaped result whose record carries that failure. Because a real attempt was made, the
-    # guard must NOT re-run (host actions are not idempotent) — it goes straight to honest correction.
-    provider = GuardProvider(
-        plan_decisions=[],  # not used; we call _guard_turn directly
-        verify_verdicts=[{"verdict": "unsupported"}],
-        rewrite_text="I tried to update it but it failed, so the change was not made.",
-    )
-    runner = SucceedingDeepRunner()   # if (wrongly) called, calls would increment
-    orch = _orch(provider, StubRetrieval(), deep_runner=runner)
-
-    record = ExecutionRecord()
-    record.facts.append(ExecutionFact(goal="update quest", failed=True, error="boom"))
-    from quest_ai_runner.core.orchestrator import OrchestratorResult
-    res = OrchestratorResult(kind="answer", text="I've updated your quest.")
-
-    # Provide a plan so remediation COULD run if the safety gate were wrong.
-    from quest_ai_runner.core.adapters import PlanDecision
-    plan = PlanDecision(action="deep", goal="Update quest", deep_brief="update")
-    orch._guard_turn(res, record, user_message="update my quest", plan=plan,
-                     model_hint=None, emit=None, rep_preamble=None)
-
-    assert runner.calls == 0                       # NEVER re-ran the already-attempted action
-    assert res.claim_corrected is True             # corrected honestly instead
-    assert res.partial is True
-    assert "I've updated your quest." not in res.text
-
-
-def test_guard_does_not_rerun_on_already_successful_action():
-    # Record shows a SUCCESS but verify (hypothetically) returns unsupported for some other claim.
-    # The guard must not re-run a succeeded action (double-mutation risk) — it corrects honestly.
-    provider = GuardProvider(
-        plan_decisions=[],
-        verify_verdicts=[{"verdict": "unsupported"}],
-        rewrite_text="One part is done; I could not complete the rest.",
-    )
-    runner = SucceedingDeepRunner()
-    orch = _orch(provider, StubRetrieval(), deep_runner=runner)
-    from quest_ai_runner.core.orchestrator import OrchestratorResult
-    from quest_ai_runner.core.adapters import PlanDecision
-    record = ExecutionRecord()
-    record.facts.append(ExecutionFact(goal="add goal", succeeded=True))
-    res = OrchestratorResult(kind="answer", text="I've added two goals and emailed the team.")
-    plan = PlanDecision(action="deep", goal="Add goals", deep_brief="add")
-    orch._guard_turn(res, record, user_message="add goals and email", plan=plan,
-                     model_hint=None, emit=None, rep_preamble=None)
-    assert runner.calls == 0
-    assert res.claim_corrected is True
-
-
-# ---------------------------------------------------------------------------
-# 5) Remediation SUCCEEDS -> claim becomes true, original reply kept, status done.
-# ---------------------------------------------------------------------------
-
-def test_remediation_success_keeps_original_reply():
-    provider = GuardProvider(
-        plan_decisions=[{"action": "answer", "rationale": "claimed without doing"}],
-        verify_verdicts=[{"verdict": "unsupported"}],
-        answer_text="I've added the goal.",
-    )
-    runner = SucceedingDeepRunner()   # the safe re-run SUCCEEDS
-    res = _orch(provider, StubRetrieval(), deep_runner=runner).run("add a goal")
-    assert runner.calls == 1
-    assert res.claim_corrected is False            # claim is now true; reply kept
-    assert res.text == "I've added the goal."
-    assert res.partial is False
-    outcome = _report_via_executor(res)
-    assert outcome.status == "done"
-
-
-# ---------------------------------------------------------------------------
-# Guard never raises: a verify call that explodes leaves the turn unchanged.
+# Verification never breaks the turn: a verdict call that explodes degrades to accept.
 # ---------------------------------------------------------------------------
 
 class ExplodingProvider(GuardProvider):
     def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
-        if "honesty checker" in prompt:
+        if tool_schema.get("name") == "goal_verdict":
             raise RuntimeError("verify model down")
         return super().plan(prompt, model=model, tool_schema=tool_schema)
 
 
-def test_guard_degrades_gracefully_when_verifier_fails():
+def test_verification_degrades_gracefully_when_verifier_fails():
     provider = ExplodingProvider(
         plan_decisions=[{"action": "answer", "rationale": "x"}],
-        answer_text="I've added the goal.",
+        answer_text="Your quest has three goals in total right now.",
     )
-    res = _orch(provider, StubRetrieval()).run("add a goal")
-    # verify_supported swallows the error and returns supported -> reply unchanged, never crashes.
+    res = _orch(provider, StubRetrieval()).run("how many goals does my quest have right now?")
     assert res.kind == "answer"
-    assert res.text == "I've added the goal."
+    assert res.text == "Your quest has three goals in total right now."
     assert res.claim_corrected is False
 
 
 # ---------------------------------------------------------------------------
-# Config: verify_claims=False disables the guard entirely.
+# Config: verify_claims=False (with the goal loop off) means zero verification calls.
 # ---------------------------------------------------------------------------
 
-def test_verify_claims_disabled_skips_guard():
+def test_verify_claims_disabled_skips_verification():
     provider = GuardProvider(
         plan_decisions=[{"action": "answer", "rationale": "x"}],
-        answer_text="I've added the goal.",
+        answer_text="Your quest has three goals in total right now.",
     )
-    cfg = OrchestratorConfig(verify_claims=False)
-    res = _orch(provider, StubRetrieval(), config=cfg).run("add a goal")
+    cfg = OrchestratorConfig(verify_claims=False, answer_goal_max_iterations=1)
+    res = _orch(provider, StubRetrieval(), config=cfg).run(
+        "how many goals does my quest have right now?")
     assert provider.verify_calls == 0
     assert res.claim_corrected is False
-    assert res.text == "I've added the goal."
+    assert res.text == "Your quest has three goals in total right now."
 
 
 # ---------------------------------------------------------------------------

@@ -72,16 +72,9 @@ from .orchestrator import (
     normalize_decision,
 )
 from .guard import (
-    HONEST_FALLBACK_TEXT,
-    HONEST_REWRITE_PROMPT,
-    VERIFY_CLAIM_PROMPT,
-    VERIFY_TOOL,
     ExecutionFact,
     ExecutionRecord,
     classify_exec_phase,
-    honest_rewrite,
-    text_claims_action,
-    verify_supported,
 )
 from .overseer import (
     OVERSEE_TOOL,
@@ -115,10 +108,8 @@ __all__ = [
     # orchestrator
     "Orchestrator", "OrchestratorConfig", "OrchestratorResult",
     "PLANNER_PROMPT", "DECIDE_TOOL", "normalize_decision",
-    # broken-promise guard
-    "ExecutionRecord", "ExecutionFact", "classify_exec_phase", "text_claims_action",
-    "verify_supported", "honest_rewrite", "VERIFY_CLAIM_PROMPT", "VERIFY_TOOL",
-    "HONEST_REWRITE_PROMPT", "HONEST_FALLBACK_TEXT",
+    # execution record (claim honesty is judged inside the goal verification)
+    "ExecutionRecord", "ExecutionFact", "classify_exec_phase",
     # goal runner
     "GoalRunner", "SubprocessGoalRunner", "SubprocessConfig", "compose_goal_prompt",
     "ESCALATION_MARKER", "extract_escalation_id",

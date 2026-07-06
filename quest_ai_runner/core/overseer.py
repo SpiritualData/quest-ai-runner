@@ -327,7 +327,7 @@ def build_digest(
 def oversee(provider: Any, model: str, digest: str) -> OverseerSignal:
     """Consult the overseer once and return its ``OverseerSignal``.
 
-    Makes ONE structured ``provider.plan`` call (mirroring how ``guard.verify_supported`` calls the
+    Makes ONE structured ``provider.plan`` call (mirroring how the goal verification calls the
     provider). On ANY error, a non-dict response, or an unrecognized signal, returns the safe default
     ``OverseerSignal("proceed")`` so the run is never distorted or broken. Never raises.
     """

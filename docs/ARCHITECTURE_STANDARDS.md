@@ -38,7 +38,7 @@ to need something concrete, add a new *interface* on `core/adapters.py`, put the
 | `core/model_registry.py` | tier → live top-model id (via a `ModelProvider`) |
 | `core/goal_runner.py` | the `/goal --max-turns` contract (`GoalRunner`, `SubprocessGoalRunner`) |
 | `core/card_filter.py` | LLM card selection + `_extract_json()` fence-stripping helper |
-| `core/guard.py`, `core/inbox.py` | broken-promise guard; mid-run `InputInbox` |
+| `core/guard.py`, `core/inbox.py` | per-turn `ExecutionRecord` (claim honesty is judged in the goal verification); mid-run `InputInbox` |
 | `adapters/files_adapter.py` | reference `RetrievalAdapter` over a configured file root |
 | `adapters/cached_db_adapter.py` | reference `RetrievalAdapter` over a live DB with a short-TTL cache |
 | `adapters/{anthropic,gemini,openai}_provider.py` | reference `ModelProvider`s |

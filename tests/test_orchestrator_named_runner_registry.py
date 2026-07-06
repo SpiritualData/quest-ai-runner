@@ -114,23 +114,30 @@ def test_unknown_classifier_key_falls_back_to_default_runner():
     assert res.deep_results[0].output == "default ran"
 
 
-def test_broken_promise_guard_remediates_via_named_registry():
+def test_claim_remediation_executes_via_named_registry():
     # The exact reported bug: the planner ANSWERS, hallucinating a completed action ("I've added a
-    # measurable outcome") for a request that should have been a real in-app data operation ("create
-    # a goal") -- nothing actually ran. With only the named registry wired (no single deep_runner,
-    # the real Quest AI wiring), the broken-promise guard's remediation used to be silently disabled
-    # (its "self.deep_runner is not None" gate), so the false claim could only be rewritten to an
-    # honest non-answer -- it could never actually CARRY OUT the action. Fixed, the guard detects the
-    # unsupported claim and remediates by actually running the goal through the named registry.
+    # measurable outcome") for work that should have been a real in-app data operation -- nothing
+    # actually ran. With only the named registry wired (no single deep_runner, the real Quest AI
+    # wiring), remediation used to be silently disabled (its "self.deep_runner is not None" gate),
+    # so the false claim could only be rewritten to an honest non-answer -- it could never actually
+    # CARRY OUT the action. Fixed: the goal verification flags the unbacked claim
+    # (claims_unexecuted) and the answer loop executes the work for real through the named
+    # registry, then re-verifies. (An informational message so the message-intent deferred-deep
+    # fallback stays out of the way; the claim check alone must drive the execution.)
     provider = GuardProvider(
         plan_decisions=[{"action": "answer", "rationale": "describe"}],
-        verify_verdicts=[{"verdict": "unsupported"}],
+        goal_verdicts=[{"met": False, "claims_unexecuted": True,
+                        "reason": "claims a data change the record does not show"},
+                       {"met": True}],
         answer_text="I've added a measurable outcome for your quest.",
+        synth_text="Added the measurable outcome for real; the goal now tracks the 5k.",
     )
     runner = _NamedRunner(met=True, output="Added the goal 'Run a 5k' to your quest.")
     res = _orch_named_registry(provider, StubRetrieval(), runner).run(
-        "create a goal to run a 5k this week")
+        "what is the status of my measurable outcome for the 5k?")
     assert res.kind == "answer"
-    assert runner.calls, "expected the guard's remediation to actually execute via the named registry"
-    # The remediation run succeeded and re-verified as supported -> the reply is kept, not rewritten.
+    assert runner.calls, "expected the claim remediation to actually execute via the named registry"
+    # The remediation run succeeded and re-verified -> the reply reports the real work, no
+    # honest-correction flag.
     assert res.claim_corrected is False
+    assert res.execution_record.any_success is True

@@ -22,19 +22,12 @@ All notable changes to this project are documented here. The format is based on
   `web:true` when a native or Tavily web adapter is wired. See [docs/web-search.md](docs/web-search.md).
 
 ### Fixed
-- **The brain can no longer claim file changes it never made.** The read-and-answer step has no
-  execution ability (file/code/data changes only happen through a deep run), yet the answer LLM
-  could reply "I have now directly updated and written the changes to <file>" and the honesty
-  guard's structural gate missed the phrasing, so the false claim shipped and repeated across
-  turns. Two layers fixed: (1) `_grounding_block` now tells the answer LLM explicitly that it
-  cannot edit files or run commands in this step and must never claim a change was made, only
-  describe what should be executed; (2) `text_claims_action` in `core/guard.py` now catches
-  adverb-separated claims ("I have now DIRECTLY updated"), "we" as subject, the mutate verbs
-  write/wrote/written, stage, commit, push, deploy, install, and present-perfect passive result
-  claims ("the file has been updated", "your script is now updated"), so the broken-promise guard
-  engages, verifies against the execution record, and remediates via a real deep run or rewrites
-  the reply honestly. Simple past passive ("was updated in v2") still reads as history, and honest
-  not-done statements ("has not been made yet") do not trip the gate.
+- **The answer step is told it cannot make changes.** `_grounding_block` now states explicitly
+  that the read-and-answer step cannot edit files, run commands, or change code/data/config, that
+  changes happen only through a separate execution run, and that it must never claim a change was
+  made, only describe what should be executed. This prevents the hallucinated "I have now directly
+  updated and written the changes to <file>" replies at the source; the goal-verification claim
+  check (see the broken-promise honesty entry under Added) catches whatever still slips through.
 - **Overseer no longer escalates plain questions to a deep task.** `escalate_deep`'s guidance keyed
   off "the request uses an action verb," so a question that merely mentioned one ("how would I add
   X?", "what would it take to fix Y?") read as an action request answered by a read-and-answer plan
@@ -894,8 +887,8 @@ All notable changes to this project are documented here. The format is based on
   found. The preamble is built as `rep_preamble` (if any) followed by a `--- RELEVANT CONTENT
   FOUND BY THE BRAIN ---` section rendered from `gathered`. The `wants_preamble` gate now fires
   whenever the runner accepts `context_preamble` (not only when `rep_preamble` is set), so
-  gathered-only runs also benefit. `_guard_turn` also threads `gathered` through to its
-  remediation `_run_deep` call.
+  gathered-only runs also benefit. The claim-remediation `_run_deep` call also threads `gathered`
+  through.
 
 ### Added
 - **`quest-ai-runner bootstrap` CLI subcommand.** Builds or refreshes the context card store for a corpus on demand: `--corpus PATH` (default `QAR_CORPUS_ROOT` or cwd) and `--cards-dir PATH` (default `QAR_CONTEXT_CARDS_DIR` or `<corpus>/.quest-context`). Uses the env-selected model provider, runs the incremental bootstrap, and prints the card count.
@@ -920,24 +913,28 @@ All notable changes to this project are documented here. The format is based on
   Routes to `QUEST_TEAM_ID` by default (override with `--team-id`), optionally attaches to a goal
   (`--goal-id`) and schedules a future run (`--at <ISO-8601 UTC>`); omit `--at` to run at the next
   poll.
-- **Broken-promise guard — post-turn honesty check (auto-remediate then verify).** The
-  `Orchestrator` now durably captures per-turn EXECUTION FACTS (which mutating deep actions ran and
-  whether each SUCCEEDED or FAILED, from `DeepResult.met` plus `EVENT_EXEC` phase ticks) onto
-  `OrchestratorResult.execution_record`. At turn finalization it guards ANSWER replies: a cheap
-  STRUCTURAL gate (`text_claims_action`) engages only when the reply asserts a completed or imminent
-  action (so plain informational turns pay ZERO model cost), then a focused verification call
-  (`verify_supported`) decides whether the execution record backs the claim. On a mismatch it
-  AUTO-REMEDIATES with ONE safe re-run, but ONLY when nothing actually executed this turn (no
-  success AND no failure recorded) — an action that already ran, succeeded or failed, is NEVER
-  re-run, since host actions are not guaranteed idempotent (the double-mutation safeguard). If still
-  unmet, the reply is rewritten to be honest (`honest_rewrite`, no false success, no em dashes) and
-  the result is flagged `claim_corrected` / `partial`. `TaskExecutor._report` maps a
-  `claim_corrected` background-task answer to `needs_you` instead of `done`. Tunable and ON by
-  default (`OrchestratorConfig.verify_claims=True`, `max_remediations=1`); the guard NEVER raises
-  (any failure leaves the turn unchanged). New module `quest_ai_runner.core.guard`
-  (`ExecutionRecord`, `ExecutionFact`, `text_claims_action`, `classify_exec_phase`,
-  `verify_supported`, `honest_rewrite`, and the centralized `VERIFY_CLAIM_PROMPT` /
-  `HONEST_REWRITE_PROMPT`). App-agnostic; shared by live chat and background tasks (one Orchestrator).
+- **Broken-promise honesty check, judged inside the goal verification.** The `Orchestrator` now
+  durably captures per-turn EXECUTION FACTS (which mutating deep actions ran and whether each
+  SUCCEEDED or FAILED, from `DeepResult.met` plus `EVENT_EXEC` phase ticks) onto
+  `OrchestratorResult.execution_record` (new module `quest_ai_runner.core.guard`:
+  `ExecutionRecord`, `ExecutionFact`, `classify_exec_phase`). On every ANSWER turn the goal
+  loop's `_verify_goal` call also receives that record and its ONE verdict additionally judges
+  honesty: the answering step can never change files/code/data itself, so a reply claiming a
+  completed change the record does not show as SUCCEEDED comes back `met=false` with the
+  `claims_unexecuted` flag. There is deliberately NO regex claim detector: the verification LLM
+  reads the reply and the record together, so no phrasing can slip past a pattern list (an
+  earlier iteration gated on regexes and missed real replies like "I have now directly updated
+  and written the changes to <file>"). On an unbacked claim the loop AUTO-REMEDIATES: it executes
+  the work for real via a deep run, but ONLY when nothing actually executed this turn (no success
+  AND no failure recorded) — an action that already ran, succeeded or failed, is NEVER re-run,
+  since host actions are not guaranteed idempotent (the double-mutation safeguard) — then folds
+  the real output back into the reply and re-verifies. Otherwise the reply is regenerated to be
+  honest (no false success) and the result is flagged `claim_corrected` / `partial`;
+  `TaskExecutor._report` maps a `claim_corrected` background-task answer to `needs_you` instead
+  of `done`. Tunable and ON by default (`OrchestratorConfig.verify_claims=True`,
+  `max_remediations=1`; the check runs at least once per answer turn even with
+  `answer_goal_max_iterations=1`) and NEVER raises (any failure leaves the turn unchanged).
+  App-agnostic; shared by live chat and background tasks (one Orchestrator).
 
 ### Fixed
 - **Image describe-fallback could be handed a foreign model id.** `Orchestrator` now accepts a
