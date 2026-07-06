@@ -144,8 +144,9 @@ def test_dashboard_line_map_hit_tests_each_runs_own_rows():
 
 
 def test_dashboard_marks_the_active_run():
-    # The run passed as active_run_id gets a distinct "▸" marker so a user with several concurrent
-    # runs can see, without opening the detail panel, which one Alt+D/Tab/a click would act on.
+    # Every run's header carries one expand/collapse arrow: "▾" for the run passed as
+    # active_run_id (what Alt+D/Tab/a click would act on, i.e. currently "expanded" into the
+    # detail panel), "▸" for the others. Exactly one arrow per run, never two.
     t = _DeepRunTracker()
     t.add_run("r1", "Goal one")
     t.add_run("r2", "Goal two")
@@ -153,8 +154,10 @@ def test_dashboard_marks_the_active_run():
     lines = text.splitlines()
     r1_header = next(ln for ln in lines if "Goal one" in ln)
     r2_header = next(ln for ln in lines if "Goal two" in ln)
-    assert "▸" in r2_header
-    assert "▸" not in r1_header
+    assert "▾" in r2_header
+    assert "▸" not in r2_header
+    assert "▸" in r1_header
+    assert "▾" not in r1_header
 
 
 def test_dashboard_with_map_empty_when_no_runs():

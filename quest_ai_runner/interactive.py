@@ -630,7 +630,7 @@ class _DeepRunTracker:
             row_run: Dict[int, str] = {}
             for run_id, info in sorted(self._runs.items()):
                 block_start = len(lines)
-                status_icon = "▶" if info['status'] == 'running' else ("✓" if info['status'] == 'done' else "✗")
+                status_icon = "●" if info['status'] == 'running' else ("✓" if info['status'] == 'done' else "✗")
                 elapsed = time.time() - info['started']
                 mins, secs = divmod(int(elapsed), 60)
                 time_str = f"{mins}m{secs}s" if mins > 0 else f"{secs}s"
@@ -638,17 +638,20 @@ class _DeepRunTracker:
                 # The SUBGOAL this run is working on: its own prominent (bold cyan) header line so
                 # the user always sees WHAT the live actions below are for. Shown fully (generous cap
                 # vs the old 60 chars that cut sentences mid-word); the renderer wraps if needed.
-                # The currently-selected run (what Alt+D/Tab/a click would open right now) gets a
-                # "▸" marker and a brighter (bold yellow) header instead of plain bold cyan, so it's
-                # visible at a glance which of several concurrent runs is selected.
+                # One expand/collapse arrow per run, on this header line only (the status/elapsed
+                # line below carries no arrow of its own, so there's never a second one to confuse
+                # with this one): "▾" when this run is the one currently open in the detail panel
+                # (what Alt+D/Tab/a click would open right now), "▸" otherwise, mirroring the
+                # familiar expanded/collapsed chevron convention. The open run also gets a brighter
+                # (bold yellow) header instead of plain bold cyan, so it's visible at a glance.
                 goal = " ".join((info['goal'] or "").split())
                 if len(goal) > 160:
                     goal = goal[:160].rstrip() + "…"
                 goal_text = goal or "deep task"
                 if run_id == active_run_id:
-                    lines.append(f"\x1b[1;33m▸ ⎅ {goal_text}\x1b[0m")
+                    lines.append(f"\x1b[1;33m▾ ⎅ {goal_text}\x1b[0m")
                 else:
-                    lines.append(f"\x1b[1;36m  ⎅ {goal_text}\x1b[0m")
+                    lines.append(f"\x1b[1;36m▸ ⎅ {goal_text}\x1b[0m")
                 # Status + elapsed sit under the subgoal, then the latest live action lines.
                 lines.append(f"\x1b[2m  {status_icon} {time_str}\x1b[0m")
 
