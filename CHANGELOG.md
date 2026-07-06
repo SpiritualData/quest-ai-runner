@@ -22,6 +22,19 @@ All notable changes to this project are documented here. The format is based on
   `web:true` when a native or Tavily web adapter is wired. See [docs/web-search.md](docs/web-search.md).
 
 ### Fixed
+- **The brain can no longer claim file changes it never made.** The read-and-answer step has no
+  execution ability (file/code/data changes only happen through a deep run), yet the answer LLM
+  could reply "I have now directly updated and written the changes to <file>" and the honesty
+  guard's structural gate missed the phrasing, so the false claim shipped and repeated across
+  turns. Two layers fixed: (1) `_grounding_block` now tells the answer LLM explicitly that it
+  cannot edit files or run commands in this step and must never claim a change was made, only
+  describe what should be executed; (2) `text_claims_action` in `core/guard.py` now catches
+  adverb-separated claims ("I have now DIRECTLY updated"), "we" as subject, the mutate verbs
+  write/wrote/written, stage, commit, push, deploy, install, and present-perfect passive result
+  claims ("the file has been updated", "your script is now updated"), so the broken-promise guard
+  engages, verifies against the execution record, and remediates via a real deep run or rewrites
+  the reply honestly. Simple past passive ("was updated in v2") still reads as history, and honest
+  not-done statements ("has not been made yet") do not trip the gate.
 - **Overseer no longer escalates plain questions to a deep task.** `escalate_deep`'s guidance keyed
   off "the request uses an action verb," so a question that merely mentioned one ("how would I add
   X?", "what would it take to fix Y?") read as an action request answered by a read-and-answer plan

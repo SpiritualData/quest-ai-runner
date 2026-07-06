@@ -1682,6 +1682,15 @@ def _grounding_block(context_view: str, gathered: List[Dict[str, Any]], partial:
             "above doesn't cover the question, say plainly that you'd need to dig further."
         )
     parts.append(
+        "ABOUT YOUR OWN ABILITIES in this reply: you are in a read-and-answer step. You cannot "
+        "edit files, run commands, or change any code, data, or configuration here; changes "
+        "happen only through a separate execution run that the system launches after your reply. "
+        "NEVER state that you made, wrote, applied, updated, or staged a change (in any tense), "
+        "even if the conversation suggests a change was attempted before. If the request needs a "
+        "change, say plainly that it has not been made yet and describe exactly what should be "
+        "done; the system will execute it."
+    )
+    parts.append(
         "Answer the user's latest message grounded in the context above, and ONLY in the material "
         "about the SPECIFIC subject they named. Material about a sibling topic that merely shares a "
         "category word (a DIFFERENT evaluation, pipeline, project, or metric than the one asked "

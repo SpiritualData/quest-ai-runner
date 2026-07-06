@@ -129,12 +129,27 @@ _DONE_VERBS = (
     r"add(?:ed)?|creat(?:ed|e)|updat(?:ed|e)|sav(?:ed|e)|set(?: up)?|schedul(?:ed|e)|"
     r"mark(?:ed)?|sen[dt]|delet(?:ed|e)|remov(?:ed|e)|chang(?:ed|e)|edit(?:ed)?|"
     r"appli(?:ed)?|appl(?:y)|post(?:ed)?|submit(?:ted)?|complet(?:ed|e)|"
-    r"renam(?:ed|e)|moved?|configur(?:ed|e)|enabl(?:ed|e)|disabl(?:ed|e)|fix(?:ed)?|implement(?:ed)?"
+    r"renam(?:ed|e)|moved?|configur(?:ed|e)|enabl(?:ed|e)|disabl(?:ed|e)|fix(?:ed)?|implement(?:ed)?|"
+    r"writ(?:ten|e)|wrote|stag(?:ed|e)|commit(?:ted)?|push(?:ed)?|deploy(?:ed)?|install(?:ed)?"
 )
 
+# Filler that may sit between the subject/auxiliary and the mutate verb without weakening the
+# claim: "I have NOW DIRECTLY updated…", "I just SUCCESSFULLY applied…". Any "-ly" adverb is
+# tolerated (up to three words) — a miss here means the honesty guard never engages at all.
+_CLAIM_FILLER = r"(?:gone ahead and\s+|now\s+|just\s+|already\s+|also\s+|then\s+|[a-z]+ly\s+){0,3}"
+
 # "I've / I have / I just / I went ahead and <verb>" or "I <verb-ed>" — a completed-action claim.
+# "we" counts the same as "I" ("we have updated the script").
 _CLAIM_DONE_RE = re.compile(
-    r"\bI(?:'ve| have| just| already)?\s+(?:gone ahead and\s+|now\s+)?(?:" + _DONE_VERBS + r")\b",
+    r"\b(?:I|we)(?:'ve| have| just| already)?\s+" + _CLAIM_FILLER + r"(?:" + _DONE_VERBS + r")\b",
+    re.IGNORECASE,
+)
+# Present-perfect passive / result-state claims about the artifact itself: "the file has been
+# updated", "your script is now updated". Simple past passive ("was updated in v2") is NOT
+# matched — that phrasing usually reports history, not a claim about this turn's work.
+_CLAIM_PASSIVE_RE = re.compile(
+    r"\b(?:ha(?:s|ve)\s+" + _CLAIM_FILLER + r"been|(?:is|are)\s+now)\s+" + _CLAIM_FILLER
+    + r"(?:" + _DONE_VERBS + r")\b",
     re.IGNORECASE,
 )
 # "Done", "All set", "That's done", "Successfully <verb>ed" — completion announcements.
@@ -156,6 +171,8 @@ _CLAIM_FUTURE_RE = re.compile(
     r"|\bI(?:'m| am)\s+(?:now\s+)?(?:" + _PROGRESSIVE_VERBS + r")ing\b",
     re.IGNORECASE,
 )
+# NOTE: "write/written/wrote" in _DONE_VERBS deliberately has no progressive stem — "I'm writing"
+# is overwhelmingly about composing text for the user, not mutating a file.
 
 
 def text_claims_action(text: Optional[str]) -> bool:
@@ -169,6 +186,8 @@ def text_claims_action(text: Optional[str]) -> bool:
     try:
         t = text
         if _CLAIM_DONE_RE.search(t):
+            return True
+        if _CLAIM_PASSIVE_RE.search(t):
             return True
         if _CLAIM_ANNOUNCE_RE.search(t):
             return True

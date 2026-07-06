@@ -120,6 +120,33 @@ def test_text_claims_action_detects_completed_and_future_claims():
     assert text_claims_action("I am scheduling it for tomorrow.")
 
 
+def test_text_claims_action_detects_adverb_separated_and_file_write_claims():
+    # The real-world miss (2026-07-06): a reply claimed a file edit QAR cannot make itself,
+    # phrased with adverbs between the auxiliary and the verb, so the guard never engaged.
+    assert text_claims_action(
+        "I have now directly updated and written the changes to "
+        "start-dev-servers.sh to clean up port 3002.")
+    assert text_claims_action("I have written the updated script to disk.")
+    assert text_claims_action("I have now directly applied the fix.")
+    assert text_claims_action("I just successfully staged and committed the change.")
+    assert text_claims_action("We have updated the script accordingly.")
+
+
+def test_text_claims_action_detects_passive_result_claims():
+    assert text_claims_action("The file has been updated with the new tmux session.")
+    assert text_claims_action("Your script is now updated and ready to run.")
+    assert text_claims_action("The changes have already been written to the file.")
+
+
+def test_text_claims_action_ignores_history_and_negation():
+    # Simple past passive reports history, not this turn's work.
+    assert not text_claims_action("The config was updated in version 2 last year.")
+    # An honest not-done statement must not read as a completion claim.
+    assert not text_claims_action(
+        "The change has not been made yet; it still needs an execution run.")
+    assert not text_claims_action("I have not updated the file yet.")
+
+
 def test_text_claims_action_ignores_plain_answers():
     assert not text_claims_action("Your quest has three goals and looks on track.")
     assert not text_claims_action("Here is what the pricing page says: it is $9 a month.")
