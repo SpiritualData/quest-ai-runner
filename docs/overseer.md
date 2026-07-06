@@ -185,8 +185,15 @@ zero.
 ## What isn't claimed yet
 
 There is no production A/B data on redirect/escalate precision (false-positive rate, tokens saved
-per run) because the feature is new and off by default. Before flipping it on for a real workload,
-run it against a labeled task set (see `evaluation/`) and record top-line numbers here, the same way
+per run) because the feature is new and off by default. A first labeled signal eval exists:
+`evaluation/overseer_signals_eval.py` feeds 11 hand-labeled hook-A/hook-B digests through
+`oversee()` with a real model, including CONTRAST PAIRS (same fix-and-commit request with a
+describes-the-fix draft vs a reports-it-done-with-evidence draft; the same subject phrased as a
+question vs an instruction) and no reuse of `OVERSEER_PROMPT`'s own exemplar phrasings, so a pass
+shows judgment rather than phrase-matching. Result 2026-07-06: 11/11 correct signals at
+`gemini-3.5-flash`, with both contrast pairs discriminated correctly. That is still a small
+authored suite, not production data: before flipping it on for a real workload, run it against a
+larger labeled task set and record top-line numbers here, the same way
 [TF-DF-IDF sampling](TF_DF_IDF_SAMPLING.md) and the [retrieval evaluation](../README.md#evaluation)
 are documented with real, reproducible numbers rather than estimates.
 
@@ -206,6 +213,14 @@ orch.cfg.overseer_background_finish_timeout_seconds = 30.0    # hook B's backgro
 orch.cfg.overseer_gate_min_consecutive_reads = 2               # hook-A gate: stuck-read-loop threshold
 orch.cfg.overseer_gate_repeat_plan = True                      # hook-A gate: repeated-plan signal
 orch.cfg.overseer_gate_spend_fraction = 0.6                    # hook-A gate: time/read budget fraction
+```
+
+Or from the environment (the CLI `poll`/`chat` consumers read these in `_config_from_env`):
+
+```bash
+QAR_OVERSEER=true              # enable (off by default)
+QAR_OVERSEER_TIER=best         # the judge's model tier (default best)
+QAR_OVERSEER_MAX_SIGNALS=3     # hard cap on consultations per run
 ```
 
 `OrchestratorResult.overseer_signals` holds every consultation this run made

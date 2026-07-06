@@ -800,3 +800,75 @@ def test_hook_a_gate_skips_a_clean_run_but_fires_on_a_looping_run():
     assert looping_res.kind == "answer"
     assert looping_provider.overseer_calls > clean_provider.overseer_calls
     assert looping_provider.overseer_calls >= 2  # at least one hook-A submit + hook B
+
+
+# ---------------------------------------------------------------------------
+# Degraded-consult fallback: a failed/unusable consult at the overseer tier retries ONCE at the
+# planner tier inside the same background worker, so a deployment whose overseer tier resolves to
+# an unservable model does not end up with a permanently silent overseer that looks healthy.
+# ---------------------------------------------------------------------------
+
+class TierRoutedOverseerProvider(StubProvider):
+    """Overseer plan() calls RAISE at ``fail_model`` and return ``fallback_raw`` at any other
+    model; records the model of every overseer consult in order."""
+
+    def __init__(self, fail_model: str, fallback_raw: Dict[str, Any]):
+        super().__init__(decisions=[])
+        self.fail_model = fail_model
+        self.fallback_raw = fallback_raw
+        self.overseer_models: List[str] = []
+
+    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
+        if _OVERSEER_MARK in prompt and "minimal-intervention" in prompt.lower():
+            self.overseer_models.append(model)
+            if model == self.fail_model:
+                raise RuntimeError(f"cannot serve {model}")
+            return dict(self.fallback_raw)
+        return super().plan(prompt, model=model, tool_schema=tool_schema)
+
+
+def test_oversee_marks_failures_degraded_but_real_verdicts_not():
+    class _Boom:
+        def plan(self, prompt, *, model, tool_schema):
+            raise RuntimeError("boom")
+
+    class _Fine:
+        def plan(self, prompt, *, model, tool_schema):
+            return {"signal": "proceed"}
+
+    assert oversee(_Boom(), "m", "d").degraded is True
+    assert oversee(_Fine(), "m", "d").degraded is False
+
+
+def test_submit_oversee_retries_degraded_consult_at_planner_tier():
+    provider = TierRoutedOverseerProvider.__new__(TierRoutedOverseerProvider)
+    registry = ModelRegistry(StubProvider(decisions=[]))
+    best = registry.resolve_tier("best")           # default overseer_tier
+    balanced = registry.resolve_tier("balanced")   # default planner_tier
+    TierRoutedOverseerProvider.__init__(
+        provider, fail_model=best,
+        fallback_raw={"signal": "redirect", "hint": "focus on refunds", "reason": "drift"})
+    orch = _orch(provider, StubRetrieval(), config=OrchestratorConfig(overseer=True))
+    with ThreadPoolExecutor(max_workers=1) as ex:
+        pending = orch._submit_oversee(ex, user_message="u", step=1, plan=None, gathered=[],
+                                       started=time.monotonic(), gate=False)
+        sig = pending["future"].result(timeout=5)
+    assert provider.overseer_models == [best, balanced]  # primary consult, then ONE fallback
+    assert sig.signal == "redirect" and sig.hint == "focus on refunds"
+    assert sig.degraded is False
+
+
+def test_submit_oversee_no_duplicate_retry_when_tiers_resolve_to_same_model():
+    registry = ModelRegistry(StubProvider(decisions=[]))
+    balanced = registry.resolve_tier("balanced")
+    provider = TierRoutedOverseerProvider.__new__(TierRoutedOverseerProvider)
+    TierRoutedOverseerProvider.__init__(
+        provider, fail_model=balanced, fallback_raw={"signal": "proceed"})
+    orch = _orch(provider, StubRetrieval(),
+                 config=OrchestratorConfig(overseer=True, overseer_tier="balanced"))
+    with ThreadPoolExecutor(max_workers=1) as ex:
+        pending = orch._submit_oversee(ex, user_message="u", step=1, plan=None, gathered=[],
+                                       started=time.monotonic(), gate=False)
+        sig = pending["future"].result(timeout=5)
+    assert provider.overseer_models == [balanced]  # same model both tiers: no pointless retry
+    assert sig.signal == "proceed" and sig.degraded is True

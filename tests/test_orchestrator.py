@@ -30,8 +30,10 @@ def test_plan_read_then_answer():
 
     assert res.kind == "answer"
     assert retrieval.read_calls == ["README.md"]      # it actually read before answering
-    # plan_calls = 2 loop steps + 1 post-answer verification call (answer_goal_max_iterations)
-    assert provider.plan_calls == 3
+    # plan_calls = 2 loop steps + the post-answer verification (answer_goal_max_iterations): the
+    # stub's exhausted-queue reply has no "met" key, so the verifier makes its verify_tier call and
+    # then ONE planner-tier fallback retry (see _verify_goal's tier ladder) = 2 verify calls.
+    assert provider.plan_calls == 4
     # +1 for Fix 13's always-on cheap goal-condition derivation call (STAGE 1), +1 real answer.
     assert provider.answer_calls == 2
     # The README content was injected into the grounding the answer saw.
@@ -688,10 +690,10 @@ def test_loop_feeds_lean_view_to_planner_on_replan():
     cfg = OrchestratorConfig(max_steps=12, planner_recent_full=2, planner_compress_over=4)
     res = _orch(provider, retrieval, config=cfg).run("question")
     assert res.kind == "answer"
-    # Use plan_prompts[-2]: the last PLANNER prompt; plan_prompts[-1] is the post-answer
-    # verification call (answer_goal_max_iterations), which uses the VERIFY_GOAL_PROMPT, not
-    # the planner prompt — so "EARLIER READS" would not appear there.
-    last_prompt = provider.plan_prompts[-2]
+    # Use plan_prompts[-3]: the last PLANNER prompt; plan_prompts[-2:] are the post-answer
+    # verification calls (verify_tier + its planner-tier fallback on the stub's unusable verdict),
+    # which use the VERIFY_GOAL_PROMPT, not the planner prompt — "EARLIER READS" is not there.
+    last_prompt = provider.plan_prompts[-3]
     assert "EARLIER READS" in last_prompt          # leaning engaged on later steps
     # The oldest full bodies are compressed out of the planner view (only recent kept verbatim).
     assert last_prompt.count(big) <= cfg.planner_recent_full
@@ -721,9 +723,9 @@ def test_repeat_context_off_resends_full_on_replan():
     res = _orch(provider, retrieval).run(
         "q", transcript=_TRANSCRIPT, context_view=_CONTEXT)
     assert res.kind == "answer"
-    # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2] is the post-answer verification
-    # call (answer_goal_max_iterations) using VERIFY_GOAL_PROMPT — not checked here.
-    assert len(provider.plan_prompts) == 3
+    # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2..3] are the post-answer verification
+    # calls (verify_tier + planner-tier fallback on the stub's unusable verdict) — not checked here.
+    assert len(provider.plan_prompts) == 4
     for p in provider.plan_prompts[:2]:
         assert _CONTEXT in p
         assert "the latest message" in p             # full transcript present each step
@@ -740,9 +742,9 @@ def test_repeat_context_on_step1_full_replan_abbreviated():
     res = _orch(provider, retrieval, config=cfg).run(
         "q", transcript=_TRANSCRIPT, context_view=_CONTEXT)
     assert res.kind == "answer"
-    # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2] is the post-answer verification
-    # call (answer_goal_max_iterations) using VERIFY_GOAL_PROMPT — not checked here.
-    assert len(provider.plan_prompts) == 3
+    # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2..3] are the post-answer verification
+    # calls (verify_tier + planner-tier fallback on the stub's unusable verdict) — not checked here.
+    assert len(provider.plan_prompts) == 4
     step1, replan = provider.plan_prompts[0], provider.plan_prompts[1]
     # Step 1: full context + transcript.
     assert _CONTEXT in step1
@@ -852,7 +854,10 @@ def test_model_hint_does_not_touch_planner_calls():
     from quest_ai_runner.core.model_registry import ModelRegistry
     registry = ModelRegistry(provider)
     expected_planner = registry.resolve_tier("balanced")  # OrchestratorConfig.planner_tier default
-    assert all(m == expected_planner for m in provider.plan_models)
+    # plan_models[0] is the PLANNER call — the one the hint must not touch. Later plan calls are
+    # the post-answer goal verification, which deliberately runs at verify_tier ("best"), hint or
+    # not, so they are not part of this assertion.
+    assert provider.plan_models[0] == expected_planner
 
 
 def test_model_hint_absent_leaves_planner_tier_unchanged():

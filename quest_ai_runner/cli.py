@@ -273,6 +273,30 @@ def _config_from_env() -> RunnerConfig:
         cfg.orchestrator.async_card_update = False
     elif _acu in ("1", "true", "on", "yes"):
         cfg.orchestrator.async_card_update = True
+    # --- Minimal-intervention overseer (the simulated-conscious judge) -------------------------
+    # QAR_OVERSEER=1/true enables it (library default: off). A high-quality model reads a tiny
+    # capped digest of the run and almost always stays silent; occasionally it sends ONE signal
+    # (redirect / answer_now / escalate_deep / escalate_human). Consults are non-blocking (a
+    # background thread polled without waiting), pre-filtered by a free heuristic gate, and capped
+    # at QAR_OVERSEER_MAX_SIGNALS per run, so the risk coverage costs at most a few small calls.
+    _ovr = (os.getenv("QAR_OVERSEER") or "").strip().lower()
+    if _ovr in ("1", "true", "on", "yes"):
+        cfg.orchestrator.overseer = True
+    elif _ovr in ("0", "false", "off", "no"):
+        cfg.orchestrator.overseer = False
+    # QAR_OVERSEER_TIER: the judge's model tier (default "best": judgment is where the expensive
+    # model pays; the digest keeps its token cost tiny regardless).
+    if (os.getenv("QAR_OVERSEER_TIER") or "").strip():
+        cfg.orchestrator.overseer_tier = os.environ["QAR_OVERSEER_TIER"].strip().lower()
+    if os.getenv("QAR_OVERSEER_MAX_SIGNALS"):
+        try:
+            cfg.orchestrator.overseer_max_signals = int(os.environ["QAR_OVERSEER_MAX_SIGNALS"])
+        except ValueError:
+            pass
+    # QAR_VERIFY_TIER: the goal/claims verification judge's tier (default "best" — this one small
+    # hard-capped call gates done vs needs_you/failed and claim honesty). Set "balanced" to cheapen.
+    if (os.getenv("QAR_VERIFY_TIER") or "").strip():
+        cfg.orchestrator.verify_tier = os.environ["QAR_VERIFY_TIER"].strip().lower()
     return cfg
 
 

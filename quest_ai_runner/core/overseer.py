@@ -42,10 +42,17 @@ class OverseerSignal:
     ``hint`` is only meaningful for ``redirect``: a single short course correction (kept under
     ~200 chars). ``reason`` is a one-sentence, user-safe explanation of the signal (may be surfaced
     as the overseer event's text), and is empty for a plain proceed.
+
+    ``degraded`` distinguishes a REAL "proceed" verdict from a failure that fell back to proceed
+    (provider error, non-dict response, unrecognized signal). The run treats both identically (do
+    nothing), but the caller can use it to retry the consult at a different tier: a deployment
+    whose overseer tier resolves to a model the wired provider cannot serve would otherwise have a
+    permanently silent overseer that looks exactly like a healthy one.
     """
     signal: str = "proceed"    # "proceed" | "redirect" | "answer_now" | "escalate_deep" | "escalate_human"
     hint: str = ""              # only for redirect: ONE short course correction
     reason: str = ""             # one sentence, user-safe
+    degraded: bool = False       # True when this proceed is a failure fallback, not a verdict
 
 
 _VALID_SIGNALS = ("proceed", "redirect", "answer_now", "escalate_deep", "escalate_human")
@@ -335,10 +342,10 @@ def oversee(provider: Any, model: str, digest: str) -> OverseerSignal:
         prompt = OVERSEER_PROMPT.format(digest=digest or "")
         raw = provider.plan(prompt, model=model, tool_schema=OVERSEE_TOOL)
         if not isinstance(raw, dict):
-            return OverseerSignal("proceed")
+            return OverseerSignal("proceed", degraded=True)
         signal = str(raw.get("signal") or "").strip().lower()
         if signal not in _VALID_SIGNALS:
-            return OverseerSignal("proceed")
+            return OverseerSignal("proceed", degraded=True)
         hint = str(raw.get("hint") or "").strip()
         if signal != "redirect":
             hint = ""  # hint is only meaningful for a redirect
@@ -346,4 +353,4 @@ def oversee(provider: Any, model: str, digest: str) -> OverseerSignal:
         reason = str(raw.get("reason") or "").strip()
         return OverseerSignal(signal=signal, hint=hint, reason=reason)
     except Exception:  # noqa: BLE001 — an overseer failure must degrade to proceed, never break
-        return OverseerSignal("proceed")
+        return OverseerSignal("proceed", degraded=True)

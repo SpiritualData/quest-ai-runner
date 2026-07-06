@@ -54,10 +54,15 @@ def test_custom_consumer_incomplete_when_env_missing(monkeypatch):
     assert "quest_api_key (qsk_...) is required" in problems
 
 
-def test_example_stub_provider_drives_real_brain_answer():
+def test_example_stub_provider_drives_real_brain_answer(monkeypatch, tmp_path):
     """The e2e_demo StubProvider + the real Orchestrator: an ordinary task -> grounded answer."""
     from examples.e2e_demo import StubProvider
 
+    # Isolate from any REAL card store: build_orchestrator's context assembler defaults to
+    # <corpus_root|cwd>/.quest-context, so running pytest from a repo root whose live
+    # .quest-context happens to contain a card with the demo's [HUMAN-ONLY] marker (e.g. from a
+    # past e2e_demo run) can leak that card into the planner prompt and flip the stub to confirm.
+    monkeypatch.chdir(tmp_path)
     cfg = RunnerConfig(
         quest_base_url="https://x", quest_api_key="qsk_x", team_id="t",
         retrieval=StubRetrieval({"README.md": "fact: yes"}),

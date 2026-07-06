@@ -515,6 +515,14 @@ class OrchestratorConfig:
     # default. ``max_remediations`` caps the execute-for-real re-runs (only when no action ran).
     verify_claims: bool = True
     max_remediations: int = 1
+    # GOAL-VERIFICATION JUDGE TIER. The tier ``_verify_goal`` (the met/not-met + claims-honesty
+    # verdict) resolves its model from. This verdict is the run's risk gate: it decides done vs
+    # needs_you/failed and whether a reply's completion claims are honest, so a wrong verdict either
+    # ships a false "done" or triggers a full regeneration / deep re-run — both far costlier than
+    # the tier delta on ONE small call whose inputs are already hard-capped (~12.5k chars). Spend
+    # the strong model on judgment, keep the cheap tiers for gathering. Empty string falls back to
+    # ``planner_tier`` (the previous behavior).
+    verify_tier: str = "best"
     # MINIMAL-INTERVENTION OVERSEER. A high-quality model reads a tiny digest of the run and writes a
     # tiny signal, watching the loop the way a person's awareness watches their own body walk: almost
     # always silent, occasionally sending one small course correction. It is consulted at two points
@@ -2491,35 +2499,50 @@ class Orchestrator:
         claims_rules = ""
         if exec_record is not None:
             claims_rules = VERIFY_CLAIMS_RULES.format(record=exec_record.summary()[:2000])
-        try:
-            model = self.registry.resolve_tier(self.cfg.planner_tier)
-            transcript_section = (transcript or "").strip()[:2000] or "(no prior turns)"
-            raw = self.provider.plan(
-                VERIFY_GOAL_PROMPT.format(
-                    persona=persona, standards=standards, claims_rules=claims_rules,
-                    goal=(goal or "")[:1000], brief=(brief or "")[:2000],
-                    transcript=transcript_section,
-                    output=(output or "")[:6000]),
-                model=model, tool_schema=VERIFY_GOAL_TOOL)
-            # A tool-schema provider returns the structured dict directly; a provider that can only
-            # return text (no forced tool_choice) returns a string. Reuse the repo's JSON-from-LLM
-            # helper to recover the object in that case, defaulting to a not-met verdict on any miss.
-            if isinstance(raw, str):
-                try:
-                    raw = json.loads(_extract_json(raw) or "{}")
-                except Exception:  # noqa: BLE001 — a parse miss is just "could not verify"
-                    raw = {}
-            if isinstance(raw, dict) and "met" in raw:
-                _tier = raw.get("next_tier")
-                return {"met": bool(raw.get("met")),
-                        "reason": str(raw.get("reason") or "").strip(),
-                        "next_action": str(raw.get("next_action") or "").strip(),
-                        "need_more_context": bool(raw.get("need_more_context")),
-                        "context_query": str(raw.get("context_query") or "").strip(),
-                        "next_tier": (str(_tier).strip() or None) if _tier else None,
-                        "claims_unexecuted": bool(raw.get("claims_unexecuted"))}
-        except Exception:  # noqa: BLE001 — verification must never break the run
-            log.warning("goal verification call failed", exc_info=True)
+        prompt = VERIFY_GOAL_PROMPT.format(
+            persona=persona, standards=standards, claims_rules=claims_rules,
+            goal=(goal or "")[:1000], brief=(brief or "")[:2000],
+            transcript=(transcript or "").strip()[:2000] or "(no prior turns)",
+            output=(output or "")[:6000])
+        # The judge runs at ``verify_tier`` (default "best"): this ONE small, hard-capped call
+        # gates the whole turn's outcome (done vs needs_you/failed, claim honesty), so it gets the
+        # strong model. Routed through get_provider_for_model (same as the overseer) since the best
+        # tier may resolve to a different provider's model than the planner's. FALLBACK: if the
+        # strong-tier call fails or returns an unusable verdict, retry ONCE at ``planner_tier`` (the
+        # previous judge) rather than degrading straight to "no verification" — a deployment whose
+        # best tier resolves to a model the wired provider cannot serve must not silently lose the
+        # goal/claims gate it had before.
+        models: List[str] = []
+        for tier in (self.cfg.verify_tier or self.cfg.planner_tier, self.cfg.planner_tier):
+            try:
+                resolved = self.registry.resolve_tier(tier)
+            except Exception:  # noqa: BLE001 — an unresolvable tier just drops out of the ladder
+                continue
+            if resolved and resolved not in models:
+                models.append(resolved)
+        for model in models:
+            try:
+                provider = self.get_provider_for_model(model)
+                raw = provider.plan(prompt, model=model, tool_schema=VERIFY_GOAL_TOOL)
+                # A tool-schema provider returns the structured dict directly; a provider that can
+                # only return text (no forced tool_choice) returns a string. Reuse the repo's
+                # JSON-from-LLM helper to recover the object in that case.
+                if isinstance(raw, str):
+                    try:
+                        raw = json.loads(_extract_json(raw) or "{}")
+                    except Exception:  # noqa: BLE001 — a parse miss is just "could not verify"
+                        raw = {}
+                if isinstance(raw, dict) and "met" in raw:
+                    _tier = raw.get("next_tier")
+                    return {"met": bool(raw.get("met")),
+                            "reason": str(raw.get("reason") or "").strip(),
+                            "next_action": str(raw.get("next_action") or "").strip(),
+                            "need_more_context": bool(raw.get("need_more_context")),
+                            "context_query": str(raw.get("context_query") or "").strip(),
+                            "next_tier": (str(_tier).strip() or None) if _tier else None,
+                            "claims_unexecuted": bool(raw.get("claims_unexecuted"))}
+            except Exception:  # noqa: BLE001 — verification must never break the run
+                log.warning("goal verification call failed (model=%s)", model, exc_info=True)
         return None
 
     def _deep_models(self, model_hint: Optional[str], quality_standards: Optional[str],
@@ -2988,8 +3011,8 @@ class Orchestrator:
                     return DeepResult(met=False, error=type(e).__name__)
 
             # OUR OWN GOAL LOOP (replaces Claude Code's /goal): run the worker, then VERIFY the
-            # done-standard at the quality bar with one cheap LLM call (judged through the rep persona
-            # and the applicable guidance cards). If not met, feed back what fell short + what to do
+            # done-standard at the quality bar with ONE small ``verify_tier`` LLM call (judged
+            # through the rep persona and the applicable guidance cards). If not met, feed back what fell short + what to do
             # next AND ESCALATE to a stronger model, then re-run — WHILE under the overall token
             # budget (bounded by a hard attempt cap). More token-efficient than /goal (no per-turn
             # self-check inside the worker), the brain steers each retry, and the model auto-escalates.
@@ -3649,8 +3672,27 @@ class Orchestrator:
                 prior_escalations=prior_escalations)
             model = self.registry.resolve_tier(self.cfg.overseer_tier)
             provider = self.get_provider_for_model(model)
+            # FALLBACK (mirrors _verify_goal's tier ladder): a consult that comes back DEGRADED
+            # (provider error / unusable response, not a real verdict) retries ONCE at the planner
+            # tier. Without this, a deployment whose overseer tier resolves to a model the wired
+            # provider cannot serve has a permanently silent overseer that looks exactly like a
+            # healthy one — every consult "proceeds". Both calls run in the SAME background worker,
+            # so the loop still never blocks.
+            fb_model: Optional[str] = None
+            try:
+                fb_model = self.registry.resolve_tier(self.cfg.planner_tier)
+            except Exception:  # noqa: BLE001 — no fallback tier, primary consult only
+                fb_model = None
+            fb_provider = self.get_provider_for_model(fb_model) if fb_model else None
+
+            def _consult() -> OverseerSignal:
+                sig = oversee(provider, model, digest)
+                if sig.degraded and fb_model and fb_model != model and fb_provider is not None:
+                    return oversee(fb_provider, fb_model, digest)
+                return sig
+
             # oversee() itself never raises (degrades to proceed), so the worker is safe.
-            future: Future = executor.submit(oversee, provider, model, digest)
+            future: Future = executor.submit(_consult)
             return {"future": future, "step": step, "plan": plan}
         except Exception:  # noqa: BLE001 — submission failure must never break the run
             return None
@@ -5060,9 +5102,18 @@ class Orchestrator:
         _claim_corrected = False
         if self.cfg.answer_goal_max_iterations > 1 or self.cfg.verify_claims:
             try:
-                overall_goal = (plan.goal or "").strip() or (
-                    "Fully and correctly answer the user's request to their satisfaction: "
-                    + user_message)
+                # Verify against the turn's DERIVED GOAL CONDITION (the checkable done-standard
+                # established at turn start by _understand_input/_derive_goal_condition) when one
+                # was actually derived: that is the user-level bar for the WHOLE turn. Deriving a
+                # done-standard and then judging the answer against something else (the plan's own
+                # goal restatement) would let the two drift. When no distinct condition was derived
+                # (it equals the raw message, e.g. the derivation failed safe), fall back to the
+                # plan's goal, then to the generic bar, exactly as before.
+                overall_goal = (goal_condition or "").strip()
+                if not overall_goal or overall_goal == (user_message or "").strip():
+                    overall_goal = (plan.goal or "").strip() or (
+                        "Fully and correctly answer the user's request to their satisfaction: "
+                        + user_message)
                 _max = max(1, self.cfg.answer_goal_max_iterations)
                 if self.cfg.verify_claims:
                     # The claim check needs at least one verification pass even when the goal loop

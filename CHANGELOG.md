@@ -7,6 +7,39 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **The goal/claims verification judge now runs at a strong tier, with a risk-managed fallback.**
+  New `OrchestratorConfig.verify_tier` (default `"best"`): `_verify_goal` — the ONE small,
+  hard-capped call whose verdict gates the whole turn (met/not-met decides done vs
+  needs_you/failed; `claims_unexecuted` decides honesty remediation) — resolves its model from
+  this tier instead of the mid `planner_tier`, routed via `get_provider_for_model` like the
+  overseer. Spend the strong model on judgment, keep cheap tiers for gathering: a wrong verdict
+  either ships a false "done" or triggers a full regeneration / deep re-run, both costlier than
+  the tier delta. If the strong-tier call fails or returns an unusable verdict, the judge retries
+  ONCE at `planner_tier` (the previous judge), so a deployment whose best tier is not servable
+  never silently loses the goal/claims gate. `verify_tier=""` restores the old single
+  planner-tier call. Env: `QAR_VERIFY_TIER`. Tested in `tests/test_verify_tier.py`.
+- **The overseer and verify tier are now configurable from the environment.** The
+  minimal-intervention overseer previously could not be enabled in the CLI/poll deployments at
+  all (no env wiring existed). `_config_from_env` now reads `QAR_OVERSEER` (1/true enables),
+  `QAR_OVERSEER_TIER` (default "best"), `QAR_OVERSEER_MAX_SIGNALS`, and `QAR_VERIFY_TIER`;
+  documented in `.env.example`.
+- **A degraded overseer consult retries once at the planner tier.** `OverseerSignal` gains a
+  `degraded` flag distinguishing a real "proceed" verdict from a failure that fell back to
+  proceed (provider error / unusable response). `_submit_oversee`'s background worker retries a
+  degraded consult ONCE at `planner_tier` (skipped when both tiers resolve to the same model), so
+  a deployment whose overseer tier resolves to a model the wired provider cannot serve no longer
+  has a permanently silent overseer that looks exactly like a healthy one. Still fully
+  non-blocking; both calls happen in the same background worker.
+- **Labeled overseer signal eval.** `evaluation/overseer_signals_eval.py`: 11 hand-labeled
+  hook-A/hook-B digests judged by a real model, with contrast pairs (described-vs-done drafts,
+  question-vs-instruction phrasing) and no reuse of the prompt's own exemplar phrases. 11/11 at
+  `gemini-3.5-flash` on 2026-07-06; see docs/overseer.md.
+- **The answer goal loop verifies against the turn's DERIVED GOAL CONDITION.** Step 1
+  (`_understand_input`/`_derive_goal_condition`) establishes a checkable done-standard for every
+  turn, but the final answer verification judged against the plan's own goal restatement, letting
+  the two drift. When a distinct condition was derived it is now the bar the answer is verified
+  against; when none was (derivation failed safe / message already concrete) the plan's goal and
+  the generic bar apply exactly as before.
 - **Native, key-free web search (default-on).** The runner can now ground answers on the live
   web using the model provider's OWN web-search tool, reusing the LLM key it already has, with no
   separate web-search key and no Claude Code subprocess. New `ProviderWebSearchAdapter`
