@@ -7,6 +7,46 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Scoped, item-level recent-context usage memory (task execution + item ranking).** Extends the
+  warm recent-context fallback below in three ways:
+  1. **Deep/background runs now benefit too, not just chat turns.** `Orchestrator._assemble_for_goal`
+     (used by every deep subgoal in `_run_deep`) now ALSO loads the scoped warm set, gates it
+     against the GOAL text, and merges surviving cards into the per-goal context (dedupe, fresh
+     wins) -- the same completeness guarantee a chat turn gets. After a goal completes, the cards
+     + items its context actually included are recorded back to the store under every applicable
+     scope key, so a follow-up task on the same quest/conversation warm-starts. Verified identical
+     under `Mode.BACKGROUND` (the executor's lane) with no `conv_id` in play.
+  2. **Three memory SCOPES, consulted together:** `core/recent_context.py`'s
+     `FileRecentContextStore` now keys by SCOPE (`"conv:<conv_id>"`, `"quest:<quest_id>"`,
+     `"global"`) instead of one bare key -- `record`/`load` take a scope-key list (a single bare
+     string is still accepted for convenience, classified as "conv"). `load` merges the scopes
+     deduped by card id with narrower-wins precedence (conv > quest > global). conv/quest keep the
+     existing 8-turn/24-card/14-day caps; `global` (aggregating everywhere) gets larger 24-turn/
+     64-card/30-day caps. `filter_relevant` weights each scope's lexical relevance (conv 1.0, quest
+     0.8, global 0.5) plus the existing 7-day recency tie-break; only conv-scope's immediately
+     preceding turn gets the follow-up free pass -- quest and global ALWAYS need real lexical
+     overlap, so cross-conversation/global memory never drags in something unrelated. New
+     `OrchestratorConfig.recent_context_global_enabled` (default True; env
+     `QAR_RECENT_CONTEXT_GLOBAL`) turns off ONLY the global scope.
+  3. **Item-level usage memory + ranking.** Beyond remembering which CARDS were used, each card
+     record now carries its content ITEMS (`{id, type, locator, preview (<=300 chars),
+     last_used_ts, input_keywords}`, capped 8/card, unioned by item id across turns), tagged with
+     the stopword-filtered keywords of the input that turn was answering. `render_recent_cards`
+     ranks a carried-over card's own items by (overlap with the CURRENT input's keywords, then
+     recency) before rendering, so previously-useful items lead. A new
+     `build_item_usage_hint(records, query_text)` turns this memory into a compact
+     `{card_id: [item_id, ...]}` hint threaded into `context_assembler.assemble(..., meta=...)` as
+     `meta["recent_item_usage"]`; `adapters/hybrid_context_assembler.py`'s consolidating LLM pass
+     (`core/card_filter.py`'s `consolidate_context`) folds it into the prompt as a HINT (prefer
+     keeping/ordering these ids first, never a hard override), and the rebuilt `rendered_section`
+     now reorders (not just prunes) a card's verbatim item region when the consolidator's returned
+     order differs, so ranking reaches the actual rendered text. Assemblers that don't know the
+     `recent_item_usage` meta key simply ignore it (purely additive).
+
+  Zero LLM calls in the warm path itself (the consolidator hint rides an LLM call that already
+  happens). Tests extended in `tests/test_recent_context.py` and
+  `tests/test_orchestrator_recent_context.py`, plus new
+  `tests/test_hybrid_context_assembler_recent_hint.py`. Documented in `docs/context-assembly.md`.
 - **Warm recent-context fallback for follow-up turns (no LLM).** `core/recent_context.py`:
   `RecentContextStore` (a tiny Protocol, `record`/`load`, both best-effort and never raising) plus
   `FileRecentContextStore`, its reference implementation, one JSON file per conversation under

@@ -76,7 +76,15 @@ from .guard import (
 )
 from .model_registry import TIERS, ModelRegistry
 from .overseer import OverseerSignal, build_digest, oversee
-from .recent_context import RecentContextStore, filter_relevant, render_recent_cards
+from .recent_context import (
+    GLOBAL_SCOPE_KEY,
+    RecentContextStore,
+    build_item_usage_hint,
+    conv_scope_key,
+    filter_relevant,
+    quest_scope_key,
+    render_recent_cards,
+)
 
 log = logging.getLogger("quest-ai-runner.orchestrator")
 
@@ -597,6 +605,12 @@ class OrchestratorConfig:
     # are ADDITIONAL to whatever the fresh assembly finds, so kept small). Env:
     # QAR_RECENT_CONTEXT_MAX_CARDS (read in cli.py's _config_from_env).
     recent_context_max_cards: int = 6
+    # Whether the WARM recent-context store's "global" scope (everything recently selected anywhere,
+    # not just this conversation/quest) is consulted at all. True by default. Setting this False
+    # turns off ONLY cross-conversation/cross-quest memory -- conv- and quest-scoped warm context
+    # keep working unchanged. Env: QAR_RECENT_CONTEXT_GLOBAL ("0"/"false" disables; read in
+    # cli.py's _config_from_env).
+    recent_context_global_enabled: bool = True
 
 
 @dataclass
@@ -2100,11 +2114,15 @@ class Orchestrator:
         # (and related) conversation to rewrite a short/anaphoric message into a self-contained goal
         # condition before selecting context. Never raises. None = Step 1 is a no-op (zero latency).
         self.conversation_store = conversation_store
-        # Optional WARM RECENT-CONTEXT store (see core/recent_context.py). When wired, ``run``
-        # loads the cards this conversation's recent turns already selected (fast, no LLM), gates
-        # them through a pure lexical relevance filter, and merges any survivors into context_view
-        # so a follow-up turn is warm even before/without a fresh assembly. Never raises. None =
-        # exactly today's behavior (no recent-turn fallback).
+        # Optional WARM RECENT-CONTEXT store (see core/recent_context.py). When wired, ``run`` (and
+        # each deep goal via ``_assemble_for_goal``) loads the cards recently selected across THREE
+        # scopes -- this conversation, this quest, and always "global" -- (fast, no LLM), gates them
+        # through a pure lexical relevance filter weighted by scope, and merges any survivors into
+        # context_view so a follow-up turn (or a background task) is warm even before/without a
+        # fresh assembly. It also remembers, PER CARD, which content items past turns found useful
+        # for a similar input, ranking them to the front both when rendering a carried-over card and
+        # as a hint to the consolidating LLM pass when a card is re-found by fresh assembly. Never
+        # raises. None = exactly today's behavior (no recent-turn fallback).
         self.recent_context = recent_context
 
     def get_provider_for_model(self, model: str) -> ModelProvider:
@@ -2646,25 +2664,111 @@ class Orchestrator:
             f"Do this now: {nxt}"
         )
 
+    # --- warm recent-context scoping (shared by the main turn and per-goal deep context) -----
+
+    def _recent_scope_keys(self, ctx_meta: Optional[Dict[str, Any]]) -> List[str]:
+        """The WARM recent-context scope keys for this run/goal (see core/recent_context.py):
+        ``conv:<conv_id>`` when a conversation id is in scope, ``quest:<quest_id>`` when a quest id
+        is in scope, PLUS always ``"global"`` (everything recently selected anywhere), unless the
+        consumer turned cross-conversation memory off via ``cfg.recent_context_global_enabled``. A
+        turn/goal with neither a conv_id nor a quest_id in scope still reads/records global (as
+        long as global is enabled). Never raises; [] when recent-context is off entirely."""
+        keys: List[str] = []
+        try:
+            meta = ctx_meta or {}
+            conv_id = meta.get("conv_id")
+            quest_id = meta.get("quest_id")
+            if conv_id:
+                keys.append(conv_scope_key(conv_id))
+            if quest_id:
+                keys.append(quest_scope_key(quest_id))
+            if self.cfg.recent_context_global_enabled:
+                keys.append(GLOBAL_SCOPE_KEY)
+        except Exception:  # noqa: BLE001
+            return []
+        return keys
+
     # --- per-goal context selection (each deep goal gets its OWN context) -----
 
     def _assemble_for_goal(self, goal: str, *,
                            ctx_meta: Optional[Dict[str, Any]]) -> str:
+        """Select PER-GOAL context for a single deep goal condition (text only). Thin wrapper over
+        ``_assemble_for_goal_with_cards`` for any caller that only needs the rendered block."""
+        text, _cards = self._assemble_for_goal_with_cards(goal, ctx_meta=ctx_meta)
+        return text
+
+    def _assemble_for_goal_with_cards(
+        self, goal: str, *, ctx_meta: Optional[Dict[str, Any]]
+    ) -> Tuple[str, List[Dict[str, Any]]]:
         """Select PER-GOAL context for a single deep goal condition. Renders a block from the
-        wired ``context_assembler`` (targeting THIS goal, not the shared run-level message) plus a
-        relevant CURRENT-conversation slice from the wired ``conversation_store``. Returns "" when
-        neither is wired or nothing is found. Never raises — a degraded source is simply skipped."""
+        wired ``context_assembler`` (targeting THIS goal, not the shared run-level message), the
+        WARM recent-context store's own scoped warm set (see core/recent_context.py -- the SAME
+        completeness guarantee a chat turn gets, so a deep/background task benefits from warm
+        context too, not just the interactive turn), plus a relevant CURRENT-conversation slice
+        from the wired ``conversation_store``. Returns ``(rendered_text, card_metadata)`` --
+        ``card_metadata`` is the merged fresh + surviving-recent card list this goal's context
+        actually included (fresh cards first, dedupe-fresh-wins), so the caller can ``record()``
+        it back to the warm store after the goal completes (see ``run_one`` in ``_run_deep``), the
+        same way the main turn does. Returns ``("", [])`` when nothing is wired or found. Never
+        raises — a degraded source is simply skipped."""
         parts: List[str] = []
-        if self.context_assembler is not None and (goal or "").strip():
+        fresh_card_ids: set = set()
+        fresh_card_meta: List[Dict[str, Any]] = []
+        goal_text = (goal or "").strip()
+
+        # Load the scoped warm set ONCE (used both for the recent_item_usage hint below and for
+        # the recent-turn merge further down), gated against the GOAL text (not the run-level
+        # message -- each subgoal gets memory relevant to ITS own focus).
+        recent_records: List[Dict[str, Any]] = []
+        recent_hint: Dict[str, List[str]] = {}
+        if self.recent_context is not None and self.cfg.recent_context_enabled and goal_text:
             try:
-                assembled = self.context_assembler.assemble(goal, meta=ctx_meta or None)
+                scope_keys = self._recent_scope_keys(ctx_meta)
+                if scope_keys:
+                    recent_records = self.recent_context.load(scope_keys)
+                    recent_hint = build_item_usage_hint(recent_records, goal_text)
+            except Exception:  # noqa: BLE001
+                log.debug("per-goal recent-context load failed", exc_info=True)
+                recent_records, recent_hint = [], {}
+
+        if self.context_assembler is not None and goal_text:
+            try:
+                # A fresh dict for THIS goal's hint: never inherit the run-level ``ctx_meta``'s own
+                # ``recent_item_usage`` (built for the user's whole message, not this subgoal) when
+                # this goal's own scoped load produced no hint.
+                goal_meta = dict(ctx_meta or {})
+                if recent_hint:
+                    goal_meta["recent_item_usage"] = recent_hint
+                else:
+                    goal_meta.pop("recent_item_usage", None)
+                assembled = self.context_assembler.assemble(goal_text, meta=goal_meta or None)
                 cv = self._materialize_deep_context(assembled)
                 if cv:
                     parts.append("--- CONTEXT SELECTED FOR THIS GOAL ---\n" + cv)
+                fresh_card_meta = [
+                    cm for cm in (getattr(assembled, "card_metadata", None) or [])
+                    if isinstance(cm, dict) and cm.get("id")
+                ]
+                fresh_card_ids = {cm.get("id") for cm in fresh_card_meta}
             except Exception:  # noqa: BLE001 — assembly must never break the run
                 log.debug("per-goal context assembly failed", exc_info=True)
+
+        recent_entries: List[Dict[str, Any]] = []
+        if recent_records:
+            try:
+                filtered = filter_relevant(
+                    recent_records, goal_text, is_followup=False,
+                    max_cards=self.cfg.recent_context_max_cards)
+                survivors = [r for r in filtered if r.get("id") not in fresh_card_ids]
+                recent_text, recent_entries = render_recent_cards(survivors, goal_text)
+                if recent_text:
+                    parts.append(recent_text)
+            except Exception:  # noqa: BLE001 — recent-context merge must never break the run
+                log.debug("per-goal recent-context merge failed", exc_info=True)
+                recent_entries = []
+
         conv_id = (ctx_meta or {}).get("conv_id")
-        if self.conversation_store is not None and conv_id and (goal or "").strip():
+        if self.conversation_store is not None and conv_id and goal_text:
             try:
                 slc = self.conversation_store.current_slice(conv_id, goal)
                 txt = (getattr(slc, "text", "") or "").strip()
@@ -2672,7 +2776,7 @@ class Orchestrator:
                     parts.append("--- RELEVANT CONVERSATION FOR THIS GOAL ---\n" + txt)
             except Exception:  # noqa: BLE001 — store must never break the run
                 log.debug("per-goal conversation slice failed", exc_info=True)
-        return "\n\n".join(parts)
+        return "\n\n".join(parts), fresh_card_meta + recent_entries
 
     @staticmethod
     def _materialize_deep_context(assembled: Any) -> str:
@@ -2918,7 +3022,7 @@ class Orchestrator:
             # that report they did not have enough (the "look at more if it did not learn enough"
             # widening principle). Empty when no assembler/store is wired (single-goal/no-store path
             # is byte-for-byte unchanged). The closure mutates ``extra_context`` across iterations.
-            per_goal_context = self._assemble_for_goal(goal, ctx_meta=ctx_meta)
+            per_goal_context, per_goal_cards = self._assemble_for_goal_with_cards(goal, ctx_meta=ctx_meta)
             extra_context: List[str] = []
             # The runner picks the run_id (from its session file); we learn it from the first exec
             # event and reuse it to label the completion milestone, so the consumer can attach this
@@ -3168,6 +3272,22 @@ class Orchestrator:
                                         data={"goal": goal,
                                               "run_id": captured_run_id["id"],
                                               "deep_output": _strip_future_context(res.output).strip() or None}))
+            # WARM recent-context write-back (see core/recent_context.py): record the cards+items
+            # THIS goal's context actually included, under every applicable scope key, so a task
+            # follow-up (another deep goal on the same quest/conversation, or the next chat turn)
+            # warm-starts on what this run already found -- the completeness half of the fallback:
+            # a background/deep run benefits from warm memory the same way an interactive turn
+            # does. Keyed by the GOAL text (what the context was selected FOR). Best-effort, never
+            # raises, and runs regardless of whether the goal was ultimately verified met (the
+            # context was genuinely used either way).
+            if (self.recent_context is not None and self.cfg.recent_context_enabled
+                    and per_goal_cards):
+                try:
+                    goal_scope_keys = self._recent_scope_keys(ctx_meta)
+                    if goal_scope_keys:
+                        self.recent_context.record(goal_scope_keys, per_goal_cards, goal)
+                except Exception:  # noqa: BLE001
+                    log.debug("per-goal recent-context record failed", exc_info=True)
             return res
 
         # Handle nested task groups for sequential dependencies:
@@ -4390,17 +4510,22 @@ class Orchestrator:
 
         # --- Recent-turn context: warm NO-LLM fallback (see core/recent_context.py) ------------
         # Independent of the ConversationStore-driven Stage 1 above (that rewrites the message; this
-        # carries forward the CARDS a conversation's own recent turns already selected). A fast
-        # local file read, gated through a pure lexical filter (no LLM) so an unrelated new question
-        # never drags in stale cards. Cards that survive are merged into context_view further below,
-        # crucially EVEN WHEN the fresh background assembly started next times out or finds nothing
-        # -- that resilience is the point. ``recent_key`` keys the conversation; both None means the
-        # feature is inert this turn (no conv_id/quest_id to key on).
-        recent_key = conv_id or quest_id
+        # carries forward the CARDS recently selected). A fast local file read across THREE scopes
+        # -- conv:<conv_id>, quest:<quest_id>, and always "global" (unless the consumer disabled
+        # cross-conversation memory) -- gated through a pure lexical filter (no LLM) so an unrelated
+        # new question never drags in stale cards. Cards that survive are merged into context_view
+        # further below, crucially EVEN WHEN the fresh background assembly started next times out or
+        # finds nothing -- that resilience is the point. ``_recent_scope_keys`` is empty only when
+        # recent-context is fully off (no conv/quest id AND global disabled is impossible since
+        # global defaults on; it is only empty when the consumer wired no recent_context at all,
+        # handled by the outer None check below).
+        _recent_scope_keys_this_turn = self._recent_scope_keys(_ctx_meta)
         _recent_filtered: List[Dict[str, Any]] = []
-        if self.recent_context is not None and cfg.recent_context_enabled and recent_key:
+        _recent_records: List[Dict[str, Any]] = []
+        if (self.recent_context is not None and cfg.recent_context_enabled
+                and _recent_scope_keys_this_turn):
             try:
-                _recent_records = self.recent_context.load(recent_key)
+                _recent_records = self.recent_context.load(_recent_scope_keys_this_turn)
             except Exception:  # noqa: BLE001 -- a store failure must never break the run
                 _recent_records = []
             try:
@@ -4413,6 +4538,19 @@ class Orchestrator:
                     is_followup=_is_followup, max_cards=cfg.recent_context_max_cards)
             except Exception:  # noqa: BLE001
                 _recent_filtered = []
+            # ITEM-LEVEL RANKING HINT for fresh assembly (see core/recent_context.py): built from
+            # ALL loaded records (not just the ones that survived the CARD-level gate above), since
+            # this only influences item ORDER within a card fresh assembly re-selects on its own --
+            # even a card that did not itself pass filter_relevant this turn may resurface via fresh
+            # assembly, and its item-usage history should still apply. Threaded into the
+            # consolidating LLM pass via meta; a pure hint, never a hard override.
+            try:
+                _recent_item_usage_hint = build_item_usage_hint(
+                    _recent_records, f"{goal_condition} {user_message}")
+                if _recent_item_usage_hint:
+                    _ctx_meta["recent_item_usage"] = _recent_item_usage_hint
+            except Exception:  # noqa: BLE001
+                pass
 
         _assembled = None
         _ctx_future = None
@@ -4539,7 +4677,8 @@ class Orchestrator:
             try:
                 _fresh_ids = {cm.get("id") for cm in _card_meta if isinstance(cm, dict)}
                 _recent_survivors = [r for r in _recent_filtered if r.get("id") not in _fresh_ids]
-                _recent_text, _recent_entries = render_recent_cards(_recent_survivors)
+                _recent_text, _recent_entries = render_recent_cards(
+                    _recent_survivors, f"{goal_condition} {user_message}")
                 if _recent_text:
                     context_view = (_recent_text + "\n\n" + context_view if context_view
                                     else _recent_text)
@@ -4587,9 +4726,9 @@ class Orchestrator:
         # the warm set follows the conversation forward; a card that has dropped out of relevance is
         # pruned next turn by filter_relevant, not by record() itself.
         if (self.recent_context is not None and cfg.recent_context_enabled
-                and recent_key and _merged_card_meta):
+                and _recent_scope_keys_this_turn and _merged_card_meta):
             try:
-                self.recent_context.record(recent_key, _merged_card_meta, user_message)
+                self.recent_context.record(_recent_scope_keys_this_turn, _merged_card_meta, user_message)
             except Exception:  # noqa: BLE001
                 pass
 

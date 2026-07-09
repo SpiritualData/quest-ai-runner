@@ -79,6 +79,9 @@ Rules:
 - Some cards list NO items (they are file/reference cards whose value is their summary and file \
 listings). Judge them at the CARD level: to keep one, return it with an empty "items" list; to drop \
 it, omit it.
+- A card may note which item ids were recently useful for a SIMILAR past input. Treat this as a \
+hint, not a rule: when one of those items still genuinely helps THIS task, keep it and list it \
+first among that card's kept items; when it does not help this task, drop it like any other item.
 - For each kept item, choose how to deliver it:
   "paste" (the default): the item's content is included directly.
   "pointer": only for a file the worker can open by itself later, when pasting its full text now is \
@@ -175,6 +178,7 @@ def consolidate_context(
     *,
     model_provider: Optional[ModelProvider] = None,
     model: Optional[str] = None,
+    recent_item_usage: Optional[Dict[str, List[str]]] = None,
 ) -> List[Dict[str, Any]]:
     """ONE holistic LLM pass over the merged card set: drop, rerank, and prune content items.
 
@@ -182,6 +186,13 @@ def consolidate_context(
     (the previews come from ``render_card_content_blocks``). Returns the CONSOLIDATOR OUTPUT, an
     ordered keep-list ``[{"card_id", "items": [{"item_id", "deliver": "paste"|"pointer"}]}]``, kept
     cards first in priority order, only the surviving item ids per card.
+
+    ``recent_item_usage`` (optional) is the ``{card_id: [item_id, ...]}`` hint built from the warm
+    recent-context store's item-usage memory (see ``core.recent_context.build_item_usage_hint``):
+    item ids a past turn with a SIMILAR input already found useful for that card, ranked most
+    relevant first. When a hint names ids present on a candidate card, the prompt tells the LLM to
+    prefer keeping (and ordering first) those items -- a HINT the consolidator may still override
+    when they no longer serve THIS task, never a hard rule.
 
     The LLM selects ids ONLY, never rewrites content, so everything stays VERBATIM. Graceful: when
     ``model_provider`` is None, or the call/parse/validation fails, returns keep-all with
@@ -192,6 +203,7 @@ def consolidate_context(
     if model_provider is None:
         return _consolidate_keep_all(cards)
     try:
+        recent_item_usage = recent_item_usage or {}
         card_lines: List[str] = []
         for card in cards[:_CONSOLIDATE_MAX_CARDS]:
             cid = card.get("id", "")
@@ -203,6 +215,15 @@ def consolidate_context(
             if preview and preview != title:
                 head += f" :: {preview}"
             card_lines.append(head)
+            # Recent-turn item-usage hint for THIS card (see core.recent_context): only the ids
+            # that are actually candidates on this card are worth naming.
+            known_item_ids = {
+                it.get("id", "") for it in (card.get("items") or []) if isinstance(it, dict)
+            }
+            recent_ids = [iid for iid in recent_item_usage.get(cid, []) if iid in known_item_ids]
+            if recent_ids:
+                card_lines.append(
+                    "  (recently useful for a similar input: " + ", ".join(recent_ids) + ")")
             for it in (card.get("items") or [])[:_CONSOLIDATE_MAX_ITEMS]:
                 if not isinstance(it, dict):
                     continue

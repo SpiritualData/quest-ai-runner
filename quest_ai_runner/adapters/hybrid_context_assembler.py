@@ -193,15 +193,19 @@ class HybridContextAssembler(ContextAssemblerBase):
                 seen_source_keys.add(key)
                 merged_sources.append(src)
 
-        # Merge card_metadata from both arms (keyword first, then vector), deduped by id.
+        # Merge card_metadata from both arms (keyword first, then vector), deduped by id. NOTE:
+        # loop variable named ``card_meta`` (NOT ``meta``) -- this function's ``meta`` PARAMETER
+        # (the caller's assemble() meta, e.g. carrying ``recent_item_usage``) must survive past
+        # this loop so it can be threaded into ``_consolidate_merged`` below; shadowing it here
+        # silently emptied that hint in an earlier version of this code.
         merged_metadata: List[dict] = []
         seen_card_ids: set = set()
-        for meta in (getattr(kw_result, "card_metadata", None) or []) + \
+        for card_meta in (getattr(kw_result, "card_metadata", None) or []) + \
                     (getattr(vec_result, "card_metadata", None) or []):
-            card_id = meta.get("id")
+            card_id = card_meta.get("id")
             if card_id and card_id not in seen_card_ids:
                 seen_card_ids.add(card_id)
-                merged_metadata.append(meta)
+                merged_metadata.append(card_meta)
 
         mechanical = AssembledContext(
             context_view=combined_view,
@@ -222,7 +226,7 @@ class HybridContextAssembler(ContextAssemblerBase):
             and self._model_provider is not None
             and any((m.get("items") for m in merged_metadata))
         ):
-            consolidated = self._consolidate_merged(task_text, merged_metadata, mechanical)
+            consolidated = self._consolidate_merged(task_text, merged_metadata, mechanical, meta=meta)
             if consolidated is not None:
                 return consolidated
         return mechanical
@@ -232,6 +236,8 @@ class HybridContextAssembler(ContextAssemblerBase):
         task_text: str,
         merged_metadata: List[dict],
         mechanical: AssembledContext,
+        *,
+        meta: Optional[Dict[str, Any]] = None,
     ) -> Optional[AssembledContext]:
         """Run the consolidating filter and rebuild from survivors. None on any failure/empty.
 
@@ -240,12 +246,23 @@ class HybridContextAssembler(ContextAssemblerBase):
         content + conventions, NOT just its content items), in the consolidator's order. When the
         consolidator pruned some of a card's content items, those items' rendered fragments are
         REMOVED from the verbatim section by string match (never re-synthesized); a fragment that
-        cannot be located is left intact rather than risk corrupting the section. A card with no
-        ``rendered_section`` (e.g. a stub assembler) falls back to the old item-only rebuild under a
-        ``### <title>`` header. ``card_metadata``/``card_ids`` are set to the consolidated set, each
-        kept item carries its ``deliver`` tag, and each surviving card's ``rendered_section`` is
-        updated to the pruned text so the deep preamble stays consistent. Returns None (caller keeps
-        the mechanical merge) when nothing survives or anything goes wrong. Never raises.
+        cannot be located is left intact rather than risk corrupting the section. Beyond pruning,
+        when the consolidator returns a card's surviving items in a DIFFERENT order than they
+        appear in the verbatim section (e.g. because a ``recent_item_usage`` hint moved a
+        previously-useful item to the front), the item region of the section is REBUILT in the
+        consolidator's order -- see ``_reordered_section``. A card with no ``rendered_section``
+        (e.g. a stub assembler) falls back to the old item-only rebuild under a ``### <title>``
+        header, which already follows the consolidator's item order. ``card_metadata``/``card_ids``
+        are set to the consolidated set, each kept item carries its ``deliver`` tag, and each
+        surviving card's ``rendered_section`` is updated to the pruned/reordered text so the deep
+        preamble stays consistent. Returns None (caller keeps the mechanical merge) when nothing
+        survives or anything goes wrong. Never raises.
+
+        ``meta`` is the same dict the caller's ``assemble(task_text, meta=...)`` received; when it
+        carries ``meta["recent_item_usage"]`` (``{card_id: [item_id, ...]}``, see
+        ``core.recent_context.build_item_usage_hint``), that hint rides the consolidation prompt so
+        the LLM prefers/orders-first the items a similar past input already found useful. A plain
+        HINT, never a hard override -- see ``core.card_filter.consolidate_context``.
         """
         try:
             # Local import keeps the core<-adapter dependency one-directional and avoids any cycle.
@@ -257,6 +274,30 @@ class HybridContextAssembler(ContextAssemblerBase):
                 body), so prune-by-removal is a pure verbatim-substring match. Mirrors how
                 ``render_card_content`` lays a block out (both go through ``render_block_lines``)."""
                 return "\n".join(render_block_lines(blk))
+
+            def _reordered_section(section: str, original_items: List[dict], surviving: List[dict]) -> str:
+                """Rebuild the CONTIGUOUS item region of ``section`` in ``surviving``'s order.
+
+                ``render_card_content`` lays a card's items out back-to-back with no separator
+                between them (each block's own lines already start with its ``- (type)`` header),
+                so the ORIGINAL item region is exactly ``"\\n".join(_block_fragment(it) for it in
+                original_items)``. When that exact substring is found in ``section`` and pruning/
+                reordering actually changed anything, replace it with the survivors' fragments
+                joined the same way, in ``surviving``'s order. Falls back to ``section`` unchanged
+                (never corrupts it) when the original region cannot be located verbatim -- e.g. a
+                deployment that renders items differently than this module expects.
+                """
+                if not original_items or not surviving:
+                    return section
+                original_ids = [ob.get("id", "") for ob in original_items]
+                surviving_ids = [sb.get("id", "") for sb in surviving]
+                if original_ids == surviving_ids:
+                    return section  # nothing pruned AND nothing reordered
+                original_region = "\n".join(_block_fragment(ob) for ob in original_items)
+                if not original_region or original_region not in section:
+                    return section
+                new_region = "\n".join(_block_fragment(sb) for sb in surviving)
+                return section.replace(original_region, new_region, 1)
 
             # EVERY merged card participates (not only item-bearing ones): a file-only keyword card
             # carries its value in its summary + file listings, so the consolidator must be able to
@@ -282,9 +323,11 @@ class HybridContextAssembler(ContextAssemblerBase):
             if not consolidator_input:
                 return None
 
+            recent_item_usage = (meta or {}).get("recent_item_usage") or {}
             verdict = consolidate_context(
                 task_text, consolidator_input,
                 model_provider=self._model_provider, model=self._model,
+                recent_item_usage=recent_item_usage,
             )
             if not verdict:
                 return None
@@ -313,23 +356,36 @@ class HybridContextAssembler(ContextAssemblerBase):
 
                 rendered = m.get("rendered_section")
                 if rendered:
-                    # Start from the VERBATIM section. Prune ONLY when this card had items and the
-                    # kept set is a strict subset; remove each pruned item's exact rendered fragment.
+                    # Start from the VERBATIM section. Prune/reorder ONLY when this card had items
+                    # and either some were dropped or the consolidator returned a different order
+                    # (e.g. a recent_item_usage hint moved a previously-useful item to the front).
                     section = rendered
-                    if original_items and len(surviving) < len(original_items):
-                        kept_ids = {b.get("id", "") for b in surviving}
-                        for ob in original_items:
-                            if ob.get("id", "") in kept_ids:
-                                continue
-                            frag = _block_fragment(ob)
-                            if frag and frag in section:
-                                section = section.replace(frag, "", 1)
-                            else:
-                                # Fallback: try the raw resolved text; if neither is found, leave the
-                                # section intact (never corrupt it) rather than guess.
-                                raw = ob.get("text", "")
-                                if raw and raw in section:
-                                    section = section.replace(raw, "", 1)
+                    original_ids = [ob.get("id", "") for ob in original_items]
+                    surviving_ids = [sb.get("id", "") for sb in surviving]
+                    if original_items and original_ids != surviving_ids:
+                        # ONE clean substitution: the whole original item region -> the survivors'
+                        # fragments in the CONSOLIDATOR's order, both pruning and reordering in a
+                        # single string operation (see _reordered_section). This only fires when the
+                        # region is found as an exact contiguous substring; otherwise fall back to
+                        # the old per-fragment removal below (prune only, original order preserved --
+                        # never corrupts the section, just skips reordering).
+                        reordered = _reordered_section(section, original_items, surviving)
+                        if reordered != section:
+                            section = reordered
+                        else:
+                            kept_ids = {b.get("id", "") for b in surviving}
+                            for ob in original_items:
+                                if ob.get("id", "") in kept_ids:
+                                    continue
+                                frag = _block_fragment(ob)
+                                if frag and frag in section:
+                                    section = section.replace(frag, "", 1)
+                                else:
+                                    # Fallback: try the raw resolved text; if neither is found, leave
+                                    # the section intact (never corrupt it) rather than guess.
+                                    raw = ob.get("text", "")
+                                    if raw and raw in section:
+                                        section = section.replace(raw, "", 1)
                     part = section
                 else:
                     # No rendered_section (e.g. a stub assembler): rebuild from surviving items under

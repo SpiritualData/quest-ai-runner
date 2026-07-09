@@ -465,6 +465,13 @@ class ContextAssembler(Protocol):
         ``on_event``, if given, is a callable ``(event_type: str, data: dict) -> None`` that
         receives progress events as assembly progresses. Callers that do not care about events
         may omit it; implementations that do not support it may ignore it.
+
+        ``meta`` MAY carry ``"recent_item_usage"`` -- ``{card_id: [item_id, ...]}``, an optional
+        HINT built by ``core.recent_context.build_item_usage_hint`` from the warm recent-context
+        store's memory of which items past turns found useful for a similar input. An assembler
+        that does not know this key MUST simply ignore it (it is purely additive); the reference
+        ``HybridContextAssembler`` threads it into its consolidating LLM pass so previously-useful
+        items are preferred/ordered first, never hard-enforced.
         """
 
     def record(self, task_text: str, outcome: Dict[str, Any]) -> None:

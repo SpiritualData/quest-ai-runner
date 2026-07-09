@@ -377,67 +377,147 @@ otherwise it sets the `TurnContextStore` directly. A consumer that never calls
 
 Fresh assembly (Step 2, above) runs `assemble()` in a background thread with a 5 second budget so
 corpus search never stalls an interactive turn. That is the right tradeoff for latency, but it has
-a cost: a slow or timed-out assemble() leaves that turn with NO cards at all, even ones a prior
-turn in the SAME conversation already found relevant a moment ago. `core/recent_context.py` closes
-that gap with a small, synchronous, no-LLM fallback: the cards a conversation's own recent turns
-selected, carried forward and gated by a cheap lexical check so an unrelated new question never
-drags in stale context.
+a cost: a slow or timed-out assemble() leaves that turn with NO cards at all, even ones recently
+found relevant a moment ago. `core/recent_context.py` closes that gap with a small, synchronous,
+no-LLM fallback: cards recently selected, carried forward and gated by a cheap lexical check so an
+unrelated new question never drags in stale context.
 
 **`RecentContextStore` (a tiny Protocol, `core.recent_context`).** Two methods, both
 best-effort and NEVER raise:
-- `record(key, cards, user_text)` -- persists this turn's selected `card_metadata` for
-  conversation `key` (`conv_id` or `quest_id`, whichever the caller supplied).
-- `load(key)` -- returns the recent records for that key, most-recent-first, deduped by card id
-  (a duplicate id keeps its newest occurrence). Each record is stamped with `turn_index` (0 = the
-  immediately preceding turn, 1 = the one before that, ...).
+- `record(scope_keys, cards, user_text)` -- persists this turn's selected `card_metadata` under
+  EVERY key in `scope_keys` (a list, or a single bare string for convenience).
+- `load(scope_keys)` -- returns the recent records merged across `scope_keys`, deduped by card id
+  with narrower-scope-wins precedence (see Scopes below). Each record is stamped with `scope`
+  (`"conv"`/`"quest"`/`"global"`) and `turn_index` (0 = the immediately preceding turn in that
+  scope, 1 = the one before that, ...).
 
-`FileRecentContextStore` is the reference implementation: one JSON file per conversation under
+`FileRecentContextStore` is the reference implementation: one JSON file per SCOPE KEY under
 `<root_dir>/recent/<sha1(key)[:16]>.json`, written atomically (temp file + `os.replace`, the same
-pattern `FileContextStore` uses). A file holds at most `max_turns` turns (default 8) and
-`max_cards` unique card ids (default 24, newest wins when trimming); each turn older than
-`max_record_age_days` (default 14) is pruned on write. Each stored card is a compact preview
-(id, title, adapter, relevance_score, keywords, files, a preview capped at 1500 characters), not
-the full rendered card: a consumer wanting a fresh render gets one on the next turn's normal
-assembly path anyway.
+pattern `FileContextStore` uses).
+
+### Scopes: conv, quest, and global -- consulted together
+
+Memory is kept in three scopes, all queried on every turn:
+
+| Scope    | Key format         | Weight | Free pass on follow-up? | Caps (turns / cards / TTL) |
+|----------|---------------------|:------:|:------------------------:|-----------------------------|
+| conv     | `conv:<conv_id>`    | 1.0    | Yes (turn_index 0 only)  | 8 / 24 / 14 days             |
+| quest    | `quest:<quest_id>`  | 0.8    | No -- real overlap required | 8 / 24 / 14 days       |
+| global   | `global`            | 0.5    | No -- real overlap required | 24 / 64 / 30 days      |
+
+`load()` merges the scopes deduped by card id: when the SAME card shows up in more than one scope,
+the NARROWEST scope's record wins whole (conv > quest > global) -- it keeps that scope's own
+`preview`/`items`/`turn_index`. `global` aggregates across every conversation and quest, so it gets
+larger caps and a longer TTL; a consumer that wants ONLY conv/quest memory (no cross-conversation
+recall at all) sets `OrchestratorConfig.recent_context_global_enabled = False` (env
+`QAR_RECENT_CONTEXT_GLOBAL`), which drops just the `"global"` key from the scope list -- conv and
+quest scoping are unaffected.
+
+Each stored card carries: `id`, `title`, `adapter`, `relevance_score`, `keywords`, `files`, `ts`,
+and structured content `items` (see below); a card with no structured items falls back to a
+whole-card preview capped at 500 characters -- not the full rendered card, since a consumer wanting
+a fresh render gets one on the next turn's normal assembly path anyway.
+
+### Item-level usage memory: not just which cards, but which parts of a card
+
+Beyond remembering WHICH cards were used, each card record now remembers WHICH of its content
+items a turn's consolidation actually kept, tagged with what that turn was answering:
+
+```
+item: {id, type, locator, preview (<=300 chars), last_used_ts, input_keywords}
+```
+
+`input_keywords` is the stopword-filtered keywords of the turn's user text -- what this item served.
+Items are capped 8 per card and, when the SAME card is re-selected on a later turn, unioned by item
+id (the newest occurrence's preview/locator/timestamp wins; `input_keywords` from every occurrence
+are unioned, capped at 24). This is what lets a card surviving into a later turn re-rank its own
+items so the ones a similar past input found useful come first.
 
 **`filter_relevant(records, query_text, *, is_followup, max_cards)` -- the relevance gate.** A
 record passes when EITHER:
-- `is_followup` is true and the record came from the immediately preceding turn
-  (`turn_index == 0`), so a genuine follow-up ("what about that?", "ok continue") gets the
-  previous turn's cards for free, no lexical check needed; or
+- `is_followup` is true, the record's scope is `"conv"` (a bare/legacy key defaults to conv), and
+  it came from the immediately preceding turn (`turn_index == 0`) -- a genuine follow-up ("what
+  about that?") gets the CONVERSATION's own previous turn for free, no lexical check needed; or
 - its keywords/title have real lexical overlap with the current message: a stopword-filtered
-  token-overlap ratio of at least 0.15, or at least 2 distinct informative tokens in common.
+  token-overlap ratio of at least 0.15, or at least 2 distinct informative tokens in common. Quest-
+  and global-scope records ALWAYS need this real overlap -- there is no free pass outside the
+  current conversation.
 
-An unrelated new question (no overlap, and not the immediately previous turn) is dropped. That is
-the whole point: recent cards are used only when they are still relevant to the CURRENT input.
-Passing records are ranked by (forced-pass or overlap ratio) plus a recency tie-break (7 day
-half-life, the same shape as `TurnContextStore`'s own scoring) and capped to `max_cards`.
-`is_followup` itself comes from the Orchestrator's existing cheap, no-LLM
-`_needs_context_to_understand` check, so this adds no extra latency or model call.
+An unrelated new question (no overlap, and not the conv-scope's immediately previous turn) is
+dropped. Passing records are ranked by `(lexical_relevance * scope_weight) + recency_tie_break`
+(7 day half-life) and capped to `max_cards`. `is_followup` itself comes from the Orchestrator's
+existing cheap, no-LLM `_needs_context_to_understand` check, so this adds no extra latency or
+model call.
 
-**How the Orchestrator wires it in.** `Orchestrator(recent_context=...)` plus
-`OrchestratorConfig.recent_context_enabled` (default True) and
-`recent_context_max_cards` (default 6, the cap passed to `filter_relevant`). On each `run()`:
-1. `load()` the conversation's recent records, keyed by `conv_id` or `quest_id`.
-2. Run them through `filter_relevant()` against the derived goal condition + the literal message.
-3. Wait for fresh assembly (Step 2) as usual.
-4. Merge: any surviving recent card whose id was NOT re-found by fresh assembly this turn is
+**`render_recent_cards(records, query_text)`** renders each surviving card's items ranked by
+(keyword overlap with `query_text`, then recency) so previously-useful items lead, falling back to
+the whole-card preview when a card has no items.
+
+**`build_item_usage_hint(records, query_text)`** turns the SAME item-usage memory into a compact
+`{card_id: [item_id, ...]}` hint (ranked the same way), meant to influence item ORDER within a card
+that a FRESH assembly re-selects on its own -- see "Threading the hint into fresh assembly" below.
+
+### How the Orchestrator wires it in (the main turn)
+
+`Orchestrator(recent_context=...)` plus `OrchestratorConfig.recent_context_enabled` (default True)
+and `recent_context_max_cards` (default 6, the cap passed to `filter_relevant`). On each `run()`:
+1. Build this turn's scope keys (`_recent_scope_keys`): `conv:<conv_id>` and/or `quest:<quest_id>`
+   when present, plus always `"global"` (unless disabled). A turn with neither a conv nor a quest
+   id still reads/records global.
+2. `load()` the merged scoped records.
+3. Run them through `filter_relevant()` against the derived goal condition + the literal message.
+4. Build the item-usage hint (`build_item_usage_hint`) from ALL loaded records (not just the ones
+   that passed step 3 -- this only influences item ORDER within a card fresh assembly re-selects on
+   its own) and thread it into `context_meta["recent_item_usage"]` before assembly runs.
+5. Wait for fresh assembly (Step 2) as usual -- it receives the hint via `meta`.
+6. Merge: any surviving recent card whose id was NOT re-found by fresh assembly this turn is
    rendered (`render_recent_cards`) and folded into `context_view` and `EVENT_CONTEXT`'s
-   `card_metadata`, tagged `adapter: "recent"` so a UI can visually tell carried-over context
-   apart from freshly assembled cards. A card fresh assembly DID re-find wins outright; the
-   recent-turn copy is dropped rather than duplicated.
-5. `record()` the MERGED selection (fresh + surviving recent) back to the store, so the warm set
-   follows the conversation forward turn by turn.
+   `card_metadata`, tagged `adapter: "recent"`. A card fresh assembly DID re-find wins outright.
+7. `record()` the MERGED selection (fresh + surviving recent) back to the store under every scope
+   key from step 1, so the warm set follows forward.
 
-Step 4 is what makes this a genuine fallback, not just a cache: `EVENT_CONTEXT` fires whenever
+Step 6 is what makes this a genuine fallback, not just a cache: `EVENT_CONTEXT` fires whenever
 EITHER fresh assembly ran OR a recent card survived, so a turn where the assembler is unwired,
-times out, or raises still gets its conversation's own recent context instead of none at all.
+times out, or raises still gets recent context instead of none at all.
 
-Disable it with `QAR_RECENT_CONTEXT=0` (env, read in `cli.py`), or by passing
+### Threading the hint into fresh assembly (the consolidator)
+
+`adapters/hybrid_context_assembler.py`'s `HybridContextAssembler` runs ONE consolidating LLM pass
+(`core/card_filter.py`'s `consolidate_context`) over the merged card set from both retrieval arms.
+When the caller's `meta["recent_item_usage"]` names item ids on a candidate card, the consolidation
+prompt gets an extra per-card line ("recently useful for a similar input: ..."), and the rules tell
+the LLM to prefer keeping/ordering those first -- a HINT, never a hard override; an item that no
+longer serves the current task is still dropped like any other. Because the consolidator already
+returns each card's kept items in ITS OWN priority order, the rebuilt `rendered_section` (the
+card's whole verbatim block) is reordered -- not just pruned -- when that order differs from the
+section's original layout, so the ranking actually reaches the rendered text a deep worker or the
+answer model reads, not just the internal `items` list. Any assembler that does not know the
+`recent_item_usage` meta key (the plain `FileContextStore`, the vector arm) simply ignores it,
+since `meta` is always optional/additive.
+
+### Deep and background runs get the same completeness guarantee
+
+Most real task work happens in DEEP runs, whose per-goal context comes from
+`Orchestrator._assemble_for_goal` (used by every subgoal in `_run_deep`), not the main-turn path
+above. `_assemble_for_goal` now ALSO:
+1. Loads the SAME scoped warm set (via `ctx_meta`'s `conv_id`/`quest_id`), gated with
+   `filter_relevant` against the GOAL text (not the run-level message -- each subgoal gets memory
+   relevant to its own focus), and threads the item-usage hint into its own `assemble()` call.
+2. Merges gated survivors into the per-goal context the same dedupe-fresh-wins way as the main turn.
+3. After the goal completes (met or not -- the context was genuinely used either way), records the
+   cards + items that context actually included back to the store under every applicable scope key,
+   so a LATER goal on the same quest/conversation (or the next chat turn) warm-starts.
+
+This runs identically under `Mode.BACKGROUND` (the task executor's lane): a background task with
+only a `quest_id` (no `conv_id` at all) still reads/writes the `quest:<quest_id>` and `global`
+scopes, so two sequential background runs on the same quest warm-start the second from the first.
+
+Disable the whole feature with `QAR_RECENT_CONTEXT=0` (env, read in `cli.py`), or by passing
 `OrchestratorConfig(recent_context_enabled=False)` directly; either turns off BOTH the load and
-the write-back, leaving `run()` exactly as it behaves with no recent-context store wired.
-`QAR_RECENT_CONTEXT_MAX_CARDS` overrides the per-turn cap. `build_orchestrator` resolves the
-store via `resolve_recent_context_store`, rooted alongside the card store
+the write-back (main turn AND per-goal), leaving `run()` exactly as it behaves with no
+recent-context store wired. `QAR_RECENT_CONTEXT_MAX_CARDS` overrides the per-turn/per-goal cap;
+`QAR_RECENT_CONTEXT_GLOBAL=0` turns off only the `"global"` scope. `build_orchestrator` resolves
+the store via `resolve_recent_context_store`, rooted alongside the card store
 (`<cards_dir>/recent`) and wired independently of which `ContextAssembler` (if any) a consumer
 chose, since it is keyed purely by `conv_id`/`quest_id`.
 

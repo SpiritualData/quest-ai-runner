@@ -313,6 +313,15 @@ def _config_from_env() -> RunnerConfig:
             cfg.orchestrator.recent_context_max_cards = int(os.environ["QAR_RECENT_CONTEXT_MAX_CARDS"])
         except ValueError:
             pass
+    # QAR_RECENT_CONTEXT_GLOBAL: the recent-context store's "global" scope (everything recently
+    # selected anywhere, not just this conversation/quest) is ON by default. "0"/"false" disables
+    # ONLY cross-conversation/cross-quest memory; conv- and quest-scoped warm context (and the
+    # QAR_RECENT_CONTEXT master switch above) are unaffected.
+    _rcg = (os.getenv("QAR_RECENT_CONTEXT_GLOBAL") or "").strip().lower()
+    if _rcg in ("0", "false", "off", "no"):
+        cfg.orchestrator.recent_context_global_enabled = False
+    elif _rcg in ("1", "true", "on", "yes"):
+        cfg.orchestrator.recent_context_global_enabled = True
     return cfg
 
 
