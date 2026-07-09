@@ -297,6 +297,22 @@ def _config_from_env() -> RunnerConfig:
     # hard-capped call gates done vs needs_you/failed and claim honesty). Set "balanced" to cheapen.
     if (os.getenv("QAR_VERIFY_TIER") or "").strip():
         cfg.orchestrator.verify_tier = os.environ["QAR_VERIFY_TIER"].strip().lower()
+    # --- Warm recent-turn context fallback (see core/recent_context.py) ------------------------
+    # ON by default (library default: True). QAR_RECENT_CONTEXT=0/false disables it entirely (no
+    # store is wired by build_orchestrator's resolve_recent_context_store, so recent-turn cards are
+    # never consulted or recorded). QAR_RECENT_CONTEXT_MAX_CARDS caps how many recent-turn cards
+    # filter_relevant may let through in one turn (default 6; these are ADDITIONAL to whatever the
+    # fresh assembly finds).
+    _rc = (os.getenv("QAR_RECENT_CONTEXT") or "").strip().lower()
+    if _rc in ("0", "false", "off", "no"):
+        cfg.orchestrator.recent_context_enabled = False
+    elif _rc in ("1", "true", "on", "yes"):
+        cfg.orchestrator.recent_context_enabled = True
+    if os.getenv("QAR_RECENT_CONTEXT_MAX_CARDS"):
+        try:
+            cfg.orchestrator.recent_context_max_cards = int(os.environ["QAR_RECENT_CONTEXT_MAX_CARDS"])
+        except ValueError:
+            pass
     return cfg
 
 

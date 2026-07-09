@@ -7,6 +7,25 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Warm recent-context fallback for follow-up turns (no LLM).** `core/recent_context.py`:
+  `RecentContextStore` (a tiny Protocol, `record`/`load`, both best-effort and never raising) plus
+  `FileRecentContextStore`, its reference implementation, one JSON file per conversation under
+  `<root_dir>/recent/<sha1(key)[:16]>.json`, capped at 8 turns / 24 unique cards (newest wins) and
+  pruned after 14 days, written atomically. `filter_relevant` is a pure, no-LLM lexical gate: a
+  genuine follow-up ("what about that?") gets the immediately preceding turn's cards for free, an
+  older or unrelated turn's cards need real keyword overlap (ratio >= 0.15 or >= 2 shared
+  informative tokens), ranked with a 7 day recency tie-break. `Orchestrator` now takes
+  `recent_context=...` and, on every `run()`, loads + gates the conversation's own recent cards and
+  merges the survivors into `context_view` and `EVENT_CONTEXT`'s `card_metadata` (tagged
+  `adapter: "recent"`) AFTER fresh assembly resolves, deduping by card id (fresh wins). Crucially,
+  this merge fires even when the fresh `ContextAssembler` is unwired, times out, or raises, so a
+  follow-up turn is warm instead of empty. The merged selection is recorded back to the store for
+  the next turn. New `OrchestratorConfig.recent_context_enabled` (default True) and
+  `recent_context_max_cards` (default 6); env `QAR_RECENT_CONTEXT` / `QAR_RECENT_CONTEXT_MAX_CARDS`
+  (read in `cli.py`), wired via `config.py`'s `resolve_recent_context_store` alongside the card
+  store, independent of whichever `ContextAssembler` a consumer chose. Tested in
+  `tests/test_recent_context.py` and `tests/test_orchestrator_recent_context.py`; documented in
+  `docs/context-assembly.md`.
 - **Cooperative mid-run cancellation for background tasks.** `QuestClient.is_task_cancelled(id)`
   checks whether a task's status is `"cancelled"` or its `cancel_requested` field is truthy
   (fail-open: any API error returns False, so a transient hiccup can never kill a legitimate run).

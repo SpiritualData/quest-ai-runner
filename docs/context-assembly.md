@@ -373,6 +373,74 @@ in `RunnerConfig`, the session wraps it with `CompositeContextAssembler([existin
 otherwise it sets the `TurnContextStore` directly. A consumer that never calls
 `InteractiveSession` can wire both explicitly, as above.
 
+## Warm recent-context fallback (no LLM)
+
+Fresh assembly (Step 2, above) runs `assemble()` in a background thread with a 5 second budget so
+corpus search never stalls an interactive turn. That is the right tradeoff for latency, but it has
+a cost: a slow or timed-out assemble() leaves that turn with NO cards at all, even ones a prior
+turn in the SAME conversation already found relevant a moment ago. `core/recent_context.py` closes
+that gap with a small, synchronous, no-LLM fallback: the cards a conversation's own recent turns
+selected, carried forward and gated by a cheap lexical check so an unrelated new question never
+drags in stale context.
+
+**`RecentContextStore` (a tiny Protocol, `core.recent_context`).** Two methods, both
+best-effort and NEVER raise:
+- `record(key, cards, user_text)` -- persists this turn's selected `card_metadata` for
+  conversation `key` (`conv_id` or `quest_id`, whichever the caller supplied).
+- `load(key)` -- returns the recent records for that key, most-recent-first, deduped by card id
+  (a duplicate id keeps its newest occurrence). Each record is stamped with `turn_index` (0 = the
+  immediately preceding turn, 1 = the one before that, ...).
+
+`FileRecentContextStore` is the reference implementation: one JSON file per conversation under
+`<root_dir>/recent/<sha1(key)[:16]>.json`, written atomically (temp file + `os.replace`, the same
+pattern `FileContextStore` uses). A file holds at most `max_turns` turns (default 8) and
+`max_cards` unique card ids (default 24, newest wins when trimming); each turn older than
+`max_record_age_days` (default 14) is pruned on write. Each stored card is a compact preview
+(id, title, adapter, relevance_score, keywords, files, a preview capped at 1500 characters), not
+the full rendered card: a consumer wanting a fresh render gets one on the next turn's normal
+assembly path anyway.
+
+**`filter_relevant(records, query_text, *, is_followup, max_cards)` -- the relevance gate.** A
+record passes when EITHER:
+- `is_followup` is true and the record came from the immediately preceding turn
+  (`turn_index == 0`), so a genuine follow-up ("what about that?", "ok continue") gets the
+  previous turn's cards for free, no lexical check needed; or
+- its keywords/title have real lexical overlap with the current message: a stopword-filtered
+  token-overlap ratio of at least 0.15, or at least 2 distinct informative tokens in common.
+
+An unrelated new question (no overlap, and not the immediately previous turn) is dropped. That is
+the whole point: recent cards are used only when they are still relevant to the CURRENT input.
+Passing records are ranked by (forced-pass or overlap ratio) plus a recency tie-break (7 day
+half-life, the same shape as `TurnContextStore`'s own scoring) and capped to `max_cards`.
+`is_followup` itself comes from the Orchestrator's existing cheap, no-LLM
+`_needs_context_to_understand` check, so this adds no extra latency or model call.
+
+**How the Orchestrator wires it in.** `Orchestrator(recent_context=...)` plus
+`OrchestratorConfig.recent_context_enabled` (default True) and
+`recent_context_max_cards` (default 6, the cap passed to `filter_relevant`). On each `run()`:
+1. `load()` the conversation's recent records, keyed by `conv_id` or `quest_id`.
+2. Run them through `filter_relevant()` against the derived goal condition + the literal message.
+3. Wait for fresh assembly (Step 2) as usual.
+4. Merge: any surviving recent card whose id was NOT re-found by fresh assembly this turn is
+   rendered (`render_recent_cards`) and folded into `context_view` and `EVENT_CONTEXT`'s
+   `card_metadata`, tagged `adapter: "recent"` so a UI can visually tell carried-over context
+   apart from freshly assembled cards. A card fresh assembly DID re-find wins outright; the
+   recent-turn copy is dropped rather than duplicated.
+5. `record()` the MERGED selection (fresh + surviving recent) back to the store, so the warm set
+   follows the conversation forward turn by turn.
+
+Step 4 is what makes this a genuine fallback, not just a cache: `EVENT_CONTEXT` fires whenever
+EITHER fresh assembly ran OR a recent card survived, so a turn where the assembler is unwired,
+times out, or raises still gets its conversation's own recent context instead of none at all.
+
+Disable it with `QAR_RECENT_CONTEXT=0` (env, read in `cli.py`), or by passing
+`OrchestratorConfig(recent_context_enabled=False)` directly; either turns off BOTH the load and
+the write-back, leaving `run()` exactly as it behaves with no recent-context store wired.
+`QAR_RECENT_CONTEXT_MAX_CARDS` overrides the per-turn cap. `build_orchestrator` resolves the
+store via `resolve_recent_context_store`, rooted alongside the card store
+(`<cards_dir>/recent`) and wired independently of which `ContextAssembler` (if any) a consumer
+chose, since it is keyed purely by `conv_id`/`quest_id`.
+
 ## User Input Understanding (Step 1) and the `ConversationStore`
 
 The `transcript`/`TurnContextStore` machinery above answers "what context goes to the run." Before

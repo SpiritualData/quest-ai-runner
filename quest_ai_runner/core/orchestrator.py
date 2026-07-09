@@ -76,6 +76,7 @@ from .guard import (
 )
 from .model_registry import TIERS, ModelRegistry
 from .overseer import OverseerSignal, build_digest, oversee
+from .recent_context import RecentContextStore, filter_relevant, render_recent_cards
 
 log = logging.getLogger("quest-ai-runner.orchestrator")
 
@@ -583,6 +584,19 @@ class OrchestratorConfig:
     # HIGH by default (clear-twin only); 1.0 effectively disables the behavior, and a store without
     # embeddings (no ``find_similar_card``) skips it entirely. See DEFAULT_CARD_MERGE_SIMILARITY.
     card_merge_similarity: float = DEFAULT_CARD_MERGE_SIMILARITY
+    # WARM RECENT-CONTEXT FALLBACK (see core/recent_context.py). ON by default. When a
+    # RecentContextStore is wired (``Orchestrator.recent_context``), each turn synchronously loads
+    # the small set of cards the CONVERSATION's own recent turns selected (a fast local file read,
+    # no LLM call) and gates them through ``filter_relevant`` (pure lexical overlap, no LLM) before
+    # merging any survivors into context_view. This is what keeps a follow-up turn warm even when
+    # the fresh background assembly times out or nothing is wired at all. False disables the
+    # fallback even when a store is wired. Env: QAR_RECENT_CONTEXT ("0"/"false" disables; read in
+    # cli.py's _config_from_env).
+    recent_context_enabled: bool = True
+    # Hard cap on how many recent-turn cards ``filter_relevant`` may let through in one turn (these
+    # are ADDITIONAL to whatever the fresh assembly finds, so kept small). Env:
+    # QAR_RECENT_CONTEXT_MAX_CARDS (read in cli.py's _config_from_env).
+    recent_context_max_cards: int = 6
 
 
 @dataclass
@@ -2041,6 +2055,7 @@ class Orchestrator:
         guidance: Optional[GuidanceProvider] = None,
         input_inbox: Optional["InputInbox"] = None,
         conversation_store: Optional[ConversationStore] = None,
+        recent_context: Optional[RecentContextStore] = None,
     ):
         self.retrieval = retrieval
         self.provider = provider
@@ -2085,6 +2100,12 @@ class Orchestrator:
         # (and related) conversation to rewrite a short/anaphoric message into a self-contained goal
         # condition before selecting context. Never raises. None = Step 1 is a no-op (zero latency).
         self.conversation_store = conversation_store
+        # Optional WARM RECENT-CONTEXT store (see core/recent_context.py). When wired, ``run``
+        # loads the cards this conversation's recent turns already selected (fast, no LLM), gates
+        # them through a pure lexical relevance filter, and merges any survivors into context_view
+        # so a follow-up turn is warm even before/without a fresh assembly. Never raises. None =
+        # exactly today's behavior (no recent-turn fallback).
+        self.recent_context = recent_context
 
     def get_provider_for_model(self, model: str) -> ModelProvider:
         """Auto-detect and return the provider for a given model based on name prefix.
@@ -4367,6 +4388,32 @@ class Orchestrator:
         _recent_conversation_digest_lines = _recent_conversation_turns(
             conv_ctx_text, exclude=[user_message, goal_condition])
 
+        # --- Recent-turn context: warm NO-LLM fallback (see core/recent_context.py) ------------
+        # Independent of the ConversationStore-driven Stage 1 above (that rewrites the message; this
+        # carries forward the CARDS a conversation's own recent turns already selected). A fast
+        # local file read, gated through a pure lexical filter (no LLM) so an unrelated new question
+        # never drags in stale cards. Cards that survive are merged into context_view further below,
+        # crucially EVEN WHEN the fresh background assembly started next times out or finds nothing
+        # -- that resilience is the point. ``recent_key`` keys the conversation; both None means the
+        # feature is inert this turn (no conv_id/quest_id to key on).
+        recent_key = conv_id or quest_id
+        _recent_filtered: List[Dict[str, Any]] = []
+        if self.recent_context is not None and cfg.recent_context_enabled and recent_key:
+            try:
+                _recent_records = self.recent_context.load(recent_key)
+            except Exception:  # noqa: BLE001 -- a store failure must never break the run
+                _recent_records = []
+            try:
+                _is_followup = self._needs_context_to_understand(user_message)
+            except Exception:  # noqa: BLE001
+                _is_followup = False
+            try:
+                _recent_filtered = filter_relevant(
+                    _recent_records, f"{goal_condition} {user_message}",
+                    is_followup=_is_followup, max_cards=cfg.recent_context_max_cards)
+            except Exception:  # noqa: BLE001
+                _recent_filtered = []
+
         _assembled = None
         _ctx_future = None
         _ctx_executor = None
@@ -4474,36 +4521,77 @@ class Orchestrator:
                 except Exception:  # noqa: BLE001
                     pass
 
+        # --- Recent-turn context: merge cards that survived the relevance gate ----------------
+        # Folded in REGARDLESS of whether fresh assembly produced anything -- this is the
+        # resilience win from core/recent_context.py: if ``_assembled`` is None (no assembler
+        # wired, or the background assemble() above timed out/failed), a follow-up turn still gets
+        # the cards its own recent turns already selected, gated by filter_relevant so an unrelated
+        # new question never drags them in. A recent card already re-found by fresh assembly this
+        # turn is dropped here (the fresh one wins). Never raises.
+        _card_meta: List[Dict[str, Any]] = (
+            list(getattr(_assembled, "card_metadata", None) or []) if _assembled is not None else []
+        )
+        _sources: List[Dict[str, Any]] = (
+            list(getattr(_assembled, "sources", None) or []) if _assembled is not None else []
+        )
+        _recent_entries: List[Dict[str, Any]] = []
+        if _recent_filtered:
+            try:
+                _fresh_ids = {cm.get("id") for cm in _card_meta if isinstance(cm, dict)}
+                _recent_survivors = [r for r in _recent_filtered if r.get("id") not in _fresh_ids]
+                _recent_text, _recent_entries = render_recent_cards(_recent_survivors)
+                if _recent_text:
+                    context_view = (_recent_text + "\n\n" + context_view if context_view
+                                    else _recent_text)
+                if _recent_survivors:
+                    _sources.append({
+                        "adapter": "recent",
+                        "label": "recent turns",
+                        "items": [r.get("title") or r.get("id", "") for r in _recent_survivors],
+                    })
+            except Exception:  # noqa: BLE001 -- recent-context merge must never break the run
+                _recent_entries = []
+        _merged_card_meta = _card_meta + _recent_entries
+
         # --- CONTEXT EVENT: emit EVENT_CONTEXT showing which cards were selected -----------
         # Dedicated event for context assembly: card selection + sources. Surfaces in all modes.
-        # Always emitted when assembly ran (even with 0 cards + 0 sources) so consumers
-        # can show "assembly ran but found nothing" without needing a separate signal.
-        # Never raises.
-        if _assembled is not None:
+        # Always emitted when assembly ran OR recent-turn cards survived (even with 0 cards + 0
+        # sources otherwise) so consumers can show "assembly ran but found nothing" without needing
+        # a separate signal. Never raises.
+        if _assembled is not None or _recent_entries:
             try:
-                _card_meta = getattr(_assembled, "card_metadata", None) or []
-                _sources = getattr(_assembled, "sources", None) or []
-                log.debug(f"Assembled context: {len(_card_meta)} cards, {len(_sources)} sources")
+                log.debug(f"Assembled context: {len(_merged_card_meta)} cards, {len(_sources)} sources")
                 # Build human-readable card summary for text field.
-                _card_titles = [c.get("title", c.get("id", "?"))[:50] for c in _card_meta]
+                _card_titles = [c.get("title", c.get("id", "?"))[:50] for c in _merged_card_meta]
                 _text = "Selected cards: " + ", ".join(_card_titles) + "." if _card_titles else ""
                 log.debug(f"Emitting EVENT_CONTEXT: {_text}")
                 # LIGHTWEIGHT projection: the card_metadata items now carry each item's full
                 # resolved ``text`` (heavy). Project to id/title/type-counts/file-paths so the
                 # event stays small and never dumps full item text into the stream.
-                _card_meta_light = _project_card_metadata_for_event(_card_meta)
+                _card_meta_light = _project_card_metadata_for_event(_merged_card_meta)
                 emit.emit(ProgressEvent(
                     type=EVENT_CONTEXT,
                     text=_text,
                     data={
                         "card_metadata": _card_meta_light,
                         "sources": _sources,
-                        "card_count": len(_card_meta),
+                        "card_count": len(_merged_card_meta),
                         "source_count": len(_sources),
                     }
                 ))
             except Exception as e:  # noqa: BLE001
                 log.error(f"Failed to emit EVENT_CONTEXT: {e}", exc_info=True)
+
+        # --- Recent-turn context: write back the merged selection for the NEXT turn ------------
+        # Best-effort, never raises. Includes BOTH freshly assembled and surviving recent cards so
+        # the warm set follows the conversation forward; a card that has dropped out of relevance is
+        # pruned next turn by filter_relevant, not by record() itself.
+        if (self.recent_context is not None and cfg.recent_context_enabled
+                and recent_key and _merged_card_meta):
+            try:
+                self.recent_context.record(recent_key, _merged_card_meta, user_message)
+            except Exception:  # noqa: BLE001
+                pass
 
         # --- CONTEXT TRANSPARENCY (Feature 2): emit a human-readable summary of sources ------
         # Best-effort: emit a STATUS event naming the adapters + file items so the consumer/UI

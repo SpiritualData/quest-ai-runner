@@ -865,6 +865,30 @@ def resolve_context_assembler(
         return None
 
 
+def resolve_recent_context_store(cfg: RunnerConfig):
+    """Resolve the WARM recent-turn context store from config -- ON BY DEFAULT.
+
+    Mirrors ``resolve_context_assembler``'s ``cards_dir`` resolution (same root, so recent-turn
+    records live alongside the card store, under ``<cards_dir>/recent``) but is wired
+    INDEPENDENTLY of which ``ContextAssembler`` ended up chosen: even a consumer that passed its
+    own explicit ``context_assembler`` (or disabled it with ``None``) still gets the recent-turn
+    fallback, since it is keyed purely by ``conv_id``/``quest_id`` and reads/writes its own small
+    per-conversation JSON files under ``.quest-context/recent``. Disabled entirely when
+    ``cfg.orchestrator.recent_context_enabled`` is False (env ``QAR_RECENT_CONTEXT``, read in
+    ``cli.py``'s ``_config_from_env``). Construction never raises -- a bad path just yields
+    ``None`` (the orchestrator behaves exactly as if no store were wired).
+    """
+    if not cfg.orchestrator.recent_context_enabled:
+        return None
+    try:
+        from .core.recent_context import FileRecentContextStore
+        root = cfg.corpus_root or os.getcwd()
+        cards_dir = cfg.context_cards_dir or os.path.join(root, ".quest-context")
+        return FileRecentContextStore(cards_dir)
+    except Exception:  # noqa: BLE001 -- never let this wiring break runner construction
+        return None
+
+
 def build_orchestrator(
     cfg: RunnerConfig,
     *,
@@ -1034,4 +1058,5 @@ def build_orchestrator(
         guidance=guidance,
         input_inbox=input_inbox,
         conversation_store=cfg.conversation_store,
+        recent_context=resolve_recent_context_store(cfg),
     )
