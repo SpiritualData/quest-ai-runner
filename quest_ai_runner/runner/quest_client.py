@@ -155,6 +155,24 @@ class QuestClient:
             log.warning("get_task failed for %s: %s", task_id, e)
             return {}
 
+    def is_task_cancelled(self, task_id: str) -> bool:
+        """True when the task has been cancelled mid-execution (a human hit "stop").
+
+        Re-fetches the task via ``get_task`` and reports True when its ``status`` is
+        ``"cancelled"`` or its ``cancel_requested`` field is truthy (the backend sets both when a
+        background task is cancelled, but a caller only needs one signal). FAIL-OPEN by contract:
+        any error (network, unconfigured client, missing task) returns False rather than raising, so
+        a transient API hiccup can never be mistaken for a cancellation and kill a legitimate run.
+        """
+        try:
+            task = self.get_task(task_id) or {}
+            if str(task.get("status") or "").strip().lower() == "cancelled":
+                return True
+            return bool(task.get("cancel_requested"))
+        except Exception:  # noqa: BLE001 -- fail-open: never let this check kill a real run
+            log.warning("is_task_cancelled check failed for %s", task_id, exc_info=True)
+            return False
+
     # --- claim / report ------------------------------------------------------
 
     def claim(self, task_id: str, handler: Optional[str] = None) -> Optional[Dict[str, Any]]:
@@ -233,13 +251,19 @@ class QuestClient:
     # --- live progress into the originating chat -----------------------------
 
     def post_conversation_message(self, conv_id: str, content: str, *,
-                                  kind: str = "progress") -> Dict[str, Any]:
+                                  kind: str = "progress",
+                                  task_id: Optional[str] = None) -> Dict[str, Any]:
         """Append a LIVE progress message into the Quest AI conversation a task came from.
 
         This is how a chat-delegated background task keeps the chat from going silent: the runner
         posts ``started`` when it picks the task up, ``progress`` for real milestones, and ``done``
         with the result. It executes under the quest OWNER's identity (the ``qsk_`` key), and the
         endpoint is owner-scoped, so the runner is simply appending to the owner's own conversation.
+
+        ``task_id``, when given, is stamped on the stored message so the frontend can correlate
+        this progress post back to the task's own lifecycle (e.g. to show/hide a "stop" control, or
+        group a task's messages together). Omitted from the body when not given, so callers that
+        don't have a task in scope behave exactly as before.
 
         Best-effort by contract at the call site (a dropped progress post must never fail the task),
         but this method itself surfaces API errors so callers can log them.
@@ -248,8 +272,11 @@ class QuestClient:
             if not self.configured:
                 log.warning("post_conversation_message skipped: Quest API not configured")
                 return {}
+            body: Dict[str, Any] = {"content": content, "kind": kind}
+            if task_id is not None:
+                body["task_id"] = task_id
             return self._request("POST", f"/api/quest-ai/conversations/{conv_id}/progress",
-                                 body={"content": content, "kind": kind}) or {}
+                                 body=body) or {}
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("post_conversation_message for conv %s failed: %s", conv_id, e)
             return {}

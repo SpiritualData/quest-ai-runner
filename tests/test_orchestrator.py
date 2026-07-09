@@ -1080,3 +1080,93 @@ def test_narration_rationale_instructions_demand_grounding_discipline():
     assert "I haven't found" in replan                       # absence stated as not-found-yet
     assert "not a fact" in replan                            # hunches voiced as hunches
     assert "settled" in replan                               # no conclusion stated as settled early
+
+
+# ---------------------------------------------------------------------------
+# Cooperative mid-run cancellation (``cancel_check``).
+# ---------------------------------------------------------------------------
+
+def test_cancel_check_true_from_the_start_skips_planning_entirely():
+    """A cancel_check that already reports True before the first step must stop the run BEFORE any
+    planner call, returning kind="cancelled" (not a normal answer/deep/confirm outcome)."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "should never run"}])
+    res = _orch(provider, StubRetrieval()).run("hello", cancel_check=lambda: True)
+    assert res.kind == "cancelled"
+    assert provider.plan_calls == 0
+    # No answer/deep/confirm fields are populated for a cancelled result.
+    assert res.text is None
+    assert res.deep_results == []
+    assert res.decision_id is None
+
+
+def test_cancel_check_stops_after_the_first_step_before_the_second_plan_call():
+    """cancel_check flips True only AFTER the first step: the loop must run the first plan/read
+    step to completion, then stop at the NEXT step boundary rather than starting a second one."""
+    provider = StubProvider(decisions=[
+        {"action": "read", "reads": [{"rel_path": "README.md"}], "rationale": "reading"},
+        {"action": "answer", "rationale": "should never run"},
+    ])
+    retrieval = StubRetrieval({"README.md": "fact: yes"})
+    calls = {"n": 0}
+
+    def cancel_after_first_step() -> bool:
+        calls["n"] += 1
+        return calls["n"] > 1
+
+    res = _orch(provider, retrieval).run("q", cancel_check=cancel_after_first_step)
+    assert res.kind == "cancelled"
+    assert provider.plan_calls == 1              # the read step ran; the answer step never fired
+    assert retrieval.read_calls == ["README.md"]  # the first step's own work still completed
+
+
+def test_cancel_check_false_never_affects_a_normal_run():
+    """A cancel_check that always returns False (or a caller that passes None) must leave the run
+    byte-for-byte unaffected -- the existing plan -> read -> answer behavior is unchanged."""
+    provider = StubProvider(decisions=[
+        {"action": "read", "reads": [{"rel_path": "README.md"}], "rationale": "need the doc"},
+        {"action": "answer", "rationale": "have it"},
+    ])
+    retrieval = StubRetrieval({"README.md": "GROUNDING fact: pricing is $9/mo."})
+    res = _orch(provider, retrieval).run("What's the price?", cancel_check=lambda: False)
+    assert res.kind == "answer"
+    assert retrieval.read_calls == ["README.md"]
+    # Same call counts test_plan_read_then_answer asserts for the identical scripted plan (a
+    # cancel_check that is always False changes nothing about the loop's own behavior).
+    assert provider.plan_calls == 4
+    assert provider.answer_calls == 2
+
+
+def test_cancel_check_true_before_deep_execution_returns_cancelled_without_running_the_worker():
+    """A plan that would escalate to 'deep' must not spawn the worker at all when the run was
+    already cancelled by the time the deep step is about to start."""
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "Write the one-pager", "deep_brief": "do it", "rationale": "work"},
+    ])
+    runner = StubDeepRunner(met=True, output="one-pager written")
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run(
+        "write the one-pager", cancel_check=lambda: True)
+    assert res.kind == "cancelled"
+    assert runner.calls == []                    # the deep worker never ran
+    assert res.deep_results == []
+
+
+def test_cancel_check_during_deep_retry_stops_before_the_next_attempt():
+    """A deep goal that fails verification normally retries (see
+    ``test_goal_loop_iterates_until_verified_met``, whose SAME scripted plan drives 2 worker runs).
+    Here cancel_check flips True as soon as the first attempt has run, so the retry loop must stop
+    at the next-attempt boundary instead of spawning a second worker run."""
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
+        {"met": False, "reason": "the fix was incomplete", "next_action": "also update the helper"},
+        {"met": True, "reason": "done"},   # would only be consumed by a second attempt's verify call
+    ])
+    runner = StubDeepRunner(met=True, output="made an edit")
+
+    def cancel_after_first_attempt() -> bool:
+        return len(runner.calls) >= 1
+
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(deep_goal_max_iterations=3)).run(
+        "fix the thing", cancel_check=cancel_after_first_attempt)
+    assert res.kind == "cancelled"
+    assert len(runner.calls) == 1                # only the first attempt ran; retry never fired

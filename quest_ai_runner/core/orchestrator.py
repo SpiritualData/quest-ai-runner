@@ -588,7 +588,7 @@ class OrchestratorConfig:
 @dataclass
 class OrchestratorResult:
     """What the loop produced. Exactly one terminal kind."""
-    kind: str                          # "answer" | "deep" | "confirm"
+    kind: str                          # "answer" | "deep" | "confirm" | "cancelled"
     text: Optional[str] = None         # for answer
     deep_results: List[DeepResult] = field(default_factory=list)   # for deep (1..N)
     goals: List[str] = field(default_factory=list)                 # the goal(s) run
@@ -614,7 +614,8 @@ class OrchestratorResult:
     # Why the loop exited. One of: "verified" | "max_turns" | "escalated_deep" | "read_budget" |
     # "unverified" | "deep_met" | "deep_not_met" | "clarify" | "confirm" |
     # "overseer_answer_now" | "overseer_escalated_deep" | "overseer_escalated_human" (set when an
-    # overseer signal decided the path).
+    # overseer signal decided the path) | "cancelled" (a caller-supplied ``cancel_check`` reported
+    # the run was cancelled mid-execution; see ``kind == "cancelled"``).
     exit_reason: str = ""
     # The last goal-verification verdict: {"met": bool, "reason": str, "next_action": str, ...}.
     # Populated whenever _verify_goal ran. None when goal verification did not run this turn.
@@ -2821,7 +2822,19 @@ class Orchestrator:
                   quality_standards: Optional[str] = None,
                   pending_inputs: Optional[Callable[[], List[str]]] = None,
                   model_hint: Optional[str] = None,
-                  ctx_meta: Optional[Dict[str, Any]] = None) -> OrchestratorResult:
+                  ctx_meta: Optional[Dict[str, Any]] = None,
+                  cancel_check: Optional[Callable[[], bool]] = None) -> OrchestratorResult:
+        # Cooperative mid-run cancellation (see ``Orchestrator.run``'s ``cancel_check`` docstring):
+        # bail out before spawning any subtask work at all when the caller already reports the run
+        # was cancelled. ``goals`` mirrors the "no deep-runner configured" early return above so a
+        # caller inspecting a cancelled result still sees which goal(s) were requested.
+        if cancel_check is not None and cancel_check():
+            _cancelled_goals = [
+                (st.get("goal") or "").strip() or user_message
+                for st in (plan.deep_subtasks or [{"goal": plan.goal}])
+            ]
+            return OrchestratorResult(kind="cancelled", goals=_cancelled_goals,
+                                      rationale=plan.rationale, exit_reason="cancelled")
         subtasks = (plan.deep_subtasks or [])[: self.cfg.max_deep_subtasks]
         if not subtasks:
             subtasks = [{"goal": _truncate_goal(plan.goal or f"Fully address the request: {user_message}"),
@@ -3027,6 +3040,11 @@ class Orchestrator:
             tokens_used = 0
             res = DeepResult(met=False)
             for attempt in range(1, max_iters + 1):
+                # Cooperative cancellation, checked before starting each new attempt (a retry can be
+                # a full agentic subprocess run, so this is the natural point to stop rather than
+                # mid-subprocess). ``res`` keeps whatever the prior attempt produced.
+                if cancel_check is not None and cancel_check():
+                    break
                 run_model = deep_models[min(tier_idx, len(deep_models) - 1)]
                 if emit is not None and attempt > 1:
                     emit.status("Goal not met yet, retrying"
@@ -3188,6 +3206,14 @@ class Orchestrator:
                 for f in futs:
                     group_results = f.result()
                     all_results.extend([r for r in group_results if r is not None])
+
+        # Aggregate cancellation check: the subtasks above may have stopped early (each attempt
+        # loop breaks cooperatively), so re-check once more here before reporting the outcome as a
+        # normal "deep" result. This is the point that decides whether the CALLER (Orchestrator.run)
+        # sees this as a genuine (possibly partial) deep outcome or a cancelled one.
+        if cancel_check is not None and cancel_check():
+            return OrchestratorResult(kind="cancelled", goals=all_goals, rationale=plan.rationale,
+                                      exit_reason="cancelled")
 
         return OrchestratorResult(
             kind="deep",
@@ -4067,7 +4093,8 @@ class Orchestrator:
             pending_inputs: Optional[Callable[[], List[str]]] = None,
             conv_id: Optional[str] = None,
             conv_scope: Optional[Dict[str, Any]] = None,
-            prior_escalations: Optional[List[Dict[str, Any]]] = None) -> OrchestratorResult:
+            prior_escalations: Optional[List[Dict[str, Any]]] = None,
+            cancel_check: Optional[Callable[[], bool]] = None) -> OrchestratorResult:
         """Run the bounded loop for one request and return a terminal OrchestratorResult.
 
         Streaming/event interface (both lanes use the SAME emissions; the SINK decides policy):
@@ -4123,6 +4150,17 @@ class Orchestrator:
                             of previous ``OrchestratorResult``s it already persisted). Feeds the
                             overseer digest's PRIOR ESCALATIONS THIS CONVERSATION section. Absent/None
                             means "none yet" (today's behavior, byte-for-byte, when overseer is off).
+        * ``cancel_check`` -- optional zero-arg callable a caller polls for COOPERATIVE mid-run
+                            cancellation (e.g. a runner backed by a task store where a human can
+                            cancel a background task while it is in progress). Checked at natural
+                            loop boundaries: before starting each new plan/gather/replan step, before
+                            each deep-goal retry attempt, and once more after deep execution
+                            finishes. When it returns True the run stops cleanly and returns an
+                            ``OrchestratorResult`` with ``kind="cancelled"`` (no ``text``/
+                            ``deep_results``/``decision_id`` to act on) instead of the normal
+                            answer/deep/confirm outcome. It is never called more than the loop's own
+                            natural cadence, so a cheap/throttled implementation is fine. Absent/None
+                            means exactly today's behavior (a run can never be cancelled mid-flight).
 
         ``run`` still works with NO event args (back-compat: same signature callers used before
         plus keyword-only extras), returning the terminal ``OrchestratorResult``.
@@ -4535,6 +4573,12 @@ class Orchestrator:
                     res.tokens_out = self.provider.tokens_out
             except Exception:  # noqa: BLE001
                 pass
+            if res.kind == "cancelled":
+                # Cooperative mid-run cancellation: there is no real outcome to write back or verify
+                # against the goal, and no answer/deep/confirm event to surface. Just close out the
+                # stream so any consumer waiting on EVENT_DONE is not left hanging.
+                emit.emit(ProgressEvent(type=EVENT_DONE, result_kind=res.kind, step=steps))
+                return res
             # Best-effort ContextAssembler write-back (learn from the outcome for next run). Pass the
             # files the brain ACTUALLY read this run (their rel_paths, from the gathered reads/greps)
             # so the card PINS them: that is what makes the loop compound and what staleness later
@@ -4620,6 +4664,10 @@ class Orchestrator:
         overseer_decided = ""
         for step in range(cfg.max_steps):
             steps = step + 1
+            # Cooperative cancellation, checked before starting each new plan/gather/replan step.
+            if cancel_check is not None and cancel_check():
+                return finish(OrchestratorResult(kind="cancelled", rationale="cancelled mid-run",
+                                                  exit_reason="cancelled"))
             emit.status("Planning…" if step == 0 else "Re-planning…")
 
             # --- OVERSEER poll (hook A, applied ONE STEP LATE): pick up a consult SUBMITTED on a
@@ -4843,7 +4891,9 @@ class Orchestrator:
                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                                  gathered=gathered, quality_standards=quality_standards,
                                  pending_inputs=pending_inputs, model_hint=model_hint,
-                                 ctx_meta=_ctx_meta)
+                                 ctx_meta=_ctx_meta, cancel_check=cancel_check)
+            if res.kind == "cancelled":
+                return finish(res)
             res.exit_reason = "deep_met" if (res.deep_results and all(d.met for d in res.deep_results)) else "deep_not_met"
             if overseer_decided == "overseer_escalated_deep":
                 res.exit_reason = "overseer_escalated_deep"
@@ -4956,7 +5006,9 @@ class Orchestrator:
                         emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                         gathered=gathered, quality_standards=quality_standards,
                         pending_inputs=pending_inputs, model_hint=model_hint,
-                        ctx_meta=_ctx_meta)
+                        ctx_meta=_ctx_meta, cancel_check=cancel_check)
+                    if _ov_res.kind == "cancelled":
+                        return finish(_ov_res)
                     _ov_res.exit_reason = "overseer_escalated_deep"
                     self._kickoff_card_update(_ov_res, _ov_plan, user_message, _ctx_meta, emit)
                     return finish(_ov_res)
@@ -5058,7 +5110,9 @@ class Orchestrator:
                                          exec_record=exec_record, gathered=gathered,
                                          quality_standards=quality_standards,
                                          pending_inputs=pending_inputs, model_hint=model_hint,
-                                         ctx_meta=_ctx_meta)
+                                         ctx_meta=_ctx_meta, cancel_check=cancel_check)
+                if deep_res.kind == "cancelled":
+                    return finish(deep_res)
                 # FOLD THE DEEP OUTPUT BACK INTO THE FINAL ANSWER. The pre-deep `text` is a proposal
                 # ("shall I proceed?"); the real deliverable is what the deep run just produced. If we
                 # only emit it as a side milestone, the user-facing reply stays the stale proposal with
@@ -5175,7 +5229,10 @@ class Orchestrator:
                                                       exec_record=exec_record, gathered=gathered,
                                                       quality_standards=quality_standards,
                                                       pending_inputs=pending_inputs,
-                                                      model_hint=model_hint, ctx_meta=_ctx_meta)
+                                                      model_hint=model_hint, ctx_meta=_ctx_meta,
+                                                      cancel_check=cancel_check)
+                            if _rem_res.kind == "cancelled":
+                                return finish(_rem_res)
                             _rem_out = ""
                             if _rem_res and _rem_res.deep_results:
                                 _rem_out = "\n\n".join(
@@ -5231,7 +5288,9 @@ class Orchestrator:
                             emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                             gathered=gathered, quality_standards=quality_standards,
                             pending_inputs=pending_inputs, model_hint=model_hint,
-                            ctx_meta=_ctx_meta)
+                            ctx_meta=_ctx_meta, cancel_check=cancel_check)
+                        if _esc_res.kind == "cancelled":
+                            return finish(_esc_res)
                         _esc_res.exit_reason = "escalated_deep"
                         _esc_res.goal_verdict = verdict
                         # Async, best-effort: prepare this user's cards for next time.

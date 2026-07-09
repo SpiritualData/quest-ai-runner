@@ -9,7 +9,11 @@ Given a single claimed assistant-task, the executor:
        - deep (not met)    -> PATCH failed | needs_you  (limit/error -> failed; raised a
                               decision -> needs_you with the decision_id)
        - confirm           -> a decision-request was raised -> PATCH needs_you + decision_id
-  4. Never raises to the poller: any error becomes a PATCH failed with the message.
+       - cancelled         -> NO PATCH (the backend already set status=cancelled and appends its
+                              own terminal chat message; a PATCH here would just 409) -- a
+                              best-effort progress note only.
+  4. Never raises to the poller: any error becomes a PATCH failed with the message, unless the
+     task was cancelled meanwhile (see above).
 
 It does NOT claim or discover (the poller owns that) — it is the unit of work for one task, so
 it can be unit-tested against a mock Quest client + stub brain with no network.
@@ -17,6 +21,7 @@ it can be unit-tested against a mock Quest client + stub brain with no network.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional
 
@@ -25,11 +30,17 @@ from ..core.orchestrator import Orchestrator, OrchestratorResult
 
 log = logging.getLogger("quest-ai-runner.executor")
 
+# How often (seconds of real time) the throttled cancel_check built by ``_build_cancel_check`` is
+# allowed to actually call the Quest API. The orchestrator may poll cancel_check at every loop
+# boundary (frequently), but cancellation is a rare, human-triggered event -- hammering the API on
+# every check would waste calls for no benefit.
+CANCEL_CHECK_INTERVAL_SECONDS = 15.0
+
 
 @dataclass
 class ExecutionOutcome:
     task_id: str
-    status: str                       # "done" | "needs_you" | "failed"
+    status: str                       # "done" | "needs_you" | "failed" | "cancelled"
     result: str = ""
     decision_id: Optional[str] = None
 
@@ -75,6 +86,71 @@ class TaskExecutor:
     def _task_text(task: Dict[str, Any]) -> str:
         return (task.get("text") or task.get("title") or task.get("description") or "").strip()
 
+    def _build_cancel_check(self, task_id: str,
+                            interval: float = CANCEL_CHECK_INTERVAL_SECONDS) -> Callable[[], bool]:
+        """Build a THROTTLED ``cancel_check`` callable to pass into ``Orchestrator.run()``.
+
+        The orchestrator may poll this at every internal loop boundary (plan/gather/replan step,
+        each deep-goal retry attempt) -- far more often than a cancellation could plausibly happen
+        (a human hitting "stop" is rare and not latency-sensitive). Calling ``is_task_cancelled``
+        on every poll would hammer the Quest API for no benefit, so this calls it AT MOST once per
+        ``interval`` seconds of real time and returns the last known answer in between. Falls back
+        to an always-False check when there's no task id or the client lacks the method (older
+        clients / mocks), so the run behaves exactly as before.
+        """
+        if not task_id:
+            return lambda: False
+        is_cancelled = getattr(self._client, "is_task_cancelled", None)
+        if not callable(is_cancelled):
+            return lambda: False
+        state = {"checked_at": 0.0, "cancelled": False}
+
+        def _check() -> bool:
+            now = time.monotonic()
+            if now - state["checked_at"] >= interval:
+                state["checked_at"] = now
+                try:
+                    state["cancelled"] = bool(is_cancelled(task_id))
+                except Exception:  # noqa: BLE001 -- a check must never crash a run
+                    pass
+            return state["cancelled"]
+
+        return _check
+
+    def _is_task_cancelled(self, task_id: str) -> bool:
+        """Best-effort, UNTHROTTLED cancellation check for the final reporting path.
+
+        Used right before a terminal PATCH (done/failed) and after an orchestrator error, so a run
+        that dies or finishes BECAUSE it was interrupted is not mistakenly reported once more (which
+        would also just 409 against a task the backend already marked cancelled). Never raises:
+        ``is_task_cancelled`` is fail-open by contract, and this also tolerates a client that lacks
+        the method entirely (older clients / mocks).
+        """
+        if not task_id:
+            return False
+        is_cancelled = getattr(self._client, "is_task_cancelled", None)
+        if not callable(is_cancelled):
+            return False
+        try:
+            return bool(is_cancelled(task_id))
+        except Exception:  # noqa: BLE001
+            return False
+
+    def _quiet_cancelled(self, task_id: str,
+                         result: Optional[OrchestratorResult] = None) -> ExecutionOutcome:
+        """The quiet-cancelled path: the task was stopped mid-run (cooperatively, by the
+        orchestrator's own ``cancel_check``, or detected here right before reporting).
+
+        Do NOT PATCH the task (the backend already set ``status=cancelled``; a PATCH would just
+        409) and do NOT post a done/failed message into the conversation (the backend appends its
+        own terminal "cancelled" chat message) -- just a best-effort status note on the task's own
+        progress stream, a log line, and a "cancelled" outcome for the poller.
+        """
+        self._report_progress(task_id, "status", text="Stopped: this task was cancelled.")
+        log.info("task %s stopped: cancelled mid-run", task_id)
+        rationale = (getattr(result, "rationale", "") or "").strip() if result else ""
+        return ExecutionOutcome(task_id, "cancelled", rationale or "task was cancelled")
+
     def execute(self, task: Dict[str, Any], *,
                 rep_preamble: Optional[str] = None) -> ExecutionOutcome:
         """Run ONE claimed task and report its outcome.
@@ -106,13 +182,13 @@ class TaskExecutor:
             self._report_progress(task_id, "error", text="task had no instruction text to run")
             self._safe_report_failed(task_id, "task had no text/description to run")
             self._post_conv(conv_id, "I couldn't run this — the task had no instruction text.",
-                            kind="done")
+                            kind="done", task_id=task_id)
             return ExecutionOutcome(task_id, "failed", "task had no text/description")
 
         # Announce the start: a live progress event on the task (the task-detail stream) AND, when a
         # conv_id links this task to a chat, a started message into that chat.
         self._report_progress(task_id, "started", text=f"Started working on this: {text}")
-        self._post_conv(conv_id, f"Started working on this: {text}", kind="started")
+        self._post_conv(conv_id, f"Started working on this: {text}", kind="started", task_id=task_id)
 
         # Fetch goal + quest context + conversation history from Quest API if available, and build
         # a context_view for the orchestrator so the deep agent knows what goal/quest it's working on
@@ -144,17 +220,27 @@ class TaskExecutor:
         # FileContextStore's goal_folder_map boost — would otherwise never see it.
         context_meta: Optional[Dict[str, Any]] = {"goal_id": goal_id} if goal_id else None
 
+        # Cooperative mid-run cancellation: a THROTTLED check (see _build_cancel_check) threaded
+        # into the orchestrator so a human hitting "stop" while this task is in_progress can abort
+        # the run cleanly at its next loop boundary instead of running to completion regardless.
+        cancel_check = self._build_cancel_check(task_id)
+
         try:
             result: OrchestratorResult = self._orch.run(
                 text, quest_id=quest_id, context_view=context_view, mode=Mode.BACKGROUND,
                 sink=sink, model_hint=model_hint, rep_preamble=rep_preamble,
                 context_meta=context_meta,
-                conv_id=conv_id, conv_scope=conv_scope or None)
+                conv_id=conv_id, conv_scope=conv_scope or None, cancel_check=cancel_check)
         except Exception as e:  # noqa: BLE001 — brain failure -> failed report, never crash poller
+            # A run that raises BECAUSE it was interrupted must not be reported as failed: check
+            # (unthrottled, this is the terminal path) whether the task was cancelled meanwhile.
+            if self._is_task_cancelled(task_id):
+                return self._quiet_cancelled(task_id)
             msg = f"orchestrator error: {type(e).__name__}: {e}"
             self._report_progress(task_id, "error", text=msg)
             self._safe_report_failed(task_id, msg)
-            self._post_conv(conv_id, f"I hit an error working on this: {msg}", kind="done")
+            self._post_conv(conv_id, f"I hit an error working on this: {msg}", kind="done",
+                            task_id=task_id)
             return ExecutionOutcome(task_id, "failed", msg)
 
         return self._report(task_id, result, conv_id)
@@ -181,7 +267,7 @@ class TaskExecutor:
         are best-effort: a dropped progress event must never affect the task outcome."""
         if event.text:
             self._report_progress(task_id, "exec", text=event.text)
-            self._post_conv(conv_id, event.text, kind="progress")
+            self._post_conv(conv_id, event.text, kind="progress", task_id=task_id)
 
     def _report_progress(self, task_id: str, kind: str, *, text: Optional[str] = None,
                          output: Optional[str] = None,
@@ -197,16 +283,19 @@ class TaskExecutor:
         if callable(report):
             self._safe(lambda _d=data: report(task_id, kind, text=text, output=output, data=_d))
 
-    def _post_conv(self, conv_id: Optional[str], content: str, *, kind: str) -> None:
+    def _post_conv(self, conv_id: Optional[str], content: str, *, kind: str,
+                   task_id: Optional[str] = None) -> None:
         """Best-effort: append a live progress message into the originating chat, if one is linked.
 
-        Never raises and never affects the task's success/failure — if the conversation post fails
-        (network, conversation gone), the task still reports its result normally via PATCH."""
+        ``task_id``, when given, is stamped on the posted message so the frontend can correlate it
+        back to the task's own lifecycle. Never raises and never affects the task's success/failure:
+        if the conversation post fails (network, conversation gone), the task still reports its
+        result normally via PATCH."""
         if not conv_id or not content:
             return
         post = getattr(self._client, "post_conversation_message", None)
         if callable(post):
-            self._safe(lambda: post(conv_id, content, kind=kind))
+            self._safe(lambda: post(conv_id, content, kind=kind, task_id=task_id))
 
     def _build_context_view(self, goal_id: Optional[str], quest_id: Optional[str],
                             conv_id: Optional[str] = None) -> str:
@@ -299,6 +388,13 @@ class TaskExecutor:
 
     def _report(self, task_id: str, result: OrchestratorResult,
                 conv_id: Optional[str] = None) -> ExecutionOutcome:
+        # Cooperative cancellation: ``result.kind == "cancelled"`` is the orchestrator's OWN
+        # cooperative signal (its ``cancel_check`` returned True mid-run); the extra
+        # ``_is_task_cancelled`` re-check covers the race where the run finished (or an async
+        # caller reports through the public ``report()`` API) right as/after a human cancelled the
+        # task, before we PATCH a terminal status that would just 409 anyway.
+        if result.kind == "cancelled" or self._is_task_cancelled(task_id):
+            return self._quiet_cancelled(task_id, result)
         if result.kind == "answer":
             text = result.text or "(no answer produced)"
             # BROKEN-PROMISE GUARD: if the orchestrator rewrote this answer to be honest about a
@@ -309,7 +405,7 @@ class TaskExecutor:
             if getattr(result, "claim_corrected", False):
                 self._report_progress(task_id, "done", text="Paused. Needs you.", output=text)
                 self._safe(lambda: self._client.report_needs_you(task_id, text, ""))
-                self._post_conv(conv_id, text, kind="done")
+                self._post_conv(conv_id, text, kind="done", task_id=task_id)
                 return ExecutionOutcome(task_id, "needs_you", text)
             # Append goal-verdict reasoning so the reader knows whether the goal was confirmed
             # met, hit max iterations unverified, or was a best-effort partial answer.
@@ -329,7 +425,7 @@ class TaskExecutor:
             done_text = text + verdict_suffix if verdict_suffix else text
             self._report_progress(task_id, "done", text="Done.", output=done_text)
             self._safe(lambda: self._client.report_done(task_id, done_text))
-            self._post_conv(conv_id, done_text, kind="done")
+            self._post_conv(conv_id, done_text, kind="done", task_id=task_id)
             return ExecutionOutcome(task_id, "done", done_text)
 
         if result.kind == "confirm":
@@ -337,7 +433,7 @@ class TaskExecutor:
             # needs_you is a terminal-but-paused state; close the live stream with a 'done' tick
             # noting it now needs a human, so the stream doesn't hang open.
             self._report_progress(task_id, "done", text=f"Paused, needs you: {summary}")
-            self._post_conv(conv_id, summary, kind="decision")
+            self._post_conv(conv_id, summary, kind="decision", task_id=task_id)
             if result.decision_id:
                 self._safe(lambda: self._client.report_needs_you(task_id, summary, result.decision_id))
                 return ExecutionOutcome(task_id, "needs_you", summary, result.decision_id)
@@ -351,7 +447,7 @@ class TaskExecutor:
             summary = "\n\n".join(d.output for d in deep if d.output) or "Goal(s) met."
             self._report_progress(task_id, "done", text="Done.", output=summary)
             self._safe(lambda: self._client.report_done(task_id, summary))
-            self._post_conv(conv_id, summary, kind="done")
+            self._post_conv(conv_id, summary, kind="done", task_id=task_id)
             return ExecutionOutcome(task_id, "done", summary)
         # A deep run that raised a human decision instead of finishing.
         decision_id = next((d.decision_id for d in deep if d.decision_id), None)
@@ -361,7 +457,7 @@ class TaskExecutor:
             chat_text = next((d.output for d in deep if d.output), None) or summary
             self._report_progress(task_id, "done", text=f"Paused, needs you: {summary}")
             self._safe(lambda: self._client.report_needs_you(task_id, summary, decision_id))
-            self._post_conv(conv_id, chat_text, kind="decision")
+            self._post_conv(conv_id, chat_text, kind="decision", task_id=task_id)
             return ExecutionOutcome(task_id, "needs_you", summary, decision_id)
         # Otherwise the run hit a limit / errored.
         errs = "; ".join(d.error for d in deep if d.error) or "the goal was not met"
@@ -369,7 +465,7 @@ class TaskExecutor:
             errs = "deep work required but no deep-runner is configured: " + "; ".join(result.goals)
         self._report_progress(task_id, "error", text=errs)
         self._safe(lambda: self._client.report_failed(task_id, errs))
-        self._post_conv(conv_id, f"I couldn't complete this: {errs}", kind="done")
+        self._post_conv(conv_id, f"I couldn't complete this: {errs}", kind="done", task_id=task_id)
         return ExecutionOutcome(task_id, "failed", errs)
 
     # --- safety wrappers (reporting must not crash the poller) ---------------

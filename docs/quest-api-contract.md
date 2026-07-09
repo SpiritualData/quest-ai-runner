@@ -40,6 +40,29 @@ PATCH /api/assistant-tasks/{id}    { "status": "done" | "needs_you" | "failed",
 - `failed` — a deep run hit its limit or errored.
 - `needs_you` — a human-only step; carries the `decision_id` of the raised request.
 
+The runner never PATCHes `"cancelled"` itself (see Cancellation below): once a task is cancelled
+the backend already owns that terminal status, and a PATCH against it returns `409`.
+
+### Cancellation (stop a task while it's in progress)
+```
+GET /api/assistant-tasks/{id}   -> { ..., "status": "...", "cancel_requested": bool }
+```
+A human can cancel a task while it is `in_progress` (e.g. `POST
+/api/assistant-tasks/{id}/undo`, or a conversation-level stop). The backend sets the task's
+`status` to `"cancelled"` and `cancel_requested` to `true`, and rejects any subsequent `PATCH` that
+tries to change its status with `409`.
+
+`QuestClient.is_task_cancelled(task_id)` re-fetches the task and reports True when either signal is
+set; it is fail-open (any API error returns False, so a transient hiccup never mistakenly stops a
+legitimate run). `TaskExecutor` builds a throttled version of this check (at most once per ~15s of
+real time) and passes it to `Orchestrator.run(cancel_check=...)`, which polls it at natural loop
+boundaries (each plan/gather/replan step, each deep-goal retry attempt) and stops cleanly with
+`OrchestratorResult(kind="cancelled")` when it reports True. On a cancelled outcome the executor
+does **not** PATCH the task or post a done/failed message into the chat: the backend already set
+the terminal status and appends its own "cancelled" chat message, so the executor only posts a
+best-effort status note onto the task's own progress stream. See `docs/streaming-and-modes.md` for how
+`cancel_check` fits alongside the other `run()` event/streaming parameters.
+
 ### Escalate (human-only step)
 ```
 POST /api/teams/{team_id}/decisions    { ..., "default_on_silence": "hold" }

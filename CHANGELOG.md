@@ -7,6 +7,26 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Cooperative mid-run cancellation for background tasks.** `QuestClient.is_task_cancelled(id)`
+  checks whether a task's status is `"cancelled"` or its `cancel_requested` field is truthy
+  (fail-open: any API error returns False, so a transient hiccup can never kill a legitimate run).
+  `Orchestrator.run()` gains an optional `cancel_check: Callable[[], bool]` checked at natural loop
+  boundaries (before each plan/gather/replan step, before each deep-goal retry attempt, and once
+  more after deep execution finishes); when it reports True the run stops cleanly and returns an
+  `OrchestratorResult` with `kind="cancelled"` instead of the usual answer/deep/confirm outcome.
+  `None` (the default) is byte-for-byte the old behavior. `TaskExecutor.execute()` builds a
+  THROTTLED cancel check (at most one `is_task_cancelled` call per ~15s of real time) and threads
+  it into the run. On a cancelled outcome, or when a final unthrottled check right before reporting
+  done/failed (or after an orchestrator error) finds the task already cancelled, the executor does
+  NOT PATCH a terminal status (the backend already set it and appends its own terminal chat
+  message; a PATCH would just 409) and posts only a best-effort status note onto the task's own
+  progress stream, returning `ExecutionOutcome(status="cancelled")`. Covered in
+  `tests/test_orchestrator.py` (cancel_check boundaries) and `tests/test_runner.py` (executor and
+  QuestClient behavior).
+- **`QuestClient.post_conversation_message` accepts an optional `task_id`.** Stamped on the body
+  only when given (omitted keeps the request byte-for-byte unchanged), so the backend can
+  correlate a chat progress post back to the task it belongs to. `TaskExecutor` now passes the
+  task's own id on every started/progress/done/decision message it posts into the chat.
 - **The goal/claims verification judge now runs at a strong tier, with a risk-managed fallback.**
   New `OrchestratorConfig.verify_tier` (default `"best"`): `_verify_goal` — the ONE small,
   hard-capped call whose verdict gates the whole turn (met/not-met decides done vs

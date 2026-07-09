@@ -31,6 +31,7 @@ class MockQuestClient:
         self.claim_handlers = []   # list of (task_id, handler) — what each claim stamped
         self.reports = []          # list of (task_id, status, result, decision_id)
         self.posts = []            # list of (conv_id, content, kind) — live chat progress posts
+        self.post_task_ids = []    # parallel to ``posts``: the task_id (or None) each post carried
         self.progress = []         # list of (task_id, kind, text, output) — live task-detail stream
         self.heartbeats = []       # list of (team_id, capabilities, runner_label)
         self.discover_team_ids = []  # records the team_id each discovery scoped to
@@ -66,8 +67,9 @@ class MockQuestClient:
     def report_failed(self, task_id, result):
         self.reports.append((task_id, "failed", result, None))
 
-    def post_conversation_message(self, conv_id, content, *, kind="progress"):
+    def post_conversation_message(self, conv_id, content, *, kind="progress", task_id=None):
         self.posts.append((conv_id, content, kind))
+        self.post_task_ids.append(task_id)
         return {"role": "assistant", "kind": kind, "content": content}
 
     def post_environment_heartbeat(self, capabilities, *, runner_label=None, env_id=None, team_id=None):
@@ -1042,3 +1044,256 @@ def test_executor_task_model_none_is_same_as_absent():
     # first, on the cheap "fast" tier, before the real answer call.
     expected_fast = registry.resolve_tier("fast")
     assert provider.answer_models == [expected_fast, expected_sonnet]
+
+
+# ---------------------------------------------------------------------------
+# Mid-run cancellation (POST /api/assistant-tasks/{id}/undo sets status=cancelled +
+# cancel_requested=true; the runner must notice it and stop cooperatively).
+# ---------------------------------------------------------------------------
+
+def test_executor_cancel_check_stops_mid_run_and_skips_terminal_report():
+    """A cancel_check that flips True mid-run (after the first plan/read step) must stop the
+    orchestrator cleanly with a cancelled outcome, and the executor must NOT PATCH a terminal
+    status (report_done/report_needs_you/report_failed) or post a done/failed message into the
+    chat -- the backend already owns the terminal state and a PATCH would just 409."""
+    provider = StubProvider(decisions=[
+        {"action": "read", "reads": [{"rel_path": "README.md"}], "rationale": "reading"},
+        {"action": "answer", "rationale": "should never run"},
+    ])
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _brain(provider))
+
+    calls = {"n": 0}
+
+    def cancel_after_first_step() -> bool:
+        calls["n"] += 1
+        return calls["n"] > 1
+
+    ex._build_cancel_check = lambda task_id: cancel_after_first_step
+    out = ex.execute({"id": "tcancel", "text": "say hi", "conv_id": "qaconv_cancel"})
+
+    assert out.status == "cancelled"
+    assert provider.plan_calls == 1              # stopped before the second (answer) step ran
+    assert client.reports == []                  # no report_done/needs_you/failed PATCH
+    # The unavoidable pre-run "started" message is the ONLY chat post -- no terminal message.
+    kinds = [k for (_c, _t, k) in client.posts]
+    assert kinds == ["started"]
+    progress_kinds = [k for (_tid, k, _t, _o) in client.progress]
+    assert progress_kinds[0] == "started"
+    assert progress_kinds[-1] == "status"        # the quiet-cancelled progress note
+
+
+def test_executor_cancel_check_none_when_client_lacks_is_task_cancelled():
+    """The default (real) ``_build_cancel_check`` degrades to an always-False check when the
+    client has no ``is_task_cancelled`` (older clients / the mock in this file lacks it too) --
+    a normal run must be completely unaffected."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _brain(provider))
+    out = ex.execute({"id": "tnorm1", "text": "say hi"})
+    assert out.status == "done"
+    assert client.reports[0][:2] == ("tnorm1", "done")
+
+
+def test_executor_normal_run_unaffected_when_never_cancelled():
+    """A client that DOES implement ``is_task_cancelled`` but always reports False must leave a
+    normal run byte-for-byte unaffected (done is still PATCHed and posted)."""
+    class NeverCancelledClient(MockQuestClient):
+        def is_task_cancelled(self, task_id):
+            return False
+
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = NeverCancelledClient([])
+    ex = TaskExecutor(client, _brain(provider))
+    out = ex.execute({"id": "tnorm2", "text": "say hi", "conv_id": "qaconv_norm"})
+    assert out.status == "done"
+    assert client.reports[0][:2] == ("tnorm2", "done")
+    assert ("qaconv_norm",) == tuple({c for (c, _t, _k) in client.posts})
+
+
+def test_executor_final_check_maps_orchestrator_error_to_cancelled_when_task_was_cancelled():
+    """If the orchestrator run raises (e.g. it was interrupted) but the task turns out to already
+    be cancelled, the executor must report the quiet-cancelled outcome instead of failed -- a run
+    that dies BECAUSE it was interrupted must not be reported as a genuine failure."""
+    class BoomProvider(StubProvider):
+        def plan(self, *a, **k):
+            raise RuntimeError("interrupted mid-call")
+
+    class CancelledAfterTheFactClient(MockQuestClient):
+        def is_task_cancelled(self, task_id):
+            return True
+
+    client = CancelledAfterTheFactClient([])
+    ex = TaskExecutor(client, _brain(BoomProvider(decisions=[])))
+    out = ex.execute({"id": "tboom", "text": "do something"})
+    assert out.status == "cancelled"
+    assert client.reports == []                  # no report_failed PATCH
+
+
+def test_executor_posts_include_task_id_for_conversation_correlation():
+    """Every chat post the executor makes carries the task's own id, so the frontend can correlate
+    a progress message back to the task it belongs to (e.g. to show/hide a stop control)."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _brain(provider))
+    out = ex.execute({"id": "tcorr", "text": "say hi", "conv_id": "qaconv_corr"})
+    assert out.status == "done"
+    assert client.post_task_ids and all(t == "tcorr" for t in client.post_task_ids)
+
+
+def test_build_cancel_check_throttles_is_task_cancelled_calls():
+    """The default THROTTLE interval (~15s) means repeated rapid checks must hit the client's
+    ``is_task_cancelled`` at most once -- the rest reuse the last known answer."""
+    calls = []
+
+    class CountingClient(MockQuestClient):
+        def is_task_cancelled(self, task_id):
+            calls.append(task_id)
+            return False
+
+    client = CountingClient([])
+    ex = TaskExecutor(client, _brain(StubProvider(decisions=[])))
+    check = ex._build_cancel_check("t1")
+    for _ in range(20):
+        assert check() is False
+    assert len(calls) == 1
+
+
+def test_build_cancel_check_rechecks_after_interval_elapses():
+    """With ``interval=0`` every call is past the (zero-length) window, so every check re-hits the
+    client -- proving the throttle is TIME-based, not a one-shot cache."""
+    calls = []
+
+    class CountingClient(MockQuestClient):
+        def is_task_cancelled(self, task_id):
+            calls.append(task_id)
+            return False
+
+    client = CountingClient([])
+    ex = TaskExecutor(client, _brain(StubProvider(decisions=[])))
+    check = ex._build_cancel_check("t1", interval=0.0)
+    check()
+    check()
+    check()
+    assert len(calls) == 3
+
+
+def test_build_cancel_check_no_task_id_is_always_false():
+    """No task id (shouldn't happen in practice, but must degrade safely) -> always-False check,
+    no client call at all."""
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _brain(StubProvider(decisions=[])))
+    check = ex._build_cancel_check("")
+    assert check() is False
+
+
+# --- QuestClient.is_task_cancelled ------------------------------------------------
+
+def test_is_task_cancelled_true_for_status_cancelled():
+    from quest_ai_runner.runner.quest_client import QuestClient
+
+    class _FakeGetTaskClient(QuestClient):
+        def get_task(self, task_id):
+            return {"id": task_id, "status": "cancelled"}
+
+    client = _FakeGetTaskClient("http://quest.example", "qsk_test")
+    assert client.is_task_cancelled("t1") is True
+
+
+def test_is_task_cancelled_true_for_cancel_requested_flag():
+    from quest_ai_runner.runner.quest_client import QuestClient
+
+    class _FakeGetTaskClient(QuestClient):
+        def get_task(self, task_id):
+            return {"id": task_id, "status": "in_progress", "cancel_requested": True}
+
+    client = _FakeGetTaskClient("http://quest.example", "qsk_test")
+    assert client.is_task_cancelled("t1") is True
+
+
+def test_is_task_cancelled_false_when_neither_signal_set():
+    from quest_ai_runner.runner.quest_client import QuestClient
+
+    class _FakeGetTaskClient(QuestClient):
+        def get_task(self, task_id):
+            return {"id": task_id, "status": "in_progress", "cancel_requested": False}
+
+    client = _FakeGetTaskClient("http://quest.example", "qsk_test")
+    assert client.is_task_cancelled("t1") is False
+
+
+def test_is_task_cancelled_false_on_api_error():
+    """FAIL-OPEN by contract: a transient error must never be mistaken for a cancellation and kill
+    a legitimate run."""
+    from quest_ai_runner.runner.quest_client import QuestClient
+
+    class _BoomGetTaskClient(QuestClient):
+        def get_task(self, task_id):
+            raise RuntimeError("network boom")
+
+    client = _BoomGetTaskClient("http://quest.example", "qsk_test")
+    assert client.is_task_cancelled("t1") is False
+
+
+def test_is_task_cancelled_false_when_task_not_found():
+    """``get_task`` already degrades to {} on a 404/API error (see its own docstring); an empty
+    task has neither signal, so this must be False, not raise."""
+    from quest_ai_runner.runner.quest_client import QuestClient
+
+    class _MissingTaskClient(QuestClient):
+        def get_task(self, task_id):
+            return {}
+
+    client = _MissingTaskClient("http://quest.example", "qsk_test")
+    assert client.is_task_cancelled("missing") is False
+
+
+# --- QuestClient.post_conversation_message(task_id=...) ---------------------------
+
+def test_post_conversation_message_includes_task_id_when_given(monkeypatch):
+    import json
+    import urllib.request
+    from quest_ai_runner.runner.quest_client import QuestClient
+
+    captured = {}
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b'{"role": "assistant"}'
+
+    def _fake_urlopen(req, timeout=None):
+        captured["body"] = req.data
+        return _Resp()
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    client = QuestClient("http://quest.example", "qsk_test")
+    client.post_conversation_message("qaconv_1", "hello", kind="progress", task_id="task-99")
+    assert json.loads(captured["body"]) == {
+        "content": "hello", "kind": "progress", "task_id": "task-99",
+    }
+
+
+def test_post_conversation_message_omits_task_id_when_absent(monkeypatch):
+    """Backward compatibility: no ``task_id`` -> the body is exactly {content, kind}, unchanged."""
+    import json
+    import urllib.request
+    from quest_ai_runner.runner.quest_client import QuestClient
+
+    captured = {}
+
+    class _Resp:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def read(self): return b'{"role": "assistant"}'
+
+    def _fake_urlopen(req, timeout=None):
+        captured["body"] = req.data
+        return _Resp()
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    client = QuestClient("http://quest.example", "qsk_test")
+    client.post_conversation_message("qaconv_1", "hello", kind="progress")
+    assert json.loads(captured["body"]) == {"content": "hello", "kind": "progress"}

@@ -57,6 +57,28 @@ finishes via the background path (notify/PATCH), so nothing is lost.
 concern: the result is already persisted/reported by the background path, so the UI just reads it
 back. Core does nothing extra here.
 
+## Cooperative cancellation (`cancel_check`)
+
+Like `detach_check`, `cancel_check` is a zero-arg callable **polled during the run** -- but where
+`detach_check` only flips which sink receives events (the run still finishes), `cancel_check`
+stops the run itself:
+
+```python
+result = orch.run(
+    task_text, mode=Mode.BACKGROUND, sink=sink,
+    cancel_check=lambda: quest_client.is_task_cancelled(task_id),  # a human hit "stop"
+)
+```
+
+It's checked at natural loop boundaries (before each plan/gather/replan step, before each
+deep-goal retry attempt, and once more after deep execution finishes) -- never mid-call, so a
+single in-flight LLM/tool call always completes before the loop notices. When it reports True the
+run stops cleanly and returns `OrchestratorResult(kind="cancelled")` instead of the usual
+answer/deep/confirm outcome; `None` (the default) is exactly today's behavior. `TaskExecutor`
+builds a throttled `cancel_check` from `QuestClient.is_task_cancelled` so BACKGROUND runs can be
+stopped without hammering the API on every poll (see `docs/quest-api-contract.md`'s Cancellation
+section for the full contract).
+
 ## Why this matters
 
 `runner/executor.py` already runs BACKGROUND with a `MilestoneSink` whose `on_milestone` posts an
