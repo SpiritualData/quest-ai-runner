@@ -254,6 +254,9 @@ class Poller:
         # The pre-run pull (when the direction calls for it) also yields the rep's per-run preamble,
         # so the deep run executes AS that rep with no extra consumer glue.
         rep_preamble = self._pull_rep_for(task, target)
+        # Opt-in: refresh the task's linked goal folder's QUEST_SYNC.md before running, when
+        # cfg.goal_folder_map maps this task's goal/quest to a local folder.
+        self._pull_goal_folder_for(task)
         executor = TaskExecutor(self.client, self._orch())
         outcome = executor.execute(task, rep_preamble=rep_preamble)
         log.info("task %s -> %s", task_id, outcome.status)
@@ -261,6 +264,8 @@ class Poller:
         # configured direction asks for it. Best-effort and AFTER the task is reported — a sync
         # failure here must never fail the task.
         self._push_rep_for(task, target)
+        # Opt-in push-back: post any locally-queued notes on the goal folder up to Quest.
+        self._push_goal_folder_for(task)
         # Opt-in: record this task's outcome into the rep's turn store so future runs can recall it.
         self._record_rep_turn(task, target, outcome)
         return task_id
@@ -430,6 +435,60 @@ class Poller:
             rep_turn_store.record(task_text, {"response": result_text})
         except Exception as e:  # noqa: BLE001 — best-effort; never fails the task
             log.info("rep turn record for %s failed (%s) — continuing", user_id, e)
+
+    # --- goal <-> local folder sync (opt-in, keyed off cfg.goal_folder_map) --
+
+    def _goal_folder_for(self, task: Dict[str, Any]) -> Optional[tuple]:
+        """Return ``(quest_id, folder)`` when this task's goal/quest is in ``cfg.goal_folder_map``.
+
+        Unlike the rep resolver, no callable is needed: the task already carries the exact id
+        (``goal_id`` for a personal "goal is the hub" quest, else ``quest_id``) that the map is
+        keyed on. Returns None when unconfigured or the task's goal isn't mapped."""
+        folder_map = getattr(self.cfg, "goal_folder_map", None)
+        if not folder_map:
+            return None
+        qid = task.get("goal_id") or task.get("quest_id")
+        if not qid:
+            return None
+        folder = folder_map.get(str(qid))
+        return (str(qid), folder) if folder else None
+
+    def _pull_goal_folder_for(self, task: Dict[str, Any]) -> None:
+        """Best-effort PRE-run pull: refresh the mapped folder's QUEST_SYNC.md from Quest.
+
+        Fires only when the task's goal/quest resolves via ``cfg.goal_folder_map`` AND
+        ``cfg.goal_folder_sync_direction`` includes a pull ("pull" or "both"). Never raises — a
+        sync failure is logged and the run proceeds with whatever was last synced."""
+        target = self._goal_folder_for(task)
+        if not target:
+            return
+        if self.cfg.goal_folder_sync_direction not in ("pull", "both"):
+            return
+        quest_id, folder = target
+        try:
+            from .goal_folder_sync import pull_goal_to_folder
+            pull_goal_to_folder(self.client, quest_id, folder)
+        except Exception as e:  # noqa: BLE001 — best-effort, like the rep pull
+            log.info("goal-folder pull for %s failed (%s) — folder left as last synced",
+                     quest_id, e)
+
+    def _push_goal_folder_for(self, task: Dict[str, Any]) -> None:
+        """Best-effort POST-run push: post any locally-queued notes up to the mapped goal.
+
+        Fires only when the task's goal/quest resolves via ``cfg.goal_folder_map`` AND
+        ``cfg.goal_folder_sync_direction`` is "push" or "both". Never raises."""
+        target = self._goal_folder_for(task)
+        if not target:
+            return
+        if self.cfg.goal_folder_sync_direction not in ("push", "both"):
+            return
+        quest_id, folder = target
+        try:
+            from .goal_folder_sync import push_folder_to_goal
+            push_folder_to_goal(self.client, quest_id, folder)
+        except Exception as e:  # noqa: BLE001 — best-effort; a push failure never fails the task
+            log.info("goal-folder push for %s failed (%s) — leaving Quest notes unchanged",
+                     quest_id, e)
 
     # --- run modes -----------------------------------------------------------
 

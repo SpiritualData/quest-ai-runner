@@ -41,6 +41,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
+from ._managed_sections import extract_between, replace_between
+
 try:
     import yaml
 except ImportError:
@@ -101,37 +103,17 @@ def _render_learned_block(learned_notes: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def _replace_between(text: str, start: str, end: str, body: str) -> str:
-    """Replace the content between (and including) a marker pair, or append a fresh block.
-
-    Idempotent: re-rendering with the same body yields the same file. If the markers are absent
-    (first pull into a human-authored or empty file) the block is appended, leaving existing
-    content intact.
-    """
-    block = f"{start}\n{body}\n{end}"
-    pattern = re.compile(re.escape(start) + r".*?" + re.escape(end), re.DOTALL)
-    if pattern.search(text):
-        return pattern.sub(lambda _m: block, text, count=1)
-    sep = "" if (not text or text.endswith("\n\n")) else ("\n" if text.endswith("\n") else "\n\n")
-    return f"{text}{sep}{block}\n"
-
-
 def render_skill_file(existing: str, profile: Dict[str, Any]) -> str:
     """Render the managed sections of a skill file from a Quest AI profile, preserving the rest."""
     persona = str(profile.get("persona") or "").strip()
     learned = list(profile.get("learned_notes") or [])
     out = existing or ""
-    out = _replace_between(out, _PERSONA_START, _PERSONA_END, persona)
-    out = _replace_between(out, _LEARNED_START, _LEARNED_END, _render_learned_block(learned))
+    out = replace_between(out, _PERSONA_START, _PERSONA_END, persona)
+    out = replace_between(out, _LEARNED_START, _LEARNED_END, _render_learned_block(learned))
     return out
 
 
 # --- parsing (managed block text -> profile fields) -----------------------------
-
-def _extract_between(text: str, start: str, end: str) -> Optional[str]:
-    pattern = re.compile(re.escape(start) + r"\n?(.*?)\n?" + re.escape(end), re.DOTALL)
-    m = pattern.search(text or "")
-    return m.group(1) if m else None
 
 
 def _extract_frontmatter_metadata(text: str) -> Dict[str, Any]:
@@ -162,8 +144,8 @@ def parse_skill_file(text: str) -> Dict[str, Any]:
     Returns ``{persona, learned_notes, display_name}`` with only what the file actually
     contains (a missing managed block yields ``None``/empty so push can send only what's present).
     """
-    persona = _extract_between(text, _PERSONA_START, _PERSONA_END)
-    learned_raw = _extract_between(text, _LEARNED_START, _LEARNED_END)
+    persona = extract_between(text, _PERSONA_START, _PERSONA_END)
+    learned_raw = extract_between(text, _LEARNED_START, _LEARNED_END)
     learned_notes: List[Dict[str, Any]] = []
     if learned_raw is not None:
         for line in learned_raw.splitlines():

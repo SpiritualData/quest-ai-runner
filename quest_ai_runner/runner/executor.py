@@ -138,10 +138,17 @@ class TaskExecutor:
             if _val is not None:
                 conv_scope[_dst] = _val
 
+        # Thread the task's goal identity into the orchestrator's context meta. quest_id already
+        # travels as its own run() param, but a personal "goal is the hub" task carries its id in
+        # goal_id (often with NO quest_id), and context assemblers that scope by goal — e.g.
+        # FileContextStore's goal_folder_map boost — would otherwise never see it.
+        context_meta: Optional[Dict[str, Any]] = {"goal_id": goal_id} if goal_id else None
+
         try:
             result: OrchestratorResult = self._orch.run(
                 text, quest_id=quest_id, context_view=context_view, mode=Mode.BACKGROUND,
                 sink=sink, model_hint=model_hint, rep_preamble=rep_preamble,
+                context_meta=context_meta,
                 conv_id=conv_id, conv_scope=conv_scope or None)
         except Exception as e:  # noqa: BLE001 — brain failure -> failed report, never crash poller
             msg = f"orchestrator error: {type(e).__name__}: {e}"

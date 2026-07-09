@@ -17,6 +17,11 @@ Endpoints implemented (the contract from integration_library_design.md §3):
   Identity   : GET  /api/teams/whoami  (validate the key)
   AI-rep sync: GET/PUT /api/teams/{team_id}/members/{user_id}/ai-profile (all rep data),
                POST     /api/teams/{team_id}/members/{user_id}/corrections (one learned note)
+  Account-wide quests (NOT team-scoped; a person's own goals — "goal is the hub"):
+               GET  /api/quests/me                    (list_my_quests)
+               GET  /api/quests/{quest_id}/state       (get_my_quest)
+               GET  /api/quests/{quest_id}/notes       (list_quest_notes)
+               POST /api/quests/{quest_id}/notes       (add_quest_note)
 
 ``QuestDecisionSink`` wraps a QuestClient as a core ``EscalationSink`` so the brain can raise a
 confirm/decision and get back a ``decision_id`` to report on the task.
@@ -423,6 +428,70 @@ class QuestClient:
             return list(resp.get("notes") or resp or []) if isinstance(resp, dict) else (list(resp) if isinstance(resp, list) else [])
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("list_goal_notes failed for goal %s: %s", goal_id, e)
+            return []
+
+    # --- account-wide quests (single-user "goal is the hub" lane; NOT team-scoped) --
+    # A person's own quests (dissertation, career, family, ...) live on their account, not
+    # attached to any team — distinct from list_quests()/get_quest() above, which browse a
+    # TEAM's initiative quests. Any owner or active-share holder can read/append with their own
+    # key; no team_id is needed or accepted by these endpoints.
+
+    def list_my_quests(self) -> List[Dict[str, Any]]:
+        """GET /api/quests/me — every quest the authenticated user owns, account-wide.
+
+        Each item is ``{quest_id, state: {...}}`` with the full quest state embedded (outcome,
+        current_state, strategies, notes, ...). This is where a person's real goals live —
+        distinct from a team's initiative quests (``list_quests``). Returns [] on any failure.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", "/api/quests/me") or []
+            return resp if isinstance(resp, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_my_quests failed: %s", e)
+            return []
+
+    def get_my_quest(self, quest_id: str) -> Dict[str, Any]:
+        """GET /api/quests/{quest_id}/state — fetch one account-wide quest's full state.
+
+        Unlike ``get_quest`` (team-scoped), this needs no team_id. Returns {} if not found or the
+        caller lacks access (owner or active share).
+        """
+        try:
+            self._require()
+            resp = self._request("GET", f"/api/quests/{quest_id}/state") or {}
+            return resp if isinstance(resp, dict) else {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("get_my_quest failed for quest %s: %s", quest_id, e)
+            return {}
+
+    def list_quest_notes(self, quest_id: str) -> List[Dict[str, Any]]:
+        """GET /api/quests/{quest_id}/notes — the goal's freeform notes, oldest -> newest.
+
+        The "goal is the hub" surface: any owner or active-share holder can read them. Returns []
+        if not found or inaccessible.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", f"/api/quests/{quest_id}/notes") or []
+            return resp if isinstance(resp, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_quest_notes failed for quest %s: %s", quest_id, e)
+            return []
+
+    def add_quest_note(self, quest_id: str, text: str) -> List[Dict[str, Any]]:
+        """POST /api/quests/{quest_id}/notes — append a note; returns the updated notes list.
+
+        Attribution is derived server-side from the caller: an API-key caller (this client) is
+        recorded ``author_kind: "ai"``. Returns [] on failure.
+        """
+        try:
+            self._require()
+            resp = self._request(
+                "POST", f"/api/quests/{quest_id}/notes", body={"text": text}) or []
+            return resp if isinstance(resp, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("add_quest_note failed for quest %s: %s", quest_id, e)
             return []
 
     # --- task creation (enqueue a new AI task) --------------------------------

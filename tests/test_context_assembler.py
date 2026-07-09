@@ -1594,3 +1594,87 @@ class TestRichSummaryHelpers:
         assert "WidgetFactory" in summary or "make_widget" in summary, (
             f"expected symbol names in fallback summary: {summary!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# goal_folder_map: automated context scoping toward a quest's linked folder
+# ---------------------------------------------------------------------------
+
+class TestGoalFolderBoost:
+    """A run whose meta carries a mapped quest_id should ground preferentially on that quest's
+    linked folder — but ONLY among cards that already share some relevance with the task; a
+    folder match on a zero-keyword-overlap card must never force it in (never worse by
+    construction)."""
+
+    def _two_cards(self, cards_dir):
+        # Both cards share the SAME single keyword so their un-boosted IDF scores are identical.
+        # linked/notes.md sits under the quest's mapped folder; other/notes.md does not.
+        cards_dir.mkdir(parents=True, exist_ok=True)
+        linked = _make_card("linked", ["academy"], files=[{"path": "linked/notes.md"}])
+        other = _make_card("other", ["academy"], files=[{"path": "other/notes.md"}])
+        _write_card(cards_dir, linked)
+        _write_card(cards_dir, other)
+
+    def test_boost_surfaces_linked_card_over_threshold(self, tmp_path):
+        cards_dir = tmp_path / "cards"
+        self._two_cards(cards_dir)
+        # threshold sits ABOVE the un-boosted score (3.0) but BELOW the boosted score (3.0*4.0).
+        store = FileContextStore(
+            str(cards_dir), repo_root=str(tmp_path), confidence_threshold=10.0,
+            goal_folder_map={"quest_1": str(tmp_path / "linked")},
+        )
+        ac = store.assemble("academy", meta={"quest_id": "quest_1"})
+        assert ac.card_ids == ["linked"]   # boosted card clears the gate; the other doesn't
+
+    def test_boost_fires_on_goal_id_too(self, tmp_path):
+        """A personal 'goal is the hub' task carries its id in meta['goal_id'] (often with NO
+        quest_id at all) — the boost must fire on it, matching the poller's _goal_folder_for."""
+        cards_dir = tmp_path / "cards"
+        self._two_cards(cards_dir)
+        store = FileContextStore(
+            str(cards_dir), repo_root=str(tmp_path), confidence_threshold=10.0,
+            goal_folder_map={"quest_1": str(tmp_path / "linked")},
+        )
+        ac = store.assemble("academy", meta={"goal_id": "quest_1"})
+        assert ac.card_ids == ["linked"]
+
+    def test_boost_inert_without_a_matching_quest_id(self, tmp_path):
+        cards_dir = tmp_path / "cards"
+        self._two_cards(cards_dir)
+        store = FileContextStore(
+            str(cards_dir), repo_root=str(tmp_path), confidence_threshold=10.0,
+            goal_folder_map={"quest_1": str(tmp_path / "linked")},
+        )
+        assert store.assemble("academy").card_ids == []                       # no meta at all
+        assert store.assemble("academy", meta={}).card_ids == []              # no quest_id
+        assert store.assemble("academy", meta={"quest_id": "quest_9"}).card_ids == []  # unmapped
+
+    def test_map_entry_outside_repo_root_is_ignored(self, tmp_path):
+        cards_dir = tmp_path / "cards"
+        self._two_cards(cards_dir)
+        outside = tmp_path.parent / f"outside-{tmp_path.name}"
+        store = FileContextStore(
+            str(cards_dir), repo_root=str(tmp_path), confidence_threshold=10.0,
+            goal_folder_map={"quest_1": str(outside)},
+        )
+        # The entry couldn't be resolved under repo_root, so it's dropped: no boost fires.
+        assert store.assemble("academy", meta={"quest_id": "quest_1"}).card_ids == []
+
+    def test_boost_never_promotes_a_zero_relevance_card(self, tmp_path):
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir(parents=True, exist_ok=True)
+        # ZERO shared keywords with the task text, but it lives under the mapped folder.
+        unrelated = _make_card("unrelated", ["giraffe"], files=[{"path": "linked/other.md"}])
+        _write_card(cards_dir, unrelated)
+        store = FileContextStore(
+            str(cards_dir), repo_root=str(tmp_path), confidence_threshold=0.0,
+            goal_folder_map={"quest_1": str(tmp_path / "linked")},
+        )
+        ac = store.assemble("academy fundraising plan", meta={"quest_id": "quest_1"})
+        assert ac.card_ids == []   # 0 * _GOAL_FOLDER_BOOST is still 0 — never forced in
+
+    def test_no_goal_folder_map_is_a_complete_no_op(self, tmp_path):
+        cards_dir = tmp_path / "cards"
+        self._two_cards(cards_dir)
+        store = FileContextStore(str(cards_dir), repo_root=str(tmp_path), confidence_threshold=10.0)
+        assert store.assemble("academy", meta={"quest_id": "quest_1"}).card_ids == []
