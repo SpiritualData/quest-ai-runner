@@ -52,6 +52,7 @@ from .card_content_render import (
     MAX_CARD_REFS as _MAX_CARD_REFS,
     content_item_text as _content_item_text,
     dedupe_content as _dedupe_content,
+    filter_content_by_time_range,
     normalize_content as _normalize_content,
     rank_content_by_recency_relevance as _rank_content_by_recency_relevance,
     render_card_content,
@@ -2232,6 +2233,40 @@ class FileContextStore(ContextAssemblerBase):
 
         top_cards = idf_candidates[: self._max_cards]
 
+        # QUERY-AWARE TIME FILTER (spec v3 work package C, item level): when the caller's meta
+        # carries a ``time_range`` (the shape ``parse_goal_condition_reply`` emits, threaded in by
+        # the orchestrator as ``meta["time_range"]``), apply it as a HARD filter over each selected
+        # card's CONTENT ITEMS by their ``ts``: an item carrying a real timestamp outside the range
+        # is dropped before rendering, while an item with NO timestamp is always kept (absence of a
+        # timestamp must never hide content). A card whose items are ALL filtered out is dropped
+        # from the result entirely; when the filter would empty EVERY selected card, it degrades to
+        # the unfiltered selection with an explicit note line (never a silent empty). Filtered
+        # cards are shallow COPIES so the in-memory cache's card dicts are never mutated. Absent
+        # meta / no ``time_range`` key: byte-for-byte today's behavior.
+        time_filter_note = ""
+        time_range = (meta or {}).get("time_range")
+        if time_range and top_cards:
+            time_filtered_cards: List[Dict[str, Any]] = []
+            for card in top_cards:
+                content = _normalize_content(card.get("content"))
+                if not content:
+                    # No dated content to filter on (a file-only card): keep it as-is.
+                    time_filtered_cards.append(card)
+                    continue
+                kept_items = filter_content_by_time_range(content, time_range)
+                if not kept_items:
+                    continue  # every item fell outside the range: drop the whole card
+                if len(kept_items) != len(content):
+                    card = {**card, "content": kept_items}
+                time_filtered_cards.append(card)
+            if time_filtered_cards:
+                top_cards = time_filtered_cards
+            else:
+                time_filter_note = (
+                    "(Note: no card content matched the requested time range. "
+                    "Showing context without the time filter.)"
+                )
+
         # Render each card, checking file freshness.
         # Collect every (card_index, file_entry) pair that needs a fingerprint check, then
         # compute all sha256 reads concurrently -- sha256 I/O releases the GIL so threads
@@ -2363,6 +2398,12 @@ class FileContextStore(ContextAssemblerBase):
             view_parts.append(part)
 
         context_view = "\n\n---\n\n".join(view_parts)
+        if time_filter_note:
+            # Time-filter degrade (see above): everything the filter touched was emptied, so the
+            # UNFILTERED selection renders with an explicit note leading it, never a silent empty.
+            context_view = (
+                time_filter_note + "\n\n" + context_view if context_view else time_filter_note
+            )
 
         # --- Context transparency: collect the file paths surfaced by this arm ----------------
         # One source entry per arm (keyword/IDF), listing the pinned file paths (mtime-sorted,

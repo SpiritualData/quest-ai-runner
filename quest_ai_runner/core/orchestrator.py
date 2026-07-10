@@ -2880,11 +2880,17 @@ class Orchestrator:
         recent_entries: List[Dict[str, Any]] = []
         if recent_records:
             try:
+                # The turn's time_range (when ``_derive_goal_condition`` parsed one; see run())
+                # rides in ctx_meta, so a deep goal's recent-context set honors the same hard
+                # time filter as the main turn. Absent key: byte-for-byte today's behavior.
+                goal_time_range = (ctx_meta or {}).get("time_range")
                 filtered = filter_relevant(
                     recent_records, goal_text, is_followup=False,
-                    max_cards=self.cfg.recent_context_max_cards)
+                    max_cards=self.cfg.recent_context_max_cards,
+                    time_range=goal_time_range)
                 survivors = [r for r in filtered if r.get("id") not in fresh_card_ids]
-                recent_text, recent_entries = render_recent_cards(survivors, goal_text)
+                recent_text, recent_entries = render_recent_cards(
+                    survivors, goal_text, time_range=goal_time_range)
                 if recent_text:
                     parts.append(recent_text)
             except Exception:  # noqa: BLE001 — recent-context merge must never break the run
@@ -4648,6 +4654,14 @@ class Orchestrator:
                     type=EVENT_UNDERSTANDING,
                     text=f"Understood as: {goal_condition}",
                     data=_event_data))
+            if retrieval_constraints and isinstance(retrieval_constraints.get("time_range"), dict):
+                # C2 card stores (item level): thread the turn's time_range into the assembly meta
+                # so a time-filter-capable assembler (e.g. ``FileContextStore``) hard-filters card
+                # CONTENT ITEMS by their ``ts``, and the recent-context filter/render calls below
+                # apply the same rule. ``_ctx_meta`` also flows into every per-goal assembly this
+                # turn spawns (``_run_deep`` -> ``_assemble_for_goal_with_cards``), so deep goals
+                # inherit the filter. Assemblers that ignore unknown meta keys are unaffected.
+                _ctx_meta["time_range"] = retrieval_constraints["time_range"]
             if retrieval_constraints and self.conversation_store is not None:
                 # C3 routing: constraints name a time period / topic / actor / content kind, so do
                 # a BOUNDED, hard-filtered cross-conversation search now instead of leaving this to
@@ -4701,7 +4715,8 @@ class Orchestrator:
             try:
                 _recent_filtered = filter_relevant(
                     _recent_records, f"{goal_condition} {user_message}",
-                    is_followup=_is_followup, max_cards=cfg.recent_context_max_cards)
+                    is_followup=_is_followup, max_cards=cfg.recent_context_max_cards,
+                    time_range=_ctx_meta.get("time_range"))
             except Exception:  # noqa: BLE001
                 _recent_filtered = []
             # ITEM-LEVEL RANKING HINT for fresh assembly (see core/recent_context.py): built from
@@ -4844,7 +4859,8 @@ class Orchestrator:
                 _fresh_ids = {cm.get("id") for cm in _card_meta if isinstance(cm, dict)}
                 _recent_survivors = [r for r in _recent_filtered if r.get("id") not in _fresh_ids]
                 _recent_text, _recent_entries = render_recent_cards(
-                    _recent_survivors, f"{goal_condition} {user_message}")
+                    _recent_survivors, f"{goal_condition} {user_message}",
+                    time_range=_ctx_meta.get("time_range"))
                 if _recent_text:
                     context_view = (_recent_text + "\n\n" + context_view if context_view
                                     else _recent_text)

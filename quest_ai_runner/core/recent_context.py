@@ -61,6 +61,7 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Tuple, Union, runtime_checkable
 
+from quest_ai_runner.adapters.conversation_format import parse_date_bound, timestamp_in_range
 from quest_ai_runner.adapters.tfdfidf_sampling import keywords_from_text
 
 log = logging.getLogger("quest-ai-runner.recent_context")
@@ -150,6 +151,32 @@ def _is_newer(ts_a: str, ts_b: str) -> bool:
         return _age_days(ts_a) <= _age_days(ts_b)
     except Exception:  # noqa: BLE001
         return False
+
+
+def ts_in_time_range(ts: str, time_range: Optional[Dict[str, Any]]) -> bool:
+    """True when ISO timestamp ``ts`` falls inside ``time_range`` (query-aware retrieval routing,
+    spec v3 work package C).
+
+    ``time_range`` is the same ``{"start": "YYYY-MM-DD"|None, "end": "YYYY-MM-DD"|None}`` shape
+    ``parse_goal_condition_reply`` emits (see ``core/orchestrator.py``), parsed with the shared
+    ``parse_date_bound``/``timestamp_in_range`` helpers from ``adapters.conversation_format``.
+    A missing/unparseable ``ts`` is ALWAYS in range (absence of a timestamp must never hide
+    content), and a falsy range or one with no parseable bound is a no-op (True for everything).
+    Never raises.
+    """
+    if not time_range or not isinstance(time_range, dict):
+        return True
+    try:
+        start = parse_date_bound(time_range.get("start"), end_of_day=False)
+        end = parse_date_bound(time_range.get("end"), end_of_day=True)
+        if start is None and end is None:
+            return True
+        parsed = datetime.datetime.fromisoformat((ts or "").replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+        return timestamp_in_range(parsed.timestamp(), start, end)
+    except Exception:  # noqa: BLE001 -- an unparseable timestamp is kept, never dropped
+        return True
 
 
 @runtime_checkable
@@ -492,6 +519,7 @@ def filter_relevant(
     *,
     is_followup: bool,
     max_cards: int = 6,
+    time_range: Optional[Dict[str, Any]] = None,
 ) -> List[Dict[str, Any]]:
     """Pure, NO-LLM relevance gate over ``records`` (as returned by ``RecentContextStore.load``).
 
@@ -512,6 +540,13 @@ def filter_relevant(
     recency_tie_break`` (scope weights: conv 1.0, quest 0.8, global 0.5; recency half-life 7 days)
     and capped to ``max_cards``. Never raises: returns [] on any failure. NO LLM calls anywhere in
     this function -- warm context must be free.
+
+    ``time_range`` (optional, the shape ``parse_goal_condition_reply`` emits) is a HARD filter over
+    each passing record's own ``ts``: a record whose timestamp falls outside the range is dropped
+    AFTER the relevance gate, while a record with no/unparseable ``ts`` is always kept. When the
+    time filter would empty everything the relevance gate passed, it falls back to the unfiltered
+    passing set (never a silent empty; ``render_recent_cards`` adds the explicit note at render
+    time). ``None`` (the default) is byte-for-byte today's behavior.
     """
     if not records:
         return []
@@ -536,7 +571,14 @@ def filter_relevant(
             score = (lexical_relevance * weight) + _recency_weight(record.get("ts", ""))
             passing.append((score, record))
         passing.sort(key=lambda pair: pair[0], reverse=True)
-        return [record for _score, record in passing[:max_cards]]
+        kept = [record for _score, record in passing]
+        if time_range and kept:
+            in_range = [r for r in kept if ts_in_time_range(r.get("ts", ""), time_range)]
+            if in_range:
+                kept = in_range
+            # else: the time filter would empty everything relevant -- fall back to the
+            # unfiltered set; the degrade note is rendered by render_recent_cards.
+        return kept[:max_cards]
     except Exception:  # noqa: BLE001
         log.debug("filter_relevant failed", exc_info=True)
         return []
@@ -593,6 +635,7 @@ def build_item_usage_hint(
 
 def render_recent_cards(
     records: List[Dict[str, Any]], query_text: str = "",
+    *, time_range: Optional[Dict[str, Any]] = None,
 ) -> Tuple[str, List[Dict[str, Any]]]:
     """Render surviving recent-turn ``records`` into a context_view block + card_metadata entries.
 
@@ -605,14 +648,49 @@ def render_recent_cards(
     after. Each entry's ``adapter`` is stamped ``"recent"`` so a consumer/UI can visually tell
     carried-over context apart from freshly assembled cards, using the existing card_metadata
     schema. Never raises; returns ``("", [])`` on any failure.
+
+    ``time_range`` (optional, the shape ``parse_goal_condition_reply`` emits) is a HARD filter at
+    the ITEM level: an item whose ``last_used_ts`` falls outside the range does not render (items
+    with no timestamp always do); a record whose items are ALL filtered out is dropped, as is an
+    item-less record whose own ``ts`` is out of range. When the filter would empty EVERYTHING that
+    would otherwise render, everything renders unfiltered with an explicit note line (never a
+    silent empty). ``None`` (the default) is byte-for-byte today's behavior.
     """
     if not records:
         return "", []
     try:
+        render_records: List[Dict[str, Any]] = list(records)
+        time_filter_degraded = False
+        if time_range:
+            survivors: List[Dict[str, Any]] = []
+            for record in records:
+                items = record.get("items") or []
+                if items:
+                    kept_items = [
+                        it for it in items
+                        if not isinstance(it, dict)
+                        or ts_in_time_range(it.get("last_used_ts", ""), time_range)
+                    ]
+                    if not kept_items:
+                        continue  # every item fell outside the range: drop the record
+                    if len(kept_items) != len(items):
+                        record = {**record, "items": kept_items}
+                    survivors.append(record)
+                elif ts_in_time_range(record.get("ts", ""), time_range):
+                    survivors.append(record)
+            if survivors:
+                render_records = survivors
+            else:
+                time_filter_degraded = True  # render everything unfiltered, with the note below
         query_terms = set(keywords_from_text(query_text or ""))
         lines = ["--- CONTEXT FROM RECENT TURNS ---"]
+        if time_filter_degraded:
+            lines.append(
+                "(Note: no recent context matched the requested time range. "
+                "Showing recent context without the time filter.)"
+            )
         entries: List[Dict[str, Any]] = []
-        for record in records:
+        for record in render_records:
             title = record.get("title") or record.get("id") or ""
             items = record.get("items") or []
             if items:

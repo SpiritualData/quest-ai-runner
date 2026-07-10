@@ -24,8 +24,9 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from typing import Any, Dict, List, Set
+from typing import Any, Dict, List, Optional, Set
 
+from .conversation_format import parse_date_bound, timestamp_in_range
 from .reference_resolver import _render_unresolved
 
 # ---------------------------------------------------------------------------
@@ -121,6 +122,44 @@ def normalize_content(raw: Any) -> List[Dict[str, Any]]:
             ).hexdigest()[:8]
             item_id = f"{itype}-{digest}-{idx}"
         out.append({"id": item_id, "type": itype, "locator": locator, "ts": ts, "why": why})
+    return out
+
+
+def filter_content_by_time_range(
+    content: List[Dict[str, Any]], time_range: Optional[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """Hard-filter card CONTENT ITEMS by ``ts`` against an optional ``time_range`` (query-aware
+    retrieval routing, spec v3 work package C: "content items carry ts; allow time-range filtering
+    at the item level in assemble/render paths where wired").
+
+    ``time_range`` is the same ``{"start": "YYYY-MM-DD"|None, "end": "YYYY-MM-DD"|None}`` shape
+    ``parse_goal_condition_reply`` emits (see ``core/orchestrator.py``), parsed here with the SAME
+    ``parse_date_bound``/``timestamp_in_range`` helpers ``SessionFileConversationStore`` and
+    ``ClaudeConversationsAdapter`` already use for conversation-level time filtering.
+
+    An item with NO real timestamp (``ts <= 0.0`` -- ``normalize_content``'s default for a missing
+    or absent ``ts``) is ALWAYS KEPT: absence of a timestamp must never hide content. Only items
+    that DO carry a real ``ts`` and fall strictly outside the range are dropped. A falsy/empty
+    ``time_range``, or one whose start/end are both unparseable, is a no-op: returns ``content``
+    unchanged. Never raises.
+    """
+    if not time_range or not isinstance(time_range, dict):
+        return content
+    try:
+        start = parse_date_bound(time_range.get("start"), end_of_day=False)
+        end = parse_date_bound(time_range.get("end"), end_of_day=True)
+    except Exception:  # noqa: BLE001
+        return content
+    if start is None and end is None:
+        return content
+    out: List[Dict[str, Any]] = []
+    for item in content:
+        try:
+            ts = float(item.get("ts") or 0.0)
+        except (TypeError, ValueError):
+            ts = 0.0
+        if ts <= 0.0 or timestamp_in_range(ts, start, end):
+            out.append(item)
     return out
 
 

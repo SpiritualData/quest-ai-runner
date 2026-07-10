@@ -12,15 +12,23 @@ Covers:
   * C2 filters: ``SessionFileConversationStore.related_slices`` and
     ``ClaudeConversationsAdapter.query`` apply a HARD time_range filter before relevance, and
     degrade to relevance-only (with an explicit note) when the filtered set is empty.
+  * C2 card stores (item level): ``FileContextStore.assemble`` hard-filters card CONTENT ITEMS by
+    ``ts`` when meta carries ``time_range`` (ts-less items always kept; an emptied card is dropped;
+    a fully emptied selection degrades to unfiltered with an explicit note), the recent-context
+    ``filter_relevant``/``render_recent_cards`` honor the same optional filter, and the
+    orchestrator threads the parsed ``time_range`` into the assembly meta.
   * C4 planner tool round-trip: the planner can put time_range/topic_terms/actor/content_kind
     alongside a "query" read spec, and it reaches the RetrievalAdapter's query(spec) unchanged.
 """
+import datetime
 import json
 import time
+from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.adapters.claude_conversations_adapter import ClaudeConversationsAdapter
+from quest_ai_runner.adapters.file_context_store import FileContextStore
 from quest_ai_runner.adapters.session_file_conversation_store import SessionFileConversationStore
-from quest_ai_runner.core.adapters import ConversationContext, Observation
+from quest_ai_runner.core.adapters import AssembledContext, ConversationContext, Observation
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import (
     DECIDE_TOOL,
@@ -28,6 +36,7 @@ from quest_ai_runner.core.orchestrator import (
     _format_now_block,
     parse_goal_condition_reply,
 )
+from quest_ai_runner.core.recent_context import filter_relevant, render_recent_cards
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -371,3 +380,237 @@ def test_planner_filtered_query_reaches_the_retrieval_adapter_unchanged():
     got = retrieval.query_specs[0]
     assert got["time_range"] == {"start": "2026-07-08", "end": "2026-07-08"}
     assert got["content_kind"] == "conversations"
+
+
+# --- C2 card stores: item-level time_range filtering in FileContextStore ------
+
+_RANGE = {"start": "2026-07-01", "end": "2026-07-02"}
+_IN_TS = datetime.datetime(2026, 7, 1, 12, 0, tzinfo=datetime.timezone.utc).timestamp()
+_OUT_TS = datetime.datetime(2026, 5, 1, 12, 0, tzinfo=datetime.timezone.utc).timestamp()
+_IN_ISO = "2026-07-01T12:00:00Z"
+_OUT_ISO = "2026-05-01T12:00:00Z"
+
+
+def _note(item_id, text, ts):
+    return {"id": item_id, "type": "note", "locator": {"text": text}, "ts": ts, "why": ""}
+
+
+def _write_card(cards_dir, card_id, *, keywords, content):
+    card = {
+        "id": card_id, "keywords": keywords, "summary": "", "files": [], "content": content,
+        "conventions": [], "provenance": {}, "usage_count": 0, "last_outcome": "unknown",
+    }
+    (cards_dir / f"{card_id}.json").write_text(json.dumps(card), encoding="utf-8")
+
+
+def _card_store(tmp_path):
+    cards_dir = tmp_path / "cards"
+    cards_dir.mkdir()
+    return FileContextStore(str(cards_dir), confidence_threshold=0.0), cards_dir
+
+
+def test_file_store_time_range_keeps_in_range_drops_out_of_range_items(tmp_path):
+    store, cards_dir = _card_store(tmp_path)
+    _write_card(cards_dir, "alpha-card", keywords=["alpha"], content=[
+        _note("n_in", "inrange alpha detail", _IN_TS),
+        _note("n_out", "outrange alpha detail", _OUT_TS),
+    ])
+    ac = store.assemble("alpha", meta={"time_range": _RANGE})
+    assert "alpha-card" in ac.card_ids
+    assert "inrange alpha detail" in ac.context_view
+    assert "outrange alpha detail" not in ac.context_view
+    # The structured item blocks (what the hybrid consolidator rebuilds from) are filtered too.
+    (card_meta,) = [cm for cm in ac.card_metadata if cm["id"] == "alpha-card"]
+    assert {b["id"] for b in card_meta["items"]} == {"n_in"}
+
+
+def test_file_store_time_range_keeps_ts_less_items(tmp_path):
+    store, cards_dir = _card_store(tmp_path)
+    _write_card(cards_dir, "alpha-card", keywords=["alpha"], content=[
+        _note("n_in", "inrange alpha detail", _IN_TS),
+        _note("n_none", "undated alpha detail", 0.0),  # no real ts: must never be hidden
+    ])
+    ac = store.assemble("alpha", meta={"time_range": _RANGE})
+    assert "undated alpha detail" in ac.context_view
+    assert "inrange alpha detail" in ac.context_view
+
+
+def test_file_store_card_emptied_by_time_filter_is_dropped(tmp_path):
+    store, cards_dir = _card_store(tmp_path)
+    _write_card(cards_dir, "stale-card", keywords=["alpha"], content=[
+        _note("n1", "outrange alpha one", _OUT_TS),
+        _note("n2", "outrange alpha two", _OUT_TS),
+    ])
+    _write_card(cards_dir, "fresh-card", keywords=["alpha"], content=[
+        _note("n3", "inrange alpha three", _IN_TS),
+    ])
+    ac = store.assemble("alpha", meta={"time_range": _RANGE})
+    assert "fresh-card" in ac.card_ids
+    assert "stale-card" not in ac.card_ids
+    assert "outrange" not in ac.context_view
+
+
+def test_file_store_total_empty_time_filter_degrades_with_note(tmp_path):
+    store, cards_dir = _card_store(tmp_path)
+    _write_card(cards_dir, "only-card", keywords=["alpha"], content=[
+        _note("n1", "outrange alpha detail", _OUT_TS),
+    ])
+    ac = store.assemble("alpha", meta={"time_range": _RANGE})
+    # Never a silent empty: the unfiltered selection renders, led by an explicit note.
+    assert "(Note:" in ac.context_view
+    assert "time range" in ac.context_view
+    assert "only-card" in ac.card_ids
+    assert "outrange alpha detail" in ac.context_view
+
+
+def test_file_store_without_time_range_is_unchanged(tmp_path):
+    store, cards_dir = _card_store(tmp_path)
+    _write_card(cards_dir, "alpha-card", keywords=["alpha"], content=[
+        _note("n_out", "outrange alpha detail", _OUT_TS),
+    ])
+    # meta with no time_range key: no filtering, no note.
+    ac = store.assemble("alpha", meta={"quest_id": "q1"})
+    assert "outrange alpha detail" in ac.context_view
+    assert "(Note:" not in ac.context_view
+
+
+# --- C2 card stores: recent-context time_range filtering ----------------------
+
+def test_filter_relevant_time_range_hard_filters_records():
+    records = [
+        {"id": "in", "turn_index": 5, "scope": "conv", "title": "billing invoice",
+         "keywords": ["billing", "invoice"], "ts": _IN_ISO},
+        {"id": "out", "turn_index": 5, "scope": "conv", "title": "billing invoice",
+         "keywords": ["billing", "invoice"], "ts": _OUT_ISO},
+    ]
+    result = filter_relevant(records, "billing invoice question", is_followup=False,
+                             max_cards=6, time_range=_RANGE)
+    assert [r["id"] for r in result] == ["in"]
+
+
+def test_filter_relevant_time_range_keeps_ts_less_records():
+    records = [
+        {"id": "in", "turn_index": 5, "scope": "conv", "title": "billing invoice",
+         "keywords": ["billing", "invoice"], "ts": _IN_ISO},
+        {"id": "undated", "turn_index": 5, "scope": "conv", "title": "billing invoice",
+         "keywords": ["billing", "invoice"]},  # no ts at all: must never be hidden
+    ]
+    result = filter_relevant(records, "billing invoice question", is_followup=False,
+                             max_cards=6, time_range=_RANGE)
+    assert {r["id"] for r in result} == {"in", "undated"}
+
+
+def test_filter_relevant_time_range_falls_back_when_everything_is_out_of_range():
+    records = [
+        {"id": "out", "turn_index": 5, "scope": "conv", "title": "billing invoice",
+         "keywords": ["billing", "invoice"], "ts": _OUT_ISO},
+    ]
+    result = filter_relevant(records, "billing invoice question", is_followup=False,
+                             max_cards=6, time_range=_RANGE)
+    # Never a silent empty: the relevance-passing set survives unfiltered.
+    assert [r["id"] for r in result] == ["out"]
+
+
+def test_render_recent_cards_time_range_filters_items_and_drops_emptied_records():
+    records = [
+        {"id": "mixed", "title": "Mixed card", "items": [
+            {"id": "i_in", "preview": "inrange item", "input_keywords": [],
+             "last_used_ts": _IN_ISO},
+            {"id": "i_out", "preview": "outrange item", "input_keywords": [],
+             "last_used_ts": _OUT_ISO},
+        ]},
+        {"id": "stale", "title": "Stale card", "items": [
+            {"id": "i_old", "preview": "old only item", "input_keywords": [],
+             "last_used_ts": _OUT_ISO},
+        ]},
+    ]
+    text, entries = render_recent_cards(records, "anything", time_range=_RANGE)
+    assert "inrange item" in text
+    assert "outrange item" not in text
+    assert "old only item" not in text  # the emptied record is dropped whole
+    assert {e["id"] for e in entries} == {"mixed"}
+    assert "(Note:" not in text
+
+
+def test_render_recent_cards_time_range_total_empty_degrades_with_note():
+    records = [
+        {"id": "stale", "title": "Stale card", "items": [
+            {"id": "i_old", "preview": "old only item", "input_keywords": [],
+             "last_used_ts": _OUT_ISO},
+        ]},
+    ]
+    text, entries = render_recent_cards(records, "anything", time_range=_RANGE)
+    # Never a silent empty: everything renders unfiltered with an explicit note.
+    assert "(Note:" in text
+    assert "time range" in text
+    assert "old only item" in text
+    assert {e["id"] for e in entries} == {"stale"}
+
+
+def test_render_recent_cards_time_range_keeps_ts_less_items_and_records():
+    records = [
+        {"id": "undated-items", "title": "Undated items", "items": [
+            {"id": "i1", "preview": "undated item", "input_keywords": [], "last_used_ts": ""},
+        ]},
+        {"id": "undated-record", "title": "Undated record", "preview": "whole card preview"},
+    ]
+    text, entries = render_recent_cards(records, "anything", time_range=_RANGE)
+    assert "undated item" in text
+    assert "whole card preview" in text
+    assert "(Note:" not in text
+
+
+# --- C2 card stores: the orchestrator threads time_range into assembly meta ---
+
+class _MetaCapturingAssembler:
+    """A ContextAssembler stub recording the ``meta`` each assemble() call received."""
+
+    def __init__(self):
+        self.metas: List[Optional[Dict[str, Any]]] = []
+
+    def assemble(self, task_text, *, meta=None):
+        self.metas.append(meta)
+        return AssembledContext()
+
+    def record(self, task_text, outcome):
+        pass
+
+
+def test_run_threads_time_range_into_assembly_meta():
+    assembler = _MetaCapturingAssembler()
+    provider = _ConstraintProvider(
+        "What was done last Wednesday\n"
+        '{"time_range": {"start": "2026-07-08", "end": "2026-07-08"}}'
+    )
+    orch = _orch(provider, context_assembler=assembler)
+    result = orch.run("what was done last wednesday", now="2026-07-09")
+
+    assert result.retrieval_constraints == {
+        "time_range": {"start": "2026-07-08", "end": "2026-07-08"},
+    }
+    assert len(assembler.metas) == 1
+    assert (assembler.metas[0] or {}).get("time_range") == {
+        "start": "2026-07-08", "end": "2026-07-08",
+    }
+
+
+def test_run_without_constraints_leaves_meta_free_of_time_range():
+    assembler = _MetaCapturingAssembler()
+    provider = _ConstraintProvider("Fix the pricing bug in checkout")  # no constraints line
+    orch = _orch(provider, context_assembler=assembler)
+    orch.run("fix the pricing bug in checkout", now="2026-07-09")
+
+    assert len(assembler.metas) == 1
+    assert "time_range" not in (assembler.metas[0] or {})
+
+
+def test_assemble_for_goal_threads_time_range_meta():
+    assembler = _MetaCapturingAssembler()
+    provider = StubProvider(decisions=[])
+    orch = Orchestrator(retrieval=StubRetrieval(), provider=provider,
+                        registry=ModelRegistry(provider), context_assembler=assembler)
+    orch._assemble_for_goal_with_cards(
+        "summarize last week", ctx_meta={"time_range": _RANGE, "quest_id": "q1"})
+
+    assert len(assembler.metas) == 1
+    assert (assembler.metas[0] or {}).get("time_range") == _RANGE

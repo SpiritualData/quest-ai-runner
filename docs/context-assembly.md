@@ -641,6 +641,31 @@ file has no structural "kind"; a backend with real conversation metadata (e.g. a
 store) can enforce them. `current_slice` accepts `filters` for protocol symmetry but does not use
 it (there is only one conversation to filter at that granularity).
 
+**Card stores: item-level `time_range` filtering.** A card's content items carry a `ts` (see the
+content model above), so the turn's `time_range` also filters INSIDE cards, not just across
+conversations. When constraints include a `time_range`, the orchestrator threads it into the
+assembly meta (`meta["time_range"]`) for BOTH the main-turn `assemble()` and every per-goal
+assembly a deep run spawns (`_assemble_for_goal_with_cards`), and into the warm recent-context
+path (`filter_relevant` / `render_recent_cards` take an optional `time_range`). The rules, shared
+with the conversation stores:
+
+1. **Hard filter, item level.** `FileContextStore.assemble` drops a selected card's content items
+   whose `ts` falls outside the range before rendering (both the rendered view and the structured
+   `card_metadata` items the hybrid consolidator rebuilds from). The recent-context render applies
+   the same rule over item `last_used_ts` (and record `ts` for item-less records).
+2. **No timestamp never hides content.** An item or record WITHOUT a real timestamp is always
+   kept: the filter only excludes content that provably falls outside the range.
+3. **Emptied cards drop; a fully emptied result degrades, never silently.** A card whose items are
+   all filtered out is dropped from the result. When the filter would empty EVERYTHING that would
+   otherwise render, the unfiltered selection renders instead, led by an explicit `(Note: ...)`
+   line, the same degrade shape as the conversation stores.
+
+The date parsing is the shared `parse_date_bound` / `timestamp_in_range` pair from
+`conversation_format` (via `card_content_render.filter_content_by_time_range` for epoch-`ts` card
+items and `recent_context.ts_in_time_range` for ISO recent-context timestamps). Meta without a
+`time_range` key leaves every store byte-for-byte unchanged, and assemblers that ignore meta keys
+are unaffected.
+
 **Planner-visible filtered queries (mid-run widening).** The SAME `time_range` / `topic_terms` /
 `actor` / `content_kind` keys are also generic, optional properties the planner may set alongside a
 `query` in a `reads[]` item (`DECIDE_TOOL`'s schema). `_exec_one_read` already forwards the WHOLE

@@ -57,6 +57,24 @@ All notable changes to this project are documented here. The format is based on
   call mid-run (the same widening loop that already exists for reads) with zero core plumbing
   changes. New shared date helpers in `conversation_format`: `parse_date_bound`,
   `timestamp_in_range`. See `docs/context-assembly.md` ("Query-aware retrieval routing").
+- **Query-aware retrieval routing, card stores: item-level `time_range` filtering.** Card content
+  items already carry a `ts`; the turn's parsed `time_range` now reaches them as a HARD filter.
+  When `Orchestrator._derive_goal_condition` parses a `time_range`, the orchestrator threads it
+  into the assembly meta (`meta["time_range"]`) for BOTH the main-turn `assemble()` and every
+  per-goal assembly (`_assemble_for_goal_with_cards`, so deep subgoals inherit it), and into the
+  warm recent-context path. `FileContextStore.assemble` then drops content items whose `ts` falls
+  outside the range before rendering (items with NO timestamp are ALWAYS kept: absence of a
+  timestamp never hides content); a card left with zero items is dropped from the result, and when
+  the filter would empty every selected card it degrades to the unfiltered selection led by an
+  explicit `(Note: ...)` line, never a silent empty. `core/recent_context.py`'s `filter_relevant`
+  and `render_recent_cards` gain an optional `time_range` with the same rules over record `ts` /
+  item `last_used_ts` (a fully emptied render degrades to unfiltered with the same note). New pure
+  helpers reusing the shared date parsing (no reimplementation):
+  `card_content_render.filter_content_by_time_range` (epoch `ts`) and
+  `recent_context.ts_in_time_range` (ISO timestamps), both on `conversation_format`'s
+  `parse_date_bound`/`timestamp_in_range`. Meta without a `time_range` key is byte-for-byte
+  today's behavior, and assemblers that ignore meta keys are unaffected. See
+  `docs/context-assembly.md` ("Query-aware retrieval routing").
 - **Full-horizon, relevance-first cross-conversation recall in `SessionFileConversationStore`.**
   `related_slices` now considers EVERY session file on every call (no time window or recency
   cutoff: an old-but-relevant conversation is always reachable) while staying cheap as
