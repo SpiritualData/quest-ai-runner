@@ -31,6 +31,7 @@ import logging
 import re
 import threading
 import time
+from datetime import datetime, timezone
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass, field
@@ -230,6 +231,15 @@ The four actions:
                    {{"rel_path": "...", "start_line": 40, "end_line": 80}}, and/or
       * a grep:    {{"grep": "regex", "scope": "optional/subpath"}} to LOCATE content, and/or
       * a query:   {{"query": {{...}}}} for a structured source lookup (if supported), and/or
+      * FILTERS alongside a query, when the request names a specific TIME PERIOD, TOPIC, WHO
+        (you/a rep/the team), or KIND OF CONTENT (tasks done, decisions, conversations, files):
+          {{"query": {{...}}, "time_range": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}},
+            "topic_terms": ["..."], "actor": "me"|"rep"|"team",
+            "content_kind": "tasks_done"|"decisions"|"conversations"|"files"}}
+        A source applies filters as a HARD filter first, then ranks by relevance within the
+        matches -- use this to search past conversations/history by time or kind instead of a
+        plain keyword query when the request is genuinely about a period or kind, not just a topic.
+        A source that does not support a given filter ignores it. Omit filters you don't need.
       * DISCOVERY, when you do not yet know what the source of truth contains:
           {{"list_sources": true}}                       -> the collections/tables/doc-sets that exist
           {{"describe_source": "<name>", "describe_path": "<optional nested path>"}}
@@ -392,6 +402,22 @@ DECIDE_TOOL: Dict[str, Any] = {
                         "grep": {"type": "string"},
                         "scope": {"type": "string"},
                         "query": {"type": "object"},
+                        "time_range": {
+                            "type": ["object", "null"],
+                            "description": "Optional HARD filter alongside a query/grep: only "
+                                           "consider content from this period. Resolve relative "
+                                           "dates ('Wednesday', 'last week') to concrete dates.",
+                            "properties": {"start": {"type": "string"}, "end": {"type": "string"}},
+                        },
+                        "topic_terms": {
+                            "type": "array", "items": {"type": "string"},
+                            "description": "Optional topic/keyword terms to narrow a query/grep.",
+                        },
+                        "actor": {"type": ["string", "null"], "enum": ["me", "rep", "team", None]},
+                        "content_kind": {
+                            "type": ["string", "null"],
+                            "enum": ["tasks_done", "decisions", "conversations", "files", None],
+                        },
                         "list_sources": {"type": "boolean"},
                         "describe_source": {"type": "string"},
                         "describe_path": {"type": "string"},
@@ -651,6 +677,11 @@ class OrchestratorResult:
     # Every minimal-intervention OVERSEER consultation this run, oldest first, each a dict
     # {"signal", "hint", "reason", "step"}. None when the overseer did not run (off / no consult).
     overseer_signals: Optional[List[Dict[str, Any]]] = None
+    # Structured retrieval constraints parsed alongside the goal condition (spec v3, work package
+    # C): {time_range, topic_terms, actor, content_kind}, any subset. None when nothing in the
+    # message called for filtering (today's behavior) or Step 1 took the conversation-context path
+    # (goal-condition derivation, which parses constraints, only runs for self-contained input).
+    retrieval_constraints: Optional[Dict[str, Any]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -1111,6 +1142,11 @@ Latest user message: {user_message}
 # context), derive a concise, CHECKABLE done-standard from the message ALONE, no conversation history
 # needed. This runs on EVERY turn that skips the context-fetch path above, so it must stay CHEAP (a
 # fast/balanced tier, never "best") -- see ``_derive_goal_condition``.
+#
+# Query-aware retrieval routing (spec v3, work package C): this SAME call ALSO emits an OPTIONAL
+# second line naming structured retrieval constraints (time_range/topic_terms/actor/content_kind),
+# parsed by ``parse_goal_condition_reply``. No new LLM call -- one extra thing parsed from the same
+# reply. Absent/unparseable constraints degrade to exactly today's behavior (goal_condition only).
 DERIVE_GOAL_CONDITION_PROMPT = """\
 Restate the user's message below as ONE short, concrete, CHECKABLE done-standard: the single
 condition that would mean this request has been fully addressed. Do not add requirements the user
@@ -1118,13 +1154,101 @@ did not ask for, do not change what was asked, and do not invent extra steps. If
 already a clear, checkable done-standard as written (e.g. a plain question, an already-concrete
 instruction), reply with it UNCHANGED.
 
-Rules:
-- Reply with ONLY the restated instruction, nothing else. No preamble, no explanation.
-- Keep it concise: one sentence, plain and concrete.
-- Do not use em dashes.
+Reply with ONE OR TWO LINES, nothing else:
+  Line 1: ONLY the restated instruction. No preamble, no explanation. One sentence, plain and
+    concrete. Do not use em dashes.
+  Line 2 (OPTIONAL, only when it genuinely applies): if the message names a specific TIME PERIOD
+    ("Wednesday", "last week", "yesterday", "this month"), a specific TOPIC, WHO it is about (you,
+    a rep, the team), or a KIND OF CONTENT (tasks done, decisions, conversations, files), emit a
+    single-line JSON object with any of these OPTIONAL keys (omit keys that do not apply; omit this
+    whole line when NONE apply):
+      "time_range": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}} -- resolve relative expressions
+        against CURRENT DATE below into concrete calendar dates.
+      "topic_terms": ["..."] -- a few short topic/keyword terms named in the message.
+      "actor": "me" | "rep" | "team" -- who the message is about, only when it names one.
+      "content_kind": "tasks_done" | "decisions" | "conversations" | "files" -- the kind of content
+        asked for, only when the message names one.
+    Never invent a filter the message does not support. When unsure, omit line 2 entirely.
+
+{now_block}
 
 User message: {user_message}
 """
+
+# The keys/values ``parse_goal_condition_reply`` accepts from the OPTIONAL constraints line above.
+# Anything else (an unrecognized key, or a value outside these enums) is DROPPED, not passed
+# through opaquely -- a hallucinated field must never reach a store as a real filter.
+_CONSTRAINT_ACTOR_VALUES = frozenset({"me", "rep", "team"})
+_CONSTRAINT_CONTENT_KIND_VALUES = frozenset({"tasks_done", "decisions", "conversations", "files"})
+
+
+def _format_now_block(now: Optional[str]) -> str:
+    """Render the CURRENT DATE line fed to ``DERIVE_GOAL_CONDITION_PROMPT`` so relative date
+    expressions ("Wednesday", "last week") resolve against a real "today". ``now`` is an optional
+    ISO date/datetime string; absent or unparseable falls back to the system clock (UTC), so
+    relative-date resolution is always possible and this never blocks the turn."""
+    dt = None
+    if now:
+        try:
+            dt = datetime.fromisoformat(str(now).replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            dt = None
+    if dt is None:
+        dt = datetime.now(timezone.utc)
+    return f"CURRENT DATE: {dt.strftime('%Y-%m-%d')} ({dt.strftime('%A')})"
+
+
+def parse_goal_condition_reply(raw: str) -> Tuple[str, Optional[Dict[str, Any]]]:
+    """Split a ``DERIVE_GOAL_CONDITION_PROMPT`` reply into ``(goal_condition, constraints)``.
+
+    The reply is normally just the restated instruction (line 1) -- ``constraints`` is None and
+    behavior is byte-for-byte what it was before constraints existed. The reply MAY carry a second
+    line with a single JSON object naming OPTIONAL structured retrieval constraints (see the
+    prompt): ``time_range`` ({{"start", "end"}}), ``topic_terms`` (list of strings), ``actor``
+    ("me"|"rep"|"team"), ``content_kind`` ("tasks_done"|"decisions"|"conversations"|"files").
+
+    Best-effort and NEVER raises: malformed/missing JSON, or a JSON object with no recognized
+    keys, yields ``constraints=None``. Only whitelisted keys/values survive parsing; anything else
+    is dropped so a hallucinated field can never reach a store as a real filter."""
+    text = (raw or "").strip()
+    if not text:
+        return "", None
+    lines = text.splitlines()
+    goal_condition = lines[0].strip()
+    constraints: Optional[Dict[str, Any]] = None
+    rest = "\n".join(lines[1:]).strip()
+    if rest:
+        try:
+            match = re.search(r"\{.*\}", rest, re.DOTALL)
+            obj = json.loads(match.group(0)) if match else None
+        except Exception:  # noqa: BLE001 -- malformed constraints must never break the turn
+            obj = None
+        if isinstance(obj, dict):
+            cleaned: Dict[str, Any] = {}
+            time_range = obj.get("time_range")
+            if isinstance(time_range, dict):
+                start = time_range.get("start")
+                end = time_range.get("end")
+                if isinstance(start, str) or isinstance(end, str):
+                    cleaned["time_range"] = {
+                        "start": start if isinstance(start, str) else None,
+                        "end": end if isinstance(end, str) else None,
+                    }
+            topic_terms = obj.get("topic_terms")
+            if isinstance(topic_terms, list):
+                cleaned_terms = [str(t).strip() for t in topic_terms if str(t).strip()]
+                if cleaned_terms:
+                    cleaned["topic_terms"] = cleaned_terms
+            actor = obj.get("actor")
+            if isinstance(actor, str) and actor.strip().lower() in _CONSTRAINT_ACTOR_VALUES:
+                cleaned["actor"] = actor.strip().lower()
+            content_kind = obj.get("content_kind")
+            if (isinstance(content_kind, str)
+                    and content_kind.strip().lower() in _CONSTRAINT_CONTENT_KIND_VALUES):
+                cleaned["content_kind"] = content_kind.strip().lower()
+            if cleaned:
+                constraints = cleaned
+    return goal_condition, constraints
 
 # Synthesize the FINAL user-facing reply after a deferred deep run, grounding it in what the deep
 # run ACTUALLY did/produced. Without this, a deferred-deep turn returns the pre-deep proposal (which
@@ -4111,7 +4235,9 @@ class Orchestrator:
         goal_condition = reply if reply else user_message
         return goal_condition, conv_ctx_text, None
 
-    def _derive_goal_condition(self, user_message: str) -> str:
+    def _derive_goal_condition(
+        self, user_message: str, *, now: Optional[str] = None
+    ) -> Tuple[str, Optional[Dict[str, Any]]]:
         """Derive a concise, CHECKABLE done-standard for a SELF-CONTAINED input (Fix 13).
 
         Unlike ``_understand_input`` (the context-FETCH path, gated by
@@ -4123,19 +4249,28 @@ class Orchestrator:
         spirit: "the SHORT, CHECKABLE DONE-STANDARD... the single condition that means the work is
         COMPLETE", not just a restatement.
 
+        Query-aware retrieval routing (spec v3, work package C): the SAME reply may ALSO carry
+        optional structured retrieval constraints (time_range/topic_terms/actor/content_kind), parsed
+        by ``parse_goal_condition_reply`` -- no new LLM call, just more parsed from the one call this
+        already makes. ``now`` (optional ISO date/datetime string) resolves relative date expressions
+        in the message ("Wednesday", "last week") against a real "today"; see ``_format_now_block``.
+        Returns ``(goal_condition, constraints)``; ``constraints`` is None exactly when nothing in
+        the message calls for filtering -- today's behavior, byte for byte, for ``goal_condition``.
+
         Fails safe: any exception, or an empty/unusable reply, degrades to the raw ``user_message``
-        unchanged (today's fallback), and never breaks the run. Deliberately uses a CHEAP tier
-        ("fast", never "best"): this adds one LLM round trip to every turn that reaches here, so it
-        must stay fast and inexpensive.
+        unchanged with no constraints (today's fallback), and never breaks the run. Deliberately uses
+        a CHEAP tier ("fast", never "best"): this adds one LLM round trip to every turn that reaches
+        here, so it must stay fast and inexpensive.
         """
         try:
             model = self.registry.resolve_tier("fast")
-            prompt = DERIVE_GOAL_CONDITION_PROMPT.format(user_message=user_message)
+            prompt = DERIVE_GOAL_CONDITION_PROMPT.format(
+                user_message=user_message, now_block=_format_now_block(now))
             out = self.provider.answer([{"role": "user", "content": prompt}], model=model)
-            out = (out or "").strip()
-            return out if out else user_message
+            goal_condition, constraints = parse_goal_condition_reply(out or "")
+            return (goal_condition or user_message), constraints
         except Exception:  # noqa: BLE001 — must never break the run
-            return user_message
+            return user_message, None
 
     def _run_clarify(self, plan: PlanDecision, *, quest_id: Optional[str] = None,
                      emit: Optional[_Emitter] = None) -> OrchestratorResult:
@@ -4235,7 +4370,8 @@ class Orchestrator:
             conv_id: Optional[str] = None,
             conv_scope: Optional[Dict[str, Any]] = None,
             prior_escalations: Optional[List[Dict[str, Any]]] = None,
-            cancel_check: Optional[Callable[[], bool]] = None) -> OrchestratorResult:
+            cancel_check: Optional[Callable[[], bool]] = None,
+            now: Optional[str] = None) -> OrchestratorResult:
         """Run the bounded loop for one request and return a terminal OrchestratorResult.
 
         Streaming/event interface (both lanes use the SAME emissions; the SINK decides policy):
@@ -4302,6 +4438,12 @@ class Orchestrator:
                             answer/deep/confirm outcome. It is never called more than the loop's own
                             natural cadence, so a cheap/throttled implementation is fine. Absent/None
                             means exactly today's behavior (a run can never be cancelled mid-flight).
+        * ``now``          -- optional ISO date/datetime string, the CALLER's notion of "now". Fed
+                            into goal-condition/constraint derivation (see ``_derive_goal_condition``)
+                            so a relative date in the message ("Wednesday", "last week") resolves
+                            against the caller's real clock instead of the server's. Absent/None
+                            falls back to the system clock (UTC) -- relative-date resolution still
+                            works, just against this process's clock.
 
         ``run`` still works with NO event args (back-compat: same signature callers used before
         plus keyword-only extras), returning the terminal ``OrchestratorResult``.
@@ -4446,6 +4588,10 @@ class Orchestrator:
         # word-for-word fidelity is preserved.
         goal_condition = user_message
         conv_ctx_text = ""
+        # Query-aware retrieval routing (spec v3, work package C): structured constraints parsed
+        # alongside the goal condition below (else-branch only -- see ``_derive_goal_condition``).
+        # None whenever nothing in the message calls for filtering (today's behavior).
+        retrieval_constraints: Optional[Dict[str, Any]] = None
         if (self.conversation_store is not None and conv_id
                 and self._needs_context_to_understand(user_message)):
             try:
@@ -4493,12 +4639,32 @@ class Orchestrator:
             # message alone (see ``_derive_goal_condition``; fails safe to the raw ``user_message``,
             # never raises). This adds one LLM round trip to every turn that reaches here (a real
             # cost/latency change from before, when this branch did nothing); see CHANGELOG.md.
-            goal_condition = self._derive_goal_condition(user_message)
-            if goal_condition != user_message:
+            goal_condition, retrieval_constraints = self._derive_goal_condition(user_message, now=now)
+            if goal_condition != user_message or retrieval_constraints:
+                _event_data: Dict[str, Any] = {"goal_condition": goal_condition}
+                if retrieval_constraints:
+                    _event_data["constraints"] = retrieval_constraints
                 emit.emit(ProgressEvent(
                     type=EVENT_UNDERSTANDING,
                     text=f"Understood as: {goal_condition}",
-                    data={"goal_condition": goal_condition}))
+                    data=_event_data))
+            if retrieval_constraints and self.conversation_store is not None:
+                # C3 routing: constraints name a time period / topic / actor / content kind, so do
+                # a BOUNDED, hard-filtered cross-conversation search now instead of leaving this to
+                # undirected relevance-only recall. The store applies filters FIRST (hard filter),
+                # relevance ranks WITHIN the filtered set, and degrades to relevance-only with an
+                # explicit labeled note when the filtered set is empty (see ``related_slices``).
+                # Best-effort: any failure here must never break the turn.
+                try:
+                    _filtered_ctx = self.conversation_store.related_slices(
+                        goal_condition, conv_scope or {}, exclude_conv_id=conv_id,
+                        filters=retrieval_constraints)
+                except Exception:  # noqa: BLE001
+                    _filtered_ctx = None
+                if _filtered_ctx is not None and _filtered_ctx.text:
+                    _filtered_block = "=== FILTERED CONVERSATION SEARCH ===\n" + _filtered_ctx.text
+                    context_view = (_filtered_block + "\n\n" + context_view
+                                    if context_view else _filtered_block)
 
         # Fix 5a: a handful of PRIOR user turns in this SAME conversation, for the overseer digest's
         # RECENT CONVERSATION section. Computed once (from whatever ``conv_ctx_text`` STAGE 1 pulled;
@@ -4783,6 +4949,7 @@ class Orchestrator:
             res.steps = steps
             res.gathered = gathered
             res.execution_record = exec_record
+            res.retrieval_constraints = retrieval_constraints
             if overseer_signals:
                 res.overseer_signals = list(overseer_signals)
             # Tear down the background overseer worker (Fix 1). ``wait=False`` mirrors the
@@ -5569,7 +5736,8 @@ class Orchestrator:
                    rep_preamble: Optional[str] = None,
                    pending_inputs: Optional[Callable[[], List[str]]] = None,
                    conv_id: Optional[str] = None,
-                   conv_scope: Optional[Dict[str, Any]] = None):
+                   conv_scope: Optional[Dict[str, Any]] = None,
+                   now: Optional[str] = None):
         """Generator form of ``run`` for a LIVE consumer that wants to iterate events.
 
         Yields each ``ProgressEvent`` (as emitted, post-sink-policy for the given mode) and,
@@ -5604,7 +5772,7 @@ class Orchestrator:
                                quest_id=quest_id, mode=mode, sink=sink, model_hint=model_hint,
                                attachments=attachments, rep_preamble=rep_preamble,
                                pending_inputs=pending_inputs, conv_id=conv_id,
-                               conv_scope=conv_scope)
+                               conv_scope=conv_scope, now=now)
                 result_box["result"] = res
             except Exception as e:  # noqa: BLE001
                 result_box["error"] = e

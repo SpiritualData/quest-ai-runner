@@ -409,17 +409,23 @@ class ConversationContext:
     """A rendered slice of conversation history, ready to drop into ``context_view``.
 
     Fields:
-      ``text``      -- rendered, ready-to-inject text (role-labelled turns).
-      ``turns``     -- optional metadata of the turns included (for tracing / tests).
-      ``sources``   -- optional ``[{conv_id, label, ...}]`` describing which conversations fed it.
-      ``scanned``   -- how many turns/conversations were considered (transparency).
-      ``truncated`` -- True if some content was dropped to respect a ``max_chars`` budget.
+      ``text``          -- rendered, ready-to-inject text (role-labelled turns).
+      ``turns``         -- optional metadata of the turns included (for tracing / tests).
+      ``sources``       -- optional ``[{conv_id, label, ...}]`` describing which conversations fed it.
+      ``scanned``       -- how many turns/conversations were considered (transparency).
+      ``truncated``     -- True if some content was dropped to respect a ``max_chars`` budget.
+      ``degraded_note`` -- set when ``filters`` were given but matched nothing, so the store fell
+                           back to relevance-only (today's behavior) instead of an empty result. The
+                           SAME note is also prepended into ``text`` (a labeled line) so it reaches
+                           the prompt; this field mirrors it for tracing/tests. None when filters
+                           were absent, or present and satisfied.
     """
     text: str = ""
     turns: List[Dict[str, Any]] = field(default_factory=list)
     sources: List[Dict[str, Any]] = field(default_factory=list)
     scanned: int = 0
     truncated: bool = False
+    degraded_note: Optional[str] = None
 
 
 @runtime_checkable
@@ -433,18 +439,31 @@ class ConversationStore(Protocol):
     """
 
     def current_slice(self, conv_id: str, query: str, *, recent_turns: int = 4,
-                      max_chars: int = 6000) -> "ConversationContext":
+                      max_chars: int = 6000,
+                      filters: Optional[Dict[str, Any]] = None) -> "ConversationContext":
         """Relevant slice of the CURRENT conversation. The ONLY thing forced into the output is the
         LAST USER turn; everything else is a relevance-selected CANDIDATE (TF-DF-IDF), not
         auto-included by recency. ``recent_turns`` is the "considered window" (default 4): the last N
         turns join the candidate pool but are NOT guaranteed in. USER turns are preferred and rendered
         verbatim; AI turns earn inclusion by relevance and are compacted. Scalable for very long
-        conversations. Never raises."""
+        conversations. ``filters`` (optional) is an OPAQUE dict of retrieval constraints -- keys are
+        interpreted by the implementation (e.g. ``time_range``, ``topic_terms``, ``actor``,
+        ``content_kind``; a consumer may add its own domain keys, e.g. an id list, since core never
+        reads them). An implementation that has no meaningful use for ``filters`` at this single-
+        conversation granularity may ignore it. Never raises."""
 
     def related_slices(self, query: str, scope: Dict[str, Any], *, exclude_conv_id: Optional[str] = None,
-                       max_convs: int = 3, max_chars: int = 6000) -> "ConversationContext":
+                       max_convs: int = 3, max_chars: int = 6000,
+                       filters: Optional[Dict[str, Any]] = None) -> "ConversationContext":
         """TF-DF-IDF-selected slices from OTHER conversations within ``scope``
-        ({user_id, team_ids, since, participant_id} — interpreted by the impl). Never raises."""
+        ({user_id, team_ids, since, participant_id} — interpreted by the impl). ``filters``
+        (optional) is an OPAQUE dict of retrieval constraints applied as a HARD filter BEFORE
+        relevance ranking (e.g. ``time_range`` over each candidate's timestamp) -- relevance then
+        ranks WITHIN the filtered candidates. When the filtered set is empty, an implementation
+        SHOULD degrade to today's relevance-only behavior over the unfiltered candidates rather than
+        return nothing, and set ``ConversationContext.degraded_note`` (plus a labeled line in
+        ``text``) so the caller can tell the difference. Keys the implementation does not recognize
+        are ignored. Never raises."""
 
 
 @runtime_checkable

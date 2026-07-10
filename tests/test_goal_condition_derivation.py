@@ -52,17 +52,19 @@ class _RaisingAnswerProvider(StubProvider):
 def test_derive_goal_condition_restates_a_checkable_done_standard():
     provider = _RecordingAnswerProvider(replies=["Add a --dry-run flag to poll and commit it"])
     orch = _orch(provider)
-    out = orch._derive_goal_condition("do the dry-run thing we talked about")
+    out, constraints = orch._derive_goal_condition("do the dry-run thing we talked about")
     assert out == "Add a --dry-run flag to poll and commit it"
     assert out != "do the dry-run thing we talked about"
+    assert constraints is None
 
 
 def test_derive_goal_condition_echoes_an_already_concrete_instruction():
     message = "Fix the pricing calculation bug in the checkout flow"
     provider = _RecordingAnswerProvider(replies=[message])
     orch = _orch(provider)
-    out = orch._derive_goal_condition(message)
+    out, constraints = orch._derive_goal_condition(message)
     assert out == message
+    assert constraints is None
 
 
 def test_derive_goal_condition_uses_a_cheap_tier_never_best():
@@ -82,15 +84,17 @@ def test_derive_goal_condition_falls_back_to_raw_message_on_provider_error():
     raises, never breaks the run."""
     provider = _RaisingAnswerProvider()
     orch = _orch(provider)
-    out = orch._derive_goal_condition("do the thing")
+    out, constraints = orch._derive_goal_condition("do the thing")
     assert out == "do the thing"
+    assert constraints is None
 
 
 def test_derive_goal_condition_falls_back_to_raw_message_on_empty_reply():
     provider = _RecordingAnswerProvider(replies=["   "])  # blank/whitespace-only reply
     orch = _orch(provider)
-    out = orch._derive_goal_condition("do the thing")
+    out, constraints = orch._derive_goal_condition("do the thing")
     assert out == "do the thing"
+    assert constraints is None
 
 
 def test_derive_goal_condition_prompt_needs_no_conversation_history():

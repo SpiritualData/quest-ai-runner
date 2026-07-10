@@ -24,7 +24,9 @@ from .conversation_format import (
     conversation_to_text,
     is_claude_conversation,
     load_conversations,
+    parse_date_bound,
     resolve_conv_key,
+    timestamp_in_range,
     truncate_transcript_middle,
 )
 from .tfdfidf_sampling import extract_terms, keywords_from_text, select_representatives
@@ -252,12 +254,39 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
         - "samples_per_cluster": conversations per cluster to return (default 2)
         - "query": optional query text for reranking (not used yet, reserved)
         - "use_tfidf": use TF-DF-IDF sampling instead of clustering (default True)
+        - "time_range" (query-aware retrieval routing, spec v3 work package C): optional
+          {"start", "end"} HARD filter, applied to ``conv_ids`` BEFORE sampling, using each
+          conversation's own timestamp. Degrades to the UNFILTERED conversation set when nothing
+          survives (never a silent empty result); the response text is then prefixed with an
+          explicit note so the caller can tell a real empty history from a too-narrow filter.
+          "topic_terms"/"content_kind"/"actor" are accepted (ignored) -- this adapter does not yet
+          rerank by query text (see the "query" key above); a filtered candidate set still lets a
+          consumer narrow BY PERIOD even without query-text reranking.
         """
         self._ensure_loaded()
         if not self._conversations:
             return Observation(kind="error", error="no conversations available")
 
         conv_ids = list(self._conversations.keys())
+        degraded_note = ""
+        time_range = spec.get("time_range")
+        if isinstance(time_range, dict) and (time_range.get("start") or time_range.get("end")):
+            start_epoch = parse_date_bound(time_range.get("start"), end_of_day=False)
+            end_epoch = parse_date_bound(time_range.get("end"), end_of_day=True)
+            if start_epoch is not None or end_epoch is not None:
+                time_filtered = [
+                    cid for cid in conv_ids
+                    if timestamp_in_range(
+                        self._get_conversation_timestamp(self._conversations[cid]),
+                        start_epoch, end_epoch)
+                ]
+                if time_filtered:
+                    conv_ids = time_filtered
+                else:
+                    degraded_note = (
+                        "No conversations found in the specified time range; showing broader "
+                        "results instead.\n\n")
+
         max_clusters = spec.get("max_clusters", 5)
         samples_per_cluster = spec.get("samples_per_cluster", 2)
         use_tfidf = spec.get("use_tfidf", True)
@@ -287,7 +316,7 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
 
         return Observation(
             kind="query",
-            text="\n\n".join(text_parts),
+            text=degraded_note + "\n\n".join(text_parts),
         )
 
     def _cluster_and_sample(

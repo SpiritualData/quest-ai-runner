@@ -50,11 +50,13 @@ from .conversation_format import (
     conversation_timestamp,
     is_claude_conversation,
     nl_terms,
+    parse_date_bound,
     rank_candidates_by_digest,
     resolve_conv_key,
     scan_conversation_files,
     select_current_slice,
     select_related,
+    timestamp_in_range,
 )
 
 # How long a directory scan stays fresh before the next call re-lists session files. Listing is
@@ -193,8 +195,14 @@ class SessionFileConversationStore(ConversationStore):
     # --- current conversation -------------------------------------------------
 
     def current_slice(self, conv_id: str, query: str, *, recent_turns: int = 4,
-                      max_chars: int = 6000) -> ConversationContext:
+                      max_chars: int = 6000,
+                      filters: Optional[Dict[str, Any]] = None) -> ConversationContext:
         """Relevant slice of the CURRENT conversation.
+
+        ``filters`` is accepted for ``ConversationStore`` protocol compatibility but not
+        meaningfully applicable at single-conversation granularity (there is only ever one
+        conversation to filter here) -- it is ignored. A cross-conversation filter belongs in
+        ``related_slices`` below.
 
         The ONLY thing forced into the output is the LAST USER turn (the actual intent). Everything
         else is a CANDIDATE selected by relevance, not auto-included by recency:
@@ -240,7 +248,8 @@ class SessionFileConversationStore(ConversationStore):
 
     def related_slices(self, query: str, scope: Dict[str, Any], *,
                        exclude_conv_id: Optional[str] = None, max_convs: int = 3,
-                       max_chars: int = 6000) -> ConversationContext:
+                       max_chars: int = 6000,
+                       filters: Optional[Dict[str, Any]] = None) -> ConversationContext:
         """TF-DF-IDF-selected slices from OTHER conversations within ``scope``.
 
         Full-horizon and relevance-first: EVERY session file is a stage-1 candidate on every call
@@ -249,9 +258,22 @@ class SessionFileConversationStore(ConversationStore):
         then best-effort scope-filtered (local sessions may lack user_id/team_ids, so a missing
         field is NOT a filter) and rendered as a short slice per conversation under ``max_chars``.
         ``scanned`` reports the stage-1 candidate count (the true horizon considered). Never raises.
+
+        ``filters`` (optional, query-aware retrieval routing): ``{time_range: {start, end},
+        topic_terms: [...], content_kind, actor}`` (any subset; unrecognized keys ignored).
+        ``time_range`` is a HARD filter applied to stage-1 candidates BEFORE the relevance gate
+        above, using each file's cached digest timestamp -- routing time+entity filters first,
+        semantic/lexical WITHIN the filtered set. ``topic_terms`` are folded into the query used
+        for matching/ranking. ``content_kind``/``actor`` have no reliable structural analogue in
+        local session files (a chat transcript has no "kind"; a Mongo-backed store with real
+        metadata, e.g. ``MongoConversationStore``, can filter on them) so they are accepted but not
+        enforced here. When the time-filtered candidate set is EMPTY, this DEGRADES to today's
+        relevance-only behavior over the UNFILTERED candidates (never a silent empty result) and
+        sets ``ConversationContext.degraded_note`` plus a labeled line at the top of ``text``.
         """
         try:
             scope = scope or {}
+            filters = filters or {}
             self._refresh_index()
             exclude_key = (
                 resolve_conv_key(exclude_conv_id, self._filepaths, self._conv_id_lookup)
@@ -273,11 +295,37 @@ class SessionFileConversationStore(ConversationStore):
             if not candidates:
                 return ConversationContext(scanned=0)
 
+            # C2/C3: a HARD time_range filter narrows the stage-1 candidate set itself (routing
+            # time filters FIRST), before any relevance ranking. Degrades to the unfiltered set
+            # when nothing survives, so an over-narrow filter never reads as an empty history.
+            degraded_note: Optional[str] = None
+            time_range = filters.get("time_range")
+            if isinstance(time_range, dict) and (time_range.get("start") or time_range.get("end")):
+                start_epoch = parse_date_bound(time_range.get("start"), end_of_day=False)
+                end_epoch = parse_date_bound(time_range.get("end"), end_of_day=True)
+                if start_epoch is not None or end_epoch is not None:
+                    time_filtered = {
+                        k: v for k, v in candidates.items()
+                        if timestamp_in_range(float(v["ts"] or 0.0), start_epoch, end_epoch)
+                    }
+                    if time_filtered:
+                        candidates = time_filtered
+                    else:
+                        degraded_note = (
+                            "No conversations found in the specified time range; showing "
+                            "broader relevance-based results instead.")
+
+            effective_query = query or ""
+            topic_terms = filters.get("topic_terms")
+            if isinstance(topic_terms, list) and topic_terms:
+                effective_query = (effective_query + " "
+                                   + " ".join(str(t) for t in topic_terms)).strip()
+
             # PRECISION (I4): only candidates whose digest shares at least one term with the query
             # compete on relevance. A query that matches nothing gets ONLY the recency floor below,
             # never a prompt full of unrelated conversations. An empty/blank query keeps everyone
             # (pure distinctiveness + recency ranking, the pre-query behavior).
-            query_terms = nl_terms(query or "")
+            query_terms = nl_terms(effective_query)
             if query_terms:
                 matched = [k for k in candidates
                            if nl_terms(candidates[k]["digest"]) & query_terms]
@@ -289,7 +337,7 @@ class SessionFileConversationStore(ConversationStore):
                 matched,
                 digest_of=lambda k: candidates[k]["digest"],
                 timestamp_of=lambda k: float(candidates[k]["ts"] or 0.0),
-                query=query,
+                query=effective_query,
                 top_n=shortlist_n,
             )
             # Recency floor: the most recent few candidates always join (and always render, via
@@ -319,14 +367,16 @@ class SessionFileConversationStore(ConversationStore):
                 conv_list.append(conv)
 
             if not conv_list:
-                return ConversationContext(scanned=scanned)
+                return ConversationContext(scanned=scanned, degraded_note=degraded_note)
 
             text, sources, truncated = select_related(
-                conv_list, query, max_convs=max_convs, max_chars=max_chars,
+                conv_list, effective_query, max_convs=max_convs, max_chars=max_chars,
                 must_include_ids={k for k in floor_keys},
             )
+            if degraded_note:
+                text = f"(Note: {degraded_note})\n\n{text}" if text else f"(Note: {degraded_note})"
             return ConversationContext(text=text, sources=sources, scanned=scanned,
-                                       truncated=truncated)
+                                       truncated=truncated, degraded_note=degraded_note)
         except Exception:  # noqa: BLE001 — never raise
             return ConversationContext(scanned=0)
 

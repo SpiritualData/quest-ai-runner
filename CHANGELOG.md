@@ -7,6 +7,56 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Cross-environment parity: an interactive context-request fast lane (presence-aware push).**
+  Chat on one environment can now fetch fresh local context from ANOTHER environment's runner
+  (e.g. a live server's corpus) with a latency that no longer depends on the runner's 900s
+  background poll. `Poller` gains a `context_request` handling path
+  (`_handle_context_request`): a claimed task carrying a structured `{query, max_chars, ...}`
+  request is answered by assembling context LOCALLY via the runner's own `context_assembler`
+  (no goal loop, no LLM plan/answer call), truncated to `max_chars`, and reported done via the
+  new `QuestClient.report_done_with_data` (plain text plus optional `result_data` card
+  metadata). Discovery is also `env_id`-aware now: `QuestClient.discover_due` takes an optional
+  `env_id` (multi-environment teams route work to the right runner; the poller passes
+  `cfg.env_id`). The runner's OWN thread (`Poller._fast_lane_loop`, started by `run_forever`)
+  serves interactive work with sub-poll-interval latency: by default it holds a LONG-POLL GET
+  (`QuestClient.wait_for_interactive`, against a new `GET /api/assistant-tasks/wait` backend
+  endpoint) open at a time, reconnecting immediately after each return so a live chat
+  context-request is answered in close to real time whenever the runner is up; `QAR_WAIT_CHANNEL=0`
+  falls back to a short interval poll (`QAR_CONTEXT_POLL_SECONDS`, default 5s, via the new
+  `QuestClient.list_interactive_due`). An in-process claim guard (`_claim_slot`/`_release_slot`)
+  prevents the background scan and the fast lane from both handling the same task when they
+  observe it in the same short window. New `RunnerConfig` fields: `wait_channel_enabled`,
+  `context_poll_seconds`, `wait_timeout_seconds`; new env vars `QAR_WAIT_CHANNEL`,
+  `QAR_CONTEXT_POLL_SECONDS`, `QAR_WAIT_TIMEOUT_SECONDS` (documented in `cli.py`'s module
+  docstring). See `docs/quest-api-contract.md` ("Fast lane for interactive tasks").
+- **Query-aware retrieval routing: structured constraints, filter-capable stores, a planner-visible
+  filtered query.** Some requests name an explicit time period, topic, who, or kind of content
+  ("what did we finish last Wednesday?") — relevance-only ranking under-serves these. The SAME
+  goal-condition-derivation call `Orchestrator._derive_goal_condition` already makes for a
+  self-contained message now ALSO parses OPTIONAL structured retrieval constraints
+  (`time_range`/`topic_terms`/`actor`/`content_kind`) from its one reply (no new LLM call); new pure
+  helpers `parse_goal_condition_reply` and `_format_now_block` do the splitting/date-block
+  rendering. `run()`/`run_stream()` take a new `now` (ISO date/datetime) so relative expressions
+  ("Wednesday", "last week") resolve against the caller's real clock; absent falls back to the
+  process clock. `OrchestratorResult` gains `retrieval_constraints`. When constraints are present
+  and a `conversation_store` is wired, `run()` makes one bounded, best-effort
+  `related_slices(..., filters=constraints)` call and folds it into `context_view` under a labeled
+  block, so "what did we do last Wednesday" is answered from conversations that actually happened
+  then. `ConversationStore.current_slice`/`related_slices` gain an optional `filters` param (an
+  opaque dict core never reads); `SessionFileConversationStore.related_slices` applies `time_range`
+  as a HARD filter over cached digest timestamps BEFORE the relevance gate, folds `topic_terms`
+  into the ranking query, and DEGRADES to relevance-only (never a silent empty) with a
+  `ConversationContext.degraded_note` + a labeled `(Note: ...)` line when the filtered set is
+  empty; `content_kind`/`actor` are accepted but not enforced for local session files (no
+  structural "kind" to check). `ConversationContext` gains `degraded_note`. The reference
+  `ClaudeConversationsAdapter.query` applies the same `time_range` hard-filter-then-degrade rule.
+  Planner-visible: `time_range`/`topic_terms`/`actor`/`content_kind` are new generic, optional
+  `reads[]` properties in `DECIDE_TOOL`'s schema, documented in the planner prompt — since
+  `_exec_one_read` already forwards the whole read spec to `RetrievalAdapter.query(spec)`
+  unchanged, no new dispatch path was needed, so the brain can make a targeted, filtered retriever
+  call mid-run (the same widening loop that already exists for reads) with zero core plumbing
+  changes. New shared date helpers in `conversation_format`: `parse_date_bound`,
+  `timestamp_in_range`. See `docs/context-assembly.md` ("Query-aware retrieval routing").
 - **Full-horizon, relevance-first cross-conversation recall in `SessionFileConversationStore`.**
   `related_slices` now considers EVERY session file on every call (no time window or recency
   cutoff: an old-but-relevant conversation is always reachable) while staying cheap as

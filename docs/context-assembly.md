@@ -589,6 +589,69 @@ resolve call produces the goal condition; if it reports `MORE_CONTEXT_NEEDED` th
 short-circuits to a confirm asking the user. The moment the goal condition is set, an
 `EVENT_UNDERSTANDING` event streams it ("Understood as: …").
 
+## Query-aware retrieval routing: filters, not just relevance
+
+Some requests name an explicit **time period**, **topic**, **who** (the user / a rep / the team),
+or **kind of content** ("what did we finish last Wednesday?", "show me the team's decisions from
+last week"). Relevance-only ranking under-serves these: a plain TF-DF-IDF search over everything
+can rank a wrong-period match above the right one. So the SAME goal-condition-derivation call that
+already runs for a self-contained message (`Orchestrator._derive_goal_condition`, see "User Input
+Understanding" above) ALSO parses OPTIONAL structured **retrieval constraints** out of its one
+reply — no new LLM call.
+
+**The reply shape.** The prompt (`DERIVE_GOAL_CONDITION_PROMPT`) asks for one or two lines: line 1
+is the restated goal condition (unchanged from before); an OPTIONAL line 2 is a single JSON object
+naming any of `time_range` (`{"start", "end"}`, resolved against a `CURRENT DATE` line built from
+the caller's `now`), `topic_terms` (a few keywords), `actor` (`"me"|"rep"|"team"`), and
+`content_kind` (`"tasks_done"|"decisions"|"conversations"|"files"`). `parse_goal_condition_reply`
+splits the two, and keeps ONLY whitelisted keys/values — an unrecognized key or an out-of-enum
+value is dropped rather than passed through, so a hallucinated filter can never reach a store.
+Absent or unparseable constraints yield `constraints=None`: today's behavior, byte for byte.
+
+**`run(..., now=...)`.** The caller's notion of "now" (an ISO date/datetime string) threads into
+`_derive_goal_condition` so relative expressions ("Wednesday", "last week") resolve against the
+caller's real clock. Absent/None falls back to the process's own clock — relative-date resolution
+still works, just against this process's time.
+
+**Routing (constraints present → filter first, relevance within).** When
+`_derive_goal_condition` returns constraints AND a `conversation_store` is wired, `run()` makes ONE
+bounded, best-effort `conversation_store.related_slices(goal_condition, conv_scope,
+filters=constraints)` call and folds the result into `context_view` under a labeled
+`=== FILTERED CONVERSATION SEARCH ===` block — so "what did we do last Wednesday" is answered from
+conversations that actually happened then, not from whatever the plain-relevance search surfaced.
+`OrchestratorResult.retrieval_constraints` carries the parsed constraints for the caller's own use
+(tracing, UI, a follow-up turn). This is additive: when constraints are absent, no extra store call
+happens and behavior is unchanged.
+
+**Filter-capable stores (`ConversationStore.related_slices(..., filters=...)`).** `filters` is an
+OPAQUE dict — core never reads its keys; each implementation interprets what it recognizes and
+ignores the rest, so a consumer can even add its own domain keys (e.g. a list of quest ids) without
+core knowing about them. The two rules every implementation follows:
+1. **Hard filter first, relevance within.** A recognized filter (e.g. `time_range`) narrows the
+   candidate set BEFORE ranking, not just a ranking nudge.
+2. **Never a silent empty.** When the filtered set is empty, degrade to today's relevance-only
+   behavior over the UNFILTERED candidates, and set `ConversationContext.degraded_note` plus a
+   labeled `(Note: ...)` line at the top of `text`, so a too-narrow filter reads as "showing
+   broader results" rather than "no history at all."
+
+`SessionFileConversationStore.related_slices` applies `time_range` as a hard filter over each
+file's cached digest timestamp (stage 1, before the relevance gate), folds `topic_terms` into the
+query used for ranking, and accepts (but does not enforce) `content_kind`/`actor` — a local session
+file has no structural "kind"; a backend with real conversation metadata (e.g. a Mongo-backed
+store) can enforce them. `current_slice` accepts `filters` for protocol symmetry but does not use
+it (there is only one conversation to filter at that granularity).
+
+**Planner-visible filtered queries (mid-run widening).** The SAME `time_range` / `topic_terms` /
+`actor` / `content_kind` keys are also generic, optional properties the planner may set alongside a
+`query` in a `reads[]` item (`DECIDE_TOOL`'s schema). `_exec_one_read` already forwards the WHOLE
+read spec to `RetrievalAdapter.query(spec)` unchanged, so no new dispatch path was needed — a
+`RetrievalAdapter` that fronts conversation history (e.g. quest-backend's
+`MongoConversationRetrievalAdapter`, or the reference `ClaudeConversationsAdapter.query` here, which
+applies the same `time_range` hard-filter-then-degrade rule over local session files) simply reads
+the same filter keys off `spec`. This lets the brain make a TARGETED, filtered retriever call mid-
+run ("search conversations, content_kind=conversations, time_range=last Wednesday") when the
+up-front assembly wasn't enough — the same widening loop that already exists for plain reads.
+
 ## Per-goal context and verifier-driven iteration (deep runs)
 
 When the planner dispatches deep work with N goals, each goal is treated as its own goal condition
