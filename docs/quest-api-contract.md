@@ -97,6 +97,47 @@ the key's; `user_id` (the rep) is passed explicitly.
 The poller posts what the lane can honestly do (`web` / `corpus` / `code`, derived from the wired
 adapters) each cycle, so Quest's router only sends work the lane can handle.
 
+### Fast lane for interactive tasks (cross-environment context requests)
+
+An INTERACTIVE task (`"interactive": true` on the task doc) is one raised from a LIVE chat turn
+that is waiting on the answer right now -- today the only producer is another environment's
+quest-context hub asking THIS runner for local context (a `context_request` task: `{"query",
+"user_id", "quest_ids", "visited", "max_chars"}`). The runner never runs the goal loop for one of
+these -- it assembles context locally via its own `context_assembler` and reports done.
+
+```
+GET /api/assistant-tasks/wait?interactive=true&timeout=<secs>[&team_id=&env_id=]
+  -> { "task": {...} | null }
+```
+Long-poll: the backend BLOCKS (re-checking its store internally, ~0.25-0.5s cadence) until an
+interactive task is queued for the caller's env/team, or `timeout` elapses (server-capped at 30s)
+with nothing to deliver. `QuestClient.wait_for_interactive` calls this in a tight loop from its own
+thread (`Poller._fast_lane_loop`), reconnecting immediately after every return -- empty or not --
+so an interactive task is answered close to real time whenever the runner is up, without the
+latency of the normal background scan (`poll_interval_seconds`, default 900s). `QAR_WAIT_CHANNEL=0`
+disables this and falls back to a plain short-interval poll:
+```
+GET /api/assistant-tasks?status=queued&interactive=true[&team_id=&env_id=]
+```
+via `QuestClient.list_interactive_due`, on `QAR_CONTEXT_POLL_SECONDS` (default 5s; `0` disables the
+fast lane entirely).
+
+Reporting a context-request's result uses the same `PATCH .../{id}` as any task, with an OPTIONAL
+`result_data` alongside the plain-text `result` (`QuestClient.report_done_with_data`) so a runner
+can carry structured extras -- today, card metadata -- without overloading the text field every
+other caller reads as-is:
+```
+PATCH /api/assistant-tasks/{id}    { "status": "done", "result": "...",
+                                     "result_data": {"card_metadata": [...]} }
+```
+
+`discover_due` (the normal background scan) is also `env_id`-aware now:
+```
+GET /api/assistant-tasks?status=queued&due_before=<ISO-now>&env_id=<env>
+```
+so a multi-environment team's runners each discover only their own pinned work (plus any unpinned
+task) -- the backend already scoped this; the client/poller just pass `env_id` through.
+
 ## Don't hand-roll HTTP
 
 Use `QuestClient` — it covers discover / claim / report / escalate / loop-close / whoami / heartbeat

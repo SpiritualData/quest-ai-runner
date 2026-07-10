@@ -35,10 +35,13 @@ class MockQuestClient:
         self.progress = []         # list of (task_id, kind, text, output) — live task-detail stream
         self.heartbeats = []       # list of (team_id, capabilities, runner_label)
         self.discover_team_ids = []  # records the team_id each discovery scoped to
+        self.discover_env_ids = []   # records the env_id each discovery scoped to
+        self.result_data_reports = []  # list of (task_id, result, result_data) -- report_done_with_data calls
 
-    def discover_due(self, *, now=None, status="queued", team_id=None):
+    def discover_due(self, *, now=None, status="queued", team_id=None, env_id=None):
         now = now or datetime.now(timezone.utc)
         self.discover_team_ids.append(team_id)
+        self.discover_env_ids.append(env_id)
         out = []
         for t in self._due:
             due_at = t.get("due_at")
@@ -46,13 +49,27 @@ class MockQuestClient:
                 continue
             if team_id and t.get("team_id") != team_id:
                 continue
+            if env_id and t.get("env_id") not in (env_id, None):
+                continue
             out.append(t)
         return out
+
+    def list_interactive_due(self, *, team_id=None, env_id=None):
+        return [t for t in self.discover_due(team_id=team_id, env_id=env_id) if t.get("interactive")]
+
+    def wait_for_interactive(self, *, team_id=None, env_id=None, timeout=25.0):
+        tasks = self.list_interactive_due(team_id=team_id, env_id=env_id)
+        return tasks[0] if tasks else None
 
     def claim(self, task_id, handler=None):
         self.claimed.append(task_id)
         self.claim_handlers.append((task_id, handler))
         return {"id": task_id, "status": "in_progress", "handler": handler}
+
+    def report_done_with_data(self, task_id, result, result_data=None):
+        self.result_data_reports.append((task_id, result, result_data))
+        self.reports.append((task_id, "done", result, None))
+        return {"id": task_id, "status": "done", "result": result, "result_data": result_data}
 
     def report_progress(self, task_id, kind, *, text=None, output=None, data=None):
         self.progress.append((task_id, kind, text, output))

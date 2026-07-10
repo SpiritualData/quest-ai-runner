@@ -22,6 +22,17 @@ Env it reads:
   QAR_ENV_ID (optional)                          — which of the team's environments this runner is
                                                    (omit = the team's default env; set a distinct id
                                                    per runner when a team attaches SEVERAL)
+  QAR_WAIT_CHANNEL (optional)                    — "0"/"false"/"off" disables the long-poll fast
+                                                   lane for interactive context-requests (falls back
+                                                   to a short poll, QAR_CONTEXT_POLL_SECONDS).
+                                                   Default: enabled.
+  QAR_CONTEXT_POLL_SECONDS (optional, seconds)    — fallback fast-lane poll interval, used only when
+                                                   QAR_WAIT_CHANNEL is disabled (default 5; 0 turns
+                                                   the fast lane off entirely, falling back to the
+                                                   background scan's own poll_interval_seconds)
+  QAR_WAIT_TIMEOUT_SECONDS (optional, seconds)    — how long each long-poll GET asks the backend to
+                                                   hold the connection open (default 25, backend caps
+                                                   it at 30)
   QAR_MAX_MEMORY_PERCENT (optional)              — pause new task pickup when system memory usage
                                                    exceeds this percent; resume when it recovers
   QAR_MIN_FREE_MEMORY_MB (optional)              — pause when available memory drops below this MB
@@ -239,6 +250,25 @@ def _config_from_env() -> RunnerConfig:
     )
     if os.getenv("QAR_POLL_INTERVAL"):
         cfg.poll_interval_seconds = float(os.environ["QAR_POLL_INTERVAL"])
+
+    # --- fast lane for interactive context-requests (D2 revised: presence-aware push) -----------
+    # QAR_WAIT_CHANNEL: "0"/"false"/"off" disables the long-poll wait channel, falling back to a
+    # short interval poll (QAR_CONTEXT_POLL_SECONDS). Default: enabled.
+    _wait_channel = (os.getenv("QAR_WAIT_CHANNEL") or "").strip().lower()
+    if _wait_channel in ("0", "false", "off", "no"):
+        cfg.wait_channel_enabled = False
+    elif _wait_channel in ("1", "true", "on", "yes"):
+        cfg.wait_channel_enabled = True
+    if os.getenv("QAR_CONTEXT_POLL_SECONDS"):
+        try:
+            cfg.context_poll_seconds = float(os.environ["QAR_CONTEXT_POLL_SECONDS"])
+        except ValueError:
+            pass
+    if os.getenv("QAR_WAIT_TIMEOUT_SECONDS"):
+        try:
+            cfg.wait_timeout_seconds = float(os.environ["QAR_WAIT_TIMEOUT_SECONDS"])
+        except ValueError:
+            pass
     # The planner step picks the next action (read/answer/deep/confirm). It defaults to a cheap
     # tier; a consumer whose tasks are mostly real work (e.g. code edits) can raise it so the
     # answer-vs-deep routing is decided by a more capable model.

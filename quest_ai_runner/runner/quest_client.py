@@ -9,7 +9,10 @@ team/executor identity (goal-linked tasks execute under the quest owner, so the 
 polls/updates them). NO key is baked in — it comes from config.
 
 Endpoints implemented (the contract from integration_library_design.md §3):
-  Discovery  : GET  /api/assistant-tasks?status=queued&due_before=<ISO-now>
+  Discovery  : GET  /api/assistant-tasks?status=queued&due_before=<ISO-now>[&env_id=]
+  Fast lane  : GET  /api/assistant-tasks/wait?interactive=true&timeout=<secs>[&team_id=&env_id=]
+               (long-poll; blocks server-side until an interactive task is queued or timeout)
+               GET  /api/assistant-tasks?status=queued&interactive=true  (fallback short poll)
   Claim      : PATCH /api/assistant-tasks/{id}  {status: in_progress}
   Report     : PATCH /api/assistant-tasks/{id}  {status: done|needs_you|failed, result, decision_id}
   Escalate   : POST  /api/teams/{team_id}/decisions  (a HOLD-default decision-request)
@@ -83,7 +86,8 @@ class QuestClient:
                 "Quest base URL and API key (qsk_...) are required. Supply them via RunnerConfig.")
 
     def _request(self, method: str, path: str, *, params: Optional[Dict[str, Any]] = None,
-                 body: Optional[Dict[str, Any]] = None) -> Any:
+                 body: Optional[Dict[str, Any]] = None,
+                 timeout_override: Optional[float] = None) -> Any:
         self._require()
         url = f"{self.base_url}{path}"
         if params:
@@ -94,8 +98,11 @@ class QuestClient:
         req = urllib.request.Request(url, data=data, method=method)
         req.add_header("Authorization", f"Bearer {self.api_key}")
         req.add_header("Content-Type", "application/json")
+        # timeout_override lets a caller ask for a LONGER socket timeout than the client default
+        # (e.g. the long-poll wait channel, which asks the server to hold the request for up to
+        # ~25-30s and must not have its own transport cut that short).
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:
+            with urllib.request.urlopen(req, timeout=(timeout_override or self.timeout)) as resp:
                 raw = resp.read()
                 return json.loads(raw) if raw else None
         except urllib.error.HTTPError as e:
@@ -118,7 +125,8 @@ class QuestClient:
 
     def discover_due(self, *, now: Optional[datetime] = None,
                      status: str = "queued",
-                     team_id: Optional[str] = None) -> List[Dict[str, Any]]:
+                     team_id: Optional[str] = None,
+                     env_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """GET queued tasks due at/before now (the poll-mode discovery floor).
 
         Unscheduled tasks count as 'due now'; scheduled ones surface within their window.
@@ -131,6 +139,12 @@ class QuestClient:
         treats a task's null ``team_id`` as owner-scoped, so a team filter only narrows, never breaks
         the personal lane.
 
+        ``env_id`` scopes discovery further to ONE of the team's runner ENVIRONMENTS: a multi-env
+        team routes a task pinned to a specific runner via ``env_id``, and the backend's list
+        endpoint matches that env PLUS any unpinned (``env_id=None``) task, so passing this only
+        narrows -- it never strands general work. Omit it (the default) for the pre-multi-env
+        contract (every runner sees every one of the team's unpinned + all-env tasks).
+
         The Quest list endpoint returns an envelope ``{"tasks": [...], "count": N}`` (not a
         bare array), so we unwrap ``tasks`` here; a bare-list response is also tolerated so the
         client works against a mock or a future shape change.
@@ -141,12 +155,73 @@ class QuestClient:
         params: Dict[str, Any] = {"status": status, "due_before": iso}
         if tid:
             params["team_id"] = tid
+        if env_id:
+            params["env_id"] = env_id
         try:
             resp = self._request("GET", "/api/assistant-tasks", params=params)
             return _as_task_list(resp)
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("discover_due failed: %s", e)
             return []
+
+    def list_interactive_due(self, *, team_id: Optional[str] = None,
+                             env_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """GET queued INTERACTIVE tasks only (the fast-lane FALLBACK poll).
+
+        Interactive tasks are context-requests (and similar) raised from a LIVE chat turn that is
+        waiting on a reply right now -- see ``wait_for_interactive`` for the preferred, lower-latency
+        long-poll channel. This method is the fallback used when the wait channel is disabled
+        (``QAR_WAIT_CHANNEL=0``): the fast lane calls it on a short interval
+        (``QAR_CONTEXT_POLL_SECONDS``) instead of waiting out the full background
+        ``poll_interval_seconds``. Same team/env scoping as ``discover_due``. Never raises.
+        """
+        tid = self.team_id if team_id is None else team_id
+        params: Dict[str, Any] = {"status": "queued", "interactive": "true"}
+        if tid:
+            params["team_id"] = tid
+        if env_id:
+            params["env_id"] = env_id
+        try:
+            resp = self._request("GET", "/api/assistant-tasks", params=params)
+            return _as_task_list(resp)
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_interactive_due failed: %s", e)
+            return []
+
+    def wait_for_interactive(self, *, team_id: Optional[str] = None,
+                             env_id: Optional[str] = None,
+                             timeout: float = 25.0) -> Optional[Dict[str, Any]]:
+        """Long-poll GET /api/assistant-tasks/wait -- the presence-aware PUSH channel.
+
+        Blocks SERVER-SIDE (the backend holds the connection, polling Mongo internally) until an
+        interactive task is queued for this team/env, or ``timeout`` elapses with nothing to
+        deliver. The runner is meant to call this in a tight loop from its own thread: reconnect
+        immediately after each return (empty or not) so a live chat context-request is answered in
+        close to real time whenever this lane is up, without the fixed-poll latency of
+        ``poll_interval_seconds`` (default 900s).
+
+        Returns the queued task dict, or ``None`` on an empty/timed-out wait (the ordinary, expected
+        outcome most of the time) or on ANY transport error (unconfigured client, network failure,
+        endpoint not yet available on an older backend). Never raises. The socket-level timeout is
+        padded past the server's own bound so a legitimate near-``timeout`` wait is never cut short
+        by our own transport.
+        """
+        tid = self.team_id if team_id is None else team_id
+        params: Dict[str, Any] = {"interactive": "true", "timeout": timeout}
+        if tid:
+            params["team_id"] = tid
+        if env_id:
+            params["env_id"] = env_id
+        try:
+            resp = self._request(
+                "GET", "/api/assistant-tasks/wait", params=params,
+                timeout_override=timeout + 10.0,
+            )
+            task = (resp or {}).get("task")
+            return task or None
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.info("wait_for_interactive unavailable (%s) -- the fast lane will retry", e)
+            return None
 
     def get_task(self, task_id: str) -> Dict[str, Any]:
         try:
@@ -218,6 +293,24 @@ class QuestClient:
                                  body={"status": "failed", "result": result})
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("report_failed for task %s: %s", task_id, e)
+            return {}
+
+    def report_done_with_data(self, task_id: str, result: str,
+                              result_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """PATCH done with an OPTIONAL structured ``result_data`` payload alongside the plain text.
+
+        Used by the context-request fast path (see ``poller._handle_context_request``) to carry
+        card metadata (a list of dicts) back to the backend without overloading the plain-text
+        ``result`` field, which every other caller still reads/renders as-is. Omitting
+        ``result_data`` (or passing an empty dict/list) is IDENTICAL to plain ``report_done``.
+        """
+        body: Dict[str, Any] = {"status": "done", "result": result}
+        if result_data:
+            body["result_data"] = result_data
+        try:
+            return self._request("PATCH", f"/api/assistant-tasks/{task_id}", body=body)
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("report_done_with_data failed for task %s: %s", task_id, e)
             return {}
 
     # --- live execution progress onto the task (the task-detail stream) ------

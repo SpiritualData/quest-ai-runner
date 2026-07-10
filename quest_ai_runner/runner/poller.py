@@ -134,6 +134,13 @@ class Poller:
         # Code's WebSearch/WebFetch). Computed once at construction (the adapter wiring is fixed
         # for the poller's lifetime).
         self._capabilities = derive_capabilities(config)
+        # In-process claim guard: prevents the background scan and the fast lane (wait channel /
+        # fallback poll, see run_forever) from BOTH claiming and running the SAME task when they
+        # observe it in the same short window before either has PATCHed it off 'queued'. This is
+        # belt-and-suspenders alongside the backend's own claim() PATCH -- it only protects against
+        # a race WITHIN this one process.
+        self._inflight_lock = threading.Lock()
+        self._inflight: set = set()
 
     def _orch(self):
         if self._orchestrator is None:
@@ -175,7 +182,7 @@ class Poller:
                         if self.cfg.discovery_team_id is not None
                         else (self.cfg.team_id or ""))
             due = self.client.discover_due(
-                now=datetime.now(timezone.utc), team_id=disc_tid)
+                now=datetime.now(timezone.utc), team_id=disc_tid, env_id=self.cfg.env_id)
         except (QuestApiError, QuestNotConfigured) as e:
             log.info("discovery unavailable (%s) — will retry next scan", e)
             return []
@@ -188,7 +195,7 @@ class Poller:
         handled: List[str] = []
         workers = max(1, min(self.cfg.max_concurrent_tasks, len(fresh)))
         with ThreadPoolExecutor(max_workers=workers) as pool:
-            futures = {pool.submit(self._handle_one, t): t for t in fresh}
+            futures = {pool.submit(self._handle_one_guarded, t): t for t in fresh}
             # Drive handling/logging in COMPLETION order (as_completed), not submission order —
             # so a fast task is reported as soon as it finishes instead of waiting behind a
             # slower task that happened to be submitted first.
@@ -219,7 +226,46 @@ class Poller:
         except Exception as e:  # noqa: BLE001 — heartbeat is best-effort, never breaks the scan
             log.info("environment heartbeat failed (%s) — continuing poll", e)
 
+    def _claim_slot(self, task_id: str) -> bool:
+        """Reserve ``task_id`` for in-process handling. False if another path here already has it.
+
+        See the ``_inflight`` docstring on ``__init__`` -- this only guards a race BETWEEN this
+        process's own background scan and its fast lane, not across separate runner processes."""
+        if not task_id:
+            return True
+        with self._inflight_lock:
+            if task_id in self._inflight:
+                return False
+            self._inflight.add(task_id)
+            return True
+
+    def _release_slot(self, task_id: str) -> None:
+        if not task_id:
+            return
+        with self._inflight_lock:
+            self._inflight.discard(task_id)
+
+    def _handle_one_guarded(self, task: Dict[str, Any]) -> Optional[str]:
+        """Wrap ``_handle_one`` with the in-process claim guard (see ``_claim_slot``).
+
+        Used by the background scan's ThreadPoolExecutor so it never handles a task the fast lane
+        (wait channel / fallback poll) picked up in the same instant."""
+        task_id = str(task.get("id") or task.get("task_id") or "")
+        if not self._claim_slot(task_id):
+            log.info("task %s already being handled by the fast lane -- skipping this scan", task_id)
+            return None
+        try:
+            return self._handle_one(task)
+        finally:
+            self._release_slot(task_id)
+
     def _handle_one(self, task: Dict[str, Any]) -> Optional[str]:
+        # Interactive context-requests never run the goal loop: a small, bounded, side-effect-free
+        # local context assembly, reported back as fast as possible. Route them BEFORE the
+        # resource/token-budget gates below -- they cost far less than a real task and exist
+        # specifically to be fast, so they should never be deferred by host-load pickup gating.
+        if task.get("context_request") is not None:
+            return self._handle_context_request(task)
         sig = _task_signature(task)
         task_id = str(task.get("id") or task.get("task_id") or "")
         # Re-check resources PER TASK: overload can begin mid-scan (earlier tasks in this very
@@ -268,6 +314,59 @@ class Poller:
         self._push_goal_folder_for(task)
         # Opt-in: record this task's outcome into the rep's turn store so future runs can recall it.
         self._record_rep_turn(task, target, outcome)
+        return task_id
+
+    # --- D1: interactive context-request fast path (no goal execution, no LLM plan loop) ------
+
+    def _handle_context_request(self, task: Dict[str, Any]) -> Optional[str]:
+        """Answer ONE ``context_request`` task: assemble context LOCALLY and report it.
+
+        This is the counterpart to quest-backend's quest-context hub / LocalFetchReferenceResolver:
+        when a live chat turn on another environment needs THIS runner's local context, the backend
+        queues a task carrying a structured ``context_request`` ({query, user_id, quest_ids,
+        visited, max_chars}) instead of a normal instruction. Answering it never runs the brain's
+        plan/gather/replan loop or a deep run -- it just reuses the SAME ContextAssembler this
+        runner already builds for its own chat/task turns (cards + vector search, all local/lexical,
+        no extra LLM call beyond whatever the assembler itself already makes for consolidation), so
+        it stays fast and side-effect-free.
+
+        Bounded by the request's ``max_chars`` (soft; truncates with a marker like the hub's own
+        merge budget). Reports ``done`` with the assembled text -- plus, when available, the
+        assembler's ``card_metadata`` via ``report_done_with_data`` so the backend's hub can surface
+        remote-env cards like any other card (see quest-backend's D4). Never raises to the caller:
+        any failure here reports the task ``failed`` with the error so the backend's fan-out sees a
+        clean terminal state instead of waiting out its own timeout budget."""
+        task_id = str(task.get("id") or task.get("task_id") or "")
+        cr = task.get("context_request") or {}
+        query = str(cr.get("query") or task.get("text") or "").strip()
+        max_chars = cr.get("max_chars")
+
+        if self.client.claim(task_id, handler="context-request") is None:
+            log.info("could not claim context-request task %s -- skipping", task_id)
+            return None
+        self.state.mark(_task_signature(task))
+
+        if not query:
+            self.client.report_done_with_data(task_id, "")
+            return task_id
+        try:
+            orch = self._orch()
+            assembler = getattr(orch, "context_assembler", None)
+            if assembler is None:
+                self.client.report_done_with_data(task_id, "")
+                return task_id
+            assembled = assembler.assemble(query)
+            text = (getattr(assembled, "context_view", "") or "").strip()
+            cards = list(getattr(assembled, "card_metadata", None) or [])
+            if isinstance(max_chars, (int, float)) and max_chars > 0 and len(text) > max_chars:
+                text = text[: int(max_chars)].rstrip() + "\n...[truncated]"
+            self.client.report_done_with_data(
+                task_id, text, {"card_metadata": cards} if cards else None)
+            log.info("context-request %s answered (%d chars, %d card(s))",
+                     task_id, len(text), len(cards))
+        except Exception as e:  # noqa: BLE001 -- must still terminate the task cleanly
+            log.error("context-request %s failed: %s", task_id, e, exc_info=True)
+            self.client.report_failed(task_id, f"context assembly failed: {type(e).__name__}: {e}")
         return task_id
 
     def _resolve_rep_target(self, task: Dict[str, Any]) -> Optional[tuple]:
@@ -490,21 +589,114 @@ class Poller:
             log.info("goal-folder push for %s failed (%s) — leaving Quest notes unchanged",
                      quest_id, e)
 
+    # --- fast lane: interactive context-requests, served faster than the background scan --------
+
+    def _dispatch_fast_task(self, task: Dict[str, Any]) -> None:
+        """Claim-and-run ONE task delivered by the fast lane (wait channel or fallback poll).
+
+        So far every interactive task is a context-request (see ``_handle_context_request``), and
+        ``_handle_one`` already routes those without running the goal loop; anything else delivered
+        here (a future interactive task type) simply falls back to the normal execution path so the
+        fast lane never silently drops unrecognized work. Deduped against the shared signature store
+        and guarded against the background scan claiming the SAME task concurrently (see
+        ``_claim_slot``)."""
+        task_id = str(task.get("id") or task.get("task_id") or "")
+        if not task_id or self.state.seen(_task_signature(task)):
+            return
+        if not self._claim_slot(task_id):
+            return  # the background scan already has this one in flight
+        try:
+            self._handle_one(task)
+        except Exception:  # noqa: BLE001 -- the fast lane must never die on a bad task
+            log.error("fast lane: handling task %s crashed", task_id, exc_info=True)
+        finally:
+            self._release_slot(task_id)
+
+    def _fast_lane_loop(self, stop_event: threading.Event) -> None:
+        """Background thread: serve INTERACTIVE work with sub-poll-interval latency (D2 revised).
+
+        Two strategies, chosen by config:
+          * ``wait_channel_enabled`` (default) -- hold a long-poll GET (blocks server-side up to
+            ``wait_timeout_seconds``) so a live chat context-request is answered close to instantly;
+            the connection is reopened immediately after each return (empty or not) -- the long-poll
+            itself provides the pacing, no extra sleep needed on the happy path.
+          * disabled -- fall back to a short interval poll (``context_poll_seconds``) over just the
+            interactive queue. ``context_poll_seconds <= 0`` disables the fast lane entirely (the
+            background scan's ``poll_interval_seconds`` is then the only cadence, exactly the
+            pre-fast-lane behavior).
+
+        A wait call that fails fast (well under its requested timeout -- unconfigured client,
+        network error, or an older backend without the ``/wait`` endpoint) is treated as trouble,
+        not a clean empty wait, and backs off briefly before retrying so a broken endpoint can never
+        turn into a tight retry loop. Never raises: one bad iteration is logged and the loop
+        continues, exactly like the background scan's own error handling."""
+        import time as _time
+
+        if not self.client.configured or not self.cfg.team_id:
+            return  # nothing to attach the fast lane to (mirrors the heartbeat's own gate)
+
+        while not stop_event.is_set():
+            try:
+                if self.cfg.wait_channel_enabled:
+                    started = _time.monotonic()
+                    task = self.client.wait_for_interactive(
+                        team_id=self.cfg.team_id, env_id=self.cfg.env_id,
+                        timeout=self.cfg.wait_timeout_seconds,
+                    )
+                    elapsed = _time.monotonic() - started
+                    if task:
+                        self._dispatch_fast_task(task)
+                    elif elapsed < 1.0:
+                        # Looks like a fast failure, not a clean ~timeout-length empty wait.
+                        if stop_event.wait(min(5.0, max(1.0, self.cfg.context_poll_seconds))):
+                            return
+                    # else: a normal empty wait -- reconnect immediately, no sleep.
+                else:
+                    interval = self.cfg.context_poll_seconds
+                    if interval <= 0:
+                        return  # fast lane explicitly disabled
+                    for t in self.client.list_interactive_due(
+                        team_id=self.cfg.team_id, env_id=self.cfg.env_id,
+                    ):
+                        self._dispatch_fast_task(t)
+                    if stop_event.wait(interval):
+                        return
+            except Exception:  # noqa: BLE001 -- the fast lane must never die
+                log.error("fast lane iteration failed", exc_info=True)
+                if stop_event.wait(1.0):
+                    return
+
     # --- run modes -----------------------------------------------------------
 
     def run_forever(self, *, stop_event: Optional[threading.Event] = None):
         import time
+
+        # The fast lane runs in its OWN daemon thread for the life of the service, independent of
+        # the background scan's stop_event contract below: it gets its own internal Event so it can
+        # be stopped deterministically in tests (via the returned thread) while still shutting down
+        # automatically at process exit in production (daemon=True) even when run_forever() itself
+        # never returns (the systemd/cron entry point calls it with no stop_event).
+        fast_stop = threading.Event()
+        fast_thread = threading.Thread(
+            target=self._fast_lane_loop, args=(fast_stop,),
+            name="qar-fast-lane", daemon=True,
+        )
+        fast_thread.start()
+
         interval = self.cfg.poll_interval_seconds
-        while True:
-            # While the host is overloaded, wait at the guard's (shorter) re-check cadence rather
-            # than burning full poll cycles — so the lane RESUMES promptly when resources recover.
-            if not self.resources.wait_until_ok(stop_event=stop_event):
-                return  # stopped while paused
-            try:
-                self.run_once()
-            except Exception as e:  # noqa: BLE001 — a transient error must not kill the loop
-                log.error("scan failed: %s", e)
-            if stop_event is not None and stop_event.wait(interval):
-                return
-            if stop_event is None:
-                time.sleep(interval)
+        try:
+            while True:
+                # While the host is overloaded, wait at the guard's (shorter) re-check cadence rather
+                # than burning full poll cycles — so the lane RESUMES promptly when resources recover.
+                if not self.resources.wait_until_ok(stop_event=stop_event):
+                    return  # stopped while paused
+                try:
+                    self.run_once()
+                except Exception as e:  # noqa: BLE001 — a transient error must not kill the loop
+                    log.error("scan failed: %s", e)
+                if stop_event is not None and stop_event.wait(interval):
+                    return
+                if stop_event is None:
+                    time.sleep(interval)
+        finally:
+            fast_stop.set()
