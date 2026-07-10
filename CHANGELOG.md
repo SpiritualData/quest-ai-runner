@@ -7,6 +7,22 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Full-horizon, relevance-first cross-conversation recall in `SessionFileConversationStore`.**
+  `related_slices` now considers EVERY session file on every call (no time window or recency
+  cutoff: an old-but-relevant conversation is always reachable) while staying cheap as
+  conversations accumulate, via a two-stage scan: stage 1 ranks ALL files by a compact per-file
+  digest (first/last message snippets, cached per file and invalidated by `(mtime, size)`, so a
+  warm call costs one `stat` per file; oversized files get a bounded head+tail raw read instead of
+  a full parse); stage 2 fully loads only a hard-capped shortlist (`_MAX_FULL_LOADS`) for precise
+  selection + rendering. Candidates whose digest shares no word with the query drop out entirely,
+  and a small recency floor (the 2 most recent conversations) always renders regardless of match,
+  so an unmatched query pulls ONLY the floor, never unrelated conversations. The store also
+  re-lists the session dir at most every 30s, so conversations written after construction become
+  reachable, and it no longer parses every file eagerly at construction. New shared helpers in
+  `conversation_format`: `scan_conversation_files` (path-only index), `rank_candidates_by_digest`
+  (query-overlap-boosted, length-normalized, recency-tie-break digest ranking), `nl_terms`
+  (word-level tokens for prose relevance), `query_overlap_boost`, and a `must_include_ids` param
+  on `select_related` for caller-supplied floors.
 - **Scoped, item-level recent-context usage memory (task execution + item ranking).** Extends the
   warm recent-context fallback below in three ways:
   1. **Deep/background runs now benefit too, not just chat turns.** `Orchestrator._assemble_for_goal`
@@ -134,6 +150,23 @@ All notable changes to this project are documented here. The format is based on
   `web:true` when a native or Tavily web adapter is wired. See [docs/web-search.md](docs/web-search.md).
 
 ### Fixed
+- **Conversation selection is now actually query-sensitive.** The relevance bias in
+  `select_current_slice` / `select_related` was a no-op (`terms | (terms & query_terms)` equals
+  `terms`), and prose was tokenized with the path-oriented `extract_terms` (whole-phrase tokens
+  that never overlap a query). Turn and digest ranking now applies a real word-level
+  query-overlap boost (`conversation_format.query_overlap_boost` over `nl_terms` word tokens), so
+  "reachable by relevance to the current input" holds instead of ranking purely by
+  distinctiveness + recency.
+- **The executor's fallback prior-conversation read is bounded.** A task carrying `conv_id` with
+  no `ConversationStore` wired used to dump the ENTIRE linked conversation into the task's
+  context via an uncapped `read_section`; it now passes `max_bytes`
+  (`executor.CONV_CONTEXT_MAX_BYTES`, 16k), so per-task prompt cost no longer grows with
+  conversation length.
+- **Over-budget conversation reads keep the recent tail.**
+  `ClaudeConversationsAdapter.read_section` used to head-truncate at `max_bytes`, dropping the
+  newest turns (the ones a linked task usually needs); it now elides the MIDDLE (new
+  `conversation_format.truncate_transcript_middle`), keeping the opening plus mostly the recent
+  tail.
 - **The answer step is told it cannot make changes.** `_grounding_block` now states explicitly
   that the read-and-answer step cannot edit files, run commands, or change code/data/config, that
   changes happen only through a separate execution run, and that it must never claim a change was

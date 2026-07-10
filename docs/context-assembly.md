@@ -555,8 +555,32 @@ any other backend. Wire it via `RunnerConfig.conversation_store`; `run()` takes 
 - USER turns are **preferred** (a x1.5 score boost) and rendered verbatim; AI turns earn inclusion by
   relevance even when latest, and are **compacted** by `conversation_format.compact_message`
   (beginning + end + the most salient middle sentences via sentence-level TF-DF-IDF), so a long AI
-  answer cannot dominate df/idf. Per-turn scores are length-normalized. The pure algorithm lives in
-  `conversation_format.select_current_slice` / `select_related` so any backend ranks identically.
+  answer cannot dominate df/idf. Per-turn scores are length-normalized, and turns sharing words with
+  the current query get a strong overlap boost (`conversation_format.query_overlap_boost`, word-level
+  tokens via `nl_terms`), so selection is relevance-to-the-input-first, not distinctiveness-first.
+  The pure algorithm lives in `conversation_format.select_current_slice` / `select_related` so any
+  backend ranks identically.
+
+**Cross-conversation recall is relevance-first over the FULL horizon.**
+`SessionFileConversationStore.related_slices` never applies a time window or recency cutoff: every
+session file is a candidate on every call, so an old-but-relevant conversation is always reachable.
+It stays cheap as conversations accumulate via a two-stage scan:
+1. **Stage 1 (cheap, all files):** each file gets a compact digest (first/last message snippets)
+   cached per file and invalidated by `(mtime, size)` — after the first pass, a call costs one
+   `stat` per file. All candidates are ranked by digest relevance to the query
+   (`conversation_format.rank_candidates_by_digest`: query-overlap-boosted TF-DF-IDF, length
+   normalized, recency only a small tie-break boost). Candidates whose digest shares no word with
+   the query drop out entirely (precision), while a small **recency floor** (the most recent few
+   conversations) always joins regardless of match, so "what did we just do?" works even with zero
+   term overlap. An unmatched query therefore yields ONLY the recency floor, never a prompt full of
+   unrelated conversations.
+2. **Stage 2 (bounded):** only the shortlist (hard-capped per call, independent of how many
+   conversations exist) is fully loaded, scope-filtered, and rendered by `select_related` under
+   `max_chars`.
+
+The file index refreshes at most every 30 seconds, so conversations written after the store was
+constructed become reachable. Oversized files get a bounded head+tail raw read for their digest
+instead of a full parse, so a single huge file cannot make the scan expensive.
 
 **Fast by construction.** A cheap no-LLM gate (`_needs_context_to_understand`) skips Step 1 entirely
 for self-contained messages, so the common case adds zero latency. When the gate fires, ONE cheap

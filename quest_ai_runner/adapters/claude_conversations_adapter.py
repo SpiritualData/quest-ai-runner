@@ -25,6 +25,7 @@ from .conversation_format import (
     is_claude_conversation,
     load_conversations,
     resolve_conv_key,
+    truncate_transcript_middle,
 )
 from .tfdfidf_sampling import extract_terms, keywords_from_text, select_representatives
 
@@ -124,9 +125,11 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
             end = end_line or len(lines)
             conv_text = "\n".join(lines[max(0, start) : min(len(lines), end)])
 
-        # Apply byte limit if specified
+        # Apply byte limit if specified. A transcript's most useful turns are usually the most
+        # recent ones (at the END), so over-budget conversations keep the opening plus the recent
+        # tail with the middle elided, instead of a head-only cut that would drop the latest turns.
         if max_bytes and len(conv_text) > max_bytes:
-            conv_text = conv_text[:max_bytes].rsplit("\n", 1)[0] + "\n[truncated]"
+            conv_text = truncate_transcript_middle(conv_text, max_bytes)
 
         return Observation(
             kind="read",

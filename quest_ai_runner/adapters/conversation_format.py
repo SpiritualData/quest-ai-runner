@@ -25,7 +25,7 @@ import re
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from .tfdfidf_sampling import extract_terms, select_representatives
+from .tfdfidf_sampling import extract_terms, keywords_from_text, select_representatives
 
 # ---------------------------------------------------------------------------
 # Shared constants used by select_current_slice / select_related (and the
@@ -38,6 +38,35 @@ _USER_SCORE_BOOST: float = 1.5
 # Verbatim USER turns are only compacted if they are absurdly long; AI turns are always compacted.
 _USER_VERBATIM_CAP: int = 2000
 _AI_COMPACT_CHARS: int = 400
+# How strongly sharing terms with the CURRENT QUERY boosts a candidate's score, relative to its
+# base TF-DF-IDF distinctiveness. High enough that any real overlap with the query outweighs the
+# tiny recency boost (ts/1e11) and plain distinctiveness, so recall is relevance-first.
+_QUERY_OVERLAP_WEIGHT: float = 4.0
+
+
+def nl_terms(text: str) -> set:
+    """WORD-LEVEL terms of natural-language text, for query-relevance matching.
+
+    ``extract_terms`` splits only on punctuation-followed-by-space (built for file paths and
+    digest strings), so prose collapses into whole-phrase terms that never overlap a query.
+    Relevance comparisons between conversational text and the user's input must therefore use
+    word-level tokens (``keywords_from_text``).
+    """
+    return set(keywords_from_text(text or ""))
+
+
+def query_overlap_boost(terms: set, query_terms: set) -> float:
+    """Multiplicative score boost for how much ``terms`` overlaps the current query's terms.
+
+    ``1.0`` (no boost) when there is no query or no overlap; grows with the FRACTION of query
+    terms covered, scaled by ``_QUERY_OVERLAP_WEIGHT``. This is what makes selection actually
+    query-sensitive: TF-DF-IDF alone scores distinctiveness, not relevance to the input. Both
+    sets should be WORD-LEVEL tokens (``nl_terms``) so prose actually overlaps.
+    """
+    if not query_terms or not terms:
+        return 1.0
+    overlap = len(terms & query_terms) / len(query_terms)
+    return 1.0 + _QUERY_OVERLAP_WEIGHT * overlap
 
 
 # ---------------------------------------------------------------------------
@@ -283,21 +312,21 @@ def conversation_timestamp(conv: Any) -> float:
     return 0.0
 
 
-def load_conversations(
+def scan_conversation_files(
     corpus_root: Optional[Path], sessions_dir: Path
-) -> Tuple[Dict[str, Any], Dict[str, Path], Dict[str, str]]:
-    """Load all Claude conversation JSON files, best-effort.
+) -> Tuple[Dict[str, Path], Dict[str, str]]:
+    """Index conversation JSON FILE PATHS without parsing any file (the cheap stage-0 scan).
 
     Scans (recursively, when ``corpus_root`` is given) for ``.claude``/``conversations`` dirs plus
-    the explicit ``sessions_dir``. Returns:
+    the explicit ``sessions_dir`` and returns:
 
-      * ``conversations``      -- {unique_key: conversation dict}
-      * ``filepaths``          -- {unique_key: resolved Path}
-      * ``conv_id_lookup``     -- {filename_stem: unique_key} (last-loaded wins on collision)
+      * ``filepaths``      -- {unique_key: resolved Path} for every ``*.json`` found
+      * ``conv_id_lookup`` -- {filename_stem: unique_key} (last-scanned wins on collision)
 
-    Never raises — unreadable files/dirs are silently skipped.
+    No file content is read, so this stays cheap no matter how many conversations exist. Whether a
+    file actually IS a conversation is decided lazily by whoever loads it
+    (``is_claude_conversation`` at parse time). Never raises — unreadable dirs are silently skipped.
     """
-    conversations: Dict[str, Any] = {}
     filepaths: Dict[str, Path] = {}
     conv_id_lookup: Dict[str, str] = {}
 
@@ -312,7 +341,7 @@ def load_conversations(
         search_dirs.append(sessions_dir)
 
     if not search_dirs:
-        return conversations, filepaths, conv_id_lookup
+        return filepaths, conv_id_lookup
 
     seen = set()
     unique_dirs: List[Path] = []
@@ -326,10 +355,6 @@ def load_conversations(
         try:
             for session_file in search_dir.glob("*.json"):
                 try:
-                    with open(session_file) as f:
-                        data = json.load(f)
-                    if not is_claude_conversation(data):
-                        continue
                     file_stem = session_file.stem
                     if corpus_root:
                         try:
@@ -339,16 +364,76 @@ def load_conversations(
                             unique_key = file_stem
                     else:
                         unique_key = file_stem
-
-                    conversations[unique_key] = data
                     filepaths[unique_key] = session_file.resolve()
                     conv_id_lookup[file_stem] = unique_key
-                except (json.JSONDecodeError, OSError):
+                except OSError:
                     pass
         except Exception:  # noqa: BLE001
             pass
 
+    return filepaths, conv_id_lookup
+
+
+def load_conversations(
+    corpus_root: Optional[Path], sessions_dir: Path
+) -> Tuple[Dict[str, Any], Dict[str, Path], Dict[str, str]]:
+    """Load all Claude conversation JSON files, best-effort (the eager FULL load).
+
+    Scans via ``scan_conversation_files`` then parses every found file. Returns:
+
+      * ``conversations``      -- {unique_key: conversation dict}
+      * ``filepaths``          -- {unique_key: resolved Path}
+      * ``conv_id_lookup``     -- {filename_stem: unique_key} (last-loaded wins on collision)
+
+    Cost grows with the total size of ALL session files, so a caller facing a large or ever-growing
+    conversation dir should prefer the lazy two-stage path (``scan_conversation_files`` + per-file
+    cached digests, as ``SessionFileConversationStore`` does) over this. Never raises — unreadable
+    or non-conversation files are silently skipped.
+    """
+    conversations: Dict[str, Any] = {}
+    filepaths: Dict[str, Path] = {}
+    conv_id_lookup: Dict[str, str] = {}
+
+    all_paths, _ = scan_conversation_files(corpus_root, sessions_dir)
+    for unique_key, session_file in all_paths.items():
+        try:
+            with open(session_file) as f:
+                data = json.load(f)
+            if not is_claude_conversation(data):
+                continue
+            conversations[unique_key] = data
+            filepaths[unique_key] = session_file
+            conv_id_lookup[session_file.stem] = unique_key
+        except (json.JSONDecodeError, OSError):
+            pass
+
     return conversations, filepaths, conv_id_lookup
+
+
+def truncate_transcript_middle(text: str, max_chars: int) -> str:
+    """Bound a rendered TRANSCRIPT to ``max_chars`` by eliding the MIDDLE, keeping the opening
+    context and (mostly) the recent tail.
+
+    Head-only truncation is wrong for conversations: the turns that most often matter to a new
+    request are the most recent ones, at the END of the transcript. This keeps roughly the first
+    third and the last two thirds of the budget with a clear elision marker between them. Short
+    text is returned unchanged. Never raises.
+    """
+    try:
+        text = text or ""
+        if max_chars <= 0:
+            return ""
+        if len(text) <= max_chars:
+            return text
+        marker = "\n[... middle of conversation elided ...]\n"
+        if max_chars <= len(marker):
+            return text[-max_chars:]
+        keep = max_chars - len(marker)
+        head_len = keep // 3
+        tail_len = keep - head_len
+        return text[:head_len] + marker + text[-tail_len:]
+    except Exception:  # noqa: BLE001 — truncation must never raise
+        return (text or "")[:max_chars]
 
 
 def resolve_conv_key(
@@ -415,24 +500,25 @@ def select_current_slice(
     window_start = max(0, len(messages) - n) if n else 0
     candidate_idxs = [i for i in range(len(messages)) if i != anchor_idx]
 
-    query_terms = extract_terms(query or "")
-
     def _terms(idx_str: str) -> set:
         i = int(idx_str)
-        t = extract_terms(_relevance_doc(messages[i]))
-        # Bias toward turns sharing terms with the query (without excluding others).
-        return t | (t & query_terms)
+        return extract_terms(_relevance_doc(messages[i]))
+
+    query_word_terms = nl_terms(query or "")
 
     def _boost(idx_str: str) -> float:
         i = int(idx_str)
         msg = messages[i]
         # Length-normalize so a long turn cannot win on size alone: divide the raw TF-DF-IDF
-        # score by the (sub-linear) document length. USER turns are PREFERRED via x1.5.
+        # score by the (sub-linear) document length. USER turns are PREFERRED via x1.5. Turns
+        # sharing WORDS with the QUERY are boosted so selection is relevance-first, not just
+        # distinctiveness-first (word-level tokens: prose phrase-terms never overlap a query).
         doc = _relevance_doc(msg)
         length_norm = 1.0 / math.sqrt(max(1, len(extract_terms(doc))))
         user_boost = _USER_SCORE_BOOST if _is_user(msg) else 1.0
         window_nudge = 1.05 if i >= window_start else 1.0  # mild recency tiebreak, not auto-in
-        return length_norm * user_boost * window_nudge
+        relevance = query_overlap_boost(nl_terms(doc), query_word_terms)
+        return length_norm * user_boost * window_nudge * relevance
 
     selected_idxs: List[int] = []
     if candidate_idxs:
@@ -479,6 +565,47 @@ def select_current_slice(
     return (text, turns_meta, truncated)
 
 
+def rank_candidates_by_digest(
+    keys: List[str],
+    *,
+    digest_of: Callable[[str], str],
+    timestamp_of: Callable[[str], float],
+    query: str,
+    top_n: int,
+) -> List[str]:
+    """Rank conversation keys by RELEVANCE of their DIGEST text to ``query``, full horizon.
+
+    Scoring: TF-DF-IDF distinctiveness x a strong query-overlap boost (``query_overlap_boost``,
+    what makes ranking actually query-sensitive) x length normalization (a long digest cannot win
+    on size alone) x a small recency boost (``1.0 + ts / 1e11``, a tie-break, never a cutoff --
+    an old digest still wins purely on relevance).
+
+    Pure and cheap: works off digest text + timestamp alone, no message content needed, so it is
+    safe to call over an ENTIRE (possibly large and ever-growing) candidate pool as a first-stage
+    prefilter before any full conversation is loaded. Shared by ``select_related`` (the final,
+    precise pick) and ``SessionFileConversationStore.related_slices`` (the cheap shortlist stage
+    that bounds how many files get fully loaded). Never raises.
+    """
+    if not keys:
+        return []
+    # Word-level tokens throughout: digests and queries are prose, and phrase-level
+    # ``extract_terms`` tokens never overlap between two prose texts (see ``nl_terms``).
+    query_terms = nl_terms(query or "")
+    terms_by_key = {k: nl_terms(digest_of(k)) for k in keys}
+
+    def _boost(k: str) -> float:
+        ts = timestamp_of(k)
+        recency = 1.0 + (ts / 1e11) if ts > 0 else 1.0
+        length_norm = 1.0 / math.sqrt(max(1, len(terms_by_key[k])))
+        relevance = query_overlap_boost(terms_by_key[k], query_terms)
+        return recency * length_norm * relevance
+
+    n = max(1, int(top_n))
+    ranked = select_representatives(keys, get_terms=lambda k: terms_by_key[k],
+                                    samples_per_group=n, get_score_boost=_boost)
+    return ranked[:n]
+
+
 def select_related(
     conversations: List[Dict[str, Any]],
     query: str,
@@ -486,6 +613,7 @@ def select_related(
     max_convs: int = 3,
     max_chars: int = 6000,
     get_conv_id: Optional[Callable[[int, Dict[str, Any]], str]] = None,
+    must_include_ids: Optional[set] = None,
 ) -> Tuple[str, List[Dict[str, Any]], bool]:
     """Select and render slices from a list of related conversations.
 
@@ -493,12 +621,13 @@ def select_related(
     caller's responsibility) and returns ``(rendered_text, sources_list, truncated_flag)`` where
     each source entry is ``{"conv_id": <id>, "label": "related conversation"}``.
 
-    Algorithm (identical to the one previously embedded in
-    ``SessionFileConversationStore.related_slices``):
+    Algorithm:
 
-    * Each conversation is ranked by TF-DF-IDF over its ``conversation_digest`` with a recency
-      boost (``1.0 + ts / 1e11``) via ``select_representatives``.
-    * At most ``max_convs`` conversations are rendered.
+    * Each conversation is ranked via ``rank_candidates_by_digest`` (query-overlap-boosted
+      TF-DF-IDF over its ``conversation_digest`` with a small recency boost).
+    * At most ``max_convs`` conversations are rendered from the ranking. Conversations whose
+      resolved id is in ``must_include_ids`` (e.g. a caller's recency floor) are ADDITIONALLY
+      rendered even when not ranked in, appended after the ranked winners.
     * Per conversation: a short slice (last 4 turns, rendered with AI compaction) or the digest
       is used, formatted as ``=== Related conversation: {id} ===\\n{body}``.
     * ``max_chars`` is respected: truncation stops adding blocks once the budget is hit, with a
@@ -517,26 +646,20 @@ def select_related(
             return get_conv_id(i, conv)
         return str(conv.get("id") or conv.get("conv_id") or i)
 
-    query_terms = extract_terms(query or "")
-
-    def _digest_terms(idx_str: str) -> set:
-        i = int(idx_str)
-        t = extract_terms(conversation_digest(conversations[i]))
-        return t | (t & query_terms)
-
-    def _recency(idx_str: str) -> float:
-        i = int(idx_str)
-        ts = conversation_timestamp(conversations[i])
-        return 1.0 + (ts / 1e11) if ts > 0 else 1.0
-
     indices = [str(i) for i in range(len(conversations))]
-    ranked = select_representatives(
+    chosen = rank_candidates_by_digest(
         indices,
-        get_terms=_digest_terms,
-        samples_per_group=max(1, int(max_convs)),
-        get_score_boost=_recency,
+        digest_of=lambda idx_str: conversation_digest(conversations[int(idx_str)]),
+        timestamp_of=lambda idx_str: conversation_timestamp(conversations[int(idx_str)]),
+        query=query,
+        top_n=max_convs,
     )
-    chosen = ranked[: max(1, int(max_convs))]
+    if must_include_ids:
+        for idx_str in indices:
+            if idx_str in chosen:
+                continue
+            if _resolve_id(int(idx_str), conversations[int(idx_str)]) in must_include_ids:
+                chosen.append(idx_str)
 
     parts: List[str] = []
     sources: List[Dict[str, Any]] = []

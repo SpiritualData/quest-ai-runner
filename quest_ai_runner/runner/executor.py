@@ -36,6 +36,14 @@ log = logging.getLogger("quest-ai-runner.executor")
 # every check would waste calls for no benefit.
 CANCEL_CHECK_INTERVAL_SECONDS = 15.0
 
+# Hard cap on the FALLBACK prior-conversation read in ``_build_context_view`` (the path taken only
+# when no ConversationStore is wired). Without a cap, a long-running conversation would dump its
+# entire transcript into every linked task's prompt, growing without bound as the conversation
+# grows. Passed as ``max_bytes`` to ``read_section`` so the serving adapter truncates at the
+# source; adapters that serve conversations keep the recent tail when truncating (see
+# ``ClaudeConversationsAdapter.read_section``).
+CONV_CONTEXT_MAX_BYTES = 16_000
+
 
 @dataclass
 class ExecutionOutcome:
@@ -314,8 +322,11 @@ class TaskExecutor:
         if (conv_id and self._retrieval
                 and getattr(self._orch, "conversation_store", None) is None):
             try:
-                # Try to read the EXACT conversation by its conv_id
-                obs = self._retrieval.read_section(str(conv_id))
+                # Try to read the EXACT conversation by its conv_id. BOUNDED: max_bytes caps the
+                # transcript at the source, so a long conversation can never grow this task's
+                # prompt without bound (a conversation-aware adapter keeps the recent tail).
+                obs = self._retrieval.read_section(str(conv_id),
+                                                   max_bytes=CONV_CONTEXT_MAX_BYTES)
                 if obs and obs.kind == "read" and obs.text:
                     # Explicitly mark which conversation we loaded to disambiguate from previous tasks
                     parts.append(f"=== Prior Conversation Context (conv_id={conv_id}) ===\n{obs.text}\n")
