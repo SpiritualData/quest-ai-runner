@@ -2371,7 +2371,17 @@ class Orchestrator:
                     str(spec["grep"]), scope=spec.get("scope") or None
                 )
             if spec.get("query") is not None:
-                return self.retrieval.query(spec)
+                # Planner specs nest the query params under "query" ({"query": {"text": ...},
+                # "time_range": ...}), but adapters read params at the TOP level of the dict
+                # they receive (text/collection/...). Flatten the nested params over the spec
+                # (nested keys win) so both shapes reach every adapter; sibling constraint keys
+                # (time_range, topic_terms, actor, content_kind) stay intact. Without this, an
+                # adapter expecting top-level "text" saw only the nested dict and the planner's
+                # semantic-search step silently returned an error observation every time.
+                payload = dict(spec)
+                if isinstance(spec["query"], dict):
+                    payload.update(spec["query"])
+                return self.retrieval.query(payload)
             if spec.get("rel_path"):
                 return self.retrieval.read_section(
                     str(spec["rel_path"]),

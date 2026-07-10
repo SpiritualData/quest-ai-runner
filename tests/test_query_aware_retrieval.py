@@ -380,6 +380,25 @@ def test_planner_filtered_query_reaches_the_retrieval_adapter_unchanged():
     got = retrieval.query_specs[0]
     assert got["time_range"] == {"start": "2026-07-08", "end": "2026-07-08"}
     assert got["content_kind"] == "conversations"
+    # The nested query params are ALSO flattened to the top level: adapters like the backend's
+    # semantic search read "text" off the top of the dict they receive, so a nested-only payload
+    # made the planner's query step silently return an error observation every time.
+    assert got["text"] == "greenhouse"
+
+
+def test_string_query_spec_still_reaches_the_adapter():
+    """A planner emitting {"query": "plain text"} (string, not dict) keeps working unchanged."""
+    retrieval = _RecordingQueryRetrieval()
+    provider = StubProvider(decisions=[
+        {"action": "read", "reads": [{"query": "greenhouse plans"}], "rationale": "search"},
+        {"action": "answer", "rationale": "ok", "model_tier": "sonnet"},
+    ])
+    orch = Orchestrator(retrieval=retrieval, provider=provider, registry=ModelRegistry(provider))
+    result = orch.run("find the greenhouse plans")
+
+    assert result.kind == "answer"
+    assert len(retrieval.query_specs) == 1
+    assert retrieval.query_specs[0]["query"] == "greenhouse plans"
 
 
 # --- C2 card stores: item-level time_range filtering in FileContextStore ------
