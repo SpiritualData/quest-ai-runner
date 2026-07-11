@@ -1,4 +1,4 @@
-"""goal_folder_sync — pull/push a Quest goal <-> a local folder, against a MOCK client.
+"""quest_folder_sync — pull/push a Quest quest <-> a local folder, against a MOCK client.
 
 No network: a tiny in-memory Quest client records get/note calls and serves canned quest state.
 """
@@ -7,18 +7,18 @@ from pathlib import Path
 
 import pytest
 
-from quest_ai_runner.runner.goal_folder_sync import (
-    GoalFolderSyncError,
-    pull_goal_to_folder,
-    push_folder_to_goal,
+from quest_ai_runner.runner.quest_folder_sync import (
+    QuestFolderSyncError,
+    pull_quest_to_folder,
+    push_folder_to_quest,
     render_sync_file,
-    sync_goal_folder,
+    sync_quest_folder,
 )
 
 QUEST_ID = "quest_c18a9d1409ff"
 
 
-class MockGoalClient:
+class MockQuestFolderClient:
     """In-memory stand-in for QuestClient's account-wide quest surface. No HTTP."""
 
     def __init__(self, state=None, notes=None):
@@ -108,9 +108,9 @@ def test_render_scaffolds_to_push_section_once():
 # --- pull -------------------------------------------------------------------------
 
 def test_pull_writes_sync_file_with_quest_data():
-    client = MockGoalClient(notes=[{"note_id": "note_1", "text": "first note"}])
+    client = MockQuestFolderClient(notes=[{"note_id": "note_1", "text": "first note"}])
     with tempfile.TemporaryDirectory() as d:
-        res = pull_goal_to_folder(client, QUEST_ID, d)
+        res = pull_quest_to_folder(client, QUEST_ID, d)
         content = Path(d, "QUEST_SYNC.md").read_text()
     assert client.get_calls == [QUEST_ID]
     assert res.pulled and res.direction == "pull" and res.notes_pulled == 1
@@ -121,44 +121,44 @@ def test_pull_writes_sync_file_with_quest_data():
 
 
 def test_pull_is_idempotent_no_rewrite_when_unchanged():
-    client = MockGoalClient()
+    client = MockQuestFolderClient()
     with tempfile.TemporaryDirectory() as d:
-        pull_goal_to_folder(client, QUEST_ID, d)
+        pull_quest_to_folder(client, QUEST_ID, d)
         first = Path(d, "QUEST_SYNC.md").read_text()
-        pull_goal_to_folder(client, QUEST_ID, d)
+        pull_quest_to_folder(client, QUEST_ID, d)
         second = Path(d, "QUEST_SYNC.md").read_text()
     assert first == second
 
 
 def test_pull_preserves_existing_human_content():
-    client = MockGoalClient()
+    client = MockQuestFolderClient()
     with tempfile.TemporaryDirectory() as d:
         Path(d, "QUEST_SYNC.md").write_text("# Hand-written header\n\nKeep this.\n")
-        pull_goal_to_folder(client, QUEST_ID, d)
+        pull_quest_to_folder(client, QUEST_ID, d)
         content = Path(d, "QUEST_SYNC.md").read_text()
     assert "Keep this." in content
     assert "100 paying clients" in content
 
 
 def test_pull_missing_quest_raises():
-    client = MockGoalClient(state={})
+    client = MockQuestFolderClient(state={})
     with tempfile.TemporaryDirectory() as d:
-        with pytest.raises(GoalFolderSyncError):
-            pull_goal_to_folder(client, QUEST_ID, d)
+        with pytest.raises(QuestFolderSyncError):
+            pull_quest_to_folder(client, QUEST_ID, d)
 
 
 # --- push -------------------------------------------------------------------------
 
 def test_push_posts_unsynced_bullet_and_marks_it():
-    client = MockGoalClient()
+    client = MockQuestFolderClient()
     with tempfile.TemporaryDirectory() as d:
-        pull_goal_to_folder(client, QUEST_ID, d)
+        pull_quest_to_folder(client, QUEST_ID, d)
         path = Path(d, "QUEST_SYNC.md")
         path.write_text(path.read_text().replace(
             "## Notes to push to Quest",
             "## Notes to push to Quest\n- leads.csv now has 12 signups",
         ))
-        res = push_folder_to_goal(client, QUEST_ID, d)
+        res = push_folder_to_quest(client, QUEST_ID, d)
         content = path.read_text()
     assert res.pushed and res.direction == "push" and res.notes_pushed == 1
     assert client.add_note_calls == [(QUEST_ID, "leads.csv now has 12 signups")]
@@ -166,38 +166,38 @@ def test_push_posts_unsynced_bullet_and_marks_it():
 
 
 def test_push_skips_already_synced_bullets():
-    client = MockGoalClient()
+    client = MockQuestFolderClient()
     with tempfile.TemporaryDirectory() as d:
-        pull_goal_to_folder(client, QUEST_ID, d)
+        pull_quest_to_folder(client, QUEST_ID, d)
         path = Path(d, "QUEST_SYNC.md")
         path.write_text(path.read_text().replace(
             "## Notes to push to Quest",
             "## Notes to push to Quest\n- <!-- id:note_9 --> already synced earlier",
         ))
-        push_folder_to_goal(client, QUEST_ID, d)
+        push_folder_to_quest(client, QUEST_ID, d)
     assert client.add_note_calls == []  # nothing new to push
 
 
 def test_push_missing_file_raises():
-    client = MockGoalClient()
+    client = MockQuestFolderClient()
     with tempfile.TemporaryDirectory() as d:
-        with pytest.raises(GoalFolderSyncError):
-            push_folder_to_goal(client, QUEST_ID, d)
+        with pytest.raises(QuestFolderSyncError):
+            push_folder_to_quest(client, QUEST_ID, d)
 
 
 def test_push_api_failure_leaves_bullet_unsynced_and_uncounted():
     """add_quest_note returning [] (the client's failure mode) must NOT mark the bullet as
     synced or count it as pushed — it stays queued for the next push."""
-    client = MockGoalClient()
+    client = MockQuestFolderClient()
     client.add_quest_note = lambda quest_id, text: []  # simulate QuestClient's failure return
     with tempfile.TemporaryDirectory() as d:
-        pull_goal_to_folder(client, QUEST_ID, d)
+        pull_quest_to_folder(client, QUEST_ID, d)
         path = Path(d, "QUEST_SYNC.md")
         path.write_text(path.read_text().replace(
             "## Notes to push to Quest",
             "## Notes to push to Quest\n- a finding the API lost",
         ))
-        res = push_folder_to_goal(client, QUEST_ID, d)
+        res = push_folder_to_quest(client, QUEST_ID, d)
         content = path.read_text()
     assert res.notes_pushed == 0
     assert "- a finding the API lost" in content          # still queued, plain bullet
@@ -208,7 +208,7 @@ def test_push_marks_bullet_even_when_server_rewrites_text():
     """If the server transforms the note text (trim, formatting), the exact-text match fails;
     the push must still mark the bullet with the LAST note's id — otherwise the bullet is
     re-posted as a duplicate on every future push."""
-    client = MockGoalClient()
+    client = MockQuestFolderClient()
 
     def _rewriting_add(quest_id, text):
         client.add_note_calls.append((quest_id, text))
@@ -217,16 +217,16 @@ def test_push_marks_bullet_even_when_server_rewrites_text():
 
     client.add_quest_note = _rewriting_add
     with tempfile.TemporaryDirectory() as d:
-        pull_goal_to_folder(client, QUEST_ID, d)
+        pull_quest_to_folder(client, QUEST_ID, d)
         path = Path(d, "QUEST_SYNC.md")
         path.write_text(path.read_text().replace(
             "## Notes to push to Quest",
             "## Notes to push to Quest\n- server will shout this",
         ))
-        res = push_folder_to_goal(client, QUEST_ID, d)
+        res = push_folder_to_quest(client, QUEST_ID, d)
         content = path.read_text()
         # A second push must not re-post it.
-        push_folder_to_goal(client, QUEST_ID, d)
+        push_folder_to_quest(client, QUEST_ID, d)
     assert res.notes_pushed == 1
     assert "<!-- id:note_42 --> server will shout this" in content
     assert len(client.add_note_calls) == 1
@@ -234,33 +234,33 @@ def test_push_marks_bullet_even_when_server_rewrites_text():
 
 # --- the one entry point -----------------------------------------------------------
 
-def test_sync_goal_folder_pull_default():
-    client = MockGoalClient()
+def test_sync_quest_folder_pull_default():
+    client = MockQuestFolderClient()
     with tempfile.TemporaryDirectory() as d:
-        res = sync_goal_folder(client, QUEST_ID, d)
+        res = sync_quest_folder(client, QUEST_ID, d)
     assert res.direction == "pull" and res.pulled and not res.pushed
 
 
-def test_sync_goal_folder_both_pulls_then_pushes():
-    client = MockGoalClient()
+def test_sync_quest_folder_both_pulls_then_pushes():
+    client = MockQuestFolderClient()
     with tempfile.TemporaryDirectory() as d:
         # Seed a local bullet before the "both" sync so push has something to send.
-        pull_goal_to_folder(client, QUEST_ID, d)
+        pull_quest_to_folder(client, QUEST_ID, d)
         path = Path(d, "QUEST_SYNC.md")
         path.write_text(path.read_text().replace(
             "## Notes to push to Quest", "## Notes to push to Quest\n- a queued local finding",
         ))
-        res = sync_goal_folder(client, QUEST_ID, d, direction="both")
+        res = sync_quest_folder(client, QUEST_ID, d, direction="both")
     assert res.pulled and res.pushed and res.direction == "both"
     assert res.notes_pushed == 1
     assert client.add_note_calls == [(QUEST_ID, "a queued local finding")]
 
 
-def test_sync_goal_folder_unknown_direction_raises():
-    client = MockGoalClient()
+def test_sync_quest_folder_unknown_direction_raises():
+    client = MockQuestFolderClient()
     with tempfile.TemporaryDirectory() as d:
         with pytest.raises(ValueError):
-            sync_goal_folder(client, QUEST_ID, d, direction="sideways")
+            sync_quest_folder(client, QUEST_ID, d, direction="sideways")
 
 
 # --- QuestClient account-wide quest endpoint shaping (no network) ------------------
@@ -289,50 +289,50 @@ def test_quest_client_account_quest_endpoints_shape_requests():
 
 # --- poller integration: opt-in pull-before-run / push-after-run hooks -------------
 
-def _goal_aware_mock_client(goal_client):
+def _quest_folder_aware_mock_client(quest_folder_client):
     """A MockQuestClient (task surface) that also serves the account-wide quest surface."""
     from .test_runner import MockQuestClient
 
     client = MockQuestClient([
         {"id": "goal-task", "text": "do goal work", "status": "queued", "goal_id": QUEST_ID},
     ])
-    client.get_my_quest = goal_client.get_my_quest
-    client.list_quest_notes = goal_client.list_quest_notes
-    client.add_quest_note = goal_client.add_quest_note
+    client.get_my_quest = quest_folder_client.get_my_quest
+    client.list_quest_notes = quest_folder_client.list_quest_notes
+    client.add_quest_note = quest_folder_client.add_quest_note
     return client
 
 
-def test_poller_pulls_goal_folder_before_running_when_mapped():
+def test_poller_pulls_quest_folder_before_running_when_mapped():
     from quest_ai_runner.config import RunnerConfig
     from quest_ai_runner.runner.poller import Poller
 
     from .conftest import StubProvider, StubRetrieval
 
-    goal_client = MockGoalClient()
-    client = _goal_aware_mock_client(goal_client)
+    quest_folder_client = MockQuestFolderClient()
+    client = _quest_folder_aware_mock_client(quest_folder_client)
     with tempfile.TemporaryDirectory() as d:
         cfg = RunnerConfig(
             quest_base_url="http://x", quest_api_key="qsk_test",
             retrieval=StubRetrieval({"README.md": "fact"}),
             model_provider=StubProvider(decisions=[{"action": "answer", "rationale": "ok"}]),
-            goal_folder_map={QUEST_ID: d},
+            quest_folder_map={QUEST_ID: d},
         )
         poller = Poller(cfg, state_path=None, client=client)
         handled = poller.run_once()
         content = Path(d, "QUEST_SYNC.md").read_text()
     assert handled == ["goal-task"]
-    assert goal_client.get_calls == [QUEST_ID]   # pulled before running
+    assert quest_folder_client.get_calls == [QUEST_ID]   # pulled before running
     assert "100 paying clients" in content
 
 
-def test_poller_no_map_does_not_sync_goal_folder():
+def test_poller_no_map_does_not_sync_quest_folder():
     from quest_ai_runner.config import RunnerConfig
     from quest_ai_runner.runner.poller import Poller
 
     from .conftest import StubProvider, StubRetrieval
 
-    goal_client = MockGoalClient()
-    client = _goal_aware_mock_client(goal_client)
+    quest_folder_client = MockQuestFolderClient()
+    client = _quest_folder_aware_mock_client(quest_folder_client)
     cfg = RunnerConfig(
         quest_base_url="http://x", quest_api_key="qsk_test",
         retrieval=StubRetrieval({"README.md": "fact"}),
@@ -340,56 +340,56 @@ def test_poller_no_map_does_not_sync_goal_folder():
     )
     poller = Poller(cfg, state_path=None, client=client)
     assert poller.run_once() == ["goal-task"]
-    assert goal_client.get_calls == []            # no map -> no sync
+    assert quest_folder_client.get_calls == []            # no map -> no sync
 
 
-def test_poller_goal_folder_sync_failure_never_breaks_the_task():
+def test_poller_quest_folder_sync_failure_never_breaks_the_task():
     """A sync that raises (bad folder, API error) must not stop the task from running."""
     from quest_ai_runner.config import RunnerConfig
     from quest_ai_runner.runner.poller import Poller
 
     from .conftest import StubProvider, StubRetrieval
 
-    class BoomClient(MockGoalClient):
+    class BoomClient(MockQuestFolderClient):
         def get_my_quest(self, quest_id):
             raise RuntimeError("boom")
 
-    goal_client = BoomClient()
-    client = _goal_aware_mock_client(goal_client)
+    quest_folder_client = BoomClient()
+    client = _quest_folder_aware_mock_client(quest_folder_client)
     cfg = RunnerConfig(
         quest_base_url="http://x", quest_api_key="qsk_test",
         retrieval=StubRetrieval({"README.md": "fact"}),
         model_provider=StubProvider(decisions=[{"action": "answer", "rationale": "ok"}]),
-        goal_folder_map={QUEST_ID: "/tmp/does-not-matter"},
+        quest_folder_map={QUEST_ID: "/tmp/does-not-matter"},
     )
     poller = Poller(cfg, state_path=None, client=client)
     assert poller.run_once() == ["goal-task"]                # task still ran
     assert client.reports[0][:2] == ("goal-task", "done")
 
 
-def test_poller_pushes_goal_folder_after_run_when_direction_is_push():
+def test_poller_pushes_quest_folder_after_run_when_direction_is_push():
     from quest_ai_runner.config import RunnerConfig
     from quest_ai_runner.runner.poller import Poller
 
     from .conftest import StubProvider, StubRetrieval
 
-    goal_client = MockGoalClient()
-    client = _goal_aware_mock_client(goal_client)
+    quest_folder_client = MockQuestFolderClient()
+    client = _quest_folder_aware_mock_client(quest_folder_client)
     with tempfile.TemporaryDirectory() as d:
-        pull_goal_to_folder(goal_client, QUEST_ID, d)
+        pull_quest_to_folder(quest_folder_client, QUEST_ID, d)
         path = Path(d, "QUEST_SYNC.md")
         path.write_text(path.read_text().replace(
             "## Notes to push to Quest", "## Notes to push to Quest\n- queued while offline",
         ))
-        goal_client.get_calls.clear()  # forget the setup pull above; only the poller's calls matter
+        quest_folder_client.get_calls.clear()  # forget the setup pull above; only the poller's calls matter
         cfg = RunnerConfig(
             quest_base_url="http://x", quest_api_key="qsk_test",
             retrieval=StubRetrieval({"README.md": "fact"}),
             model_provider=StubProvider(decisions=[{"action": "answer", "rationale": "ok"}]),
-            goal_folder_map={QUEST_ID: d},
-            goal_folder_sync_direction="push",
+            quest_folder_map={QUEST_ID: d},
+            quest_folder_sync_direction="push",
         )
         poller = Poller(cfg, state_path=None, client=client)
         poller.run_once()
-    assert goal_client.add_note_calls == [(QUEST_ID, "queued while offline")]
-    assert goal_client.get_calls == []   # push-only direction: no pull before the run
+    assert quest_folder_client.add_note_calls == [(QUEST_ID, "queued while offline")]
+    assert quest_folder_client.get_calls == []   # push-only direction: no pull before the run

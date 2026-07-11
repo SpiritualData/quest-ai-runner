@@ -451,6 +451,15 @@ def main(argv=None) -> int:
     sc_p.add_argument("--no-llm", action="store_true",
                       help="skip LLM relevance filter, show raw IDF results only")
 
+    # --- sync-quest-folder subcommand: pull/push a quest <-> a local folder --
+    sync_p = sub.add_parser("sync-quest-folder",
+                            help="sync a Quest quest's state/notes with a local folder's QUEST_SYNC.md")
+    sync_p.add_argument("quest_id", help="the quest id to sync (e.g. quest_1625d9f47a06)")
+    sync_p.add_argument("folder", help="local folder holding (or to hold) QUEST_SYNC.md")
+    sync_p.add_argument("--direction", choices=["pull", "push", "both"], default="pull",
+                        help="pull: Quest -> folder (default); push: folder -> Quest; "
+                             "both: pull then push")
+
     # --- poll subcommand (and legacy flat flags, kept for back-compat) --------
     poll_p = sub.add_parser("poll", help="poll Quest for due tasks and run them")
     poll_p.add_argument("--once", action="store_true", help="one scan then exit (cron mode)")
@@ -561,6 +570,30 @@ def main(argv=None) -> int:
             pass
         task_id = task.get("id") or task.get("task_id") or "?"
         print(f"Queued — {args.text[:80]}  ({task_id})")
+        return 0
+
+    # --- sync-quest-folder ------------------------------------------------------
+    if args.command == "sync-quest-folder":
+        from .runner.quest_client import QuestClient
+        from .runner.quest_folder_sync import QuestFolderSyncError, sync_quest_folder
+        base_url = os.getenv("QUEST_BASE_URL", "")
+        api_key = os.getenv("QUEST_API_KEY", "")
+        team_id = os.getenv("QUEST_TEAM_ID", "")
+        if not base_url or not api_key:
+            log.error("QUEST_BASE_URL and QUEST_API_KEY must be set")
+            return 1
+        client = QuestClient(base_url, api_key, team_id=team_id)
+        try:
+            result = sync_quest_folder(client, args.quest_id, args.folder, direction=args.direction)
+        except QuestFolderSyncError as e:
+            log.error("sync failed: %s", e)
+            return 1
+        parts = []
+        if result.pulled:
+            parts.append(f"pulled {result.notes_pulled} note(s)")
+        if result.pushed:
+            parts.append(f"pushed {result.notes_pushed} note(s)")
+        print(f"Synced quest {args.quest_id} -> {result.sync_path} ({', '.join(parts)})")
         return 0
 
     # --- bootstrap ------------------------------------------------------------

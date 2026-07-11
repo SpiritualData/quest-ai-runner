@@ -1,12 +1,12 @@
-"""goal_folder_sync — keep a Quest goal (a life goal / initiative quest) and a local folder in
-sync, in ONE call.
+"""quest_folder_sync — keep a Quest (a life goal / initiative, with its state and notes) and a
+local folder in sync, in ONE call.
 
-A goal that a person is actively working ON often has a local folder of real work: research,
-drafts, code, a marketing plan. That folder and the goal's Quest state should agree:
+A quest that a person is actively working ON often has a local folder of real work: research,
+drafts, code, a marketing plan. That folder and the quest's Quest state should agree:
 
-    pull_goal_to_folder(client, quest_id, folder)                 # Quest -> local file
-    push_folder_to_goal(client, quest_id, folder)                 # local file -> Quest (new notes)
-    sync_goal_folder(client, quest_id, folder, direction="both")   # pull, then push
+    pull_quest_to_folder(client, quest_id, folder)                 # Quest -> local file
+    push_folder_to_quest(client, quest_id, folder)                 # local file -> Quest (new notes)
+    sync_quest_folder(client, quest_id, folder, direction="both")   # pull, then push
 
 This reuses the repo's existing ``QuestClient`` (its account-wide quest methods: ``get_my_quest``,
 ``list_quest_notes``, ``add_quest_note`` — no new HTTP) and mirrors ``rep_sync.py``'s shape: a
@@ -49,7 +49,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ._managed_sections import extract_between, replace_between
 
-log = logging.getLogger("quest-ai-runner.goal_folder_sync")
+log = logging.getLogger("quest-ai-runner.quest_folder_sync")
 
 SYNC_FILE_NAME = "QUEST_SYNC.md"
 
@@ -71,12 +71,12 @@ _FRONTMATTER_RE = re.compile(r"^---\n.*?\n---\n?", re.DOTALL)
 _BULLET_RE = re.compile(r"^-\s*(?:<!--\s*id:(?P<id>[^\s>]+)\s*-->\s*)?(?P<text>.*)$")
 
 
-class GoalFolderSyncError(RuntimeError):
-    """A goal <-> folder sync could not be completed (e.g. the sync file is missing for push)."""
+class QuestFolderSyncError(RuntimeError):
+    """A quest <-> folder sync could not be completed (e.g. the sync file is missing for push)."""
 
 
 @dataclass
-class GoalFolderSyncResult:
+class QuestFolderSyncResult:
     """What a sync did, for logging and for a caller (e.g. the poller) to report."""
     direction: str
     quest_id: str
@@ -148,7 +148,7 @@ def _ensure_to_push_section(text: str) -> str:
 
 def render_sync_file(existing: str, quest_id: str, quest_state: Dict[str, Any],
                      notes: List[Dict[str, Any]]) -> str:
-    """Render the managed sections of a goal-folder sync file, preserving everything else."""
+    """Render the managed sections of a quest-folder sync file, preserving everything else."""
     out = _ensure_frontmatter(existing or "", quest_id)
     out = replace_between(out, _GOAL_START, _GOAL_END, _render_goal_block(quest_state))
     out = replace_between(out, _NOTES_START, _NOTES_END, _render_notes_block(notes))
@@ -183,7 +183,7 @@ def _read_existing(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8") if path.exists() else ""
     except OSError as e:  # pragma: no cover - filesystem edge
-        raise GoalFolderSyncError(f"could not read sync file {path}: {e}") from e
+        raise QuestFolderSyncError(f"could not read sync file {path}: {e}") from e
 
 
 def _write(path: Path, content: str) -> None:
@@ -191,23 +191,23 @@ def _write(path: Path, content: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
     except OSError as e:  # pragma: no cover - filesystem edge
-        raise GoalFolderSyncError(f"could not write sync file {path}: {e}") from e
+        raise QuestFolderSyncError(f"could not write sync file {path}: {e}") from e
 
 
 # --- the simple public functions --------------------------------------------------
 
-def pull_goal_to_folder(client: Any, quest_id: str, folder: str,
-                        *, filename: str = SYNC_FILE_NAME) -> GoalFolderSyncResult:
-    """Quest -> local: GET the goal's state + notes and (re)render the folder's sync file.
+def pull_quest_to_folder(client: Any, quest_id: str, folder: str,
+                        *, filename: str = SYNC_FILE_NAME) -> QuestFolderSyncResult:
+    """Quest -> local: GET the quest's state + notes and (re)render the folder's sync file.
 
     Human-authored content outside the managed markers (including the "Notes to push" section)
     is preserved. Idempotent: pulling unchanged Quest state leaves the file byte-identical.
-    Raises :class:`GoalFolderSyncError` if the quest is not found or inaccessible.
+    Raises :class:`QuestFolderSyncError` if the quest is not found or inaccessible.
     """
     quest_resp = client.get_my_quest(quest_id) or {}
     quest_state = quest_resp.get("state") or {}
     if not quest_state:
-        raise GoalFolderSyncError(f"quest {quest_id} not found or inaccessible")
+        raise QuestFolderSyncError(f"quest {quest_id} not found or inaccessible")
     notes = list(client.list_quest_notes(quest_id) or [])
     path = _sync_path(folder, filename)
     existing = _read_existing(path)
@@ -215,23 +215,23 @@ def pull_goal_to_folder(client: Any, quest_id: str, folder: str,
     if rendered != existing:
         _write(path, rendered)
     log.info("pulled quest %s -> %s (%d notes)", quest_id, path, len(notes))
-    return GoalFolderSyncResult(
+    return QuestFolderSyncResult(
         direction="pull", quest_id=quest_id, sync_path=str(path),
         pulled=True, notes_pulled=len(notes),
     )
 
 
-def push_folder_to_goal(client: Any, quest_id: str, folder: str,
-                        *, filename: str = SYNC_FILE_NAME) -> GoalFolderSyncResult:
+def push_folder_to_quest(client: Any, quest_id: str, folder: str,
+                        *, filename: str = SYNC_FILE_NAME) -> QuestFolderSyncResult:
     """Local -> Quest: post any un-synced bullet in "Notes to push to Quest" as a new Quest note.
 
     Each pushed bullet is rewritten in place with the id the note was assigned, so a repeated
-    push only ever sends bullets added since the last one. Raises :class:`GoalFolderSyncError`
+    push only ever sends bullets added since the last one. Raises :class:`QuestFolderSyncError`
     if the sync file doesn't exist yet (nothing to push from — pull first).
     """
     path = _sync_path(folder, filename)
     if not path.exists():
-        raise GoalFolderSyncError(f"no sync file to push at {path} — pull first")
+        raise QuestFolderSyncError(f"no sync file to push at {path} — pull first")
     text = _read_existing(path)
     lines = text.splitlines()
     bounds = _to_push_bounds(lines)
@@ -272,31 +272,31 @@ def push_folder_to_goal(client: Any, quest_id: str, folder: str,
     if new_text != text:
         _write(path, new_text)
     log.info("pushed %d note(s) from %s -> quest %s", pushed, path, quest_id)
-    return GoalFolderSyncResult(
+    return QuestFolderSyncResult(
         direction="push", quest_id=quest_id, sync_path=str(path),
         pushed=True, notes_pushed=pushed,
     )
 
 
-def sync_goal_folder(client: Any, quest_id: str, folder: str, direction: str = "pull",
-                     *, filename: str = SYNC_FILE_NAME) -> GoalFolderSyncResult:
-    """The one entry point: keep a goal's Quest state and a local folder in sync.
+def sync_quest_folder(client: Any, quest_id: str, folder: str, direction: str = "pull",
+                     *, filename: str = SYNC_FILE_NAME) -> QuestFolderSyncResult:
+    """The one entry point: keep a quest's Quest state and a local folder in sync.
 
     ``direction``:
-      * ``"pull"`` (default) — Quest is the source of truth for goal state; refresh the local file.
+      * ``"pull"`` (default) — Quest is the source of truth for quest state; refresh the local file.
       * ``"push"`` — post any locally-added, un-synced notes up to Quest. No pull.
-      * ``"both"`` — pull first (goal state/notes are current), then push (send anything the human
+      * ``"both"`` — pull first (quest state/notes are current), then push (send anything the human
         or agent queued locally). Use when both sides may have changed.
     """
     direction = (direction or "pull").lower()
     if direction == "pull":
-        return pull_goal_to_folder(client, quest_id, folder, filename=filename)
+        return pull_quest_to_folder(client, quest_id, folder, filename=filename)
     if direction == "push":
-        return push_folder_to_goal(client, quest_id, folder, filename=filename)
+        return push_folder_to_quest(client, quest_id, folder, filename=filename)
     if direction == "both":
-        pulled = pull_goal_to_folder(client, quest_id, folder, filename=filename)
-        pushed = push_folder_to_goal(client, quest_id, folder, filename=filename)
-        return GoalFolderSyncResult(
+        pulled = pull_quest_to_folder(client, quest_id, folder, filename=filename)
+        pushed = push_folder_to_quest(client, quest_id, folder, filename=filename)
+        return QuestFolderSyncResult(
             direction="both", quest_id=quest_id, sync_path=pushed.sync_path,
             pulled=True, pushed=True,
             notes_pulled=pulled.notes_pulled, notes_pushed=pushed.notes_pushed,

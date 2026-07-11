@@ -1,5 +1,5 @@
 """Managed-section helpers — the marker-delimited round-trip primitive shared by the runner's
-local-file <-> Quest sync modules (``rep_sync.py``, ``goal_folder_sync.py``).
+local-file <-> Quest sync modules (``rep_sync.py``, ``quest_folder_sync.py``).
 
 A "managed section" is a block of a human-editable local file delimited by an HTML-comment
 marker pair, e.g.::

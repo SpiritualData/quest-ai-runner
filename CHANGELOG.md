@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **`goal_folder_sync` renamed to `quest_folder_sync`** (module, `RunnerConfig.goal_folder_map` ->
+  `quest_folder_map`, `RunnerConfig.goal_folder_sync_direction` -> `quest_folder_sync_direction`,
+  `GoalFolderSyncError`/`GoalFolderSyncResult` -> `QuestFolderSyncError`/`QuestFolderSyncResult`,
+  `pull_goal_to_folder`/`push_folder_to_goal`/`sync_goal_folder` ->
+  `pull_quest_to_folder`/`push_folder_to_quest`/`sync_quest_folder`). A Quest holds a goal plus
+  its state and notes, so "quest folder" names the synced concept more precisely than "goal
+  folder" did. Also newly exposed on the CLI: `quest-ai-runner sync-quest-folder <quest_id>
+  <folder> [--direction pull|push|both]`, so a consumer no longer has to import the module
+  directly for a one-off sync.
+
 ### Added
 - **Cross-environment parity: an interactive context-request fast lane (presence-aware push).**
   Chat on one environment can now fetch fresh local context from ANOTHER environment's runner

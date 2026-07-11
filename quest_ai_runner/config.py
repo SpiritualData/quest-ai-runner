@@ -195,27 +195,27 @@ class RunnerConfig:
     # is logged and never fails the task. Validated by ``validate()`` (unknown value -> a problem).
     rep_sync_direction: str = "pull"
 
-    # --- goal <-> local folder sync (opt-in; OFF by default) ------------------
-    # Maps a quest/goal id to a local folder that holds the real work for that goal (research,
+    # --- quest <-> local folder sync (opt-in; OFF by default) ------------------
+    # Maps a quest/goal id to a local folder that holds the real work for that quest (research,
     # drafts, code, a marketing plan, ...). ONE map, TWO consumers:
-    #   * the poller (below) uses it to keep ``goal_folder_sync.QUEST_SYNC.md`` in that folder in
-    #     sync with the goal's Quest state, right around running any task whose ``goal_id`` or
+    #   * the poller (below) uses it to keep ``quest_folder_sync.QUEST_SYNC.md`` in that folder in
+    #     sync with the quest's Quest state, right around running any task whose ``goal_id`` or
     #     ``quest_id`` is a key in this map;
     #   * the default FileContextStore (``resolve_context_assembler``) uses the SAME map to boost
     #     automated context selection toward that folder whenever a run's ``goal_id`` or
     #     ``quest_id`` matches (goal_id first, the same order the poller uses), so a user input
-    #     tied to a goal grounds on its linked folder without extra consumer glue.
+    #     tied to a quest grounds on its linked folder without extra consumer glue.
     # Left None (default) -> both behaviors are inert, exactly today's behavior.
-    goal_folder_map: Optional[Dict[str, str]] = None
-    # Sync DIRECTION for the opt-in goal-folder flow above (only consulted when a task's goal_id/
-    # quest_id is a key in ``goal_folder_map``). Same three values as ``rep_sync_direction``:
+    quest_folder_map: Optional[Dict[str, str]] = None
+    # Sync DIRECTION for the opt-in quest-folder flow above (only consulted when a task's goal_id/
+    # quest_id is a key in ``quest_folder_map``). Same three values as ``rep_sync_direction``:
     #   * "pull" (default) — Quest -> the folder's QUEST_SYNC.md BEFORE the run, so the folder
-    #     reflects the goal's current state/notes at execution time. No push-back.
+    #     reflects the quest's current state/notes at execution time. No push-back.
     #   * "push" — local sync file -> Quest AFTER the run only (post any queued local notes).
     #   * "both" — pull first, then push back after the run.
     # Best-effort in both directions: a sync failure is logged and never fails the task. Validated
     # by ``validate()`` (unknown value -> a problem).
-    goal_folder_sync_direction: str = "pull"
+    quest_folder_sync_direction: str = "pull"
 
     extra: Dict[str, Any] = field(default_factory=dict)
 
@@ -234,10 +234,10 @@ class RunnerConfig:
             problems.append(
                 "rep_sync_direction must be 'pull', 'push', or 'both' "
                 f"(got {self.rep_sync_direction!r})")
-        if self.goal_folder_sync_direction not in ("pull", "push", "both"):
+        if self.quest_folder_sync_direction not in ("pull", "push", "both"):
             problems.append(
-                "goal_folder_sync_direction must be 'pull', 'push', or 'both' "
-                f"(got {self.goal_folder_sync_direction!r})")
+                "quest_folder_sync_direction must be 'pull', 'push', or 'both' "
+                f"(got {self.quest_folder_sync_direction!r})")
         return problems
 
 
@@ -689,10 +689,10 @@ def resolve_context_assembler(
             # qdrant backend: route ALL card persistence through the Qdrant repo (no cards_dir). None
             # (file backend) keeps the default FilesystemCardRepository(cards_dir).
             card_repository=_card_repository,
-            # Same map the poller consults for goal<->folder QUEST_SYNC.md sync (see
-            # RunnerConfig.goal_folder_map): boosts automated context selection toward a quest's
+            # Same map the poller consults for quest<->folder QUEST_SYNC.md sync (see
+            # RunnerConfig.quest_folder_map): boosts automated context selection toward a quest's
             # linked folder whenever a run's quest_id matches.
-            goal_folder_map=cfg.goal_folder_map,
+            quest_folder_map=cfg.quest_folder_map,
         )
         # If a vector store is configured, the default becomes a HYBRID: keyword/IDF FUSED with
         # semantic vector search (the two are complementary). Otherwise keyword-only.

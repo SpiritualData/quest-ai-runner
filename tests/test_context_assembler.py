@@ -1597,10 +1597,10 @@ class TestRichSummaryHelpers:
 
 
 # ---------------------------------------------------------------------------
-# goal_folder_map: automated context scoping toward a quest's linked folder
+# quest_folder_map: automated context scoping toward a quest's linked folder
 # ---------------------------------------------------------------------------
 
-class TestGoalFolderBoost:
+class TestQuestFolderBoost:
     """A run whose meta carries a mapped quest_id should ground preferentially on that quest's
     linked folder — but ONLY among cards that already share some relevance with the task; a
     folder match on a zero-keyword-overlap card must never force it in (never worse by
@@ -1621,19 +1621,19 @@ class TestGoalFolderBoost:
         # threshold sits ABOVE the un-boosted score (3.0) but BELOW the boosted score (3.0*4.0).
         store = FileContextStore(
             str(cards_dir), repo_root=str(tmp_path), confidence_threshold=10.0,
-            goal_folder_map={"quest_1": str(tmp_path / "linked")},
+            quest_folder_map={"quest_1": str(tmp_path / "linked")},
         )
         ac = store.assemble("academy", meta={"quest_id": "quest_1"})
         assert ac.card_ids == ["linked"]   # boosted card clears the gate; the other doesn't
 
     def test_boost_fires_on_goal_id_too(self, tmp_path):
         """A personal 'goal is the hub' task carries its id in meta['goal_id'] (often with NO
-        quest_id at all) — the boost must fire on it, matching the poller's _goal_folder_for."""
+        quest_id at all) — the boost must fire on it, matching the poller's _quest_folder_for."""
         cards_dir = tmp_path / "cards"
         self._two_cards(cards_dir)
         store = FileContextStore(
             str(cards_dir), repo_root=str(tmp_path), confidence_threshold=10.0,
-            goal_folder_map={"quest_1": str(tmp_path / "linked")},
+            quest_folder_map={"quest_1": str(tmp_path / "linked")},
         )
         ac = store.assemble("academy", meta={"goal_id": "quest_1"})
         assert ac.card_ids == ["linked"]
@@ -1643,7 +1643,7 @@ class TestGoalFolderBoost:
         self._two_cards(cards_dir)
         store = FileContextStore(
             str(cards_dir), repo_root=str(tmp_path), confidence_threshold=10.0,
-            goal_folder_map={"quest_1": str(tmp_path / "linked")},
+            quest_folder_map={"quest_1": str(tmp_path / "linked")},
         )
         assert store.assemble("academy").card_ids == []                       # no meta at all
         assert store.assemble("academy", meta={}).card_ids == []              # no quest_id
@@ -1655,7 +1655,7 @@ class TestGoalFolderBoost:
         outside = tmp_path.parent / f"outside-{tmp_path.name}"
         store = FileContextStore(
             str(cards_dir), repo_root=str(tmp_path), confidence_threshold=10.0,
-            goal_folder_map={"quest_1": str(outside)},
+            quest_folder_map={"quest_1": str(outside)},
         )
         # The entry couldn't be resolved under repo_root, so it's dropped: no boost fires.
         assert store.assemble("academy", meta={"quest_id": "quest_1"}).card_ids == []
@@ -1668,12 +1668,12 @@ class TestGoalFolderBoost:
         _write_card(cards_dir, unrelated)
         store = FileContextStore(
             str(cards_dir), repo_root=str(tmp_path), confidence_threshold=0.0,
-            goal_folder_map={"quest_1": str(tmp_path / "linked")},
+            quest_folder_map={"quest_1": str(tmp_path / "linked")},
         )
         ac = store.assemble("academy fundraising plan", meta={"quest_id": "quest_1"})
-        assert ac.card_ids == []   # 0 * _GOAL_FOLDER_BOOST is still 0 — never forced in
+        assert ac.card_ids == []   # 0 * _QUEST_FOLDER_BOOST is still 0 — never forced in
 
-    def test_no_goal_folder_map_is_a_complete_no_op(self, tmp_path):
+    def test_no_quest_folder_map_is_a_complete_no_op(self, tmp_path):
         cards_dir = tmp_path / "cards"
         self._two_cards(cards_dir)
         store = FileContextStore(str(cards_dir), repo_root=str(tmp_path), confidence_threshold=10.0)

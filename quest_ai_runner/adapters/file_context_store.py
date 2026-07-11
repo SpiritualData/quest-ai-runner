@@ -228,14 +228,14 @@ _RECENCY_BOOST_MAX_DEFAULT = 0.20          # at most +20% to the ranking score, 
 _RECENCY_BOOST_HALF_LIFE_DAYS = 30.0       # recency component half-life (matches the vector arm)
 _RECENCY_BOOST_USAGE_CAP = 5.0             # usage_count saturates here (5+ uses = full usage signal)
 
-# GOAL-FOLDER BOOST: unlike the recency/usage boost above (a soft heuristic applied only AFTER
+# QUEST-FOLDER BOOST: unlike the recency/usage boost above (a soft heuristic applied only AFTER
 # the confidence gate), this applies BEFORE the gate, multiplying the raw score itself. That's
-# deliberate: a goal_folder_map match means the CALLER already established this run is about that
+# deliberate: a quest_folder_map match means the CALLER already established this run is about that
 # quest (its own goal_id, not a keyword guess), so a card pinning files under the linked folder
 # gets a strong nudge to clear the gate even on a thinner keyword match — while a card with ZERO
 # shared keywords (score 0) still scores 0 after the boost, so unrelated folder content is never
 # forced in "never worse by construction" still holds.
-_GOAL_FOLDER_BOOST = 4.0
+_QUEST_FOLDER_BOOST = 4.0
 
 # Max length for a card summary built from docstrings/descriptions (~400 chars).
 _SUMMARY_MAX_CHARS = 400
@@ -1197,11 +1197,11 @@ class FileContextStore(ContextAssemblerBase):
                           default per-card-JSON-files behavior, byte-for-byte). Injecting a
                           repository (e.g. a database-backed one) keeps ALL card logic here while
                           swapping only the persistence.
-      goal_folder_map   -- optional ``{goal_or_quest_id: folder}`` (e.g.
-                          ``RunnerConfig.goal_folder_map``). When ``assemble()`` is called with a
+      quest_folder_map  -- optional ``{goal_or_quest_id: folder}`` (e.g.
+                          ``RunnerConfig.quest_folder_map``). When ``assemble()`` is called with a
                           ``meta`` whose ``goal_id`` or ``quest_id`` (goal_id checked first)
                           matches a key here, cards pinning files under that folder get a BOOST
-                          (see ``_GOAL_FOLDER_BOOST``) so a run already known to be about that
+                          (see ``_QUEST_FOLDER_BOOST``) so a run already known to be about that
                           quest grounds preferentially on its linked folder. Entries whose folder
                           isn't under ``repo_root`` are ignored (logged once at construction).
 
@@ -1250,7 +1250,7 @@ class FileContextStore(ContextAssemblerBase):
         max_card_ref_chars: int = _MAX_CARD_REF_CHARS,
         card_repository: Optional[CardRepository] = None,
         recency_boost_max: float = _RECENCY_BOOST_MAX_DEFAULT,
-        goal_folder_map: Optional[Dict[str, str]] = None,
+        quest_folder_map: Optional[Dict[str, str]] = None,
     ) -> None:
         self._cards_dir = Path(cards_dir)
         # Card PERSISTENCE is pluggable behind a CardRepository. Default: per-card JSON files under
@@ -1260,18 +1260,18 @@ class FileContextStore(ContextAssemblerBase):
         # Precompute {quest_id: repo-root-relative POSIX prefix} once, so per-assemble() lookup is
         # a plain dict get. A folder outside repo_root can't be matched against card file paths
         # (which are stored relative to repo_root), so such entries are dropped with a warning.
-        self._goal_folder_map: Dict[str, str] = {}
-        if goal_folder_map:
+        self._quest_folder_map: Dict[str, str] = {}
+        if quest_folder_map:
             if self._repo_root is None:
-                _log.warning("goal_folder_map given but no repo_root configured; ignoring it")
+                _log.warning("quest_folder_map given but no repo_root configured; ignoring it")
             else:
-                for qid, folder in goal_folder_map.items():
+                for qid, folder in quest_folder_map.items():
                     try:
                         rel = Path(folder).resolve().relative_to(self._repo_root)
-                        self._goal_folder_map[str(qid)] = rel.as_posix()
+                        self._quest_folder_map[str(qid)] = rel.as_posix()
                     except (ValueError, OSError):
                         _log.warning(
-                            "goal_folder_map entry %s -> %s is not under repo_root %s; ignoring",
+                            "quest_folder_map entry %s -> %s is not under repo_root %s; ignoring",
                             qid, folder, self._repo_root,
                         )
         self._max_cards = max_cards_in_view
@@ -2105,17 +2105,17 @@ class FileContextStore(ContextAssemblerBase):
         if not task_kws:
             return AssembledContext()
 
-        # GOAL-FOLDER SCOPING: when this run's meta carries a goal/quest id that goal_folder_map
+        # QUEST-FOLDER SCOPING: when this run's meta carries a goal/quest id that quest_folder_map
         # maps to a folder, resolve it ONCE to the repo-root-relative prefix cards are matched
-        # against. goal_id is checked FIRST, mirroring the poller's _goal_folder_for: a personal
+        # against. goal_id is checked FIRST, mirroring the poller's _quest_folder_for: a personal
         # "goal is the hub" task carries its id there (often with no quest_id at all). None (the
         # common case: no map, or no meta, or neither id is mapped) is a no-op.
         folder_prefix: Optional[str] = None
-        if meta and self._goal_folder_map:
+        if meta and self._quest_folder_map:
             for _id_key in ("goal_id", "quest_id"):
                 _id = meta.get(_id_key)
-                if _id and str(_id) in self._goal_folder_map:
-                    folder_prefix = self._goal_folder_map[str(_id)]
+                if _id and str(_id) in self._quest_folder_map:
+                    folder_prefix = self._quest_folder_map[str(_id)]
                     break
 
         # Candidate pool for the keyword arm. When the repository exposes NATIVE text search
@@ -2162,10 +2162,10 @@ class FileContextStore(ContextAssemblerBase):
             # Apply test-file penalty.
             card_weight = float(card.get("weight", _SOURCE_FILE_WEIGHT))
             score = base_score * card_weight
-            # GOAL-FOLDER BOOST (pre-gate; see _GOAL_FOLDER_BOOST for why this differs from the
+            # QUEST-FOLDER BOOST (pre-gate; see _QUEST_FOLDER_BOOST for why this differs from the
             # post-gate recency/usage boost below).
             if folder_prefix and self._card_pins_folder(card, folder_prefix):
-                score *= _GOAL_FOLDER_BOOST
+                score *= _QUEST_FOLDER_BOOST
             # CONFIDENCE GATE: only a match that clears the threshold is injected. A weak match
             # contributes NOTHING, so an uncertain query yields an empty context view and the run
             # falls back to plain Claude Code (never worse). This is what makes the layer dominate:

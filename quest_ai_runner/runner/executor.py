@@ -225,7 +225,7 @@ class TaskExecutor:
         # Thread the task's goal identity into the orchestrator's context meta. quest_id already
         # travels as its own run() param, but a personal "goal is the hub" task carries its id in
         # goal_id (often with NO quest_id), and context assemblers that scope by goal — e.g.
-        # FileContextStore's goal_folder_map boost — would otherwise never see it.
+        # FileContextStore's quest_folder_map boost — would otherwise never see it.
         context_meta: Optional[Dict[str, Any]] = {"goal_id": goal_id} if goal_id else None
 
         # Cooperative mid-run cancellation: a THROTTLED check (see _build_cancel_check) threaded
