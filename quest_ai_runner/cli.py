@@ -87,6 +87,14 @@ Env it reads:
   QAR_CHAT_HISTORY_DIR (optional)             — directory where QAR writes its own chat session
                                                    history (default: ~/.quest-ai-runner/conversations).
                                                    Written by QAR; read back by QAR in future sessions.
+  QAR_QUEST_FOLDER_MAP (optional)             — JSON object mapping quest/goal id -> local folder,
+                                                   e.g. {"quest_123": "/srv/corpus/some_quest"}. Each
+                                                   entry's folder is kept in sync with its quest's
+                                                   QUEST_SYNC.md EVERY poll scan (no task required),
+                                                   plus opt-in around any task whose goal_id/quest_id
+                                                   matches. See RunnerConfig.quest_folder_map.
+  QAR_QUEST_FOLDER_SYNC_DIRECTION (optional)  — "pull" (default), "push", or "both" for the map
+                                                   above. See RunnerConfig.quest_folder_sync_direction.
 
 chat-specific env vars (all optional):
   QAR_REP_NAME (optional)                        — display name for the AI representative shown in
@@ -101,6 +109,7 @@ A consumer that wants finer control imports the library and builds RunnerConfig 
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import sys
@@ -250,6 +259,26 @@ def _config_from_env() -> RunnerConfig:
     )
     if os.getenv("QAR_POLL_INTERVAL"):
         cfg.poll_interval_seconds = float(os.environ["QAR_POLL_INTERVAL"])
+
+    # --- quest <-> local folder sync (opt-in; see RunnerConfig.quest_folder_map) ---------------
+    # QAR_QUEST_FOLDER_MAP: a JSON object mapping quest/goal id -> local folder, e.g.
+    #   QAR_QUEST_FOLDER_MAP={"quest_1625d9f47a06": "/srv/corpus/concept_ai_interface_quest"}
+    # Every entry is kept in sync with its quest EVERY scan (Poller.run_once, so the standing
+    # poll/systemd process keeps it current with no task required) plus, opt-in, right before/after
+    # any task whose goal_id/quest_id matches an entry.
+    if os.getenv("QAR_QUEST_FOLDER_MAP"):
+        try:
+            parsed = json.loads(os.environ["QAR_QUEST_FOLDER_MAP"])
+            if isinstance(parsed, dict):
+                cfg.quest_folder_map = {str(k): str(v) for k, v in parsed.items()}
+            else:
+                logging.getLogger("quest-ai-runner").warning(
+                    "QAR_QUEST_FOLDER_MAP must be a JSON object; ignoring")
+        except (ValueError, TypeError) as e:
+            logging.getLogger("quest-ai-runner").warning(
+                "QAR_QUEST_FOLDER_MAP is not valid JSON (%s); ignoring", e)
+    if os.getenv("QAR_QUEST_FOLDER_SYNC_DIRECTION"):
+        cfg.quest_folder_sync_direction = os.environ["QAR_QUEST_FOLDER_SYNC_DIRECTION"].strip().lower()
 
     # --- fast lane for interactive context-requests (D2 revised: presence-aware push) -----------
     # QAR_WAIT_CHANNEL: "0"/"false"/"off" disables the long-poll wait channel, falling back to a

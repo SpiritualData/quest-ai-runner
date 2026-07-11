@@ -321,7 +321,9 @@ def test_poller_pulls_quest_folder_before_running_when_mapped():
         handled = poller.run_once()
         content = Path(d, "QUEST_SYNC.md").read_text()
     assert handled == ["goal-task"]
-    assert quest_folder_client.get_calls == [QUEST_ID]   # pulled before running
+    # Pulled twice: once by the scan-level periodic sync (fires every scan regardless of task
+    # pickup), once by the task-scoped pre-run pull (this task's goal_id maps to the same quest).
+    assert quest_folder_client.get_calls == [QUEST_ID, QUEST_ID]
     assert "100 paying clients" in content
 
 
@@ -393,3 +395,138 @@ def test_poller_pushes_quest_folder_after_run_when_direction_is_push():
         poller.run_once()
     assert quest_folder_client.add_note_calls == [(QUEST_ID, "queued while offline")]
     assert quest_folder_client.get_calls == []   # push-only direction: no pull before the run
+
+
+# --- periodic per-scan sync: independent of task pickup ----------------------------
+
+def test_run_once_syncs_mapped_quest_folders_even_with_no_due_tasks():
+    """The whole point of a per-scan sync: a mapped quest's folder must stay current even when
+    no task ever fires for it (e.g. someone only edits the quest on Quest directly)."""
+    from quest_ai_runner.config import RunnerConfig
+    from quest_ai_runner.runner.poller import Poller
+
+    from .conftest import StubProvider, StubRetrieval
+    from .test_runner import MockQuestClient
+
+    quest_folder_client = MockQuestFolderClient()
+    client = MockQuestClient([])  # no due tasks at all
+    client.get_my_quest = quest_folder_client.get_my_quest
+    client.list_quest_notes = quest_folder_client.list_quest_notes
+    client.add_quest_note = quest_folder_client.add_quest_note
+    with tempfile.TemporaryDirectory() as d:
+        cfg = RunnerConfig(
+            quest_base_url="http://x", quest_api_key="qsk_test",
+            retrieval=StubRetrieval({"README.md": "fact"}),
+            model_provider=StubProvider(decisions=[]),
+            quest_folder_map={QUEST_ID: d},
+        )
+        poller = Poller(cfg, state_path=None, client=client)
+        handled = poller.run_once()
+        content = Path(d, "QUEST_SYNC.md").read_text()
+    assert handled == []                                  # no task ran
+    assert quest_folder_client.get_calls == [QUEST_ID]     # but the folder was still synced
+    assert "100 paying clients" in content
+
+
+def test_run_once_periodic_sync_failure_never_breaks_the_scan():
+    from quest_ai_runner.config import RunnerConfig
+    from quest_ai_runner.runner.poller import Poller
+
+    from .conftest import StubProvider, StubRetrieval
+    from .test_runner import MockQuestClient
+
+    class BoomClient(MockQuestFolderClient):
+        def get_my_quest(self, quest_id):
+            raise RuntimeError("boom")
+
+    quest_folder_client = BoomClient()
+    client = MockQuestClient([])
+    client.get_my_quest = quest_folder_client.get_my_quest
+    client.list_quest_notes = quest_folder_client.list_quest_notes
+    client.add_quest_note = quest_folder_client.add_quest_note
+    cfg = RunnerConfig(
+        quest_base_url="http://x", quest_api_key="qsk_test",
+        retrieval=StubRetrieval({"README.md": "fact"}),
+        model_provider=StubProvider(decisions=[]),
+        quest_folder_map={QUEST_ID: "/tmp/does-not-matter"},
+    )
+    poller = Poller(cfg, state_path=None, client=client)
+    assert poller.run_once() == []   # scan completes normally despite the sync failure
+
+
+def test_run_once_syncs_every_mapped_quest_folder():
+    """More than one mapped quest: each gets synced on the same scan."""
+    from quest_ai_runner.config import RunnerConfig
+    from quest_ai_runner.runner.poller import Poller
+
+    from .conftest import StubProvider, StubRetrieval
+    from .test_runner import MockQuestClient
+
+    other_quest_id = "quest_other000000000"
+    clients = {
+        QUEST_ID: MockQuestFolderClient(),
+        other_quest_id: MockQuestFolderClient(
+            state={"outcome": "A second quest", "completed": False}),
+    }
+
+    def _get_my_quest(quest_id):
+        return clients[quest_id].get_my_quest(quest_id)
+
+    def _list_quest_notes(quest_id):
+        return clients[quest_id].list_quest_notes(quest_id)
+
+    def _add_quest_note(quest_id, text):
+        return clients[quest_id].add_quest_note(quest_id, text)
+
+    client = MockQuestClient([])
+    client.get_my_quest = _get_my_quest
+    client.list_quest_notes = _list_quest_notes
+    client.add_quest_note = _add_quest_note
+    with tempfile.TemporaryDirectory() as d1, tempfile.TemporaryDirectory() as d2:
+        cfg = RunnerConfig(
+            quest_base_url="http://x", quest_api_key="qsk_test",
+            retrieval=StubRetrieval({"README.md": "fact"}),
+            model_provider=StubProvider(decisions=[]),
+            quest_folder_map={QUEST_ID: d1, other_quest_id: d2},
+        )
+        poller = Poller(cfg, state_path=None, client=client)
+        poller.run_once()
+        content1 = Path(d1, "QUEST_SYNC.md").read_text()
+        content2 = Path(d2, "QUEST_SYNC.md").read_text()
+    assert "100 paying clients" in content1
+    assert "A second quest" in content2
+
+
+# --- env wiring for QAR_QUEST_FOLDER_MAP / QAR_QUEST_FOLDER_SYNC_DIRECTION ---------
+
+def test_env_wiring_for_quest_folder_map(monkeypatch):
+    from quest_ai_runner.cli import _config_from_env
+
+    monkeypatch.delenv("QAR_QUEST_FOLDER_MAP", raising=False)
+    monkeypatch.delenv("QAR_QUEST_FOLDER_SYNC_DIRECTION", raising=False)
+    cfg = _config_from_env()
+    assert cfg.quest_folder_map is None                    # library default: off
+    assert cfg.quest_folder_sync_direction == "pull"        # library default
+
+    monkeypatch.setenv(
+        "QAR_QUEST_FOLDER_MAP",
+        '{"quest_1625d9f47a06": "/srv/corpus/concept_ai_interface_quest"}',
+    )
+    monkeypatch.setenv("QAR_QUEST_FOLDER_SYNC_DIRECTION", "both")
+    cfg = _config_from_env()
+    assert cfg.quest_folder_map == {
+        "quest_1625d9f47a06": "/srv/corpus/concept_ai_interface_quest",
+    }
+    assert cfg.quest_folder_sync_direction == "both"
+
+
+def test_env_wiring_ignores_invalid_quest_folder_map_json(monkeypatch):
+    from quest_ai_runner.cli import _config_from_env
+
+    monkeypatch.setenv("QAR_QUEST_FOLDER_MAP", "not valid json")
+    cfg = _config_from_env()
+    assert cfg.quest_folder_map is None   # bad JSON ignored, default kept
+
+    monkeypatch.setenv("QAR_QUEST_FOLDER_MAP", '["a", "list", "not", "an", "object"]')
+    cfg = _config_from_env()
+    assert cfg.quest_folder_map is None   # non-object JSON ignored, default kept

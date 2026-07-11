@@ -158,6 +158,10 @@ class Poller:
         # even on a scan that finds no due tasks. Best-effort, like progress-posting: a failed
         # heartbeat is logged and never blocks discovery/execution.
         self._emit_heartbeat()
+        # Quest-folder periodic sync (opt-in, cfg.quest_folder_map) runs every scan regardless of
+        # task pickup below — it's a light data sync, not new work, so it isn't gated by the
+        # resource/token guards that protect against taking on MORE agentic work.
+        self._sync_all_quest_folders()
         # Resource gate AFTER the heartbeat (the backend should still see the env as live) but
         # BEFORE discovery/claiming: an overloaded host takes on NO new work this scan. Skipping
         # is lossless — unclaimed tasks stay queued and fire on a later scan once resources
@@ -551,6 +555,29 @@ class Poller:
             return None
         folder = folder_map.get(str(qid))
         return (str(qid), folder) if folder else None
+
+    def _sync_all_quest_folders(self) -> None:
+        """Best-effort: sync EVERY entry in ``cfg.quest_folder_map``, independent of whether a
+        task for that quest happens to be due this scan.
+
+        The task-scoped hooks above (``_pull_quest_folder_for``/``_push_quest_folder_for``) only
+        fire around a task that carries a mapped goal/quest id, so a folder whose quest never gets
+        a task queued against it (e.g. someone just edits it on Quest directly) would otherwise
+        never refresh. Calling this once per scan, from ``run_once()``, means every standing
+        ``poll``/``run_forever`` process — the normal systemd/cron deployment — keeps every mapped
+        folder current on its own poll cadence, with no task required. A per-entry failure (bad
+        folder, API error) is logged and never blocks the other entries or the scan itself."""
+        folder_map = getattr(self.cfg, "quest_folder_map", None)
+        if not folder_map:
+            return
+        direction = self.cfg.quest_folder_sync_direction
+        from .quest_folder_sync import sync_quest_folder
+        for quest_id, folder in folder_map.items():
+            try:
+                sync_quest_folder(self.client, quest_id, folder, direction=direction)
+            except Exception as e:  # noqa: BLE001 — one bad folder must not block the others/scan
+                log.info("quest-folder periodic sync for %s failed (%s) — will retry next scan",
+                         quest_id, e)
 
     def _pull_quest_folder_for(self, task: Dict[str, Any]) -> None:
         """Best-effort PRE-run pull: refresh the mapped folder's QUEST_SYNC.md from Quest.

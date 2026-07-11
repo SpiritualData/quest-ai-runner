@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Quest-folder sync now runs automatically every poll scan, not just around a matching task.**
+  `Poller.run_once()` calls a new `_sync_all_quest_folders()` that syncs EVERY entry in
+  `cfg.quest_folder_map` on every scan (best-effort per entry; one bad folder never blocks the
+  others or the scan), so the standing `poll`/systemd/cron process keeps every mapped quest
+  folder's `QUEST_SYNC.md` current on its own poll cadence with no task required — the previous
+  task-scoped pre-run pull / post-run push hooks still fire additionally, right around a matching
+  task, for freshest-at-execution-time behavior. `quest_folder_map` and
+  `quest_folder_sync_direction` are now also settable without writing consumer code, via new env
+  vars `QAR_QUEST_FOLDER_MAP` (a JSON object, `{"quest_id": "folder"}`) and
+  `QAR_QUEST_FOLDER_SYNC_DIRECTION` (`pull`/`push`/`both`), read by `cli.py`'s `_config_from_env()`
+  (documented in its module docstring).
+
 ### Changed
 - **`goal_folder_sync` renamed to `quest_folder_sync`** (module, `RunnerConfig.goal_folder_map` ->
   `quest_folder_map`, `RunnerConfig.goal_folder_sync_direction` -> `quest_folder_sync_direction`,
