@@ -1250,6 +1250,75 @@ def parse_goal_condition_reply(raw: str) -> Tuple[str, Optional[Dict[str, Any]]]
                 constraints = cleaned
     return goal_condition, constraints
 
+def restates_meaningfully(goal_condition: str, user_message: str) -> bool:
+    """True when the resolved goal condition says something the raw message did not.
+
+    The understanding event ("Understood as: ...") is internal, but a consumer may surface it in a
+    details/debug view, so it should only fire when the resolution actually ADDS information. The
+    old guard was a byte-for-byte ``!=``, so a cheap-tier restatement that merely re-punctuated or
+    re-cased the message ("Hello" -> "Hello.") counted as a fresh understanding, and the person got
+    their own word echoed back at them above the reply. Compare normalized text instead: same words
+    in the same order means nothing was learned, so stay quiet.
+    """
+    def norm(text: str) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", (text or "").casefold()).strip()
+    return norm(goal_condition) != norm(user_message)
+
+
+# The voice contract for EVERY call that produces text the person actually reads.
+#
+# This is the ONE system prompt for the reply channel, and it exists because of a real class of bug:
+# the answer stage used to be called with no system prompt at all, so the only instructions the model
+# saw were the grounding/planning blocks, which are written ABOUT the person in the third person
+# ("Answer the user's latest message...", "The user asked: ..."). A model with no voice contract
+# mirrors the voice of its instructions. The reply then came back as internal machinery read aloud:
+# an echo of the request ("Understood as: ..."), a third-person narration of the model's own plan
+# ("The user expressed interest in ... I will create a habit titled ..."), and a recital of which
+# files and cards were retrieved.
+#
+# The separation this enforces: the run emits internal material on its OWN typed channels
+# (EVENT_UNDERSTANDING for the resolved goal condition, EVENT_CONTEXT for retrieval metadata and
+# sources, EVENT_STATUS / narration EVENT_PARTIAL for progress, EVENT_PLAN for reasoning). Those
+# stay machine-readable and are what a consumer shows in a debug/details surface. NONE of them may
+# be restated inside EVENT_RESULT, which is the reply and nothing else.
+#
+# Pass it as ``system=`` on every reply-producing provider.answer() call. Do NOT append it as a
+# user-role message: that is what let it blend into the third-person instruction voice before.
+REPLY_VOICE_SYSTEM = """\
+You are the assistant, talking directly to the person you are helping. What you write in this step is
+delivered to them verbatim as a chat message, and it is the only thing they see. Everything else in
+this turn (your reasoning, what you retrieved, what you are about to do) travels on separate internal
+channels and is not yours to repeat.
+
+Write ONLY the final reply.
+
+Voice:
+- First person for yourself ("I"), second person for them ("you"). Never call them "the user", and
+  never describe yourself in the third person.
+- Speak TO them, never ABOUT them, and never about the turn you are in.
+
+Never include any of the following. Each one is internal machinery, and it reads as noise:
+- Any echo or restatement of their message ("Understood as:", "You asked:", "The user wants:",
+  "Request:"). Just reply.
+- Narration of your reasoning, your plan, or your next action ("I will now create...", "First I will
+  check...", "Let me search..."). State the outcome instead. If you cannot act in this step, say
+  plainly what still needs to happen and who does it.
+- Any account of what you read: file names, document or source titles, card names, source counts,
+  "Sources reviewed", "Reviewing N sources", or retrieval metadata of any kind. Use what you read.
+  Do not report that you read it. If one specific source genuinely matters to them, mention it in an
+  ordinary sentence, never as a list of retrieval hits.
+- Raw internal state: ids, tool names, goal conditions, or the headings of the material you were
+  given (GROUNDING CONTEXT, UNDERSTOOD REQUEST, ACTUAL CONTENT READ, CONVERSATION CONTEXT,
+  SUB-QUESTION, and the like). Those headings are addressed to you, not to them.
+- Progress or status commentary ("Selected context for...", "Reviewing...", "Working on it").
+- Preambles and sign-offs about the reply itself ("Here is my response:", "Hope that helps!").
+
+Style:
+- Lead with the substance. Your first sentence answers them.
+- Concrete and concise. No filler.
+- Never use an em dash. Use a comma, a colon, parentheses, or two sentences.
+"""
+
 # Synthesize the FINAL user-facing reply after a deferred deep run, grounding it in what the deep
 # run ACTUALLY did/produced. Without this, a deferred-deep turn returns the pre-deep proposal (which
 # typically reads as "shall I proceed?"), discarding the real deliverable the deep run created.
@@ -1853,14 +1922,19 @@ def _grounding_block(context_view: str, gathered: List[Dict[str, Any]], partial:
     # The answer LLM should produce text, not JSON command structures.
     answer_context_view = _strip_discovery_section(context_view)
 
-    parts = ["--- GROUNDING CONTEXT (use this; do not fabricate beyond it) ---", answer_context_view or "(none)"]
+    parts = [
+        "--- GROUNDING CONTEXT (INTERNAL: answer FROM this; never quote it, never name its sources, "
+        "never mention that you read anything) ---",
+        answer_context_view or "(none)",
+    ]
     # Discovery/capability listings (list_operations/list_sources/describe_*) are a menu of what the
     # assistant COULD do, not material to answer from — drop them here so the answer grounds only on
     # real content. When nothing real was gathered, the section is omitted and the answer LLM will
     # honestly say it lacks context instead of answering from the operations menu.
     content_gathered = [o for o in (gathered or []) if not _is_discovery_obs(o)]
     if content_gathered:
-        parts.append("\n--- ACTUAL CONTENT READ FOR THIS ANSWER ---")
+        parts.append("\n--- ACTUAL CONTENT READ FOR THIS ANSWER (INTERNAL: same rule, use it "
+                     "silently; do not list or count these items back to them) ---")
         parts.append(_render_gathered(content_gathered))
     if partial:
         parts.append(
@@ -1877,7 +1951,10 @@ def _grounding_block(context_view: str, gathered: List[Dict[str, Any]], partial:
         "done; the system will execute it."
     )
     parts.append(
-        "Answer the user's latest message grounded in the context above, and ONLY in the material "
+        "Now write the reply itself, and nothing but the reply: no restatement of what they asked, "
+        "no account of your reasoning or of what you are about to do, no mention of the material "
+        "above or where it came from. Answer their latest message grounded in the context above, "
+        "and ONLY in the material "
         "about the SPECIFIC subject they named. Material about a sibling topic that merely shares a "
         "category word (a DIFFERENT evaluation, pipeline, project, or metric than the one asked "
         "about) is NOT on point: do not answer from it and do not silently switch to it. If the "
@@ -2547,7 +2624,10 @@ class Orchestrator:
         else:
             messages.append({"role": "user", "content": user_message})
         provider = self.get_provider_for_model(model)
-        return provider.answer(messages, model=model)
+        # REPLY_VOICE_SYSTEM rides as the system prompt, not as another user turn: it has to sit
+        # ABOVE the grounding/transcript blocks (which are phrased as instructions ABOUT the person)
+        # so the model answers in its own voice instead of mirroring theirs.
+        return provider.answer(messages, model=model, system=REPLY_VOICE_SYSTEM)
 
     def _synthesize_after_deep(self, user_message: str, *, prior_answer: str, deep_output: str,
                                transcript: str, model: str,
@@ -2574,7 +2654,7 @@ class Orchestrator:
                 messages.append({"role": "user", "content": transcript})
             messages.append({"role": "user", "content": prompt})
             provider = self.get_provider_for_model(model)
-            synthesized = provider.answer(messages, model=model)
+            synthesized = provider.answer(messages, model=model, system=REPLY_VOICE_SYSTEM)
             if isinstance(synthesized, str) and synthesized.strip():
                 return synthesized.strip()
         except Exception:  # noqa: BLE001 — synthesis must never break the turn
@@ -2604,7 +2684,9 @@ class Orchestrator:
                     sub_msg = {"role": "user", "content": focus}
                 msgs = [{"role": "user", "content": ground}, sub_msg]
                 provider = self.get_provider_for_model(model)
-                return {"q": sub, "a": provider.answer(msgs, model=model)}
+                # A single surviving sub-answer is returned to them verbatim (see below), so each one
+                # is written under the same voice contract as a whole reply.
+                return {"q": sub, "a": provider.answer(msgs, model=model, system=REPLY_VOICE_SYSTEM)}
             except Exception as e:  # noqa: BLE001
                 log.warning(f"Sub-question answer generation failed: {type(e).__name__}: {e}", exc_info=True)
                 return None
@@ -2627,12 +2709,17 @@ class Orchestrator:
             return ok[0]["a"]
         merged = "\n\n".join(f"SUB-QUESTION: {a['q']}\nANSWER: {a['a']}" for a in ok)
         try:
+            # The old wording here opened with "The user asked: ...", which handed the model a
+            # third-person frame and invited it to narrate the split back ("The user asked about X,
+            # here is the merged answer"). Address it as their message, and say the split is internal.
             return self.provider.answer(
                 [{"role": "user", "content": (
-                    f"The user asked: {user_message}\n\nYou answered its independent parts below. "
-                    "Merge them into ONE coherent, non-repetitive reply (don't mention the split):"
-                    f"\n\n{merged}")}],
+                    f"Their message was:\n\n{user_message}\n\nYou answered its independent parts "
+                    "below. The split is INTERNAL scaffolding: merge the parts into ONE coherent, "
+                    "non-repetitive reply written straight to them, and never mention the split, "
+                    "the sub-questions, or the headings below.\n\n" + merged)}],
                 model=model,
+                system=REPLY_VOICE_SYSTEM,
             )
         except Exception:  # noqa: BLE001
             return "\n\n".join(a["a"] for a in ok)
@@ -3169,7 +3256,9 @@ class Orchestrator:
             # task's final output to the same run it streamed.
             captured_run_id: Dict[str, Optional[str]] = {"id": None}
             if per_goal_context and emit is not None:
-                emit.status(f"Selected context for goal: {goal[:60]}")
+                # Progress the person can read, not internal state. "Selected context for goal: ..."
+                # named an orchestrator step and read as leaked machinery in the live status pill.
+                emit.status(f"Working on: {goal[:60]}")
 
             # Resolve which runner handles THIS goal ONCE per task (not per retry — the
             # classifier's inputs (user_message/goal/brief) don't change across retries of the
@@ -4630,11 +4719,11 @@ class Orchestrator:
             # and only search for MORE as needed. So we inject the gathered conversation context AND
             # the resolved request. (Narrowing to a minimal, just-what-it-needs slice happens later
             # per SUBGOAL in _run_deep, to keep each subgoal focused, not on this main flow.)
-            if goal_condition != user_message or conv_ctx_text:
+            if restates_meaningfully(goal_condition, user_message) or conv_ctx_text:
                 emit.emit(ProgressEvent(
                     type=EVENT_UNDERSTANDING,
                     text=f"Understood as: {goal_condition}",
-                    data={"goal_condition": goal_condition}))
+                    data={"goal_condition": goal_condition, "internal": True}))
                 # The resolver used this context to derive goal_condition, so it IS relevant.
                 # Strip the defensive hedge label added during retrieval so the answerer does
                 # not treat confirmed-useful context as uncertain background noise.
@@ -4645,7 +4734,8 @@ class Orchestrator:
                 _understood_block = (
                     "--- CONVERSATION CONTEXT ---\n" + clean_conv_ctx + "\n"
                     if clean_conv_ctx else ""
-                ) + f"--- UNDERSTOOD REQUEST ---\n{goal_condition}\n"
+                ) + ("--- UNDERSTOOD REQUEST (INTERNAL: this is how the run resolved their message; "
+                     "answer it, never read it back to them) ---\n" + goal_condition + "\n")
                 context_view = (_understood_block + "\n" + context_view
                                 if context_view else _understood_block)
         else:
@@ -4656,8 +4746,8 @@ class Orchestrator:
             # never raises). This adds one LLM round trip to every turn that reaches here (a real
             # cost/latency change from before, when this branch did nothing); see CHANGELOG.md.
             goal_condition, retrieval_constraints = self._derive_goal_condition(user_message, now=now)
-            if goal_condition != user_message or retrieval_constraints:
-                _event_data: Dict[str, Any] = {"goal_condition": goal_condition}
+            if restates_meaningfully(goal_condition, user_message) or retrieval_constraints:
+                _event_data: Dict[str, Any] = {"goal_condition": goal_condition, "internal": True}
                 if retrieval_constraints:
                     _event_data["constraints"] = retrieval_constraints
                 emit.emit(ProgressEvent(

@@ -24,6 +24,9 @@ class StubProvider:
         self.plan_calls = 0
         self.answer_calls = 0
         self.last_answer_messages: List[Dict[str, str]] = []
+        # Every system prompt an answer() call was given, in order, so a test can assert the
+        # reply-voice contract actually reaches the model (None = no system prompt was passed).
+        self.answer_systems: List[Any] = []
         self.last_plan_prompt: str = ""
         self.plan_prompts: List[str] = []
 
@@ -38,6 +41,7 @@ class StubProvider:
     def answer(self, messages, *, model, system=None) -> str:
         self.answer_calls += 1
         self.last_answer_messages = messages
+        self.answer_systems.append(system)
         joined = "\n".join(m["content"] for m in messages)
         return f"{self._answer_text} [grounded_on:{'README' in joined or 'GROUNDING' in joined}]"
 

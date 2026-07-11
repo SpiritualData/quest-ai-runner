@@ -6,6 +6,34 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **The reply channel now carries only the reply.** A chat turn was arriving with the run's internal
+  machinery read aloud inside it: an echo of the request ("Understood as: Hello."), a third-person
+  narration of the model's own plan ("The user expressed interest in ... I will create a habit
+  titled ..."), and a recital of which files and cards had been retrieved. Root cause: the answer
+  stage called `provider.answer()` with **no system prompt at all**, so the only instructions the
+  model saw were the grounding and sub-question-merge blocks, which are phrased ABOUT the person in
+  the third person ("Answer the user's latest message...", "The user asked: ..."). With no voice
+  contract, the model mirrored the voice of its own instructions.
+  - New `REPLY_VOICE_SYSTEM` in `core/orchestrator.py` is the single voice contract for the reply
+    channel, passed as `system=` on every call that produces text the person reads
+    (`_grounded_answer`, both `_answer_subquestions` calls, `_synthesize_after_deep`). It states that
+    the output IS the message, and forbids the meta-echo, third-person self-narration, source and
+    retrieval listings, raw internal state, and progress commentary, one rule per observed symptom.
+  - The grounding blocks and the injected `UNDERSTOOD REQUEST` block are now explicitly labelled
+    `INTERNAL` with "use it, never quote it, never name its sources".
+  - The sub-question merge prompt no longer opens with "The user asked:", which handed the model a
+    third-person frame and invited it to narrate the split back.
+  - Internal material keeps its own typed channels (`EVENT_UNDERSTANDING`, `EVENT_CONTEXT`,
+    `EVENT_STATUS`, narration `EVENT_PARTIAL`) and is now tagged `data["internal"] = True` on the
+    understanding event, so a consumer can route it to a debug/details surface instead of the bubble.
+  - New `restates_meaningfully()` replaces the byte-for-byte `!=` guard on the understanding event: a
+    cheap-tier restatement that only re-punctuated or re-cased the message ("Hello" -> "Hello.")
+    counted as a fresh understanding and echoed the person's own greeting back at them.
+  - `emit.status("Selected context for goal: ...")` is now `"Working on: ..."`. The old string named
+    an orchestrator step and read as leaked machinery in the consumer's live status tick.
+  - Covered by `tests/test_reply_voice_separation.py`.
+
 ### Added
 - **Quest-folder sync now runs automatically every poll scan, not just around a matching task.**
   `Poller.run_once()` calls a new `_sync_all_quest_folders()` that syncs EVERY entry in
