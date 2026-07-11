@@ -1250,6 +1250,59 @@ def parse_goal_condition_reply(raw: str) -> Tuple[str, Optional[Dict[str, Any]]]
                 constraints = cleaned
     return goal_condition, constraints
 
+# A message that carries no request to resolve: a greeting, a thanks, an acknowledgement.
+#
+# These exist because of what a cheap model does with "Hello" when asked to restate it as a
+# done-standard: it stops restating and starts HELPING ("Hello. How can I help you with your Quests
+# today?"). That answer-shaped string then became the turn's goal condition, which put it on the
+# understanding channel as "Understood as: Hello. How can I help you..." AND injected it into the
+# answer's context as the UNDERSTOOD REQUEST. A greeting has nothing to resolve, so the fix is not to
+# ask: skip the LLM hop entirely and let the message stand as its own goal condition. One less round
+# trip on the most common turn there is, and the echo cannot be generated in the first place.
+_SMALL_TALK_RE = re.compile(
+    r"^\s*(hi|hey|hello|yo|hiya|howdy|sup|greetings|good\s+(morning|afternoon|evening|day)|"
+    r"thanks|thank\s+you|thx|ty|ok|okay|k|cool|nice|great|awesome|got\s+it|understood|"
+    r"bye|goodbye|see\s+you|good\s?night)"
+    r"[\s!.,?~]*(there|everyone|team|again|so\s+much|a\s+lot)?[\s!.,?~]*$",
+    re.IGNORECASE,
+)
+
+
+def is_small_talk(user_message: str) -> bool:
+    """True for a bare greeting / thanks / acknowledgement: a message with no request in it.
+
+    Deliberately conservative. It matches only a SHORT message that is nothing but the pleasantry,
+    so "hi, can you create a habit for me" (a real request that opens with a greeting) does NOT
+    match and still gets a proper goal condition.
+    """
+    text = (user_message or "").strip()
+    if not text or len(text) > 40:
+        return False
+    return bool(_SMALL_TALK_RE.match(text))
+
+
+# The contract for the UNDERSTANDING channel: the goal-condition calls (``_derive_goal_condition``
+# and ``_understand_input``).
+#
+# These are the calls the first fix missed. They are NOT reply-producing, so REPLY_VOICE_SYSTEM is
+# the wrong contract for them, but like the answer stage they were going out with NO system prompt at
+# all, and a cheap model handed a bare user message with no role to play defaults to the one role it
+# knows: assistant. It answers. That answer is then labelled "Understood as: ..." and shown to the
+# person, which is the meta-echo they saw. This tells the model it is not in a conversation at all.
+GOAL_CONDITION_SYSTEM = """\
+You are a request analyser inside a system. You are NOT in a conversation, and nobody reads what you
+write here. Your output is a machine-readable field, not a message.
+
+Output ONE line: a short, concrete, checkable done-standard restating what the message asks for.
+
+- Never answer the message, never greet, never offer help, never ask a question.
+- Never write "Understood as", "The user wants", or any other preamble. Output the standard alone.
+- If the message is already clear and concrete, output it unchanged.
+- Never invent requirements the message does not contain.
+- Never use an em dash.
+"""
+
+
 def restates_meaningfully(goal_condition: str, user_message: str) -> bool:
     """True when the resolved goal condition says something the raw message did not.
 
@@ -1864,6 +1917,59 @@ def _strip_discovery_section(context_view: str) -> str:
     return context_view
 
 
+def _safe_event_title(cm: Dict[str, Any]) -> str:
+    """A card title fit to leave the process, with the person's own words taken out of it.
+
+    A conversation-history card is titled with the RAW USER TURN it came from (see
+    ``core/turn_context_store.py``: ``{"title": cards[i]["user"], "adapter": "turn"}``). That title
+    rode out on EVENT_CONTEXT and a consumer rendered it, so the retrieval panel replayed the chat
+    back at the person: "Hi", "User: Hi...", "Hello". A retrieval listing says WHAT the run drew on;
+    it must never quote it. Describe history cards instead of quoting them, and flatten every other
+    title to one short line.
+    """
+    raw = re.sub(r"\s+", " ", str(cm.get("title") or "")).strip()
+    adapter = str(cm.get("adapter") or "").strip().lower()
+    if adapter == "turn" or re.match(r"^(user|assistant|ai|human)\s*:", raw, re.IGNORECASE):
+        return "Conversation turn"
+    if len(raw) > 80:
+        return raw[:77].rstrip() + "..."
+    return raw
+
+
+def _project_sources_for_event(sources: List[Any]) -> List[Any]:
+    """Project retrieval ``sources`` into a shape safe to stream. Never raises.
+
+    An assembler's source entry is ``{"adapter", "label", "items"}``, and ``items`` can hold real
+    content (a conversation turn, a matched passage), not just file paths. Only path-like items
+    survive here; anything free-text collapses to a count. A consumer that wants to show "what the
+    AI read" gets the labels and the counts, never the material itself.
+    """
+    out: List[Any] = []
+    try:
+        for src in (sources or []):
+            if isinstance(src, str):
+                out.append(src)
+                continue
+            if not isinstance(src, dict):
+                continue
+            items = src.get("items") or []
+            kept = [
+                it for it in items
+                if isinstance(it, str) and "\n" not in it and len(it) <= 120 and " " not in it.strip()
+            ]
+            proj: Dict[str, Any] = {
+                "adapter": src.get("adapter", ""),
+                "label": src.get("label", ""),
+                "item_count": len(items),
+            }
+            if kept:
+                proj["items"] = kept
+            out.append(proj)
+    except Exception:  # noqa: BLE001 — projection must never break event emission
+        return []
+    return out
+
+
 def _project_card_metadata_for_event(card_meta: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """Project assembled ``card_metadata`` into a LIGHTWEIGHT shape for EVENT_CONTEXT. Never raises.
 
@@ -1880,7 +1986,7 @@ def _project_card_metadata_for_event(card_meta: List[Dict[str, Any]]) -> List[Di
                 continue
             proj: Dict[str, Any] = {
                 "id": cm.get("id", ""),
-                "title": cm.get("title", ""),
+                "title": _safe_event_title(cm),
                 "relevance_score": cm.get("relevance_score"),
                 "file_count": cm.get("file_count"),
                 "files": cm.get("files"),
@@ -4295,7 +4401,12 @@ class Orchestrator:
                 conv_context=ctx_text or "=== CURRENT CONVERSATION ===\n(no prior conversation available)",
                 user_message=user_message)
             try:
-                out = self.provider.answer([{"role": "user", "content": prompt}], model=model)
+                # Same contract as _derive_goal_condition: this call resolves a request into a
+                # done-standard, it does not talk to anyone. Without it, a model handed a bare
+                # message answers it, and that answer gets labelled "Understood as: ...".
+                out = self.provider.answer(
+                    [{"role": "user", "content": prompt}], model=model,
+                    system=GOAL_CONDITION_SYSTEM)
             except Exception:  # noqa: BLE001 — provider error degrades to "no resolution"
                 return ""
             return (out or "").strip()
@@ -4367,11 +4478,18 @@ class Orchestrator:
         a CHEAP tier ("fast", never "best"): this adds one LLM round trip to every turn that reaches
         here, so it must stay fast and inexpensive.
         """
+        # A bare greeting/thanks has no request to resolve. Asking a cheap model to restate it is how
+        # "Hello" came back as "Hello. How can I help you with your Quests today?" and ended up
+        # echoed above the reply. Skip the call: the message IS its own done-standard.
+        if is_small_talk(user_message):
+            return user_message, None
         try:
             model = self.registry.resolve_tier("fast")
             prompt = DERIVE_GOAL_CONDITION_PROMPT.format(
                 user_message=user_message, now_block=_format_now_block(now))
-            out = self.provider.answer([{"role": "user", "content": prompt}], model=model)
+            out = self.provider.answer(
+                [{"role": "user", "content": prompt}], model=model,
+                system=GOAL_CONDITION_SYSTEM)
             goal_condition, constraints = parse_goal_condition_reply(out or "")
             return (goal_condition or user_message), constraints
         except Exception:  # noqa: BLE001 — must never break the run
@@ -4982,22 +5100,29 @@ class Orchestrator:
         if _assembled is not None or _recent_entries:
             try:
                 log.debug(f"Assembled context: {len(_merged_card_meta)} cards, {len(_sources)} sources")
-                # Build human-readable card summary for text field.
-                _card_titles = [c.get("title", c.get("id", "?"))[:50] for c in _merged_card_meta]
-                _text = "Selected cards: " + ", ".join(_card_titles) + "." if _card_titles else ""
-                log.debug(f"Emitting EVENT_CONTEXT: {_text}")
-                # LIGHTWEIGHT projection: the card_metadata items now carry each item's full
-                # resolved ``text`` (heavy). Project to id/title/type-counts/file-paths so the
-                # event stays small and never dumps full item text into the stream.
+                # LIGHTWEIGHT projection: the card_metadata items carry each item's full resolved
+                # ``text`` (heavy), and a conversation-history card's TITLE is the raw user turn, so
+                # both the card titles and the source items are sanitized before they leave the
+                # process. Nothing on this event quotes the person's own words back at them.
                 _card_meta_light = _project_card_metadata_for_event(_merged_card_meta)
+                _sources_light = _project_sources_for_event(_sources)
+                # The text field used to concatenate the card titles ("Selected cards: Hi, Hello."),
+                # which is the same verbatim-turn leak by another route. Counts, not content.
+                _text = (f"Selected {len(_merged_card_meta)} context card"
+                         f"{'s' if len(_merged_card_meta) != 1 else ''}."
+                         if _merged_card_meta else "")
+                log.debug(f"Emitting EVENT_CONTEXT: {_text}")
                 emit.emit(ProgressEvent(
                     type=EVENT_CONTEXT,
                     text=_text,
                     data={
                         "card_metadata": _card_meta_light,
-                        "sources": _sources,
+                        "sources": _sources_light,
                         "card_count": len(_merged_card_meta),
                         "source_count": len(_sources),
+                        # Retrieval metadata is the run explaining itself. A consumer routes this to
+                        # a debug surface, never into the chat bubble.
+                        "internal": True,
                     }
                 ))
             except Exception as e:  # noqa: BLE001

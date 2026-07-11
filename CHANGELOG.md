@@ -7,6 +7,30 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **The understanding channel no longer invents a reply, and the context event no longer quotes the
+  conversation.** Round 2 of the leak above. Giving the four REPLY-producing calls a voice contract
+  killed the third-person narration inside the answer, but two leaks survived it because the answer
+  stage does not produce them.
+  - **The meta-echo came from a call the first pass missed.** `_derive_goal_condition` (and
+    `_understand_input`'s resolver) called `provider.answer()` with **no system prompt**, exactly as
+    the answer stage used to. Handed a bare "Hello" with no role to play, a cheap model defaults to
+    the only role it knows and ANSWERS: the derived "goal condition" came back as "Hello. How can I
+    help you with your Quests today?", which is what the understanding event then carried. Both calls
+    now pass `system=GOAL_CONDITION_SYSTEM`, which tells the model it is a request analyser, not in a
+    conversation, and must never answer, greet, or ask a question.
+  - **A greeting now costs zero LLM calls.** New `is_small_talk()` short-circuits
+    `_derive_goal_condition` for a bare greeting/thanks/acknowledgement: the message is its own
+    done-standard, so no restatement is generated, no understanding event fires, and the most common
+    turn there is drops a round trip. A greeting that carries a real request ("hi, create a habit for
+    me") is deliberately NOT small talk and still gets a proper goal condition.
+  - **`EVENT_CONTEXT` no longer ships the person's own words.** A conversation-history card is titled
+    with the raw user turn it came from (`core/turn_context_store.py`), and both the card titles and
+    the assemblers' source `items` rode out untouched, so a consumer rendering them replayed the chat
+    back at the person ("Hi", "User: Hi...", "Hello") inside a retrieval panel. New
+    `_safe_event_title()` describes history cards instead of quoting them, new
+    `_project_sources_for_event()` keeps only path-like items and collapses free text to a count, and
+    the event's `text` field carries a card COUNT instead of a concatenation of card titles. The
+    event is also tagged `data["internal"] = True`, like the understanding event.
 - **The reply channel now carries only the reply.** A chat turn was arriving with the run's internal
   machinery read aloud inside it: an echo of the request ("Understood as: Hello."), a third-person
   narration of the model's own plan ("The user expressed interest in ... I will create a habit
