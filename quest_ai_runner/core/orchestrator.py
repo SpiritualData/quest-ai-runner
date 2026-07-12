@@ -44,6 +44,7 @@ from .adapters import (
     EVENT_DONE,
     EVENT_EXEC,
     EVENT_MILESTONE,
+    EVENT_MODE_SIGNAL,
     EVENT_OVERSEER,
     EVENT_PARTIAL,
     EVENT_PLAN,
@@ -328,6 +329,17 @@ PARALLEL SUB-QUESTIONS (optional): if the message has INDEPENDENT parts, set `su
 DEEP FAN-OUT (optional, for "deep"): if the work splits into INDEPENDENT subtasks, set
   `deep_subtasks` to 2-{max_deep} of {{"goal": "...", "brief": "..."}} -- each a concurrent run.
 
+MODE SIGNAL (`mode_signal`, optional -- almost always omit it): detect an EXPLICIT request from
+  the user to change the WORKING MODE of this conversation. Judge their INTENT in their own
+  words; there are no trigger phrases.
+    * "enter_brainstorm": ONLY when the user explicitly says they want to think out loud /
+      explore ideas together WITHOUT anything being executed, changed, or turned into a task.
+      They must be asking for the no-action mode itself, in whatever words.
+    * "exit_brainstorm": ONLY when the user explicitly asks to move from talking to doing --
+      proceed, act on what was discussed, make it happen.
+    * omit (null): EVERYTHING else. A topic shift, musing, a hypothetical, an open-ended
+      question, or discussing ideas is NOT a mode signal. When in ANY doubt, omit it.
+
 {rationale_instruction}
 
 --- THE USER'S MESSAGE ---
@@ -374,6 +386,22 @@ _RATIONALE_INSTRUCTION_NARRATE_REPLAN = (
     "question, not a fact. Never repeat anything in 'Already said'. No em dashes, greeting, or "
     "markdown. Empty if nothing genuinely new. Also set `model_tier`."
 )
+
+# Injected at the top of the planner prompt (both the flattened and the layered shape) when the
+# consumer runs the turn with execution_mode="brainstorm". It narrows the ACTION space only; the
+# reading/answering doctrine above it applies unchanged, so brainstorm turns keep full context
+# and full intelligence. Contains no literal {/} so it is .format()-safe.
+_BRAINSTORM_PLANNER_NOTE = """\
+--- BRAINSTORM MODE (active for this turn) ---
+The user has asked to think out loud in this conversation: nothing gets executed, changed, or
+turned into a task while this mode is on. The actions "deep" and "confirm" are UNAVAILABLE this
+turn -- use "read", "answer", or "clarify" only, and do not set `deferred_deep` or
+`answer_contains_work_to_execute`. Read as much as you need and answer with your full judgment:
+explore, compare, weigh options, sketch plans, advise. Describing possible work is CORRECT here,
+not a failure -- the ordinary rule that a change request must escalate to "deep" is suspended.
+EXCEPTION: if THIS message explicitly asks to proceed / act on what was discussed, set
+mode_signal="exit_brainstorm" and treat every action as available again.
+"""
 
 # Assemble the final format()-able prompt. The gate constants from context_doctrine have NO
 # literal {/} characters, so they pass through .format() untouched when the final assembled
@@ -483,6 +511,15 @@ DECIDE_TOOL: Dict[str, Any] = {
                 },
                 "required": ["question"],
             },
+            "mode_signal": {
+                "type": ["string", "null"],
+                "enum": ["enter_brainstorm", "exit_brainstorm", None],
+                "description": "Set ONLY when the user EXPLICITLY asks to change the working "
+                               "mode: 'enter_brainstorm' when they explicitly want to think out "
+                               "loud with nothing acted on, 'exit_brainstorm' when they "
+                               "explicitly ask to proceed/act on what was discussed. Otherwise "
+                               "null. Judge intent; a topic shift or musing is never a signal.",
+            },
             "rationale": {"type": "string"},
         },
         "required": ["action", "rationale"],
@@ -587,6 +624,21 @@ class OrchestratorConfig:
     # verdict on any failure/timeout/parse miss -- it can only ever ADD an escalation the regex
     # missed, never block the turn or override a "yes" the regex already gave.
     intent_judge_tier: str = "balanced"
+    # EXECUTION MODE for this run, supplied by the CONSUMER per run (the orchestrator is stateless
+    # about it; the consumer owns the latch and persists it wherever its conversation state lives).
+    #   * "normal" (default): today's behavior, byte-for-byte.
+    #   * "brainstorm": the user is thinking out loud and nothing may be acted on this turn.
+    #     Reads, context assembly, and answers are UNTOUCHED (full context, full intelligence);
+    #     what is disabled is ACTING: a planner "deep" or "confirm" degrades to "answer", and the
+    #     nets that can only ADD execution (deferred deep, the message-intent escalation fallback,
+    #     overseer escalations, claim-remediation and insufficient-context deep re-runs) are
+    #     skipped. Mode CHANGES are detected by the planner itself (LLM judgment on the planning
+    #     call that already runs every turn, never phrase matching) and reported via
+    #     ``PlanDecision.mode_signal`` -> EVENT_MODE_SIGNAL + ``OrchestratorResult.mode_signal``;
+    #     an "exit_brainstorm" signal releases the gating for the SAME turn (the user explicitly
+    #     asked to proceed), an "enter_brainstorm" signal engages it. Any unrecognized value of
+    #     this field behaves as "normal" (fail-safe).
+    execution_mode: str = "normal"
     # MINIMAL-INTERVENTION OVERSEER. A high-quality model reads a tiny digest of the run and writes a
     # tiny signal, watching the loop the way a person's awareness watches their own body walk: almost
     # always silent, occasionally sending one small course correction. It is consulted at two points
@@ -711,6 +763,11 @@ class OrchestratorResult:
     # message called for filtering (today's behavior) or Step 1 took the conversation-context path
     # (goal-condition derivation, which parses constraints, only runs for self-contained input).
     retrieval_constraints: Optional[Dict[str, Any]] = None
+    # EXPLICIT execution-mode change the planner detected in the user's message this turn:
+    # "enter_brainstorm" | "exit_brainstorm" | None (no signal / detection failed safe). Also
+    # emitted live as EVENT_MODE_SIGNAL. The orchestrator does NOT persist a mode; the consumer
+    # owns the latch (see OrchestratorConfig.execution_mode).
+    mode_signal: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -784,6 +841,16 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
             "allow_free_input": bool(clarif_raw.get("allow_free_input", False)),
         }
 
+    # Mode signal: strictly validated -- anything but the two known values (wrong type, empty,
+    # garbage, a hallucinated mode name) normalizes to None, so a detection failure can never
+    # change the consumer's mode (fail-safe).
+    mode_signal = raw.get("mode_signal")
+    if not (isinstance(mode_signal, str)
+            and mode_signal.strip().lower() in ("enter_brainstorm", "exit_brainstorm")):
+        mode_signal = None
+    else:
+        mode_signal = mode_signal.strip().lower()
+
     return PlanDecision(
         action=action,
         reads=clean_reads,
@@ -797,6 +864,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
         deferred_deep=deferred_deep,
         answer_contains_work_to_execute=bool(raw.get("answer_contains_work_to_execute", False)),
         clarification=clarification,
+        mode_signal=mode_signal,
     )
 
 
@@ -3169,7 +3237,8 @@ class Orchestrator:
     def _plan(self, user_message: str, transcript: str, context_view: str,
               gathered: List[Dict[str, Any]], *, step: int = 0,
               narrate: bool = False, persona: str = "",
-              already_said: Optional[List[str]] = None) -> PlanDecision:
+              already_said: Optional[List[str]] = None,
+              brainstorm: bool = False) -> PlanDecision:
         # Step 1 (step == 0) always sees the FULL transcript + context_view. On later re-plan
         # steps, if the consumer opted in, swap the (unchanged) transcript + context_view for a
         # short reference note — the planner's job there is to react to the NEW gathered
@@ -3199,6 +3268,8 @@ class Orchestrator:
                 if narrate else _RATIONALE_INSTRUCTION_PLAIN),
         )
         preamble_parts: List[str] = []
+        if brainstorm:
+            preamble_parts.append(_BRAINSTORM_PLANNER_NOTE)
         if narrate and persona.strip():
             preamble_parts.append(
                 "--- SPEAK AS THIS PERSONA (for your `rationale` line only) ---\n"
@@ -3235,6 +3306,8 @@ class Orchestrator:
                     if narrate else _RATIONALE_INSTRUCTION_PLAIN),
             )
             tail_parts: List[str] = []
+            if brainstorm:
+                tail_parts.append(_BRAINSTORM_PLANNER_NOTE)
             if narrate and already_said:
                 tail_parts.append(
                     "--- ALREADY SAID OUT LOUD THIS TURN (do NOT repeat, echo, or paraphrase) ---\n"
@@ -5475,6 +5548,17 @@ class Orchestrator:
         started = time.monotonic()
         cfg = self.cfg
 
+        # --- EXECUTION MODE (brainstorm latch, consumer-owned) --------------------------------
+        # ``brainstorm_active`` gates every path that could ACT this turn (deep, confirm, and the
+        # nets that can only ADD execution). It starts from the consumer-supplied config; an
+        # explicit planner-detected signal THIS turn adjusts it immediately (an "exit_brainstorm"
+        # releases the gating for the same turn the user asked to proceed in, an
+        # "enter_brainstorm" engages it). Any other execution_mode value behaves as "normal".
+        # ``mode_signal_detected`` is the first (and only) signal captured this turn, surfaced via
+        # EVENT_MODE_SIGNAL + OrchestratorResult.mode_signal; the orchestrator persists nothing.
+        brainstorm_active = (cfg.execution_mode == "brainstorm")
+        mode_signal_detected: Optional[str] = None
+
         # Reset per-turn token counters on the provider (if it tracks them).
         try:
             if hasattr(self.provider, "tokens_in"):
@@ -6032,6 +6116,7 @@ class Orchestrator:
             res.gathered = gathered
             res.execution_record = exec_record
             res.retrieval_constraints = retrieval_constraints
+            res.mode_signal = mode_signal_detected
             if overseer_signals:
                 res.overseer_signals = list(overseer_signals)
             # Tear down the background overseer worker (Fix 1). ``wait=False`` mirrors the
@@ -6178,6 +6263,9 @@ class Orchestrator:
                             plan.action = "answer"
                             overseer_decided = "overseer_answer_now"
                             break
+                        elif _psig.signal in ("escalate_deep", "escalate_human") and brainstorm_active:
+                            # Brainstorm mode: escalations may not ADD actions; treat as proceed.
+                            pass
                         elif _psig.signal == "escalate_deep":
                             plan = plan or PlanDecision(action="answer")
                             plan.action = "deep"
@@ -6221,12 +6309,38 @@ class Orchestrator:
             try:
                 plan = self._plan(user_message, transcript, context_view, gathered, step=step,
                                   narrate=narrator.enabled, persona=rep_preamble or "",
-                                  already_said=narrator._said if narrator.enabled else None)
+                                  already_said=narrator._said if narrator.enabled else None,
+                                  brainstorm=brainstorm_active)
             except Exception as e:  # noqa: BLE001 — planner failure -> grounded fallback answer
                 log.exception(
                     f"Planner failed on step {steps}: {e}. Falling back to grounded answer."
                 )
                 plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
+
+            # --- EXECUTION-MODE SIGNAL: capture the first explicit mode change the planner
+            # detected this turn (LLM judgment riding the planning call that already ran; zero
+            # extra calls). Surfaced to the consumer as an event here and on the result in
+            # finish(); the consumer owns persisting the latch. An exit signal releases the
+            # brainstorm gating for the REST of this same turn (the user explicitly asked to
+            # proceed); an enter signal engages it. Fail-safe by construction: normalize_decision
+            # already reduced anything unrecognized to None, and None changes nothing.
+            if plan and plan.mode_signal and mode_signal_detected is None:
+                mode_signal_detected = plan.mode_signal
+                brainstorm_active = (plan.mode_signal == "enter_brainstorm")
+                try:
+                    emit.emit(ProgressEvent(type=EVENT_MODE_SIGNAL, step=steps,
+                                            data={"signal": mode_signal_detected,
+                                                  "execution_mode": cfg.execution_mode}))
+                except Exception:  # noqa: BLE001 — reporting the signal must never break the turn
+                    pass
+
+            # BRAINSTORM GATE: acting is unavailable while the latch is held. If the planner
+            # still chose "deep" or "confirm" despite the prompt note, degrade to "answer" with
+            # everything gathered so far (same fail-safe style as a planner failure above): the
+            # turn keeps its full context and produces a grounded reply, it just does not act.
+            if plan and brainstorm_active and plan.action in ("deep", "confirm"):
+                log.info("Brainstorm mode: degrading planner action %r to 'answer'.", plan.action)
+                plan.action = "answer"
 
             # Safety gate: if planner chose "read" for many consecutive steps, force a terminal action
             if plan and plan.action == "read":
@@ -6235,11 +6349,15 @@ class Orchestrator:
                 if consecutive_reads >= cfg.max_consecutive_reads:
                     log.warning(
                         f"Planner stuck in read loop after {steps} steps / {consecutive_reads} reads. "
-                        f"Force-escalating to deep with gathered context."
+                        f"Force-escalating to {'answer' if brainstorm_active else 'deep'} with gathered context."
                     )
-                    plan.action = "deep"
-                    plan.goal = plan.goal or f"Complete the request: {user_message}"
-                    plan.deep_brief = plan.deep_brief or user_message
+                    if brainstorm_active:
+                        # Brainstorm may not act: wrap up with a grounded answer instead.
+                        plan.action = "answer"
+                    else:
+                        plan.action = "deep"
+                        plan.goal = plan.goal or f"Complete the request: {user_message}"
+                        plan.deep_brief = plan.deep_brief or user_message
             else:
                 consecutive_reads = 0  # Reset when planner chooses something else
             # When narrating, the planner's `rationale` is ALREADY the user-facing spoken beat for
@@ -6345,8 +6463,10 @@ class Orchestrator:
         final = (plan or PlanDecision(action="answer")).action
 
         # Cap/budget fallback: still in read mode -> best-effort answer or escalate to deep.
+        # In brainstorm mode escalation is unavailable, so a budget-capped turn always wraps up
+        # with a best-effort grounded answer (even with nothing gathered) instead of acting.
         if final not in ("answer", "deep", "confirm", "clarify"):
-            if gathered:
+            if gathered or brainstorm_active:
                 emit.status("Wrapping up with a best-effort answer…")
                 model = self._answer_model(plan, "balanced", hint=model_hint)
                 text = self._grounded_answer(user_message, transcript, context_view, gathered, model,
@@ -6473,7 +6593,10 @@ class Orchestrator:
                     else:
                         # Not resolved yet: ship the draft now; a late resolution is handled async.
                         self._finish_oversee_in_background(_bpending, emit=emit, quest_id=quest_id)
-                if _bsig.signal == "escalate_deep" and self._has_deep_execution_capability():
+                if brainstorm_active and _bsig.signal in ("escalate_deep", "escalate_human"):
+                    # Brainstorm mode: overseer escalations may not ADD actions; ship the draft.
+                    pass
+                elif _bsig.signal == "escalate_deep" and self._has_deep_execution_capability():
                     if emit is not None:
                         emit.status("Overseer: this needs real execution, running it now…")
                     _ov_plan = PlanDecision(
@@ -6494,7 +6617,7 @@ class Orchestrator:
                     _ov_res.exit_reason = "overseer_escalated_deep"
                     self._kickoff_card_update(_ov_res, _ov_plan, user_message, _ctx_meta, emit)
                     return finish(_ov_res)
-                if _bsig.signal == "escalate_human":
+                elif _bsig.signal == "escalate_human":
                     # Genuine human-only fork (Fix 2): route through the SAME confirm / decision-
                     # request mechanism as a planner-originated confirm, discarding the drafted
                     # answer (mirrors the pre-existing escalate-to-deep precedent just above, which
@@ -6522,8 +6645,12 @@ class Orchestrator:
         # If deferred_deep is set, also run the deep task after returning the answer
         # OR if planner explicitly flagged answer_contains_work_to_execute
         # OR auto-detect false claims (fallback for broken prompts)
-        should_defer_deep = plan.deferred_deep
-        if not should_defer_deep and self._has_deep_execution_capability():
+        # BRAINSTORM MODE: this entire block is an escalation net (it can only ADD execution to
+        # an answer turn), so while the latch is held it is skipped wholesale: no deferred deep,
+        # no work-to-execute flag, no described-work net, no message-intent fallback (regex OR
+        # LLM judgment). Describing possible work IS the product in brainstorm.
+        should_defer_deep = None if brainstorm_active else plan.deferred_deep
+        if not should_defer_deep and not brainstorm_active and self._has_deep_execution_capability():
             # Primary: trust planner's explicit flag
             if plan.answer_contains_work_to_execute:
                 should_defer_deep = {"goal": f"Execute what the answer describes: {user_message}",
@@ -6711,6 +6838,7 @@ class Orchestrator:
                     # re-verifies the post-deep answer against the record on the next pass.
                     if verdict.get("claims_unexecuted"):
                         can_execute = (self._has_deep_execution_capability()
+                                       and not brainstorm_active
                                        and exec_record is not None
                                        and not exec_record.any_success
                                        and not exec_record.any_failure
@@ -6772,7 +6900,8 @@ class Orchestrator:
                     # When the verifier says the answer lacked the context needed to be definitive,
                     # escalate to deep so it can search further. Regenerating with the SAME gathered
                     # context won't help — the deep runner can grep/read on its own.
-                    if verdict.get("need_more_context") and self._has_deep_execution_capability():
+                    if (verdict.get("need_more_context") and not brainstorm_active
+                            and self._has_deep_execution_capability()):
                         if emit is not None:
                             emit.status("Need more context to answer — searching further…")
                         _context_q = verdict.get("context_query") or user_message

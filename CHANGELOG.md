@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Brainstorm execution mode: a consumer-owned no-action latch.**
+  `OrchestratorConfig.execution_mode` ("normal", the default, or "brainstorm") lets a consumer
+  run a turn in which the user is explicitly thinking out loud: reads, context assembly, and
+  answers are untouched (full context, full intelligence), but nothing may ACT. A planner
+  "deep" or "confirm" degrades to "answer", and every net that can only ADD execution to a turn
+  (planner `deferred_deep`, the described-work and message-intent escalation fallbacks, overseer
+  escalations, claim-remediation and insufficient-context deep re-runs) is skipped. Mode changes
+  are detected by the planner itself via a new optional `mode_signal` field
+  ("enter_brainstorm" | "exit_brainstorm" | null) on the structured decision it already returns
+  every turn (LLM judgment of explicit user intent; zero extra calls, no phrase matching) and
+  surfaced to the consumer through the new always-surfacing `EVENT_MODE_SIGNAL` event and
+  `OrchestratorResult.mode_signal`. The orchestrator stays stateless: the consumer owns
+  persisting the latch and passing the mode back in per run. Fail-safe throughout: an
+  unrecognized `mode_signal` value normalizes to null (no mode change), an unrecognized
+  `execution_mode` behaves as "normal", and with the defaults behavior is unchanged. An
+  "exit_brainstorm" signal releases the gating for the same turn the user asked to proceed in;
+  an "enter_brainstorm" signal engages it immediately.
+
 ### Fixed
 - **Context assembly timeout no longer throws away work that finished in time: partial results
   are used.** The turn-start assembly collect had an all-or-nothing budget: when the assembler

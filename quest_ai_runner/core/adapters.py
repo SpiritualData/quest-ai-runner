@@ -96,10 +96,17 @@ EVENT_OVERSEER = "overseer"    # a minimal-intervention OVERSEER consultation ha
                                # its signal (proceed/redirect/answer_now/escalate) + optional hint.
                                # ALWAYS surfaces (in SURFACING_EVENTS) so a BACKGROUND run can note a
                                # course correction; it fires on every consultation, including proceed.
+EVENT_MODE_SIGNAL = "mode_signal"  # the planner detected an EXPLICIT user request to change the
+                               # execution mode (see OrchestratorConfig.execution_mode). Carries
+                               # ``data`` = {"signal": "enter_brainstorm"|"exit_brainstorm",
+                               # "execution_mode": <the mode this run was configured with>}.
+                               # The orchestrator is STATELESS about modes: it only reports the
+                               # signal; the consumer owns the latch (persisting the mode and
+                               # passing it back in on future runs). ALWAYS surfaces.
 
 # The event types a BACKGROUND (MilestoneSink) run forwards. Everything else is dropped as
 # intermediate chatter. Encoded ONCE here so every consumer inherits the same policy.
-SURFACING_EVENTS = frozenset({EVENT_UNDERSTANDING, EVENT_CONTEXT, EVENT_RESULT, EVENT_DECISION, EVENT_MILESTONE, EVENT_DONE, EVENT_TOKENS, EVENT_OVERSEER})
+SURFACING_EVENTS = frozenset({EVENT_UNDERSTANDING, EVENT_CONTEXT, EVENT_RESULT, EVENT_DECISION, EVENT_MILESTONE, EVENT_DONE, EVENT_TOKENS, EVENT_OVERSEER, EVENT_MODE_SIGNAL})
 
 
 # ---------------------------------------------------------------------------
@@ -179,6 +186,11 @@ class PlanDecision:
     answer_contains_work_to_execute: bool = False  # Set True if answer describes work the AI should do
     # User clarification/input needed: when action="clarify"
     clarification: Optional[Dict[str, Any]] = None  # {"question": "...", "options": [...], "allow_free_input": bool}
+    # EXPLICIT execution-mode signal the planner detected in the user's message (LLM judgment on
+    # the planning call it already makes; never phrase matching). "enter_brainstorm" |
+    # "exit_brainstorm" | None. Anything else the model returns is normalized to None (fail-safe:
+    # a detection failure never changes the mode).
+    mode_signal: Optional[str] = None
 
 
 @dataclass
