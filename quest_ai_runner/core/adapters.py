@@ -496,6 +496,19 @@ class ContextAssembler(Protocol):
     def record(self, task_text: str, outcome: Dict[str, Any]) -> None:
         """Best-effort write-back of the run outcome. Never raises."""
 
+    # OPTIONAL capability: render ONE card by id (the mid-loop {"card": id} read).
+    # The unified context primitive (see docs/HANDS_FREE_QUEST_AI_DESIGN.md sec. 3) makes card
+    # access reachable at EVERY loop step, not just turn start. The Orchestrator dispatches this via
+    # getattr, so an assembler that omits it degrades to a benign "not supported" observation -- it
+    # is NOT part of the required surface. Best-effort: return the card's rendered content (its
+    # references resolved) as text, or None when the card is absent or the store cannot render it.
+    # Never raises.
+    #
+    #   def render_card(
+    #       self, card_id: str, *, meta: Optional[Dict[str, Any]] = None
+    #   ) -> Optional[str]:
+    #       ...
+
 
 # ---------------------------------------------------------------------------
 # VectorStore: optional VECTOR ORIENTATION role (Protocol + ABC, stdlib-only).
@@ -658,6 +671,13 @@ class ContextAssemblerBase(abc.ABC):
 
     def record(self, task_text: str, outcome: Dict[str, Any]) -> None:
         """Best-effort write-back -- no-op default; override to persist outcomes."""
+
+    def render_card(
+        self, card_id: str, *, meta: Optional[Dict[str, Any]] = None
+    ) -> Optional[str]:
+        """OPTIONAL: render ONE card by id for the mid-loop {"card": id} read. Default: unsupported
+        (returns None). Override to fetch a single card's rendered content. Never raises."""
+        return None
 
 
 # ---------------------------------------------------------------------------

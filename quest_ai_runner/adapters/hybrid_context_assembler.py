@@ -109,6 +109,27 @@ class HybridContextAssembler(ContextAssemblerBase):
                     exc_info=True,
                 )
 
+    def render_card(self, card_id: str, *, meta: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        """Fetch ONE card by id (the brain's mid-loop ``{"card": <id>}`` read) from whichever arm
+        can render it. Tries the keyword arm first (it owns the CardRepository), then the vector arm.
+        Never raises."""
+        for asm in (self._keyword, self._vector):
+            fn = getattr(asm, "render_card", None)
+            if not callable(fn):
+                continue
+            try:
+                out = fn(card_id, meta=meta)
+            except TypeError:
+                try:
+                    out = fn(card_id)
+                except Exception:
+                    out = None
+            except Exception:
+                out = None
+            if out:
+                return out
+        return None
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------

@@ -2687,6 +2687,27 @@ class FileContextStore(ContextAssemblerBase):
             max_ref_chars=self._max_card_ref_chars,
         )
 
+    def render_card(self, card_id: str, *, meta: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        """Render ONE card by id for the brain's mid-loop ``{"card": <id>}`` read. Never raises.
+
+        Reads the raw card through the persistence boundary (``CardRepository.read``) and renders its
+        references FRESH with the SAME ``render_card_content`` routine the turn-start selection uses,
+        so a directly-fetched card reads identically to a selected one. Returns None when the card is
+        absent or has no renderable content (the brain turns None into a NAMED "no such card"
+        observation). ``meta`` is accepted for interface parity and currently unused here.
+        """
+        try:
+            card = self._repo.read(card_id)
+            if not isinstance(card, dict):
+                return None
+            title = (card.get("name") or card.get("summary") or card_id or "").strip()
+            body = "\n".join(self._render_card_content(card, set())).strip()
+            if not body:
+                return None
+            return f"[{card_id}] {title}\n{body}" if title else body
+        except Exception:  # noqa: BLE001 — a card fetch must never raise into the loop
+            return None
+
     def _fingerprint(self, path: str) -> Dict[str, Any]:
         """Compute current sha256 + mtime + (optional) git_sha for a file path.
 

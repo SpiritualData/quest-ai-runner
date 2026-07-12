@@ -92,3 +92,23 @@ class CompositeContextAssembler:
                 a.record(task_text, outcome)
             except Exception:
                 pass
+
+    def render_card(self, card_id: str, *, meta: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        """Fetch ONE card by id (the brain's mid-loop ``{"card": <id>}`` read) from the first inner
+        assembler that can render it. Never raises."""
+        for a in self._assemblers:
+            fn = getattr(a, "render_card", None)
+            if not callable(fn):
+                continue
+            try:
+                out = fn(card_id, meta=meta)
+            except TypeError:
+                try:
+                    out = fn(card_id)
+                except Exception:
+                    out = None
+            except Exception:
+                out = None
+            if out:
+                return out
+        return None

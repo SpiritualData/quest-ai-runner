@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **One context primitive, reachable at every loop step (unified card/topic context).** Card and
+  topic context are no longer trapped in a single turn-start pass. The planner can now request two
+  new read ops mid-loop: `{"cards": "<query>"}` runs card/topic assembly for a query through the
+  SAME `ContextAssembler` the turn-start path uses, and `{"card": "<id>"}` fetches one known card's
+  rendered content (via the assembler's new optional `render_card`; a store that omits it degrades
+  to a NAMED "not supported" observation). Turn-start assembly becomes an eager, non-blocking
+  pre-fetch into a shared, query-keyed in-run cache (`TurnCardCache`): when it times out, the future
+  is kept referenced rather than discarded, so if it lands late a mid-loop `{"cards": <same query>}`
+  read serves it from the cache with NO second assembly run. A 5s turn-start timeout is therefore no
+  longer unrecoverable for the whole turn. Mid-loop card reads emit `EVENT_CONTEXT` marked
+  `midloop: true` (with an `origin` of cache/prefetch/fresh) so consumers see context arriving
+  mid-turn. Reference `render_card` implemented on `FileContextStore`, delegated by
+  `HybridContextAssembler` and `CompositeContextAssembler`. Failing / absent / timed-out card reads
+  return a NAMED observation, never empty.
+
 ### Changed
 - **A verifier failure is never reported as success.** When goal verification cannot run (LLM
   outage, unresolvable verify tier, parse failure), the deep result is now UNVERIFIED: it reports

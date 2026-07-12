@@ -249,6 +249,15 @@ The four actions:
           {{"describe_operation": "<name>"}}             -> the full signature/usage of ONE operation
           {{"list_guidance": true}}                      -> the catalog of use-case-specific guidance
           {{"read_guidance": "<id>"}}                    -> the full instructions of ONE guidance card
+      * KNOWN-TOPIC CONTEXT (memory cards this assistant has built about topics/people/work),
+        distinct from grepping files:
+          {{"cards": "<query text>"}}                    -> fetch remembered context for a topic/query
+          {{"card": "<card_id>"}}                        -> fetch ONE known card's content by id
+        Use "cards" when the answer likely lives in what you ALREADY KNOW about a subject (prior
+        conversations, a person, an ongoing piece of work), NOT in a specific file: it reaches the
+        SAME topic memory that loads at the start of a turn, so if the turn started without enough
+        context you can pull more at ANY step. Prefer a file grep/read for source-of-truth content
+        in the corpus, and "cards" for accumulated knowledge about a topic.
     APPLICABLE GUIDANCE: the most relevant use-case-specific instructions may ALREADY be injected in
     the CONTEXT under "APPLICABLE GUIDANCE"; when the request matches a kind of work not covered
     there, list_guidance then read_guidance the matching card BEFORE you answer or act.
@@ -426,6 +435,14 @@ DECIDE_TOOL: Dict[str, Any] = {
                         "describe_operation": {"type": "string"},
                         "list_guidance": {"type": "boolean"},
                         "read_guidance": {"type": "string"},
+                        "cards": {"type": "string",
+                                  "description": "Fetch remembered topic/person/work context for "
+                                                 "this query from the assistant's memory cards "
+                                                 "(the SAME context loaded at turn start; callable "
+                                                 "at any step). Use for accumulated knowledge, not "
+                                                 "source-of-truth files (grep/read those)."},
+                        "card": {"type": "string",
+                                 "description": "Fetch ONE known context card's content by its id."},
                     },
                 },
             },
@@ -711,6 +728,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
                 or r.get("list_sources") or r.get("describe_source")
                 or r.get("list_operations") or r.get("describe_operation")
                 or r.get("list_guidance") or r.get("read_guidance")
+                or r.get("cards") or r.get("card")
             ):
                 clean_reads.append(r)
 
@@ -1893,7 +1911,7 @@ def _is_orchestrator_command(text: str) -> bool:
         # Check for known orchestrator command keys
         orchestrator_keys = {
             "list_operations", "describe_operation", "list_sources", "describe_source",
-            "grep", "rel_path", "query", "list_guidance", "read_guidance"
+            "grep", "rel_path", "query", "list_guidance", "read_guidance", "cards", "card"
         }
         return any(k in obj for k in orchestrator_keys)
     except (json.JSONDecodeError, ValueError, TypeError):
@@ -2171,6 +2189,10 @@ def describe_read_spec(spec: Dict[str, Any]) -> str:
         return "list_operations"
     if spec.get("describe_operation"):
         return f"describe_operation({spec['describe_operation']})"
+    if spec.get("cards") is not None:
+        return f"cards({spec['cards']!r})"
+    if spec.get("card") is not None:
+        return f"card({spec['card']})"
     if spec.get("grep"):
         return f"grep({spec['grep']!r})"
     if spec.get("query") is not None:
@@ -2214,6 +2236,116 @@ def record_context_assembly_timeout() -> int:
     with context_assembly_timeout_lock:
         context_assembly_timeout_count += 1
         return context_assembly_timeout_count
+
+
+class TurnCardCache:
+    """One in-run, query-keyed cache of context assembly, shared by BOTH context paths this turn.
+
+    The unified context primitive (docs/HANDS_FREE_QUEST_AI_DESIGN.md sec. 3): turn-start assembly
+    and mid-loop ``{"cards": <query>}`` reads reach the SAME cards through ONE object, so a 5s
+    turn-start timeout is no longer unrecoverable for the whole turn. Two mechanisms:
+
+    * The turn-start eager pre-fetch registers its running ``Future`` here (``register_prefetch``).
+      When that fetch TIMES OUT at turn start, the future is kept referenced (not cancelled), so if
+      it lands late a later mid-loop read for the SAME query serves it from here WITHOUT re-running
+      assembly.
+    * A mid-loop read for a query with no pre-fetch runs a fresh, bounded ``assemble`` and caches it
+      under the query, so repeats within the turn are free.
+
+    Everything is best-effort and thread-safe (mid-loop reads run in ``_do_reads``' parallel pool):
+    a lock guards the two dicts. No cross-turn persistence -- the cache dies with the run.
+    """
+
+    def __init__(self, assembler: Optional[Any], meta: Optional[Dict[str, Any]]):
+        self.assembler = assembler
+        self.meta = meta or None
+        self.lock = threading.Lock()
+        self.results: Dict[str, Any] = {}          # query -> AssembledContext (completed)
+        self.futures: Dict[str, Future] = {}       # query -> in-flight assemble (may land late)
+        self.executor: Optional[ThreadPoolExecutor] = None
+        self.emit: Optional[Any] = None            # per-run event sink (set by run()); may stay None
+
+    def register_prefetch(self, query: str, future: Future) -> None:
+        """Register the turn-start eager pre-fetch future under its query. Never raises."""
+        if not query or future is None:
+            return
+        try:
+            with self.lock:
+                self.futures[query] = future
+        except Exception:  # noqa: BLE001
+            pass
+
+    def register_result(self, query: str, assembled: Any) -> None:
+        """Record a completed AssembledContext so a same-query read is a pure cache hit. Never raises."""
+        if not query or assembled is None:
+            return
+        try:
+            with self.lock:
+                self.results[query] = assembled
+                self.futures.pop(query, None)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def assemble_for_query(self, query: str, timeout: float):
+        """Assembled context for ``query`` plus a one-word ORIGIN ("cache" | "prefetch" | "fresh").
+
+        Serves a completed result, else waits on a registered pre-fetch future (kept referenced even
+        after a turn-start timeout), else runs a fresh bounded assemble. Raises ``TimeoutError`` when
+        the wait exceeds ``timeout`` (the caller turns that into a NAMED timeout observation, never
+        empty); the still-running future stays referenced so a later read can reuse it.
+        """
+        if self.assembler is None:
+            return None, "none"
+        with self.lock:
+            if query in self.results:
+                return self.results[query], "cache"
+            future = self.futures.get(query)
+            origin = "prefetch" if future is not None else "fresh"
+            if future is None:
+                if self.executor is None:
+                    self.executor = ThreadPoolExecutor(max_workers=1)
+                assembler = self.assembler
+                meta = self.meta
+                future = self.executor.submit(lambda: assembler.assemble(query, meta=meta))
+                self.futures[query] = future
+        assembled = future.result(timeout=timeout)  # may raise TimeoutError -> named error obs
+        with self.lock:
+            self.results[query] = assembled
+            self.futures.pop(query, None)
+        return assembled, origin
+
+    def render_card(self, card_id: str, timeout: float):
+        """One card's rendered content plus an ORIGIN ("card" | "unsupported" | "none"). Never the
+        loop's job to know the store type: dispatched via getattr, so an assembler without the
+        optional ``render_card`` returns ("unsupported"). Raises ``TimeoutError`` on a slow store."""
+        if self.assembler is None:
+            return None, "none"
+        fn = getattr(self.assembler, "render_card", None)
+        if not callable(fn):
+            return None, "unsupported"
+        meta = self.meta
+
+        def call_render() -> Optional[str]:
+            try:
+                return fn(card_id, meta=meta)
+            except TypeError:
+                # An assembler whose render_card does not accept meta (older/stub): call positionally.
+                return fn(card_id)
+
+        with self.lock:
+            if self.executor is None:
+                self.executor = ThreadPoolExecutor(max_workers=1)
+            future = self.executor.submit(call_render)
+        return future.result(timeout=timeout), "card"
+
+    def close(self) -> None:
+        """Shut the fresh-assemble executor down non-blocking (a still-running late fetch finishes on
+        its own; Python threads cannot be force-killed). Never raises."""
+        try:
+            if self.executor is not None:
+                self.executor.shutdown(wait=False)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 class _Emitter:
@@ -2557,9 +2689,17 @@ class Orchestrator:
     # --- gather (parallel reads/greps/queries via the RetrievalAdapter) ------
 
     def _exec_one_read(self, spec: Dict[str, Any],
-                       guidance_selected_ids: Optional[set] = None) -> Optional[Observation]:
+                       guidance_selected_ids: Optional[set] = None,
+                       card_context: Optional["TurnCardCache"] = None) -> Optional[Observation]:
         if not isinstance(spec, dict):
             return None
+        # CARD CONTEXT (the unified primitive, mid-loop): reach the SAME cards + assembly the
+        # turn-start path uses, at any loop step. Handled BEFORE the retrieval-None guard because
+        # these route through the ContextAssembler, not the RetrievalAdapter (see the two helpers).
+        if spec.get("cards") is not None:
+            return self.read_cards_context(str(spec["cards"]), card_context)
+        if spec.get("card") is not None:
+            return self.read_one_card(str(spec["card"]), card_context)
         # No retrieval adapter: gracefully report unsupported rather than crashing. The brain
         # can still answer from transcript/context_view; it just cannot ground on a corpus.
         if self.retrieval is None and not (
@@ -2662,8 +2802,111 @@ class Orchestrator:
             return Observation(kind="error", error=type(e).__name__)
         return None
 
+    # --- CARD CONTEXT reads: the unified primitive reachable at any loop step ------------------
+
+    def read_cards_context(self, query: str,
+                           card_context: Optional["TurnCardCache"]) -> Observation:
+        """Run card/topic context assembly for ``query`` mid-loop, through the SAME assembler the
+        turn-start path uses. Serves from the shared in-run cache (incl. a late-landing turn-start
+        pre-fetch) when possible, else runs a fresh bounded assemble. A timeout or failure returns a
+        NAMED error observation (never empty), matching the WS1 discipline. Never raises."""
+        query = (query or "").strip()
+        if not query:
+            return Observation(kind="query", locator="cards",
+                               text="No query text was given for the cards read.")
+        if card_context is None or card_context.assembler is None:
+            return Observation(
+                kind="query", locator=f"cards({query!r})",
+                text="No context assembler is configured, so topic/card context is unavailable.")
+        timeout = read_op_timeout_seconds()
+        try:
+            assembled, origin = card_context.assemble_for_query(query, timeout)
+        except FuturesTimeoutError:
+            return Observation(
+                kind="error", locator=f"cards({query!r})",
+                error=f"Card context assembly for {query!r} timed out after {timeout:.0f}s")
+        except Exception as e:  # noqa: BLE001 — a mid-loop read must never break the loop
+            log.warning(f"Mid-loop cards read failed: {type(e).__name__}: {e}", exc_info=True)
+            return Observation(kind="error", locator=f"cards({query!r})",
+                               error=f"{type(e).__name__}: {e}")
+        text = (getattr(assembled, "context_view", "") or "").strip() if assembled is not None else ""
+        card_meta = list(getattr(assembled, "card_metadata", None) or []) if assembled is not None else []
+        sources = list(getattr(assembled, "sources", None) or []) if assembled is not None else []
+        self.emit_context_event_midloop(card_context, query, card_meta, sources, origin)
+        if not text:
+            return Observation(
+                kind="query", locator=f"cards({query!r})",
+                text=f"No topic/card context found for {query!r} "
+                     f"(assembly ran via {origin}, found nothing).")
+        return Observation(kind="query", locator=f"cards({query!r})", text=text)
+
+    def read_one_card(self, card_id: str,
+                      card_context: Optional["TurnCardCache"]) -> Observation:
+        """Fetch ONE card's rendered content by id mid-loop, via the assembler's optional
+        ``render_card``. Unsupported store / absent card / timeout each return a NAMED observation
+        (never empty). Never raises."""
+        card_id = (card_id or "").strip()
+        if not card_id:
+            return Observation(kind="query", locator="card",
+                               text="No card id was given for the card read.")
+        if card_context is None or card_context.assembler is None:
+            return Observation(kind="query", locator=f"card({card_id})",
+                               text="No context assembler is configured, so card fetch is unavailable.")
+        timeout = read_op_timeout_seconds()
+        try:
+            text, origin = card_context.render_card(card_id, timeout)
+        except FuturesTimeoutError:
+            return Observation(kind="error", locator=f"card({card_id})",
+                               error=f"Fetching card {card_id!r} timed out after {timeout:.0f}s")
+        except Exception as e:  # noqa: BLE001 — a mid-loop read must never break the loop
+            log.warning(f"Mid-loop card read failed: {type(e).__name__}: {e}", exc_info=True)
+            return Observation(kind="error", locator=f"card({card_id})",
+                               error=f"{type(e).__name__}: {e}")
+        if origin == "unsupported":
+            return Observation(
+                kind="query", locator=f"card({card_id})",
+                text="This assistant's context store does not support fetching a single card by "
+                     "id; use a cards read (a query string) to retrieve topic context instead.")
+        text = (text or "").strip()
+        if not text:
+            return Observation(kind="query", locator=f"card({card_id})",
+                               text=f"No context card with id {card_id!r}.")
+        self.emit_context_event_midloop(card_context, card_id, [{"id": card_id}], [], "card")
+        return Observation(kind="query", locator=f"card({card_id})", text=text)
+
+    def emit_context_event_midloop(self, card_context: Optional["TurnCardCache"], query: str,
+                                   card_meta: List[Dict[str, Any]],
+                                   sources: List[Dict[str, Any]], origin: str) -> None:
+        """Emit EVENT_CONTEXT for a mid-loop card read, marked ``midloop`` so a consumer can tell it
+        apart from turn-start assembly (docs sec. 3, point 4). Best-effort; never raises."""
+        emit = getattr(card_context, "emit", None) if card_context is not None else None
+        if emit is None:
+            return
+        try:
+            card_meta_light = _project_card_metadata_for_event(card_meta or [])
+            sources_light = _project_sources_for_event(sources or [])
+            count = len(card_meta or [])
+            text = (f"Fetched {count} context card{'s' if count != 1 else ''} mid-turn."
+                    if count else "")
+            emit.emit(ProgressEvent(
+                type=EVENT_CONTEXT,
+                text=text,
+                data={
+                    "card_metadata": card_meta_light,
+                    "sources": sources_light,
+                    "card_count": count,
+                    "source_count": len(sources or []),
+                    # The marker distinguishing a mid-loop card read from turn-start assembly.
+                    "midloop": True,
+                    "origin": origin,
+                    "internal": True,
+                }))
+        except Exception as e:  # noqa: BLE001
+            log.debug(f"Failed to emit mid-loop EVENT_CONTEXT: {e}", exc_info=True)
+
     def _do_reads(self, reads: List[Dict[str, Any]],
-                  guidance_selected_ids: Optional[set] = None) -> List[Dict[str, Any]]:
+                  guidance_selected_ids: Optional[set] = None,
+                  card_context: Optional["TurnCardCache"] = None) -> List[Dict[str, Any]]:
         specs = [s for s in (reads or [])[: self.cfg.max_reads_per_step] if isinstance(s, dict)]
         if not specs:
             return []
@@ -2675,14 +2918,14 @@ class Orchestrator:
             return d
 
         if len(specs) == 1:
-            obs = self._exec_one_read(specs[0], guidance_selected_ids)
+            obs = self._exec_one_read(specs[0], guidance_selected_ids, card_context)
             return [_tagged(obs, specs[0])] if obs is not None else []
         workers = min(self.cfg.max_parallel, len(specs))
         op_timeout = read_op_timeout_seconds()
         results: List[Optional[Observation]] = [None] * len(specs)
         pool = ThreadPoolExecutor(max_workers=workers)
         try:
-            futures = {pool.submit(self._exec_one_read, s, guidance_selected_ids): i
+            futures = {pool.submit(self._exec_one_read, s, guidance_selected_ids, card_context): i
                        for i, s in enumerate(specs)}
             for fut in futures:
                 i = futures[fut]
@@ -5081,6 +5324,16 @@ class Orchestrator:
             except Exception:  # noqa: BLE001
                 pass
 
+        # ONE shared, query-keyed in-run context cache (the unified primitive, docs sec. 3): the
+        # turn-start pre-fetch below and any mid-loop {"cards": ...} / {"card": ...} read reach the
+        # SAME assembler through it, so a turn-start assembly timeout is recoverable mid-loop (a
+        # late-landing pre-fetch future is kept referenced and served from cache) instead of dropping
+        # all fresh context for the whole turn. It carries ``emit`` so a mid-loop card read can emit
+        # EVENT_CONTEXT. Closed in ``finish()``.
+        card_context = TurnCardCache(self.context_assembler, _ctx_meta)
+        card_context.emit = emit
+        _ctx_prefetch_query: Optional[str] = None
+
         _assembled = None
         _ctx_future = None
         _ctx_executor = None
@@ -5093,12 +5346,17 @@ class Orchestrator:
                 # the goal_condition rides in context_view. When Step 1 did not run, goal_condition
                 # == user_message, so this is byte-for-byte the prior behavior.
                 _ctx_msg = goal_condition
+                _ctx_prefetch_query = _ctx_msg
 
                 def _do_assemble() -> Any:
                     return _ctx_assembler.assemble(_ctx_msg, meta=_ctx_meta or None)
 
                 _ctx_executor = ThreadPoolExecutor(max_workers=1)
                 _ctx_future = _ctx_executor.submit(_do_assemble)
+                # Register the eager pre-fetch so a later mid-loop {"cards": <same query>} read can
+                # serve it from the shared cache -- crucially EVEN IF the turn-start collect below
+                # times out: the future is not cancelled, so a late result still lands here.
+                card_context.register_prefetch(_ctx_msg, _ctx_future)
                 try:
                     # This is the ContextAssembler.assemble() call: a hybrid keyword + vector
                     # search over the wired context (cards + turn history), not a single named
@@ -5190,6 +5448,12 @@ class Orchestrator:
                 except Exception:  # noqa: BLE001
                     pass
             if _assembled is not None:
+                # Turn-start assembly completed in time: seed the shared cache so a same-query
+                # mid-loop {"cards": ...} read is a pure cache hit (no second assembly run). On the
+                # timeout branch above we deliberately leave the still-running future registered, so
+                # if it lands late a mid-loop read for the same query serves it from the cache.
+                if _ctx_prefetch_query:
+                    card_context.register_result(_ctx_prefetch_query, _assembled)
                 try:
                     if _assembled.context_view:
                         context_view = (_assembled.context_view + "\n\n" + context_view if context_view
@@ -5348,6 +5612,12 @@ class Orchestrator:
                     _oversee_executor.shutdown(wait=False)
                 except Exception:  # noqa: BLE001
                     pass
+            # Tear down the shared context cache's fresh-assemble executor (``wait=False`` again: a
+            # still-running late pre-fetch finishes on its own, exactly like the assembly teardown).
+            try:
+                card_context.close()
+            except Exception:  # noqa: BLE001
+                pass
             # Collect token counts from the provider if it tracks them.
             try:
                 if hasattr(self.provider, "tokens_in"):
@@ -5607,7 +5877,7 @@ class Orchestrator:
                         emit.status("Exploring…")
                     else:
                         emit.status("Searching…" if any(r.get("grep") for r in plan.reads) else "Reading…")
-                    new_obs = self._do_reads(plan.reads, guidance_selected_ids)
+                    new_obs = self._do_reads(plan.reads, guidance_selected_ids, card_context)
                     gathered.extend(new_obs)
                     _sources: List[str] = []
                     for _o in new_obs:
