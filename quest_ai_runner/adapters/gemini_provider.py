@@ -17,9 +17,32 @@ import time
 from typing import Any, Dict, List, Optional
 
 from ..core.adapters import ModelProviderBase
+from ..core.prompt_layers import join_layers
 from .retry_utils import parse_json_with_retry, retry_transient
 
 _log = logging.getLogger("quest-ai-runner.gemini")
+
+
+def split_layers_for_gemini(system: Optional[str], layers: List[Dict[str, Any]]) -> tuple:
+    """Split prompt-layer blocks into Gemini's native (system_instruction, contents) shape.
+
+    Gemini implicit caching keys on a stable ``system_instruction`` plus a stable ``contents``
+    PREFIX, so the L1 head goes to ``system_instruction`` and everything after it (L2 context + L3
+    tail) is joined, in order, into ``contents``. Keeping the context first in ``contents`` means a
+    repeated turn's context prefix is byte-identical and caches implicitly, while today's flatten-
+    everything-into-one-user-string shape shared no prefix and cached nothing. A plain ``system``
+    string (e.g. the reply voice) is prepended to ``system_instruction``. Returns
+    ``(system_instruction, contents)``; ``system_instruction`` is ``None`` when there is no head.
+    """
+    head = ""
+    rest_blocks = list(layers or [])
+    if rest_blocks and rest_blocks[0].get("cache"):
+        head = str(rest_blocks[0].get("text") or "")
+        rest_blocks = rest_blocks[1:]
+    parts = [p for p in ((system or "").strip(), head) if p]
+    system_instruction = "\n\n".join(parts) or None
+    contents = join_layers(*[str(b.get("text") or "") for b in rest_blocks])
+    return system_instruction, contents
 
 
 class GeminiProvider(ModelProviderBase):
@@ -48,21 +71,31 @@ class GeminiProvider(ModelProviderBase):
         return self._client
 
     @retry_transient(max_retries=3, base_delay=1.0)
-    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
+    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any],
+             layers: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         """Run the planner with structured JSON output.
 
         Gemini doesn't have tool_choice like Anthropic, so we use forced JSON mode
-        and extract the response.
+        and extract the response. When ``layers`` are supplied, the stable head rides as a native
+        ``system_instruction`` and the context + tail stay a stable-ordered ``contents`` string, so
+        the shared prefix caches implicitly; without ``layers`` the plain prompt is sent as before.
         """
         client = self._get_client()
+        if layers:
+            system_instruction, contents = split_layers_for_gemini(None, layers)
+        else:
+            system_instruction, contents = None, prompt
 
         def _call() -> str:
             # A FRESH structured-JSON generation each attempt, so a malformed response is re-asked.
             self.call_count += 1
+            config: Dict[str, Any] = {"response_mime_type": "application/json"}
+            if system_instruction:
+                config["system_instruction"] = system_instruction
             response = client.models.generate_content(
                 model=model,
-                contents=prompt,
-                config={"response_mime_type": "application/json"},
+                contents=contents,
+                config=config,
             )
             meta = getattr(response, "usage_metadata", None)
             if meta:
@@ -79,12 +112,33 @@ class GeminiProvider(ModelProviderBase):
             return {}
 
     @retry_transient(max_retries=3, base_delay=1.0)
-    def answer(self, messages: List[Dict[str, Any]], *, model: str, system: Optional[str] = None) -> str:
+    def answer(self, messages: List[Dict[str, Any]], *, model: str, system: Optional[str] = None,
+               layers: Optional[List[Dict[str, Any]]] = None) -> str:
         """Generate an answer from a conversation history.
 
-        Gemini API expects a single prompt, so we convert the message list to text.
+        Gemini API expects a single prompt, so we convert the message list to text. When ``layers``
+        are supplied, the stable head becomes a native ``system_instruction`` (with any ``system``
+        string prepended) and the context + tail become a stable-ordered ``contents`` string, which
+        is what lets Gemini implicit caching hit; without ``layers`` we keep the historic flatten-
+        the-message-list-to-one-string path unchanged.
         """
         client = self._get_client()
+        if layers:
+            system_instruction, contents = split_layers_for_gemini(system, layers)
+            self.call_count += 1
+            config: Dict[str, Any] = {}
+            if system_instruction:
+                config["system_instruction"] = system_instruction
+            response = client.models.generate_content(
+                model=model,
+                contents=contents,
+                config=config or None,
+            )
+            meta = getattr(response, "usage_metadata", None)
+            if meta:
+                self.tokens_in += getattr(meta, "prompt_token_count", 0) or 0
+                self.tokens_out += getattr(meta, "candidates_token_count", 0) or 0
+            return response.text if response and response.text else ""
         # Convert message list to prompt text
         prompt_parts = []
         if system:

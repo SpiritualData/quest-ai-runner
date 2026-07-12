@@ -25,8 +25,12 @@ class DryRunProvider(ModelProvider):
         self.tokens_in: int = 0
         self.tokens_out: int = 0
 
-    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
-        """Estimate tokens for a plan call without calling the LLM."""
+    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any],
+             layers: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """Estimate tokens for a plan call without calling the LLM.
+
+        ``layers`` is accepted for interface parity but ignored (estimation uses ``prompt``).
+        """
         # Estimate input tokens (~1 token per 4 chars)
         input_tokens = max(1, len(prompt) // 4)
         self.tokens_in += input_tokens
@@ -56,10 +60,13 @@ class DryRunProvider(ModelProvider):
         messages: List[Dict[str, Any]],
         *,
         model: str,
+        system: Optional[str] = None,
+        layers: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
         """Estimate tokens for an answer call without calling the LLM.
 
         Returns a stub response in the appropriate format (JSON for structured outputs).
+        ``system`` / ``layers`` are accepted for interface parity but ignored by the estimator.
         """
         # Sum up prompt tokens from all messages
         prompt_text = "".join(str(msg.get("content", "")) for msg in messages)

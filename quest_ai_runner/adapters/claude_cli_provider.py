@@ -282,7 +282,10 @@ class ClaudeCliProvider(ModelProviderBase):
 
     # --- ModelProvider surface ----------------------------------------------
 
-    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
+    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any],
+             layers: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        # ``layers`` is accepted for interface parity but ignored: the CLI takes one flattened
+        # prompt and has no prompt-cache surface to wire, so the caller's ``prompt`` is used as-is.
         # The CLI can't force tool_choice, so append a hard instruction to emit ONLY the tool's
         # JSON object, then parse it leniently. normalize_decision tolerates a partial/empty dict.
         schema = tool_schema.get("input_schema", {}) if tool_schema else {}
@@ -300,7 +303,9 @@ class ClaudeCliProvider(ModelProviderBase):
             return {}
         return extract_json_object(text)
 
-    def answer(self, messages: List[Dict[str, Any]], *, model: str, system: Optional[str] = None) -> str:
+    def answer(self, messages: List[Dict[str, Any]], *, model: str, system: Optional[str] = None,
+               layers: Optional[List[Dict[str, Any]]] = None) -> str:
+        # ``layers`` accepted for interface parity but ignored; ``messages`` are flattened as before.
         prompt = _flatten_messages(messages)
         return self._invoke(prompt, model=model, system=system)
 

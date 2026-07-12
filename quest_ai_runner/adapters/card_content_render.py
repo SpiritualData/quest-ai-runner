@@ -304,9 +304,12 @@ def render_card_content_blocks(
         content = normalize_content(card.get("content"))
         if not content:
             return blocks
+        # SELECTION stays relevance-driven: rank by recency + relevance and keep the top max_refs,
+        # then resolve them WITHIN the char budget in that same relevance order, so exactly which
+        # items survive (and their resolved/truncated text) is byte-for-byte what it was before.
         ranked = rank_content_by_recency_relevance(content, task_kws, limit=max_refs)
         budget = max_ref_chars
-        for item in ranked:
+        for rank, item in enumerate(ranked):
             if budget <= 0:
                 break
             itype = item.get("type", "note")
@@ -339,7 +342,17 @@ def render_card_content_blocks(
                 # Only a file can be re-read fresh by the deep worker's own fs tools, so only a file
                 # item may ever be delivered as a POINTER instead of pasted content.
                 "pointer_eligible": (itype == "file"),
+                # The relevance rank that SELECTED this item (0 = most useful). Kept as metadata so
+                # the RENDERED order below can be stable by item id without losing usefulness info.
+                "priority_rank": rank,
             })
+        # PRESENTATION is STABLE by item id, decoupled from the relevance rank above: provider
+        # prompt caches are PREFIX caches, so a card whose items render in a different order every
+        # call (as within-card relevance scores drift turn to turn) defeats caching for the whole
+        # card layer -- exactly the leak the card-level ``stable_card_order`` fix closed at the top
+        # level, mirrored here at the item level. ``priority_rank`` above carries the usefulness
+        # ordering for any consumer that still wants "the most relevant item".
+        blocks.sort(key=lambda b: b.get("id", ""))
     except Exception:  # noqa: BLE001
         return blocks
     return blocks

@@ -17,7 +17,33 @@ import time
 from typing import Any, Dict, List, Optional
 
 from ..core.adapters import ModelProviderBase
+from ..core.prompt_layers import blocks_to_prompt, cache_control_indices
 from .retry_utils import retry_transient
+
+
+def build_cached_system(system: Optional[str], layers: List[Dict[str, Any]]) -> tuple:
+    """Render prompt-layer blocks into an Anthropic ``system`` array + the volatile tail text.
+
+    The stable (``cache=True``) blocks become ``system`` text blocks; each one that should carry a
+    breakpoint gets ``cache_control: {"type": "ephemeral"}`` so the provider caches the prefix up to
+    and including it. The number of breakpoints is capped (``cache_control_indices``) so a request
+    can never exceed Anthropic's four-breakpoint limit. A plain ``system`` string (e.g. the reply
+    voice contract) rides first as an uncached text block so it stays part of the cached prefix
+    across turns without spending one of the capped breakpoints. The single ``cache=False`` tail
+    block is returned separately to become the user turn. Returns ``(system_array, tail_text)``.
+    """
+    cached = [b for b in (layers or []) if b.get("cache")]
+    tail_text = blocks_to_prompt([b for b in (layers or []) if not b.get("cache")])
+    system_array: List[Dict[str, Any]] = []
+    if system and system.strip():
+        system_array.append({"type": "text", "text": system})
+    breakpoints = set(cache_control_indices(cached))
+    for i, block in enumerate(cached):
+        entry: Dict[str, Any] = {"type": "text", "text": str(block.get("text") or "")}
+        if i in breakpoints:
+            entry["cache_control"] = {"type": "ephemeral"}
+        system_array.append(entry)
+    return system_array, tail_text
 
 
 class AnthropicProvider(ModelProviderBase):
@@ -45,16 +71,27 @@ class AnthropicProvider(ModelProviderBase):
         return self._client
 
     @retry_transient(max_retries=3, base_delay=1.0)
-    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
+    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any],
+             layers: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         client = self._get_client()
         self.call_count += 1
-        resp = client.messages.create(
-            model=model,
-            max_tokens=self.max_plan_tokens,
-            tools=[tool_schema],
-            tool_choice={"type": "tool", "name": tool_schema["name"]},
-            messages=[{"role": "user", "content": prompt}],
-        )
+        # Layered path: cache-eligible head + context ride in the ``system`` array with
+        # cache_control breakpoints; the volatile tail is the user turn. Without layers, the plain
+        # prompt is the user turn exactly as before.
+        kwargs: Dict[str, Any] = {
+            "model": model,
+            "max_tokens": self.max_plan_tokens,
+            "tools": [tool_schema],
+            "tool_choice": {"type": "tool", "name": tool_schema["name"]},
+        }
+        if layers:
+            system_array, tail_text = build_cached_system(None, layers)
+            if system_array:
+                kwargs["system"] = system_array
+            kwargs["messages"] = [{"role": "user", "content": tail_text}]
+        else:
+            kwargs["messages"] = [{"role": "user", "content": prompt}]
+        resp = client.messages.create(**kwargs)
         if hasattr(resp, "usage"):
             self.tokens_in += getattr(resp.usage, "input_tokens", 0) or 0
             self.tokens_out += getattr(resp.usage, "output_tokens", 0) or 0
@@ -64,8 +101,28 @@ class AnthropicProvider(ModelProviderBase):
         raise RuntimeError("planner returned no structured decision")
 
     @retry_transient(max_retries=3, base_delay=1.0)
-    def answer(self, messages: List[Dict[str, Any]], *, model: str, system: Optional[str] = None) -> str:
+    def answer(self, messages: List[Dict[str, Any]], *, model: str, system: Optional[str] = None,
+               layers: Optional[List[Dict[str, Any]]] = None) -> str:
         client = self._get_client()
+        # Layered path: the cache-eligible head + context become the ``system`` array (with the
+        # reply-voice ``system`` string riding first, uncached, so it stays in the cached prefix),
+        # and the volatile tail becomes the single user turn. Multimodal / multi-turn callers pass
+        # no ``layers`` and keep the message-list path below unchanged.
+        if layers:
+            system_array, tail_text = build_cached_system(system, layers)
+            create_kwargs: Dict[str, Any] = {
+                "model": model,
+                "max_tokens": self.max_answer_tokens,
+                "messages": [{"role": "user", "content": tail_text}],
+            }
+            if system_array:
+                create_kwargs["system"] = system_array
+            self.call_count += 1
+            resp = client.messages.create(**create_kwargs)
+            if hasattr(resp, "usage"):
+                self.tokens_in += getattr(resp.usage, "input_tokens", 0) or 0
+                self.tokens_out += getattr(resp.usage, "output_tokens", 0) or 0
+            return "".join(getattr(b, "text", "") for b in resp.content if getattr(b, "type", None) == "text")
         # A message's ``content`` may be a plain string (the common path, unchanged) OR a LIST of
         # Anthropic content blocks (text + image), e.g.
         #   {"role": "user", "content": [

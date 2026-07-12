@@ -78,6 +78,7 @@ from .guard import (
 )
 from .model_registry import TIERS, ModelRegistry
 from .overseer import OverseerSignal, build_digest, oversee
+from .prompt_layers import PromptLayers, compose_layers, turn_prompt_head
 from .recent_context import (
     GLOBAL_SCOPE_KEY,
     RecentContextStore,
@@ -2115,16 +2116,29 @@ def _project_card_metadata_for_event(card_meta: List[Dict[str, Any]]) -> List[Di
     return out
 
 
-def _grounding_block(context_view: str, gathered: List[Dict[str, Any]], partial: bool) -> str:
-    # For the answer LLM, strip out the discovery block (which is planner-specific).
-    # The answer LLM should produce text, not JSON command structures.
-    answer_context_view = _strip_discovery_section(context_view)
+def grounding_context_layer(context_view: str) -> str:
+    """The L2 CONTEXT layer for an answer: the grounding header + the discovery-stripped context.
 
-    parts = [
+    Split out of ``_grounding_block`` so the answer path can place this stable block in the cached L2
+    layer (identical while the cards are unchanged) while the volatile gathered/instruction tail
+    stays in L3. The answer LLM strips the planner-only discovery block (it should produce text, not
+    JSON command structures).
+    """
+    answer_context_view = _strip_discovery_section(context_view)
+    return "\n\n".join([
         "--- GROUNDING CONTEXT (INTERNAL: answer FROM this; never quote it, never name its sources, "
         "never mention that you read anything) ---",
         answer_context_view or "(none)",
-    ]
+    ])
+
+
+def grounding_answer_tail(gathered: List[Dict[str, Any]], partial: bool) -> str:
+    """The L3 volatile tail for an answer: the gathered content read this turn + the closing rules.
+
+    Everything after the context layer: the actual-content-read section (this turn's mid-loop reads,
+    which change every call), the best-effort caveat, and the ability/closing instructions.
+    """
+    parts: List[str] = []
     # Discovery/capability listings (list_operations/list_sources/describe_*) are a menu of what the
     # assistant COULD do, not material to answer from — drop them here so the answer grounds only on
     # real content. When nothing real was gathered, the section is omitted and the answer LLM will
@@ -2164,6 +2178,16 @@ def _grounding_block(context_view: str, gathered: List[Dict[str, Any]], partial:
         "present state."
     )
     return "\n\n".join(parts)
+
+
+def _grounding_block(context_view: str, gathered: List[Dict[str, Any]], partial: bool) -> str:
+    """The full grounding block (L2 context layer + L3 answer tail), for the non-layered path.
+
+    Composed from ``grounding_context_layer`` + ``grounding_answer_tail`` so the flattened output is
+    byte-for-byte what it was before the split, while the layered answer path can use the two pieces
+    independently (context in the cached L2 layer, the rest in the volatile tail).
+    """
+    return grounding_context_layer(context_view) + "\n\n" + grounding_answer_tail(gathered, partial)
 
 
 # ---------------------------------------------------------------------------
@@ -2220,6 +2244,25 @@ def _run_goal_accepts_run_id(deep_runner: Any) -> bool:
         return False
     for p in sig.parameters.values():
         if p.name == "run_id" or p.kind is inspect.Parameter.VAR_KEYWORD:
+            return True
+    return False
+
+
+def provider_call_accepts_layers(fn: Any) -> bool:
+    """Whether a provider's ``plan``/``answer`` accepts the ``layers`` cache-hint kwarg (or **kwargs).
+
+    Same opt-in discipline the deep-runner helpers use: the orchestrator passes ``layers`` ONLY to a
+    provider whose method accepts it, so an older ModelProvider (or a test stub) written before the
+    layered cache surface existed keeps working unchanged via its plain ``prompt``/``messages`` path.
+    Decided by signature inspection rather than try/except so an LLM call with side effects is never
+    issued twice.
+    """
+    try:
+        sig = inspect.signature(fn)
+    except (ValueError, TypeError):
+        return False
+    for p in sig.parameters.values():
+        if p.name == "layers" or p.kind is inspect.Parameter.VAR_KEYWORD:
             return True
     return False
 
@@ -3127,7 +3170,40 @@ class Orchestrator:
             prompt = "\n\n".join(preamble_parts) + "\n\n" + prompt
         model = self.registry.resolve_tier(self.cfg.planner_tier)
         provider = self.get_provider_for_model(model)
-        raw = provider.plan(prompt, model=model, tool_schema=DECIDE_TOOL)
+        # Cache-friendly layered shape (in addition to the flattened ``prompt`` fallback above): the
+        # persona rides in the stable L1 head, the context view is the stable L2 layer, and the
+        # planner instructions + message + gathered are the volatile L3 tail (with the context slot
+        # relocated to a pointer, since the real context now sits above in L2). Only passed to a
+        # provider that accepts ``layers``; the flattened ``prompt`` remains the faithful fallback so
+        # a provider without the layered surface is byte-for-byte unchanged.
+        plan_kwargs: Dict[str, Any] = {"model": model, "tool_schema": DECIDE_TOOL}
+        if provider_call_accepts_layers(provider.plan):
+            plan_body = PLANNER_PROMPT.format(
+                user_message=user_message,
+                transcript=plan_transcript or "(no prior messages)",
+                context_view="(provided in the CONTEXT section above)",
+                gathered=_render_gathered_for_planner(
+                    gathered, self.cfg.planner_recent_full, self.cfg.planner_compress_over),
+                max_reads=self.cfg.max_reads_per_step,
+                max_subq=self.cfg.max_subquestions,
+                max_deep=self.cfg.max_deep_subtasks,
+                rationale_instruction=(
+                    (_RATIONALE_INSTRUCTION_NARRATE_REPLAN if step > 0 else _RATIONALE_INSTRUCTION_NARRATE)
+                    if narrate else _RATIONALE_INSTRUCTION_PLAIN),
+            )
+            tail_parts: List[str] = []
+            if narrate and already_said:
+                tail_parts.append(
+                    "--- ALREADY SAID OUT LOUD THIS TURN (do NOT repeat, echo, or paraphrase) ---\n"
+                    + "\n".join(f"• {s}" for s in already_said)
+                )
+            tail_parts.append(plan_body)
+            plan_kwargs["layers"] = compose_layers(
+                persona=(persona if (narrate and persona.strip()) else ""),
+                context=plan_context or "",
+                tail="\n\n".join(tail_parts),
+            ).blocks()
+        raw = provider.plan(prompt, **plan_kwargs)
         return normalize_decision(raw or {}, self.cfg)
 
     # --- answer generation (grounded; optional parallel sub-questions) -------
@@ -3170,7 +3246,24 @@ class Orchestrator:
         # REPLY_VOICE_SYSTEM rides as the system prompt, not as another user turn: it has to sit
         # ABOVE the grounding/transcript blocks (which are phrased as instructions ABOUT the person)
         # so the model answers in its own voice instead of mirroring theirs.
-        return provider.answer(messages, model=model, system=REPLY_VOICE_SYSTEM)
+        # Cache-friendly layered shape (in addition to the ``messages`` fallback): the persona is the
+        # stable L1 head, the grounding CONTEXT is the stable L2 layer, and transcript + this turn's
+        # gathered content + the new message are the volatile L3 tail. Skipped for a multimodal turn
+        # (native image blocks can't be flattened into the tail) and for any provider without the
+        # layered surface, both of which keep the untouched ``messages`` path.
+        answer_kwargs: Dict[str, Any] = {"model": model, "system": REPLY_VOICE_SYSTEM}
+        if not native_blocks and provider_call_accepts_layers(provider.answer):
+            tail_parts: List[str] = []
+            if transcript:
+                tail_parts.append(transcript)
+            tail_parts.append(grounding_answer_tail(gathered, partial))
+            tail_parts.append(user_message)
+            answer_kwargs["layers"] = compose_layers(
+                persona=rep_preamble or "",
+                context=grounding_context_layer(context_view),
+                tail="\n\n".join(tail_parts),
+            ).blocks()
+        return provider.answer(messages, **answer_kwargs)
 
     def _synthesize_after_deep(self, user_message: str, *, prior_answer: str, deep_output: str,
                                transcript: str, model: str,
@@ -3315,6 +3408,22 @@ class Orchestrator:
             goal=(goal or "")[:1000], brief=(brief or "")[:2000],
             transcript=(transcript or "").strip()[:2000] or "(no prior turns)",
             output=(output or "")[:6000])
+        # Cache-friendly layered shape (in addition to the flattened ``prompt`` fallback): the rep
+        # persona and quality standards ride in the stable L1 head; the verify instructions + goal +
+        # brief + transcript + worker output are the volatile L3 tail (built with empty persona/
+        # standards slots, since those now sit in the head). Verify carries no card context, so its
+        # L2 is empty. Only used for a provider that accepts ``layers``; the flattened ``prompt`` is
+        # the faithful fallback for every other provider.
+        verify_layers = compose_layers(
+            persona=(rep_preamble or ""),
+            standards=(quality_standards or ""),
+            context="",
+            tail=VERIFY_GOAL_PROMPT.format(
+                persona="", standards="", claims_rules=claims_rules,
+                goal=(goal or "")[:1000], brief=(brief or "")[:2000],
+                transcript=(transcript or "").strip()[:2000] or "(no prior turns)",
+                output=(output or "")[:6000]),
+        ).blocks()
         # The judge runs at ``verify_tier`` (default "best"): this ONE small, hard-capped call
         # gates the whole turn's outcome (done vs needs_you/failed, claim honesty), so it gets the
         # strong model. Routed through get_provider_for_model (same as the overseer) since the best
@@ -3337,7 +3446,10 @@ class Orchestrator:
         for model in models:
             try:
                 provider = self.get_provider_for_model(model)
-                raw = provider.plan(prompt, model=model, tool_schema=VERIFY_GOAL_TOOL)
+                verify_kwargs: Dict[str, Any] = {"model": model, "tool_schema": VERIFY_GOAL_TOOL}
+                if provider_call_accepts_layers(provider.plan):
+                    verify_kwargs["layers"] = verify_layers
+                raw = provider.plan(prompt, **verify_kwargs)
                 # A tool-schema provider returns the structured dict directly; a provider that can
                 # only return text (no forced tool_choice) returns a string. Reuse the repo's
                 # JSON-from-LLM helper to recover the object in that case.

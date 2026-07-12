@@ -46,10 +46,13 @@ class OpenAIProvider(ModelProviderBase):
         return self._client
 
     @retry_transient(max_retries=3, base_delay=1.0)
-    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
+    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any],
+             layers: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         """Run the planner with JSON mode forced output.
 
         OpenAI's JSON mode (response_format={'type': 'json_object'}) ensures valid JSON output.
+        ``layers`` is accepted for interface parity but ignored (no prompt-cache wiring here); the
+        caller's flattened ``prompt`` is used unchanged.
         """
         client = self._get_client()
 
@@ -73,8 +76,12 @@ class OpenAIProvider(ModelProviderBase):
             return {}
 
     @retry_transient(max_retries=3, base_delay=1.0)
-    def answer(self, messages: List[Dict[str, Any]], *, model: str, system: Optional[str] = None) -> str:
-        """Generate an answer from a conversation history."""
+    def answer(self, messages: List[Dict[str, Any]], *, model: str, system: Optional[str] = None,
+               layers: Optional[List[Dict[str, Any]]] = None) -> str:
+        """Generate an answer from a conversation history.
+
+        ``layers`` is accepted for interface parity but ignored; ``messages`` are used unchanged.
+        """
         client = self._get_client()
         # Convert messages to OpenAI format
         api_messages = []

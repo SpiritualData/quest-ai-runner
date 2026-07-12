@@ -7,6 +7,28 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **WS4 (cache economics): one shared prompt-layering path + provider cache wiring.** A new
+  `core/prompt_layers.py` primitive (`PromptLayers`, `compose_layers`, `turn_prompt_head`) splits
+  every turn-call's prompt into three layers: a stable L1 head (persona + standards), a stable L2
+  context/cards layer, and a volatile L3 tail (the step instruction + new message + gathered). The
+  plan / re-plan / answer / verify call sites in `core/orchestrator.py` now build their prompts
+  through this helper, so calls built from the same turn constants render a byte-identical L1 + L2
+  prefix and differ only in the tail. Because provider prompt caches are PREFIX caches, this lets a
+  lineage re-read the shared prefix from cache instead of re-sending it (measured baseline: today's
+  differently-shaped prompts cache zero tokens). The `ModelProvider` surface gains an additive,
+  backward-compatible `layers` kwarg on `plan`/`answer` (an ordered list of
+  `{"text": str, "cache": bool}` blocks): `AnthropicProvider` renders the cached blocks as a
+  `system` array with `cache_control: {"type": "ephemeral"}` breakpoints (capped at four, via
+  `cache_control_indices`), and `GeminiProvider` passes the L1 head as a native `system_instruction`
+  with the context + tail as stable-ordered `contents` (which is what lets Gemini implicit caching
+  hit; the old flatten-everything-to-one-string shape cached nothing). `MultiProvider` passes
+  `layers` through untouched; every other provider accepts and ignores it. Callers always pass a
+  faithful flattened `prompt`/`messages` too, and `layers` is only sent to a provider whose method
+  accepts it, so a provider (or a consumer's own `ModelProvider`) without the layered surface is
+  byte-for-byte unchanged. Also closes the residual within-card leak: a card's content items are now
+  RENDERED in a stable order (by item id) while SELECTION stays relevance-driven (the relevance rank
+  survives as `priority_rank` metadata), mirroring the card-level `stable_card_order` fix so a card
+  whose item relevance drifts turn to turn no longer defeats caching for its layer.
 - **WS3: a real deep-worker escalation ladder, generically.** The deep worker is always Claude
   Code (Claude models only), so "goal not met -> a stronger model" only ever does something when
   the ladder actually contains a Claude-runnable id. `QAR_DEEP_MODELS` now means a comma-separated

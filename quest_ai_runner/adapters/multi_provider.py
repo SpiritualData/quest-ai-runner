@@ -102,9 +102,10 @@ class MultiProvider(ModelProvider):
         return line
 
     def plan(
-        self, prompt: str, *, model: str, tool_schema: Dict[str, Any]
+        self, prompt: str, *, model: str, tool_schema: Dict[str, Any],
+        layers: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
-        """Route plan call to correct provider."""
+        """Route plan call to correct provider, passing the cache ``layers`` through untouched."""
         if self._usage_tracker and self._usage_tracker.over_limit():
             # Return a terminal "answer" decision so the orchestrator skips further LLM work
             # and proceeds straight to generating the limit-reached response.
@@ -113,21 +114,22 @@ class MultiProvider(ModelProvider):
         before_in = getattr(provider, "tokens_in", 0)
         before_out = getattr(provider, "tokens_out", 0)
         self.call_count += 1
-        result = provider.plan(prompt, model=model, tool_schema=tool_schema)
+        result = provider.plan(prompt, model=model, tool_schema=tool_schema, layers=layers)
         self._record_token_delta(provider, before_in, before_out)
         return result
 
     def answer(
-        self, messages: List[Dict[str, Any]], *, model: str, system: Optional[str] = None
+        self, messages: List[Dict[str, Any]], *, model: str, system: Optional[str] = None,
+        layers: Optional[List[Dict[str, Any]]] = None,
     ) -> str:
-        """Route answer call to correct provider."""
+        """Route answer call to correct provider, passing the cache ``layers`` through untouched."""
         if self._usage_tracker and self._usage_tracker.over_limit():
             return self._limit_message()
         provider = self._get_provider_for_model(model)
         before_in = getattr(provider, "tokens_in", 0)
         before_out = getattr(provider, "tokens_out", 0)
         self.call_count += 1
-        result = provider.answer(messages, model=model, system=system)
+        result = provider.answer(messages, model=model, system=system, layers=layers)
         self._record_token_delta(provider, before_in, before_out)
         return result
 

@@ -272,11 +272,30 @@ class RetrievalAdapter(Protocol):
 class ModelProvider(Protocol):
     """The LLM behind planning, answering, and the live model list."""
 
-    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
-        """One cheap, forced-structured planner call -> the raw decision dict."""
+    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any],
+             layers: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """One cheap, forced-structured planner call -> the raw decision dict.
 
-    def answer(self, messages: List[Dict[str, str]], *, model: str, system: Optional[str] = None) -> str:
-        """Generate a grounded reply from a message list. Returns the text."""
+        ``layers`` (optional) is the ordered prompt-layer blocks from ``core.prompt_layers``
+        (``[{"text": str, "cache": bool}, ...]``, stable head + context first, volatile tail last).
+        A provider that supports prefix caching renders the ``cache=True`` blocks as its cacheable
+        prefix (e.g. an Anthropic ``system`` array with ``cache_control`` breakpoints, or a Gemini
+        ``system_instruction`` + stable ``contents``) so a turn's repeated calls read the shared
+        prefix instead of re-sending it. A provider that supports no caching (or is given no
+        ``layers``) MUST behave exactly as before, using ``prompt``; callers always pass a faithful
+        flattened ``prompt`` as well, so ignoring ``layers`` is a safe, no-behavior-change fallback.
+        """
+
+    def answer(self, messages: List[Dict[str, str]], *, model: str, system: Optional[str] = None,
+               layers: Optional[List[Dict[str, Any]]] = None) -> str:
+        """Generate a grounded reply from a message list. Returns the text.
+
+        ``layers`` (optional) carries the ordered prompt-layer blocks (see ``plan``); a
+        cache-aware provider renders the cacheable head + context prefix from them and takes the
+        volatile tail as the final turn, while a provider given no ``layers`` uses ``messages``
+        unchanged. Callers always build ``messages`` faithfully too, so ``layers`` is purely an
+        additive cache hint.
+        """
 
     def list_models(self) -> List[str]:
         """The live, latest-first model id list (model_registry buckets it into tiers)."""
@@ -800,9 +819,9 @@ class ModelProviderBase(abc.ABC):
         self.call_count: int = 0  # Track LLM calls for reporting
 
     @abc.abstractmethod
-    def plan(self, prompt, *, model, tool_schema) -> Dict[str, Any]: ...
+    def plan(self, prompt, *, model, tool_schema, layers=None) -> Dict[str, Any]: ...
     @abc.abstractmethod
-    def answer(self, messages, *, model, system=None) -> str: ...
+    def answer(self, messages, *, model, system=None, layers=None) -> str: ...
     @abc.abstractmethod
     def list_models(self) -> List[str]: ...
 
