@@ -88,7 +88,9 @@ class FixedScoreStore(VectorStoreBase):
 
 def test_assembler_prefers_specific_subject_over_higher_scoring_sibling():
     # The sibling ("atom evaluation") has a HIGHER raw similarity than the real subject
-    # ("result prediction evaluation"). Specificity must flip the order and flag the sibling.
+    # ("result prediction evaluation"). Specificity must flip the SELECTION ranking (captured as
+    # effective_score) and flag the sibling, even though the RENDERED order is stable by card id
+    # (a prefix-cache precondition, see vector_context_assembler.py) and so does not itself move.
     hits = [
         VectorHit(
             id="atom-eval",
@@ -112,8 +114,12 @@ def test_assembler_prefers_specific_subject_over_higher_scoring_sibling():
     ctx = assembler.assemble("what is next for result prediction evaluation")
 
     view = ctx.context_view
-    # 1. The specific subject now ranks FIRST despite its lower raw score.
-    assert view.index("result-pred-eval") < view.index("atom-eval")
+    by_id = {c["id"]: c for c in ctx.card_metadata}
+    # 1. The specific subject now ranks higher by effective_score despite its lower raw score
+    # (SELECTION signal). The RENDERED order in context_view/card_ids is stable by card id
+    # ("atom-eval" < "result-pred-eval"), independent of this ranking.
+    assert by_id["result-pred-eval"]["effective_score"] > by_id["atom-eval"]["effective_score"]
+    assert ctx.card_ids == ["atom-eval", "result-pred-eval"]
     # 2. The sibling is explicitly flagged as a weak / adjacent match in the text the LLM reads.
     atom_section = view.split("### Vector hit: atom-eval")[1]
     assert "WEAK" in atom_section and "ADJACENT" in atom_section
@@ -122,7 +128,6 @@ def test_assembler_prefers_specific_subject_over_higher_scoring_sibling():
     assert "subject match: on-subject" in view
 
     # 4. The structured signal is on card_metadata for consumers/UI.
-    by_id = {c["id"]: c for c in ctx.card_metadata}
     assert by_id["result-pred-eval"]["specificity"]["on_subject"] is True
     assert by_id["atom-eval"]["specificity"]["on_subject"] is False
     assert by_id["result-pred-eval"]["specificity"]["score"] > by_id["atom-eval"]["specificity"]["score"]

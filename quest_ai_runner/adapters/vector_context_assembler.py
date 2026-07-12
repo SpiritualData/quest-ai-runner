@@ -30,6 +30,16 @@ assembler performs a fully *agentic* retrieval that uses the LLM in two places:
    via the shared ``render_card_content`` routine (same as the keyword arm), so a
    vector-selected card pulls in the live collection / conversation data.
 
+5. **Stable render order.** The similarity/specificity/recency score above decides
+   WHICH hits survive (selection, and truncation to ``max_in_view``); it never
+   decides the order they render in. The surviving hits are rendered sorted by
+   card id, so the same selection renders byte-identically call to call -- a
+   precondition for provider prompt caches, which match on a literal prefix and
+   are defeated by reordering (a card set reshuffled every call costs MORE cached
+   than not caching at all). The score that drove selection is preserved per hit
+   as ``effective_score`` in ``card_metadata`` for any consumer that wants "the
+   most relevant hit"; it must read that field, never list position.
+
 When no provider is given the agentic steps are skipped: the raw task text is
 the only query and all hits above the confidence gate are kept.
 
@@ -626,7 +636,8 @@ class VectorContextAssembler(ContextAssemblerBase):
         if self._provider is not None:
             candidates = self._llm_review(task_text, candidates)
 
-        # Step d: re-rank by an effective score = raw similarity x SPECIFICITY x recency.
+        # Step d: rank by an effective score = raw similarity x SPECIFICITY x recency, used to pick
+        # WHICH hits survive (this ranking still fully drives selection and truncation below).
         # SPECIFICITY is the PRIMARY key: it prefers a candidate about the SAME specific subject the
         # query names over a sibling that only shares the category (e.g. a query about
         # "result-prediction evaluation" must not be led by an "atom evaluation" doc just because
@@ -635,6 +646,9 @@ class VectorContextAssembler(ContextAssemblerBase):
         # never dropped. The specificity factor floors at 0.3 (see rerank_factor) so it re-orders
         # decisively without zeroing a hit out, and it is neutral (1.0) when the query has no
         # discriminating structure to judge on -- so this is never worse than recency alone.
+        # NOTE: this effective score decides SELECTION only. The RENDERED order of the survivors is
+        # decoupled from it below (stable by card id) -- see the comment at the sort just before
+        # ``kept`` is built.
         spec_results = score_candidates(task_text, [_hit_searchable_text(h) for h in candidates])
         spec_by_id: Dict[str, SpecificityResult] = {
             h.id: sr for h, sr in zip(candidates, spec_results)
@@ -675,9 +689,22 @@ class VectorContextAssembler(ContextAssemblerBase):
         if not kept_decayed:
             return AssembledContext()
 
-        # Sort by effective (decayed) score descending, cap at max_in_view.
+        # SELECTION: sort by effective (decayed) score descending, cap at max_in_view. Truncation
+        # happens HERE, on the score-ranked list, so the survivors are the most relevant hits --
+        # relevance decides WHICH cards make it in, before order is ever touched.
         kept_decayed.sort(key=lambda x: x[0], reverse=True)
         kept_decayed = kept_decayed[: self._max_in_view]
+
+        # PRESENTATION: the survivors' rendered order is STABLE by card id, independent of score.
+        # Provider prompt caches are PREFIX caches, so a card set that renders in a different order
+        # every call (as recency-decayed scores drift turn to turn) defeats caching for the whole
+        # layer -- measured: caching a call whose card order was reshuffled costs MORE than no
+        # caching at all, because every call becomes a fresh cache write instead of a cache read.
+        # The effective score that drove selection above is preserved per hit as
+        # "effective_score" in card_metadata (below), so a consumer that wants "the most relevant
+        # hit" reads that field, never position 0.
+        effective_by_id: Dict[str, float] = {h.id: eff for eff, h in kept_decayed}
+        kept_decayed.sort(key=lambda x: x[1].id)
         kept = [h for _, h in kept_decayed]
 
         # Step e: render (pass task_text so card-content references rank + resolve against it).
@@ -758,6 +785,11 @@ class VectorContextAssembler(ContextAssemblerBase):
                 "id": h.id,
                 "title": h.text[:100] if h.text else "(no text)",  # first 100 chars as title
                 "relevance_score": min(1.0, h.score),  # normalize vector scores
+                # The specificity x recency x raw-similarity score that decided SELECTION and
+                # truncation above. The card_metadata LIST ITSELF is ordered by card id, not by
+                # this score (see the sort building "kept"), so a consumer that wants "the most
+                # relevant card" reads this field, never position 0 / list order.
+                "effective_score": round(effective_by_id.get(h.id, 0.0), 6),
                 "file_count": len(hit_paths),
                 "files": hit_paths[:3],  # top 3 files
                 "adapter": adapter_type,

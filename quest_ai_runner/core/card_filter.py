@@ -97,11 +97,31 @@ Respond with ONLY valid JSON (no markdown, no prose). The "cards" list is in pri
 Return only the cards and items you are keeping."""
 
 
+def stable_card_order(entries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Stamp a ``priority_rank`` (0 = most useful) from the entries' current order, then return
+    them sorted by ``card_id`` (lexicographic) instead of by usefulness.
+
+    Selection stays intelligent (whatever decided ``entries``' input order, keep it); only the
+    RETURNED order changes. Provider prompt caches are PREFIX caches: a card set that renders in
+    a different order every call defeats caching for the whole layer even when the same cards are
+    selected turn after turn (measured: caching a call whose card order was reshuffled costs MORE
+    than no caching at all, because every call becomes a fresh cache write). Sorting by card id
+    makes the rendered block byte-identical across calls whenever the selection is unchanged. A
+    caller that wants "the most useful card" reads ``priority_rank`` on each entry, never
+    position 0 in the returned list.
+    """
+    for rank, entry in enumerate(entries):
+        entry["priority_rank"] = rank
+    return sorted(entries, key=lambda e: e.get("card_id", ""))
+
+
 def _consolidate_keep_all(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Graceful fallback verdict: keep EVERY card and EVERY item, deliver=paste, order preserved.
+    """Graceful fallback verdict: keep EVERY card and EVERY item, deliver=paste.
 
     This is the "never worse" output: the consolidated selection equals exactly the mechanical
-    merge, so when no provider is wired (or anything fails) behavior is identical to today.
+    merge (every card/item survives), so when no provider is wired (or anything fails) the kept
+    set is identical to today. The RETURNED order is still stabilized by card id (see
+    ``stable_card_order``) so this fallback path is just as cache-friendly as a real verdict.
     """
     out: List[Dict[str, Any]] = []
     for card in cards:
@@ -113,7 +133,7 @@ def _consolidate_keep_all(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                 for it in items if isinstance(it, dict)
             ],
         })
-    return out
+    return stable_card_order(out)
 
 
 def _validate_consolidation(
@@ -183,9 +203,19 @@ def consolidate_context(
     """ONE holistic LLM pass over the merged card set: drop, rerank, and prune content items.
 
     ``cards`` is the merged card set, each ``{"id", "title", "items": [{id, type, why, preview}]}``
-    (the previews come from ``render_card_content_blocks``). Returns the CONSOLIDATOR OUTPUT, an
-    ordered keep-list ``[{"card_id", "items": [{"item_id", "deliver": "paste"|"pointer"}]}]``, kept
-    cards first in priority order, only the surviving item ids per card.
+    (the previews come from ``render_card_content_blocks``). Returns the CONSOLIDATOR OUTPUT,
+    ``[{"card_id", "priority_rank", "items": [{"item_id", "deliver": "paste"|"pointer"}]}]``, only
+    the surviving item ids per card.
+
+    SELECTION is still fully LLM-driven: the model decides which cards/items survive, and its
+    usefulness judgment is captured verbatim as ``priority_rank`` on each entry (0 = most useful,
+    1 = next, ...). The RETURNED list order is deliberately NOT that priority order: it is sorted
+    by ``card_id`` (lexicographic) instead, so the rendered prompt stays byte-identical across
+    calls whenever the selection doesn't change. Provider prompt caches are PREFIX caches, so a
+    card set that renders in a different order every call defeats caching for the whole layer
+    (measured: caching a call whose card order was reshuffled costs MORE than no caching, because
+    every call becomes a fresh cache write instead of a cache read). A caller that wants "the most
+    useful card" reads ``priority_rank``, never position 0.
 
     ``recent_item_usage`` (optional) is the ``{card_id: [item_id, ...]}`` hint built from the warm
     recent-context store's item-usage memory (see ``core.recent_context.build_item_usage_hint``):
@@ -239,7 +269,7 @@ def consolidate_context(
         result = _validate_consolidation(parsed, cards)
         if result is None:
             return _consolidate_keep_all(cards)
-        return result
+        return stable_card_order(result)
     except Exception as e:  # noqa: BLE001
         _log.debug("consolidate_context failed, keeping all cards/items: %s", e)
         return _consolidate_keep_all(cards)
@@ -274,8 +304,14 @@ def filter_cards_by_relevance(
     1. Card-level: score each card 0-1 by relevance to the task
     2. File-level: within each selected card, rank files by relevance
 
-    Returns only cards with relevance > 0.5, ordered by score DESC.
-    Files within each card are ordered by relevance DESC.
+    Returns only cards with relevance > 0.5. SELECTION is still LLM-driven (the score decides
+    which cards survive), but the RETURNED order is stable: sorted by card id (lexicographic),
+    not by score. Provider prompt caches are PREFIX caches, so a card set that renders in a
+    different order every call (as relevance scores drift turn to turn) defeats caching for the
+    whole layer -- the score survives as ``relevance_score`` on each ``CardMetadata`` so a caller
+    that wants "the most useful card" reads that field, never position 0.
+    Files within each card are still ordered by relevance DESC (a within-card ranking, not the
+    top-level card order the prefix cache depends on).
 
     Args:
         task: The user's task text
@@ -284,7 +320,7 @@ def filter_cards_by_relevance(
                        (if None, returns all cards with files in original order)
 
     Returns:
-        Filtered and scored CardMetadata list, ordered by relevance_score DESC
+        Filtered CardMetadata list, ordered by card id (stable); relevance_score carries rank.
     """
     if not candidate_cards:
         return []
@@ -439,6 +475,10 @@ Respond with ONLY valid JSON (no markdown, no extra text):
             # Fallback: sequential ranking
             results = [_rank_files_for_card(cs) for cs in relevant_cards]
 
-    # Sort results by relevance score descending
-    results.sort(key=lambda r: r.relevance_score, reverse=True)
+    # Presentation order is STABLE by card id, not by relevance score: provider prompt caches
+    # are PREFIX caches, so re-sorting the same selected cards by a score that drifts call to
+    # call defeats caching for the whole layer (measured: caching with a reshuffled card set
+    # costs MORE than no caching at all). relevance_score above already carries the LLM's
+    # usefulness judgment for any caller that needs "the most relevant card".
+    results.sort(key=lambda r: r.id)
     return results

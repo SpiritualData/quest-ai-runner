@@ -962,7 +962,9 @@ class TestRecencyDecay:
     """Recent associations must rank above old ones with equal raw scores."""
 
     def test_recent_ranks_above_old_with_equal_raw_score(self):
-        """Two associations with equal raw scores: the recent one must rank first."""
+        """Two associations with equal raw scores: the recent one must rank higher by
+        effective_score, even though the RENDERED order (card_ids) is stable by card id, not
+        by rank (see the cache-economics ordering contract in vector_context_assembler.py)."""
         # We use an injectable clock so 'now' is deterministic.
         now = 1_000_000.0  # epoch seconds (arbitrary)
         old_ts = now - 400 * 86400   # 400 days ago
@@ -991,8 +993,15 @@ class TestRecencyDecay:
         )
         ac = asm.assemble("billing payment")
         assert len(ac.card_ids) >= 2, "expected both hits to be returned"
-        assert ac.card_ids[0] == "recent-assoc", (
-            f"expected recent-assoc to rank first, got order: {ac.card_ids}"
+        # Rendered order is stable by card id, not by rank: "old-assoc" sorts before
+        # "recent-assoc" lexicographically regardless of which one ranked higher.
+        assert ac.card_ids == ["old-assoc", "recent-assoc"], (
+            f"expected card_ids sorted by id regardless of rank, got: {ac.card_ids}"
+        )
+        # The recency-driven ranking itself survives as effective_score metadata.
+        meta_by_id = {m["id"]: m for m in ac.card_metadata}
+        assert meta_by_id["recent-assoc"]["effective_score"] > meta_by_id["old-assoc"]["effective_score"], (
+            "expected recent-assoc to have the higher effective_score despite equal raw scores"
         )
 
     def test_old_association_is_not_completely_dropped_when_score_above_gate(self):
@@ -1047,6 +1056,115 @@ class TestRecencyDecay:
         asm = VectorContextAssembler(store, confidence_min_score=0.0)
         ac = asm.assemble("billing payment")
         assert "no-ts" in ac.card_ids, "no-ts hit should still be returned with neutral decay"
+
+
+class TestStableRenderOrder:
+    """The rendered/returned card order is stable by card id, independent of score, which is the
+    precondition for provider prompt-cache prefixes (see HANDS_FREE_QUEST_AI_DESIGN.md section 6):
+    a card set that reorders every call as scores drift defeats caching for the whole layer."""
+
+    def _store_with(self, entries: List[Dict[str, Any]]) -> "FakeVectorStore":
+        store = FakeVectorStore()
+        store.upsert(entries)
+        return store
+
+    def test_same_selection_renders_identically_regardless_of_score_order(self):
+        # Two runs select the SAME three cards but with their raw scores permuted (simulating
+        # scores drifting turn to turn). The rendered order must be identical both times.
+        base_entries = [
+            {"id": "card-charlie", "text": "billing payment pipeline", "payload": {}},
+            {"id": "card-alpha", "text": "billing payment pipeline", "payload": {}},
+            {"id": "card-bravo", "text": "billing payment pipeline", "payload": {}},
+        ]
+        scorings = [
+            {"card-charlie": 0.9, "card-alpha": 0.6, "card-bravo": 0.75},
+            {"card-charlie": 0.6, "card-alpha": 0.9, "card-bravo": 0.75},  # scores reshuffled
+        ]
+        orderings = []
+        for scores in scorings:
+            store = FakeVectorStore()
+            store.upsert(base_entries)
+            # Override the fake store's substring-match scoring with explicit per-id scores by
+            # monkeypatching search() to return hits scored per this run's ``scores`` map.
+            original_search = store.search
+
+            def scored_search(query, *, scope=None, top_k=8, _scores=scores, _orig=original_search):
+                hits = _orig(query, scope=scope, top_k=top_k)
+                return [
+                    VectorHit(id=h.id, score=_scores.get(h.id, h.score), text=h.text, payload=h.payload)
+                    for h in hits
+                ]
+
+            store.search = scored_search
+            asm = VectorContextAssembler(store, confidence_min_score=0.0, max_in_view=8)
+            ac = asm.assemble("billing payment")
+            orderings.append(ac.card_ids)
+
+        assert orderings[0] == orderings[1], (
+            f"rendered order changed when only scores were reshuffled: {orderings}"
+        )
+        # And that order is exactly the id-sorted order, not an artifact of insertion order.
+        assert orderings[0] == sorted(orderings[0])
+
+    def test_truncation_keeps_highest_scored_before_stable_sort(self):
+        # 4 candidates, max_in_view=2: selection must keep the two HIGHEST-scored survivors
+        # ("card-b" and "card-d"), even though card ids alone would suggest "card-a"/"card-b".
+        entries = [
+            {"id": "card-a", "text": "billing payment pipeline", "payload": {}},
+            {"id": "card-b", "text": "billing payment pipeline", "payload": {}},
+            {"id": "card-c", "text": "billing payment pipeline", "payload": {}},
+            {"id": "card-d", "text": "billing payment pipeline", "payload": {}},
+        ]
+        scores = {"card-a": 0.1, "card-b": 0.95, "card-c": 0.2, "card-d": 0.8}
+        store = FakeVectorStore()
+        store.upsert(entries)
+        original_search = store.search
+
+        def scored_search(query, *, scope=None, top_k=8):
+            hits = original_search(query, scope=scope, top_k=top_k)
+            return [
+                VectorHit(id=h.id, score=scores.get(h.id, h.score), text=h.text, payload=h.payload)
+                for h in hits
+            ]
+
+        store.search = scored_search
+        asm = VectorContextAssembler(store, confidence_min_score=0.0, max_in_view=2)
+        ac = asm.assemble("billing payment")
+
+        # The two highest-scored candidates survived truncation (card-a, card-c dropped).
+        assert set(ac.card_ids) == {"card-b", "card-d"}
+        # Their RENDERED order is still stable by id, not by score.
+        assert ac.card_ids == ["card-b", "card-d"]
+
+    def test_effective_score_metadata_survives_stable_reorder(self):
+        # relevance/effective ranking must be readable per card even though list position no
+        # longer encodes it.
+        entries = [
+            {"id": "card-low", "text": "billing payment pipeline", "payload": {}},
+            {"id": "card-high", "text": "billing payment pipeline", "payload": {}},
+        ]
+        scores = {"card-low": 0.2, "card-high": 0.95}
+        store = FakeVectorStore()
+        store.upsert(entries)
+        original_search = store.search
+
+        def scored_search(query, *, scope=None, top_k=8):
+            hits = original_search(query, scope=scope, top_k=top_k)
+            return [
+                VectorHit(id=h.id, score=scores.get(h.id, h.score), text=h.text, payload=h.payload)
+                for h in hits
+            ]
+
+        store.search = scored_search
+        asm = VectorContextAssembler(store, confidence_min_score=0.0, max_in_view=8)
+        ac = asm.assemble("billing payment")
+
+        # Rendered order is id-stable ("card-high" < "card-low"), i.e. NOT rank order.
+        assert ac.card_ids == ["card-high", "card-low"]
+        by_id = {c["id"]: c for c in ac.card_metadata}
+        assert "effective_score" in by_id["card-low"] and "effective_score" in by_id["card-high"]
+        # But the underlying relevance ranking is preserved and readable via the field.
+        assert by_id["card-high"]["effective_score"] > by_id["card-low"]["effective_score"]
 
 
 class TestCapacityBound:
@@ -1969,7 +2087,10 @@ class TestHybridConsolidation:
         assert ac.card_ids == ["kw-card", "vec-card"]
 
     def test_consolidation_drops_and_reranks_and_prunes(self):
-        # Verdict: keep vec-card first, then kw-card with only k1 (drop k2).
+        # Verdict: keep vec-card first, then kw-card with only k1 (drop k2). The LLM's usefulness
+        # order (vec-card, then kw-card) survives as priority_rank, but the RENDERED order
+        # (card_ids) is stable by card id -- see the cache-economics ordering contract in
+        # core/card_filter.py's consolidate_context.
         prov = _ConsolidatingProvider(
             '{"cards": ['
             '{"card_id": "vec-card", "items": [{"item_id": "v1", "deliver": "paste"}]},'
@@ -1981,8 +2102,9 @@ class TestHybridConsolidation:
         hybrid = HybridContextAssembler(keyword=kw, vector=vec, model_provider=prov, model="m")
         ac = hybrid.assemble("billing")
         assert prov.answer_calls == 1  # exactly ONE consolidating call
-        # Reranked: vec-card before kw-card.
-        assert ac.card_ids == ["vec-card", "kw-card"]
+        # Rendered order is stable by card id ("kw-card" < "vec-card"), not by the LLM's verdict
+        # order.
+        assert ac.card_ids == ["kw-card", "vec-card"]
         # Rebuilt view pastes surviving items verbatim under their titles.
         assert "### Vector theme" in ac.context_view
         assert "PASTE_V1_TEXT" in ac.context_view
