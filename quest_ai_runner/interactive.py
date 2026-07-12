@@ -41,7 +41,7 @@ Install the [tui] extra for the full experience:
 
 Usage:
     quest-ai-runner chat
-    quest-ai-runner chat --rep "Joshua's AI" --persona-file path/to/skill.md
+    quest-ai-runner chat --rep "Alex's AI" --persona-file path/to/skill.md
     quest-ai-runner chat --goal-id <quest-goal-id>
 
 Example workflow (task execution):

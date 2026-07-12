@@ -1,6 +1,6 @@
 """Execution record — the durable per-turn account of what actually executed.
 
-The risk this manages (Joshua, 2026-06-15): the assistant SAYS it did something when the action
+The risk this manages (product owner, 2026-06-15): the assistant SAYS it did something when the action
 did not actually execute or finish. The brain's read-and-answer step can never change files, code,
 data, or configuration itself; only deep runs can. So the orchestrator keeps an ``ExecutionRecord``
 of every mutating action that ran this turn (built from ``DeepResult.met`` and any ``EVENT_EXEC``

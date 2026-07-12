@@ -254,7 +254,7 @@ class QuestClient:
         """PATCH -> in_progress (backend-aware dedup: a claimed task won't re-fire).
 
         When ``handler`` is given (the slug of the AI representation/skill that will run this task,
-        e.g. ``"joshua"`` / ``"subham"``, or a runner label), it is stamped on the task so the
+        e.g. ``"alex"`` / ``"sam"``, or a runner label), it is stamped on the task so the
         Quest task-detail modal can show "handled by X". Omit it and the claim body is unchanged
         (fully backward compatible).
 

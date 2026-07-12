@@ -113,7 +113,7 @@ Each strategy is tried in order; the first one that succeeds wins. This allows f
 Run the test suite to verify extraction strategies:
 
 ```bash
-cd /home/joshua/hq/stories/spiritual_data/product/launch_code/quest-ai-runner
+# from the repository root
 python3 test_edited_files_extraction.py
 ```
 

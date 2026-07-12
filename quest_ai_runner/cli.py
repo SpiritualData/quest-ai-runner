@@ -98,7 +98,7 @@ Env it reads:
 
 chat-specific env vars (all optional):
   QAR_REP_NAME (optional)                        — display name for the AI representative shown in
-                                                   the interactive session (e.g. "Joshua's AI").
+                                                   the interactive session (e.g. "Alex's AI").
                                                    Overridden by --rep on the command line.
   QAR_REP_PERSONA_FILE (optional)                — path to a persona/skill file whose content is
                                                    injected as rep_preamble into every chat turn.

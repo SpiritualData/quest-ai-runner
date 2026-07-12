@@ -64,7 +64,7 @@ def test_rep_preamble_and_gathered_both_appear():
     retrieval = StubRetrieval({"notes.md": "GROUNDING important note content"})
     runner = _PreambleCapturingRunner()
 
-    rep_persona = "You are Joshua's AI representative."
+    rep_persona = "You are Alex's AI representative."
     res = _orch(provider, retrieval, runner).run("do work", rep_preamble=rep_persona)
 
     assert res.kind == "deep"

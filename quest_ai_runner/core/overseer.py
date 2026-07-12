@@ -1,6 +1,6 @@
 """Overseer — a minimal-intervention watcher for the Orchestrator run loop.
 
-The idea (Joshua, founder): a HIGH-QUALITY model, reading very few tokens and writing very few,
+The idea (product owner): a HIGH-QUALITY model, reading very few tokens and writing very few,
 watches a run the way a human consciousness watches their own body walk. Most of the time it says
 nothing; occasionally it sends ONE tiny signal that causes a large downstream course correction.
 

@@ -231,7 +231,7 @@ def test_specificity_gate_is_woven_into_planner_deep_and_grounding():
     from quest_ai_runner.core.orchestrator import PLANNER_PROMPT, _grounding_block
 
     # The gate states the primary discipline (match the specific referent, not its category) and
-    # explicitly subordinates recency to it (Joshua: relevance/specificity first, time only backup).
+    # explicitly subordinates recency to it (product owner: relevance/specificity first, time only backup).
     gate = cd.SPECIFICITY_GATE
     assert "sibling" in gate.lower()
     assert "category" in gate.lower()

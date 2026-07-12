@@ -391,7 +391,7 @@ class Poller:
         """Derive the handler label stamped on claim — WHO ran this task.
 
         If the rep resolver mapped the task to a ``(user_id, skill_dir)``, the handler is the
-        basename of ``skill_dir`` (the rep slug, e.g. "joshua"/"subham"). Otherwise fall back to
+        basename of ``skill_dir`` (the rep slug, e.g. "alex"/"sam"). Otherwise fall back to
         the runner's configured ``runner_label`` (or None when neither is available)."""
         if target:
             _user_id, skill_dir = target

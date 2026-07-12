@@ -1558,7 +1558,7 @@ All notable changes to this project are documented here. The format is based on
   and streams its execution lifecycle to the task, so a Quest task-detail view can show "handled by
   X" and a live progress feed. `QuestClient.claim(task_id, handler=None)` stamps the handler on the
   in-progress PATCH (omitted when None → backward compatible), and the poller resolves the handler
-  as the rep slug (basename of the `rep_sync_resolver`'s `skill_dir`, e.g. `"joshua"`/`"subham"`),
+  as the rep slug (basename of the `rep_sync_resolver`'s `skill_dir`, e.g. `"alex"`/`"sam"`),
   falling back to `RunnerConfig.runner_label` or None. New `QuestClient.report_progress(task_id,
   kind, text=, output=, data=)` POSTs `{kind, ...non-None}` to `/api/assistant-tasks/{id}/progress`
   (kind in started|status|exec|output|done|error) and is best-effort: it never raises, logging a

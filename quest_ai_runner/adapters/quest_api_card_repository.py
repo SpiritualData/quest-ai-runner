@@ -6,7 +6,7 @@ Qdrant store rather than locally. Cards include an inline preview so Quest AI ca
 use them immediately without a round-trip to the local machine.
 
 Env vars consumed by the factory (read in config.py, passed in at construction):
-  QAR_QUEST_API_URL   -- Quest backend base URL (e.g. https://api.prod.spiritualdata.org)
+  QAR_QUEST_API_URL   -- Quest backend base URL (e.g. https://quest.example.com)
   QAR_QUEST_API_KEY   -- Bearer token for the quest-backend card API
   QAR_USER_ID         -- The Quest user ID (MongoDB ObjectId string) whose cards to manage
   QAR_RUNNER_ENV_ID   -- Identifies this local runner environment (default: hostname)

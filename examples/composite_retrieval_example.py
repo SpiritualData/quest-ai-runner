@@ -54,7 +54,7 @@ The orchestrator implements the following pattern:
 
     # Add example conversations
     design_conv = {
-        "rep_name": "Joshua's AI",
+        "rep_name": "Alex's AI",
         "turn_count": 3,
         "messages": [
             {
@@ -76,7 +76,7 @@ The orchestrator implements the following pattern:
     }
 
     implementation_conv = {
-        "rep_name": "Joshua's AI",
+        "rep_name": "Alex's AI",
         "turn_count": 2,
         "messages": [
             {"role": "user", "text": "How do we implement the grep method for conversations?"},

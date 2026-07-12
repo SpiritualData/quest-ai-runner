@@ -36,7 +36,7 @@ Each `.json` file in `conversations/` should be a Claude session export (what Cl
 
 ```json
 {
-  "rep_name": "Joshua's AI",
+  "rep_name": "Alex's AI",
   "turn_count": 5,
   "messages": [
     {
@@ -138,7 +138,7 @@ When you provide a corpus with conversations, the adapter:
 The adapter recognizes Claude conversations by structure:
 ```json
 {
-  "rep_name": "Joshua's AI",           # optional: AI name
+  "rep_name": "Alex's AI",             # optional: AI name
   "turn_count": 5,                     # optional: for quick reference
   "messages": [                        # required: array of message objects
     {

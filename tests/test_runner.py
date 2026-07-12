@@ -1066,11 +1066,11 @@ def test_claim_includes_handler_in_patch_body(monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
 
     client = QuestClient("http://quest.example", "qsk_test")
-    client.claim("t1", handler="joshua")
+    client.claim("t1", handler="alex")
 
     assert captured["url"] == "http://quest.example/api/assistant-tasks/t1"
     assert captured["method"] == "PATCH"
-    assert json.loads(captured["body"]) == {"status": "in_progress", "handler": "joshua"}
+    assert json.loads(captured["body"]) == {"status": "in_progress", "handler": "alex"}
 
 
 def test_claim_without_handler_omits_it(monkeypatch):
