@@ -1300,3 +1300,74 @@ def test_context_assembly_timeout_default_is_five_seconds(monkeypatch):
     assert context_assembly_timeout_seconds() == 2.5
     monkeypatch.setenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS", "garbage")
     assert context_assembly_timeout_seconds() == 5.0  # bad value falls back, never raises
+
+
+def test_context_assembly_partial_result_is_used_and_loud(monkeypatch, caplog):
+    # A PARTIAL assembly result (the assembler hit its soft deadline and returned only the
+    # arm(s) that completed) must be USED — it beats the drop-everything path — while staying
+    # as loud as the timeout: a WARNING naming the degradation plus a structured
+    # "assembly_partial" marker on EVENT_CONTEXT.
+    import logging
+
+    from quest_ai_runner.core.adapters import AssembledContext
+    from quest_ai_runner.core.orchestrator import EVENT_CONTEXT
+
+    class PartialAssembler:
+        def assemble(self, task_text, *, meta=None):
+            return AssembledContext(context_view="PARTIAL_CONTEXT", partial=True)
+
+        def record(self, task_text, outcome):
+            pass
+
+    provider = StubProvider(decisions=[
+        {"action": "answer", "rationale": "chit-chat", "model_tier": "haiku"},
+    ])
+    orch = Orchestrator(retrieval=StubRetrieval(), provider=provider,
+                        registry=ModelRegistry(provider), context_assembler=PartialAssembler())
+    sink = _CapturingSink()
+    with caplog.at_level(logging.WARNING, logger="quest-ai-runner.orchestrator"):
+        res = orch.run("hello there", sink=sink)
+
+    assert res.kind == "answer"
+    # The partial context reached the planner prompt — used, not dropped.
+    assert any("PARTIAL_CONTEXT" in p for p in provider.plan_prompts)
+    assert any("partial" in r.message.lower() for r in caplog.records), (
+        "using a partial result must be a loud WARNING naming the degradation")
+    ctx_events = [e for e in sink.events if e.type == EVENT_CONTEXT]
+    assert ctx_events
+    assert any(e.data.get("assembly_partial") for e in ctx_events)
+    # Partial is NOT a timeout: the full-drop marker must stay false.
+    assert not any(e.data.get("assembly_timed_out") for e in ctx_events)
+
+
+def test_context_assembly_meta_carries_soft_deadline(monkeypatch):
+    # The turn-start prefetch threads a soft deadline (a time.monotonic() timestamp slightly
+    # under the hard collect timeout) to the assembler via meta["assembly_deadline"], so a
+    # deadline-aware assembler can return best-effort partials in time.
+    import time as time_module
+
+    from quest_ai_runner.core.adapters import AssembledContext
+
+    seen_meta: dict = {}
+
+    class RecordingAssembler:
+        def assemble(self, task_text, *, meta=None):
+            seen_meta.update(meta or {})
+            return AssembledContext(context_view="CTX")
+
+        def record(self, task_text, outcome):
+            pass
+
+    monkeypatch.setenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS", "5")
+    provider = StubProvider(decisions=[
+        {"action": "answer", "rationale": "chit-chat", "model_tier": "haiku"},
+    ])
+    orch = Orchestrator(retrieval=StubRetrieval(), provider=provider,
+                        registry=ModelRegistry(provider), context_assembler=RecordingAssembler())
+    before = time_module.monotonic()
+    orch.run("hello there", sink=_CapturingSink())
+
+    deadline = seen_meta.get("assembly_deadline")
+    assert isinstance(deadline, float), f"expected a monotonic deadline, got: {deadline!r}"
+    # Soft deadline sits UNDER the 5s hard budget, measured from roughly the submit time.
+    assert before + 1.0 < deadline <= time_module.monotonic() + 5.0

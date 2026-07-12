@@ -7,12 +7,42 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Context assembly timeout no longer throws away work that finished in time: partial results
+  are used.** The turn-start assembly collect had an all-or-nothing budget: when the assembler
+  overran `QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` (default 5s), ALL fresh context was dropped for
+  the turn even if one retrieval arm had long since completed. The orchestrator now threads a
+  soft deadline (slightly under the hard collect timeout) to the assembler via
+  `meta["assembly_deadline"]` (a `time.monotonic()` timestamp), and `HybridContextAssembler`
+  honors it: an arm that has not finished by the deadline is skipped and the completed arm(s)
+  are fused as a partial result, marked with the new additive `AssembledContext.partial` flag.
+  The consolidating LLM pass is bypassed when the result is partial or the remaining budget
+  could not absorb it (fails never worse, same philosophy as `core/card_filter.py`). Using a
+  partial result stays as loud as the timeout it replaces: a WARNING names the degradation and
+  `EVENT_CONTEXT` carries a structured `assembly_partial` marker alongside the existing
+  `assembly_timed_out`. The true zero-results case is unchanged: when NEITHER arm finished by
+  the deadline the hybrid blocks for both exactly as before (an early empty return would read
+  as "assembly found nothing" and poison the shared turn cache), so the hard-timeout path, the
+  warm recent-card fallback, and the `TurnCardCache` late-recovery contract (a timed-out
+  turn-start future is still recoverable mid-loop) all hold. Assemblers that ignore the meta
+  hint, and callers that pass no deadline, behave byte-for-byte as before.
+
 - **`cli send` no longer acknowledges tasks that were never enqueued.** Found by live testing:
   `create_task` defaulted to `source="cli"`, which the Quest API rejects (its enum is
   chat / reflection / review), and the client swallowed the 400 into `{}` - so `send` printed a
   confident "I'm looking into it" for a task that would never run. The default source is now
   `"chat"`, `create_task` raises on failure instead of swallowing it, and `send` refuses to ack
   unless the API returned a task id.
+
+### Changed
+- **The learned-notes always-recent floor is relevance-gated.** `NoteContextStore.assemble`
+  unconditionally included the 2 most recent notes in every turn's context, which bled the
+  previous topic into an unrelated next turn. A floored note must now clear a minimal relevance
+  bar against the current query, reusing the store's existing keyword-overlap scoring: a single
+  shared meaningful keyword keeps it, and when either side yields no keywords the note is kept
+  (cannot judge relevance, so do not drop). Genuinely related recent notes still always make
+  it; only a clearly unrelated one is dropped. When nothing (floor included) relates to the
+  query, `assemble` now returns an empty context instead of a header with stale notes. Set
+  `QAR_NOTE_FLOOR_RELEVANCE_GATED=0` to restore the old unconditional floor.
 
 ### Added
 - **Conscious overseer sees full context: goal verification now carries the turn's L2 context

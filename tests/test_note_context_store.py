@@ -120,27 +120,86 @@ def test_assemble_empty_returns_empty(tmp_path):
 def test_assemble_after_sync_returns_corrections(tmp_path):
     store = NoteContextStore(str(tmp_path / "notes"))
     store.sync_from_notes([_make_note("n1", "be concise in updates")])
-    result = store.assemble("write a status update")
+    result = store.assemble("write concise status updates")
     assert "be concise in updates" in result.context_view
 
 
 def test_assemble_includes_correction_header(tmp_path):
     store = NoteContextStore(str(tmp_path / "notes"))
     store.sync_from_notes([_make_note("n1", "be concise")])
-    result = store.assemble("anything")
+    result = store.assemble("keep it concise")
     assert "LEARNED CORRECTIONS" in result.context_view
 
 
-def test_assemble_recent_floor_always_included(tmp_path):
-    """The 2 most recent notes are always included regardless of keyword overlap."""
+# ---------------------------------------------------------------------------
+# assemble — the relevance-gated recent floor
+# ---------------------------------------------------------------------------
+
+
+def _five_topic_notes():
+    """Five notes with disjoint topics, explicitly timestamped so n4/n5 are the most recent."""
+    return [
+        _make_note(f"n{j}", f"note topic{j}", created_at=f"2026-01-01T00:00:0{j}Z")
+        for j in range(1, 6)
+    ]
+
+
+def test_floor_gate_drops_unrelated_recent_notes(tmp_path):
+    """Default behavior: a clearly unrelated query no longer drags in the 2 most recent notes."""
     store = NoteContextStore(str(tmp_path / "notes"))
-    # Add 5 notes; the last 2 should always appear even on an unrelated query.
-    for i in range(1, 6):
-        store.sync_from_notes([_make_note(f"n{j}", f"note topic{j}") for j in range(1, i + 1)])
+    store.sync_from_notes(_five_topic_notes())
     result = store.assemble("xyzzy completely unrelated query")
-    # topic4 and topic5 are the most recent two — must always appear.
+    # No note relates to the query, floor included: assemble returns an EMPTY context.
+    assert result.context_view == ""
+
+
+def test_floor_gate_keeps_related_recent_note(tmp_path):
+    """A recent note that shares even one meaningful keyword with the query still floors in."""
+    store = NoteContextStore(str(tmp_path / "notes"))
+    store.sync_from_notes(_five_topic_notes())
+    result = store.assemble("tell me about topic5 xyzzy")
+    assert "topic5" in result.context_view
+    # The OTHER recent note (topic4) shares nothing with the query — gated out.
+    assert "topic4" not in result.context_view
+
+
+def test_floor_gate_escape_hatch_env(tmp_path, monkeypatch):
+    """QAR_NOTE_FLOOR_RELEVANCE_GATED=0 restores the old unconditional floor."""
+    monkeypatch.setenv("QAR_NOTE_FLOOR_RELEVANCE_GATED", "0")
+    store = NoteContextStore(str(tmp_path / "notes"))
+    store.sync_from_notes(_five_topic_notes())
+    result = store.assemble("xyzzy completely unrelated query")
     assert "topic4" in result.context_view
     assert "topic5" in result.context_view
+
+
+def test_floor_kept_when_query_has_no_keywords(tmp_path):
+    """Permissive bar: a query with no meaningful keywords cannot judge relevance — keep floor."""
+    store = NoteContextStore(str(tmp_path / "notes"))
+    store.sync_from_notes(_five_topic_notes())
+    result = store.assemble("ok?")
+    assert "topic4" in result.context_view
+    assert "topic5" in result.context_view
+
+
+def test_floor_bypasses_ranking_when_relevant(tmp_path):
+    """A relevant recent note floors in even when higher-scoring notes would fill every slot."""
+    store = NoteContextStore(str(tmp_path / "notes"))
+    notes = [
+        _make_note(f"n{i}", f"deploy server rule number{i}",
+                   created_at=f"2026-01-01T00:00:0{i}Z")
+        for i in range(1, 7)  # six notes scoring 2 against the query below
+    ]
+    notes += [
+        _make_note("n7", "deploy quietly overnight", created_at="2026-01-01T00:00:07Z"),
+        _make_note("n8", "deploy without fanfare", created_at="2026-01-01T00:00:08Z"),
+    ]
+    store.sync_from_notes(notes)
+    result = store.assemble("deploy server config")
+    # n7/n8 score only 1 and would lose every ranked slot to the six score-2 notes, but they
+    # are recent AND relevant, so the floor guarantees them a place.
+    assert "deploy quietly overnight" in result.context_view
+    assert "deploy without fanfare" in result.context_view
 
 
 def test_assemble_max_total_respected(tmp_path):

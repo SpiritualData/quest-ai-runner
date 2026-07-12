@@ -2340,10 +2340,13 @@ def context_assembly_timeout_seconds() -> float:
     """Wall-clock budget for the turn-start context-assembly background fetch (cards + recent +
     corpus consolidation, run concurrently with the instant ack). Env
     ``QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS`` (default 5.0, accepts a float); read fresh on every
-    call so it can be tuned without a restart. A run that exceeds this drops ALL fresh context
-    for the turn (the assembler has no partial-result path), so raising it trades latency for
-    completeness -- see the WARNING logged at the call site plus
-    ``record_context_assembly_timeout`` for the counter this triggers."""
+    call so it can be tuned without a restart. A soft deadline slightly under this budget is
+    threaded to the assembler via ``meta["assembly_deadline"]`` so a deadline-aware assembler
+    (e.g. ``HybridContextAssembler``) returns whatever completed in time as a PARTIAL result
+    (``AssembledContext.partial``) instead of blowing the whole budget. Only when not even a
+    partial result lands in time does the collect below drop ALL fresh context for the turn --
+    see the WARNING logged at the call site plus ``record_context_assembly_timeout`` for the
+    counter this triggers."""
     raw = os.getenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS")
     if raw is None or not raw.strip():
         return 5.0
@@ -5746,7 +5749,21 @@ class Orchestrator:
                 _ctx_prefetch_query = _ctx_msg
 
                 def _do_assemble() -> Any:
-                    return _ctx_assembler.assemble(_ctx_msg, meta=_ctx_meta or None)
+                    # Soft internal deadline slightly under the hard collect timeout below,
+                    # threaded via ``meta["assembly_deadline"]`` (a ``time.monotonic()``
+                    # timestamp). A deadline-aware assembler (e.g. HybridContextAssembler)
+                    # uses it to return whatever its retrieval arms completed in time as a
+                    # PARTIAL result (``AssembledContext.partial``) instead of overrunning the
+                    # budget and losing everything. Assemblers that ignore the hint behave
+                    # exactly as before. Only THIS turn-start prefetch is deadline-bounded:
+                    # ``_ctx_meta`` itself is left untouched, so mid-loop reads through
+                    # ``TurnCardCache`` stay unbounded and a late full assembly is still
+                    # recoverable there.
+                    hard_budget = context_assembly_timeout_seconds()
+                    soft_budget = max(hard_budget - 0.5, hard_budget * 0.5)
+                    assemble_meta = {**(_ctx_meta or {}),
+                                     "assembly_deadline": time.monotonic() + soft_budget}
+                    return _ctx_assembler.assemble(_ctx_msg, meta=assemble_meta)
 
                 _ctx_executor = ThreadPoolExecutor(max_workers=1)
                 _ctx_future = _ctx_executor.submit(_do_assemble)
@@ -5820,20 +5837,23 @@ class Orchestrator:
         # The assembled cards go FIRST, then the caller's context, so cards apply even when the
         # caller provided its own grounding (panel docs / chat uploads append below).
         context_assembly_timed_out = False
+        context_assembly_partial = False
         if _ctx_future is not None:
             ctx_timeout = context_assembly_timeout_seconds()
             try:
                 _assembled = _ctx_future.result(timeout=ctx_timeout)
             except TimeoutError:
-                # LOUD by design: this drops ALL fresh context for the turn (the assembler has
-                # no partial-result path), the exact mechanism behind "forgets what I just
-                # said" — it must never be a debug-only breadcrumb.
+                # LOUD by design: this drops ALL fresh context for the turn — not even the
+                # assembler's soft-deadline PARTIAL path (see _do_assemble) returned in time —
+                # the exact mechanism behind "forgets what I just said". It must never be a
+                # debug-only breadcrumb.
                 context_assembly_timed_out = True
                 timeout_count = record_context_assembly_timeout()
                 log.warning(
-                    "Context assembly timed out after %.1fs; turn-start context was dropped "
-                    "and this turn proceeds without it (QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS "
-                    "to adjust; total timeouts this process: %d)",
+                    "Context assembly timed out after %.1fs with no partial result; "
+                    "turn-start context was dropped and this turn proceeds without it "
+                    "(QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS to adjust; total timeouts this "
+                    "process: %d)",
                     ctx_timeout, timeout_count)
                 _assembled = None
             except Exception as e:  # noqa: BLE001 — cancelled or assembler error: skip
@@ -5845,6 +5865,15 @@ class Orchestrator:
                 except Exception:  # noqa: BLE001
                     pass
             if _assembled is not None:
+                # PARTIAL result: the assembler hit its soft deadline and returned only the
+                # retrieval arm(s) that completed. Using it beats the drop-everything path,
+                # but stay LOUD about the degradation (same visibility bar as the timeout).
+                context_assembly_partial = bool(getattr(_assembled, "partial", False))
+                if context_assembly_partial:
+                    log.warning(
+                        "Context assembly hit its soft deadline; PARTIAL context was used "
+                        "for this turn (only the retrieval arm(s) that finished within "
+                        "budget; QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS to adjust)")
                 # Turn-start assembly completed in time: seed the shared cache so a same-query
                 # mid-loop {"cards": ...} read is a pure cache hit (no second assembly run). On the
                 # timeout branch above we deliberately leave the still-running future registered, so
@@ -5928,6 +5957,10 @@ class Orchestrator:
                         # the WARNING logged at the timeout call site and
                         # ``record_context_assembly_timeout``).
                         "assembly_timed_out": context_assembly_timed_out,
+                        # Sibling marker: assembly hit its soft deadline and this turn ran on
+                        # a PARTIAL result (the arm(s) that completed in time) instead of
+                        # dropping fresh context entirely.
+                        "assembly_partial": context_assembly_partial,
                         # Retrieval metadata is the run explaining itself. A consumer routes this to
                         # a debug surface, never into the chat bubble.
                         "internal": True,

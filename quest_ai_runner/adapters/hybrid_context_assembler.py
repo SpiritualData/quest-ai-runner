@@ -21,6 +21,20 @@ If BOTH assemblers return an empty context_view the hybrid also returns an
 empty AssembledContext, and the caller falls back to plain Claude Code (the
 never-worse guarantee).
 
+DEADLINE (partial results)
+--------------------------
+When the caller passes ``meta["assembly_deadline"]`` (a ``time.monotonic()``
+timestamp), the fuse step becomes deadline-aware: an arm that has not finished
+by the deadline is SKIPPED and the arm(s) that completed are fused as a partial
+result (``AssembledContext.partial=True``) so a slow arm never costs the caller
+its whole context budget.  If NEITHER arm finished by the deadline the hybrid
+blocks for both exactly as before -- returning an early empty result would look
+like "assembly found nothing" and defeat the caller's own timeout/late-recovery
+handling for the true zero-results case.  The consolidating LLM pass is bypassed
+when the result is partial or the remaining budget could not absorb it (the
+fails-never-worse philosophy of ``core/card_filter.py``).  Without a deadline in
+``meta``, behavior is unchanged.
+
 RECORD
 ------
 ``record()`` forwards to both assemblers so both auto-accumulate over time.
@@ -29,11 +43,17 @@ from __future__ import annotations
 
 import concurrent.futures
 import logging
+import time
 from typing import Any, Dict, List, Optional
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase, ContextAssembler
 
 logger = logging.getLogger(__name__)
+
+# Minimum seconds that must remain before ``meta["assembly_deadline"]`` for the consolidating
+# LLM pass to be attempted at all; with less than this left the mechanical merge is returned
+# directly (bypassing consolidation can only cost polish, never content -- fails never worse).
+CONSOLIDATE_MIN_REMAINING_SECONDS = 1.0
 
 
 class HybridContextAssembler(ContextAssemblerBase):
@@ -152,26 +172,72 @@ class HybridContextAssembler(ContextAssemblerBase):
             except Exception:
                 return AssembledContext()
 
+        # Optional soft deadline: ``meta["assembly_deadline"]`` is a ``time.monotonic()``
+        # timestamp set by the caller (e.g. the Orchestrator's turn-start assembly, slightly
+        # under its own hard collect timeout).  Absent or malformed -> no deadline, prior
+        # behavior byte-for-byte.
+        deadline: Optional[float] = None
         try:
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-                fut_kw = pool.submit(_run_keyword)
-                fut_vec = pool.submit(_run_vector)
+            raw_deadline = (meta or {}).get("assembly_deadline")
+            if raw_deadline is not None:
+                deadline = float(raw_deadline)
+        except Exception:
+            deadline = None
+
+        partial = False
+        pool = None
+        try:
+            pool = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+            fut_kw = pool.submit(_run_keyword)
+            fut_vec = pool.submit(_run_vector)
+            arm_results: Dict[str, Optional[AssembledContext]] = {}
+            for name, fut in (("keyword", fut_kw), ("vector", fut_vec)):
+                remaining: Optional[float] = None
+                if deadline is not None:
+                    remaining = max(deadline - time.monotonic(), 0.0)
                 try:
-                    kw_result = fut_kw.result()
+                    arm_results[name] = fut.result(timeout=remaining)
+                except concurrent.futures.TimeoutError:
+                    arm_results[name] = None  # not finished by the deadline
                 except Exception:
-                    kw_result = AssembledContext()
+                    arm_results[name] = AssembledContext()
+            if arm_results["keyword"] is None and arm_results["vector"] is None:
+                # Deadline expired with NEITHER arm finished: block for both (the pre-deadline
+                # behavior).  Returning an early empty result here would read as "assembly
+                # completed and found nothing" and poison the caller's cache, defeating its own
+                # hard timeout + late-recovery path, which is the correct owner of the true
+                # zero-results case.
                 try:
-                    vec_result = fut_vec.result()
+                    arm_results["keyword"] = fut_kw.result()
                 except Exception:
-                    vec_result = AssembledContext()
+                    arm_results["keyword"] = AssembledContext()
+                try:
+                    arm_results["vector"] = fut_vec.result()
+                except Exception:
+                    arm_results["vector"] = AssembledContext()
+            elif arm_results["keyword"] is None or arm_results["vector"] is None:
+                skipped = "keyword" if arm_results["keyword"] is None else "vector"
+                partial = True
+                logger.warning(
+                    "HybridContextAssembler: %s arm missed the assembly deadline and was "
+                    "skipped; fusing the completed arm as a partial result", skipped)
+            kw_result = arm_results["keyword"] or AssembledContext()
+            vec_result = arm_results["vector"] or AssembledContext()
         except Exception:
             # ThreadPoolExecutor failed: run serially.
             kw_result = _run_keyword()
             vec_result = _run_vector()
+        finally:
+            if pool is not None:
+                try:
+                    # wait=False: a skipped arm's thread finishes on its own; never block on it.
+                    pool.shutdown(wait=False)
+                except Exception:
+                    pass
 
         # Fuse: both empty -> empty (fall back to baseline).
         if not kw_result.context_view and not vec_result.context_view:
-            return AssembledContext()
+            return AssembledContext(partial=partial)
 
         # Build fused context_view with clearly labelled sections.
         view_parts: List[str] = []
@@ -235,6 +301,7 @@ class HybridContextAssembler(ContextAssemblerBase):
             stale=merged_stale,
             sources=merged_sources,
             card_metadata=merged_metadata,
+            partial=partial,
         )
 
         # --- ONE consolidating LLM pass over the MERGED card set --------------------------------
@@ -242,9 +309,16 @@ class HybridContextAssembler(ContextAssemblerBase):
         # survive (content stays VERBATIM, the LLM selects ids only). Engages ONLY when a provider is
         # wired AND at least one merged card carries structured ``items``. On no-provider / no-items /
         # any failure -> the mechanical merge above (the never-worse guarantee), unchanged.
+        # BUDGET GATE: a partial result means the deadline already expired, and even a full fuse
+        # skips consolidation when less than CONSOLIDATE_MIN_REMAINING_SECONDS of budget is left --
+        # an LLM pass that would blow the caller's budget is worse than the mechanical merge
+        # (fails never worse, same philosophy as core/card_filter.py).
         if (
             self._consolidate
             and self._model_provider is not None
+            and not partial
+            and (deadline is None
+                 or (deadline - time.monotonic()) >= CONSOLIDATE_MIN_REMAINING_SECONDS)
             and any((m.get("items") for m in merged_metadata))
         ):
             consolidated = self._consolidate_merged(task_text, merged_metadata, mechanical, meta=meta)

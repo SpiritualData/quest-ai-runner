@@ -407,6 +407,13 @@ class AssembledContext:
                                Defaults to [] (backward compatible).  Populated by assemblers
                                that opt in; the Orchestrator emits a human-readable STATUS
                                event summarising the sources when the list is non-empty.
+      ``partial``           -- True when the assembler ran out of budget and returned only what
+                               completed in time (see ``meta["assembly_deadline"]``, honored by
+                               deadline-aware assemblers such as ``HybridContextAssembler``).
+                               A partial result is still real context -- the Orchestrator
+                               prefers it over dropping the turn's fresh context entirely --
+                               but consumers can surface that it was incomplete.  Defaults to
+                               False (backward compatible).
     """
     context_view: str = ""
     model_tier_hint: Optional[str] = None
@@ -414,6 +421,7 @@ class AssembledContext:
     stale: List[str] = field(default_factory=list)
     sources: List[Dict[str, Any]] = field(default_factory=list)
     card_metadata: List[Dict[str, Any]] = field(default_factory=list)  # [{'id', 'title', 'relevance_score', 'file_count', 'files', 'adapter'}]
+    partial: bool = False
 
 
 # ---------------------------------------------------------------------------
