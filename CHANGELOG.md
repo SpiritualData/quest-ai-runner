@@ -15,6 +15,24 @@ All notable changes to this project are documented here. The format is based on
   unless the API returned a task id.
 
 ### Added
+- **Conscious overseer sees full context: goal verification now carries the turn's L2 context
+  layer.** `Orchestrator._verify_goal` judged a worker's output with an EMPTY context layer, so the
+  verifier never saw the cards/grounding the worker or answer call actually had (see
+  `docs/HANDS_FREE_QUEST_AI_DESIGN.md` sections 4 and 6). It now takes a `context_layer` parameter
+  and both call sites thread the turn's ALREADY-RENDERED L2 block through unchanged: the
+  deep-goal loop passes that goal's own `per_goal_context` (the same block the worker received in
+  its `context_preamble`, kept stable across retry attempts so the cache benefit holds across
+  them), and the answer-verification loop passes `grounding_context_layer(context_view)` (the same
+  L2 the answer call it is judging used, computed once so it stays stable across regenerate
+  iterations). Because the block is byte-identical to what the paired call already sent, the
+  marginal cost to a cached lineage is a cache read, not a fresh write. The flattened
+  non-layered fallback prompt gains a clearly labeled `CONTEXT AVAILABLE TO THE WORKER` section
+  placed before the output-to-judge, so a provider without the layered surface sees the same
+  information. A new `QAR_VERIFY_CONTEXT_MAX_CHARS` env var (default 24000) caps the block;
+  `truncate_verify_context` drops only the TAIL (keeping the stable head/prefix) and notes the cut
+  when the cap is exceeded. Purely additive: an absent `context_layer` renders byte-for-byte the
+  old prompt/layers shape, and the unverified-verdict contract (verdict `None` means unverified,
+  never a silent trust of the worker's own outcome) is unchanged either way.
 - **WS4 (cache economics): one shared prompt-layering path + provider cache wiring.** A new
   `core/prompt_layers.py` primitive (`PromptLayers`, `compose_layers`, `turn_prompt_head`) splits
   every turn-call's prompt into three layers: a stable L1 head (persona + standards), a stable L2

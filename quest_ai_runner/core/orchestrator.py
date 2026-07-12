@@ -913,7 +913,7 @@ Do NOT use em dashes.
 --- CONVERSATION HISTORY (what the worker had access to; empty means no prior turns exist) ---
 {transcript}
 
---- WORKER OUTPUT (what it reports it did) ---
+{context}--- WORKER OUTPUT (what it reports it did) ---
 {output}
 """
 
@@ -2354,6 +2354,46 @@ def context_assembly_timeout_seconds() -> float:
     return value if value > 0 else 5.0
 
 
+def verify_context_max_chars() -> int:
+    """Character cap on the context layer handed to goal verification (``Orchestrator._verify_goal``).
+
+    See HANDS_FREE_QUEST_AI_DESIGN.md sections 4 and 6: the overseer/verifier should affordably see
+    the SAME context layer the worker/answer call saw (cache-read pricing makes that cheap once the
+    layer is already cached), so ``_verify_goal`` is handed the turn's rendered L2 context block
+    straight through, unchanged. This cap is a safety valve for the rare case where that block is
+    itself huge (a card layer with no upstream cap), not a normal-path limiter. Env
+    ``QAR_VERIFY_CONTEXT_MAX_CHARS`` (default 24000, accepts an int); read fresh on every call so it
+    can be tuned without a restart. A non-positive value disables the cap entirely."""
+    raw = os.getenv("QAR_VERIFY_CONTEXT_MAX_CHARS")
+    if raw is None or not raw.strip():
+        return 24000
+    try:
+        value = int(raw)
+    except ValueError:
+        return 24000
+    return value if value > 0 else 24000
+
+
+def truncate_verify_context(text: str, max_chars: Optional[int] = None) -> str:
+    """Cap a context block for goal verification, dropping only its TAIL when it is too large.
+
+    Truncating the tail (never the head, never by summarizing) keeps the returned block a true
+    byte-PREFIX of the untruncated one -- the same stable-prefix property the whole layering scheme
+    depends on (``prompt_layers.PromptLayers.prefix``). ``max_chars`` defaults to
+    ``verify_context_max_chars()``; a non-positive cap means "no limit". Returns ``text`` unchanged
+    when it is empty or already within the cap. When truncated, appends a short note naming how much
+    was cut, so the judge knows the context it saw was partial rather than assuming completeness."""
+    if not text:
+        return ""
+    cap = verify_context_max_chars() if max_chars is None else max_chars
+    if cap <= 0 or len(text) <= cap:
+        return text
+    dropped = len(text) - cap
+    head = text[:cap].rstrip()
+    return (head + f"\n\n[... context truncated for verification: {dropped} more "
+            "characters omitted, earliest content kept ...]")
+
+
 context_assembly_timeout_lock = threading.Lock()
 context_assembly_timeout_count = 0
 
@@ -3366,7 +3406,8 @@ class Orchestrator:
                      rep_preamble: Optional[str] = None,
                      quality_standards: Optional[str] = None,
                      transcript: Optional[str] = None,
-                     exec_record: Optional[ExecutionRecord] = None
+                     exec_record: Optional[ExecutionRecord] = None,
+                     context_layer: Optional[str] = None,
                      ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Decide whether the worker's run met the done-standard AT THE QUALITY BAR.
 
@@ -3375,6 +3416,19 @@ class Orchestrator:
         supplied (answer turns with ``verify_claims`` on), the SAME verdict also judges honesty of
         completion claims: any change the output claims it completed must be backed by a SUCCEEDED
         entry in the record, else ``met=false`` with ``claims_unexecuted=true``.
+
+        ``context_layer`` is the turn's ALREADY-RENDERED L2 context block -- the exact same string the
+        caller's plan/answer/deep call put in ITS layers (``plan_context``, ``grounding_context_layer
+        (context_view)``, or a deep goal's own ``per_goal_context``; see the call sites in
+        ``_run_deep``'s goal loop and the answer-verification loop). Passed straight through, NEVER
+        re-rendered here, so the verifier sees the SAME context the call it is judging saw (see
+        HANDS_FREE_QUEST_AI_DESIGN.md sections 4 and 6: the overseer should affordably see the FULL
+        context the worker/answer saw, and because the block is byte-identical to what that call
+        already sent, the marginal cost to a cached lineage is a cache read, not a fresh write). Only
+        the TAIL is truncated when the block exceeds ``verify_context_max_chars()`` (env
+        ``QAR_VERIFY_CONTEXT_MAX_CHARS``), preserving the stable head/prefix; see
+        ``truncate_verify_context``. ``None`` or empty means no context was available at the call
+        site (e.g. no assembler/store wired) -- the verdict logic is unaffected either way.
 
         Returns a ``(verdict, error)`` pair:
         - ``verdict`` is ``{"met": bool, "reason": str, "next_action": str, "need_more_context":
@@ -3386,7 +3440,8 @@ class Orchestrator:
           (every tier failed, an unresolvable tier, a parse miss, or no output to judge),
           ``verdict`` is ``None`` and ``error`` carries the real reason (an exception message, not
           just a class name) — the caller MUST treat this as "unverified", never as a silent trust
-          of the worker's own reported outcome. Never raises.
+          of the worker's own reported outcome (context presence never changes this contract). Never
+          raises.
         """
         if not (output or "").strip():
             # Nothing to judge — the worker reported no result. Treat as not verifiable here; the
@@ -3403,23 +3458,39 @@ class Orchestrator:
         claims_rules = ""
         if exec_record is not None:
             claims_rules = VERIFY_CLAIMS_RULES.format(record=exec_record.summary()[:2000])
+        # The context block for the FLATTENED prompt (the non-layered fallback): rendered clearly as
+        # its own section, placed before the worker output it is meant to ground the judgment of,
+        # same prefix-block convention as ``persona``/``standards`` above (present-with-trailing-blank-
+        # line, or empty -- so an empty context leaves the prompt byte-for-byte what it was before this
+        # parameter existed). Never stripped/re-sliced when present -- that would break the
+        # byte-identity with the caller's own L2 that is the whole point of threading it through.
+        raw_context_layer = context_layer or ""
+        context_text = truncate_verify_context(raw_context_layer) if raw_context_layer.strip() else ""
+        context_block = ""
+        if context_text:
+            context_block = (
+                "--- CONTEXT AVAILABLE TO THE WORKER (INTERNAL: the same assembled context/cards the "
+                "worker had access to when producing this output; use it to judge whether the output "
+                "is actually grounded and complete) ---\n" + context_text + "\n\n")
         prompt = VERIFY_GOAL_PROMPT.format(
-            persona=persona, standards=standards, claims_rules=claims_rules,
+            persona=persona, standards=standards, claims_rules=claims_rules, context=context_block,
             goal=(goal or "")[:1000], brief=(brief or "")[:2000],
             transcript=(transcript or "").strip()[:2000] or "(no prior turns)",
             output=(output or "")[:6000])
         # Cache-friendly layered shape (in addition to the flattened ``prompt`` fallback): the rep
-        # persona and quality standards ride in the stable L1 head; the verify instructions + goal +
-        # brief + transcript + worker output are the volatile L3 tail (built with empty persona/
-        # standards slots, since those now sit in the head). Verify carries no card context, so its
-        # L2 is empty. Only used for a provider that accepts ``layers``; the flattened ``prompt`` is
-        # the faithful fallback for every other provider.
+        # persona and quality standards ride in the stable L1 head; the SAME rendered context layer the
+        # turn's plan/answer/deep call carried rides in the stable L2 (byte-identical to theirs, so a
+        # cached lineage reads it instead of re-sending it); the verify instructions + goal + brief +
+        # transcript + worker output are the volatile L3 tail (built with empty persona/standards/
+        # context slots, since those now sit in the head/L2). Only used for a provider that accepts
+        # ``layers``; the flattened ``prompt`` (context inline, see above) is the faithful fallback for
+        # every other provider.
         verify_layers = compose_layers(
             persona=(rep_preamble or ""),
             standards=(quality_standards or ""),
-            context="",
+            context=context_text,
             tail=VERIFY_GOAL_PROMPT.format(
-                persona="", standards="", claims_rules=claims_rules,
+                persona="", standards="", claims_rules=claims_rules, context="",
                 goal=(goal or "")[:1000], brief=(brief or "")[:2000],
                 transcript=(transcript or "").strip()[:2000] or "(no prior turns)",
                 output=(output or "")[:6000]),
@@ -4212,9 +4283,17 @@ class Orchestrator:
                 # as done just because the worker's own exit code said success (that was the exact
                 # "verifier outage silently re-opens 'said Completed but did nothing'" bug — see
                 # HANDS_FREE_QUEST_AI_DESIGN.md section 2). The real reason travels with the result.
+                # ``context_layer=per_goal_context``: this goal's OWN assembled context (built once
+                # above, unchanged across attempts) -- the SAME block this goal's worker actually
+                # received in its ``context_preamble`` (see ``_do_run`` above). The turn-level
+                # plan/answer context is not in scope in this per-goal closure and would not describe
+                # what THIS worker saw anyway; per_goal_context is the truer "what the worker saw"
+                # for a deep goal, and staying stable across attempts keeps this call's L2 cached
+                # across retries of the same goal too.
                 verdict, verify_error = self._verify_goal(goal, base_brief, res.output or "",
                                             rep_preamble=rep_preamble,
-                                            quality_standards=quality_standards)
+                                            quality_standards=quality_standards,
+                                            context_layer=per_goal_context)
                 if verdict is None:
                     reason = verify_error or "verification did not run for an unknown reason"
                     res.met = False
@@ -6552,6 +6631,12 @@ class Orchestrator:
                     overall_goal = (plan.goal or "").strip() or (
                         "Fully and correctly answer the user's request to their satisfaction: "
                         + user_message)
+                # The SAME rendered L2 context layer the answer call(s) this turn used (see
+                # ``_grounded_answer``'s ``layers`` wiring): ``context_view`` does not change across
+                # this loop's regenerate/verify iterations (a regeneration only rewrites ``text``), so
+                # computing it once here gives every verify call in this loop a byte-identical L2 to
+                # the answer it is judging, and the same L2 across iterations too.
+                answer_context_layer = grounding_context_layer(context_view)
                 _max = max(1, self.cfg.answer_goal_max_iterations)
                 if self.cfg.verify_claims:
                     # The claim check needs at least one verification pass even when the goal loop
@@ -6565,7 +6650,8 @@ class Orchestrator:
                         rep_preamble=rep_preamble,
                         quality_standards=quality_standards,
                         transcript=transcript,
-                        exec_record=exec_record if self.cfg.verify_claims else None)
+                        exec_record=exec_record if self.cfg.verify_claims else None,
+                        context_layer=answer_context_layer)
                     if verdict is not None:
                         _last_verdict = verdict
                     if verdict is not None and verdict.get("met"):
