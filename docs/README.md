@@ -14,6 +14,8 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 - **[Implementing adapters](adapters.md)** — the four interfaces (`RetrievalAdapter`,
   `ModelProvider`, `DeepRunner`, `EscalationSink`) and how to build your own.
 - **[Deployment](deployment.md)** — run the poller under cron or systemd.
+- **[Corpus playbooks](corpus-playbooks.md)** — distill a corpus's history into playbook files the
+  shallow loop (context cards) and Claude Code deep runs both pick up automatically.
 
 ## Explanation / reference
 
