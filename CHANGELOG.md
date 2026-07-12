@@ -7,6 +7,17 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- **A verifier failure is never reported as success.** When goal verification cannot run (LLM
+  outage, unresolvable verify tier, parse failure), the deep result is now UNVERIFIED: it reports
+  failed with the real reason ("Unverified: goal verification did not run (...)"), instead of
+  silently trusting the worker's own exit code. The answer path likewise logs the real reason and
+  exits "unverified", never "verified".
+- **Mid-loop reads and turn-start context assembly time out loudly.** Each parallel read gets a
+  per-operation budget (`QAR_READ_OP_TIMEOUT_SECONDS`, default 60s); a stall reports which named
+  operation timed out, never an empty "nothing found". The context-assembly wait is configurable
+  (`QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS`, default 5s) and a timeout now logs at WARNING with a
+  process-wide counter and an `assembly_timed_out` marker on the context event, instead of a
+  debug-level note while all fresh context is silently dropped.
 - **Deep runs are never untimed, never silent, and never watch the wrong session.** The
   `claude -p` deep subprocess now always has a wall-clock cap (`SubprocessConfig.timeout_seconds`,
   else `QAR_DEEP_TIMEOUT_SECONDS`, else 1 hour); on expiry its whole process group is killed and
