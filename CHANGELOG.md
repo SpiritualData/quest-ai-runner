@@ -7,6 +7,29 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **WS3: a real deep-worker escalation ladder, generically.** The deep worker is always Claude
+  Code (Claude models only), so "goal not met -> a stronger model" only ever does something when
+  the ladder actually contains a Claude-runnable id. `QAR_DEEP_MODELS` now means a comma-separated
+  list of real Claude model ids/aliases (weak -> strong) and is left UNSET by default, rather than
+  defaulting to bare semantic tier names (`fast,balanced,quality,best`) that were never
+  Claude-runnable and made the ladder silently inert on a non-Claude deployment.
+  `Orchestrator._deep_models` now builds a fallback ladder generically when no explicit ladder is
+  configured: it starts from the resolved session model and, if that is not Claude-runnable,
+  extends the ladder with any Claude-runnable id it can resolve from the "quality"/"best" tiers
+  (e.g. an operator override like `QAR_MODEL_BEST=claude-opus-4-8`), so escalation does something
+  real even on a Gemini/OpenAI-primary deployment. The resolved ladder is logged at INFO once per
+  deep run; a non-pinned ladder that still comes out length <= 1 logs a WARNING naming the fix.
+- **WS3: intent judgment owned by a structured LLM call, regex demoted to prefilter.** The
+  force-deep "the user's message requests a change but the turn only proposed it" fallback used a
+  regex net (`_message_requests_change`) as its sole judge. The regex is now a cheap PREFILTER,
+  decisive (and free) for the common cases; only in the AMBIGUOUS band it leaves undecided (a
+  change-verb/wrongness signal fired, but an interrogative opener or a bare "?" ending overrode
+  it -- see `_message_change_signal_ambiguous`) does ONE structured LLM judgment
+  (`Orchestrator._judge_execution_directive`, tool schema `{is_execution_directive, reason}`) step
+  in, at the cheap "balanced" tier (`OrchestratorConfig.intent_judge_tier`), hard-timeout-guarded
+  (`QAR_INTENT_JUDGE_TIMEOUT_SECONDS`, default 8s) and falling back to the regex verdict on any
+  failure/timeout/parse miss. This can only ever ADD an escalation the regex missed; it never adds
+  a blocking call to the ordinary conclusive case and never blocks the turn.
 - **One context primitive, reachable at every loop step (unified card/topic context).** Card and
   topic context are no longer trapped in a single turn-start pass. The planner can now request two
   new read ops mid-loop: `{"cards": "<query>"}` runs card/topic assembly for a query through the

@@ -576,6 +576,16 @@ class OrchestratorConfig:
     # the strong model on judgment, keep the cheap tiers for gathering. Empty string falls back to
     # ``planner_tier`` (the previous behavior).
     verify_tier: str = "best"
+    # INTENT-DIRECTIVE JUDGE (WS3: structured judgment replacing a regex-only call). The cheap
+    # regex prefilter (``_message_requests_change``) decides most turns for free; when it CANNOT
+    # (a change-verb/wrongness signal fired but an interrogative opener or a bare "?" overrode it --
+    # see ``message_change_signal_ambiguous``), ONE structured LLM call judges the ambiguous
+    # message instead of guessing. This is a ROUTING decision, not the run's outcome gate
+    # (``verify_tier`` is that), so it defaults to the cheaper "balanced" tier. The call is
+    # hard-timeout-guarded (``intent_judge_timeout_seconds()``) and ALWAYS falls back to the regex
+    # verdict on any failure/timeout/parse miss -- it can only ever ADD an escalation the regex
+    # missed, never block the turn or override a "yes" the regex already gave.
+    intent_judge_tier: str = "balanced"
     # MINIMAL-INTERVENTION OVERSEER. A high-quality model reads a tiny digest of the run and writes a
     # tiny signal, watching the loop the way a person's awareness watches their own body walk: almost
     # always silent, occasionally sending one small course correction. It is consulted at two points
@@ -904,6 +914,52 @@ Do NOT use em dashes.
 
 --- WORKER OUTPUT (what it reports it did) ---
 {output}
+"""
+
+# ---------------------------------------------------------------------------
+# INTENT-DIRECTIVE JUDGE (WS3): the ONE structured LLM call that decides the AMBIGUOUS band the
+# cheap regex prefilter (_message_requests_change / message_change_signal_ambiguous) leaves
+# undecided. See Orchestrator.judge_execution_directive. Kept tiny and app-agnostic: no org names,
+# no examples baked from any one deployment's data.
+# ---------------------------------------------------------------------------
+
+INTENT_DIRECTIVE_TOOL: Dict[str, Any] = {
+    "name": "execution_directive_verdict",
+    "description": "Judge whether the user's message is a DIRECTIVE to actually make a change "
+                   "(code, files, or data) right now, as opposed to a question, an exploration, an "
+                   "opinion request, or a hypothetical.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "is_execution_directive": {
+                "type": "boolean",
+                "description": "True ONLY if the user is directing the assistant to actually make "
+                               "the change now (a command, even a polite one: 'can you fix X', "
+                               "'go ahead and add Y'). False if the message asks ABOUT something, "
+                               "weighs options, or does not actually direct action.",
+            },
+            "reason": {"type": "string", "description": "One short sentence: why."},
+        },
+        "required": ["is_execution_directive"],
+    },
+}
+
+INTENT_DIRECTIVE_PROMPT = """\
+A cheap keyword prefilter could not confidently classify this user message. Judge whether it is a
+DIRECTIVE to actually execute a change (code, files, or data) right now, as opposed to a question,
+an exploration ("how would I..."), an opinion request, or a hypothetical.
+
+Set is_execution_directive=true ONLY when the user is telling the assistant to make the change now
+(a command, even a polite one: "can you fix X", "go ahead and add Y"). Set it false when the
+message is asking ABOUT something, weighing options, or does not actually direct action.
+
+Do NOT use em dashes.
+
+--- USER MESSAGE ---
+{message}
+
+--- THE ASSISTANT'S DRAFT ANSWER THIS TURN (context only; judge the MESSAGE, not the answer) ---
+{answer}
 """
 
 # Inserted into VERIFY_GOAL_PROMPT (the {claims_rules} slot) ONLY when an execution record is
@@ -1531,6 +1587,23 @@ def _message_requests_change(message: Optional[str]) -> bool:
         if m.endswith("?") and not has_verb:
             return False
         return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def message_change_signal_ambiguous(message: Optional[str]) -> bool:
+    """True when ``message`` carries a cheap signal of an executable directive (a change verb or a
+    wrongness description) but ``_message_requests_change`` still returned False for it -- because
+    an interrogative opener or a bare "?" ending overrode the signal. This is the AMBIGUOUS band
+    worth spending ONE structured LLM judgment on (see ``Orchestrator.judge_execution_directive``):
+    a message with NO signal at all (e.g. "thanks!") never reaches here, so the judgment call is not
+    spent on every regex miss, only on messages a human would find genuinely borderline ("how would
+    I add X, go ahead and do it if you can"). Never raises."""
+    if not message or not message.strip():
+        return False
+    try:
+        m = message.strip()
+        return bool(_CHANGE_VERB_RE.search(m) or _WRONGNESS_RE.search(m))
     except Exception:  # noqa: BLE001
         return False
 
@@ -2168,6 +2241,22 @@ def read_op_timeout_seconds() -> float:
     except ValueError:
         return 60.0
     return value if value > 0 else 60.0
+
+
+def intent_judge_timeout_seconds() -> float:
+    """Wall-clock budget for the ONE structured intent-directive judgment call (see
+    ``Orchestrator.judge_execution_directive``). Env ``QAR_INTENT_JUDGE_TIMEOUT_SECONDS`` (default
+    8, accepts a float); read fresh on every call, not cached. A short cap is deliberate: this call
+    only runs in the ambiguous band the regex prefilter left undecided, and must never be the reason
+    a turn feels slow -- a timeout falls back to the regex verdict instead of blocking."""
+    raw = os.getenv("QAR_INTENT_JUDGE_TIMEOUT_SECONDS")
+    if raw is None or not raw.strip():
+        return 8.0
+    try:
+        value = float(raw)
+    except ValueError:
+        return 8.0
+    return value if value > 0 else 8.0
 
 
 def describe_read_spec(spec: Dict[str, Any]) -> str:
@@ -3274,29 +3363,146 @@ class Orchestrator:
                            model, last_error, exc_info=True)
         return None, last_error
 
+    def judge_execution_directive(self, user_message: str, answer_text: str) -> Tuple[bool, str]:
+        """ONE structured LLM judgment for the AMBIGUOUS band ``_message_requests_change`` (the
+        cheap regex prefilter) leaves undecided -- see ``message_change_signal_ambiguous`` for
+        exactly which messages reach here. Design: HANDS_FREE_QUEST_AI_DESIGN.md section 4 --
+        intent-ambiguity calls belong to a structured judgment, not regex.
+
+        Runs at ``cfg.intent_judge_tier`` (default "balanced"): this is a routing decision, not the
+        run's outcome gate (``verify_tier``/``_verify_goal`` is that), so it does not need the
+        strong tier. Hard-capped by ``intent_judge_timeout_seconds()`` so a slow/hung provider can
+        NEVER block the turn. On ANY failure, timeout, or unusable response, falls back to the
+        regex verdict -- False, since the caller only reaches here after the regex already said no
+        -- and returns that with a clear reason so the caller can log why. Never raises.
+
+        Returns ``(is_execution_directive, reason)``.
+        """
+        fallback_reason = "regex prefilter verdict (LLM judgment unavailable)"
+        try:
+            model = self.registry.resolve_tier(self.cfg.intent_judge_tier)
+        except Exception as e:  # noqa: BLE001 — an unresolvable tier just means no judgment
+            log.warning("Intent-directive judge: could not resolve tier %r (%s); using the regex verdict.",
+                       self.cfg.intent_judge_tier, e)
+            return False, fallback_reason
+        if not model:
+            return False, fallback_reason
+        prompt = INTENT_DIRECTIVE_PROMPT.format(
+            message=(user_message or "")[:1000],
+            answer=(answer_text or "").strip()[:1500] or "(no answer produced yet)",
+        )
+
+        def call_judge() -> Dict[str, Any]:
+            provider = self.get_provider_for_model(model)
+            raw = provider.plan(prompt, model=model, tool_schema=INTENT_DIRECTIVE_TOOL)
+            if isinstance(raw, str):
+                raw = json.loads(_extract_json(raw) or "{}")
+            return raw if isinstance(raw, dict) else {}
+
+        timeout = intent_judge_timeout_seconds()
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
+            future = pool.submit(call_judge)
+            result = future.result(timeout=timeout)
+        except FuturesTimeoutError:
+            log.warning("Intent-directive judge timed out after %.0fs "
+                       "(QAR_INTENT_JUDGE_TIMEOUT_SECONDS to adjust); falling back to the regex verdict.",
+                       timeout)
+            return False, fallback_reason
+        except Exception as e:  # noqa: BLE001 — the judgment call must never break the turn
+            log.warning("Intent-directive judge failed (%s: %s); falling back to the regex verdict.",
+                       type(e).__name__, e)
+            return False, fallback_reason
+        finally:
+            pool.shutdown(wait=False)
+        if not isinstance(result, dict) or "is_execution_directive" not in result:
+            log.warning("Intent-directive judge returned no usable verdict; falling back to the regex verdict.")
+            return False, fallback_reason
+        is_directive = bool(result.get("is_execution_directive"))
+        reason = str(result.get("reason") or "").strip() or "LLM intent judgment"
+        return is_directive, reason
+
     def _deep_models(self, model_hint: Optional[str], quality_standards: Optional[str],
                      fallback: Optional[str]) -> List[Optional[str]]:
         """Resolve the deep-worker model LADDER (tried in order, escalating on a not-met goal).
 
         Priority: (1) an explicit per-task model request via ``model_hint`` when it names a model the
         worker can run; (2) a guidance card model preference; either PINS a single model (no
-        escalation). Otherwise (3) the configured ``deep_model_ladder`` (fast -> strong), else (4)
-        the single ``fallback`` model the orchestrator was given. Always returns a non-empty list."""
+        escalation). Otherwise (3) the configured ``deep_model_ladder`` (the consumer's explicit
+        ladder, e.g. from ``QAR_DEEP_MODELS`` -- REAL Claude ids/aliases, weak -> strong), else
+        (4) a ladder built from the single ``fallback`` model the orchestrator was given, EXTENDED
+        with any Claude-runnable id found by resolving the "quality"/"best" tiers (so a Gemini/
+        OpenAI deployment whose tier config still names a Claude id for its strong tier -- e.g.
+        ``QAR_MODEL_BEST=claude-opus-4-8`` -- gets a real escalation step instead of a silently
+        inert length-1 ladder; see ``fallback_deep_ladder``). Always returns a non-empty list.
+        Logs (INFO) the resolved ladder once per deep run, and WARNS when a NON-pinned resolution
+        still comes out length <= 1 (escalation unavailable), so a deployment can see and fix it."""
         from .goal_runner import _is_claude_model  # worker-runnable check (deep worker is Claude Code)
         # Explicit per-task model request: ``fallback`` already factored ``model_hint`` through the
         # registry. When a hint was given and it resolved to a model the worker can run (Claude), pin
         # it (no auto-escalation). In a non-Claude deployment the resolved hint is not worker-runnable,
         # so we fall through to the ladder instead of handing Claude Code a Gemini/OpenAI id.
         if model_hint and fallback and _is_claude_model(fallback):
+            log.info("Deep-worker model ladder: pinned to %r (explicit per-task model request); "
+                     "escalation intentionally disabled.", fallback)
             return [fallback]
         pref = _guidance_model_pref(quality_standards)
         if pref:
+            log.info("Deep-worker model ladder: pinned to %r (guidance model preference); "
+                     "escalation intentionally disabled.", pref)
             return [pref]
         if self.cfg.deep_model_ladder:
             ladder = [m for m in self.cfg.deep_model_ladder if m]
             if ladder:
+                self.log_deep_ladder(ladder, source="configured deep_model_ladder (e.g. QAR_DEEP_MODELS)")
                 return list(ladder)
-        return [fallback]
+        ladder = self.fallback_deep_ladder(fallback)
+        self.log_deep_ladder(ladder, source="fallback model + Claude-runnable tier resolution")
+        return ladder
+
+    def fallback_deep_ladder(self, fallback: Optional[str]) -> List[Optional[str]]:
+        """Build the deep-worker ladder when no explicit ``deep_model_ladder`` is configured.
+
+        Starts from the single ``fallback`` model the orchestrator was already given. If that model
+        is NOT Claude-runnable (a Gemini/OpenAI deployment, so the deep worker -- Claude Code --
+        could never actually use it as ``--model``), try to EXTEND the ladder with a real escalation
+        step by resolving the "quality" then "best" tiers through the registry: on many deployments
+        these still name a genuine Claude id (either the library's own last-known default, or an
+        explicit operator override like ``QAR_MODEL_BEST=claude-opus-4-8`` -- see
+        HANDS_FREE_QUEST_AI_DESIGN.md section 2, point 4 for why this matters), so this is what makes
+        "goal not met -> stronger model" do something even when the deployment's PRIMARY model is not
+        Claude. Never raises; always returns a non-empty list (falls back to ``[fallback]`` alone,
+        even if that is not Claude-runnable, so a caller always has something to try)."""
+        from .goal_runner import _is_claude_model  # worker-runnable check
+        ladder: List[str] = [fallback] if fallback else []
+        if not fallback or not _is_claude_model(fallback):
+            for tier in ("quality", "best"):
+                try:
+                    resolved = self.registry.resolve_tier(tier)
+                except Exception:  # noqa: BLE001 — an unresolvable tier is just skipped
+                    continue
+                if resolved and _is_claude_model(resolved) and resolved not in ladder:
+                    ladder.append(resolved)
+        return ladder or [fallback]
+
+    @staticmethod
+    def log_deep_ladder(ladder: List[Optional[str]], *, source: str) -> None:
+        """Log the resolved deep-worker ladder once per deep run (called from ``_deep_models``).
+
+        A ladder this reports on is NEVER an intentional pin (those log their own INFO line and
+        return before reaching here) -- so length <= 1 here genuinely means "goal not met -> a
+        stronger model" has nothing to escalate to, worth a WARNING naming the fix. Never raises."""
+        try:
+            log.info("Deep-worker model ladder resolved (%s): %s", source, ladder)
+            if len(ladder) <= 1:
+                log.warning(
+                    "Escalation unavailable: no additional Claude-runnable model configured for the "
+                    "deep-worker ladder (resolved: %s). The deep worker (Claude Code) can only "
+                    "escalate to another Claude model -- set QAR_DEEP_MODELS to a comma-separated "
+                    "list of Claude model ids/aliases (e.g. \"sonnet,opus\"), or point a tier "
+                    "override (e.g. QAR_MODEL_BEST) at a real Claude id.", ladder)
+        except Exception:  # noqa: BLE001 — logging must never break a deep run
+            pass
 
     def _resolved_deep_tier(self, tier: Optional[str],
                             deep_models: List[Optional[str]]) -> Optional[str]:
@@ -6120,22 +6326,36 @@ class Orchestrator:
             # the assistant's proposed approach so the deep run APPLIES it rather than re-deriving.
             # (Executing here is fine even when the answer falsely claims completion: the goal
             # verification below re-checks the folded post-deep answer against the execution record.)
-            elif (_message_requests_change(user_message)
-                  and (exec_record is None or not exec_record.any_mutation_attempted)):
-                log.info("Escalating answer->deep: user message requests a change but the turn only "
-                         "produced a proposal; running it now.")
-                _proposal = (text or "").strip()
-                _brief = user_message if not _proposal else (
-                    f"{user_message}\n\nThe assistant proposed this approach. APPLY it (make the "
-                    f"actual code/file/data changes, do not just describe them):\n{_proposal}"
-                )
-                should_defer_deep = {
-                    "goal": f"Carry out the user's request: {user_message}",
-                    "brief": _brief,
-                    "rationale": "user message requests a change but turn only proposed it (message-intent fallback)",
-                }
-                if emit is not None:
-                    emit.status("You asked for a change, making it now…")
+            #
+            # The regex (_message_requests_change) is a cheap PREFILTER, decisive on its own for the
+            # common case (a match is trusted with zero extra cost). Only in the AMBIGUOUS band it
+            # leaves undecided -- a change verb/wrongness signal fired but an interrogative opener or
+            # a bare "?" ending overrode it, see message_change_signal_ambiguous -- does ONE
+            # structured LLM judgment step in (WS3, HANDS_FREE_QUEST_AI_DESIGN.md section 4),
+            # hard-timeout-guarded and falling back to the regex verdict (False) on any failure. So
+            # this never adds a blocking call to the ordinary "clearly not a directive" case, and
+            # never blocks the turn even in the ambiguous case.
+            elif exec_record is None or not exec_record.any_mutation_attempted:
+                _is_directive = _message_requests_change(user_message)
+                _directive_reason = "message-intent fallback (regex)"
+                if not _is_directive and message_change_signal_ambiguous(user_message):
+                    _is_directive, _llm_reason = self.judge_execution_directive(user_message, text)
+                    _directive_reason = f"message-intent fallback (LLM judgment: {_llm_reason})"
+                if _is_directive:
+                    log.info("Escalating answer->deep: user message requests a change but the turn "
+                             "only produced a proposal; running it now (%s).", _directive_reason)
+                    _proposal = (text or "").strip()
+                    _brief = user_message if not _proposal else (
+                        f"{user_message}\n\nThe assistant proposed this approach. APPLY it (make the "
+                        f"actual code/file/data changes, do not just describe them):\n{_proposal}"
+                    )
+                    should_defer_deep = {
+                        "goal": f"Carry out the user's request: {user_message}",
+                        "brief": _brief,
+                        "rationale": "user message requests a change but turn only proposed it (message-intent fallback)",
+                    }
+                    if emit is not None:
+                        emit.status("You asked for a change, making it now…")
 
         # True once a deferred deep run has produced substantive output that we folded back into the
         # final answer. Gates the post-deep goal-verification loop below so a deferred-deep turn is

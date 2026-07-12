@@ -306,11 +306,21 @@ def _config_from_env() -> RunnerConfig:
         cfg.orchestrator.planner_tier = planner_tier
 
     # --- Deep goal loop tuning (our own /goal replacement) -------------------------------------
-    # The deep worker is Claude Code (Claude models only). QAR_DEEP_MODELS is the model LADDER the
-    # goal loop escalates through on a not-met goal, fast -> strong. Default to the Anthropic tiers.
-    deep_models = [m.strip() for m in (os.getenv("QAR_DEEP_MODELS") or "fast,balanced,quality,best").split(",")
-                   if m.strip()]
-    cfg.orchestrator.deep_model_ladder = deep_models or None
+    # The deep worker is Claude Code, so it can ONLY run Claude models. QAR_DEEP_MODELS is the
+    # model LADDER the goal loop escalates through on a not-met goal, weak -> strong, e.g.
+    # "claude-sonnet-4-6,claude-opus-4-8" or the bare aliases "sonnet,opus". Give REAL Claude
+    # model ids/aliases here, not semantic tier names ("fast"/"balanced"/"quality"/"best") -- those
+    # are tier names the ModelRegistry resolves per-DEPLOYMENT, which on a Gemini/OpenAI deployment
+    # resolve to non-Claude ids the worker cannot run, silently making the ladder inert (see
+    # HANDS_FREE_QUEST_AI_DESIGN.md section 2, point 4). Left UNSET (the default): the ladder is
+    # NOT hardcoded here -- Orchestrator._deep_models resolves one generically at run time (pins to
+    # an already-Claude-runnable fallback model, then tries to extend it with any Claude id found by
+    # resolving the "quality"/"best" tiers, e.g. from QAR_MODEL_BEST), and logs what it found.
+    deep_models_env = (os.getenv("QAR_DEEP_MODELS") or "").strip()
+    if deep_models_env:
+        cfg.orchestrator.deep_model_ladder = (
+            [m.strip() for m in deep_models_env.split(",") if m.strip()] or None
+        )
     # Overall TOKEN BUDGET for one turn's deep goal loop (worker tokens summed across attempts).
     # Operator-tunable; replaces a fixed attempt count as the primary stop.
     if os.getenv("QAR_GOAL_TOKEN_BUDGET"):
