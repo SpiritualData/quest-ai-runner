@@ -214,9 +214,11 @@ def test_answer_now_short_circuits_read_loop():
 
 def test_escalate_deep_forces_deep():
     provider = OverseerStubProvider(
+        # Only the first "read" is ever consumed by the planner (the overseer escalates to deep
+        # right after step 1); the goal-verification call for the escalated deep run is next.
         decisions=[
-            {"action": "read", "reads": [{"rel_path": "README.md"}], "rationale": "read"}
-            for _ in range(10)
+            {"action": "read", "reads": [{"rel_path": "README.md"}], "rationale": "read"},
+            {"met": True, "reason": "did the deep work"},  # goal verification after escalation
         ],
         overseer_signals=[{"signal": "escalate_deep", "reason": "needs real execution"}],
     )

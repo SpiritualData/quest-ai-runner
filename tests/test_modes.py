@@ -158,7 +158,9 @@ def test_confirm_escalates_in_background_mode():
 
 def test_deep_emits_milestone_in_background_mode():
     provider = StubProvider(decisions=[
-        {"action": "deep", "goal": "Write the doc", "deep_brief": "do it", "rationale": "work"}])
+        {"action": "deep", "goal": "Write the doc", "deep_brief": "do it", "rationale": "work"},
+        {"met": True, "reason": "written"},  # goal verification
+    ])
     surfaced = []
     sink = MilestoneSink(on_milestone=lambda ev: surfaced.append(("milestone", ev.text)),
                          on_result=lambda ev: surfaced.append(("result", ev.text)))
@@ -298,7 +300,9 @@ def test_runner_without_emit_param_is_not_passed_emit():
     """A legacy run_goal(*, goal, brief, model, max_turns) must keep working — the orchestrator
     inspects the signature and does NOT pass ``emit`` to it (no double-call, no TypeError)."""
     provider = StubProvider(decisions=[
-        {"action": "deep", "goal": "Do it", "deep_brief": "do", "rationale": "work"}])
+        {"action": "deep", "goal": "Do it", "deep_brief": "do", "rationale": "work"},
+        {"met": True, "reason": "ok"},  # goal verification
+    ])
     legacy = StubDeepRunner(met=True, output="ok")
     sink = StreamSink(lambda ev: None)
     res = _orch(provider, StubRetrieval(), deep_runner=legacy).run(

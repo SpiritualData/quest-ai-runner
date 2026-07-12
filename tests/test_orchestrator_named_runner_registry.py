@@ -67,6 +67,7 @@ def test_deep_action_actually_executes_via_named_registry():
     provider = StubProvider(decisions=[
         {"action": "deep", "goal": "Add the goal", "deep_brief": "add a goal to run a 5k",
          "rationale": "in-app data operation"},
+        {"met": True, "reason": "goal added"},  # goal verification
     ])
     runner = _NamedRunner(met=True, output="Added the goal 'Run a 5k' to your quest.")
     res = _orch_named_registry(provider, StubRetrieval(), runner).run("add a goal to run a 5k")

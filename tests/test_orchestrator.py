@@ -68,6 +68,7 @@ def test_deep_runs_goal():
     provider = StubProvider(decisions=[
         {"action": "deep", "goal": "Write the one-pager", "deep_brief": "do it",
          "model_tier": "opus", "rationale": "real work"},
+        {"met": True, "reason": "one-pager written"},  # goal verification
     ])
     runner = StubDeepRunner(met=True, output="one-pager written")
     res = _orch(provider, StubRetrieval(), deep_runner=runner).run("write the one-pager")
@@ -134,8 +135,8 @@ def test_cap_with_nothing_gathered_escalates_to_deep():
     # Planner keeps asking to read, but nothing comes back -> nothing gathered -> escalate to deep.
     provider = StubProvider(decisions=[
         {"action": "read", "reads": [{"rel_path": "x.md"}], "rationale": "again"}
-        for _ in range(10)
-    ])
+        for _ in range(2)  # matches max_steps below; escalation to deep is auto-derived, not planned
+    ] + [{"met": True, "reason": "did it"}])  # goal verification for the escalated deep run
     runner = StubDeepRunner(met=True, output="did it")
     res = Orchestrator(
         retrieval=_EmptyRetrieval(), provider=provider, registry=ModelRegistry(provider),
@@ -526,6 +527,25 @@ def test_goal_loop_reports_not_met_after_exhausting_attempts():
                 config=OrchestratorConfig(deep_goal_max_iterations=2)).run("fix the thing")
     assert len(runner.calls) == 2
     assert res.deep_results[0].met is False  # brain-verified not met, despite worker exit-0
+
+
+def test_deep_goal_verifier_none_is_never_trusted_as_done():
+    # WS1 fix: if the verifier can't produce a usable verdict (both verify_tier and its
+    # planner_tier fallback return no "met" key), the loop must NOT fall back to trusting the
+    # worker's raw exit-code success (StubDeepRunner reports met=True unconditionally) -- that was
+    # exactly the "verifier outage silently re-opens 'said Completed but did nothing'" bug. A None
+    # verdict means UNVERIFIED, never a silent "done", and the reported error names why.
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
+        {},  # verify_tier call: unusable (no "met" key)
+        {},  # planner_tier fallback: also unusable -> verdict is None
+    ])
+    runner = StubDeepRunner(met=True, output="worker claims success")
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(deep_goal_max_iterations=3)).run("fix the thing")
+    assert len(runner.calls) == 1  # no blind retry on an unverifiable result
+    assert res.deep_results[0].met is False, "an unverified result must never be reported as done"
+    assert "unverified" in (res.deep_results[0].error or "").lower()
 
 
 def test_confirm_condenses_long_summary_before_escalation():
@@ -1170,3 +1190,113 @@ def test_cancel_check_during_deep_retry_stops_before_the_next_attempt():
         "fix the thing", cancel_check=cancel_after_first_attempt)
     assert res.kind == "cancelled"
     assert len(runner.calls) == 1                # only the first attempt ran; retry never fired
+
+
+# --- WS1 reliability floor: loud, configurable timeouts -----------------------------------
+
+class _SlowRetrieval:
+    """A RetrievalAdapter where reading ``slow.md`` blocks past the configured per-op timeout;
+    every other path (grep/query, other paths) resolves immediately."""
+
+    def __init__(self, delay: float, files: Dict[str, str]):
+        import time as _t
+        self._time = _t
+        self.delay = delay
+        self.files = files
+
+    def read_section(self, rel_path, *, start_line=None, end_line=None, heading=None, max_bytes=None):
+        from quest_ai_runner.core.adapters import Observation
+        if rel_path == "slow.md":
+            self._time.sleep(self.delay)
+        if rel_path not in self.files:
+            return Observation(kind="error", rel_path=rel_path, error="not found")
+        return Observation(kind="read", rel_path=rel_path, locator="head", text=self.files[rel_path])
+
+    def grep(self, pattern, *, scope=None, max_hits=None):
+        from quest_ai_runner.core.adapters import Observation
+        return Observation(kind="grep", pattern=pattern, hits=[])
+
+    def query(self, spec):
+        from quest_ai_runner.core.adapters import Observation
+        return Observation(kind="error", error="query unsupported in stub")
+
+
+def test_read_op_timeout_names_the_stalled_operation(monkeypatch):
+    # WS1 fix: a single slow adapter member must not wedge the whole read step, and its timeout
+    # must be a NAMED error (not an empty result indistinguishable from "nothing found"). The
+    # OTHER concurrent read in the same step must still succeed normally.
+    monkeypatch.setenv("QAR_READ_OP_TIMEOUT_SECONDS", "0.05")
+    retrieval = _SlowRetrieval(delay=0.3, files={"slow.md": "x", "fast.md": "fast content"})
+    provider = StubProvider(decisions=[])
+    orch = _orch(provider, retrieval)
+
+    results = orch._do_reads([{"rel_path": "slow.md"}, {"rel_path": "fast.md"}])
+
+    assert len(results) == 2
+    slow_result, fast_result = results[0], results[1]
+    assert slow_result["kind"] == "error"
+    assert "slow.md" in slow_result["error"]
+    assert "timed out" in slow_result["error"]
+    assert fast_result["kind"] == "read"
+    assert fast_result["text"] == "fast content"
+
+
+def test_read_op_timeout_default_is_generous(monkeypatch):
+    # No env override -> the documented default (60s), not some accidental tiny value.
+    from quest_ai_runner.core.orchestrator import read_op_timeout_seconds
+    monkeypatch.delenv("QAR_READ_OP_TIMEOUT_SECONDS", raising=False)
+    assert read_op_timeout_seconds() == 60.0
+    monkeypatch.setenv("QAR_READ_OP_TIMEOUT_SECONDS", "12.5")
+    assert read_op_timeout_seconds() == 12.5
+    monkeypatch.setenv("QAR_READ_OP_TIMEOUT_SECONDS", "not-a-number")
+    assert read_op_timeout_seconds() == 60.0  # bad value falls back, never raises
+
+
+def test_context_assembly_timeout_is_loud_and_recoverable(monkeypatch, caplog):
+    # WS1 fix: a slow context assembler must not (a) silently drop turn-start context at debug
+    # level only, or (b) hang the turn waiting for it. The turn proceeds without the fresh
+    # context, a WARNING names what happened, and EVENT_CONTEXT carries a structured
+    # "assembly_timed_out" marker a consumer can observe.
+    import logging
+    import time as time_module
+
+    from quest_ai_runner.core.adapters import AssembledContext
+    from quest_ai_runner.core.orchestrator import EVENT_CONTEXT
+
+    monkeypatch.setenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS", "0.05")
+
+    class SlowAssembler:
+        def assemble(self, task_text, *, meta=None):
+            time_module.sleep(0.3)
+            return AssembledContext(context_view="TOO_LATE_CONTEXT")
+
+        def record(self, task_text, outcome):
+            pass
+
+    provider = StubProvider(decisions=[
+        {"action": "answer", "rationale": "chit-chat", "model_tier": "haiku"},
+    ])
+    orch = Orchestrator(retrieval=StubRetrieval(), provider=provider,
+                        registry=ModelRegistry(provider), context_assembler=SlowAssembler())
+    sink = _CapturingSink()
+    with caplog.at_level(logging.WARNING, logger="quest-ai-runner.orchestrator"):
+        res = orch.run("hello there", sink=sink)
+
+    assert res.kind == "answer"
+    # The slow assembler's context never reached the planner prompt: dropped, not awaited.
+    assert not any("TOO_LATE_CONTEXT" in p for p in provider.plan_prompts)
+    assert any("timed out" in r.message.lower() and "dropped" in r.message.lower()
+              for r in caplog.records), "the timeout must be a loud WARNING, not a debug breadcrumb"
+    ctx_events = [e for e in sink.events if e.type == EVENT_CONTEXT]
+    assert ctx_events, "EVENT_CONTEXT must still fire on a timeout so a consumer can observe it"
+    assert any(e.data.get("assembly_timed_out") for e in ctx_events)
+
+
+def test_context_assembly_timeout_default_is_five_seconds(monkeypatch):
+    from quest_ai_runner.core.orchestrator import context_assembly_timeout_seconds
+    monkeypatch.delenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS", raising=False)
+    assert context_assembly_timeout_seconds() == 5.0
+    monkeypatch.setenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS", "2.5")
+    assert context_assembly_timeout_seconds() == 2.5
+    monkeypatch.setenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS", "garbage")
+    assert context_assembly_timeout_seconds() == 5.0  # bad value falls back, never raises

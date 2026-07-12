@@ -475,6 +475,7 @@ def test_deep_goal_records_its_context_for_a_later_goal(tmp_path):
     provider = StubProvider(decisions=[
         {"action": "deep", "goal": "Summarize pricing tiers", "deep_brief": "do it",
          "rationale": "real work"},
+        {"met": True, "reason": "done"},  # goal verification
     ])
     runner = StubDeepRunner(met=True, output="done")
     fresh_card = _pricing_card()

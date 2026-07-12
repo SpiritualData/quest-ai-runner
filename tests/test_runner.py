@@ -131,6 +131,10 @@ def test_executor_confirm_reports_needs_you_with_decision():
 def test_executor_deep_met_reports_done():
     provider = StubProvider(decisions=[
         {"action": "deep", "goal": "do X", "deep_brief": "x", "rationale": "work"},
+        # The goal loop verifies the worker's output itself; an unverifiable run is now
+        # UNVERIFIED (reported failed), never silently trusted, so the verify verdict must be
+        # scripted explicitly for the run to report done.
+        {"met": True, "reason": "verified"},
     ])
     client = MockQuestClient([])
     ex = TaskExecutor(client, _brain(provider, deep_runner=StubDeepRunner(met=True, output="X done")))
@@ -144,8 +148,11 @@ def test_executor_deep_not_met_reports_failed():
         {"action": "deep", "goal": "do X", "deep_brief": "x", "rationale": "work"},
     ])
     client = MockQuestClient([])
+    # No output alongside the error: the loop fails fast on a worker error with nothing to
+    # verify, preserving the worker's own error text (with output present it would instead go
+    # through verification and report the verifier's reason).
     ex = TaskExecutor(client, _brain(provider,
-                      deep_runner=StubDeepRunner(met=False, error="hit turn limit")))
+                      deep_runner=StubDeepRunner(met=False, error="hit turn limit", output="")))
     out = ex.execute({"id": "t4", "text": "do X"})
     assert out.status == "failed"
     assert "turn limit" in client.reports[0][2]
@@ -175,6 +182,8 @@ def test_executor_posts_live_progress_into_conversation():
     """
     provider = StubProvider(decisions=[
         {"action": "deep", "goal": "draft plan", "deep_brief": "x", "rationale": "work"},
+        # Scripted verify verdict: unverifiable runs report failed now, never trusted-done.
+        {"met": True, "reason": "ok"},
     ])
     client = MockQuestClient([])
     ex = TaskExecutor(client, _brain(provider, deep_runner=StubDeepRunner(met=True, output="PLAN")))
@@ -207,6 +216,9 @@ def test_executor_progress_messages_accumulate_in_strict_order():
              {"goal": "compare options", "brief": "b"},
          ],
          "rationale": "multi-step work"},
+        # One scripted verify verdict per subtask: unverifiable runs report failed now.
+        {"met": True, "reason": "ok"},
+        {"met": True, "reason": "ok"},
     ])
     # A deep runner whose every subtask is met surfaces one milestone per subtask.
     client = MockQuestClient([])
@@ -1187,8 +1199,9 @@ def test_executor_emits_error_progress_on_failed_deep():
         {"action": "deep", "goal": "do X", "deep_brief": "x", "rationale": "work"},
     ])
     client = MockQuestClient([])
+    # No output alongside the error: fail fast on the worker error, nothing to verify.
     ex = TaskExecutor(client, _brain(provider,
-                      deep_runner=StubDeepRunner(met=False, error="hit turn limit")))
+                      deep_runner=StubDeepRunner(met=False, error="hit turn limit", output="")))
     out = ex.execute({"id": "tpe", "text": "do X"})
     assert out.status == "failed"
     kinds = [k for (_tid, k, _t, _o) in client.progress]

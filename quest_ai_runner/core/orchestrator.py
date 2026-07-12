@@ -28,6 +28,7 @@ from __future__ import annotations
 import inspect
 import json
 import logging
+import os
 import re
 import threading
 import time
@@ -2132,6 +2133,89 @@ def _run_goal_accepts_run_id(deep_runner: Any) -> bool:
     return False
 
 
+# --- WS1 reliability floor: configurable, loud timeouts (see docs/HANDS_FREE_QUEST_AI_DESIGN.md) --
+
+def read_op_timeout_seconds() -> float:
+    """Per-operation wall-clock budget for one mid-loop read/grep/query dispatched by
+    ``Orchestrator._do_reads``. Env ``QAR_READ_OP_TIMEOUT_SECONDS`` (default 60, accepts a float);
+    read fresh on every call, not cached, so a deployment (or a test) can change it without a
+    restart. Before this existed, one slow retrieval adapter could wedge the whole turn with no
+    signal at all; a timeout now reports plainly which operation stalled and for how long instead
+    of silently looking like an empty "nothing found" result."""
+    raw = os.getenv("QAR_READ_OP_TIMEOUT_SECONDS")
+    if raw is None or not raw.strip():
+        return 60.0
+    try:
+        value = float(raw)
+    except ValueError:
+        return 60.0
+    return value if value > 0 else 60.0
+
+
+def describe_read_spec(spec: Dict[str, Any]) -> str:
+    """Human-readable operation name for a read spec, mirroring the ``locator`` naming
+    ``Orchestrator._exec_one_read`` gives its own Observations. Used only to name WHICH
+    operation timed out, so a stall is reported as a named, diagnosable failure rather than an
+    empty result."""
+    if not isinstance(spec, dict):
+        return "read"
+    if spec.get("list_guidance"):
+        return "list_guidance"
+    if spec.get("read_guidance"):
+        return f"read_guidance({spec['read_guidance']})"
+    if spec.get("list_sources"):
+        return "list_sources"
+    if spec.get("describe_source"):
+        return f"describe_source({spec['describe_source']})"
+    if spec.get("list_operations"):
+        return "list_operations"
+    if spec.get("describe_operation"):
+        return f"describe_operation({spec['describe_operation']})"
+    if spec.get("grep"):
+        return f"grep({spec['grep']!r})"
+    if spec.get("query") is not None:
+        query = spec.get("query")
+        text = query.get("text") if isinstance(query, dict) else query
+        return f"query({text!r})" if text else "query"
+    if spec.get("rel_path"):
+        return f"read_section({spec['rel_path']})"
+    return "read"
+
+
+def context_assembly_timeout_seconds() -> float:
+    """Wall-clock budget for the turn-start context-assembly background fetch (cards + recent +
+    corpus consolidation, run concurrently with the instant ack). Env
+    ``QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS`` (default 5.0, accepts a float); read fresh on every
+    call so it can be tuned without a restart. A run that exceeds this drops ALL fresh context
+    for the turn (the assembler has no partial-result path), so raising it trades latency for
+    completeness -- see the WARNING logged at the call site plus
+    ``record_context_assembly_timeout`` for the counter this triggers."""
+    raw = os.getenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS")
+    if raw is None or not raw.strip():
+        return 5.0
+    try:
+        value = float(raw)
+    except ValueError:
+        return 5.0
+    return value if value > 0 else 5.0
+
+
+context_assembly_timeout_lock = threading.Lock()
+context_assembly_timeout_count = 0
+
+
+def record_context_assembly_timeout() -> int:
+    """Thread-safe increment of the process-wide context-assembly-timeout counter (module-level
+    because assembly runs on a background executor thread per turn, and turns run concurrently).
+    No metrics backend is wired in this repo, so this is the observable marker a consumer can
+    poll/export; it is paired with a WARNING log at the call site, never silent. Returns the new
+    total count."""
+    global context_assembly_timeout_count
+    with context_assembly_timeout_lock:
+        context_assembly_timeout_count += 1
+        return context_assembly_timeout_count
+
+
 class _Emitter:
     """Per-run event router. The orchestrator calls ``emit(...)`` / ``status(...)``; this
     forwards a ProgressEvent to the run's ProgressSink (chosen by Mode) and to the legacy
@@ -2594,17 +2678,38 @@ class Orchestrator:
             obs = self._exec_one_read(specs[0], guidance_selected_ids)
             return [_tagged(obs, specs[0])] if obs is not None else []
         workers = min(self.cfg.max_parallel, len(specs))
+        op_timeout = read_op_timeout_seconds()
         results: List[Optional[Observation]] = [None] * len(specs)
-        with ThreadPoolExecutor(max_workers=workers) as pool:
+        pool = ThreadPoolExecutor(max_workers=workers)
+        try:
             futures = {pool.submit(self._exec_one_read, s, guidance_selected_ids): i
                        for i, s in enumerate(specs)}
             for fut in futures:
                 i = futures[fut]
                 try:
-                    results[i] = fut.result()
+                    # Per-op timeout (opposite discipline from the untimed version): one slow
+                    # adapter member must never wedge every other read in this step. Named
+                    # explicitly so a timeout reports "operation X stalled", never an empty
+                    # result that looks like "nothing found".
+                    results[i] = fut.result(timeout=op_timeout)
+                except FuturesTimeoutError:
+                    op_name = describe_read_spec(specs[i])
+                    log.warning(
+                        "Read operation timed out: %s exceeded %.0fs "
+                        "(QAR_READ_OP_TIMEOUT_SECONDS to adjust)", op_name, op_timeout)
+                    results[i] = Observation(
+                        kind="error",
+                        error=f"Operation '{op_name}' timed out after {op_timeout:.0f}s")
                 except Exception as e:  # noqa: BLE001
                     log.warning(f"Read operation failed: {type(e).__name__}: {e}", exc_info=True)
-                    results[i] = Observation(kind="error", error=type(e).__name__)
+                    results[i] = Observation(kind="error", error=f"{type(e).__name__}: {e}")
+        finally:
+            # Non-blocking shutdown: every spec's outcome was already reported above (via a
+            # normal result or a named timeout), so the turn must not then sit here waiting for
+            # a still-running worker thread to actually finish (Python threads cannot be
+            # force-killed) -- mirrors the context-assembly executor's own wait=False shutdown,
+            # for the same reason.
+            pool.shutdown(wait=False)
         return [_tagged(r, specs[i]) for i, r in enumerate(results) if r is not None]
 
     # --- execution directive detection (LLM-based, FORCE deep when user explicitly rejects planning) ----
@@ -2836,25 +2941,32 @@ class Orchestrator:
                      rep_preamble: Optional[str] = None,
                      quality_standards: Optional[str] = None,
                      transcript: Optional[str] = None,
-                     exec_record: Optional[ExecutionRecord] = None) -> Optional[Dict[str, Any]]:
+                     exec_record: Optional[ExecutionRecord] = None
+                     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Decide whether the worker's run met the done-standard AT THE QUALITY BAR.
 
         Judged through the AI rep's lens (``rep_preamble``) and against the applicable GUIDANCE CARDS
         (``quality_standards`` — the quality bar the result must clear). When ``exec_record`` is
         supplied (answer turns with ``verify_claims`` on), the SAME verdict also judges honesty of
         completion claims: any change the output claims it completed must be backed by a SUCCEEDED
-        entry in the record, else ``met=false`` with ``claims_unexecuted=true``. Returns
-        ``{"met": bool, "reason": str, "next_action": str, "need_more_context": bool,
-        "context_query": str, "next_tier": Optional[str], "claims_unexecuted": bool}``, or ``None``
-        if verification could not run (the caller then trusts the worker's own outcome rather than
-        looping blindly). The extra fields let the goal loop decide whether to pull MORE context for
-        the next iteration and at which model tier; they default to ``False``/``""``/``None`` on any
-        parse miss. Never raises.
+        entry in the record, else ``met=false`` with ``claims_unexecuted=true``.
+
+        Returns a ``(verdict, error)`` pair:
+        - ``verdict`` is ``{"met": bool, "reason": str, "next_action": str, "need_more_context":
+          bool, "context_query": str, "next_tier": Optional[str], "claims_unexecuted": bool}``
+          when verification ran; the extra fields let the goal loop decide whether to pull MORE
+          context for the next iteration and at which model tier, defaulting to
+          ``False``/``""``/``None`` on any parse miss.
+        - ``error`` is ``None`` whenever ``verdict`` is populated. When verification could NOT run
+          (every tier failed, an unresolvable tier, a parse miss, or no output to judge),
+          ``verdict`` is ``None`` and ``error`` carries the real reason (an exception message, not
+          just a class name) — the caller MUST treat this as "unverified", never as a silent trust
+          of the worker's own reported outcome. Never raises.
         """
         if not (output or "").strip():
             # Nothing to judge — the worker reported no result. Treat as not verifiable here; the
             # loop already handles an empty-output run as a terminal failure before calling this.
-            return None
+            return None, "the worker produced no output to verify"
         persona = ""
         if rep_preamble and rep_preamble.strip():
             persona = ("--- ACT AS THIS PERSONA WHEN JUDGING ---\n"
@@ -2887,6 +2999,9 @@ class Orchestrator:
                 continue
             if resolved and resolved not in models:
                 models.append(resolved)
+        if not models:
+            return None, "no verify tier resolved to a usable model"
+        last_error = "verifier returned no usable verdict"
         for model in models:
             try:
                 provider = self.get_provider_for_model(model)
@@ -2897,7 +3012,8 @@ class Orchestrator:
                 if isinstance(raw, str):
                     try:
                         raw = json.loads(_extract_json(raw) or "{}")
-                    except Exception:  # noqa: BLE001 — a parse miss is just "could not verify"
+                    except Exception as e:  # noqa: BLE001 — a parse miss is just "could not verify"
+                        last_error = f"could not parse verifier response (model={model}): {type(e).__name__}: {e}"
                         raw = {}
                 if isinstance(raw, dict) and "met" in raw:
                     _tier = raw.get("next_tier")
@@ -2907,10 +3023,13 @@ class Orchestrator:
                             "need_more_context": bool(raw.get("need_more_context")),
                             "context_query": str(raw.get("context_query") or "").strip(),
                             "next_tier": (str(_tier).strip() or None) if _tier else None,
-                            "claims_unexecuted": bool(raw.get("claims_unexecuted"))}
-            except Exception:  # noqa: BLE001 — verification must never break the run
-                log.warning("goal verification call failed (model=%s)", model, exc_info=True)
-        return None
+                            "claims_unexecuted": bool(raw.get("claims_unexecuted"))}, None
+                last_error = f"verifier response missing 'met' (model={model})"
+            except Exception as e:  # noqa: BLE001 — verification must never break the run
+                last_error = f"{type(e).__name__}: {e}"
+                log.warning("Goal verification call failed (model=%s): %s",
+                           model, last_error, exc_info=True)
+        return None, last_error
 
     def _deep_models(self, model_hint: Optional[str], quality_standards: Optional[str],
                      fallback: Optional[str]) -> List[Optional[str]]:
@@ -3527,11 +3646,22 @@ class Orchestrator:
                 if res.decision_id or (res.error and not (res.output or "").strip()):
                     break
                 # Verify the done-standard ourselves, applying the quality standards (guidance) and
-                # the rep persona. None => could not verify => trust the worker's own outcome.
-                verdict = self._verify_goal(goal, base_brief, res.output or "",
+                # the rep persona. verdict is None => verification could not run (LLM outage, no
+                # verify tier, parse failure) => this run is UNVERIFIED, and must NEVER be reported
+                # as done just because the worker's own exit code said success (that was the exact
+                # "verifier outage silently re-opens 'said Completed but did nothing'" bug — see
+                # HANDS_FREE_QUEST_AI_DESIGN.md section 2). The real reason travels with the result.
+                verdict, verify_error = self._verify_goal(goal, base_brief, res.output or "",
                                             rep_preamble=rep_preamble,
                                             quality_standards=quality_standards)
                 if verdict is None:
+                    reason = verify_error or "verification did not run for an unknown reason"
+                    res.met = False
+                    res.error = ("Unverified: goal verification did not run (" + reason
+                                 + "). Not confirmed complete.")
+                    if emit is not None:
+                        emit.status("Could not verify the result (" + reason
+                                    + "); marking unverified.")
                     break
                 if verdict.get("met"):
                     res.met = True
@@ -5034,11 +5164,22 @@ class Orchestrator:
         # or error we proceed with no assembled context (the reactive gather still runs in-loop).
         # The assembled cards go FIRST, then the caller's context, so cards apply even when the
         # caller provided its own grounding (panel docs / chat uploads append below).
+        context_assembly_timed_out = False
         if _ctx_future is not None:
+            ctx_timeout = context_assembly_timeout_seconds()
             try:
-                _assembled = _ctx_future.result(timeout=5.0)
-            except TimeoutError as e:  # noqa: BLE001 — timeout: skip with debug note
-                log.debug(f"Context assembly timed out after 5s: {e}", exc_info=True)
+                _assembled = _ctx_future.result(timeout=ctx_timeout)
+            except TimeoutError:
+                # LOUD by design: this drops ALL fresh context for the turn (the assembler has
+                # no partial-result path), the exact mechanism behind "forgets what I just
+                # said" — it must never be a debug-only breadcrumb.
+                context_assembly_timed_out = True
+                timeout_count = record_context_assembly_timeout()
+                log.warning(
+                    "Context assembly timed out after %.1fs; turn-start context was dropped "
+                    "and this turn proceeds without it (QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS "
+                    "to adjust; total timeouts this process: %d)",
+                    ctx_timeout, timeout_count)
                 _assembled = None
             except Exception as e:  # noqa: BLE001 — cancelled or assembler error: skip
                 log.warning(f"Context assembly failed: {type(e).__name__}: {e}", exc_info=True)
@@ -5094,10 +5235,11 @@ class Orchestrator:
 
         # --- CONTEXT EVENT: emit EVENT_CONTEXT showing which cards were selected -----------
         # Dedicated event for context assembly: card selection + sources. Surfaces in all modes.
-        # Always emitted when assembly ran OR recent-turn cards survived (even with 0 cards + 0
-        # sources otherwise) so consumers can show "assembly ran but found nothing" without needing
-        # a separate signal. Never raises.
-        if _assembled is not None or _recent_entries:
+        # Always emitted when assembly ran OR recent-turn cards survived OR assembly timed out
+        # (even with 0 cards + 0 sources otherwise) so consumers can show "assembly ran but
+        # found nothing" -- or "assembly timed out and was dropped" -- without needing a
+        # separate signal. Never raises.
+        if _assembled is not None or _recent_entries or context_assembly_timed_out:
             try:
                 log.debug(f"Assembled context: {len(_merged_card_meta)} cards, {len(_sources)} sources")
                 # LIGHTWEIGHT projection: the card_metadata items carry each item's full resolved
@@ -5120,6 +5262,11 @@ class Orchestrator:
                         "sources": _sources_light,
                         "card_count": len(_merged_card_meta),
                         "source_count": len(_sources),
+                        # Structured marker a consumer can observe/aggregate: this turn's
+                        # turn-start context was dropped because assembly ran out of time (see
+                        # the WARNING logged at the timeout call site and
+                        # ``record_context_assembly_timeout``).
+                        "assembly_timed_out": context_assembly_timed_out,
                         # Retrieval metadata is the run explaining itself. A consumer routes this to
                         # a debug surface, never into the chat bubble.
                         "internal": True,
@@ -5811,7 +5958,7 @@ class Orchestrator:
                 _remediations = 0
                 _attempt = 1
                 while _attempt < _max:  # at most _max-1 regenerations after the first answer
-                    verdict = self._verify_goal(
+                    verdict, verify_error = self._verify_goal(
                         overall_goal, user_message, text,
                         rep_preamble=rep_preamble,
                         quality_standards=quality_standards,
@@ -5824,13 +5971,15 @@ class Orchestrator:
                             emit.status("Answer verified against the goal.")
                         break
                     if verdict is None:
-                        # Verifier call failed (LLM error, parse failure, etc.) — do not silently
-                        # accept. Retry on the next attempt; if this was the last attempt, accept
-                        # with a warning rather than blocking the turn.
-                        log.warning("goal verifier returned None (attempt %d/%d) — retrying",
-                                    _attempt, _max - 1)
+                        # Verifier call failed (LLM error, parse failure, etc.) - do not silently
+                        # accept. Retry on the next attempt; if this was the last attempt, the turn
+                        # proceeds unverified (``_exit_reason`` stays "unverified" below, never
+                        # "verified") rather than being blocked, but the real reason is logged so an
+                        # outage is diagnosable, not silent.
+                        log.warning("Goal verifier did not run (attempt %d/%d): %s",
+                                    _attempt, _max - 1, verify_error or "unknown reason")
                         if _attempt >= _max - 1:
-                            break  # out of attempts, best-effort accept
+                            break  # out of attempts, proceeds unverified
                         _attempt += 1
                         continue  # retry the verification call
                     # HONESTY: the answer claims a completed change the execution record does not

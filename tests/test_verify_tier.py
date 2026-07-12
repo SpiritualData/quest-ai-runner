@@ -55,8 +55,9 @@ def _orch(provider, **kw):
 def test_verify_goal_runs_at_best_tier_by_default():
     provider = _PlanRecordingProvider(decisions=[{"met": True, "reason": "done"}])
     orch = _orch(provider)
-    verdict = orch._verify_goal("the goal", "the brief", "the worker output")
+    verdict, error = orch._verify_goal("the goal", "the brief", "the worker output")
     assert verdict is not None and verdict["met"] is True
+    assert error is None
     registry = ModelRegistry(provider)
     assert provider.plan_models == [registry.resolve_tier("best")]
 
@@ -70,8 +71,9 @@ def test_verify_goal_falls_back_to_planner_tier_when_best_fails():
         decisions=[{"met": False, "reason": "still missing the summary"}],
         raise_for_models=[best])
     orch = _orch(provider)
-    verdict = orch._verify_goal("the goal", "the brief", "the worker output")
+    verdict, error = orch._verify_goal("the goal", "the brief", "the worker output")
     assert verdict is not None and verdict["met"] is False
+    assert error is None
     assert provider.plan_models == [best, registry.resolve_tier("balanced")]
 
 
@@ -83,8 +85,9 @@ def test_verify_goal_falls_back_on_unusable_verdict_too():
         {"met": True, "reason": "fine"},         # planner-tier retry: usable
     ])
     orch = _orch(provider)
-    verdict = orch._verify_goal("the goal", "the brief", "the worker output")
+    verdict, error = orch._verify_goal("the goal", "the brief", "the worker output")
     assert verdict is not None and verdict["met"] is True
+    assert error is None
     registry = ModelRegistry(provider)
     assert provider.plan_models == [registry.resolve_tier("best"),
                                     registry.resolve_tier("balanced")]
@@ -94,10 +97,40 @@ def test_verify_tier_empty_uses_planner_tier_once():
     # verify_tier="" restores the previous behavior: ONE call at planner_tier, no double call.
     provider = _PlanRecordingProvider(decisions=[{"met": True, "reason": "done"}])
     orch = _orch(provider, config=OrchestratorConfig(verify_tier=""))
-    verdict = orch._verify_goal("the goal", "the brief", "the worker output")
+    verdict, error = orch._verify_goal("the goal", "the brief", "the worker output")
     assert verdict is not None and verdict["met"] is True
+    assert error is None
     registry = ModelRegistry(provider)
     assert provider.plan_models == [registry.resolve_tier("balanced")]
+
+
+def test_verify_goal_returns_real_error_text_when_unverifiable():
+    # Every tier returns an unusable shape (no "met" key) -> verdict is None, and the error text
+    # must name the real reason, not a bare exception class name or nothing at all. This is the
+    # WS1 fix: a None verdict must carry enough detail for the caller to report "unverified" with
+    # a real reason, never silently trust the worker's own outcome.
+    provider = _PlanRecordingProvider(decisions=[
+        {"unexpected": "shape"},   # best-tier reply: unusable
+        {"unexpected": "shape"},   # planner-tier retry: also unusable
+    ])
+    orch = _orch(provider)
+    verdict, error = orch._verify_goal("the goal", "the brief", "the worker output")
+    assert verdict is None
+    assert error and "met" in error  # names what was missing, not a generic message
+
+
+def test_verify_goal_error_text_carries_the_real_exception_message():
+    # When the verifier call itself raises, the returned error must carry the actual exception
+    # message (not just the class name), so callers can surface WHY verification failed.
+    registry = ModelRegistry(StubProvider(decisions=[]))
+    best = registry.resolve_tier("best")
+    balanced = registry.resolve_tier("balanced")
+    provider = _PlanRecordingProvider(decisions=[], raise_for_models=[best, balanced])
+    orch = _orch(provider)
+    verdict, error = orch._verify_goal("the goal", "the brief", "the worker output")
+    assert verdict is None
+    assert error is not None
+    assert "provider cannot serve" in error  # the real RuntimeError message, not just its class name
 
 
 def test_answer_verification_checks_the_derived_goal_condition():

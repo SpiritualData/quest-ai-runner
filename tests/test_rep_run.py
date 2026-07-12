@@ -62,6 +62,7 @@ def _deep_task_provider():
     """A provider whose first plan chooses a deep run (so a rep_preamble reaches the deep runner)."""
     return StubProvider(decisions=[
         {"action": "deep", "goal": "do the work", "deep_brief": "x", "rationale": "work"},
+        {"met": True, "reason": "did it"},  # goal verification
     ])
 
 
