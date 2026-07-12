@@ -210,6 +210,13 @@ def pull_rep_to_skill(client: Any, team_id: str, user_id: str, skill_dir: str,
                     logged and never raises.
     """
     profile = client.get_ai_profile(user_id, team_id=team_id)
+    if not profile:
+        # A missing/empty profile means the GET failed or no rep exists for the pair.
+        # Rendering it would BLANK the local managed persona (and a later "both"-direction
+        # push would write that blank up to Quest), so refuse instead of clobbering.
+        raise RepSyncError(
+            f"no AI profile for rep {user_id} on team {team_id} (fetch failed or rep missing); "
+            "leaving the local skill file untouched")
     path = _skill_path(skill_dir)
     existing = _read_existing(path)
     rendered = render_skill_file(existing, profile)

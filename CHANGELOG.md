@@ -96,6 +96,13 @@ All notable changes to this project are documented here. The format is based on
   reshuffled card order makes caching cost more than not caching at all.
 
 ### Fixed
+- **rep_sync: an empty/failed profile fetch can no longer blank a rep's local skill file.**
+  `QuestClient.get_ai_profile` returns `{}` when the GET fails or no rep exists for the
+  (team, user) pair; `pull_rep_to_skill` used to render that empty profile into the skill file,
+  wiping the managed persona locally, and a later "both"-direction push would then write the wipe
+  up to Quest, destroying the profile. `pull_rep_to_skill` now raises `RepSyncError` on an empty
+  profile and leaves the file byte-identical, so the poller's best-effort pull logs the failure
+  and the task runs with the previously synced file instead.
 - **The understanding channel no longer invents a reply, and the context event no longer quotes the
   conversation.** Round 2 of the leak above. Giving the four REPLY-producing calls a voice contract
   killed the third-person narration inside the answer, but two leaks survived it because the answer

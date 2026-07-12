@@ -115,6 +115,23 @@ def test_pull_is_idempotent_no_rewrite_when_unchanged():
     assert first == second
 
 
+def test_pull_empty_profile_raises_and_leaves_file_untouched():
+    """A failed/missing profile ({} from get_ai_profile) must never blank the local skill file.
+
+    QuestClient.get_ai_profile returns {} when the GET fails or no rep exists; rendering that
+    would wipe the managed persona locally, and a later "both"-direction push would write the
+    wipe up to Quest. pull_rep_to_skill refuses instead.
+    """
+    client = MockProfileClient()
+    client._profile = {}  # constructor treats {} as "use the default", so set it directly
+    with tempfile.TemporaryDirectory() as d:
+        existing = render_skill_file("# Keep\n", {"persona": "SEEDED", "learned_notes": []})
+        Path(d, "SKILL.md").write_text(existing)
+        with pytest.raises(RepSyncError):
+            pull_rep_to_skill(client, "team1", "u1", d)
+        assert Path(d, "SKILL.md").read_text() == existing  # byte-identical, nothing clobbered
+
+
 def test_pull_preserves_existing_human_content():
     client = MockProfileClient()
     with tempfile.TemporaryDirectory() as d:
