@@ -118,16 +118,20 @@ def test_assemble_empty_returns_empty(tmp_path):
 
 
 def test_assemble_after_sync_returns_corrections(tmp_path):
+    # "update" vs "updates" is a trivial inflection: the gate's lenient (stemmed) matching must
+    # not drop the correction over it.
     store = NoteContextStore(str(tmp_path / "notes"))
     store.sync_from_notes([_make_note("n1", "be concise in updates")])
-    result = store.assemble("write concise status updates")
+    result = store.assemble("write a status update")
     assert "be concise in updates" in result.context_view
 
 
 def test_assemble_includes_correction_header(tmp_path):
+    # The note was just synced (fresh created_at): the freshness bypass keeps it floored even
+    # though "anything" shares no keyword with it.
     store = NoteContextStore(str(tmp_path / "notes"))
     store.sync_from_notes([_make_note("n1", "be concise")])
-    result = store.assemble("keep it concise")
+    result = store.assemble("anything")
     assert "LEARNED CORRECTIONS" in result.context_view
 
 
@@ -171,6 +175,53 @@ def test_floor_gate_escape_hatch_env(tmp_path, monkeypatch):
     result = store.assemble("xyzzy completely unrelated query")
     assert "topic4" in result.context_view
     assert "topic5" in result.context_view
+
+
+def test_floor_gate_lenient_to_inflection(tmp_path):
+    """The gate compares stemmed forms: a singular/plural (or -ing/-ed) mismatch between the
+    query and an otherwise applicable correction must not drop it. Old timestamp, so the
+    freshness bypass plays no part."""
+    store = NoteContextStore(str(tmp_path / "notes"))
+    store.sync_from_notes([
+        _make_note("n1", "be concise in updates", created_at="2026-01-01T00:00:01Z"),
+    ])
+    result = store.assemble("write a status update")
+    assert "be concise in updates" in result.context_view
+
+
+def test_floor_gate_ranking_stays_exact_token(tmp_path):
+    """Leniency is gate-only: ranked selection still scores by exact keyword overlap, so a
+    non-floored note whose only relation is an inflection keeps score 0 and stays out."""
+    store = NoteContextStore(str(tmp_path / "notes"))
+    notes = [_make_note("n1", "be concise in updates", created_at="2026-01-01T00:00:01Z")]
+    # Two newer notes occupy the whole floor; n1 can only enter via ranked selection.
+    notes += [
+        _make_note(f"n{j}", f"note topic{j}", created_at=f"2026-01-01T00:00:0{j}Z")
+        for j in (2, 3)
+    ]
+    store.sync_from_notes(notes)
+    result = store.assemble("write a status update")
+    assert "be concise in updates" not in result.context_view
+
+
+def test_floor_gate_fresh_note_bypasses_gate(tmp_path):
+    """A note learned within the freshness window floors in even on a keyword-unrelated query:
+    a just-given correction is almost certainly still in-topic."""
+    store = NoteContextStore(str(tmp_path / "notes"))
+    # No created_at on the note: sync stamps it with now, inside the 60-minute window.
+    store.sync_from_notes([_make_note("n1", "be concise")])
+    result = store.assemble("xyzzy completely unrelated query")
+    assert "be concise" in result.context_view
+
+
+def test_floor_gate_freshness_window_env_override(tmp_path, monkeypatch):
+    """QAR_NOTE_FLOOR_FRESH_MINUTES=0 disables the freshness bypass: the same just-synced,
+    unrelated note is gated out on keywords alone."""
+    monkeypatch.setenv("QAR_NOTE_FLOOR_FRESH_MINUTES", "0")
+    store = NoteContextStore(str(tmp_path / "notes"))
+    store.sync_from_notes([_make_note("n1", "be concise")])
+    result = store.assemble("xyzzy completely unrelated query")
+    assert result.context_view == ""
 
 
 def test_floor_kept_when_query_has_no_keywords(tmp_path):

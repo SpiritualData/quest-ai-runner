@@ -144,6 +144,68 @@ def test_fresh_midloop_query_runs_one_bounded_assemble():
         cache.close()
 
 
+# --- (b2) a PARTIAL result never displaces the full fuse in the shared cache ------------------
+
+def test_partial_turn_start_discarded_midloop_read_assembles_full():
+    # The orchestrator's collect contract for a PARTIAL turn-start result: use it for the
+    # turn-start prompt, but discard the (already-done) prefetch future instead of registering
+    # the partial as the query's completed result. The next same-query mid-loop read then falls
+    # through to the FRESH assemble path (deadline-free meta) and recovers the FULL result.
+    assembler = StubAssembler()
+    cache = TurnCardCache(assembler, meta=None)
+    query = "quarterly goals"
+
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        partial = AssembledContext(context_view="PARTIAL VIEW", partial=True)
+        future = executor.submit(lambda: partial)
+        cache.register_prefetch(query, future)
+        assert future.result(timeout=1.0) is partial  # turn-start collect harvested the partial
+
+        cache.discard_prefetch(query)  # what the orchestrator does instead of register_result
+
+        assembled, origin = cache.assemble_for_query(query, timeout=5.0)
+        assert origin == "fresh", "the partial must not be served from the cache"
+        assert "the answer is 42" in assembled.context_view
+        assert assembler.assemble_calls == [query]
+
+        # The recovered FULL result is cached normally.
+        assembled2, origin2 = cache.assemble_for_query(query, timeout=5.0)
+        assert origin2 == "cache"
+        assert assembler.assemble_calls == [query]
+    finally:
+        executor.shutdown(wait=False)
+        cache.close()
+
+
+def test_late_partial_prefetch_served_once_but_never_cached():
+    # Timeout branch: the deadline-bounded turn-start future stays registered and lands LATE
+    # with a partial. A mid-loop read serves it (better than nothing) but must NOT cache it as
+    # the completed result; the NEXT read assembles fresh and recovers the full fuse.
+    assembler = StubAssembler()
+    cache = TurnCardCache(assembler, meta=None)
+    query = "quarterly goals"
+
+    executor = ThreadPoolExecutor(max_workers=1)
+    try:
+        future = executor.submit(
+            lambda: AssembledContext(context_view="PARTIAL VIEW", partial=True))
+        cache.register_prefetch(query, future)
+
+        assembled, origin = cache.assemble_for_query(query, timeout=5.0)
+        assert origin == "prefetch"
+        assert assembled.partial is True  # this read gets the late partial
+
+        assembled2, origin2 = cache.assemble_for_query(query, timeout=5.0)
+        assert origin2 == "fresh", "a cached partial would have short-circuited recovery"
+        assert assembled2.partial is False
+        assert "the answer is 42" in assembled2.context_view
+        assert assembler.assemble_calls == [query]  # exactly one fresh assembly
+    finally:
+        executor.shutdown(wait=False)
+        cache.close()
+
+
 # --- (c) planner prompt + schema advertise the new ops ----------------------------------------
 
 def test_planner_prompt_and_schema_mention_card_ops():

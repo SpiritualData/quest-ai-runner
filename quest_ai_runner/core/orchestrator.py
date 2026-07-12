@@ -2519,12 +2519,32 @@ class TurnCardCache:
             pass
 
     def register_result(self, query: str, assembled: Any) -> None:
-        """Record a completed AssembledContext so a same-query read is a pure cache hit. Never raises."""
+        """Record a completed AssembledContext so a same-query read is a pure cache hit. Never raises.
+
+        Only a FULL result belongs here: a PARTIAL one (``assembled.partial``) would displace the
+        fresh, deadline-free assemble a later mid-loop read could run to recover the full fuse --
+        the caller uses ``discard_prefetch`` for that case instead of registering."""
         if not query or assembled is None:
             return
         try:
             with self.lock:
                 self.results[query] = assembled
+                self.futures.pop(query, None)
+        except Exception:  # noqa: BLE001
+            pass
+
+    def discard_prefetch(self, query: str) -> None:
+        """Drop a registered pre-fetch future without caching anything. Never raises.
+
+        Used when the turn-start prefetch resolved to a PARTIAL result: that future is already
+        done holding the partial, so leaving it registered would hand the same partial to every
+        mid-loop read. Discarding it makes the next same-query read fall through to the fresh
+        assemble path, which runs with the deadline-free ``self.meta`` and recovers the FULL
+        result."""
+        if not query:
+            return
+        try:
+            with self.lock:
                 self.futures.pop(query, None)
         except Exception:  # noqa: BLE001
             pass
@@ -2536,6 +2556,11 @@ class TurnCardCache:
         after a turn-start timeout), else runs a fresh bounded assemble. Raises ``TimeoutError`` when
         the wait exceeds ``timeout`` (the caller turns that into a NAMED timeout observation, never
         empty); the still-running future stays referenced so a later read can reuse it.
+
+        A PARTIAL result (``assembled.partial``, e.g. a deadline-bounded turn-start prefetch that
+        landed late) is served to THIS read -- better than nothing -- but never cached as the
+        query's completed result: its future is dropped instead, so the NEXT same-query read falls
+        through to a fresh assemble with the deadline-free ``self.meta`` and recovers the full fuse.
         """
         if self.assembler is None:
             return None, "none"
@@ -2553,7 +2578,8 @@ class TurnCardCache:
                 self.futures[query] = future
         assembled = future.result(timeout=timeout)  # may raise TimeoutError -> named error obs
         with self.lock:
-            self.results[query] = assembled
+            if not bool(getattr(assembled, "partial", False)):
+                self.results[query] = assembled
             self.futures.pop(query, None)
         return assembled, origin
 
@@ -5952,18 +5978,36 @@ class Orchestrator:
                 # PARTIAL result: the assembler hit its soft deadline and returned only the
                 # retrieval arm(s) that completed. Using it beats the drop-everything path,
                 # but stay LOUD about the degradation (same visibility bar as the timeout).
-                context_assembly_partial = bool(getattr(_assembled, "partial", False))
+                # ``assembly_partial`` / the WARNING only fire when the partial actually
+                # CARRIES content -- an empty partial means nothing was used, and saying
+                # "partial context was used" would be untrue.
+                _assembly_partial_flag = bool(getattr(_assembled, "partial", False))
+                context_assembly_partial = _assembly_partial_flag and bool(
+                    getattr(_assembled, "context_view", "") or "")
                 if context_assembly_partial:
                     log.warning(
                         "Context assembly hit its soft deadline; PARTIAL context was used "
                         "for this turn (only the retrieval arm(s) that finished within "
                         "budget; QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS to adjust)")
-                # Turn-start assembly completed in time: seed the shared cache so a same-query
-                # mid-loop {"cards": ...} read is a pure cache hit (no second assembly run). On the
-                # timeout branch above we deliberately leave the still-running future registered, so
-                # if it lands late a mid-loop read for the same query serves it from the cache.
+                elif _assembly_partial_flag:
+                    log.warning(
+                        "Context assembly hit its soft deadline and returned an EMPTY "
+                        "partial result; no fresh turn-start context was used this turn "
+                        "(QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS to adjust)")
+                # FULL turn-start assembly completed in time: seed the shared cache so a
+                # same-query mid-loop {"cards": ...} read is a pure cache hit (no second assembly
+                # run). A PARTIAL result is used for THIS turn-start prompt but never cached as
+                # the query's completed result -- registering it would displace the full fuse a
+                # later mid-loop read can still recover; instead the (already-done) prefetch
+                # future is discarded so that read falls through to a fresh, deadline-free
+                # assemble. On the timeout branch above we deliberately leave the still-running
+                # future registered, so if it lands late a mid-loop read for the same query
+                # serves it from the cache.
                 if _ctx_prefetch_query:
-                    card_context.register_result(_ctx_prefetch_query, _assembled)
+                    if _assembly_partial_flag:
+                        card_context.discard_prefetch(_ctx_prefetch_query)
+                    else:
+                        card_context.register_result(_ctx_prefetch_query, _assembled)
                 try:
                     if _assembled.context_view:
                         context_view = (_assembled.context_view + "\n\n" + context_view if context_view

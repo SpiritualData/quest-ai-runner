@@ -38,12 +38,18 @@ All notable changes to this project are documented here. The format is based on
   could not absorb it (fails never worse, same philosophy as `core/card_filter.py`). Using a
   partial result stays as loud as the timeout it replaces: a WARNING names the degradation and
   `EVENT_CONTEXT` carries a structured `assembly_partial` marker alongside the existing
-  `assembly_timed_out`. The true zero-results case is unchanged: when NEITHER arm finished by
-  the deadline the hybrid blocks for both exactly as before (an early empty return would read
-  as "assembly found nothing" and poison the shared turn cache), so the hard-timeout path, the
-  warm recent-card fallback, and the `TurnCardCache` late-recovery contract (a timed-out
-  turn-start future is still recoverable mid-loop) all hold. Assemblers that ignore the meta
-  hint, and callers that pass no deadline, behave byte-for-byte as before.
+  `assembly_timed_out` -- both only when the partial actually carried content (an empty partial
+  is named as such and never reported as "used"). An arm is skipped only when a completed arm
+  actually holds content: when no completed arm has any (neither finished, or a finished arm
+  crashed or came back empty) the hybrid blocks for the missing arm(s) exactly as before (an
+  early empty return would read as "assembly found nothing" and poison the shared turn cache),
+  so the hard-timeout path, the warm recent-card fallback, and the `TurnCardCache`
+  late-recovery contract (a timed-out turn-start future is still recoverable mid-loop) all
+  hold. A partial is scoped to the turn-start prompt it rescued: it is never cached as the
+  query's completed result, so a later mid-loop read for the same query re-assembles fresh
+  (deadline-free) and recovers the FULL fuse instead of being served the partial for the rest
+  of the turn. Assemblers that ignore the meta hint, and callers that pass no deadline, behave
+  byte-for-byte as before.
 
 - **`cli send` no longer acknowledges tasks that were never enqueued.** Found by live testing:
   `create_task` defaulted to `source="cli"`, which the Quest API rejects (its enum is
@@ -56,10 +62,15 @@ All notable changes to this project are documented here. The format is based on
 - **The learned-notes always-recent floor is relevance-gated.** `NoteContextStore.assemble`
   unconditionally included the 2 most recent notes in every turn's context, which bled the
   previous topic into an unrelated next turn. A floored note must now clear a minimal relevance
-  bar against the current query, reusing the store's existing keyword-overlap scoring: a single
-  shared meaningful keyword keeps it, and when either side yields no keywords the note is kept
-  (cannot judge relevance, so do not drop). Genuinely related recent notes still always make
-  it; only a clearly unrelated one is dropped. When nothing (floor included) relates to the
+  bar against the current query, with three deliberately permissive ways through: a note
+  learned within the last 60 minutes always passes (a just-given correction is almost certainly
+  still in-topic, and style/behavior corrections relate semantically rather than lexically;
+  window tunable via `QAR_NOTE_FLOOR_FRESH_MINUTES`, non-positive disables the bypass); a
+  single shared meaningful keyword passes, compared on conservatively stemmed forms
+  (dependency-free suffix stripping, so a trivial inflection like "update" vs "updates" cannot
+  drop an applicable correction -- ranked selection keeps exact-token scoring); and when either
+  side yields no keywords the note is kept (cannot judge relevance, so do not drop). Only a
+  clearly unrelated, non-fresh note is dropped. When nothing (floor included) relates to the
   query, `assemble` now returns an empty context instead of a header with stale notes. Set
   `QAR_NOTE_FLOOR_RELEVANCE_GATED=0` to restore the old unconditional floor.
 

@@ -1371,3 +1371,83 @@ def test_context_assembly_meta_carries_soft_deadline(monkeypatch):
     assert isinstance(deadline, float), f"expected a monotonic deadline, got: {deadline!r}"
     # Soft deadline sits UNDER the 5s hard budget, measured from roughly the submit time.
     assert before + 1.0 < deadline <= time_module.monotonic() + 5.0
+
+
+def test_partial_turn_start_not_cached_midloop_read_recovers_full():
+    # A PARTIAL turn-start result is used for THIS turn's prompt but must never be registered
+    # as the query's completed cached result: a later mid-loop {"cards": <same query>} read
+    # falls through to a fresh, deadline-free assemble and recovers the FULL fuse (the
+    # late-recovery contract a registered partial would displace).
+    from quest_ai_runner.core.adapters import AssembledContext
+
+    class PartialThenFullAssembler:
+        def __init__(self):
+            self.calls = []  # (task_text, had_deadline)
+
+        def assemble(self, task_text, *, meta=None):
+            had_deadline = (meta or {}).get("assembly_deadline") is not None
+            self.calls.append((task_text, had_deadline))
+            if had_deadline:
+                return AssembledContext(context_view="PARTIAL_CONTEXT", partial=True)
+            return AssembledContext(context_view="FULL_CONTEXT")
+
+        def record(self, task_text, outcome):
+            pass
+
+    provider = StubProvider(decisions=[
+        {"action": "read", "reads": [{"cards": "hello there"}], "rationale": "recheck topic"},
+        {"action": "answer", "rationale": "done", "model_tier": "haiku"},
+    ])
+    assembler = PartialThenFullAssembler()
+    orch = Orchestrator(retrieval=StubRetrieval(), provider=provider,
+                        registry=ModelRegistry(provider), context_assembler=assembler)
+    res = orch.run("hello there", sink=_CapturingSink())
+
+    assert res.kind == "answer"
+    # The partial WAS used for the current turn's prompt (beats dropping fresh context).
+    assert any("PARTIAL_CONTEXT" in p for p in provider.plan_prompts)
+    # Same query at turn start (deadline-bounded) and mid-loop: the mid-loop read must NOT be
+    # served the partial from the cache -- it re-assembles fresh (no deadline) and gets FULL.
+    assert assembler.calls == [("hello there", True), ("hello there", False)]
+    cards_obs = [o for o in res.gathered
+                 if isinstance(o, dict) and str(o.get("locator", "")).startswith("cards(")]
+    assert cards_obs, f"no cards observation in gathered: {res.gathered}"
+    assert "FULL_CONTEXT" in cards_obs[0]["text"]
+    assert "PARTIAL_CONTEXT" not in cards_obs[0]["text"]
+
+
+def test_empty_partial_assembly_is_not_reported_as_used(caplog):
+    # An EMPTY partial (partial=True with no context_view) means nothing was actually used:
+    # the "PARTIAL context was used" WARNING and the assembly_partial marker must NOT fire.
+    # The degradation still stays loud under its own truthful name.
+    import logging
+
+    from quest_ai_runner.core.adapters import AssembledContext
+    from quest_ai_runner.core.orchestrator import EVENT_CONTEXT
+
+    class EmptyPartialAssembler:
+        def assemble(self, task_text, *, meta=None):
+            return AssembledContext(partial=True)
+
+        def record(self, task_text, outcome):
+            pass
+
+    provider = StubProvider(decisions=[
+        {"action": "answer", "rationale": "chit-chat", "model_tier": "haiku"},
+    ])
+    orch = Orchestrator(retrieval=StubRetrieval(), provider=provider,
+                        registry=ModelRegistry(provider),
+                        context_assembler=EmptyPartialAssembler())
+    sink = _CapturingSink()
+    with caplog.at_level(logging.WARNING, logger="quest-ai-runner.orchestrator"):
+        res = orch.run("hello there", sink=sink)
+
+    assert res.kind == "answer"
+    assert not any("partial context was used" in r.message.lower() for r in caplog.records), (
+        "an empty partial used nothing; claiming partial context was used would be untrue")
+    assert any("empty" in r.message.lower() and "partial" in r.message.lower()
+               for r in caplog.records), "the empty-partial degradation must still be loud"
+    ctx_events = [e for e in sink.events if e.type == EVENT_CONTEXT]
+    assert ctx_events
+    assert not any(e.data.get("assembly_partial") for e in ctx_events)
+    assert not any(e.data.get("assembly_timed_out") for e in ctx_events)

@@ -39,6 +39,20 @@ def _keywords(text: str) -> List[str]:
     return [w for w in words if w not in _STOP and len(w) > 2]
 
 
+def _stem(word: str) -> str:
+    """Conservative, dependency-free suffix strip used ONLY by the floor's relevance gate.
+
+    The gate must not drop a genuinely applicable correction over a trivial inflection
+    ("update" vs "updates", "deploy" vs "deploying"), so gate comparison happens on stemmed
+    forms: the first matching suffix of ``ing``/``ed``/``es``/``s``/``e`` is stripped when at
+    least 3 characters remain.  Deliberately crude and conservative -- ranked scoring
+    (``_idf_score``) stays exact-token so selection order is unchanged."""
+    for suffix in ("ing", "ed", "es", "s", "e"):
+        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
+            return word[: -len(suffix)]
+    return word
+
+
 def _now_iso() -> str:
     return datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -54,6 +68,23 @@ def _floor_relevance_gated() -> bool:
     if raw is None or not raw.strip():
         return True
     return raw.strip().lower() not in ("0", "false", "no", "off")
+
+
+def _floor_fresh_minutes() -> float:
+    """How recently a note must have been learned to bypass the floor's relevance gate.
+
+    A correction learned within the last N minutes is almost certainly still in-topic (it was
+    just given), so it floors in even when its wording shares no keyword with the query --
+    style/behavior corrections ("be concise") relate semantically, not lexically.  Env
+    ``QAR_NOTE_FLOOR_FRESH_MINUTES`` (default 60, accepts a float); read fresh on every call so
+    it can be tuned without a restart.  A non-positive value disables the freshness bypass."""
+    raw = os.getenv("QAR_NOTE_FLOOR_FRESH_MINUTES")
+    if raw is None or not raw.strip():
+        return 60.0
+    try:
+        return float(raw)
+    except ValueError:
+        return 60.0
 
 
 def _card_id_for_note(note: Dict[str, Any]) -> str:
@@ -75,10 +106,11 @@ class NoteContextStore:
     Mirrors TurnContextStore: cards are per-JSON-file; retrieval is IDF-weighted keyword overlap;
     the 2 most recent cards form a floor (analogous to TurnContextStore's
     always-include-last-turn guarantee) that bypasses ranking but is RELEVANCE-GATED by default:
-    a floored note must share at least one meaningful keyword with the query to ride along, so a
-    clearly unrelated previous topic no longer bleeds into the next turn (see
-    ``_floor_relevance_gated`` for the escape hatch); up to ``max_total`` cards total are
-    returned.
+    a floored note rides along when it was learned recently (``_floor_fresh_minutes``) or shares
+    at least one meaningful keyword with the query (compared leniently on stemmed forms, see
+    ``_floor_relevant``), so a clearly unrelated previous topic no longer bleeds into the next
+    turn (see ``_floor_relevance_gated`` for the escape hatch); up to ``max_total`` cards total
+    are returned.
 
     Usage in the poller::
 
@@ -203,15 +235,46 @@ class NoteContextStore:
         card_set = set(card_kw)
         return sum(1 for w in query_kw if w in card_set)
 
-    def _floor_relevant(self, query_kw: List[str], card_kw: List[str]) -> bool:
-        """Minimal relevance bar for the always-recent floor.  Deliberately permissive: a single
-        shared meaningful keyword (the same overlap scoring used for ranked selection) clears it,
-        and when either side yields no keywords the note is KEPT (cannot judge relevance, so do
-        not drop).  Only a clearly unrelated note -- both sides have keywords, zero overlap --
-        is dropped."""
+    def _note_is_fresh(self, card: Dict[str, Any]) -> bool:
+        """Whether ``card`` was learned within the last ``_floor_fresh_minutes()`` minutes.
+        A missing/unparsable ``created_at`` is NOT fresh (the gate then judges by keywords)."""
+        window = _floor_fresh_minutes()
+        if window <= 0:
+            return False
+        raw = str(card.get("created_at") or "").strip()
+        if not raw:
+            return False
+        try:
+            ts = datetime.datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        except ValueError:
+            return False
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=datetime.timezone.utc)
+        age_minutes = (datetime.datetime.now(datetime.timezone.utc) - ts).total_seconds() / 60.0
+        return age_minutes <= window
+
+    def _floor_relevant(self, query_kw: List[str], card: Dict[str, Any]) -> bool:
+        """Minimal relevance bar for the always-recent floor.  Deliberately permissive, three ways
+        through:
+
+        * FRESHNESS -- a note learned within the last ``_floor_fresh_minutes()`` minutes is kept
+          unconditionally (a just-given correction is almost certainly still in-topic, and
+          style/behavior corrections often share no keyword with the query at all).
+        * LENIENT keyword overlap -- a single shared meaningful keyword clears it, compared on
+          conservatively STEMMED forms (see ``_stem``) so a trivial inflection ("update" vs
+          "updates") cannot drop an applicable correction.  Ranked selection keeps exact-token
+          ``_idf_score`` scoring; the leniency is gate-only.
+        * CANNOT JUDGE -- when either side yields no keywords the note is KEPT.
+
+        Only a clearly unrelated, non-fresh note -- both sides have keywords, zero stemmed
+        overlap -- is dropped."""
+        if self._note_is_fresh(card):
+            return True
+        card_kw = card.get("keywords", []) or []
         if not query_kw or not card_kw:
             return True
-        return self._idf_score(query_kw, card_kw) > 0.0
+        card_stems = {_stem(w) for w in card_kw}
+        return any(_stem(w) in card_stems for w in query_kw)
 
     def assemble(
         self, task_text: str, *, meta: Optional[Dict[str, Any]] = None
@@ -239,8 +302,7 @@ class NoteContextStore:
             recent_floor = cards[-self._ALWAYS_RECENT:]
             if _floor_relevance_gated():
                 recent_floor = [
-                    c for c in recent_floor
-                    if self._floor_relevant(query_kw, c.get("keywords", []))
+                    c for c in recent_floor if self._floor_relevant(query_kw, c)
                 ]
             selected_ids: set = {id(c) for c in recent_floor}
 

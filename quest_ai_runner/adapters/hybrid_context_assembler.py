@@ -27,10 +27,12 @@ When the caller passes ``meta["assembly_deadline"]`` (a ``time.monotonic()``
 timestamp), the fuse step becomes deadline-aware: an arm that has not finished
 by the deadline is SKIPPED and the arm(s) that completed are fused as a partial
 result (``AssembledContext.partial=True``) so a slow arm never costs the caller
-its whole context budget.  If NEITHER arm finished by the deadline the hybrid
-blocks for both exactly as before -- returning an early empty result would look
-like "assembly found nothing" and defeat the caller's own timeout/late-recovery
-handling for the true zero-results case.  The consolidating LLM pass is bypassed
+its whole context budget.  An arm is skipped ONLY when a completed arm actually
+holds content: if no completed arm has any (neither finished, or the finished
+arm(s) crashed or came back empty) the hybrid blocks for the missing arm(s)
+exactly as before -- returning an early empty result would look like "assembly
+found nothing" and defeat the caller's own timeout/late-recovery handling for
+the true zero-results case.  The consolidating LLM pass is bypassed
 when the result is partial or the remaining budget could not absorb it (the
 fails-never-worse philosophy of ``core/card_filter.py``).  Without a deadline in
 ``meta``, behavior is unchanged.
@@ -201,22 +203,29 @@ class HybridContextAssembler(ContextAssemblerBase):
                     arm_results[name] = None  # not finished by the deadline
                 except Exception:
                     arm_results[name] = AssembledContext()
-            if arm_results["keyword"] is None and arm_results["vector"] is None:
-                # Deadline expired with NEITHER arm finished: block for both (the pre-deadline
-                # behavior).  Returning an early empty result here would read as "assembly
-                # completed and found nothing" and poison the caller's cache, defeating its own
-                # hard timeout + late-recovery path, which is the correct owner of the true
-                # zero-results case.
-                try:
-                    arm_results["keyword"] = fut_kw.result()
-                except Exception:
-                    arm_results["keyword"] = AssembledContext()
-                try:
-                    arm_results["vector"] = fut_vec.result()
-                except Exception:
-                    arm_results["vector"] = AssembledContext()
-            elif arm_results["keyword"] is None or arm_results["vector"] is None:
-                skipped = "keyword" if arm_results["keyword"] is None else "vector"
+            arm_futures = {"keyword": fut_kw, "vector": fut_vec}
+            missed = [name for name in ("keyword", "vector") if arm_results[name] is None]
+            # An arm only counts as "finished" for the skip decision when it finished WITH
+            # content: an arm that crashed or legitimately found nothing yields an empty
+            # AssembledContext, and skipping the slow arm on the strength of an EMPTY one
+            # would return an early empty "partial" that reads as "assembly completed and
+            # found nothing" -- poisoning the caller's cache and defeating its own hard
+            # timeout + late-recovery path, which is the correct owner of the true
+            # zero-results case.
+            completed_with_content = any(
+                res is not None and res.context_view for res in arm_results.values()
+            )
+            if missed and not completed_with_content:
+                # Deadline expired with no completed arm holding content (neither arm
+                # finished, or the finished arm(s) came back empty): block for the missing
+                # arm(s), the pre-deadline behavior.
+                for name in missed:
+                    try:
+                        arm_results[name] = arm_futures[name].result()
+                    except Exception:
+                        arm_results[name] = AssembledContext()
+            elif missed:
+                skipped = missed[0]
                 partial = True
                 logger.warning(
                     "HybridContextAssembler: %s arm missed the assembly deadline and was "

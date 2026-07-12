@@ -2,9 +2,11 @@
 
 When the caller passes ``meta["assembly_deadline"]`` (a ``time.monotonic()`` timestamp), an arm
 that has not finished by the deadline is skipped and the completed arm(s) are fused as a PARTIAL
-result (``AssembledContext.partial=True``) instead of blowing the caller's whole budget. If
-NEITHER arm finished, the hybrid blocks for both exactly as before (the caller's own timeout +
-late-recovery path owns the true zero-results case). Without a deadline, behavior is unchanged.
+result (``AssembledContext.partial=True``) instead of blowing the caller's whole budget. An arm
+is only skipped when a completed arm actually holds CONTENT: if no completed arm has any
+(neither finished, or the finished arm(s) crashed or came back empty) the hybrid blocks for the
+missing arm(s) exactly as before (the caller's own timeout + late-recovery path owns the true
+zero-results case). Without a deadline, behavior is unchanged.
 """
 import time
 
@@ -94,6 +96,45 @@ def test_neither_arm_finished_blocks_for_both():
     elapsed = time.monotonic() - t0
     assert elapsed >= 0.25, "must have blocked for the arms rather than bailing out empty"
     assert "keyword content" in ac.context_view
+    assert "vector content" in ac.context_view
+    assert ac.partial is False
+
+
+class _CrashingArm:
+    """An arm whose assemble() raises immediately (the hybrid maps that to an empty result)."""
+
+    def assemble(self, task_text, *, meta=None):
+        raise RuntimeError("arm exploded")
+
+    def record(self, task_text, outcome):
+        pass
+
+
+def test_empty_fast_arm_plus_slow_arm_blocks_for_full_result():
+    """An arm that finishes EMPTY does not count as finished for the skip decision: with no
+    completed content to fuse, the hybrid blocks for the slow arm (the pre-deadline behavior)
+    instead of returning an early empty "partial" that would read as "assembly found nothing"
+    and poison the caller's cache / late-recovery path."""
+    kw = _StubArm(view="")  # finishes instantly -- with NOTHING
+    vec = _StubArm(view="vector content", delay=0.3)
+    hybrid = HybridContextAssembler(keyword=kw, vector=vec)
+    t0 = time.monotonic()
+    ac = hybrid.assemble("task", meta=_deadline_meta(0.05))
+    elapsed = time.monotonic() - t0
+    assert elapsed >= 0.25, "must have blocked for the slow arm rather than bailing out empty"
+    assert "vector content" in ac.context_view
+    assert ac.partial is False
+
+
+def test_crashing_arm_plus_slow_arm_blocks_for_full_result():
+    """A crashed arm yields an empty result and must not count as finished either: the hybrid
+    blocks for the slow arm and returns its full content, never an early empty partial."""
+    vec = _StubArm(view="vector content", delay=0.3)
+    hybrid = HybridContextAssembler(keyword=_CrashingArm(), vector=vec)
+    t0 = time.monotonic()
+    ac = hybrid.assemble("task", meta=_deadline_meta(0.05))
+    elapsed = time.monotonic() - t0
+    assert elapsed >= 0.25, "must have blocked for the slow arm rather than bailing out empty"
     assert "vector content" in ac.context_view
     assert ac.partial is False
 
