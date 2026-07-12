@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **Deep runs are never untimed, never silent, and never watch the wrong session.** The
+  `claude -p` deep subprocess now always has a wall-clock cap (`SubprocessConfig.timeout_seconds`,
+  else `QAR_DEEP_TIMEOUT_SECONDS`, else 1 hour); on expiry its whole process group is killed and
+  the run returns a hard failure naming the elapsed time and the limit. The session progress
+  monitor no longer gives up after 15 quiet seconds: it heartbeats (default every 10s) for the
+  entire subprocess lifetime, so a hung worker is distinguishable from a working one. Each run is
+  launched with an explicit `--session-id`, and the monitor watches exactly that session file
+  instead of "any new jsonl" (no more cross-attaching to a concurrent session).
+- **Card render order is stable (prefix-cache precondition).** Card selection and truncation stay
+  fully score/LLM-driven, but the surviving cards now render sorted by card id instead of by a
+  score that drifts call to call. The usefulness judgment is preserved per card as
+  `priority_rank` (consolidator) / `effective_score` (vector assembler) / `relevance_score`
+  metadata; consumers that want "the most useful card" read the field, never list position.
+  Rationale: provider prompt caches match on a literal prefix, and measured benchmarks show a
+  reshuffled card order makes caching cost more than not caching at all.
+
 ### Fixed
 - **The understanding channel no longer invents a reply, and the context event no longer quotes the
   conversation.** Round 2 of the leak above. Giving the four REPLY-producing calls a voice contract
