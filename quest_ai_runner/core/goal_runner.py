@@ -27,9 +27,11 @@ import json
 import logging
 import os
 import shutil
+import signal
 import subprocess
 import threading
 import time
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Set
@@ -39,6 +41,62 @@ from .adapters import DeepResult, DeepRunner, EVENT_EXEC, ProgressEvent
 _log = logging.getLogger("quest-ai-runner.goal_runner")
 
 DEFAULT_DEEP_MAX_TURNS = 30
+
+# Wall-clock cap applied to the deep ``claude -p`` subprocess when the consumer's SubprocessConfig
+# leaves ``timeout_seconds`` unset. An untimed subprocess can hang forever and is indistinguishable
+# from one still working (HANDS_FREE_QUEST_AI_DESIGN.md section 2) — this is the reliability floor,
+# not a tuning knob a consumer is expected to set. Overridable via QAR_DEEP_TIMEOUT_SECONDS.
+DEFAULT_DEEP_TIMEOUT_SECONDS = 3600.0
+QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR = "QAR_DEEP_TIMEOUT_SECONDS"
+
+# How often the progress monitor emits a liveness beat while otherwise quiet (before the session
+# file exists, or while it exists but nothing new has been written since). Design rule: silence
+# longer than about 10s while a deep run is working is a bug by definition.
+DEFAULT_MONITOR_HEARTBEAT_SECONDS = 10.0
+
+
+def resolve_deep_timeout_seconds(configured: Optional[float]) -> float:
+    """The effective wall-clock cap for the deep subprocess.
+
+    ``configured`` (``SubprocessConfig.timeout_seconds``) wins when the consumer set it
+    explicitly. Otherwise falls back to the ``QAR_DEEP_TIMEOUT_SECONDS`` env var, defaulting to
+    ``DEFAULT_DEEP_TIMEOUT_SECONDS`` (1 hour) so a deep run can never hang forever just because a
+    consumer forgot to configure a timeout.
+    """
+    if configured is not None:
+        return float(configured)
+    raw = (os.getenv(QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR) or "").strip()
+    if raw:
+        try:
+            return float(raw)
+        except ValueError:
+            _log.warning(
+                "%s=%r is not a valid number, using default %.0fs",
+                QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, raw, DEFAULT_DEEP_TIMEOUT_SECONDS,
+            )
+    return DEFAULT_DEEP_TIMEOUT_SECONDS
+
+
+def kill_process_group(proc: "subprocess.Popen") -> None:
+    """Kill the subprocess AND every child it spawned, not just the top pid.
+
+    The subprocess is launched with ``start_new_session=True`` so it is its own process group
+    leader; ``os.killpg`` reaches everything under it (Claude Code, or any tool it shells out to,
+    can spawn children that would otherwise be orphaned by killing only the top pid). Falls back
+    to ``proc.kill()`` alone if the process group cannot be resolved or signaled (already exited,
+    or a platform without process groups).
+    """
+    pid = proc.pid
+    try:
+        pgid = os.getpgid(pid)
+        os.killpg(pgid, signal.SIGKILL)
+        return
+    except (ProcessLookupError, PermissionError, OSError, AttributeError) as e:
+        _log.warning("could not kill process group for pid %s (%s), falling back to proc.kill()", pid, e)
+    try:
+        proc.kill()
+    except Exception:  # noqa: BLE001 — best-effort cleanup, never raise from a timeout handler
+        pass
 
 
 def _is_claude_model(model: str) -> bool:
@@ -208,7 +266,10 @@ class SubprocessConfig:
     context_preamble: str = ""                # optional org/persona context prepended to the brief
     skip_permissions: bool = True             # --dangerously-skip-permissions for headless runs
     extra_path_dirs: Optional[List[str]] = None   # dirs to prepend to PATH for the subprocess
-    timeout_seconds: Optional[float] = None   # hard wall-clock cap on the subprocess
+    # Hard wall-clock cap on the subprocess. None means "use the runner's own floor": the
+    # QAR_DEEP_TIMEOUT_SECONDS env var, or DEFAULT_DEEP_TIMEOUT_SECONDS (1 hour) if that is also
+    # unset — see resolve_deep_timeout_seconds(). A deep run is never truly untimed.
+    timeout_seconds: Optional[float] = None
     # Tool gating for the spawned Claude Code worker (generic, optional):
     #   * allowed_tools=None  → don't pass --allowed-tools; the worker has its DEFAULT tool set
     #     (which includes WebSearch/WebFetch). With skip_permissions this is the full, web-capable set.
@@ -410,11 +471,24 @@ def _monitor_claude_session(
     poll_interval: float = 0.1,
     max_wait_seconds: float = 30.0,
     forced_run_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    heartbeat_interval: float = DEFAULT_MONITOR_HEARTBEAT_SECONDS,
 ) -> None:
-    """Monitor Claude Code session files and stream updates via callback.
+    """Monitor a Claude Code session file and stream updates via callback.
 
-    Runs in a background thread. Polls for new JSONL lines and emits ProgressEvents
-    as Claude Code produces output (thinking, tool calls, text, etc.).
+    Runs in a background thread FOR THE ENTIRE LIFETIME OF THE SUBPROCESS — it never gives up
+    early. The caller sets ``stop_event`` only when the subprocess itself has exited, timed out,
+    or errored, so this loop's lifetime tracks the subprocess exactly. While otherwise quiet
+    (before the session file exists, or once it exists but nothing new has been written), it
+    emits a periodic liveness beat through ``callback`` every ``heartbeat_interval`` seconds, so a
+    hung subprocess is never silently indistinguishable from a working one (silence longer than
+    about 10s while a deep run is working is a bug by definition).
+
+    ``session_id``, when given, is the id the worker was launched with (``--session-id <uuid>``).
+    The monitor then watches EXACTLY that session's file, deterministically, instead of "any new
+    jsonl" — this is what keeps it from cross-attaching to an unrelated concurrent session (the
+    parent conversation, or another deep run sharing the same project dir). When absent (an older
+    caller that didn't pass one), it falls back to the previous any-new-file heuristic.
 
     ``forced_run_id``, when given, is used for every emitted event's ``run_id`` instead of
     deriving one per session file. A goal retry spawns a brand-new subprocess (and therefore a
@@ -423,18 +497,43 @@ def _monitor_claude_session(
     marker isn't echoed back in the assistant's reply text), which a consumer's dashboard would
     then render as a separate, duplicate deep-run entry for what is really one ongoing subgoal.
     """
-    _log.info("monitor thread started for working_dir: %s", working_dir)
+    _log.info("monitor thread started for working_dir: %s (session_id=%s)", working_dir, session_id)
     if cutoff_time is None:
         cutoff_time = time.time()
+    monitor_start = time.time()
+    last_beat = monitor_start
+    beat_run_id = forced_run_id or (session_id[:8] if session_id else None)
+
+    def maybe_emit_heartbeat(note: str) -> None:
+        nonlocal last_beat
+        now = time.time()
+        if now - last_beat < heartbeat_interval:
+            return
+        last_beat = now
+        elapsed = now - monitor_start
+        callback(ProgressEvent(
+            type=EVENT_EXEC,
+            text=f"Deep run active, {elapsed:.0f}s elapsed, {note}",
+            data={"run_id": beat_run_id, "phase": "heartbeat", "elapsed_seconds": round(elapsed, 1)},
+        ))
+
     try:
         project_dir = _find_claude_project_dir(working_dir)
         if not project_dir:
             _log.warning("✗ project dir not found: checked %s and QAR_DEEP_WORKING_DIR/QAR_CORPUS_ROOT",
                         working_dir)
-            _log.info("waiting for .claude/projects to be created (%.0fs timeout)...", max_wait_seconds)
-            # Wait for it to be created, then find it
-            start = time.time()
-            while time.time() - start < max_wait_seconds and not stop_event.is_set():
+            _log.info("waiting for .claude/projects to be created...")
+            # Wait for it to be created, then find it. Unlike before, this does NOT give up after
+            # max_wait_seconds — it keeps beating and looking until the subprocess itself ends
+            # (stop_event set). max_wait_seconds only controls how it logs, not when it quits.
+            wait_start = time.time()
+            logged_slow_wait = False
+            while not stop_event.is_set() and not project_dir:
+                maybe_emit_heartbeat("waiting for session output")
+                if not logged_slow_wait and time.time() - wait_start > max_wait_seconds:
+                    _log.warning("still waiting for .claude/projects after %.0fs, continuing",
+                                 max_wait_seconds)
+                    logged_slow_wait = True
                 time.sleep(poll_interval)
                 project_dir = _find_claude_project_dir(working_dir)
                 if project_dir:
@@ -442,42 +541,52 @@ def _monitor_claude_session(
                     break
 
         if not project_dir:
-            _log.error("✗ FATAL: could not locate .claude/projects dir after %.1f seconds", max_wait_seconds)
+            # The subprocess ended (stop_event set) before ANY project dir ever appeared. Nothing
+            # to watch, but this is not itself an error worth escalating: the caller's own
+            # timeout/exit-code handling covers the outcome.
+            _log.warning("monitor ending: no .claude/projects dir ever appeared for %s", working_dir)
             return
 
         _log.info("✓ found claude project dir: %s", project_dir)
         event_count = 0
-
-        # Monitor ALL new session files (parallel tasks create multiple sessions)
-        _log.info("monitoring for new claude sessions (parallel tasks may create multiple)...")
         watched_files: Dict[str, int] = {}  # filename -> last known file position (bytes)
         file_session_ids: Dict[str, str] = {}  # filename -> task UUID
-        session_timeout = 15.0
-        session_start = time.time()
 
-        # Snapshot JSONL files that already exist so we never mistake the parent session
-        # (or any other pre-existing session) for a new deep-runner subprocess session.
-        # mtime alone is insufficient: the parent session's JSONL gets a new mtime whenever
-        # Claude does anything in this conversation, which can push it past cutoff_time.
+        # Fix for cross-attach: when we know the exact session id the worker was launched with,
+        # watch ONLY that file (resolved once found, then just stat'd each poll). Otherwise fall
+        # back to the prior "any new jsonl" heuristic for backward compatibility.
+        target_file: Optional[Path] = None
+
+        # Snapshot JSONL files that already exist so the any-new-file fallback never mistakes the
+        # parent session (or any other pre-existing session) for a new deep-runner subprocess
+        # session. mtime alone is insufficient: the parent session's JSONL gets a new mtime
+        # whenever Claude does anything in this conversation, which can push it past cutoff_time.
         pre_existing_files: set = {str(f) for f in project_dir.rglob("*.jsonl")}
         _log.debug("pre-existing session files excluded from monitoring: %d", len(pre_existing_files))
 
         while not stop_event.is_set():
-            # Periodically check for new session files
+            # Periodically check for the session file(s) to read.
             try:
-                # Find all JSONL files in the project dir and subdirs
-                for jsonl_file in project_dir.rglob("*.jsonl"):
+                if session_id:
+                    if target_file is None:
+                        matches = list(project_dir.rglob(f"{session_id}.jsonl"))
+                        if matches:
+                            target_file = matches[0]
+                            _log.info("✓ bound to deep run's own session file: %s", target_file)
+                    candidate_files = [target_file] if target_file is not None else []
+                else:
+                    # Any new jsonl not present before the subprocess started.
+                    candidate_files = [
+                        f for f in project_dir.rglob("*.jsonl") if str(f) not in pre_existing_files
+                    ]
+
+                for jsonl_file in candidate_files:
                     try:
                         file_key = str(jsonl_file)
-                        # Skip files that existed before the subprocess started — these are other
-                        # Claude sessions (e.g. the parent assistant session) that must not be
-                        # mistaken for the deep-runner subprocess we're monitoring.
-                        if file_key in pre_existing_files:
-                            continue
 
                         # Track file position, not content hash (simpler, no duplicates)
                         if file_key not in watched_files:
-                            _log.debug("detected new session file: %s", jsonl_file.name)
+                            _log.debug("detected session file: %s", jsonl_file.name)
                             watched_files[file_key] = 0  # Start from beginning
 
                         # Read new lines from this session file (only new ones we haven't seen)
@@ -501,6 +610,7 @@ def _monitor_claude_session(
                                             msg_text = _format_message_text(msg)
                                             if msg_text and msg_text.strip():
                                                 event_count += 1
+                                                last_beat = time.time()  # real activity counts as a beat
 
                                                 # A caller-supplied id (the subgoal's stable task_uuid) always
                                                 # wins, so every retry's fresh subprocess/session still reports
@@ -539,10 +649,11 @@ def _monitor_claude_session(
             except Exception as e:
                 _log.debug("error scanning project dir: %s", e)
 
-            # Stop monitoring after timeout with no new activity
-            if time.time() - session_start > session_timeout and not watched_files:
-                _log.warning("timeout waiting for any new sessions")
-                break
+            # Heartbeat: keep the caller informed even when nothing new has appeared yet. Real
+            # activity above already refreshed ``last_beat``, so this only fires on quiet stretches
+            # and never floods the stream while the worker is genuinely producing output.
+            note = "session started, no new output yet" if watched_files else "waiting for session output"
+            maybe_emit_heartbeat(note)
 
             time.sleep(poll_interval)
 
@@ -625,17 +736,28 @@ class SubprocessGoalRunner(DeepRunner):
         if goal.strip():
             cmd += ["--max-turns", str(int(turns))]
 
+        # Bind this run to an explicit, deterministic session id (rather than letting Claude Code
+        # pick one) so the progress monitor can watch EXACTLY this run's session file instead of
+        # guessing from "any new jsonl" — a guess that can cross-attach to a concurrent session
+        # (the parent conversation, or another deep run sharing the same project dir).
+        session_id = str(uuid.uuid4())
+        cmd += ["--session-id", session_id]
+
+        # The wall-clock cap for this run: the consumer's SubprocessConfig wins if set, otherwise
+        # QAR_DEEP_TIMEOUT_SECONDS / the 1-hour default. Never truly untimed.
+        effective_timeout = resolve_deep_timeout_seconds(self.cfg.timeout_seconds)
+
         # Start monitoring Claude Code session in a background thread if emit is provided.
         stop_monitor = threading.Event()
         monitor_thread = None
         cutoff_time = time.time()  # Sessions created after this are new
         if emit is not None:
-            _log.info("starting claude session monitor for deep run in: %s",
-                     self.cfg.working_dir)
+            _log.info("starting claude session monitor for deep run in: %s (session_id=%s)",
+                     self.cfg.working_dir, session_id)
             monitor_thread = threading.Thread(
                 target=_monitor_claude_session,
                 args=(self.cfg.working_dir, emit, stop_monitor, cutoff_time),
-                kwargs={"forced_run_id": run_id},
+                kwargs={"forced_run_id": run_id, "session_id": session_id},
                 daemon=True
             )
             monitor_thread.start()
@@ -650,6 +772,9 @@ class SubprocessGoalRunner(DeepRunner):
                 stderr=subprocess.PIPE,
                 cwd=self.cfg.working_dir,
                 env=self._build_env(),
+                # Own process group: on a timeout we must kill the worker AND every child it
+                # spawned, not just the top pid. See kill_process_group().
+                start_new_session=True,
             )
         except FileNotFoundError:
             stop_monitor.set()
@@ -662,18 +787,35 @@ class SubprocessGoalRunner(DeepRunner):
                 monitor_thread.join(timeout=1)
             return DeepResult(met=False, error=f"permission denied running worker: {e}")
 
-        # Communicate with the process (send prompt and wait for completion)
+        # Communicate with the process (send prompt and wait for completion). This wait is
+        # ALWAYS bounded by effective_timeout, so a hung worker fails loudly instead of wedging
+        # the task forever and looking identical to one still working.
+        proc_start = time.time()
         try:
             raw, err = proc.communicate(
                 input=prompt.encode("utf-8"),
-                timeout=self.cfg.timeout_seconds
+                timeout=effective_timeout
             )
         except subprocess.TimeoutExpired:
-            proc.kill()
+            elapsed = time.time() - proc_start
+            kill_process_group(proc)
+            # Drain whatever the worker had already buffered, purely for diagnostics. The result
+            # below is a hard FAILURE regardless of what (if anything) comes back here.
+            try:
+                proc.communicate(timeout=5)
+            except Exception:  # noqa: BLE001 — best-effort drain after a kill, never raise here
+                pass
             stop_monitor.set()
             if monitor_thread:
-                monitor_thread.join(timeout=1)
-            return DeepResult(met=False, error="goal run exceeded the time limit before completing")
+                monitor_thread.join(timeout=2)
+            return DeepResult(
+                met=False,
+                error=(
+                    f"Deep run exceeded its wall-clock timeout: ran for {elapsed:.0f}s against a "
+                    f"{effective_timeout:.0f}s limit. The worker process group was killed. "
+                    "This is a hard failure, not a silent success, even if partial output exists."
+                ),
+            )
         finally:
             # Stop monitoring thread
             stop_monitor.set()

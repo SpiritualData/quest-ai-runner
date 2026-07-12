@@ -608,6 +608,226 @@ def test_subprocess_runner_treats_empty_output_as_not_met(monkeypatch):
     assert "no output" in (res.error or "").lower()
 
 
+# --- WS1 reliability floor: wall-clock timeout, deterministic session binding, heartbeat ------
+
+def test_resolve_deep_timeout_seconds_env_var_and_config_precedence(monkeypatch):
+    """Explicit SubprocessConfig.timeout_seconds always wins. Otherwise QAR_DEEP_TIMEOUT_SECONDS
+    is used, falling back to the built-in 1-hour default when unset or unparsable — a deep run is
+    never truly untimed."""
+    from quest_ai_runner.core.goal_runner import (
+        DEFAULT_DEEP_TIMEOUT_SECONDS,
+        QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR,
+        resolve_deep_timeout_seconds,
+    )
+
+    monkeypatch.delenv(QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, raising=False)
+    assert resolve_deep_timeout_seconds(None) == DEFAULT_DEEP_TIMEOUT_SECONDS
+    assert resolve_deep_timeout_seconds(120.0) == 120.0  # explicit config wins, no env set
+
+    monkeypatch.setenv(QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, "90")
+    assert resolve_deep_timeout_seconds(None) == 90.0
+    assert resolve_deep_timeout_seconds(5.0) == 5.0       # config still wins over env
+
+    monkeypatch.setenv(QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, "not-a-number")
+    assert resolve_deep_timeout_seconds(None) == DEFAULT_DEEP_TIMEOUT_SECONDS  # bad env -> default
+
+
+def test_subprocess_runner_applies_default_timeout_when_unconfigured(monkeypatch):
+    """When the consumer leaves SubprocessConfig.timeout_seconds unset, the subprocess wait is
+    still bounded (never truly untimed): it uses QAR_DEEP_TIMEOUT_SECONDS, or the built-in
+    default when that is also unset."""
+    import subprocess as _sp
+    from quest_ai_runner.core import goal_runner as gr
+
+    monkeypatch.delenv(gr.QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, raising=False)
+    captured = {}
+
+    class _MockPopen:
+        returncode = 0
+        stdin = None
+        pid = 1
+
+        def communicate(self, input=None, timeout=None):
+            captured["timeout"] = timeout
+            return (b"did it", b"")
+
+    monkeypatch.setattr(_sp, "Popen", lambda cmd, **kw: _MockPopen())
+    runner = gr.SubprocessGoalRunner(gr.SubprocessConfig(working_dir="/w", claude_path="/usr/bin/claude"))
+    runner.run_goal(goal="g", brief="b", max_turns=2)
+    assert captured["timeout"] == gr.DEFAULT_DEEP_TIMEOUT_SECONDS
+
+    monkeypatch.setenv(gr.QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, "42")
+    runner.run_goal(goal="g", brief="b", max_turns=2)
+    assert captured["timeout"] == 42.0
+
+
+def test_subprocess_runner_timeout_kills_process_group_and_fails_clearly(monkeypatch):
+    """A hung worker must never wedge forever or look like a silent success: on wall-clock
+    timeout the runner kills the WHOLE process group (not just the top pid) and returns a FAILED
+    result whose message names how long it ran and the configured limit, with no em dash."""
+    import subprocess as _sp
+    from quest_ai_runner.core import goal_runner as gr
+
+    killed = {}
+
+    def fake_kill_process_group(proc):
+        killed["pid"] = proc.pid
+
+    monkeypatch.setattr(gr, "kill_process_group", fake_kill_process_group)
+
+    class _MockPopen:
+        returncode = 0
+        stdin = None
+        pid = 4242
+
+        def __init__(self):
+            self.calls = 0
+
+        def communicate(self, input=None, timeout=None):
+            self.calls += 1
+            if self.calls == 1:
+                raise _sp.TimeoutExpired(cmd=["claude"], timeout=timeout)
+            return (b"", b"")  # the post-kill diagnostic drain call
+
+    monkeypatch.setattr(_sp, "Popen", lambda cmd, **kw: _MockPopen())
+    runner = gr.SubprocessGoalRunner(gr.SubprocessConfig(
+        working_dir="/w", claude_path="/usr/bin/claude", timeout_seconds=5.0))
+    res = runner.run_goal(goal="do a long thing", brief="work", max_turns=3)
+
+    assert res.met is False
+    assert killed["pid"] == 4242                 # the whole process group was killed
+    assert "5" in res.error                       # the configured limit is named
+    assert "timeout" in res.error.lower()
+    assert "—" not in res.error                   # no em dashes in user-facing error text
+
+
+def test_subprocess_runner_passes_explicit_session_id(monkeypatch):
+    """Each run is bound to an explicit --session-id (a fresh uuid per call), so the progress
+    monitor can watch the deterministic session file instead of guessing from 'any new jsonl'."""
+    import subprocess as _sp
+    import uuid as _uuid
+    from quest_ai_runner.core import goal_runner as gr
+
+    captured = []
+
+    class _MockPopen:
+        returncode = 0
+        stdin = None
+        pid = 1
+
+        def communicate(self, input=None, timeout=None):
+            return (b"did it", b"")
+
+    def fake_popen(cmd, **kw):
+        captured.append(cmd)
+        return _MockPopen()
+
+    monkeypatch.setattr(_sp, "Popen", fake_popen)
+    runner = gr.SubprocessGoalRunner(gr.SubprocessConfig(working_dir="/w", claude_path="/usr/bin/claude"))
+    runner.run_goal(goal="g", brief="b", max_turns=2)
+    runner.run_goal(goal="g2", brief="b2", max_turns=2)
+
+    session_ids = []
+    for cmd in captured:
+        assert "--session-id" in cmd
+        sid = cmd[cmd.index("--session-id") + 1]
+        _uuid.UUID(sid)  # must parse as a valid uuid
+        session_ids.append(sid)
+
+    assert session_ids[0] != session_ids[1]  # each attempt gets its own fresh session id
+
+
+def test_monitor_binds_to_explicit_session_id_ignores_other_sessions(tmp_path, monkeypatch):
+    """When launched with an explicit session_id (the id passed to the worker via --session-id),
+    the monitor watches EXACTLY that session's file. A concurrent/unrelated session file appearing
+    in the same project dir (e.g. the parent conversation, or another deep run) must never be
+    cross-attached — this is the fix for the old 'any new jsonl' mis-detection."""
+    import json as _json
+    import threading as _threading
+    import time as _time
+    from quest_ai_runner.core import goal_runner as gr
+
+    project_dir = tmp_path / ".claude" / "projects" / "proj"
+    project_dir.mkdir(parents=True)
+    # Isolate project-dir DISCOVERY from this test (real hosts may already have a real
+    # ~/.claude/projects with jsonl files, which _find_claude_project_dir would otherwise prefer)
+    # so this test exercises only the session-binding behavior under test.
+    monkeypatch.setattr(gr, "_find_claude_project_dir", lambda working_dir: project_dir)
+
+    bound_session_id = "11111111-1111-1111-1111-111111111111"
+    other_session_file = project_dir / "22222222-2222-2222-2222-222222222222.jsonl"
+    bound_session_file = project_dir / f"{bound_session_id}.jsonl"
+
+    def write_msg(path, text):
+        with open(path, "a") as f:
+            f.write(_json.dumps({"type": "assistant", "message": {"content": text}}) + "\n")
+
+    events = []
+    stop_event = _threading.Event()
+    thread = _threading.Thread(
+        target=gr._monitor_claude_session,
+        args=(str(tmp_path), events.append, stop_event),
+        kwargs={
+            "poll_interval": 0.02,
+            "session_id": bound_session_id,
+            "forced_run_id": "run1",
+            "heartbeat_interval": 100.0,
+        },
+        daemon=True,
+    )
+    thread.start()
+    _time.sleep(0.05)
+    write_msg(other_session_file, "message from an unrelated concurrent session")
+    write_msg(bound_session_file, "message from the bound deep run")
+    _time.sleep(0.3)
+    stop_event.set()
+    thread.join(timeout=2)
+
+    exec_texts = [e.text for e in events if e.type == gr.EVENT_EXEC and "message from" in (e.text or "")]
+    assert any("bound deep run" in t for t in exec_texts)
+    assert not any("unrelated concurrent" in t for t in exec_texts)
+
+
+def test_monitor_heartbeats_and_never_gives_up_early_while_waiting(monkeypatch):
+    """Previously the monitor gave up 15s after no session file appeared, leaving a hung
+    subprocess looking identical to a working one. It must now keep running (and emitting a
+    periodic liveness beat) for as long as the caller lets it, however long that is. Simulate many
+    virtual seconds elapsing via a fast fake clock so the test itself stays fast."""
+    import threading as _threading
+    import time as _time
+    from quest_ai_runner.core import goal_runner as gr
+
+    monkeypatch.setattr(gr, "_find_claude_project_dir", lambda working_dir: None)
+
+    real_time = _time.time
+    state = {"t": real_time()}
+
+    def fake_time():
+        state["t"] += 1.0  # each call advances the virtual clock by a full second
+        return state["t"]
+
+    monkeypatch.setattr(gr.time, "time", fake_time)
+
+    events = []
+    stop_event = _threading.Event()
+    thread = _threading.Thread(
+        target=gr._monitor_claude_session,
+        args=("/nonexistent-working-dir", events.append, stop_event),
+        kwargs={"poll_interval": 0.001, "heartbeat_interval": 3.0, "max_wait_seconds": 5.0},
+        daemon=True,
+    )
+    thread.start()
+    _time.sleep(0.3)  # real wall-clock time; virtual clock races far past the old 15s cutoff
+    assert thread.is_alive(), "monitor must keep running past 15s virtual elapsed, not give up early"
+    stop_event.set()
+    thread.join(timeout=2)
+    assert not thread.is_alive()
+
+    beats = [e for e in events if e.type == gr.EVENT_EXEC and "elapsed" in (e.text or "")]
+    assert beats, "a liveness heartbeat must fire while waiting for the session file"
+    assert all("waiting for session output" in (e.text or "") for e in beats)
+
+
 # --- the escalation-marker contract: a deep worker that raised a human decision --------------
 
 def test_extract_escalation_id():
