@@ -588,6 +588,13 @@ def main(argv=None) -> int:
             )
         except (QuestApiError, QuestNotConfigured) as e:
             log.error("failed to enqueue task: %s", e)
+            print(f"Could not queue the task: {e}")
+            return 1
+        if not (task.get("id") or task.get("task_id")):
+            # The API answered without a task id: treat as a failure, never ack a task that
+            # may not exist (an ack for an unenqueued task is a promise nothing will fulfill).
+            log.error("task creation returned no id: %s", task)
+            print("Could not queue the task: the Quest API returned no task id.")
             return 1
         # Immediate ack: fire a cheap one-sentence restatement so the user sees feedback
         # right away, then exit.  The queued task runs in the background via the poller.
@@ -608,7 +615,7 @@ def main(argv=None) -> int:
         except Exception:  # noqa: BLE001 — ack failure is non-fatal
             pass
         task_id = task.get("id") or task.get("task_id") or "?"
-        print(f"Queued — {args.text[:80]}  ({task_id})")
+        print(f"Queued: {args.text[:80]}  ({task_id})")
         return 0
 
     # --- sync-quest-folder ------------------------------------------------------

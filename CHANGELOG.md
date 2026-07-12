@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **`cli send` no longer acknowledges tasks that were never enqueued.** Found by live testing:
+  `create_task` defaulted to `source="cli"`, which the Quest API rejects (its enum is
+  chat / reflection / review), and the client swallowed the 400 into `{}` - so `send` printed a
+  confident "I'm looking into it" for a task that would never run. The default source is now
+  `"chat"`, `create_task` raises on failure instead of swallowing it, and `send` refuses to ack
+  unless the API returned a task id.
+
 ### Added
 - **WS4 (cache economics): one shared prompt-layering path + provider cache wiring.** A new
   `core/prompt_layers.py` primitive (`PromptLayers`, `compose_layers`, `turn_prompt_head`) splits

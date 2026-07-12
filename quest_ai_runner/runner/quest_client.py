@@ -620,27 +620,31 @@ class QuestClient:
                     team_id: Optional[str] = None,
                     goal_id: Optional[str] = None,
                     scheduled_at: Optional[str] = None,
-                    source: str = "cli") -> Dict[str, Any]:
+                    source: str = "chat") -> Dict[str, Any]:
         """POST a new queued AI task to /api/assistant-tasks.
 
         ``team_id`` routes the task to a specific team's runner (defaults to the client's
         configured team). ``goal_id`` attaches the task to a goal so results appear on it.
         ``scheduled_at`` is an ISO-8601 UTC datetime string; omit it to run as soon as the
-        runner's next poll picks it up. Returns the created task dict (includes its ``id``).
+        runner's next poll picks it up. ``source`` must be a value the Quest API accepts
+        (chat / reflection / review; "chat" fits an interactive send - the old default "cli"
+        was rejected with a 400 by the API, so every CLI enqueue silently failed). Returns
+        the created task dict (includes its ``id``).
+
+        Raises ``QuestApiError`` / ``QuestNotConfigured`` on failure instead of swallowing it:
+        a caller that acknowledges the user ("I'm looking into it") after calling this MUST
+        know whether the task actually exists, otherwise the ack is a promise nothing will
+        ever fulfill (the exact silent-failure mode the reliability work bans).
         """
-        try:
-            body: Dict[str, Any] = {"text": text, "source": source}
-            tid = team_id if team_id is not None else self.team_id
-            if tid:
-                body["team_id"] = tid
-            if goal_id is not None:
-                body["goal_id"] = goal_id
-            if scheduled_at is not None:
-                body["scheduled_at"] = scheduled_at
-            return self._request("POST", "/api/assistant-tasks", body=body) or {}
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("create_task failed: %s", e)
-            return {}
+        body: Dict[str, Any] = {"text": text, "source": source}
+        tid = team_id if team_id is not None else self.team_id
+        if tid:
+            body["team_id"] = tid
+        if goal_id is not None:
+            body["goal_id"] = goal_id
+        if scheduled_at is not None:
+            body["scheduled_at"] = scheduled_at
+        return self._request("POST", "/api/assistant-tasks", body=body) or {}
 
     # --- AI-rep profile (the rep <-> skill-file sync surface) -----------------
 
