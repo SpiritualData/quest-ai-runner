@@ -1451,3 +1451,28 @@ def test_empty_partial_assembly_is_not_reported_as_used(caplog):
     assert ctx_events
     assert not any(e.data.get("assembly_partial") for e in ctx_events)
     assert not any(e.data.get("assembly_timed_out") for e in ctx_events)
+
+
+# ---------------------------------------------------------------------------
+# deferred_deep wording: the words must match the synchronous same-turn reality.
+# ---------------------------------------------------------------------------
+
+def test_deferred_deep_wording_says_it_runs_in_the_same_turn():
+    """deferred_deep executes synchronously right after the answer, in the same turn. The
+    planner doctrine, decide-tool schema, and status line must not describe it as queued
+    for later (there is no queue; that wording lied about the mechanism)."""
+    import inspect
+
+    from quest_ai_runner.core import orchestrator as orch_mod
+
+    src = inspect.getsource(orch_mod)
+    for stale in ("queue a deep task to run after answering",
+                  "Queuing follow-up work",
+                  "Why this deep work is queued",
+                  "gets done in the deferred task"):
+        assert stale not in src, f"stale queued-for-later wording still present: {stale!r}"
+
+    desc = orch_mod.DECIDE_TOOL["input_schema"]["properties"]["deferred_deep"]["description"]
+    assert "immediately after the answer" in desc
+    assert "same turn" in desc
+    assert "immediately after it in the SAME turn" in orch_mod.PLANNER_PROMPT

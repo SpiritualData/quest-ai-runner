@@ -7,6 +7,18 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Brainstorm mode now says out loud when it held a directive back.** While the brainstorm
+  latch is active, a turn whose message reads as a request to act (or whose planner chose
+  deep/confirm, or set `deferred_deep` / `answer_contains_work_to_execute`, and was degraded by
+  the latch) folds an acknowledgment steer into the answer's grounding context: tell the user
+  nothing was executed because brainstorm mode is on and they can say to go ahead when ready,
+  plus, when the planner itself was ready to act, that the work will begin on a go-ahead. The
+  steer is guidance with explicit permission to skip or soften it when it would read as awkward
+  or redundant (e.g. a rhetorical "directive", or a reply that already makes the no-action state
+  obvious), never an absolute rule. Zero extra LLM calls: the verdict reuses the latch's own
+  degradation plus the existing message-intent regex prefilter (the ambiguous-band LLM judgment
+  is not run for this), and unlatched turns are unchanged (no steer text in any prompt). Tests
+  in `tests/test_brainstorm_mode.py`.
 - **`QAR_VECTOR_BACKEND`: an explicit switch for the auto-built context vector store.**
   `resolve_context_assembler` previously always attempted to construct the auto-built
   Qdrant vector arm when no explicit `vector_store` was configured, logging a
@@ -46,6 +58,16 @@ All notable changes to this project are documented here. The format is based on
   immediately.
 
 ### Fixed
+- **`deferred_deep` wording now matches its synchronous reality.** The planner doctrine and the
+  decide-tool schema described `deferred_deep` as queuing a deep task for later, and the status
+  line said "Queuing follow-up work", but the implementation has always run that work
+  immediately after the answer, synchronously in the same turn (the answer ships first in the
+  stream, then the deep run executes and its output is folded back into the final reply). The
+  planner description, schema field descriptions, status line (now "Continuing with the
+  follow-up work now") and code comments are rewritten to say exactly that. Words only, no
+  behavior change; a real consumer-side queue remains a separate future build (the dormant
+  `DeepResult.deferred` contract is untouched). A wording regression test in
+  `tests/test_orchestrator.py` asserts the queued-for-later phrasing stays gone.
 - **Context assembly timeout no longer throws away work that finished in time: partial results
   are used.** The turn-start assembly collect had an all-or-nothing budget: when the assembler
   overran `QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` (default 5s), ALL fresh context was dropped for

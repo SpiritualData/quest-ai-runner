@@ -224,8 +224,9 @@ CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
 
   If you have already read and gathered context, and now realize execution is needed: choose
   action="answer" WITH deferred_deep. The answer can acknowledge what was found, but deferred_deep
-  must specify the work to execute. This executes both: user gets immediate feedback PLUS the work
-  gets done in the deferred task.
+  must specify the work to execute. The answer ships first, then the deferred_deep work runs
+  immediately after it in the SAME turn (it is not saved for later): the user gets immediate
+  feedback PLUS the work gets done right after.
 """
 
 _PLANNER_ACTIONS = """\
@@ -417,6 +418,29 @@ EXCEPTION: if THIS message explicitly asks to proceed / act on what was discusse
 mode_signal="exit_brainstorm" and treat every action as available again.
 """
 
+# Folded into the ANSWER grounding context (zero extra LLM calls) when the turn is latched in
+# brainstorm mode AND the intent machinery detected the message as a directive to act, or the
+# planner tried to act and the latch degraded it. Deliberately phrased as GUIDANCE with explicit
+# permission to skip or soften: a rhetorical "directive", or a reply that already makes the
+# no-action state obvious, must not be forced into a robotic disclaimer. No em dashes: this
+# steers user-facing text.
+BRAINSTORM_NO_ACTION_ACK_NOTE = """\
+--- BRAINSTORM MODE: NOTHING WAS EXECUTED THIS TURN ---
+This conversation is in brainstorm mode and this message reads like a request to act, so nothing
+was executed, changed, or scheduled this turn. Unless your reply already makes that obvious, or
+the request was clearly rhetorical, say plainly that you have not acted because brainstorm mode
+is on, and that the user can tell you to go ahead when they are ready. This is guidance, not a
+script: use your judgment, and skip or soften the acknowledgment when it would read as awkward
+or redundant.
+"""
+
+# Appended to the note above only when the PLANNER itself was ready to act this turn (it chose
+# deep/confirm, or set deferred_deep / answer_contains_work_to_execute) and the latch held it back.
+BRAINSTORM_HELD_WORK_ACK_NOTE = """\
+You were ready to start this work and held off only because of brainstorm mode. Make clear that
+you will begin as soon as the user says to go ahead.
+"""
+
 # Assemble the final format()-able prompt. The gate constants from context_doctrine have NO
 # literal {/} characters, so they pass through .format() untouched when the final assembled
 # string is .format()-ed in _plan(). Only the real {slot_name} placeholders in _PLANNER_ACTIONS
@@ -503,11 +527,13 @@ DECIDE_TOOL: Dict[str, Any] = {
             },
             "deferred_deep": {
                 "type": ["object", "null"],
-                "description": "When action='answer', optionally queue a deep task to run after answering.",
+                "description": "When action='answer', optionally specify deep work that runs "
+                               "immediately after the answer, in the same turn (the answer ships "
+                               "first, then this work executes right away).",
                 "properties": {
-                    "goal": {"type": "string", "description": "The goal for the deferred deep work"},
-                    "brief": {"type": "string", "description": "Brief for the deferred deep work (optional, defaults to user message)"},
-                    "rationale": {"type": "string", "description": "Why this deep work is queued"},
+                    "goal": {"type": "string", "description": "The goal for the follow-up deep work"},
+                    "brief": {"type": "string", "description": "Brief for the follow-up deep work (optional, defaults to user message)"},
+                    "rationale": {"type": "string", "description": "Why this deep work runs after the answer"},
                 },
                 "required": ["goal"],
             },
@@ -5633,6 +5659,10 @@ class Orchestrator:
         # EVENT_MODE_SIGNAL + OrchestratorResult.mode_signal; the orchestrator persists nothing.
         brainstorm_active = (cfg.execution_mode == "brainstorm")
         mode_signal_detected: Optional[str] = None
+        # The action ("deep"/"confirm") the planner chose this turn that the brainstorm latch
+        # degraded to "answer", if any. Feeds the no-action acknowledgment steer on the answer
+        # path so the reply can say the work was held rather than silently dropping it.
+        brainstorm_suppressed_action: Optional[str] = None
 
         # Reset per-turn token counters on the provider (if it tracks them).
         try:
@@ -6436,6 +6466,7 @@ class Orchestrator:
             # turn keeps its full context and produces a grounded reply, it just does not act.
             if plan and brainstorm_active and plan.action in ("deep", "confirm"):
                 log.info("Brainstorm mode: degrading planner action %r to 'answer'.", plan.action)
+                brainstorm_suppressed_action = plan.action
                 plan.action = "answer"
 
             # Safety gate: if planner chose "read" for many consecutive steps, force a terminal action
@@ -6615,6 +6646,26 @@ class Orchestrator:
         # answer
         model = self._answer_model(plan, "sonnet", hint=model_hint)
 
+        # BRAINSTORM NO-ACTION ACKNOWLEDGMENT (zero extra LLM calls): while the latch is held,
+        # the escalation nets below are suppressed wholesale, so a directive turn would otherwise
+        # end with a reply that never says nothing ran. The suppressed verdict is already known
+        # here for free: the planner tried to act (deep/confirm degraded by the latch above, or
+        # deferred_deep / answer_contains_work_to_execute set), or the message itself trips the
+        # same regex prefilter whose escalation the latch suppresses (_message_requests_change;
+        # the ambiguous-band LLM judgment is deliberately NOT run here, keeping this free). Fold
+        # the acknowledgment guidance into the answer grounding so the reply says out loud that
+        # nothing was done and the user can say to go ahead; the note itself grants the model
+        # permission to skip or soften it when that would read as awkward or redundant.
+        brainstorm_ack_note: Optional[str] = None
+        if brainstorm_active:
+            planner_tried_to_act = (brainstorm_suppressed_action is not None
+                                    or bool(plan.deferred_deep)
+                                    or bool(plan.answer_contains_work_to_execute))
+            if planner_tried_to_act or _message_requests_change(user_message):
+                brainstorm_ack_note = BRAINSTORM_NO_ACTION_ACK_NOTE
+                if planner_tried_to_act:
+                    brainstorm_ack_note += BRAINSTORM_HELD_WORK_ACK_NOTE
+
         def _gen_answer(steering: Optional[str]) -> str:
             # Produce an answer, optionally STEERED by goal-verification feedback (the prior answer
             # plus why it fell short + what to fix) folded into the grounding context.
@@ -6629,6 +6680,8 @@ class Orchestrator:
             if plan.rationale and plan.action == "answer":
                 planner_block = f"--- PLANNER ANALYSIS ---\n{plan.rationale}"
                 cv = (cv + "\n\n" + planner_block if cv else planner_block)
+            if brainstorm_ack_note:
+                cv = (cv + "\n\n" + brainstorm_ack_note) if cv else brainstorm_ack_note
             if len(plan.subquestions) >= 2:
                 return self._answer_subquestions(user_message, transcript, cv, gathered,
                                                  model, plan.subquestions, native_blocks=native_blocks)
@@ -6740,7 +6793,8 @@ class Orchestrator:
             except Exception:  # noqa: BLE001 — the overseer must never break the turn
                 pass
 
-        # If deferred_deep is set, also run the deep task after returning the answer
+        # If deferred_deep is set, also run the deep task now, synchronously, right after the
+        # answer text is produced (same turn; nothing is saved for later)
         # OR if planner explicitly flagged answer_contains_work_to_execute
         # OR auto-detect false claims (fallback for broken prompts)
         # BRAINSTORM MODE: this entire block is an escalation net (it can only ADD execution to
@@ -6815,7 +6869,7 @@ class Orchestrator:
                 if not plan.deferred_deep:
                     emit.status("Executing follow-up work…")
                 else:
-                    emit.status("Queuing follow-up work…")
+                    emit.status("Continuing with the follow-up work now…")
                 deferred_plan = PlanDecision(
                     action="deep",
                     goal=_truncate_goal(should_defer_deep.get("goal") or f"Execute: {user_message}"),

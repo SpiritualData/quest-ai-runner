@@ -15,6 +15,8 @@ from typing import Any, Dict, List
 from quest_ai_runner.core.adapters import EVENT_MODE_SIGNAL, StreamSink
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import (
+    BRAINSTORM_HELD_WORK_ACK_NOTE,
+    BRAINSTORM_NO_ACTION_ACK_NOTE,
     Orchestrator,
     OrchestratorConfig,
     normalize_decision,
@@ -267,6 +269,127 @@ def test_brainstorm_without_signals_gates_but_prompt_stays_signal_free():
     assert runner.calls == []
     assert "BRAINSTORM MODE" in provider.plan_prompts[0]
     assert "mode_signal" not in provider.plan_prompts[0]
+
+
+# ---------------------------------------------------------------------------
+# Brainstorm no-action acknowledgment: when the latch suppresses a directive, the answer
+# prompt carries guidance to say out loud that nothing ran (with permission to skip/soften);
+# a plain question injects nothing; unlatched prompts never carry the steer.
+# ---------------------------------------------------------------------------
+
+_ACK_MARKER = "BRAINSTORM MODE: NOTHING WAS EXECUTED THIS TURN"
+_HELD_MARKER = "held off only because of brainstorm mode"
+
+
+def _answer_prompt(provider) -> str:
+    return "\n".join(str(m["content"]) for m in provider.last_answer_messages)
+
+
+def test_brainstorm_directive_message_injects_no_action_ack_steer():
+    # "fix the login bug" trips the message-intent prefilter whose escalation the latch
+    # suppresses: the answer prompt must carry the acknowledgment guidance instead.
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "talking it through"}])
+    runner = StubDeepRunner(met=True)
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(execution_mode="brainstorm")).run("fix the login bug")
+    assert res.kind == "answer"
+    assert runner.calls == []
+    prompt = _answer_prompt(provider)
+    assert _ACK_MARKER in prompt
+    assert BRAINSTORM_NO_ACTION_ACK_NOTE in prompt
+    # The steer is guidance, never an absolute rule: permission to skip/soften rides along.
+    assert "skip or soften" in prompt
+    # Message-only directive (the planner never tried to act): no held-work variant.
+    assert _HELD_MARKER not in prompt
+
+
+def test_brainstorm_degraded_deep_injects_held_work_ack():
+    # The planner chose "deep" and the latch degraded it: the steer must also say the work
+    # was ready to start and will begin on a go-ahead.
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "Do the thing", "deep_brief": "do it", "rationale": "r"},
+    ])
+    runner = StubDeepRunner(met=True)
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(execution_mode="brainstorm")).run("what if we...")
+    assert res.kind == "answer"
+    assert runner.calls == []
+    prompt = _answer_prompt(provider)
+    assert _ACK_MARKER in prompt
+    assert BRAINSTORM_HELD_WORK_ACK_NOTE in prompt
+
+
+def test_brainstorm_suppressed_deferred_deep_injects_held_work_ack():
+    # The planner set deferred_deep despite the latch: the same acknowledgment guidance
+    # applies (the work would have started right after the answer).
+    provider = StubProvider(decisions=[
+        {"action": "answer", "rationale": "answering",
+         "deferred_deep": {"goal": "Do it after answering"}},
+    ])
+    runner = StubDeepRunner(met=True)
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(execution_mode="brainstorm")).run("idea: what about X")
+    assert res.kind == "answer"
+    assert runner.calls == []
+    prompt = _answer_prompt(provider)
+    assert _ACK_MARKER in prompt
+    assert _HELD_MARKER in prompt
+
+
+def test_brainstorm_plain_question_injects_no_ack_steer():
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "weighing options"}])
+    res = _orch(provider, StubRetrieval(),
+                config=OrchestratorConfig(execution_mode="brainstorm")).run(
+        "what are the tradeoffs of approach A?")
+    assert res.kind == "answer"
+    assert _ACK_MARKER not in _answer_prompt(provider)
+    for p in provider.plan_prompts:
+        assert _ACK_MARKER not in p
+
+
+def test_unlatched_prompts_never_carry_the_ack_steer():
+    # Normal mode, same directive message, no deep capability (so the turn stays a single
+    # answer call): neither the planner prompts nor the answer prompt may contain the steer.
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "plain"}])
+    res = _orch(provider, StubRetrieval()).run("fix the login bug")
+    assert res.kind == "answer"
+    assert _ACK_MARKER not in _answer_prompt(provider)
+    assert _HELD_MARKER not in _answer_prompt(provider)
+    for p in provider.plan_prompts:
+        assert _ACK_MARKER not in p
+
+
+class _AckAwareProvider(StubProvider):
+    """A stub whose answer() behaves on the steer: it acknowledges the no-action state only
+    when the acknowledgment guidance is actually present in its prompt."""
+
+    def answer(self, messages, *, model, system=None) -> str:
+        self.answer_calls += 1
+        self.last_answer_messages = messages
+        self.answer_systems.append(system)
+        joined = "\n".join(str(m["content"]) for m in messages)
+        if _ACK_MARKER in joined:
+            return ("I have not acted on this because we are in brainstorm mode. "
+                    "Say the word and I will go ahead.")
+        return "Here is my thinking on that."
+
+
+def test_brainstorm_directive_reply_acknowledges_no_action_behaviorally():
+    provider = _AckAwareProvider(decisions=[{"action": "answer", "rationale": "talking"}])
+    runner = StubDeepRunner(met=True)
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(execution_mode="brainstorm")).run("fix the login bug")
+    assert res.kind == "answer"
+    assert runner.calls == []
+    assert "have not acted" in res.text
+    assert "brainstorm" in res.text
+
+
+def test_normal_mode_reply_carries_no_forced_acknowledgment():
+    provider = _AckAwareProvider(decisions=[{"action": "answer", "rationale": "plain"}])
+    res = _orch(provider, StubRetrieval()).run("what are the tradeoffs of approach A?")
+    assert res.kind == "answer"
+    assert "have not acted" not in res.text
 
 
 # ---------------------------------------------------------------------------
