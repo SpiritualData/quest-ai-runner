@@ -198,10 +198,13 @@ class TaskExecutor:
 
         ``rep_preamble`` (optional) is a per-task context preamble forwarded to the deep run so the
         task executes AS a specific AI rep (its persona + learned corrections). When the poller has
-        resolved a rep and pulled its profile, it builds this preamble and passes it here; the
-        executor threads it straight into ``Orchestrator.run(rep_preamble=...)``, which forwards it
-        to a deep runner that accepts a per-call ``context_preamble``. When ``None`` (any existing
-        caller, or no rep resolved), behaviour is exactly as before.
+        resolved a rep and pulled its profile, it builds this preamble and passes it here; failing
+        that, it passes the task document's own optional ``rep_preamble`` field (see
+        ``Poller._task_rep_preamble``). The executor threads it straight into
+        ``Orchestrator.run(rep_preamble=...)``, which forwards it to a deep runner that accepts a
+        per-call ``context_preamble``, and reuses it as the voice of the fold-back done report (see
+        ``_compose_done_report``). When ``None`` (any existing caller, or no rep resolved and no
+        field on the task), behaviour is exactly as before.
         """
         task_id = str(task.get("id") or task.get("task_id") or "")
         # An Autopilot pass task REPLACES the normal deep-run path entirely: the pass itself is the

@@ -7,6 +7,18 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **A task document can supply its own persona (`rep_preamble`).** The poller now falls back to a
+  task's optional `rep_preamble` field (a non-empty string; anything else is ignored) when no AI rep
+  resolves for that task: `self._pull_rep_for(task, target) or self._task_rep_preamble(task)`. A
+  resolved rep's pulled persona still wins, so this only fills the gap. The string becomes the deep
+  run's `context_preamble` AND the voice of the fold-back "done" report, with no resolver, profile,
+  or consumer glue. The case it exists for: work deferred out of a live conversation, where the
+  queueing side already knows the persona that conversation runs with, so the report posted back
+  into that conversation speaks in the same voice as the replies already in it. The task document is
+  passed through the client untouched (no schema strips unknown keys), so a backend only has to
+  stamp the field. Documented as part of the task-document contract in
+  `docs/quest-api-contract.md` (a new "The task document the runner reads" table) and in
+  `docs/writing-a-consumer.md`.
 - **Autopilot pass (`runner/autopilot.py`).** A new `AutopilotPass`, routed by the executor for
   any task whose **`task_kind == "autopilot"`** (a recurring pass task). Routing reads `task_kind`,
   the backend's PERSISTENT classification, never `handler` — the poller overwrites `handler` on

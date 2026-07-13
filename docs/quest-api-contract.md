@@ -25,6 +25,34 @@ GET /api/assistant-tasks?status=queued&due_before=<ISO-now>
 Returns queued tasks whose `due` time has arrived. A future `due` is simply not returned yet — this
 is how scheduling works without separate plumbing.
 
+#### The task document the runner reads
+
+A task is a plain JSON object. The client does not model it with a strict schema: it hands the
+document through to the poller/executor as-is, so a backend may carry any extra fields it likes and
+they reach a consumer's resolvers untouched. These are the fields the runner itself reads (all
+optional but the instruction text):
+
+| Field | Used for |
+|---|---|
+| `id` (or `task_id`) | the task's identity: claim, report, progress stream |
+| `text` (or `title` / `description`) | the instruction to run |
+| `goal_id`, `quest_id` | the linked goal/quest, fetched for context and used to resolve a quest folder |
+| `conv_id` | the conversation the task was delegated from; live progress and the done report post back into it |
+| `card_id` | reserved: forwarded on conversation posts so a backend can thread them |
+| `model` | per-task model/tier override (`model_hint`) |
+| `rep_preamble` | the persona to run and report as, when the task has no rep of its own (see below) |
+| `task_kind` (or `handler`) | routes special kinds, e.g. an autopilot pass |
+| `interactive`, `context_request` | the fast lane (see below) |
+| `status`, `updated_at`, `scheduled_time` | dedup signature |
+| `team_id`, `user_id`, `env_id` | scoping (team lane, related-conversation search, environment pinning) |
+
+`rep_preamble` is a **fallback persona supplied by whoever queued the task**: a cache-stable
+persona/system prompt string. The runner uses it as the deep run's persona, and therefore as the
+voice of the fold-back done report, only when no AI rep is resolved for the task (a resolved rep's
+own persona always wins). Anything that is not a non-empty string is ignored. The case it exists for
+is a task deferred out of a live conversation: stamp that conversation's persona on the task and the
+report that lands back in the conversation speaks in the same voice as the replies already there.
+
 ### Claim a task
 ```
 PATCH /api/assistant-tasks/{id}    { "status": "in_progress" }

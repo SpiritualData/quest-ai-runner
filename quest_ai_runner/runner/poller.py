@@ -313,7 +313,10 @@ class Poller:
         # failure is logged and the task still runs (it just uses the last-synced skill file).
         # The pre-run pull (when the direction calls for it) also yields the rep's per-run preamble,
         # so the deep run executes AS that rep with no extra consumer glue.
-        rep_preamble = self._pull_rep_for(task, target)
+        # Fallback: when no rep is resolved for this task, the TASK DOCUMENT may carry its own
+        # persona/system prompt in ``rep_preamble`` (see _task_rep_preamble). A resolved rep always
+        # wins -- the task field only fills the gap.
+        rep_preamble = self._pull_rep_for(task, target) or self._task_rep_preamble(task)
         # Opt-in: refresh the task's linked quest folder's QUEST_SYNC.md before running, when
         # cfg.quest_folder_map maps this task's goal/quest to a local folder.
         self._pull_quest_folder_for(task)
@@ -424,6 +427,26 @@ class Poller:
         rep_notes_dir = _os.path.join(cards_dir, "reps", user_id, "notes")
         rep_turns_dir = _os.path.join(cards_dir, "reps", user_id, "turns")
         return cards_dir, rep_notes_dir, rep_turns_dir
+
+    @staticmethod
+    def _task_rep_preamble(task: Dict[str, Any]) -> Optional[str]:
+        """The persona a TASK DOCUMENT supplies for itself: its optional ``rep_preamble`` field.
+
+        A consumer that already knows the voice a task must speak in can stamp it on the task when
+        it queues the work, and the runner will use it as the deep run's persona (and therefore as
+        the voice of the fold-back "done" report) with no rep profile and no resolver wired. The
+        motivating case is a task deferred out of a live conversation: the queueing side stamps that
+        conversation's own system prompt on the task, so the report that lands back in the
+        conversation sounds like the replies already in it.
+
+        This is a FALLBACK only: when a rep IS resolved for the task, that rep's pulled persona wins
+        (see ``_handle_one``). Anything that is not a non-empty string is ignored, so a malformed or
+        placeholder field can never poison the run.
+        """
+        value = task.get("rep_preamble")
+        if isinstance(value, str) and value.strip():
+            return value
+        return None
 
     def _pull_rep_for(self, task: Dict[str, Any], target: Optional[tuple] = None) -> Optional[str]:
         """Best-effort PRE-run pull, gated on direction; returns the rep's per-run preamble or None.

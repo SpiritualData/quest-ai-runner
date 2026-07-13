@@ -229,6 +229,20 @@ into `Orchestrator.run(rep_preamble=...)`, which forwards it to the deep run onl
 whose `run_goal` accepts a `context_preamble` kwarg (the reference `SubprocessGoalRunner` does).
 Older deep runners are left untouched.
 
+### A task can carry its own persona (`rep_preamble` on the task document)
+
+You do not need reps at all to control the voice of one task. When a task document has a
+`"rep_preamble"` field (a non-empty string), the poller uses it as that task's persona: it is the
+deep run's `context_preamble` and the voice of the fold-back "done" report. A rep resolved by your
+`rep_sync_resolver` still wins; the task field is the fallback for tasks that have no rep of their
+own. A value that is not a non-empty string is ignored.
+
+This exists for work deferred out of a live conversation. The side that queues the task already
+knows the persona/system prompt that conversation is running with, so it stamps that string on the
+task; when the task finishes and its report is posted back into the same conversation, the report
+speaks in the same voice as the replies already there instead of a generic one. No resolver, no
+profile, no extra wiring in your poller.
+
 ## Next
 
 - Plug in a non-file source or a different model → [Implementing adapters](adapters.md)
