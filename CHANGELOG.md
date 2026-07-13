@@ -6,6 +6,54 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Future context no longer corrupts a strict-format deep runner's payload, and is no longer lost
+  for one.** When the async card updater is on, the orchestrator appended
+  `DEEP_FUTURE_CONTEXT_INSTRUCTION` to EVERY deep brief, telling the worker to end its output with a
+  prose `=== FUTURE CONTEXT ... ===` section. That is right for a prose worker and fatal for a runner
+  whose output IS the deliverable in a strict format: a code-generating deep runner emitted Python
+  with a prose block appended, which failed syntax review in a large fraction of production-like runs.
+  The consumer-side workaround (strip the instruction out of the brief) protected the payload but
+  silently cost the feature: that runner was then never ASKED for future context, so
+  `_parse_future_context` got nothing and the card updater learned NOTHING from the turns that did
+  real work.
+
+  The defect was the CHANNEL, not the capability, so every runner is still asked, and the answer now
+  travels out of band:
+  - `DeepResult.future_context`: a structured field carrying the bullets, separate from `output`.
+  - `DeepRunner.future_context_channel`, declared per runner. `FUTURE_CONTEXT_VIA_OUTPUT` (the
+    default, and what any runner that declares nothing gets) keeps today's behaviour byte for byte.
+    A runner whose output is a strict format (generated code, JSON, a patch) declares
+    `FUTURE_CONTEXT_VIA_FIELD`, is asked for future context by `DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION`
+    ("return it in the future-context field, never inside your primary output"), and returns it in
+    `DeepResult.future_context`. It is read with `getattr`, so duck-typed runners keep working.
+  - **One normalization seam.** Every `DeepResult`, from every runner, is passed through
+    `_normalize_future_context` the moment the runner returns: the delimited section is parsed into
+    `future_context` and CUT from `output`. Payload corruption is now impossible by construction, not
+    by each consumer remembering to strip: a worker that ignores the instruction and appends the block
+    to generated code still yields a payload that parses. Consumers doing a downstream strip can keep
+    it as a belt-and-braces net; it is no longer load-bearing.
+  - Both channels feed the SAME destination they always did (the async card updater's one LLM call,
+    and the "what I'll remember" panel), which now read `DeepResult.future_context` (falling back to
+    parsing `output` for a result built outside the seam, e.g. reflected back through a queue).
+- **A background context-index thread can no longer outlive its owner.**
+  `config._bootstrap_if_needed` starts the index build/refresh on a daemon thread, and nothing ever
+  joined or cancelled it. It kept walking the corpus and shelling out `git hash-object` per file long
+  after whatever started it was gone, so its stray subprocess calls landed in whatever the process did
+  next. In the test suite that surfaced as a different test failing on each run (whichever later test
+  happened to have `subprocess` or the environment patched captured a stray `git ... hash-object`),
+  which is how real regressions hide. Indexing is now owned:
+  - `FileContextStore.close()` / `is_closed()`: stops that store's bootstrap/refresh at its next
+    checkpoint (entry, each walked directory, before the LLM fan-out, before the fingerprint pass) and
+    guarantees no further `git` subprocess is spawned. Cards already written are kept; indexing is
+    incremental and resumes on the next start.
+  - `config.shutdown_background_index(timeout=10.0)`: closes every store an index thread was started
+    for and JOINS those threads, so after it returns the process has no index thread running. Call it
+    when an orchestrator's owner goes away (a rebuilt wiring, a tenant shutdown, a CLI exiting).
+  An open store fingerprints exactly as before, so production indexing is unchanged. A `conftest`
+  fixture calls `shutdown_background_index()` after every test, which makes the suite deterministic
+  (19 tests used to end with a live index thread; now none do).
+
 ### Added
 - **A task document can supply its own persona (`rep_preamble`).** The poller now falls back to a
   task's optional `rep_preamble` field (a non-empty string; anything else is ignored) when no AI rep

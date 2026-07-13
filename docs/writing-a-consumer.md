@@ -243,6 +243,58 @@ task; when the task finishes and its report is posted back into the same convers
 speaks in the same voice as the replies already there instead of a generic one. No resolver, no
 profile, no extra wiring in your poller.
 
+## Deep runners that emit a STRICT format (code, JSON, a patch)
+
+When the async card updater is on, the orchestrator asks every deep worker for FUTURE CONTEXT: a few
+bullets naming what would help a similar future request (collections and their ids, key files, schema
+it learned, stable facts). Those bullets are what the updater learns from, so they are how your cards
+find out which context was actually used and useful. Every runner is asked, including a code
+generator, which knows the most reusable facts of all.
+
+What differs per runner is the **channel**, declared on the runner:
+
+```python
+from quest_ai_runner.core import DeepResult, FUTURE_CONTEXT_VIA_FIELD
+
+class MyCodeRunner:
+    # My output is Python. Anything appended to it is a syntax error, so send the bullets
+    # out of band instead of asking the worker to end its output with a prose section.
+    future_context_channel = FUTURE_CONTEXT_VIA_FIELD
+
+    def run_goal(self, *, goal, brief, model=None, max_turns=None):
+        code, bullets = my_worker(brief)      # e.g. two fields of one tool-call result
+        return DeepResult(met=True, output=code, future_context=bullets)
+```
+
+| `future_context_channel` | who declares it | what the brief asks for | where the orchestrator reads it |
+|---|---|---|---|
+| `FUTURE_CONTEXT_VIA_OUTPUT` (**default**) | prose runners, incl. the reference `SubprocessGoalRunner` | end your output with the delimited `=== FUTURE CONTEXT ... ===` section | parsed out of `output`, which is then stripped |
+| `FUTURE_CONTEXT_VIA_FIELD` | a runner whose output is a strict format | return the bullets in your result's future-context field, never inside the output | `DeepResult.future_context` |
+
+The attribute is read with `getattr`, so a runner that never declares it is a prose runner and
+behaves exactly as before. Both channels land in the same place: `DeepResult.future_context`,
+normalized the moment the runner returns, and read from there by the card updater and by the
+"what I'll remember" panel.
+
+**You never have to strip anything.** The orchestrator cuts the delimited section from
+`DeepResult.output` at that same seam, whatever the runner declared, so a worker that ignores the
+instruction and appends the block to generated code still hands you a payload that parses. Do not
+work around the instruction by removing it from the brief: that keeps the payload clean but stops
+your deep runs from teaching the cards anything, which is the expensive half of the feature.
+
+## Shutting down background indexing
+
+`FileContextStore` builds and refreshes its index on a background thread so chat is usable
+immediately. That thread is **owned**, not fire-and-forget: it walks the corpus and runs
+`git hash-object` per file, so it must not outlive whatever started it.
+
+- `FileContextStore.close()` stops that store's indexing at its next checkpoint and guarantees no
+  further `git` subprocess is spawned. Cards already written are kept (indexing is incremental and
+  resumes on the next start).
+- `config.shutdown_background_index(timeout=...)` closes every store an index thread was started for
+  and joins those threads. Call it whenever an orchestrator's owner goes away: a rebuild of your
+  wiring, a tenant shutting down, a CLI about to exit, a test finishing.
+
 ## Next
 
 - Plug in a non-file source or a different model → [Implementing adapters](adapters.md)

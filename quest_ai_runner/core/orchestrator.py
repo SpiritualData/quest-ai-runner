@@ -55,6 +55,8 @@ from .adapters import (
     EVENT_STATUS,
     EVENT_TOKENS,
     EVENT_UNDERSTANDING,
+    FUTURE_CONTEXT_VIA_FIELD,
+    FUTURE_CONTEXT_VIA_OUTPUT,
     ContextAssembler,
     ConversationStore,
     DeepResult,
@@ -1420,6 +1422,23 @@ DEEP_FUTURE_CONTEXT_INSTRUCTION = (
     "'- (none)'. Do not use em dashes; use a comma, a colon, or parentheses instead."
 )
 
+# The SAME ask, for a runner whose primary output is a STRICT FORMAT (generated code, JSON, a patch):
+# appending a prose section there would corrupt the payload, so the bullets travel out-of-band in the
+# runner's structured future-context field instead. Note it never names the delimiter: the worker must
+# not emit it into a strict payload at all. Appended when the runner declares
+# FUTURE_CONTEXT_VIA_FIELD, so a code generator is still ASKED for future context (it has the most
+# reusable facts of any worker) and the card updater keeps learning from those turns.
+DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION = (
+    "\n\n--- PREPARE FUTURE CONTEXT (OUT OF BAND) ---\n"
+    "Alongside the work above, name context which would help a FUTURE similar request by THIS user. "
+    "Return it ONLY through the separate future-context field of your result, never inside your "
+    "primary output: your primary output must stay a valid, strictly formatted payload with nothing "
+    "appended to it. Give one short bullet per line (start each line with '- '). Prefer durable, "
+    "reusable pointers: collection names with their ids, key files you relied on, entities and "
+    "schema you touched, stable facts, and useful references. If nothing is worth remembering, "
+    "return '- (none)'. Do not use em dashes; use a comma, a colon, or parentheses instead."
+)
+
 # The updater's ONE LLM call. It is given the request, what executed, the parsed future-context
 # section, and the user's CURRENT relevant cards, and must return a STRUCTURED edit plan as JSON.
 CARD_UPDATE_TOOL: Dict[str, Any] = {
@@ -2120,16 +2139,82 @@ def _parse_future_context(output: Optional[str]) -> str:
         return ""
 
 
+def _future_context_channel(runner: Any) -> str:
+    """Which FUTURE-CONTEXT channel this deep runner declares (see adapters.FUTURE_CONTEXT_VIA_*).
+
+    Read with ``getattr`` so DUCK-TYPED runners (the common case; most consumers never subclass
+    ``DeepRunnerBase``) keep working: anything that does not declare a channel is a prose runner and
+    gets exactly today's behaviour. Never raises.
+    """
+    try:
+        ch = getattr(runner, "future_context_channel", FUTURE_CONTEXT_VIA_OUTPUT)
+        return ch if ch in (FUTURE_CONTEXT_VIA_OUTPUT, FUTURE_CONTEXT_VIA_FIELD) \
+            else FUTURE_CONTEXT_VIA_OUTPUT
+    except Exception:  # noqa: BLE001 — a weird runner attribute must never break a deep run
+        return FUTURE_CONTEXT_VIA_OUTPUT
+
+
+def _normalize_future_context(res: DeepResult) -> DeepResult:
+    """ONE seam, applied to EVERY DeepResult the moment a runner returns it: move the worker's
+    FUTURE-CONTEXT bullets OUT of ``output`` and into ``future_context``.
+
+    This is what makes payload corruption impossible by construction rather than by each consumer
+    remembering to strip:
+
+      * a FIELD-channel runner (code / JSON / patch generator) already put its bullets in
+        ``future_context`` and left ``output`` a clean payload, so this is a no-op for it -- except
+        that a worker which ignored the instruction and appended the delimiter anyway ALSO gets
+        cleaned here, which is the whole point of doing it centrally;
+      * an OUTPUT-channel (prose) runner ended its output with the delimited section: it is parsed
+        into ``future_context`` and cut from ``output``.
+
+    After this, ``output`` is the deliverable and ``future_context`` is the ONLY carrier of the
+    bullets, so every downstream reader (the async card updater, the UI panel, the consumer's
+    payload) reads exactly one place. Mutates and returns the same result object. Never raises.
+    """
+    try:
+        if not isinstance(res, DeepResult):
+            return res
+        parsed = _parse_future_context(res.output)
+        if not (getattr(res, "future_context", "") or "").strip() and parsed:
+            res.future_context = parsed
+        if parsed:
+            # The delimiter is present in the payload: cut it, whatever the declared channel.
+            res.output = _strip_future_context(res.output)
+    except Exception:  # noqa: BLE001 — normalization must never break a deep run
+        pass
+    return res
+
+
+def _deep_future_context(result: Any) -> str:
+    """The FUTURE-CONTEXT bullets of one deep result, from the structured field with a fallback to
+    parsing the output.
+
+    The field is authoritative (``_normalize_future_context`` fills it at the runner seam). The
+    parse fallback covers a DeepResult built OUTSIDE that seam (e.g. a consumer that constructs one
+    directly, or an older runner reflected back through a queue), so the card updater keeps learning
+    in those paths too. Never raises.
+    """
+    try:
+        fc = (getattr(result, "future_context", "") or "").strip()
+        return fc or _parse_future_context(getattr(result, "output", None))
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def _strip_future_context(output: Optional[str]) -> str:
     """Remove the worker's FUTURE-CONTEXT section from output destined for the USER.
 
-    The deep brief asks the worker to END its output with the ``FUTURE_CONTEXT_DELIMITER`` line plus
-    bullets, which the async card updater parses out (see ``_parse_future_context``). That section is
-    internal plumbing for learning, NOT part of the deliverable, so it must never reach the user.
-    This cuts from the LAST delimiter occurrence to the end (symmetric with the parser, which reads
-    from that same point) and trims trailing whitespace. Returns the output unchanged when the
-    delimiter is absent. Operates on a COPY -- never mutate ``DeepResult.output``, which stays the
-    raw source the card updater parses. Never raises.
+    An OUTPUT-channel deep brief asks the worker to END its output with the
+    ``FUTURE_CONTEXT_DELIMITER`` line plus bullets, which the async card updater learns from. That
+    section is internal plumbing for learning, NOT part of the deliverable, so it must never reach
+    the user. This cuts from the LAST delimiter occurrence to the end (symmetric with
+    ``_parse_future_context``, which reads from that same point) and trims trailing whitespace.
+    Returns the output unchanged when the delimiter is absent.
+
+    It is applied ONCE, at the runner seam, by ``_normalize_future_context`` -- so ``DeepResult.output``
+    is already clean everywhere downstream. The remaining calls on the emit paths are a deliberate
+    belt-and-braces net for a DeepResult that never passed through that seam. Never raises.
     """
     if not output or not isinstance(output, str):
         return output or ""
@@ -2153,7 +2238,7 @@ def _future_context_for_display(results: Any) -> str:
     try:
         parts: List[str] = []
         for d in (results or []):
-            section = _parse_future_context(getattr(d, "output", None))
+            section = _deep_future_context(d)
             if not section:
                 continue
             # Drop pure "(none)" placeholders; keep real bullets verbatim.
@@ -4803,12 +4888,10 @@ class Orchestrator:
             # Show task identifier in brief so user sees which task is running
             task_label = f"TASK {task_index}" if multi else "TASK"
             brief = "\n\n".join(_hdr) + f"\n\n{task_label} [{task_uuid}]: {goal}\n\n" + brief
-            # When the async post-deep card updater is active, ask the worker to END its output with
-            # a machine-parseable FUTURE-CONTEXT section so the updater can prepare reusable context
-            # for this user's next similar request. Appended ONLY when active, so a non-updating
-            # deployment's deep brief is byte-for-byte unchanged.
-            if card_update_active:
-                brief = brief + DEEP_FUTURE_CONTEXT_INSTRUCTION
+            # NOTE: the FUTURE-CONTEXT instruction is appended further down, once the runner that will
+            # handle THIS goal is resolved: which of the two instructions applies depends on that
+            # runner's ``future_context_channel``. Both are appended only when the updater is active,
+            # so a non-updating deployment's deep brief is byte-for-byte unchanged.
             # Per-subtask execution fact — populated from EVENT_EXEC phase ticks (live) and finalized
             # from the DeepResult.met below. Recording per-subtask keeps facts correct even when
             # multiple subtasks run concurrently (each closure owns its own ``fact``).
@@ -4862,6 +4945,18 @@ class Orchestrator:
                         )
                 except Exception as e:  # noqa: BLE001 — classifier failure must never block a run
                     log.warning(f"deep_runner_classifier failed ({e}); using default runner")
+
+            # FUTURE-CONTEXT ask, routed by the RESOLVED runner's channel. When the async card updater
+            # is active, EVERY runner is asked for future context (a code generator knows the most
+            # reusable facts of all: the entities, ids, and schema it touched), but a strict-format
+            # runner is asked for it OUT OF BAND so its payload stays a valid payload. This is the ask
+            # side; ``_normalize_future_context`` below is the guarantee side.
+            if card_update_active:
+                brief = brief + (
+                    DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION
+                    if _future_context_channel(active_runner) == FUTURE_CONTEXT_VIA_FIELD
+                    else DEEP_FUTURE_CONTEXT_INSTRUCTION
+                )
 
             # Pass the live emitter to the runner ONLY if its run_goal accepts an ``emit`` kwarg
             # (or **kwargs). Decided by signature inspection — never by a try/except TypeError,
@@ -4963,7 +5058,11 @@ class Orchestrator:
                         kwargs["working_dir"] = working_dir_override
                     # active_runner was already resolved once per task, above (not re-resolved per
                     # retry — the classifier's inputs don't change across retries of the same task).
-                    return active_runner.run_goal(**kwargs)
+                    # THE SEAM: every DeepResult, from every runner, is normalized here — the
+                    # FUTURE-CONTEXT bullets are moved out of ``output`` into ``future_context``, so
+                    # the payload handed to the goal verifier, the emit paths, and the consumer can
+                    # never carry the section, and the card updater has exactly one place to read.
+                    return _normalize_future_context(active_runner.run_goal(**kwargs))
                 except Exception as e:  # noqa: BLE001
                     log.error(f"Deep runner failed: {type(e).__name__}: {e}", exc_info=True)
                     return DeepResult(met=False, error=type(e).__name__)
@@ -5526,8 +5625,9 @@ class Orchestrator:
                              emit: Optional[_Emitter]) -> None:
         """Build the updater's input bundle from a finished deep result and kick off the async card
         updater. The request is the user's goal/condition; ``executed`` is the brief + each deep
-        result's output; the FUTURE-CONTEXT section is parsed back out of each output. Inert when the
-        updater is not active or nothing executed. Never raises."""
+        result's output; the FUTURE-CONTEXT bullets come from each result's ``future_context`` field
+        (filled at the runner seam by ``_normalize_future_context``, from EITHER channel). Inert when
+        the updater is not active or nothing executed. Never raises."""
         try:
             if not self._card_updater_active():
                 return
@@ -5543,7 +5643,7 @@ class Orchestrator:
             if outputs:
                 executed_parts.append("RESULT:\n" + "\n\n".join(outputs))
             future = "\n".join(
-                fc for fc in (_parse_future_context(d.output) for d in results) if fc
+                fc for fc in (_deep_future_context(d) for d in results) if fc
             )
             self._update_cards_after_deep_async(
                 request=request,

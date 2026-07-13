@@ -212,6 +212,25 @@ class DeepResult:
     # a fixed attempt count.
     tokens: int = 0           # input + output tokens consumed by the worker for this run
     cost_usd: float = 0.0     # worker-reported cost for this run, when available
+    # OUT-OF-BAND future context (bullets the async card updater learns from). This is the channel
+    # that keeps future context away from the PRIMARY PAYLOAD: a runner whose output is strictly
+    # formatted (generated code, JSON, a patch) declares
+    # ``future_context_channel = FUTURE_CONTEXT_VIA_FIELD`` and returns its bullets HERE, so nothing
+    # is ever appended to ``output``. A prose runner may leave this empty and end its ``output``
+    # with the delimited section instead; the orchestrator parses that section into this field and
+    # strips it from ``output`` at the single seam where a runner returns, so by the time any
+    # consumer sees ``output`` it is the clean payload and this field is the only carrier. Either
+    # way the card updater reads exactly one place: ``future_context``.
+    future_context: str = ""
+
+
+# The two ways a deep runner can hand its future-context bullets back. Declared per runner as
+# ``DeepRunner.future_context_channel``; the orchestrator picks the matching brief instruction and
+# reads the result from the matching place. Future context is asked for on BOTH channels: a
+# code-generating runner has the most valuable future context of all (what it changed, which ids and
+# schema it touched), so it is never opted out, only routed away from its payload.
+FUTURE_CONTEXT_VIA_OUTPUT = "output"   # DEFAULT: worker ends its prose output with the delimiter
+FUTURE_CONTEXT_VIA_FIELD = "field"     # strict-format runner: worker fills DeepResult.future_context
 
 
 @dataclass
@@ -331,7 +350,15 @@ class ModelProvider(Protocol):
 
 @runtime_checkable
 class DeepRunner(Protocol):
-    """Spawn a bounded, goal-driven autonomous run (the ``/goal --max-turns`` contract)."""
+    """Spawn a bounded, goal-driven autonomous run (the ``/goal --max-turns`` contract).
+
+    OPTIONAL attribute ``future_context_channel`` (``FUTURE_CONTEXT_VIA_OUTPUT`` by default, or
+    ``FUTURE_CONTEXT_VIA_FIELD`` for a runner whose output is a strict format such as generated code
+    or JSON): it selects how this runner hands back the FUTURE-CONTEXT bullets the async card updater
+    learns from. See ``DeepRunnerBase.future_context_channel`` for the full contract. It is read with
+    ``getattr(..., default)``, so it is deliberately NOT a required Protocol member: a runner that
+    never declares it keeps today's prose behaviour.
+    """
 
     def run_goal(
         self, *, goal: str, brief: str, model: Optional[str] = None, max_turns: Optional[int] = None,
@@ -855,6 +882,24 @@ class ModelProviderBase(abc.ABC):
 
 
 class DeepRunnerBase(abc.ABC):
+    # How THIS runner returns its future-context bullets (see FUTURE_CONTEXT_VIA_* above).
+    #
+    #   FUTURE_CONTEXT_VIA_OUTPUT (default) -- the runner's output is PROSE, so the worker is asked
+    #       to end it with the delimited FUTURE-CONTEXT section. The orchestrator parses that section
+    #       into ``DeepResult.future_context`` and strips it from ``DeepResult.output``.
+    #
+    #   FUTURE_CONTEXT_VIA_FIELD -- the runner's output is a STRICT FORMAT (generated code, JSON, a
+    #       patch) where any appended prose would corrupt the payload. The worker is instead asked to
+    #       return its bullets through the runner's own structured channel, and the runner puts them
+    #       in ``DeepResult.future_context``. Nothing is ever appended to ``output``, so corruption
+    #       is impossible by construction rather than by each consumer remembering to strip.
+    #
+    # Future context is asked for either way: a code generator knows the most reusable facts of all
+    # (entities and ids touched, schema learned, files changed), and the card updater must keep
+    # learning from exactly those turns. Read generically with ``getattr(runner,
+    # "future_context_channel", FUTURE_CONTEXT_VIA_OUTPUT)``, so duck-typed runners keep working.
+    future_context_channel: str = FUTURE_CONTEXT_VIA_OUTPUT
+
     @abc.abstractmethod
     def run_goal(self, *, goal, brief, model=None, max_turns=None, emit=None,
                  context_preamble=None, run_id=None) -> DeepResult: ...

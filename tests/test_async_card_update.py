@@ -546,3 +546,280 @@ def test_normalize_card_edits_rejects_junk():
     assert _normalize_card_edits("nope") == []
     assert _normalize_card_edits({"nothing": 1}) == []
     assert _normalize_card_edits([1, 2, "x"]) == []
+
+
+# =========================================================================== #
+# FUTURE-CONTEXT CHANNEL: the bullets must never ride inside a STRICT payload  #
+# =========================================================================== #
+#
+# The card updater learns from FUTURE-CONTEXT bullets, so every deep runner must be asked for them,
+# including a CODE GENERATOR (which knows the most reusable facts of all: the ids, schema, and files
+# it touched). What must change per runner is the CHANNEL, never the capability:
+#
+#   * a PROSE runner ends its output with the delimited section (unchanged, today's behaviour);
+#   * a STRICT-FORMAT runner (generated code / JSON / a patch) declares
+#     ``future_context_channel = FUTURE_CONTEXT_VIA_FIELD`` and returns the bullets in
+#     ``DeepResult.future_context``, so nothing is ever appended to its payload.
+#
+# Both land in the SAME place: ``DeepResult.future_context``, normalized at the runner seam, read by
+# the async card updater. These tests hold that line from both ends.
+
+import ast
+
+from quest_ai_runner.core.adapters import FUTURE_CONTEXT_VIA_FIELD, FUTURE_CONTEXT_VIA_OUTPUT
+from quest_ai_runner.core.orchestrator import (
+    DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION,
+    _deep_future_context,
+    _future_context_channel,
+    _normalize_future_context,
+)
+
+# What a code-generating deep runner produces: a payload that must parse as Python, and NOTHING else.
+_GENERATED_CODE = (
+    "def apply_mutation(doc):\n"
+    "    doc['status'] = 'active'\n"
+    "    return doc\n"
+)
+_CODE_FUTURE_CONTEXT = (
+    "- collection: quest_goals (id: col-77)\n"
+    "- schema: goals carry a 'status' field, values active|done\n"
+)
+
+
+class _CodeRunner:
+    """A STRICT-FORMAT deep runner: its output is generated Python, so future context must come back
+    out of band. Declares the field channel and fills ``DeepResult.future_context``."""
+
+    future_context_channel = FUTURE_CONTEXT_VIA_FIELD
+
+    def __init__(self, code: str = _GENERATED_CODE, future_context: str = _CODE_FUTURE_CONTEXT,
+                 contaminate: bool = False):
+        self._code = code
+        self._future_context = future_context
+        # ``contaminate``: simulate a worker that IGNORES the instruction and appends the prose block
+        # to the code anyway. The orchestrator must still hand back a clean payload.
+        self._contaminate = contaminate
+        self.briefs: List[str] = []
+
+    def run_goal(self, *, goal, brief, model=None, max_turns=None, context_preamble=None) -> DeepResult:
+        self.briefs.append(brief)
+        output = self._code
+        if self._contaminate:
+            output = f"{output}\n{FUTURE_CONTEXT_DELIMITER}\n- leaked: this must not reach the payload\n"
+        return DeepResult(met=True, output=output, future_context=self._future_context)
+
+
+def _wait_for_updater(store, tries: int = 100) -> None:
+    """The card updater runs off the result path in a thread; give it a moment to land."""
+    import time
+    for _ in range(tries):
+        if store.update_calls:
+            return
+        time.sleep(0.02)
+
+
+# --------------------------------------------------------------------------- channel declaration
+
+
+def test_channel_defaults_to_output_for_any_undeclared_runner():
+    # Duck-typed runners are the common case: anything that does not declare a channel is prose, and
+    # gets exactly today's behaviour.
+    assert _future_context_channel(_Runner("x")) == FUTURE_CONTEXT_VIA_OUTPUT
+    assert _future_context_channel(None) == FUTURE_CONTEXT_VIA_OUTPUT
+    assert _future_context_channel(object()) == FUTURE_CONTEXT_VIA_OUTPUT
+    # A runner that declares nonsense is treated as prose rather than breaking the run.
+    class _Weird:
+        future_context_channel = "sideways"
+    assert _future_context_channel(_Weird()) == FUTURE_CONTEXT_VIA_OUTPUT
+    # And a strict-format runner is honoured.
+    assert _future_context_channel(_CodeRunner()) == FUTURE_CONTEXT_VIA_FIELD
+
+
+# --------------------------------------------------------------------------- the ask (per channel)
+
+
+def test_strict_runner_is_asked_for_future_context_out_of_band():
+    """A code generator IS asked for future context (never opted out), but through the field channel:
+    it gets the out-of-band instruction and never the 'END your output with...' one."""
+    provider = CardEditProvider({"edits": [{"card_id": "goals",
+                                            "add": [{"type": "note",
+                                                     "locator": {"text": "status field"}}]}]})
+    store = RecordingCardStore(current_cards=[{"id": "goals", "title": "Goals", "files": []}])
+    runner = _CodeRunner()
+    orch = _orch(provider, runner, assembler=store)
+
+    orch.run("add a status mutation", context_meta={"user_id": "u1"})
+
+    assert runner.briefs, "the deep runner was never called"
+    # Asked, out of band.
+    assert all(DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION in b for b in runner.briefs)
+    # NEVER told to append a prose block to a strict payload, and never even shown the delimiter.
+    assert all(DEEP_FUTURE_CONTEXT_INSTRUCTION not in b for b in runner.briefs)
+    assert all(FUTURE_CONTEXT_DELIMITER not in b for b in runner.briefs)
+
+
+def test_prose_runner_still_gets_todays_instruction_unchanged():
+    """The default (prose) channel is byte-for-byte what it was: existing consumers see no change."""
+    provider = CardEditProvider({"edits": [{"card_id": "pricing"}]})
+    store = RecordingCardStore(current_cards=[{"id": "pricing", "title": "Pricing", "files": []}])
+    runner = _Runner(_WORKER_OUTPUT)
+    orch = _orch(provider, runner, assembler=store)
+
+    orch.run("update the pricing docs", context_meta={"user_id": "u1"})
+
+    assert runner.briefs
+    assert all(DEEP_FUTURE_CONTEXT_INSTRUCTION in b for b in runner.briefs)
+    assert all(DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION not in b for b in runner.briefs)
+
+
+# ------------------------------------------------- the payload + the learning, end to end
+
+
+def test_code_payload_stays_valid_code_and_its_future_context_reaches_the_card_updater():
+    """THE REGRESSION THIS FIXES. A code-generating runner must return VALID CODE as its payload AND
+    still feed the card updater. Before: the worker was told to append a prose block to its output,
+    which broke the code, so consumers stripped the instruction out of the brief entirely, which
+    silently stopped chat mutations (the turns that did real work) from ever teaching the cards."""
+    provider = CardEditProvider({"edits": [{"card_id": "goals",
+                                            "add": [{"type": "collection",
+                                                     "locator": {"name": "quest_goals",
+                                                                 "id": "col-77"}}]}]})
+    store = RecordingCardStore(current_cards=[{"id": "goals", "title": "Goals", "files": []}])
+    runner = _CodeRunner()
+    orch = _orch(provider, runner, assembler=store)
+
+    res = orch.run("add a status mutation", context_meta={"user_id": "u1"})
+
+    # 1. THE PAYLOAD: still valid Python, with no prose appended.
+    assert res.kind == "deep"
+    payload = res.deep_results[0].output
+    ast.parse(payload)                                   # raises SyntaxError if contaminated
+    assert FUTURE_CONTEXT_DELIMITER not in payload
+    assert "col-77" not in payload
+
+    # 2. THE LEARNING: the bullets came back out of band and are the result's future context.
+    assert "col-77" in res.deep_results[0].future_context
+
+    # 3. THE SAME DESTINATION as a prose runner: the async card updater's ONE LLM call is given them,
+    #    and the edits it returns are written to the card store. Asserted on the updater's actual
+    #    prompt, not merely on the field being populated.
+    _wait_for_updater(store)
+    assert provider.updater_calls == 1
+    assert any("col-77" in p and "quest_goals" in p for p in provider.updater_prompts), \
+        "the code runner's future context never reached the card updater"
+    assert store.update_calls and store.update_calls[0]["card_id"] == "u:u1:goals"
+
+
+def test_prose_runner_future_context_reaches_the_card_updater_the_same_way():
+    """The prose channel feeds the identical destination, now via the same normalized field."""
+    provider = CardEditProvider({"edits": [{"card_id": "pricing",
+                                            "add": [{"type": "collection",
+                                                     "locator": {"name": "Pricing tiers",
+                                                                 "id": "col-123"}}]}]})
+    store = RecordingCardStore(current_cards=[{"id": "pricing", "title": "Pricing", "files": []}])
+    runner = _Runner(_WORKER_OUTPUT)
+    orch = _orch(provider, runner, assembler=store)
+
+    res = orch.run("update the pricing docs", context_meta={"user_id": "u1"})
+
+    # The deliverable is kept; the internal section is cut from the payload at the runner seam.
+    payload = res.deep_results[0].output
+    assert "I implemented the thing and verified it." in payload
+    assert FUTURE_CONTEXT_DELIMITER not in payload
+    assert "col-123" not in payload
+    # ...and now lives in the structured field, which is what the updater reads.
+    assert "col-123" in res.deep_results[0].future_context
+
+    _wait_for_updater(store)
+    assert provider.updater_calls == 1
+    assert any("col-123" in p for p in provider.updater_prompts)
+    assert store.update_calls and store.update_calls[0]["card_id"] == "u:u1:pricing"
+
+
+def test_a_worker_that_appends_the_block_to_code_anyway_is_cleaned_centrally():
+    """Structural, not by convention: even if a strict-format worker disobeys and appends the prose
+    block, the orchestrator cuts it at the seam, so the payload a consumer receives still parses."""
+    provider = CardEditProvider({"edits": [{"card_id": "goals"}]})
+    store = RecordingCardStore(current_cards=[{"id": "goals", "title": "Goals", "files": []}])
+    runner = _CodeRunner(contaminate=True)
+    orch = _orch(provider, runner, assembler=store)
+
+    res = orch.run("add a status mutation", context_meta={"user_id": "u1"})
+
+    payload = res.deep_results[0].output
+    ast.parse(payload)
+    assert FUTURE_CONTEXT_DELIMITER not in payload
+    assert "leaked" not in payload
+    # The runner's own field still wins as the thing the updater learns from.
+    assert "col-77" in res.deep_results[0].future_context
+
+
+# --------------------------------------------------------------------------- the normalization seam
+
+
+def test_normalize_moves_the_section_out_of_a_prose_output():
+    res = _normalize_future_context(DeepResult(met=True, output=_WORKER_OUTPUT))
+    assert FUTURE_CONTEXT_DELIMITER not in res.output
+    assert "I implemented the thing and verified it." in res.output
+    assert "col-123" in res.future_context
+
+
+def test_normalize_leaves_a_clean_field_result_untouched():
+    res = _normalize_future_context(
+        DeepResult(met=True, output=_GENERATED_CODE, future_context=_CODE_FUTURE_CONTEXT))
+    assert res.output == _GENERATED_CODE          # payload byte-for-byte unchanged
+    assert res.future_context == _CODE_FUTURE_CONTEXT
+
+
+def test_normalize_is_inert_when_there_is_nothing_to_move():
+    res = _normalize_future_context(DeepResult(met=True, output="plain result"))
+    assert res.output == "plain result"
+    assert res.future_context == ""
+    # A deferred hand-off receipt (the reserved queue-runner path) carries no section and must pass
+    # through untouched: the goal loop trusts ``met``/``deferred`` and must still see its sentinel.
+    receipt = _normalize_future_context(
+        DeepResult(met=True, output="task #7 launched", deferred=True))
+    assert receipt.output == "task #7 launched"
+    assert receipt.deferred is True
+    assert receipt.future_context == ""
+
+
+def test_deep_future_context_prefers_the_field_and_falls_back_to_parsing():
+    # The field is authoritative once normalized...
+    assert "col-77" in _deep_future_context(
+        DeepResult(met=True, output=_GENERATED_CODE, future_context=_CODE_FUTURE_CONTEXT))
+    # ...and a DeepResult built OUTSIDE the seam (an older runner, a queued result reflected back)
+    # still teaches the cards, via the in-output parse.
+    assert "col-123" in _deep_future_context(DeepResult(met=True, output=_WORKER_OUTPUT))
+    assert _deep_future_context(DeepResult(met=True, output="nothing here")) == ""
+
+
+# --------------------------------------------------------------------------- per-runner routing
+
+
+def test_the_channel_follows_the_RUNNER_the_classifier_picked_not_the_default():
+    """With a named registry, the instruction must match the runner that will actually handle THIS
+    goal: a consumer with one prose runner and one code runner must not send the prose ask to the
+    code generator."""
+    provider = CardEditProvider({"edits": [{"card_id": "goals"}]})
+    store = RecordingCardStore(current_cards=[{"id": "goals", "title": "Goals", "files": []}])
+    code_runner = _CodeRunner()
+    prose_runner = _Runner(_WORKER_OUTPUT)
+
+    orch = Orchestrator(
+        retrieval=StubRetrieval({}),
+        provider=provider,
+        registry=ModelRegistry(provider),
+        deep_runner=prose_runner,
+        deep_runners={"code": code_runner, "text": prose_runner},
+        deep_runner_classifier=lambda user_message, goal, brief: "code",
+        config=OrchestratorConfig(deep_goal_max_iterations=2, deep_model_ladder=["sonnet"]),
+        context_assembler=store,
+    )
+    res = orch.run("generate the mutation", context_meta={"user_id": "u1"})
+
+    assert code_runner.briefs and not prose_runner.briefs
+    assert all(DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION in b for b in code_runner.briefs)
+    assert all(DEEP_FUTURE_CONTEXT_INSTRUCTION not in b for b in code_runner.briefs)
+    ast.parse(res.deep_results[0].output)
+    assert "col-77" in res.deep_results[0].future_context

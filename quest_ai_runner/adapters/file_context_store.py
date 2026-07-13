@@ -1295,6 +1295,15 @@ class FileContextStore(ContextAssemblerBase):
         self._recency_boost_max = max(0.0, float(recency_boost_max))
         # Set to True once the lazy bootstrap has been attempted (success or failure).
         self._bootstrap_done: bool = False
+        # SHUTDOWN SIGNAL for background indexing. Bootstrap/refresh are designed to run in a
+        # background thread (see config._bootstrap_if_needed), and a walk over a big corpus (with a
+        # ``git hash-object`` per file) can easily outlive whatever started it. A background thread
+        # that outlives its owner is a defect, not just a test problem: it keeps burning I/O and
+        # spawning subprocesses for a store nobody will read again, and its stray ``git`` calls land
+        # in whatever the process does next. ``close()`` sets this; the bootstrap loops and the git
+        # fingerprint helper check it and return promptly. Never set in the normal in-process path,
+        # so production indexing is unchanged.
+        self._closed = threading.Event()
 
         # --- Source-agnostic CONTENT resolution config -------------------------------------
         # Recency-bound limits for resolving a card's ``content`` items during assemble().
@@ -1578,6 +1587,24 @@ class FileContextStore(ContextAssemblerBase):
         except Exception:  # noqa: BLE001
             return {}
 
+    def close(self) -> None:
+        """Stop this store's background indexing and refuse to start any more.
+
+        Idempotent and safe to call from any thread. An in-flight ``bootstrap()`` / ``refresh_stale()``
+        notices at its next checkpoint and returns what it has written so far (cards already written
+        are kept: bootstrap is incremental and resumes next start). No new ``git hash-object``
+        subprocess is spawned after this returns.
+
+        Call it when a store's owner goes away (a consumer rebuilding its orchestrator, a CLI
+        exiting, a test finishing). ``config.shutdown_background_index()`` closes every store it
+        started a thread for and joins those threads, which is the usual way to reach this.
+        """
+        self._closed.set()
+
+    def is_closed(self) -> bool:
+        """True once ``close()`` has been called. Background indexing checks this at each checkpoint."""
+        return self._closed.is_set()
+
     def _maybe_auto_bootstrap(self) -> None:
         """Trigger bootstrap once if auto_bootstrap is on and the store is empty. Never raises."""
         if self._bootstrap_done:
@@ -1641,7 +1668,13 @@ class FileContextStore(ContextAssemblerBase):
              end when any card was written.
 
         With no ``provider`` no cards can be identified, so this returns 0 (a no-op).
+
+        CANCELLATION: ``close()`` stops the pass at the next checkpoint (entry, each walked
+        directory, before the LLM fan-out, before the fingerprint pass) and returns 0 rather than
+        keep walking and shelling out to git for a store nobody owns any more.
         """
+        if self._closed.is_set():
+            return 0
         walk_root = Path(root).resolve() if root else self._repo_root
         if walk_root is None or not walk_root.is_dir():
             return 0
@@ -1654,7 +1687,7 @@ class FileContextStore(ContextAssemblerBase):
         file_paths: List[str] = []
         file_count = 0
         for dirpath, dirnames, filenames in os.walk(walk_root):
-            if file_count >= max_files:
+            if file_count >= max_files or self._closed.is_set():
                 break
             current_dir = Path(dirpath).resolve()
             # Skip the cards directory itself to avoid indexing stored card JSON files.
@@ -1682,7 +1715,7 @@ class FileContextStore(ContextAssemblerBase):
                 file_count += 1
                 file_paths.append(str(fpath.relative_to(walk_root)))
 
-        if not file_paths:
+        if not file_paths or self._closed.is_set():
             return 0
 
         # Topic cards require semantic understanding. Without a provider, do nothing.
@@ -1829,6 +1862,10 @@ class FileContextStore(ContextAssemblerBase):
         self._cards_dir.mkdir(parents=True, exist_ok=True)
 
         # --- Pass 2: fingerprint every file referenced by any topic card, in parallel ---
+        # Checkpoint: the fingerprint pass is the git-subprocess-heavy one, so a closed store stops
+        # before it rather than fanning out ``git hash-object`` calls it will never use.
+        if self._closed.is_set():
+            return 0
         referenced: List[str] = []
         seen: Set[str] = set()
         for tc in topic_cards:
@@ -2463,6 +2500,14 @@ class FileContextStore(ContextAssemblerBase):
                 "files": display_files,
                 "adapter": "keyword",
                 "items": item_blocks,
+                # OPTIONAL card taxonomy fields, passed through verbatim when the card carries them
+                # (a card is a plain dict; a consumer is free to type and version its own cards).
+                # ``card_type`` lets a consumer tell TOPIC cards apart from its other card kinds
+                # (permissions, settings, derived doc cards) when it threads ideas by card, and
+                # ``lifecycle`` says whether the work behind a card is still open. Absent on a card
+                # that does not use them, so nothing changes for a consumer that never sets them.
+                "card_type": card.get("card_type", ""),
+                "lifecycle": card.get("lifecycle", ""),
                 # The VERBATIM rendered section this card contributed to context_view (the whole
                 # ``### Card: ...`` block: summary + Files listing + Content + Conventions). The hybrid
                 # consolidator rebuilds from this so a keyword card's file listings are never lost when
@@ -2734,8 +2779,10 @@ class FileContextStore(ContextAssemblerBase):
         except Exception:  # noqa: BLE001
             pass
 
-        # Git blob SHA: best-effort, optional, fully wrapped.
-        if self._repo_root is not None and result["sha256"]:
+        # Git blob SHA: best-effort, optional, fully wrapped. Skipped once the store is closed: this
+        # is the one call in the index that leaves the process (``git hash-object``), so a background
+        # pass that outlived its owner must not still be spawning it.
+        if self._repo_root is not None and result["sha256"] and not self._closed.is_set():
             try:
                 proc = subprocess.run(
                     ["git", "-C", str(self._repo_root), "hash-object", path],

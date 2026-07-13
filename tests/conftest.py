@@ -5,11 +5,33 @@ and the runner deterministically.
 """
 from typing import Any, Dict, List
 
+import pytest
+
+from quest_ai_runner.config import shutdown_background_index
 from quest_ai_runner.core.adapters import (
     DeepResult,
     Escalation,
     Observation,
 )
+
+
+@pytest.fixture(autouse=True)
+def no_background_index_survives_a_test():
+    """No context-index thread may outlive the test that started it.
+
+    ``config._bootstrap_if_needed`` indexes the corpus on a background thread, and that pass shells
+    out to ``git hash-object`` per file. A thread that outlived its test used to land those
+    subprocess calls inside a LATER test that had patched ``subprocess`` or the environment, which
+    failed a different test on each run (test_runner.py's explicit-session-id test and
+    test_vector_context.py's backend-env switch were the usual victims). Non-determinism like that
+    is where real regressions hide.
+
+    The library owns those threads now (``shutdown_background_index`` closes the store and joins
+    them), so this fixture is simply that call at teardown: the guarantee is enforced in the library,
+    and asserted here for every test at once.
+    """
+    yield
+    shutdown_background_index(timeout=10.0)
 
 
 class StubProvider:

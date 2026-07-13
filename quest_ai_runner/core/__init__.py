@@ -18,6 +18,8 @@ from .adapters import (
     EVENT_RESULT,
     EVENT_STATUS,
     EVENT_UNDERSTANDING,
+    FUTURE_CONTEXT_VIA_FIELD,
+    FUTURE_CONTEXT_VIA_OUTPUT,
     SURFACING_EVENTS,
     ConversationContext,
     ConversationStore,
@@ -99,6 +101,7 @@ __all__ = [
     "RetrievalAdapter", "ModelProvider", "DeepRunner", "EscalationSink",
     "RetrievalAdapterBase", "ModelProviderBase", "DeepRunnerBase", "EscalationSinkBase",
     "Observation", "PlanDecision", "DeepResult", "Escalation",
+    "FUTURE_CONTEXT_VIA_OUTPUT", "FUTURE_CONTEXT_VIA_FIELD",
     # two product modes + streaming/progress interface
     "Mode", "ProgressEvent", "ProgressSink", "ProgressSinkBase",
     "StreamSink", "MilestoneSink", "FanoutSink", "SURFACING_EVENTS",

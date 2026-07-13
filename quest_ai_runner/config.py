@@ -11,6 +11,7 @@ import fcntl
 import logging
 import os
 import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -415,6 +416,61 @@ def _cards_exist(cards_dir: str) -> bool:
         return False
 
 
+# --- Background context-index threads: OWNED, not fire-and-forget ---------------------------------
+# ``_bootstrap_if_needed`` starts the index build/refresh on a daemon thread so chat is usable
+# immediately. Daemon alone is not ownership: the thread can (and did) outlive whatever started it,
+# still walking a corpus and shelling out ``git hash-object`` per file long after nobody will read
+# the result. Every thread started here is registered with the store it is indexing, so
+# ``shutdown_background_index()`` can close the store (stopping it at its next checkpoint) and join
+# the thread. Entries are dropped once the thread is finished, so this never grows without bound.
+_INDEX_THREADS: "List[Tuple[threading.Thread, Any]]" = []
+_INDEX_THREADS_LOCK = threading.Lock()
+
+
+def _register_index_thread(thread: threading.Thread, store: Any) -> None:
+    """Record a background index thread and the store it is writing, and forget finished ones."""
+    with _INDEX_THREADS_LOCK:
+        _INDEX_THREADS[:] = [(t, s) for (t, s) in _INDEX_THREADS if t.is_alive()]
+        _INDEX_THREADS.append((thread, store))
+
+
+def shutdown_background_index(timeout: float = 10.0) -> None:
+    """Stop every background context-index thread this process started, and wait for them to exit.
+
+    Calls ``close()`` on each store being indexed (bootstrap/refresh then stop at their next
+    checkpoint and spawn no further ``git`` subprocess) and joins each thread, up to ``timeout``
+    seconds in total. Cards already written are kept; indexing is incremental and resumes on the
+    next start.
+
+    Call this whenever the owner of an orchestrator goes away: a consumer rebuilding its wiring, a
+    long-lived service shutting a tenant down, a CLI about to exit, a test finishing. Without it, an
+    index pass belongs to nobody and its stray subprocesses land in whatever the process does next.
+    Idempotent and never raises.
+    """
+    deadline = time.monotonic() + max(0.0, timeout)
+    with _INDEX_THREADS_LOCK:
+        pending = list(_INDEX_THREADS)
+        _INDEX_THREADS.clear()
+    for _, store in pending:
+        try:
+            close = getattr(store, "close", None)
+            if callable(close):
+                close()
+        except Exception:  # noqa: BLE001 — shutdown is best-effort, never raises
+            _log.debug("context index: closing store during shutdown failed", exc_info=True)
+    for thread, _ in pending:
+        try:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                remaining = 0.1  # always give a closed thread a moment to notice and unwind
+            thread.join(timeout=remaining)
+            if thread.is_alive():
+                _log.warning("context index: background thread %s did not stop within the timeout",
+                             thread.name)
+        except Exception:  # noqa: BLE001
+            _log.debug("context index: joining background thread failed", exc_info=True)
+
+
 def _bootstrap_if_needed(
     keyword, *, root: str, cards_dir: str, provider=None, model: Optional[str] = None,
     notify: Optional[Callable[[str], None]] = None,
@@ -483,7 +539,9 @@ def _bootstrap_if_needed(
                 except Exception:  # noqa: BLE001
                     _log.debug("context index: refresh failed", exc_info=True)
 
-            threading.Thread(target=_bg_refresh, daemon=True, name="qar-refresh").start()
+            _refresh_thread = threading.Thread(target=_bg_refresh, daemon=True, name="qar-refresh")
+            _register_index_thread(_refresh_thread, keyword)
+            _refresh_thread.start()
             return
 
     else:
@@ -522,7 +580,9 @@ def _bootstrap_if_needed(
         except Exception:  # noqa: BLE001
             _log.debug("context index: bootstrap failed", exc_info=True)
 
-    threading.Thread(target=_bg, daemon=True, name="qar-bootstrap").start()
+    _bootstrap_thread = threading.Thread(target=_bg, daemon=True, name="qar-bootstrap")
+    _register_index_thread(_bootstrap_thread, keyword)
+    _bootstrap_thread.start()
 
 
 # --- Env vars the CARD-PERSISTENCE backend reads (documented here so config is discoverable) -------
