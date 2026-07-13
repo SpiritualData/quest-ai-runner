@@ -7,6 +7,62 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **The reference-reuse loop is closed: a deep run's findings now actually reach the next deep run.**
+  A deep run explored an environment, wrote what it found as future context, and the updater turned
+  that into a card of typed, resolvable file REFERENCES. Then the loop broke, silently, in three
+  places at once, and the next run explored from scratch anyway:
+  - **The learned card was unretrievable.** A card whose knowledge is references (an updater writes
+    `name` + `description` + `content`, never a bootstrapped `summary`/`files`) was scored ONLY on
+    its items' `why` text. Its name, its description, and the file paths its references point at
+    were not indexed at all, so it landed under the confidence gate while the bootstrapped file
+    cards it should have beaten sailed over it. Those fields are now indexed at the same
+    intent-weighted levels (`_card_term_weights`), so the card that carries the run's hard-won paths
+    is retrievable by its topic AND by the paths it points at.
+  - **The relevance filter culled it.** The LLM filter judges a card by its title and the files it
+    covers; a learned card was handed to it with an empty title and zero files, so it read as an
+    untitled card about nothing. It now sees the card's real title (`_card_display_title`) and the
+    paths its references cover (`_card_covered_paths`), and it renders with that title instead of
+    "(no summary)".
+  - **A rendered reference did not say WHERE it came from.** An item rendered as `- (file) <why>`
+    plus the file's live contents, never the path. A body of code with no path is not a reference:
+    the next worker cannot re-read, edit, or search around it. Every reference now names its target
+    (`locator_label`): `- (file) src/x/y.py -- <why>`, and the same for a collection's name/id.
+  Proven with real Claude Code deep runs over a throwaway codebase: a second run, from a DIFFERENT
+  conversation, on a related question now arrives with the first run's paths (and their live
+  contents) in its brief and makes 1 exploration tool call, against 8 for the same question with an
+  empty card store, at 34% fewer worker tokens.
+
+### Added
+- **Per-source usage recency: a card knows which of its sources are hot and which have gone cold.**
+  A file entry's `mtime`/`sha256` are FINGERPRINTS (has the file changed), and `usage_count` is
+  CARD-level (was this card used). Neither could say WHICH of a card's sources actually carried the
+  value, so a card that accumulated sources had no way to let the dead ones sink. Every source now
+  also carries `last_used_ts` + `use_count`: a file entry and EVERY typed content item (file,
+  collection, conversation, query, note, so a conversation warms exactly like a file). They are
+  stamped at the seam where assembly RESOLVES AND RENDERS that source into the context view, so a
+  source that is merely held by a selected card is never warmed and goes cold relative to what is
+  actually used. The content ranker now blends used-recency with relevance and learned-recency, so
+  under a render budget the hot sources win and the cold ones are outranked (never dropped, they
+  still resolve when the budget reaches them). `mark_sources_used` is the public seam for any other
+  assembler arm.
+  - The stamp lands AFTER rendering and never enters the rendered text, and every rendered source is
+    re-warmed by the same amount, so two identical turns render byte-identically: prompt-cache
+    prefixes are unaffected (pinned by a test).
+  - Debounced (60s): one turn assembles context several times (the run-level view, each deep goal, a
+    widening retry), which is ONE use, so a turn cannot rewrite a card repeatedly or inflate a
+    count.
+  - Missing fields mean "never used". Legacy cards keep ranking exactly as before and are never
+    rewritten in bulk: a card gains the fields the first time it is actually used.
+- **The future-context ask now asks for the EXPENSIVE knowledge.** Both instructions (in-band and
+  out-of-band) now lead with the environment references: the exact location of each thing the worker
+  relied on, written the way that environment addresses it (a path relative to the working
+  directory, a collection with its name AND id), the entry points, and what was RULED OUT so nobody
+  pays for that search twice. Prose comes last, and a bullet that describes a thing without saying
+  where it is is not acceptable. New reference items are timestamped by the brain (`_apply_card_edits`),
+  since the updater model has no clock and an unstamped item ranks as maximally old and is trimmed
+  first.
+
+### Fixed
 - **Future context no longer corrupts a strict-format deep runner's payload, and is no longer lost
   for one.** When the async card updater is on, the orchestrator appended
   `DEEP_FUTURE_CONTEXT_INSTRUCTION` to EVERY deep brief, telling the worker to end its output with a

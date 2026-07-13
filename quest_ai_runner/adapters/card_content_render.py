@@ -67,15 +67,112 @@ def tokenize(text: str) -> Set[str]:
     return {t for t in raw if len(t) >= _MIN_TOKEN_LEN and t not in _STOPWORDS}
 
 
-def content_item_text(item: Dict[str, Any]) -> str:
-    """The free text a content item carries for relevance scoring (its ``why`` + any note text).
+def _as_float(value: Any) -> float:
+    """Coerce ``value`` to a float, or 0.0 when it is absent or unparseable. Never raises."""
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
 
-    A reference contributes its ``why`` (the short reason it is on the card); a note contributes
-    both its ``why`` and its locator ``text``. This is what the recency+relevance ranker tokenizes
-    so a pure note/collection card is still searchable. Never raises.
+
+def _as_int(value: Any) -> int:
+    """Coerce ``value`` to an int, or 0 when it is absent or unparseable. Never raises."""
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def mark_items_used(
+    content: List[Dict[str, Any]], used_ids: Set[str], *, now: float,
+    min_interval: float = 0.0,
+) -> bool:
+    """Stamp per-source USAGE RECENCY on the content items that were actually used. Never raises.
+
+    ``used_ids`` are the ids of the items that this turn RESOLVED AND RENDERED into context (what a
+    worker actually got), not merely the items the selected card happens to hold. Each one gets
+    ``last_used_ts = now`` and ``use_count += 1``; every other item is left untouched and therefore
+    goes COLD relative to it. Mutates ``content`` in place and returns True when anything changed
+    (so a caller can skip the write when nothing did).
+
+    ``min_interval`` DEBOUNCES the stamp: an item used again within that many seconds is left alone.
+    One turn assembles context several times (the run-level view, each deep goal, a widening retry),
+    and all of them are the SAME use; without a debounce a single turn would rewrite the card
+    repeatedly and inflate ``use_count``. 0.0 (the default) stamps every call.
+
+    This is what lets a card tell its hot sources from its cold ones. Card-level ``usage_count``
+    only ever said "this card was used"; it could never say WHICH of the card's sources carried the
+    value, so a card that accumulated sources had no way to let the dead ones sink. Type-agnostic by
+    construction: it keys off item ids, so a conversation, a collection, or a note is treated
+    exactly like a file.
+    """
+    changed = False
+    try:
+        for item in content:
+            if item.get("id") not in used_ids:
+                continue
+            if min_interval > 0.0 and (now - _as_float(item.get("last_used_ts"))) < min_interval:
+                continue  # same use, already stamped moments ago
+            item["last_used_ts"] = float(now)
+            item["use_count"] = _as_int(item.get("use_count")) + 1
+            changed = True
+    except Exception:  # noqa: BLE001 — usage bookkeeping must never break a render
+        return changed
+    return changed
+
+
+def locator_label(item: Dict[str, Any]) -> str:
+    """The human-readable IDENTITY of a reference: WHAT it points at, in one short string.
+
+    A ``file`` item is its path, a ``collection`` its name (and id when it has one), a
+    ``conversation`` its id, a ``query`` its query text. A ``note`` has no external target, so it
+    has no label ("").
+
+    This exists because a reference is only reusable if its target is NAMED. A card that resolves a
+    file into pasted text but never says WHICH file leaves the next worker unable to re-read, edit,
+    or grep around it, which is exactly the expensive knowledge a deep run pays to rediscover. Both
+    the rendered item header (``render_block_lines``) and the searchable text of an item
+    (``content_item_text``) are built on this, so a reference is both VISIBLE and FINDABLE by its
+    target. Never raises.
+    """
+    try:
+        itype = str(item.get("type") or "note").strip() or "note"
+        loc = item.get("locator") if isinstance(item.get("locator"), dict) else {}
+        if itype == "file":
+            return str(loc.get("path") or "").strip()
+        if itype == "collection":
+            name = str(loc.get("name") or loc.get("collection") or "").strip()
+            cid = str(loc.get("id") or "").strip()
+            if name and cid:
+                return f"{name} ({cid})"
+            return name or cid
+        if itype == "conversation":
+            return str(loc.get("conv_id") or loc.get("id") or "").strip()
+        if itype == "query":
+            return str(loc.get("query") or loc.get("text") or "").strip()
+        if itype == "note":
+            return ""
+        # Unknown type: name whatever identifier it carries.
+        return str(loc.get("name") or loc.get("id") or loc.get("path") or "").strip()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def content_item_text(item: Dict[str, Any]) -> str:
+    """The free text a content item carries for relevance scoring (its target + ``why`` + note text).
+
+    A reference contributes WHAT it points at (``locator_label``: the file path, the collection
+    name/id, ...) plus its ``why`` (the short reason it is on the card); a note contributes its
+    ``why`` and its locator ``text``. This is what the recency+relevance ranker tokenizes, and what
+    the keyword arm indexes a card's content under, so a card whose knowledge is REFERENCES rather
+    than pinned files is still findable by the names and paths it points at (a card pointing at
+    ``config/relay.toml`` must be retrievable for a question about the relay config). Never raises.
     """
     try:
         parts: List[str] = []
+        label = locator_label(item)
+        if label:
+            parts.append(label)
         why = item.get("why")
         if isinstance(why, str) and why:
             parts.append(why)
@@ -121,7 +218,14 @@ def normalize_content(raw: Any) -> List[Dict[str, Any]]:
                 )
             ).hexdigest()[:8]
             item_id = f"{itype}-{digest}-{idx}"
-        out.append({"id": item_id, "type": itype, "locator": locator, "ts": ts, "why": why})
+        out.append({"id": item_id, "type": itype, "locator": locator, "ts": ts, "why": why,
+                    # PER-SOURCE USAGE RECENCY (see mark_items_used). ``ts`` says when this source
+                    # was LEARNED; these two say when it was last actually USED as context and how
+                    # often. A legacy item that predates the fields normalizes to "never used"
+                    # (0.0 / 0), which is exactly the neutral value the ranker expects, so no card
+                    # has to be rewritten to adopt them.
+                    "last_used_ts": _as_float(item.get("last_used_ts")),
+                    "use_count": _as_int(item.get("use_count"))})
     return out
 
 
@@ -218,6 +322,11 @@ def dedupe_content(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
                     cur["why"] = it.get("why")
             elif not ((cur.get("why") or "").strip()) and new_why:
                 cur["why"] = it.get("why")
+            # Per-source usage recency survives a merge: re-adding a source must never erase how
+            # hot it already was, so keep the newest use and the higher count.
+            cur["last_used_ts"] = max(_as_float(cur.get("last_used_ts")),
+                                      _as_float(it.get("last_used_ts")))
+            cur["use_count"] = max(_as_int(cur.get("use_count")), _as_int(it.get("use_count")))
         return [by_key[key] for key in order]
     except Exception:  # noqa: BLE001
         return items
@@ -226,20 +335,34 @@ def dedupe_content(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 def rank_content_by_recency_relevance(
     content: List[Dict[str, Any]], task_kws: Set[str], *, limit: int
 ) -> List[Dict[str, Any]]:
-    """Rank content items by recency (``ts``) + relevance (term overlap), return the top ``limit``.
+    """Rank content items by relevance + recency + USAGE recency, return the top ``limit``.
 
     A card's content can grow huge over time, so resolution must be bounded. We score each item by
-    a blend: a recency component (newer ``ts`` ranks higher, normalized within the card) plus a
-    relevance component (overlap of the item's text terms with the task keywords). Relevance is
-    weighted more so a clearly on-topic-but-older item can still beat a fresh-but-irrelevant one,
-    while recency breaks ties and gently deprioritizes the stale. Never raises.
+    a blend of three real signals:
+
+      * RELEVANCE  (weight 2.0) -- overlap of the item's text terms with the task keywords. It
+        dominates, so a clearly on-topic-but-old source still beats a fresh irrelevant one.
+      * RECENCY    (weight 1.0) -- how recently the source was LEARNED (``ts``), normalized within
+        the card. Breaks ties and gently deprioritizes the stale.
+      * USED-RECENCY (weight 1.0) -- how recently the source was actually USED as context
+        (``last_used_ts``, stamped by ``mark_items_used``), normalized within the card. This is what
+        lets a card's HOT sources outrank the ones that have gone cold: a source the assembly keeps
+        selecting is re-warmed on every use, while one nothing ever needs sinks under the budget
+        line.
+
+    A cold source is never DROPPED, only outranked: it still resolves whenever the budget reaches
+    it. Legacy items (no ``last_used_ts``) normalize to a used-recency of 0.0 across the board, so a
+    card that has never been bumped ranks exactly as it did before. Never raises.
     """
     try:
         if not content:
             return []
-        ts_values = [it.get("ts", 0.0) for it in content]
+        ts_values = [_as_float(it.get("ts")) for it in content]
         ts_min, ts_max = min(ts_values), max(ts_values)
         ts_span = (ts_max - ts_min) or 1.0
+        use_values = [_as_float(it.get("last_used_ts")) for it in content]
+        use_min, use_max = min(use_values), max(use_values)
+        use_span = (use_max - use_min) or 1.0
 
         scored: List[tuple] = []
         for it in content:
@@ -247,10 +370,13 @@ def rank_content_by_recency_relevance(
             # tokenizes the task with) so relevance overlap is computed on a consistent vocabulary.
             terms = tokenize(content_item_text(it)) if task_kws else set()
             overlap = len(terms & task_kws) if task_kws else 0
-            recency = (it.get("ts", 0.0) - ts_min) / ts_span  # 0.0 (oldest) .. 1.0 (newest)
-            # Relevance dominates; recency is a smaller additive nudge / tie-breaker.
-            score = (2.0 * overlap) + recency
-            scored.append((score, it.get("ts", 0.0), it))
+            recency = (_as_float(it.get("ts")) - ts_min) / ts_span  # 0.0 (oldest) .. 1.0 (newest)
+            # 0.0 (coldest / never used) .. 1.0 (used most recently). Uniform when nothing on this
+            # card has ever been used, so the term vanishes for a legacy card.
+            warmth = (_as_float(it.get("last_used_ts")) - use_min) / use_span
+            # Relevance dominates; recency and used-recency are smaller additive nudges.
+            score = (2.0 * overlap) + recency + warmth
+            scored.append((score, _as_float(it.get("ts")), it))
         # Sort by score desc, then ts desc (newest first on ties).
         scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
         return [it for _, _, it in scored[: max(0, limit)]]
@@ -361,16 +487,30 @@ def render_card_content_blocks(
 def render_block_lines(block: Dict[str, Any]) -> List[str]:
     """Render ONE content block to its context lines (header + indented body).
 
-    THE single layout authority for a content item: ``  - (<type>) <why>`` header followed by the
-    block's VERBATIM ``text`` indented six spaces per line. Both ``render_card_content`` (which joins
-    these across a card's blocks) and the prune-by-removal logic in the hybrid consolidator rely on
-    this exact formatting, so the per-item fragment they reconstruct is a verbatim substring of the
-    card's rendered section. Keep this the ONE place that decides item line layout.
+    THE single layout authority for a content item: a ``  - (<type>) <target> -- <why>`` header
+    followed by the block's VERBATIM ``text`` indented six spaces per line. Both
+    ``render_card_content`` (which joins these across a card's blocks) and the prune-by-removal logic
+    in the hybrid consolidator rely on this exact formatting, so the per-item fragment they
+    reconstruct is a verbatim substring of the card's rendered section. Keep this the ONE place that
+    decides item line layout.
+
+    ``<target>`` is the reference's identity (``locator_label``: a file's path, a collection's
+    name/id). NAMING the target is what makes a reference reusable: the next worker sees not just
+    the resolved content but WHERE it came from, so it can re-read, edit, or search around it
+    instead of rediscovering the location. A note (no external target) renders as before.
     """
     itype = block.get("type", "note")
     why = block.get("why", "")
     rendered = block.get("text", "")
-    lines = [f"  - ({itype})" + (f" {why}" if why else "")]
+    label = locator_label(block)
+    head = f"  - ({itype})"
+    if label:
+        head += f" {label}"
+        if why:
+            head += f" -- {why}"
+    elif why:
+        head += f" {why}"
+    lines = [head]
     for rl in rendered.splitlines() or [rendered]:
         lines.append(f"      {rl}")
     return lines

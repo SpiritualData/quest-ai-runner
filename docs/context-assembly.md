@@ -106,7 +106,8 @@ Matches the repo's zero-dependency rule (core + runner import only the stdlib).
     "weight": 1.0,
     "files": [
       {"path": "rel/path.py", "git_sha": "…", "mtime": 1700000000.0,
-       "sha256": "…", "why": "entry point", "symbols": ["run", "execute"]}
+       "sha256": "…", "why": "entry point", "symbols": ["run", "execute"],
+       "last_used_ts": 1700000000.0, "use_count": 3}
     ],
     "conventions": ["pointer to a rule that applies"],
     "provenance": {"created_by_task": "…", "model": "…", "created_at": "…",
@@ -135,6 +136,18 @@ Matches the repo's zero-dependency rule (core + runner import only the stdlib).
 - **`record(task, outcome)`:** create or update the card for this task — re-pin file fingerprints,
   bump `usage_count`, set `last_outcome`. This is the learning loop: a one-time exploration becomes
   a durable card the next similar task reuses for free.
+- **Per-source usage recency (`last_used_ts` / `use_count`).** A file entry's `mtime`/`sha256` are
+  FINGERPRINTS (has the file changed), not usage; `usage_count` is CARD-level (was the card used).
+  Neither can say WHICH of a card's sources actually carried the value. So every source — a file
+  entry AND every typed content item (file, collection, conversation, query, note) — also carries
+  `last_used_ts` + `use_count`, stamped at the seam where assembly RESOLVES AND RENDERS that source
+  into the context view (`_bump_source_usage`; the public seam for other assemblers is
+  `mark_sources_used`). A source the card merely holds is never stamped, so it goes cold, and the
+  content ranker prefers hot sources under its render budget (a cold source is outranked, never
+  dropped). The stamp happens AFTER rendering and never appears in the rendered text, so two
+  identical turns render byte-identically (prompt-cache prefixes are safe), and it is debounced
+  (`_SOURCE_USAGE_MIN_INTERVAL_SECONDS`) because one turn assembles context several times. Missing
+  fields mean "never used": legacy cards need no migration.
 
 ## The two prompt gates (doctrine, generic)
 

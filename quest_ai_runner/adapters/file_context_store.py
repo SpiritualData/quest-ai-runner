@@ -16,7 +16,8 @@ Card JSON schema (matches docs/context-assembly.md exactly):
     "summary": "what this subsystem is and how it is wired",
     "files": [
       {"path": "rel/path.py", "git_sha": "...", "mtime": 1700000000.0,
-       "sha256": "...", "why": "entry point", "symbols": ["run", "execute"]}
+       "sha256": "...", "why": "entry point", "symbols": ["run", "execute"],
+       "last_used_ts": 1700000000.0, "use_count": 3}
     ],
     "conventions": ["pointer to a rule that applies"],
     "provenance": {
@@ -26,6 +27,11 @@ Card JSON schema (matches docs/context-assembly.md exactly):
     "usage_count": 0,
     "last_outcome": "met|failed|unknown"
   }
+
+A file entry's ``mtime``/``sha256``/``git_sha`` are FINGERPRINTS (has this file changed since we
+captured it), never usage. ``usage_count``/``last_outcome`` are CARD-level (was this card used).
+``last_used_ts``/``use_count`` on a file entry or a content item are PER-SOURCE usage recency (was
+THIS source used), which is what lets a card's cold sources sink below its hot ones.
 """
 from __future__ import annotations
 
@@ -39,6 +45,7 @@ import re
 import subprocess
 import tempfile
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -53,6 +60,7 @@ from .card_content_render import (
     content_item_text as _content_item_text,
     dedupe_content as _dedupe_content,
     filter_content_by_time_range,
+    mark_items_used as _mark_items_used,
     normalize_content as _normalize_content,
     rank_content_by_recency_relevance as _rank_content_by_recency_relevance,
     render_card_content,
@@ -227,6 +235,12 @@ _SOURCE_FILE_WEIGHT = 1.0
 _RECENCY_BOOST_MAX_DEFAULT = 0.20          # at most +20% to the ranking score, never the gate
 _RECENCY_BOOST_HALF_LIFE_DAYS = 30.0       # recency component half-life (matches the vector arm)
 _RECENCY_BOOST_USAGE_CAP = 5.0             # usage_count saturates here (5+ uses = full usage signal)
+# PER-SOURCE usage-recency debounce. One turn assembles context several times (the run-level view,
+# each deep goal, a widening retry, the card updater's own selection pass) and they are all the SAME
+# use. Without a debounce a single turn would rewrite each used card once per assemble and inflate
+# every source's use_count. A source re-used inside this window is left alone, which bounds card
+# writes (and, on an embedding-backed repository, re-embeds) to roughly one per card per turn.
+_SOURCE_USAGE_MIN_INTERVAL_SECONDS = 60.0
 
 # QUEST-FOLDER BOOST: unlike the recency/usage boost above (a soft heuristic applied only AFTER
 # the confidence gate), this applies BEFORE the gate, multiplying the raw score itself. That's
@@ -250,7 +264,16 @@ _SUMMARY_MAX_CHARS = 400
 # renderable, and embeddable. Item shape:
 #
 #   {"id": "<stable id>", "type": "file|collection|conversation|query|note",
-#    "locator": {<type-specific pointer>}, "ts": <epoch float>, "why": "<short reason>"}
+#    "locator": {<type-specific pointer>}, "ts": <epoch float>, "why": "<short reason>",
+#    "last_used_ts": <epoch float>, "use_count": <int>}
+#
+# ``ts`` is when the source was LEARNED. ``last_used_ts`` / ``use_count`` are PER-SOURCE USAGE
+# RECENCY: when this particular source was last actually RENDERED into context, and how often. They
+# are stamped at the render seam (``_bump_source_usage``), so a card can tell which of its sources
+# are hot and which have gone cold, and the ranker prefers the hot ones under a render budget. Both
+# default to "never used" (0.0 / 0) when absent, so cards written before they existed need no
+# migration. The same treatment applies to EVERY source type, not just files (a conversation or a
+# collection reference warms exactly like a file).
 #
 # For ``note`` the locator is ``{"text": "..."}``. References resolve through the wired
 # ``reference_resolvers`` registry (see adapters/reference_resolver.py); a card's content can grow
@@ -294,6 +317,50 @@ def _path_slug(rel_path: str) -> str:
     clean = re.sub(r"[^a-z0-9]+", "-", rel_path.lower()).strip("-") or "root"
     digest = hashlib.sha256(rel_path.encode("utf-8", errors="replace")).hexdigest()[:6]
     return f"{clean}-{digest}"
+
+
+def _card_display_title(card: Dict[str, Any]) -> str:
+    """The card's one-line title, whatever KIND of card it is. Never raises.
+
+    A BOOTSTRAPPED card (built from a file) carries a ``summary``; a LEARNED card (written by an
+    updater from a finished run) carries ``name`` + ``description``. Every consumer that shows or
+    judges a card by its title (the rendered section header, the LLM relevance filter, the updater's
+    view of current cards) must read BOTH shapes, or a learned card looks untitled and gets dropped.
+    """
+    try:
+        for key in ("summary", "name", "description"):
+            v = card.get(key)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+    except Exception:  # noqa: BLE001
+        pass
+    return ""
+
+
+def _card_covered_paths(card: Dict[str, Any], limit: int = 10) -> List[str]:
+    """The file paths a card COVERS: its pinned ``files`` plus its ``file`` content REFERENCES.
+
+    A learned card pins no files: the paths it knows live in its content locators. Anything that
+    asks "which files is this card about" (the LLM relevance filter, source transparency) must see
+    those too, else a card whose whole value is the paths it found reads as covering nothing.
+    Pinned files come first (mtime-newest first, as before), then references, deduped. Never raises.
+    """
+    paths: List[str] = []
+    try:
+        for fe in sorted(card.get("files", []) or [],
+                         key=lambda fe: fe.get("mtime", 0.0), reverse=True):
+            p = fe.get("path", "")
+            if p and p not in paths:
+                paths.append(p)
+        for item in _normalize_content(card.get("content")):
+            if item.get("type") != "file":
+                continue
+            p = str((item.get("locator") or {}).get("path") or "").strip()
+            if p and p not in paths:
+                paths.append(p)
+    except Exception:  # noqa: BLE001
+        return paths[:limit]
+    return paths[:limit]
 
 
 def _trim_content_by_recency(
@@ -2027,6 +2094,14 @@ class FileContextStore(ContextAssemblerBase):
 
         Max (not sum) prevents inflating scores when a keyword term also appears
         in the summary -- the keyword weight already captures that signal.
+
+        A LEARNED card (one an updater wrote from a finished run, whose knowledge is typed content
+        REFERENCES rather than bootstrapped file entries) carries ``name``/``description`` instead of
+        ``keywords``/``summary``, and its file paths live in content locators, not in ``files``.
+        Those fields are indexed here at the same intent-weighted levels, so such a card is scored on
+        the same footing as a bootstrapped one instead of being systematically under-scored and
+        filtered out below the confidence gate (which made a run's learned references unreachable to
+        the next run).
         """
         weights: Dict[str, float] = {}
 
@@ -2037,7 +2112,11 @@ class FileContextStore(ContextAssemblerBase):
 
         for kw in card.get("keywords", []):
             _add(kw, 3.0)
+        # ``name`` is as intentional a signal as an LLM keyword (someone named the topic); the
+        # ``description`` sits at summary level. Both are no-ops on a card that has neither.
+        _add(card.get("name", ""), 3.0)
         _add(card.get("summary", ""), 2.0)
+        _add(card.get("description", ""), 2.0)
 
         for fe in card.get("files", []):
             path = fe.get("path", "")
@@ -2056,9 +2135,14 @@ class FileContextStore(ContextAssemblerBase):
             for sym in fe.get("symbols", []):
                 _add(sym, 1.0)
 
-        # Source-agnostic CONTENT items: tokenize each item's ``why`` and any note text so a card
-        # with ZERO files (a pure note/collection card) is still selectable by IDF and vectors.
-        # Weight 2.0 — title-level signal, on par with the summary, below LLM keywords (3.0).
+        # Source-agnostic CONTENT items: tokenize each item's TARGET (the locator: a file path, a
+        # collection name/id), its ``why``, and any note text, so a card with ZERO files (a pure
+        # reference/note card, e.g. one a deep run's future context produced) is selectable by IDF
+        # and vectors. Weight 2.0 — title-level signal, on par with the summary, below keywords.
+        # A file reference's PATH is part of that item text (``locator_label``), so "where does the
+        # relay config live" reaches a card that points at ``config/relay.toml`` even though the
+        # card pins no files of its own. Structural path components (``src``, ``lib``) are common
+        # across cards, so IDF damps them on its own; no extra down-weighting is needed.
         for item in _normalize_content(card.get("content")):
             _add(_content_item_text(item), 2.0)
 
@@ -2235,18 +2319,16 @@ class FileContextStore(ContextAssemblerBase):
         if self._provider is not None and idf_candidates:
             try:
                 from ..core.card_filter import filter_cards_by_relevance
+                # The filter judges a card by its TITLE and the FILES it covers. A learned
+                # reference card has neither a bootstrapped ``summary`` nor ``files`` entries: its
+                # title is its ``name``/``description`` and the files it covers are its file
+                # REFERENCES. Feeding those in is what stops the filter from seeing an untitled,
+                # zero-file card and culling the very card that carries the run's hard-won paths.
                 candidate_dicts = [
                     {
                         "id": c.get("id", ""),
-                        "title": c.get("summary", ""),
-                        "files": [
-                            fe.get("path", "")
-                            for fe in sorted(
-                                c.get("files", []),
-                                key=lambda fe: fe.get("mtime", 0.0),
-                                reverse=True,
-                            )[:10]
-                        ],
+                        "title": _card_display_title(c),
+                        "files": _card_covered_paths(c),
                         "adapter": "keyword",
                     }
                     for c in idf_candidates
@@ -2346,7 +2428,10 @@ class FileContextStore(ContextAssemblerBase):
         for ci, card in enumerate(top_cards):
             card_id = card.get("id", "")
             card_ids.append(card_id)
-            summary = card.get("summary", "(no summary)")
+            # A learned card has no ``summary``: its title is its name/description (see
+            # _card_display_title). Without this it rendered as "(no summary)" and the worker was
+            # handed a headless block of references.
+            summary = _card_display_title(card) or "(no summary)"
             # Use the pre-sorted file list (mtime descending = most recently modified first).
             files = card.get("_sorted_files", card.get("files", []))
 
@@ -2477,10 +2562,9 @@ class FileContextStore(ContextAssemblerBase):
                 display_files = llm_cm.files[:3]
                 relevance_score = llm_cm.relevance_score
             else:
-                display_files = [
-                    fe.get("path", "")
-                    for fe in card.get("_sorted_files", card.get("files", []))[:3]
-                ]
+                # Pinned files first, then the card's file REFERENCES: a learned card pins no
+                # files, so without the references it would report covering nothing.
+                display_files = _card_covered_paths(card, limit=3)
                 relevance_score = idf_score_map.get(card_id, 0.0) / _max_idf
             # Structured content ITEMS (id/type/why/locator/text/preview/pointer_eligible) resolved
             # FRESH, the same blocks that fed this card's view lines. The consolidating filter selects
@@ -2494,7 +2578,7 @@ class FileContextStore(ContextAssemblerBase):
             )
             card_metadata.append({
                 "id": card_id,
-                "title": card.get("summary", ""),
+                "title": _card_display_title(card),
                 "relevance_score": relevance_score,
                 "file_count": len(card.get("files", [])),
                 "files": display_files,
@@ -2516,6 +2600,21 @@ class FileContextStore(ContextAssemblerBase):
                 "rendered_section": view_parts[ci] if ci < len(view_parts) else "",
             })
 
+        # --- PER-SOURCE USAGE RECENCY: bump what was actually USED, not merely what was held ------
+        # The card-level ``usage_count`` (record()) only ever said THIS CARD was used. It could not
+        # say WHICH of the card's sources carried the value, so a card that accumulated sources had
+        # no way to let the dead ones sink. Here, at the seam where sources are actually RESOLVED
+        # AND RENDERED into the context view, each source that made it in is stamped with
+        # ``last_used_ts`` + ``use_count``. Sources merely listed on a card but not rendered stay
+        # cold. Deliberately AFTER the render above: this turn's bytes are computed from the
+        # PRE-bump values, so the same card rendered twice in a row is byte-identical (the recency
+        # data never enters the rendered text, and every rendered item is re-warmed by the same
+        # amount, which cannot reorder them). Best-effort: never raises, never blocks assembly.
+        try:
+            self._bump_source_usage(top_cards, card_metadata, llm_meta_map)
+        except Exception:  # noqa: BLE001 — usage bookkeeping must never break assembly
+            _log.debug("per-source usage bump failed", exc_info=True)
+
         # Clean up the temp sort key we stashed on card dicts (they're in-memory cache copies).
         for card in top_cards:
             card.pop("_sorted_files", None)
@@ -2527,6 +2626,117 @@ class FileContextStore(ContextAssemblerBase):
             sources=_sources,
             card_metadata=card_metadata,
         )
+
+    def _bump_source_usage(
+        self,
+        top_cards: List[Dict[str, Any]],
+        card_metadata: List[Dict[str, Any]],
+        llm_meta_map: Dict[str, Any],
+    ) -> None:
+        """Stamp per-source usage recency on every source this assembly actually rendered.
+
+        For each selected card:
+          * its CONTENT items that RESOLVED into rendered blocks (the ids in ``card_metadata``'s
+            ``items``) get ``last_used_ts = now`` and ``use_count += 1``;
+          * its FILE entries that were rendered as this task's relevant files get the same. When the
+            LLM relevance filter ran, "relevant" is exactly the set it selected; without a filter
+            every listed file is rendered, so every listed file counts as used.
+
+        Type-agnostic: a content item is bumped by ID, so a conversation, collection, query, or note
+        reference is warmed exactly like a file. Never raises. Writes nothing in dry-run.
+        """
+        if self._dry_run:
+            return
+        now = time.time()
+        meta_by_id = {cm.get("id"): cm for cm in card_metadata if isinstance(cm, dict)}
+        for card in top_cards:
+            card_id = card.get("id", "")
+            if not card_id:
+                continue
+            cm = meta_by_id.get(card_id) or {}
+            used_item_ids = {
+                str(b.get("id")) for b in (cm.get("items") or [])
+                if isinstance(b, dict) and b.get("id")
+            }
+            llm_cm = llm_meta_map.get(card_id)
+            if llm_cm is not None and getattr(llm_cm, "files", None):
+                used_paths = {fp for fp in llm_cm.files if fp}
+            else:
+                used_paths = {
+                    fe.get("path", "")
+                    for fe in card.get("_sorted_files", card.get("files", []))
+                    if fe.get("path")
+                }
+            if not used_item_ids and not used_paths:
+                continue
+            try:
+                self._mark_sources_used_inner(card_id, used_item_ids, used_paths, now)
+            except Exception:  # noqa: BLE001 — one card's bookkeeping never blocks the rest
+                _log.debug("usage bump failed for card %s", card_id, exc_info=True)
+
+    def _mark_sources_used_inner(
+        self, card_id: str, item_ids: Set[str], file_paths: Set[str], now: float
+    ) -> bool:
+        """Read-modify-write ONE card's per-source usage fields. Returns True when it wrote.
+
+        Reads the card through the persistence boundary (so it never writes back a stale in-memory
+        copy), stamps the used content items and file entries, and persists only when something
+        actually changed. A card whose sources predate the fields simply gains them here: no
+        migration pass, no rewrite storm (a card is only ever touched when it is USED).
+        """
+        loaded = self._repo.read(card_id)
+        if not isinstance(loaded, dict):
+            return False
+        card = loaded
+        changed = False
+        if item_ids:
+            content = _normalize_content(card.get("content"))
+            if content and _mark_items_used(content, item_ids, now=now,
+                                            min_interval=_SOURCE_USAGE_MIN_INTERVAL_SECONDS):
+                card["content"] = content
+                changed = True
+        if file_paths:
+            for fe in card.get("files", []) or []:
+                if not isinstance(fe, dict) or fe.get("path") not in file_paths:
+                    continue
+                try:
+                    prev = float(fe.get("last_used_ts") or 0.0)
+                except (TypeError, ValueError):
+                    prev = 0.0
+                if (now - prev) < _SOURCE_USAGE_MIN_INTERVAL_SECONDS:
+                    continue  # same use, already stamped moments ago (see mark_items_used)
+                fe["last_used_ts"] = now
+                try:
+                    fe["use_count"] = int(fe.get("use_count") or 0) + 1
+                except (TypeError, ValueError):
+                    fe["use_count"] = 1
+                changed = True
+        if not changed:
+            return False
+        self._write_card_atomic(card_id, card)
+        return True
+
+    def mark_sources_used(
+        self,
+        card_id: str,
+        *,
+        item_ids: Optional[List[str]] = None,
+        file_paths: Optional[List[str]] = None,
+        now: Optional[float] = None,
+    ) -> bool:
+        """Public: stamp per-source usage recency on ``card_id``'s named sources. Never raises.
+
+        The assembly path bumps automatically (see ``_bump_source_usage``); this is the seam for any
+        OTHER consumer or assembler arm that renders a card's sources into context and wants the
+        same heat signal recorded. Returns True when the card was written.
+        """
+        try:
+            return self._mark_sources_used_inner(
+                card_id, set(item_ids or []), set(file_paths or []),
+                float(now) if now is not None else time.time(),
+            )
+        except Exception:  # noqa: BLE001
+            return False
 
     def _write_card_atomic(self, card_id: str, card: Dict[str, Any]) -> None:
         """Persist ``card`` under ``card_id`` via the repository and mark the cache dirty.
@@ -2570,6 +2780,14 @@ class FileContextStore(ContextAssemblerBase):
             for _k in ("name", "description", "summary"):
                 if _k in fields and fields[_k] is not None:
                     card[_k] = fields[_k]
+        # A card with no ``summary`` is invisible to everything that reads one (the keyword index,
+        # the relevance filter, the rendered header). An updater supplies ``name``/``description``,
+        # so seed the summary from them the first time. Never OVERWRITES an existing summary (a
+        # bootstrapped card keeps its own), so this only fills a gap.
+        if not (isinstance(card.get("summary"), str) and card["summary"].strip()):
+            seed = card.get("description") or card.get("name") or ""
+            if isinstance(seed, str) and seed.strip():
+                card["summary"] = seed.strip()
 
         content = _normalize_content(card.get("content"))
 
