@@ -217,6 +217,21 @@ class RunnerConfig:
     # by ``validate()`` (unknown value -> a problem).
     quest_folder_sync_direction: str = "pull"
 
+    # --- Autopilot (opt-in; the recurring "autopilot pass" task, see runner/autopilot.py and
+    # quest_autopilot_design.md). Both fields are inert unless a consumer creates a recurring
+    # task with ``handler: "autopilot"`` (the executor routes those to ``AutopilotPass`` instead
+    # of the normal deep-run path); nothing here changes behavior for any other task.
+    # Team-wide daily cap on autopilot-created tasks (batches + goal proposals each count as one
+    # unit). Default 3, per the design's starting number.
+    autopilot_daily_budget: int = 3
+    # The FALLBACK persona resolver (step 4 of the persona-routing chain, after a goal's own
+    # ``assignee_rep_id`` and a day-matched/unrestricted quest ``autopilot.personas`` entry): a
+    # consumer-supplied callable, given a goal dict, returning a rep_id or None. This is where a
+    # consumer plugs in its OWN persona-inference logic (e.g. the personal lane's card-vote
+    # resolver over character domain cards) — the library stays ignorant of it. Left None ->
+    # autopilot tasks with no explicit persona run as the plain assistant.
+    autopilot_persona_resolver: Optional[Callable[[Dict[str, Any]], Optional[str]]] = None
+
     extra: Dict[str, Any] = field(default_factory=dict)
 
     def validate(self) -> List[str]:

@@ -132,6 +132,24 @@ def _run_goal_accepts_context_preamble(runner: Any) -> bool:
             return True
     return False
 
+
+def _run_goal_accepts_working_dir(runner: Any) -> bool:
+    """Whether a DeepRunner's ``run_goal`` accepts a ``working_dir`` keyword (or **kwargs).
+
+    Same opt-in discipline as ``_run_goal_accepts_context_preamble``: a per-call working-directory
+    override (e.g. a quest's synced folder, see ``quest_autopilot_design.md``'s execution-
+    environment section) is forwarded ONLY to a runner that accepts it, so older ``run_goal``
+    signatures are untouched.
+    """
+    try:
+        sig = inspect.signature(runner.run_goal)
+    except (ValueError, TypeError, AttributeError):
+        return False
+    for p in sig.parameters.values():
+        if p.name == "working_dir" or p.kind is inspect.Parameter.VAR_KEYWORD:
+            return True
+    return False
+
 # The escalation-marker contract: a spawned worker that raised a human decision mid-run (via
 # whatever escalation mechanism its consumer preamble gave it) reports the decision back to the
 # runner by printing, on its own line, ``QAR-ESCALATED: <decision_id>``. SubprocessGoalRunner
@@ -224,7 +242,8 @@ class GoalRunner:
 
     def run(self, *, goal: str, brief: str, model: Optional[str] = None,
             max_turns: Optional[int] = None,
-            context_preamble: Optional[str] = None) -> DeepResult:
+            context_preamble: Optional[str] = None,
+            working_dir: Optional[str] = None) -> DeepResult:
         turns = max_turns if max_turns is not None else self._default_max_turns
         try:
             kwargs = dict(goal=goal, brief=brief, model=model, max_turns=turns)
@@ -232,6 +251,10 @@ class GoalRunner:
             # DeepRunner signatures (no ``context_preamble`` kwarg) keep working unchanged.
             if context_preamble is not None and _run_goal_accepts_context_preamble(self._runner):
                 kwargs["context_preamble"] = context_preamble
+            # Same opt-in discipline for a per-call working-directory override (e.g. a quest's
+            # synced folder for THIS run only, falling back to the runner's configured default).
+            if working_dir is not None and _run_goal_accepts_working_dir(self._runner):
+                kwargs["working_dir"] = working_dir
             res = self._runner.run_goal(**kwargs)
         except Exception as e:  # noqa: BLE001 — the goal contract never raises to the caller
             return DeepResult(met=False, error=f"deep runner failed: {type(e).__name__}")
@@ -694,13 +717,21 @@ class SubprocessGoalRunner(DeepRunner):
                  max_turns: Optional[int] = None,
                  emit: Optional[Callable[[ProgressEvent], None]] = None,
                  context_preamble: Optional[str] = None,
-                 run_id: Optional[str] = None) -> DeepResult:
+                 run_id: Optional[str] = None,
+                 working_dir: Optional[str] = None) -> DeepResult:
         # ``context_preamble`` is an OPTIONAL PER-CALL override of ``self.cfg.context_preamble``.
         # When the orchestrator forwards a per-task preamble (e.g. an AI rep's pulled persona), it
         # is used for THIS run only; otherwise the runner's configured base preamble applies, so
         # callers that pass nothing see exactly the prior behaviour.
         preamble = self.cfg.context_preamble if context_preamble is None else context_preamble
         prompt = compose_goal_prompt(goal, brief, preamble=preamble)
+        # ``working_dir`` is an OPTIONAL PER-CALL override of ``self.cfg.working_dir`` (e.g. a
+        # quest's synced folder, see quest_autopilot_design.md's execution-environment section).
+        # Used for THIS run's subprocess cwd AND the session monitor's search root; the consumer's
+        # configured global working_dir is untouched (no shared-state mutation, so concurrent
+        # tasks with different folders never race on it). Falls back to the configured default
+        # exactly as before when omitted.
+        effective_working_dir = self.cfg.working_dir if working_dir is None else working_dir
         binary = self.cfg.claude_path
         if os.path.sep not in binary:
             resolved = shutil.which(binary)
@@ -753,10 +784,10 @@ class SubprocessGoalRunner(DeepRunner):
         cutoff_time = time.time()  # Sessions created after this are new
         if emit is not None:
             _log.info("starting claude session monitor for deep run in: %s (session_id=%s)",
-                     self.cfg.working_dir, session_id)
+                     effective_working_dir, session_id)
             monitor_thread = threading.Thread(
                 target=_monitor_claude_session,
-                args=(self.cfg.working_dir, emit, stop_monitor, cutoff_time),
+                args=(effective_working_dir, emit, stop_monitor, cutoff_time),
                 kwargs={"forced_run_id": run_id, "session_id": session_id},
                 daemon=True
             )
@@ -770,7 +801,7 @@ class SubprocessGoalRunner(DeepRunner):
                 stdin=subprocess.PIPE,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                cwd=self.cfg.working_dir,
+                cwd=effective_working_dir,
                 env=self._build_env(),
                 # Own process group: on a timeout we must kill the worker AND every child it
                 # spawned, not just the top pid. See kill_process_group().

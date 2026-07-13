@@ -30,6 +30,7 @@ from typing import Any, Dict, List, Optional
 
 from ..config import RunnerConfig, build_orchestrator, derive_capabilities
 from ..resources import ResourceGuard, ResourceLimits
+from .autopilot import AutopilotPass
 from .executor import TaskExecutor
 from .quest_client import QuestApiError, QuestClient, QuestDecisionSink, QuestNotConfigured
 
@@ -129,6 +130,15 @@ class Poller:
                 self.client, default_assignee_user_id=config.default_assignee_user_id)
         self.state = StateStore(state_path)
         self._orchestrator = None  # built lazily so an unconfigured poll degrades cleanly
+        # Autopilot: built once (stateless other than the injected client/config) and handed to
+        # every TaskExecutor this poller builds, so a task with ``handler == "autopilot"`` routes
+        # to it instead of a deep run. Inert unless such a task is ever discovered.
+        self._autopilot = AutopilotPass(
+            self.client,
+            team_id=config.team_id or "",
+            persona_resolver=config.autopilot_persona_resolver,
+            daily_budget=config.autopilot_daily_budget,
+        )
         # Capabilities this runner can HONESTLY report, derived from the wired adapters
         # (corpus=FilesAdapter/corpus, code=deep-runner, web=deep-runner can browse via Claude
         # Code's WebSearch/WebFetch). Computed once at construction (the adapter wiring is fixed
@@ -307,7 +317,9 @@ class Poller:
         # Opt-in: refresh the task's linked quest folder's QUEST_SYNC.md before running, when
         # cfg.quest_folder_map maps this task's goal/quest to a local folder.
         self._pull_quest_folder_for(task)
-        executor = TaskExecutor(self.client, self._orch())
+        executor = TaskExecutor(self.client, self._orch(),
+                                quest_folder_map=getattr(self.cfg, "quest_folder_map", None),
+                                autopilot_pass=self._autopilot)
         outcome = executor.execute(task, rep_preamble=rep_preamble)
         log.info("task %s -> %s", task_id, outcome.status)
         # Opt-in push-back: after the run, write the local skill file back up to Quest when the

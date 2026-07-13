@@ -83,12 +83,22 @@ class _TaskProgressSink:
 
 
 class TaskExecutor:
-    def __init__(self, client, orchestrator: Orchestrator):
+    def __init__(self, client, orchestrator: Orchestrator, *,
+                quest_folder_map: Optional[Dict[str, str]] = None,
+                autopilot_pass: Optional[Any] = None):
         self._client = client
         self._orch = orchestrator
         # Cache the retrieval adapter from the orchestrator so _build_context_view can fetch
         # conversation history when conv_id is present
         self._retrieval = getattr(orchestrator, "retrieval", None)
+        # {goal_or_quest_id: folder} -- see _resolve_working_dir. Same map the poller consults for
+        # QUEST_SYNC.md sync (RunnerConfig.quest_folder_map); None/empty = every task uses the
+        # deep-runner's configured global working_dir, exactly as before this feature existed.
+        self._quest_folder_map = quest_folder_map or {}
+        # The consumer's AutopilotPass (see runner/autopilot.py), wired by the poller. A task whose
+        # ``handler == "autopilot"`` is routed to it instead of a normal deep run (see execute()).
+        # None (no consumer wiring, or a runner that never sees such a task) -> untouched behavior.
+        self._autopilot = autopilot_pass
 
     @staticmethod
     def _task_text(task: Dict[str, Any]) -> str:
@@ -171,6 +181,12 @@ class TaskExecutor:
         caller, or no rep resolved), behaviour is exactly as before.
         """
         task_id = str(task.get("id") or task.get("task_id") or "")
+        # An Autopilot pass task (``handler == "autopilot"``, stamped when the recurring pass task
+        # was created) REPLACES the normal deep-run path entirely: the pass itself is the work for
+        # this task (it scans opted-in quests and creates/suggests other tasks as a side effect),
+        # so it is routed BEFORE any of the context/orchestrator machinery below runs.
+        if str(task.get("handler") or "").strip().lower() == "autopilot":
+            return self._execute_autopilot(task, task_id)
         text = self._task_text(task)
         goal_id = task.get("goal_id")
         quest_id = task.get("quest_id")
@@ -238,11 +254,18 @@ class TaskExecutor:
         # the run cleanly at its next loop boundary instead of running to completion regardless.
         cancel_check = self._build_cancel_check(task_id)
 
+        # Per-task working directory: when this task's goal/quest resolves through the configured
+        # quest_folder_map, the deep run starts in THAT folder (its synced quest folder) for this
+        # run only, instead of the deep-runner's configured global working_dir. Applies to every
+        # task, not just autopilot-created ones (see quest_autopilot_design.md's execution-
+        # environment section).
+        working_dir_override = self._resolve_working_dir(goal_id, quest_id)
+
         try:
             result: OrchestratorResult = self._orch.run(
                 text, quest_id=quest_id, context_view=context_view, mode=Mode.BACKGROUND,
                 sink=sink, model_hint=model_hint, rep_preamble=rep_preamble,
-                context_meta=context_meta,
+                context_meta=context_meta, working_dir_override=working_dir_override,
                 conv_id=conv_id, conv_scope=conv_scope or None, cancel_check=cancel_check)
         except Exception as e:  # noqa: BLE001 — brain failure -> failed report, never crash poller
             # A run that raises BECAUSE it was interrupted must not be reported as failed: check
@@ -563,6 +586,49 @@ class TaskExecutor:
         except Exception:  # noqa: BLE001 — report composition must never affect the outcome
             log.warning("done-report composition failed; posting raw output", exc_info=True)
         return raw_summary
+
+    # --- per-task working directory (quest_folder_map) ------------------------
+
+    def _resolve_working_dir(self, goal_id: Optional[str],
+                             quest_id: Optional[str]) -> Optional[str]:
+        """Resolve this task's deep-run working-directory override from ``quest_folder_map``.
+
+        Mirrors the poller's own ``_quest_folder_for`` precedence (goal_id first, then quest_id) so
+        a task tied to a synced quest folder starts the deep agent THERE instead of the deep-
+        runner's configured global working_dir. Returns None (fallback = the global default)
+        when unconfigured or the task's ids aren't in the map."""
+        if not self._quest_folder_map:
+            return None
+        qid = goal_id or quest_id
+        if not qid:
+            return None
+        return self._quest_folder_map.get(str(qid)) or None
+
+    # --- autopilot pass routing (handler == "autopilot") ----------------------
+
+    def _execute_autopilot(self, task: Dict[str, Any], task_id: str) -> ExecutionOutcome:
+        """Run the wired ``AutopilotPass`` for a ``handler == "autopilot"`` task and report its
+        outcome through the normal progress/report calls (a plain 'done' unless the pass itself
+        cannot run at all). ``AutopilotPass.run`` already isolates each quest's own failures into
+        the result (see ``runner.autopilot``), so nothing here needs a per-quest try/except; this
+        method's own try/except only guards against the pass failing to run at all."""
+        self._report_progress(task_id, "started", text="Started an autopilot pass.")
+        if self._autopilot is None:
+            msg = "autopilot is not configured on this runner (no AutopilotPass wired)"
+            self._report_progress(task_id, "error", text=msg)
+            self._safe_report_failed(task_id, msg)
+            return ExecutionOutcome(task_id, "failed", msg)
+        try:
+            result = self._autopilot.run(task)
+            summary = result.summary_text()
+            self._report_progress(task_id, "done", text="Done.", output=summary)
+            self._safe(lambda: self._client.report_done(task_id, summary))
+            return ExecutionOutcome(task_id, "done", summary)
+        except Exception as e:  # noqa: BLE001 — the pass itself must never crash the poller
+            msg = f"autopilot pass error: {type(e).__name__}: {e}"
+            self._report_progress(task_id, "error", text=msg)
+            self._safe_report_failed(task_id, msg)
+            return ExecutionOutcome(task_id, "failed", msg)
 
     # --- safety wrappers (reporting must not crash the poller) ---------------
 

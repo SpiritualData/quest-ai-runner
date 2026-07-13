@@ -7,6 +7,30 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Autopilot pass (`runner/autopilot.py`).** A new `AutopilotPass`, routed by the executor for
+  any task whose `handler == "autopilot"` (a recurring pass task, e.g. created via a consumer's
+  UI). Scans a team's quests whose `autopilot.mode` is `suggest`/`act`; gates each quest, cheapest
+  first (a team-wide daily budget via a new `RunnerConfig.autopilot_daily_budget`, per-quest
+  cadence off `autopilot.last_pass_at`, backpressure from a still-open prior autopilot task, an
+  open HOLD decision on the quest); targets the quest's current-scope incomplete `ai_help` goals
+  (today's/this period's, or the single next incomplete one when unscoped); resolves a persona per
+  goal (goal `assignee_rep_id` -> a day-matched/unrestricted `autopilot.personas` entry -> a
+  consumer-injected `RunnerConfig.autopilot_persona_resolver` fallback) and batches goals sharing a
+  persona into one task; creates it `status="suggested"` (suggest mode) or `"queued"` (act mode)
+  via `QuestClient.create_task`'s new `quest_id`/`status`/`env_id`/`rep_id` parameters; proposes the
+  quest's next goal instead when `planning=="plan_and_work"` and nothing is eligible; updates
+  `autopilot.last_pass_at`/`miss_streak` via a new `QuestClient.update_quest_autopilot`. A pass
+  task whose text contains "dry-run" reports what WOULD be created and creates nothing. Per-quest
+  failures are isolated (one quest's error never aborts the pass) and every skipped quest is
+  logged with its gate reason. New `QuestClient.list_tasks` (flexible filters, for the budget/
+  backpressure math) and `list_open_decisions_for_quest`.
+- **Per-task working directory.** The executor now resolves a task's `goal_id`/`quest_id` through
+  the configured `RunnerConfig.quest_folder_map` and, when mapped, passes that folder as a per-run
+  `working_dir` override to the deep run (a new optional `working_dir` kwarg on `DeepRunner.run_goal`,
+  threaded through `Orchestrator.run(working_dir_override=...)` / `GoalRunner.run` /
+  `SubprocessGoalRunner.run_goal`, opt-in by signature inspection like `context_preamble`); falls
+  back to the deep-runner's configured global `working_dir` when no mapping exists. Applies to
+  every task, not just Autopilot-created ones.
 - **Truly asynchronous deferred deep work (queued deployments).** A consumer whose deep runner
   QUEUES a planner `deferred_deep` as a background task (returning
   `DeepResult(met=True, deferred=True, output=<hand-off sentinel>)` only after the enqueue is

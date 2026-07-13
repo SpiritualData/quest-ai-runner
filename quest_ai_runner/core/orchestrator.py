@@ -2537,6 +2537,24 @@ def _run_goal_accepts_run_id(deep_runner: Any) -> bool:
     return False
 
 
+def _run_goal_accepts_working_dir(deep_runner: Any) -> bool:
+    """Whether a DeepRunner's ``run_goal`` accepts a ``working_dir`` keyword (or **kwargs).
+
+    Same opt-in discipline as ``_run_goal_accepts_emit``: a per-task working-directory override
+    (e.g. a quest's synced folder, so the deep agent starts where that quest's real work lives —
+    see ``quest_autopilot_design.md``'s execution-environment section) is forwarded ONLY to a
+    runner that accepts it, leaving older ``run_goal`` signatures untouched.
+    """
+    try:
+        sig = inspect.signature(deep_runner.run_goal)
+    except (ValueError, TypeError, AttributeError):
+        return False
+    for p in sig.parameters.values():
+        if p.name == "working_dir" or p.kind is inspect.Parameter.VAR_KEYWORD:
+            return True
+    return False
+
+
 def provider_call_accepts_layers(fn: Any) -> bool:
     """Whether a provider's ``plan``/``answer`` accepts the ``layers`` cache-hint kwarg (or **kwargs).
 
@@ -4465,7 +4483,8 @@ class Orchestrator:
                   model_hint: Optional[str] = None,
                   ctx_meta: Optional[Dict[str, Any]] = None,
                   cancel_check: Optional[Callable[[], bool]] = None,
-                  runner_override: Optional[Any] = None) -> OrchestratorResult:
+                  runner_override: Optional[Any] = None,
+                  working_dir_override: Optional[str] = None) -> OrchestratorResult:
         # ``runner_override``: PIN a specific runner for every goal of this call, bypassing the
         # named-runner classifier. Used by the deferred_deep hand-off in a queued deployment
         # (OrchestratorConfig.deferred_deep_queued) so deferred work always reaches the consumer's
@@ -4610,6 +4629,12 @@ class Orchestrator:
             # is enough to build a useful context_preamble for the deep runner.
             wants_preamble = (active_runner is not None
                               and _run_goal_accepts_context_preamble(active_runner))
+            # A per-task working-directory override (e.g. a quest's synced folder), forwarded ONLY
+            # to a runner whose run_goal accepts that kwarg (older signatures are untouched). See
+            # quest_autopilot_design.md's execution-environment section: "one quest, one folder,
+            # one env" -- the deep agent starts where that quest's real work lives.
+            wants_working_dir = (active_runner is not None
+                                 and _run_goal_accepts_working_dir(active_runner))
 
             def _emit_one(ev: ProgressEvent) -> None:
                 # TEE: classify any EVENT_EXEC phase into the fact, then forward to the live sink.
@@ -4681,6 +4706,8 @@ class Orchestrator:
                             preamble_parts.extend(extra_context)
                         if preamble_parts:
                             kwargs["context_preamble"] = "\n\n".join(preamble_parts)
+                    if wants_working_dir and working_dir_override:
+                        kwargs["working_dir"] = working_dir_override
                     # active_runner was already resolved once per task, above (not re-resolved per
                     # retry — the classifier's inputs don't change across retries of the same task).
                     return active_runner.run_goal(**kwargs)
@@ -5820,6 +5847,7 @@ class Orchestrator:
             attachments: Optional[List[Dict[str, Any]]] = None,
             context_meta: Optional[Dict[str, Any]] = None,
             rep_preamble: Optional[str] = None,
+            working_dir_override: Optional[str] = None,
             pending_inputs: Optional[Callable[[], List[str]]] = None,
             conv_id: Optional[str] = None,
             conv_scope: Optional[Dict[str, Any]] = None,
@@ -5862,6 +5890,12 @@ class Orchestrator:
                             rep). The brain stays ignorant of its content — it forwards the string
                             to a deep runner that accepts ``context_preamble`` and leaves older
                             runners untouched. Absent/None means exactly today's behavior.
+        * ``working_dir_override`` — optional PER-RUN working-directory override for the deep step
+                            only (e.g. a quest's synced folder, resolved by the caller from its own
+                            quest-folder map). Forwarded to a deep runner that accepts a
+                            ``working_dir`` kwarg (see ``core.goal_runner.SubprocessGoalRunner``);
+                            older runners are untouched. Absent/None means the deep runner's own
+                            configured global working directory applies, exactly as before.
 
         * ``conv_id``     — optional id of the CURRENT conversation. When set AND a
                             ``conversation_store`` is wired, Step 1 (User Input Understanding) may
@@ -6904,7 +6938,8 @@ class Orchestrator:
                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                                  gathered=gathered, quality_standards=quality_standards,
                                  pending_inputs=pending_inputs, model_hint=model_hint,
-                                 ctx_meta=_ctx_meta, cancel_check=cancel_check)
+                                 ctx_meta=_ctx_meta, cancel_check=cancel_check,
+                                 working_dir_override=working_dir_override)
             if res.kind == "cancelled":
                 return finish(res)
             res.exit_reason = "deep_met" if (res.deep_results and all(d.met for d in res.deep_results)) else "deep_not_met"
@@ -7046,7 +7081,8 @@ class Orchestrator:
                         emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                         gathered=gathered, quality_standards=quality_standards,
                         pending_inputs=pending_inputs, model_hint=model_hint,
-                        ctx_meta=_ctx_meta, cancel_check=cancel_check)
+                        ctx_meta=_ctx_meta, cancel_check=cancel_check,
+                        working_dir_override=working_dir_override)
                     if _ov_res.kind == "cancelled":
                         return finish(_ov_res)
                     _ov_res.exit_reason = "overseer_escalated_deep"
@@ -7189,7 +7225,8 @@ class Orchestrator:
                                          quality_standards=quality_standards,
                                          pending_inputs=pending_inputs, model_hint=model_hint,
                                          ctx_meta=_ctx_meta, cancel_check=cancel_check,
-                                         runner_override=_deferred_runner)
+                                         runner_override=_deferred_runner,
+                                         working_dir_override=working_dir_override)
                 if deep_res.kind == "cancelled":
                     return finish(deep_res)
                 # WHAT ACTUALLY CAME BACK? Three outcomes, and the reply must match the one that
@@ -7400,7 +7437,8 @@ class Orchestrator:
                                                       quality_standards=quality_standards,
                                                       pending_inputs=pending_inputs,
                                                       model_hint=model_hint, ctx_meta=_ctx_meta,
-                                                      cancel_check=cancel_check)
+                                                      cancel_check=cancel_check,
+                                                      working_dir_override=working_dir_override)
                             if _rem_res.kind == "cancelled":
                                 return finish(_rem_res)
                             _rem_out = ""
@@ -7459,7 +7497,8 @@ class Orchestrator:
                             emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                             gathered=gathered, quality_standards=quality_standards,
                             pending_inputs=pending_inputs, model_hint=model_hint,
-                            ctx_meta=_ctx_meta, cancel_check=cancel_check)
+                            ctx_meta=_ctx_meta, cancel_check=cancel_check,
+                            working_dir_override=working_dir_override)
                         if _esc_res.kind == "cancelled":
                             return finish(_esc_res)
                         _esc_res.exit_reason = "escalated_deep"

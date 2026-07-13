@@ -459,6 +459,29 @@ class QuestClient:
             log.warning("resolve_decision failed for decision %s: %s", decision_id, e)
             return {}
 
+    def list_open_decisions_for_quest(self, quest_id: str, *,
+                                      team_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """GET the OPEN (unresolved) decisions that reference a specific quest.
+
+        Used by Autopilot's HOLD-backpressure gate (see ``runner.autopilot``): a quest with an
+        open human decision already pending should not have more autonomous work piled onto it.
+        Best-effort: filters the team's decisions listing by ``quest_id`` + ``status=open``;
+        returns ``[]`` on any failure, an unconfigured client, or a backend that doesn't support
+        the filter (never blocks the caller — the gate simply doesn't fire in that case).
+        """
+        try:
+            tid = team_id or self.team_id
+            if not tid:
+                raise QuestNotConfigured("team_id is required to list a quest's open decisions")
+            resp = self._request("GET", f"/api/teams/{tid}/decisions",
+                                 params={"quest_id": quest_id, "status": "open"})
+            if isinstance(resp, dict):
+                return list(resp.get("decisions") or [])
+            return resp if isinstance(resp, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_open_decisions_for_quest failed for quest %s: %s", quest_id, e)
+            return []
+
     # --- quest and goal browsing (for interactive chat context selection) ------
 
     def list_quests(self, *, team_id: Optional[str] = None) -> List[Dict[str, Any]]:
@@ -626,17 +649,32 @@ class QuestClient:
     def create_task(self, text: str, *,
                     team_id: Optional[str] = None,
                     goal_id: Optional[str] = None,
+                    quest_id: Optional[str] = None,
                     scheduled_at: Optional[str] = None,
-                    source: str = "chat") -> Dict[str, Any]:
-        """POST a new queued AI task to /api/assistant-tasks.
+                    source: str = "chat",
+                    status: Optional[str] = None,
+                    env_id: Optional[str] = None,
+                    rep_id: Optional[str] = None) -> Dict[str, Any]:
+        """POST a new AI task to /api/assistant-tasks.
 
         ``team_id`` routes the task to a specific team's runner (defaults to the client's
         configured team). ``goal_id`` attaches the task to a goal so results appear on it.
-        ``scheduled_at`` is an ISO-8601 UTC datetime string; omit it to run as soon as the
-        runner's next poll picks it up. ``source`` must be a value the Quest API accepts
-        (chat / reflection / review; "chat" fits an interactive send - the old default "cli"
-        was rejected with a 400 by the API, so every CLI enqueue silently failed). Returns
-        the created task dict (includes its ``id``).
+        ``quest_id`` links the task to a quest (alongside or instead of ``goal_id``), e.g. so an
+        Autopilot batch shows up in that quest's Assistant activity even when a single goal isn't
+        the sole target. ``scheduled_at`` is an ISO-8601 UTC datetime string; omit it to run as
+        soon as the runner's next poll picks it up. ``source`` must be a value the Quest API
+        accepts (chat / reflection / review / autopilot; "chat" fits an interactive send - the old
+        default "cli" was rejected with a 400 by the API, so every CLI enqueue silently failed).
+
+        ``status`` overrides the backend's default "queued" status on create (e.g. "suggested"
+        for an Autopilot proposal the user must Run before it executes); omit for the default.
+        ``env_id`` pins the task to one of the team's connected runner environments (e.g. a
+        quest's configured ``autopilot.env_id``); omit to let the backend's normal env routing
+        apply. ``rep_id`` stamps a structured persona assignment recognized by a consumer's
+        rep-resolution chain (e.g. the personal lane's ``rep_sync_resolver`` / character resolver),
+        so the task runs AS that persona when claimed; omit for the plain assistant.
+
+        Returns the created task dict (includes its ``id``).
 
         Raises ``QuestApiError`` / ``QuestNotConfigured`` on failure instead of swallowing it:
         a caller that acknowledges the user ("I'm looking into it") after calling this MUST
@@ -649,9 +687,73 @@ class QuestClient:
             body["team_id"] = tid
         if goal_id is not None:
             body["goal_id"] = goal_id
+        if quest_id is not None:
+            body["quest_id"] = quest_id
         if scheduled_at is not None:
             body["scheduled_at"] = scheduled_at
+        if status is not None:
+            body["status"] = status
+        if env_id is not None:
+            body["env_id"] = env_id
+        if rep_id is not None:
+            body["rep_id"] = rep_id
         return self._request("POST", "/api/assistant-tasks", body=body) or {}
+
+    def list_tasks(self, *, team_id: Optional[str] = None,
+                  status: Optional[str] = None,
+                  source: Optional[str] = None,
+                  goal_id: Optional[str] = None,
+                  quest_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """GET /api/assistant-tasks with flexible filters, for Autopilot's budget/backpressure math.
+
+        Unlike ``discover_due`` (which is hardcoded to ``status=queued`` + a due-before floor, the
+        poll-mode discovery contract), this is a general listing: pass whichever of
+        ``status``/``source``/``goal_id``/``quest_id`` the caller has, omit the rest. A backend
+        that ignores an unknown filter still returns a superset the caller can narrow further
+        CLIENT-SIDE (e.g. "created today", or a set of acceptable statuses) — this method never
+        assumes server-side filtering is exact. Returns ``[]`` on any failure. Never raises.
+        """
+        tid = team_id if team_id is not None else self.team_id
+        params: Dict[str, Any] = {}
+        if status is not None:
+            params["status"] = status
+        if source is not None:
+            params["source"] = source
+        if goal_id is not None:
+            params["goal_id"] = goal_id
+        if quest_id is not None:
+            params["quest_id"] = quest_id
+        if tid:
+            params["team_id"] = tid
+        try:
+            resp = self._request("GET", "/api/assistant-tasks", params=params)
+            return _as_task_list(resp)
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_tasks failed: %s", e)
+            return []
+
+    # --- quest autopilot config (read via get_quest/list_quests; write here) -------
+
+    def update_quest_autopilot(self, quest_id: str, fields: Dict[str, Any], *,
+                              team_id: Optional[str] = None) -> Dict[str, Any]:
+        """PATCH a quest's ``autopilot`` metadata (e.g. ``last_pass_at``, ``miss_streak``,
+        ``mode``, ``cadence``, ``planning``, ``personas``, ``env_id``, ``helpful``/``unhelpful``).
+
+        Only the given ``fields`` are sent, nested under ``autopilot`` so a partial update (e.g.
+        just ``last_pass_at`` after a pass) does not clobber the rest of the quest's autopilot
+        config — the backend is expected to merge, not replace, the nested object. Returns the
+        updated quest, or ``{}`` on failure (never raises; a bookkeeping write failing must not
+        break the pass that produced it).
+        """
+        try:
+            tid = team_id or self.team_id
+            if not tid:
+                raise QuestNotConfigured("team_id is required to update a quest's autopilot config")
+            body = {"autopilot": dict(fields)}
+            return self._request("PATCH", f"/api/teams/{tid}/quests/{quest_id}", body=body) or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("update_quest_autopilot failed for quest %s: %s", quest_id, e)
+            return {}
 
     # --- AI-rep profile (the rep <-> skill-file sync surface) -----------------
 
