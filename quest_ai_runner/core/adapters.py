@@ -103,10 +103,19 @@ EVENT_MODE_SIGNAL = "mode_signal"  # the planner detected an EXPLICIT user reque
                                # The orchestrator is STATELESS about modes: it only reports the
                                # signal; the consumer owns the latch (persisting the mode and
                                # passing it back in on future runs). ALWAYS surfaces.
+EVENT_CARD_THREAD = "card_thread"  # this turn's TOPIC assignment: which context card (idea) the
+                               # message belongs to (see core/card_thread.py; opt-in via
+                               # OrchestratorConfig.card_thread_enabled). Carries ``data`` =
+                               # {"action": "continue"|"switch"|"new", "card_id": <id or None>,
+                               # "label": <label or None>, "previous_card_id": <id or None>}. The
+                               # orchestrator is STATELESS about threads exactly as it is about
+                               # modes: it reports the assignment, the consumer owns the card store
+                               # and stamps its messages. ALWAYS surfaces (a consumer must be able to
+                               # stamp the turn even on a BACKGROUND run).
 
 # The event types a BACKGROUND (MilestoneSink) run forwards. Everything else is dropped as
 # intermediate chatter. Encoded ONCE here so every consumer inherits the same policy.
-SURFACING_EVENTS = frozenset({EVENT_UNDERSTANDING, EVENT_CONTEXT, EVENT_RESULT, EVENT_DECISION, EVENT_MILESTONE, EVENT_DONE, EVENT_TOKENS, EVENT_OVERSEER, EVENT_MODE_SIGNAL})
+SURFACING_EVENTS = frozenset({EVENT_UNDERSTANDING, EVENT_CONTEXT, EVENT_RESULT, EVENT_DECISION, EVENT_MILESTONE, EVENT_DONE, EVENT_TOKENS, EVENT_OVERSEER, EVENT_MODE_SIGNAL, EVENT_CARD_THREAD})
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +200,13 @@ class PlanDecision:
     # "exit_brainstorm" | None. Anything else the model returns is normalized to None (fail-safe:
     # a detection failure never changes the mode).
     mode_signal: Optional[str] = None
+    # PER-IDEA THREADING (opt-in, OrchestratorConfig.card_thread_enabled): which TOPIC CARD this
+    # message belongs to, judged on the SAME planning call (zero extra LLM calls; see
+    # core/card_thread.py). Raw field, exactly one of "continue" | "switch_to:<card_id>" |
+    # "new:<label>"; anything else is normalized to None and the turn CONTINUES the active card
+    # (the standing fail-safe: an ambiguous topic assignment must never cost a turn). A topic
+    # switch is NOT a mode signal and never touches the brainstorm latch.
+    card_thread: Optional[str] = None
 
 
 @dataclass

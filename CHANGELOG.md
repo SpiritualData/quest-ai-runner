@@ -55,6 +55,38 @@ All notable changes to this project are documented here. The format is based on
   (19 tests used to end with a live index thread; now none do).
 
 ### Added
+- **Per-idea threading, where THE IDEA IS THE CARD (`core/card_thread.py`, opt-in via
+  `OrchestratorConfig.card_thread_enabled`, default OFF).** A conversation is not one topic. People
+  interleave: they open a plan, drop into a side question, come back with "back to the launch plan".
+  There is deliberately NO thread object: a thread object would be a second registry of what context
+  cards already are, and it would die the moment an idea outlived its conversation, which is the
+  normal case. So a thread IS a card, and a card's transcript spans are its thread.
+  - **The assignment costs ZERO extra model calls.** The planner emits ONE field on the call it
+    already makes every turn: `"continue"` | `"switch_to:<card_id>"` | `"new:<label>"`. It is shown a
+    cheap PRIOR first, built from the cards this turn's hybrid retrieval (keyword/IDF arm + vector
+    arm) already scored, plus whatever the consumer always wants offered, so the prior costs no extra
+    search either. The prior only NARROWS and SURFACES; the model's judgment decides.
+  - **Fail-safe throughout.** Any parse failure, any ambiguity, any `switch_to:` naming a card that
+    is not on the table: CONTINUE the current card (`parse_card_thread`). A planner failure keeps the
+    thread rather than losing it. A topic assignment can never cost a turn.
+  - **A topic switch is NOT a mode signal.** Moving to another idea inside a brainstorm-latched
+    conversation leaves it latched, and returning to an old idea does not release it.
+  - **Priority blending, not isolation.** `select_thread_floor` gives a turn its own card's recent
+    turns plus a small global floor of the very last turns whatever their card, so "as I just said"
+    survives an interleave; `rank_card_first` / `penalized_budget` keep every other idea reachable
+    behind a penalty, so "combine those two ideas" still works.
+  - **A card outlives the work it describes.** `lifecycle_note` renders finished work as finished,
+    and the new `CARD_LIFECYCLE_GATE` (context_doctrine, on the reply's system prompt) tells the model
+    to treat it as knowledge it may cite and build on, never as open work waiting to be picked up.
+  - **A dedupe guard** (`find_duplicate_label`) so `new:` cannot litter the card space with
+    near-duplicate twins of a card that already exists.
+  - Reported on `OrchestratorResult.card_thread` and the new `EVENT_CARD_THREAD`; the orchestrator
+    stays stateless about threads exactly as it is about modes, so the consumer owns the card store
+    and stamps its own messages. `card_type` / `lifecycle` now ride through into `card_metadata`, so
+    a consumer whose store also holds non-topic cards can say which types are real ideas.
+  - With the flag off (the default) the planner prompt carries no topic block, the decide-tool schema
+    has no `card_thread` field, a stray `card_thread` is ignored, no event is emitted, and no thread
+    meta reaches the assembler: byte-identical to a build without the feature.
 - **A task document can supply its own persona (`rep_preamble`).** The poller now falls back to a
   task's optional `rep_preamble` field (a non-empty string; anything else is ignored) when no AI rep
   resolves for that task: `self._pull_rep_for(task, target) or self._task_rep_preamble(task)`. A

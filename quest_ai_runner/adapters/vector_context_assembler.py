@@ -794,6 +794,13 @@ class VectorContextAssembler(ContextAssemblerBase):
                 "files": hit_paths[:3],  # top 3 files
                 "adapter": adapter_type,
                 "items": item_blocks,
+                # OPTIONAL card taxonomy fields, passed through verbatim from the stored card payload
+                # (see file_context_store's card_metadata for the same two keys): ``card_type`` lets
+                # a consumer tell TOPIC cards apart from its other card kinds when it threads ideas
+                # by card, and ``lifecycle`` says whether the work behind the card is still open.
+                # Empty for a card that does not use them.
+                "card_type": payload.get("card_type") or "",
+                "lifecycle": payload.get("lifecycle") or "",
                 # The VERBATIM rendered block this hit contributed to context_view, so the hybrid
                 # consolidator rebuilds from it (a hit's payload fields + resolved content, not just
                 # its content items) instead of dropping them when consolidation engages.

@@ -40,6 +40,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .adapters import (
+    EVENT_CARD_THREAD,
     EVENT_CONTEXT,
     EVENT_DECISION,
     EVENT_DONE,
@@ -73,7 +74,22 @@ from .adapters import (
     RetrievalAdapter,
 )
 from .card_filter import _extract_json
-from .context_doctrine import CACHED_HINT_GATE, MODEL_TIER_GATE, SPECIFICITY_GATE, SUFFICIENCY_GATE
+from .card_thread import (
+    CardCandidate,
+    CardThreadContext,
+    CardThreadDecision,
+    merge_candidates,
+    parse_card_thread,
+    render_thread_hint,
+)
+from .context_doctrine import (
+    CACHED_HINT_GATE,
+    CARD_LIFECYCLE_GATE,
+    CARD_THREAD_GATE,
+    MODEL_TIER_GATE,
+    SPECIFICITY_GATE,
+    SUFFICIENCY_GATE,
+)
 from .inbox import InputInbox
 from .guard import (
     ExecutionFact,
@@ -360,7 +376,7 @@ PARALLEL SUB-QUESTIONS (optional): if the message has INDEPENDENT parts, set `su
 DEEP FAN-OUT (optional, for "deep"): if the work splits into INDEPENDENT subtasks, set
   `deep_subtasks` to 2-{max_deep} of {{"goal": "...", "brief": "..."}} -- each a concurrent run.
 
-{mode_signal_block}{rationale_instruction}
+{mode_signal_block}{card_thread_block}{rationale_instruction}
 
 --- THE USER'S MESSAGE ---
 {user_message}
@@ -404,6 +420,19 @@ MODE SIGNAL (`mode_signal`, optional -- almost always omit it): detect an EXPLIC
       recoverable in one sentence (the user says go ahead), acting is not.
 
 """
+
+# Injected into the {card_thread_block} slot of _PLANNER_TAIL ONLY when the consumer opted into
+# per-idea threading (OrchestratorConfig.card_thread_enabled). With the flag off (the default) the
+# slot renders empty, the DECIDE_TOOL schema carries no `card_thread` field, and a stray
+# `card_thread` in a response is ignored, so a consumer that never asked for threads sees a
+# byte-identical planner prompt and a byte-identical schema. ``{thread_hint}`` is the per-turn
+# candidate list (see core.card_thread.render_thread_hint): the cheap PRIOR, which narrows and
+# surfaces; the model's judgment decides. Contains no literal {/} beyond that one slot.
+_CARD_THREAD_PLANNER_BLOCK_TEMPLATE = (
+    CARD_THREAD_GATE
+    + "\n\n"
+    + "{thread_hint}\n\n"
+)
 
 # The `rationale` field is dual-purpose: by default it is the planner's terse internal reasoning,
 # but when the consumer turns on narration (cfg.narrate) it becomes the user-facing, spoken
@@ -546,6 +575,7 @@ def planner_prompt_defaults() -> Dict[str, Any]:
         "max_subq": cfg.max_subquestions,
         "max_deep": cfg.max_deep_subtasks,
         "mode_signal_block": "",
+        "card_thread_block": "",
         # Inline is the DEFAULT deployment (OrchestratorConfig.deferred_deep_queued = False), so
         # the default wording must be the inline one: it is the only one true by default.
         "deferred_deep_semantics": DEFERRED_DEEP_INLINE_SEMANTICS,
@@ -679,6 +709,20 @@ _MODE_SIGNAL_TOOL_FIELD: Dict[str, Any] = {
 DECIDE_TOOL_WITH_MODE_SIGNAL: Dict[str, Any] = copy.deepcopy(DECIDE_TOOL)
 DECIDE_TOOL_WITH_MODE_SIGNAL["input_schema"]["properties"]["mode_signal"] = _MODE_SIGNAL_TOOL_FIELD
 
+# The opt-in `card_thread` field (OrchestratorConfig.card_thread_enabled): the ONE field per-idea
+# threading costs. It rides the planning call the orchestrator already makes every turn, so topic
+# assignment adds ZERO extra LLM calls. Same discipline as the mode signal: a consumer that never
+# opted in exposes no thread vocabulary at all, so the planner cannot misfire a field it cannot
+# express.
+_CARD_THREAD_TOOL_FIELD: Dict[str, Any] = {
+    "type": ["string", "null"],
+    "description": "Which TOPIC (context card) this message belongs to. Exactly one of: "
+                   "'continue' (the current topic, the usual answer), "
+                   "'switch_to:<card_id>' (one of the KNOWN TOPICS listed in the prompt, using its "
+                   "id verbatim), or 'new:<short label>' (a genuinely new idea; 2 to 5 words). "
+                   "Never a mode change and never an action. When in doubt, 'continue'.",
+}
+
 # The deferred_deep field description for a QUEUED deployment (OrchestratorConfig.
 # deferred_deep_queued): the consumer wired a deep runner that enqueues the work as a background
 # task, so the schema must describe that mechanism, not the inline same-turn one. The inline
@@ -702,19 +746,32 @@ DEFERRED_DEEP_FIELD_DESC_QUEUED = (
 DEFERRED_RUNNER_KEY = "deferred"
 
 
-def decide_tool_for(mode_signals: bool, deferred_queued: bool) -> Dict[str, Any]:
+def decide_tool_for(mode_signals: bool, deferred_queued: bool,
+                    card_thread: bool = False) -> Dict[str, Any]:
     """Return the decide-tool schema variant for this run's configuration.
 
-    ``mode_signals`` adds the opt-in ``mode_signal`` field; ``deferred_queued`` swaps the
-    ``deferred_deep`` field description for the queued-background wording so the schema always
-    tells the planner what the wired deep runner ACTUALLY does with deferred work.
+    ``mode_signals`` adds the opt-in ``mode_signal`` field; ``card_thread`` adds the opt-in
+    ``card_thread`` field (per-idea threading); ``deferred_queued`` swaps the ``deferred_deep``
+    field description for the queued-background wording so the schema always tells the planner what
+    the wired deep runner ACTUALLY does with deferred work.
     """
     base = DECIDE_TOOL_WITH_MODE_SIGNAL if mode_signals else DECIDE_TOOL
-    if not deferred_queued:
+    if not deferred_queued and not card_thread:
         return base
     tool = copy.deepcopy(base)
-    tool["input_schema"]["properties"]["deferred_deep"]["description"] = (
-        DEFERRED_DEEP_FIELD_DESC_QUEUED)
+    if deferred_queued:
+        tool["input_schema"]["properties"]["deferred_deep"]["description"] = (
+            DEFERRED_DEEP_FIELD_DESC_QUEUED)
+    if card_thread:
+        tool["input_schema"]["properties"]["card_thread"] = copy.deepcopy(_CARD_THREAD_TOOL_FIELD)
+        # REQUIRED, not optional. An optional field is one a model quietly omits, and every omission
+        # lands on the fail-safe ("continue the current card"), which reads as a topic that never
+        # moves: a real run left three different ideas all sitting on the first card the user had
+        # opened. Requiring it forces the judgment to actually happen every turn. The fail-safe is
+        # unchanged and still catches a malformed or missing value; it just stops being the norm.
+        required = tool["input_schema"].setdefault("required", [])
+        if "card_thread" not in required:
+            required.append("card_thread")
     return tool
 
 
@@ -854,6 +911,24 @@ class OrchestratorConfig:
     # judges a subject-matter imperative ("create a goal called X and add it to my plan") as a
     # request to proceed, which broke the latch exactly when it mattered most.
     mode_signals_enabled: bool = False
+    # PER-IDEA THREADING, opt-in (default OFF -- with the flag off the planner prompt carries no
+    # TOPIC block, the decide-tool schema has no ``card_thread`` field, a stray ``card_thread`` in a
+    # response is ignored, no EVENT_CARD_THREAD is emitted, and no thread meta reaches the
+    # assembler: byte-identical to a build without the feature, so other consumers are unaffected).
+    #
+    # When ON, THE IDEA IS THE CARD (see core/card_thread.py). Every turn is assigned to a context
+    # card by the SAME planning call the orchestrator already makes (ZERO extra LLM calls): the
+    # planner emits ONE field, "continue" | "switch_to:<card_id>" | "new:<label>", after being shown
+    # a cheap PRIOR (the cards this turn's hybrid retrieval already scored, plus whatever the
+    # consumer always wants offered). The prior only NARROWS and SURFACES; the model's judgment
+    # decides, and any parse failure or ambiguity CONTINUES the current card. The resolved
+    # assignment is reported via ``OrchestratorResult.card_thread`` + EVENT_CARD_THREAD; the
+    # orchestrator stays stateless, exactly as it is about modes: the consumer owns the card store
+    # and stamps its own messages.
+    #
+    # A topic switch is NOT a mode signal: it never touches the brainstorm latch (a new idea in a
+    # held conversation is still held; a returning idea does not release it).
+    card_thread_enabled: bool = False
     # DEFERRED DEEP IS QUEUED. Set True by a consumer whose wired deep runner QUEUES a planner
     # ``deferred_deep`` as a background task (confirming the enqueue and returning
     # ``DeepResult(met=True, deferred=True)`` with a hand-off sentinel as its output) instead of
@@ -1015,6 +1090,13 @@ class OrchestratorResult:
     # emitted live as EVENT_MODE_SIGNAL. The orchestrator does NOT persist a mode; the consumer
     # owns the latch (see OrchestratorConfig.execution_mode).
     mode_signal: Optional[str] = None
+    # PER-IDEA THREADING (opt-in; see OrchestratorConfig.card_thread_enabled): the TOPIC CARD this
+    # turn was assigned to, as ``CardThreadDecision.as_dict()``:
+    # {"action": "continue"|"switch"|"new", "card_id": <id or None>, "label": <label or None>,
+    # "raw": <what the planner emitted>, "fell_back": <True when the fail-safe fired>}. For a "new"
+    # decision ``card_id`` is None: the CONSUMER creates (or dedupes onto) the card, since it owns
+    # the store. Also emitted live as EVENT_CARD_THREAD. None when threading is off.
+    card_thread: Optional[Dict[str, Any]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -1100,6 +1182,16 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
     else:
         mode_signal = mode_signal.strip().lower()
 
+    # Card thread (per-idea threading): only read when the consumer opted in. Kept RAW here (the
+    # string the planner emitted); ``core.card_thread.parse_card_thread`` resolves and fail-safes it
+    # in run(), where the candidate ids that make an id "known" are in hand. A non-string is dropped
+    # to None, which resolves to "continue the current card".
+    card_thread_raw = raw.get("card_thread") if cfg.card_thread_enabled else None
+    if not (isinstance(card_thread_raw, str) and card_thread_raw.strip()):
+        card_thread_raw = None
+    else:
+        card_thread_raw = card_thread_raw.strip()
+
     return PlanDecision(
         action=action,
         reads=clean_reads,
@@ -1114,6 +1206,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
         answer_contains_work_to_execute=bool(raw.get("answer_contains_work_to_execute", False)),
         clarification=clarification,
         mode_signal=mode_signal,
+        card_thread=card_thread_raw,
     )
 
 
@@ -1408,6 +1501,27 @@ completion claims.
 # prefix the parser slices on. Kept as one constant so the brief instruction and the parser agree.
 FUTURE_CONTEXT_DELIMITER = "=== FUTURE CONTEXT (for similar requests by this user) ==="
 
+# WHAT a worker should name, shared by both instructions below so the ask never drifts between the
+# two channels. The expensive knowledge a deep run buys is WHERE THINGS LIVE in the environment it
+# explored: rediscovering that is what the next run pays for twice. So the ask leads with the
+# environment references (exact locations, entry points, what was ruled out) and treats prose as the
+# last resort. Generic: an "environment" is whatever the worker explored (a repository, a corpus, a
+# filesystem, a data store), and a "location" is whatever addresses a thing in it (a path, an id).
+_FUTURE_CONTEXT_WHAT_TO_NAME = (
+    "Name REFERENCES first, prose last. The costly thing to rediscover is WHERE THINGS LIVE in the "
+    "environment you just explored, so lead with:\n"
+    "- the exact LOCATION of each thing you relied on, written the way it is addressed in that "
+    "environment (a file path exactly as it appears relative to the working directory, a collection "
+    "or data source with its name AND id), one bullet each, plus what it holds;\n"
+    "- the ENTRY POINTS: where this area starts, what calls what, which location to open first for "
+    "work like this;\n"
+    "- what you RULED OUT: places you searched that did not hold it, so nobody pays for that search "
+    "twice;\n"
+    "- stable facts and conventions that will still be true next time.\n"
+    "Never write a bullet that only describes a thing without saying where it is. Do not invent a "
+    "location you did not actually open."
+)
+
 # Appended to a deep process's brief ONLY when the async card updater is active (a card-update store
 # + a provider are available and the toggle is on). A non-updating deployment never sees this block.
 DEEP_FUTURE_CONTEXT_INSTRUCTION = (
@@ -1416,10 +1530,10 @@ DEEP_FUTURE_CONTEXT_INSTRUCTION = (
     "delimited section that names context which would help a FUTURE similar request by THIS user. "
     "Start the section with this exact line on its own:\n"
     f"{FUTURE_CONTEXT_DELIMITER}\n"
-    "Then list one bullet per line (start each line with '- '). Prefer durable, reusable pointers: "
-    "collection names with their ids, key files you relied on, stable facts, and useful references. "
-    "Keep each bullet short. If nothing is worth remembering, write the delimiter line followed by "
-    "'- (none)'. Do not use em dashes; use a comma, a colon, or parentheses instead."
+    "Then list one bullet per line (start each line with '- ').\n"
+    + _FUTURE_CONTEXT_WHAT_TO_NAME
+    + "\nKeep each bullet short. If nothing is worth remembering, write the delimiter line followed "
+    "by '- (none)'. Do not use em dashes; use a comma, a colon, or parentheses instead."
 )
 
 # The SAME ask, for a runner whose primary output is a STRICT FORMAT (generated code, JSON, a patch):
@@ -1433,10 +1547,10 @@ DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION = (
     "Alongside the work above, name context which would help a FUTURE similar request by THIS user. "
     "Return it ONLY through the separate future-context field of your result, never inside your "
     "primary output: your primary output must stay a valid, strictly formatted payload with nothing "
-    "appended to it. Give one short bullet per line (start each line with '- '). Prefer durable, "
-    "reusable pointers: collection names with their ids, key files you relied on, entities and "
-    "schema you touched, stable facts, and useful references. If nothing is worth remembering, "
-    "return '- (none)'. Do not use em dashes; use a comma, a colon, or parentheses instead."
+    "appended to it. Give one short bullet per line (start each line with '- ').\n"
+    + _FUTURE_CONTEXT_WHAT_TO_NAME
+    + "\nAlso name the entities and schema you touched. If nothing is worth remembering, return "
+    "'- (none)'. Do not use em dashes; use a comma, a colon, or parentheses instead."
 )
 
 # The updater's ONE LLM call. It is given the request, what executed, the parsed future-context
@@ -1521,8 +1635,10 @@ Rules:
     reference and put it in the card's "add" list:
       * a collection named with an id  -> {{"type": "collection", "locator": {{"name": "...", "id": "..."}}, "why": "..."}}
       * a file path                    -> {{"type": "file", "locator": {{"path": "..."}}, "why": "..."}}
-    Add one item for EACH source named. Do NOT return a card whose "add" is empty when the
-    future-context names collections or files.
+    Add one item for EACH source named. Copy each locator EXACTLY as the work named it (a file path
+    stays relative to the working directory if that is how it was given, so it still resolves next
+    time), and put what the source holds, and why it mattered, in "why". Do NOT return a card whose
+    "add" is empty when the future-context names collections or files.
   - PREFER references over copied text. Use a "note" ({{"locator": {{"text": "..."}}}}) ONLY for a
     durable fact with nothing external to point at.
   - Group related references onto ONE topical card. Set its "name"/"description" so it is easy to
@@ -3755,7 +3871,8 @@ class Orchestrator:
               gathered: List[Dict[str, Any]], *, step: int = 0,
               narrate: bool = False, persona: str = "",
               already_said: Optional[List[str]] = None,
-              brainstorm: bool = False) -> PlanDecision:
+              brainstorm: bool = False,
+              card_thread_block: str = "") -> PlanDecision:
         # Step 1 (step == 0) always sees the FULL transcript + context_view. On later re-plan
         # steps, if the consumer opted in, swap the (unchanged) transcript + context_view for a
         # short reference note — the planner's job there is to react to the NEW gathered
@@ -3779,9 +3896,14 @@ class Orchestrator:
         if self.cfg.mode_signals_enabled:
             brainstorm_note += _BRAINSTORM_EXIT_SIGNAL_NOTE
         decide_tool = decide_tool_for(self.cfg.mode_signals_enabled,
-                                      self.cfg.deferred_deep_queued)
+                                      self.cfg.deferred_deep_queued,
+                                      self.cfg.card_thread_enabled)
         deferred_semantics = (DEFERRED_DEEP_QUEUED_SEMANTICS if self.cfg.deferred_deep_queued
                               else DEFERRED_DEEP_INLINE_SEMANTICS)
+        # Per-idea threading: the TOPIC block (doctrine + this turn's candidate prior) is rendered
+        # ONCE per turn by run() and passed in. Empty string when the consumer did not opt in, so
+        # the prompt is byte-identical to a build without the feature.
+        thread_block = card_thread_block if self.cfg.card_thread_enabled else ""
         prompt = PLANNER_PROMPT.format(
             user_message=user_message,
             transcript=plan_transcript or "(no prior messages)",
@@ -3792,6 +3914,7 @@ class Orchestrator:
             max_subq=self.cfg.max_subquestions,
             max_deep=self.cfg.max_deep_subtasks,
             mode_signal_block=mode_signal_block,
+            card_thread_block=thread_block,
             deferred_deep_semantics=deferred_semantics,
             rationale_instruction=(
                 (_RATIONALE_INSTRUCTION_NARRATE_REPLAN if step > 0 else _RATIONALE_INSTRUCTION_NARRATE)
@@ -3832,6 +3955,7 @@ class Orchestrator:
                 max_subq=self.cfg.max_subquestions,
                 max_deep=self.cfg.max_deep_subtasks,
                 mode_signal_block=mode_signal_block,
+                card_thread_block=thread_block,
                 deferred_deep_semantics=deferred_semantics,
                 rationale_instruction=(
                     (_RATIONALE_INSTRUCTION_NARRATE_REPLAN if step > 0 else _RATIONALE_INSTRUCTION_NARRATE)
@@ -4651,6 +4775,28 @@ class Orchestrator:
         sections nor items (e.g. a file-only deployment), this falls back to the plain
         ``context_view`` (today's behavior, byte-for-byte), so the change is never worse.
         """
+        def _label(it: dict) -> str:
+            # WHAT the reference points at (a file's path, a collection's name/id). MUST mirror
+            # adapters.card_content_render.locator_label; kept inline so the core brain never imports
+            # an adapter. Keep the two in sync.
+            itype = it.get("type", "note")
+            loc = it.get("locator") if isinstance(it.get("locator"), dict) else {}
+            if itype == "file":
+                return str(loc.get("path") or "").strip()
+            if itype == "collection":
+                name = str(loc.get("name") or loc.get("collection") or "").strip()
+                cid = str(loc.get("id") or "").strip()
+                if name and cid:
+                    return f"{name} ({cid})"
+                return name or cid
+            if itype == "conversation":
+                return str(loc.get("conv_id") or loc.get("id") or "").strip()
+            if itype == "query":
+                return str(loc.get("query") or loc.get("text") or "").strip()
+            if itype == "note":
+                return ""
+            return str(loc.get("name") or loc.get("id") or loc.get("path") or "").strip()
+
         def _frag(it: dict) -> str:
             # The exact fragment a content item contributed to a rendered section (header + indented
             # body). MUST mirror adapters.card_content_render.render_block_lines; kept inline so the
@@ -4658,7 +4804,15 @@ class Orchestrator:
             itype = it.get("type", "note")
             why = it.get("why", "")
             text = it.get("text", "") or ""
-            lines = [f"  - ({itype})" + (f" {why}" if why else "")]
+            label = _label(it)
+            head = f"  - ({itype})"
+            if label:
+                head += f" {label}"
+                if why:
+                    head += f" -- {why}"
+            elif why:
+                head += f" {why}"
+            lines = [head]
             for rl in text.splitlines() or [text]:
                 lines.append(f"      {rl}")
             return "\n".join(lines)
@@ -5467,6 +5621,18 @@ class Orchestrator:
                     if isinstance(v, str) and v.strip():
                         fields[_k] = v.strip()
                 add_items = [it for it in (edit.get("add") or []) if isinstance(it, dict)]
+                # STAMP each new item with NOW. The card content model ranks and trims by ``ts``, and
+                # an item that arrives without one is treated as maximally old: unstamped references
+                # rank below anything dated and are the first trimmed, so a run's freshly learned
+                # references would decay out of the card they were written to. The updater LLM has no
+                # clock, so the brain stamps them.
+                _now = time.time()
+                for _it in add_items:
+                    try:
+                        if not float(_it.get("ts") or 0.0) > 0.0:
+                            _it["ts"] = _now
+                    except (TypeError, ValueError):
+                        _it["ts"] = _now
                 replace_in = [r for r in (edit.get("replace") or []) if isinstance(r, dict)]
                 remove_ids = [str(r) for r in (edit.get("remove") or [])
                               if isinstance(r, (str, int))]
@@ -6201,6 +6367,7 @@ class Orchestrator:
             conv_scope: Optional[Dict[str, Any]] = None,
             prior_escalations: Optional[List[Dict[str, Any]]] = None,
             cancel_check: Optional[Callable[[], bool]] = None,
+            card_thread: Optional[Any] = None,
             now: Optional[str] = None) -> OrchestratorResult:
         """Run the bounded loop for one request and return a terminal OrchestratorResult.
 
@@ -6274,6 +6441,17 @@ class Orchestrator:
                             answer/deep/confirm outcome. It is never called more than the loop's own
                             natural cadence, so a cheap/throttled implementation is fine. Absent/None
                             means exactly today's behavior (a run can never be cancelled mid-flight).
+        * ``card_thread`` -- optional PER-IDEA THREADING context (a ``CardThreadContext`` or the
+                            equivalent dict; see ``core.card_thread``). Only consulted when the
+                            consumer opted in with ``cfg.card_thread_enabled``. It names the card
+                            (idea) the conversation is CURRENTLY on plus any candidates the consumer
+                            always wants offered; the orchestrator adds the cards its own retrieval
+                            already scored this turn (the free PRIOR) and asks the planner, on the
+                            call it already makes, which card THIS message belongs to. The resolved
+                            assignment comes back as ``OrchestratorResult.card_thread`` and
+                            EVENT_CARD_THREAD. The orchestrator persists nothing: the consumer owns
+                            the card store and stamps its own messages. Absent/None (or the flag off)
+                            means exactly today's behavior.
         * ``now``          -- optional ISO date/datetime string, the CALLER's notion of "now". Fed
                             into goal-condition/constraint derivation (see ``_derive_goal_condition``)
                             so a relative date in the message ("Wednesday", "last week") resolves
@@ -6325,6 +6503,16 @@ class Orchestrator:
         # EVENT_MODE_SIGNAL + OrchestratorResult.mode_signal; the orchestrator persists nothing.
         brainstorm_active = (cfg.execution_mode == "brainstorm")
         mode_signal_detected: Optional[str] = None
+        # --- PER-IDEA THREADING (the idea IS the card; opt-in via cfg.card_thread_enabled) -------
+        # ``card_thread_ctx`` is the consumer's per-turn thread context (active card + the cards it
+        # always wants offered). ``card_thread_decision`` is what the planner resolved this turn,
+        # stamped onto the result in finish(). Both stay None when the flag is off, so the run is
+        # byte-identical to a build without the feature.
+        card_thread_ctx: Optional[CardThreadContext] = (
+            CardThreadContext.coerce(card_thread) if cfg.card_thread_enabled else None)
+        card_thread_decision: Optional[CardThreadDecision] = None
+        card_thread_block: str = ""
+        card_thread_candidate_ids: List[str] = []
         # The action ("deep"/"confirm"/"clarify") the turn chose that the brainstorm latch degraded
         # to "answer", if any. Feeds the no-action acknowledgment steer on the answer path so the
         # reply can say the work was held rather than silently dropping it.
@@ -6416,6 +6604,12 @@ class Orchestrator:
             _ctx_meta.setdefault("conv_id", conv_id)
         if conv_scope is not None:
             _ctx_meta.setdefault("conv_scope", conv_scope)
+        # PER-IDEA THREADING: the card the conversation is currently on, so a CARD-AWARE assembler
+        # can prefer this idea's material (priority blending, never hard isolation: everything else
+        # stays reachable). An assembler that does not know the key ignores it, so this is inert for
+        # every existing assembler.
+        if card_thread_ctx is not None and card_thread_ctx.active_card_id:
+            _ctx_meta.setdefault("thread_card_id", card_thread_ctx.active_card_id)
 
         # --- Mid-run user messages: auto-drain a wired inbox for THIS conversation ----------------
         # If the caller didn't pass an explicit ``pending_inputs`` but an ``input_inbox`` is wired,
@@ -6835,6 +7029,26 @@ class Orchestrator:
                 _recent_entries = []
         _merged_card_meta = _card_meta + _recent_entries
 
+        # --- PER-IDEA THREADING: the cheap PRIOR, then the planner decides --------------------
+        # The candidate set is the cards this turn's HYBRID RETRIEVAL already scored (keyword/IDF
+        # arm + vector arm, plus the warm recent-turn cards), merged with whatever the consumer
+        # always wants offered (its general/small-talk card, the ideas recently live in this
+        # conversation). So the prior costs ZERO extra model calls and ZERO extra searches: it is
+        # the same assembly the turn ran anyway. It NARROWS and SURFACES; it never decides. The
+        # planner picks the topic on the call it already makes, and any parse failure or ambiguity
+        # continues the current card (see core.card_thread.parse_card_thread).
+        if card_thread_ctx is not None:
+            try:
+                _thread_candidates = merge_candidates(card_thread_ctx, _merged_card_meta)
+                card_thread_candidate_ids = [c.id for c in _thread_candidates]
+                _hint = render_thread_hint(card_thread_ctx, _thread_candidates)
+                card_thread_block = _CARD_THREAD_PLANNER_BLOCK_TEMPLATE.format(thread_hint=_hint)
+            except Exception:  # noqa: BLE001 -- threading must never break a turn
+                log.debug("card thread hint build failed; the turn continues its current card",
+                          exc_info=True)
+                card_thread_block = ""
+                card_thread_candidate_ids = []
+
         # --- CONTEXT EVENT: emit EVENT_CONTEXT showing which cards were selected -----------
         # Dedicated event for context assembly: card selection + sources. Surfaces in all modes.
         # Always emitted when assembly ran OR recent-turn cards survived OR assembly timed out
@@ -6945,6 +7159,12 @@ class Orchestrator:
             res.execution_record = exec_record
             res.retrieval_constraints = retrieval_constraints
             res.mode_signal = mode_signal_detected
+            # PER-IDEA THREADING: the topic this turn was assigned to. Present on EVERY terminal
+            # result (answer, deep, confirm, cancelled) once the flag is on, because the consumer
+            # stamps the turn's messages from it and a turn that ended early still happened on an
+            # idea. None when threading is off, or when the run ended before the first plan.
+            if card_thread_decision is not None:
+                res.card_thread = card_thread_decision.as_dict()
             if overseer_signals:
                 res.overseer_signals = list(overseer_signals)
             # Tear down the background overseer worker (Fix 1). ``wait=False`` mirrors the
@@ -7138,12 +7358,60 @@ class Orchestrator:
                 plan = self._plan(user_message, transcript, context_view, gathered, step=step,
                                   narrate=narrator.enabled, persona=rep_preamble or "",
                                   already_said=narrator._said if narrator.enabled else None,
-                                  brainstorm=brainstorm_active)
+                                  brainstorm=brainstorm_active,
+                                  card_thread_block=card_thread_block)
             except Exception as e:  # noqa: BLE001 — planner failure -> grounded fallback answer
                 log.exception(
                     f"Planner failed on step {steps}: {e}. Falling back to grounded answer."
                 )
                 plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
+
+            # --- PER-IDEA THREADING: resolve the turn's TOPIC ----------------------------------
+            # The topic is a property of the MESSAGE, so the FIRST plan that actually EXPRESSES one
+            # owns it, and no later step may re-litigate it (a mid-loop read must not be able to move
+            # the turn to a different idea).
+            #
+            # "Expresses one" is doing real work here. The field is required, but a model can still
+            # return nothing for it, and it does so exactly when the turn is busy: a real run had the
+            # planner omit the topic on a "back to the launch plan" turn while it was planning reads,
+            # which landed the fail-safe (continue) and filed that turn under the idea the user was
+            # explicitly leaving. So a FELL-BACK decision is not treated as an answer: it is held as
+            # the current best, and a later plan step in the SAME turn may still supply the real one.
+            # If no step ever does, the fail-safe stands, which is the standing rule (any parse
+            # failure or ambiguity continues the current card).
+            #
+            # A "new" decision leaves ``card_id`` None: the CONSUMER owns the card store, so it is the
+            # one that creates (or dedupes onto) the card and stamps the turn.
+            #
+            # A TOPIC SWITCH IS NOT A MODE SIGNAL. This block sets no mode, touches no latch, and
+            # runs regardless of ``brainstorm_active``: moving to another idea inside a held
+            # conversation leaves it held, and coming back to an old idea does not release it.
+            if card_thread_ctx is not None and (card_thread_decision is None
+                                                or card_thread_decision.fell_back):
+                try:
+                    _decision = parse_card_thread(
+                        plan.card_thread if plan else None,
+                        active_card_id=card_thread_ctx.active_card_id,
+                        known_ids=card_thread_candidate_ids or None,
+                    )
+                    # Keep a real judgment over a fail-safe; keep the FIRST real judgment forever.
+                    if card_thread_decision is None or not _decision.fell_back:
+                        _changed = (card_thread_decision is None
+                                    or _decision.as_dict() != card_thread_decision.as_dict())
+                        card_thread_decision = _decision
+                        if _changed:
+                            emit.emit(ProgressEvent(
+                                type=EVENT_CARD_THREAD, step=steps,
+                                data={**card_thread_decision.as_dict(),
+                                      "previous_card_id": card_thread_ctx.active_card_id,
+                                      "internal": True}))
+                except Exception:  # noqa: BLE001 -- reporting must never break the turn
+                    log.debug("card thread resolution failed; continuing the current card",
+                              exc_info=True)
+                    if card_thread_decision is None:
+                        card_thread_decision = CardThreadDecision(
+                            action="continue", card_id=card_thread_ctx.active_card_id,
+                            fell_back=True)
 
             # --- EXECUTION-MODE SIGNAL (opt-in via cfg.mode_signals_enabled): capture the first
             # explicit mode change the planner detected this turn (LLM judgment riding the
@@ -7360,6 +7628,20 @@ class Orchestrator:
                 brainstorm_ack_note += (BRAINSTORM_CLARIFY_ACK_PREFIX
                                         + brainstorm_clarify_question.strip() + "\n")
 
+        # THE REPLY DIRECTIVE for every reply generator this turn (it lands on the answering call's
+        # SYSTEM prompt, next to the reply contract, which is where an instruction the reply must
+        # OBEY belongs). Two things can ride it, and they compose:
+        #   * the brainstorm no-action acknowledgment (above), when the latch is held; and
+        #   * the CARD LIFECYCLE gate, whenever per-idea threading is on. A card outlives the work
+        #     it describes, so a COMPLETED quest or a finished project can surface as context on any
+        #     turn. Without this the assistant reads it as live work and starts proposing how to do
+        #     it. The gate says: treat finished work as knowledge you may cite and build on, never
+        #     as open work, unless the user explicitly reopens it.
+        reply_directive: Optional[str] = brainstorm_ack_note
+        if cfg.card_thread_enabled:
+            reply_directive = (CARD_LIFECYCLE_GATE + "\n\n" + brainstorm_ack_note
+                               if brainstorm_ack_note else CARD_LIFECYCLE_GATE)
+
         def _answer_grounding(steering: Optional[str] = None) -> str:
             # The L2 grounding EVERY reply this turn is built on.
             cv = context_view
@@ -7385,7 +7667,7 @@ class Orchestrator:
                 model = self._answer_model(plan, "balanced", hint=model_hint)
                 text = self._grounded_answer(user_message, transcript, _answer_grounding(), gathered,
                                              model, True, native_blocks=native_blocks,
-                                             reply_directive=brainstorm_ack_note)
+                                             reply_directive=reply_directive)
                 return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
                                                  partial=True, model=model,
                                                  exit_reason="read_budget"))
@@ -7445,11 +7727,11 @@ class Orchestrator:
             if len(plan.subquestions) >= 2:
                 return self._answer_subquestions(user_message, transcript, cv, gathered,
                                                  model, plan.subquestions, native_blocks=native_blocks,
-                                                 reply_directive=brainstorm_ack_note)
+                                                 reply_directive=reply_directive)
             return self._grounded_answer(user_message, transcript, cv, gathered, model,
                                          False, native_blocks=native_blocks,
                                          rep_preamble=rep_preamble,
-                                         reply_directive=brainstorm_ack_note)
+                                         reply_directive=reply_directive)
 
         emit.status(f"Answering {len(plan.subquestions)} parts in parallel…"
                     if len(plan.subquestions) >= 2 else "Answering")

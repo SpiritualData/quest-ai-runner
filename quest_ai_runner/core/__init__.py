@@ -5,6 +5,7 @@ chat: construct an ``Orchestrator`` with adapters and call ``run``. It knows not
 Quest, any database, or any org — only the four adapter interfaces.
 """
 from .adapters import (
+    EVENT_CARD_THREAD,
     EVENT_DECISION,
     EVENT_DONE,
     EVENT_EXEC,
@@ -93,6 +94,31 @@ from .overseer import (
     build_digest,
     oversee,
 )
+from .card_thread import (
+    ACTION_CONTINUE,
+    ACTION_NEW,
+    ACTION_SWITCH,
+    FINISHED_STATUSES,
+    STATUS_ACTIVE,
+    STATUS_ARCHIVED,
+    STATUS_COMPLETED,
+    STATUS_DORMANT,
+    CardCandidate,
+    CardThreadContext,
+    CardThreadDecision,
+    card_id_set,
+    find_duplicate_label,
+    lifecycle_note,
+    merge_candidates,
+    normalize_label,
+    parse_card_thread,
+    penalized_budget,
+    rank_card_first,
+    render_thread_hint,
+    select_thread_floor,
+    split_by_card,
+)
+from .context_doctrine import CARD_LIFECYCLE_GATE, CARD_THREAD_GATE
 from .turn_context_store import TurnContextStore
 from .composite_assembler import CompositeContextAssembler
 
@@ -107,7 +133,7 @@ __all__ = [
     "StreamSink", "MilestoneSink", "FanoutSink", "SURFACING_EVENTS",
     "EVENT_STATUS", "EVENT_PLAN", "EVENT_READ", "EVENT_REPLAN", "EVENT_PARTIAL",
     "EVENT_EXEC", "EVENT_RESULT", "EVENT_DECISION", "EVENT_MILESTONE", "EVENT_DONE",
-    "EVENT_UNDERSTANDING", "EVENT_OVERSEER", "EVENT_MODE_SIGNAL",
+    "EVENT_UNDERSTANDING", "EVENT_OVERSEER", "EVENT_MODE_SIGNAL", "EVENT_CARD_THREAD",
     # storage-agnostic conversation-history retrieval (User Input Understanding)
     "ConversationContext", "ConversationStore",
     # registry
@@ -129,6 +155,21 @@ __all__ = [
     # A build without the latch lacks all of them, so a stale library can never look like it holds.
     "MODE_RELEASE_TOOL", "MODE_RELEASE_PROMPT",
     "BRAINSTORM_NO_ACTION_ACK_NOTE", "BRAINSTORM_HELD_WORK_ACK_NOTE",
+    # PER-IDEA THREADING (the idea IS the card; see core/card_thread.py). A consumer's compat probe
+    # can key on these STABLE public names to tell whether the library it loaded can thread ideas:
+    #   * OrchestratorConfig field ``card_thread_enabled`` + the ``card_thread`` kwarg on
+    #     ``Orchestrator.run``
+    #   * ``CardThreadContext`` / ``CardThreadDecision`` / ``parse_card_thread`` (the fail-safe)
+    #   * ``OrchestratorResult.card_thread`` and the EVENT_CARD_THREAD event
+    # A build without threading lacks all of them, so a stale library can never look like it threads.
+    "CardThreadContext", "CardThreadDecision", "CardCandidate",
+    "parse_card_thread", "merge_candidates", "render_thread_hint",
+    "select_thread_floor", "split_by_card", "rank_card_first", "penalized_budget",
+    "card_id_set",
+    "normalize_label", "find_duplicate_label", "lifecycle_note",
+    "ACTION_CONTINUE", "ACTION_SWITCH", "ACTION_NEW",
+    "STATUS_ACTIVE", "STATUS_COMPLETED", "STATUS_DORMANT", "STATUS_ARCHIVED", "FINISHED_STATUSES",
+    "CARD_THREAD_GATE", "CARD_LIFECYCLE_GATE",
     # reserved deep_runners key for a queued deferred deployment
     "DEFERRED_RUNNER_KEY",
     # execution record (claim honesty is judged inside the goal verification)

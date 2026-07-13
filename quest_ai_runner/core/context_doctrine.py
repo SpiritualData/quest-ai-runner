@@ -85,6 +85,53 @@ USING A CACHED CONTEXT HINT:
 """
 
 # ---------------------------------------------------------------------------
+# CARD-THREAD GATE -- per-idea threading, where the IDEA IS THE CARD (see core/card_thread.py).
+# Injected into the planner prompt ONLY when the consumer opted in (cfg.card_thread_enabled), and
+# it teaches the ONE field the planner emits. The candidate list under it is a PRIOR: it narrows
+# and surfaces, it never decides. Judgment decides.
+# ---------------------------------------------------------------------------
+CARD_THREAD_GATE: str = """\
+TOPIC (`card_thread`, REQUIRED on every plan): which topic is THIS message about?
+  Every message belongs to some TOPIC, and a topic is a CARD. Cards outlive conversations, so "the
+  same idea" means "the same card", wherever it was discussed. Name the subject this message is
+  actually about, then emit exactly one of:
+    * "continue"            -- it is about the CURRENT TOPIC: a follow-up, a refinement, a question
+                               about what you just said, a correction.
+    * "switch_to:<card_id>" -- it is about one of the KNOWN TOPICS listed below. Use the id EXACTLY
+                               as given. Match on MEANING, not on shared words: this is how "back to
+                               the launch plan" resolves, and how a question about a specific piece
+                               of work reaches that work's own topic.
+    * "new:<short label>"   -- it is a genuinely different subject that is NOT on the list. Label it
+                               the way a person would name the idea, in 2 to 5 words.
+  DO NOT STAY ON A TOPIC JUST BECAUSE IT IS THE CURRENT ONE. Filing an exchange under the wrong idea
+  buries it in another idea's history, and it stays buried. When the user signposts a change
+  ("separately", "different question", "unrelated", "on another note", "back to ..."), believe them:
+  the subject has changed, even when the words resemble what came before. A subject that merely
+  shares a category with the current topic ("pricing" alongside "the launch") is a DIFFERENT subject
+  unless the message itself ties them together.
+  CHIT-CHAT: greetings, thanks, "how are you", small talk with no subject of its own belong on the
+  general topic when one is listed (switch to it). Never open a new topic for those.
+  A topic assignment is NOT a mode change and NOT an action: it never suppresses, triggers, or
+  approves any work, and it says nothing about how the conversation should run.
+  Only when two readings are genuinely equally plausible, prefer "continue".\
+"""
+
+# ---------------------------------------------------------------------------
+# CARD LIFECYCLE GATE -- a card outlives the work it describes.
+# Injected with the card-thread gate. The failure this exists to stop: a completed piece of work
+# resurfaces as context and the assistant starts proposing how to do it, as if it were still open.
+# ---------------------------------------------------------------------------
+CARD_LIFECYCLE_GATE: str = """\
+FINISHED WORK IS KNOWLEDGE, NOT A TO DO:
+  A topic card outlives the work it describes. When a card or its context says the work is
+  completed or archived, treat it as KNOWLEDGE: you may discuss it, cite what happened, draw
+  lessons from it, and build new work on top of it. Do NOT plan it, propose next steps for it,
+  offer to pick it up, or speak about it as if it were in progress. The one exception is the user
+  explicitly reopening it; until they do, past work is history, not a plan.\
+"""
+
+
+# ---------------------------------------------------------------------------
 # DEEP_CONTEXT_DOCTRINE -- compact block combining the gates.
 # Suitable to prepend to a deep runner's context_preamble so deep agents act the same way.
 # ---------------------------------------------------------------------------
