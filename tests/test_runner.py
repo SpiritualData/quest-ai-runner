@@ -2,8 +2,9 @@
 import logging
 from datetime import datetime, timedelta, timezone
 
+from quest_ai_runner.core.adapters import DeepResult
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator
+from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorResult
 from quest_ai_runner.runner.executor import TaskExecutor
 from quest_ai_runner.runner.poller import Poller, _task_signature
 
@@ -32,6 +33,7 @@ class MockQuestClient:
         self.reports = []          # list of (task_id, status, result, decision_id)
         self.posts = []            # list of (conv_id, content, kind) — live chat progress posts
         self.post_task_ids = []    # parallel to ``posts``: the task_id (or None) each post carried
+        self.post_card_ids = []    # parallel to ``posts``: the reserved card_id (or None) each carried
         self.progress = []         # list of (task_id, kind, text, output) — live task-detail stream
         self.heartbeats = []       # list of (team_id, capabilities, runner_label)
         self.discover_team_ids = []  # records the team_id each discovery scoped to
@@ -84,9 +86,11 @@ class MockQuestClient:
     def report_failed(self, task_id, result):
         self.reports.append((task_id, "failed", result, None))
 
-    def post_conversation_message(self, conv_id, content, *, kind="progress", task_id=None):
+    def post_conversation_message(self, conv_id, content, *, kind="progress", task_id=None,
+                                  card_id=None):
         self.posts.append((conv_id, content, kind))
         self.post_task_ids.append(task_id)
+        self.post_card_ids.append(card_id)
         return {"role": "assistant", "kind": kind, "content": content}
 
     def post_environment_heartbeat(self, capabilities, *, runner_label=None, env_id=None, team_id=None):
@@ -156,6 +160,138 @@ def test_executor_deep_not_met_reports_failed():
     out = ex.execute({"id": "t4", "text": "do X"})
     assert out.status == "failed"
     assert "turn limit" in client.reports[0][2]
+
+
+# --- done-post fold-back synthesis + claim check + UNVERIFIED disclosure ---------
+
+
+class _ReportBrain:
+    """A stub brain exposing ONLY the report-composition surface ``_report`` consults, so these
+    tests drive the executor's fold-back policy directly (via the public ``report`` API) without
+    a full orchestrator run."""
+
+    retrieval = None
+
+    def __init__(self, synthesized="Polished: here is what I finished.", claims=False):
+        self._synthesized = synthesized
+        self._claims = claims          # what report_claims_unbacked returns (True/False/None)
+        self.synth_calls = []
+        self.checked = []
+
+    def synthesize_task_report(self, request, deep_output, **kw):
+        self.synth_calls.append((request, deep_output))
+        return self._synthesized
+
+    def report_claims_unbacked(self, request, report_text, exec_record):
+        self.checked.append(report_text)
+        return self._claims
+
+
+def _met_deep_result(output="RAW WORKER OUTPUT"):
+    return OrchestratorResult(kind="deep", deep_results=[DeepResult(met=True, output=output)],
+                              goals=["g"])
+
+
+def test_executor_done_post_is_folded_and_claim_checked():
+    """A fully met deep result's done post goes through the report synthesis and, once the claim
+    check passes (no unbacked claims), the SYNTHESIZED report is what reaches the chat + PATCH."""
+    client = MockQuestClient([])
+    brain = _ReportBrain(claims=False)
+    ex = TaskExecutor(client, brain)
+    out = ex.report("t1", _met_deep_result(), "qaconv_1", request_text="research the plan")
+    assert out.status == "done"
+    assert brain.synth_calls, "the done post must be folded through the report synthesis"
+    assert brain.checked == ["Polished: here is what I finished."], (
+        "the synthesized report must be claim-checked before posting")
+    assert out.result == "Polished: here is what I finished."
+    assert any(t == "Polished: here is what I finished." and k == "done"
+               for (_c, t, k) in client.posts)
+    assert client.reports[0] == ("t1", "done", "Polished: here is what I finished.", None)
+
+
+def test_executor_done_post_keeps_raw_output_when_claims_unbacked():
+    """A synthesized report that claims work the execution record does not back is DISCARDED:
+    the raw (goal-verified) output is what gets posted."""
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _ReportBrain(synthesized="I also deployed it to prod.", claims=True))
+    out = ex.report("t2", _met_deep_result(), "qaconv_1", request_text="research the plan")
+    assert out.status == "done"
+    assert out.result == "RAW WORKER OUTPUT"
+    assert not any("deployed" in t for (_c, t, _k) in client.posts)
+
+
+def test_executor_done_post_keeps_raw_output_when_claim_check_cannot_run():
+    """An UNCHECKABLE rewrite (claim check returns None: no record / LLM outage) is never
+    posted; the raw output is."""
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _ReportBrain(claims=None))
+    out = ex.report("t3", _met_deep_result(), "qaconv_1", request_text="research the plan")
+    assert out.status == "done"
+    assert out.result == "RAW WORKER OUTPUT"
+
+
+def test_executor_done_post_without_request_text_skips_fold_back():
+    """No request text (older caller): the fold-back is skipped entirely and the raw output is
+    reported, exactly as before."""
+    client = MockQuestClient([])
+    brain = _ReportBrain()
+    ex = TaskExecutor(client, brain)
+    out = ex.report("t4", _met_deep_result(), "qaconv_1")
+    assert out.status == "done"
+    assert out.result == "RAW WORKER OUTPUT"
+    assert brain.synth_calls == []
+
+
+def test_executor_unverified_deep_reports_disclosure_and_non_done():
+    """An UNVERIFIED deep result (the goal loop could not run verification) must produce a chat
+    message that says so plainly, presenting any work output as unconfirmed, and a NON-done task
+    status. Never a bare 'Done'."""
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _ReportBrain())
+    result = OrchestratorResult(kind="deep", goals=["g"], deep_results=[DeepResult(
+        met=False, output="WORK PRODUCT",
+        error="Unverified: goal verification did not run (llm outage). Not confirmed complete.")])
+    out = ex.report("t5", result, "qaconv_1", request_text="do X")
+    assert out.status == "failed"                       # non-done
+    assert client.reports[0][1] == "failed"
+    done_posts = [t for (_c, t, k) in client.posts if k == "done"]
+    assert done_posts, "the chat must still hear the outcome"
+    assert "could NOT verify" in done_posts[0]
+    assert "unconfirmed" in done_posts[0]
+    assert "WORK PRODUCT" in done_posts[0]              # the work is presented, as unconfirmed
+    assert not any(t == "Done." for (_tid, _k, t, _o) in client.progress)
+
+
+def test_executor_unverified_end_to_end_via_execute():
+    """Full path: a deep run whose verification cannot run (no scripted verdict -> verifier
+    parse failure -> UNVERIFIED) ends failed with the plain disclosure in the chat."""
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "do X", "deep_brief": "x", "rationale": "work"},
+        # No {"met": ...} verdict scripted: the verifier cannot parse -> UNVERIFIED.
+    ])
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _brain(provider, deep_runner=StubDeepRunner(met=True, output="WORK")))
+    out = ex.execute({"id": "t6", "text": "do X", "conv_id": "qaconv_z"})
+    assert out.status == "failed"
+    done_posts = [t for (_c, t, k) in client.posts if k == "done"]
+    assert done_posts and "could NOT verify" in done_posts[-1]
+
+
+def test_executor_forwards_reserved_card_id_on_conv_posts():
+    """The RESERVED card_id key (future per-idea threading by context card, no behavior yet):
+    when the task carries one it rides on every conversation progress post; absent, None."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _brain(provider))
+    ex.execute({"id": "t7", "text": "say hi", "conv_id": "qaconv_c", "card_id": "card_abc"})
+    assert client.posts, "expected conversation posts"
+    assert set(client.post_card_ids) == {"card_abc"}
+
+    client2 = MockQuestClient([])
+    provider2 = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    ex2 = TaskExecutor(client2, _brain(provider2))
+    ex2.execute({"id": "t8", "text": "say hi", "conv_id": "qaconv_c"})
+    assert client2.posts and set(client2.post_card_ids) == {None}
 
 
 def test_executor_never_raises_on_brain_error():

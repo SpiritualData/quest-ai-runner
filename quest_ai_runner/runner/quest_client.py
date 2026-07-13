@@ -345,7 +345,8 @@ class QuestClient:
 
     def post_conversation_message(self, conv_id: str, content: str, *,
                                   kind: str = "progress",
-                                  task_id: Optional[str] = None) -> Dict[str, Any]:
+                                  task_id: Optional[str] = None,
+                                  card_id: Optional[str] = None) -> Dict[str, Any]:
         """Append a LIVE progress message into the Quest AI conversation a task came from.
 
         This is how a chat-delegated background task keeps the chat from going silent: the runner
@@ -358,6 +359,10 @@ class QuestClient:
         group a task's messages together). Omitted from the body when not given, so callers that
         don't have a task in scope behave exactly as before.
 
+        ``card_id`` is a RESERVED, optional key with no behavior yet: when a task carries one,
+        it rides on the progress-post body so a future backend can thread a task's posts under a
+        per-idea thread in the conversation. Omitted from the body when not given.
+
         Best-effort by contract at the call site (a dropped progress post must never fail the task),
         but this method itself surfaces API errors so callers can log them.
         """
@@ -368,6 +373,8 @@ class QuestClient:
             body: Dict[str, Any] = {"content": content, "kind": kind}
             if task_id is not None:
                 body["task_id"] = task_id
+            if card_id is not None:
+                body["card_id"] = card_id
             return self._request("POST", f"/api/quest-ai/conversations/{conv_id}/progress",
                                  body=body) or {}
         except (QuestApiError, QuestNotConfigured) as e:

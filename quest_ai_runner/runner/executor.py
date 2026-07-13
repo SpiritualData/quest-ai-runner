@@ -182,6 +182,9 @@ class TaskExecutor:
         # present, we post LIVE progress (started → milestones → done) INTO that chat so the
         # conversation doesn't go silent after the hand-off.
         conv_id = task.get("conv_id") or None
+        # card_id (reserved, no behavior yet): forwarded on every conversation progress post so
+        # a future backend can thread this task's posts under a per-idea thread.
+        card_id = task.get("card_id") or None
         # model_hint: an optional per-task model/tier string stored by the consumer on the task
         # document (e.g. "opus", or any string the consumer's ModelRegistry understands).
         # Threaded into the orchestrator so the registry can honor it. None = default behavior.
@@ -190,13 +193,14 @@ class TaskExecutor:
             self._report_progress(task_id, "error", text="task had no instruction text to run")
             self._safe_report_failed(task_id, "task had no text/description to run")
             self._post_conv(conv_id, "I couldn't run this — the task had no instruction text.",
-                            kind="done", task_id=task_id)
+                            kind="done", task_id=task_id, card_id=card_id)
             return ExecutionOutcome(task_id, "failed", "task had no text/description")
 
         # Announce the start: a live progress event on the task (the task-detail stream) AND, when a
         # conv_id links this task to a chat, a started message into that chat.
         self._report_progress(task_id, "started", text=f"Started working on this: {text}")
-        self._post_conv(conv_id, f"Started working on this: {text}", kind="started", task_id=task_id)
+        self._post_conv(conv_id, f"Started working on this: {text}", kind="started",
+                        task_id=task_id, card_id=card_id)
 
         # Fetch goal + quest context + conversation history from Quest API if available, and build
         # a context_view for the orchestrator so the deep agent knows what goal/quest it's working on
@@ -209,7 +213,8 @@ class TaskExecutor:
         sink = _TaskProgressSink(
             task_id,
             self._report_progress,
-            on_milestone=lambda ev: self._on_milestone(task_id, conv_id, ev),
+            on_milestone=lambda ev: self._on_milestone(task_id, conv_id, ev,
+                                                       card_id=card_id),
         )
 
         # Build a scope for finding RELATED past conversations (the orchestrator's Step 1, User
@@ -248,13 +253,18 @@ class TaskExecutor:
             self._report_progress(task_id, "error", text=msg)
             self._safe_report_failed(task_id, msg)
             self._post_conv(conv_id, f"I hit an error working on this: {msg}", kind="done",
-                            task_id=task_id)
+                            task_id=task_id, card_id=card_id)
             return ExecutionOutcome(task_id, "failed", msg)
 
-        return self._report(task_id, result, conv_id)
+        return self._report(task_id, result, conv_id, request_text=text,
+                            rep_preamble=rep_preamble,
+                            card_id=(task.get("card_id") or None))
 
     def report(self, task_id: str, result: OrchestratorResult,
-               conv_id: Optional[str] = None) -> ExecutionOutcome:
+               conv_id: Optional[str] = None, *,
+               request_text: Optional[str] = None,
+               rep_preamble: Optional[str] = None,
+               card_id: Optional[str] = None) -> ExecutionOutcome:
         """Public: map an ALREADY-PRODUCED OrchestratorResult onto the Quest callback + chat.
 
         ``execute()`` runs the brain and then reports; but an integrator whose deep run executes
@@ -263,10 +273,17 @@ class TaskExecutor:
         outcome through the SAME three-way policy — done / needs_you / failed — and the same
         post-back-into-chat behaviour. They build the OrchestratorResult from the finished run and
         call ``report(...)`` so async and in-loop runs report IDENTICALLY. Thin, deliberate
-        wrapper over the internal ``_report`` so the policy lives in exactly one place."""
-        return self._report(task_id, result, conv_id)
+        wrapper over the internal ``_report`` so the policy lives in exactly one place.
 
-    def _on_milestone(self, task_id: str, conv_id: Optional[str], event: ProgressEvent) -> None:
+        ``request_text`` (optional) is the task's original instruction text; when given, a fully
+        met deep result's done message is folded through the report synthesis + claim check (see
+        ``_compose_done_report``). ``rep_preamble`` rides into that synthesis. ``card_id``
+        (optional, reserved) is stamped on the conversation progress posts."""
+        return self._report(task_id, result, conv_id, request_text=request_text,
+                            rep_preamble=rep_preamble, card_id=card_id)
+
+    def _on_milestone(self, task_id: str, conv_id: Optional[str], event: ProgressEvent,
+                      card_id: Optional[str] = None) -> None:
         """Surface a real milestone: the live task-detail stream AND the originating chat.
 
         Background runs surface only real milestones/decisions/results (the MilestoneSink policy),
@@ -275,7 +292,8 @@ class TaskExecutor:
         are best-effort: a dropped progress event must never affect the task outcome."""
         if event.text:
             self._report_progress(task_id, "exec", text=event.text)
-            self._post_conv(conv_id, event.text, kind="progress", task_id=task_id)
+            self._post_conv(conv_id, event.text, kind="progress", task_id=task_id,
+                            card_id=card_id)
 
     def _report_progress(self, task_id: str, kind: str, *, text: Optional[str] = None,
                          output: Optional[str] = None,
@@ -292,18 +310,22 @@ class TaskExecutor:
             self._safe(lambda _d=data: report(task_id, kind, text=text, output=output, data=_d))
 
     def _post_conv(self, conv_id: Optional[str], content: str, *, kind: str,
-                   task_id: Optional[str] = None) -> None:
+                   task_id: Optional[str] = None,
+                   card_id: Optional[str] = None) -> None:
         """Best-effort: append a live progress message into the originating chat, if one is linked.
 
         ``task_id``, when given, is stamped on the posted message so the frontend can correlate it
-        back to the task's own lifecycle. Never raises and never affects the task's success/failure:
-        if the conversation post fails (network, conversation gone), the task still reports its
-        result normally via PATCH."""
+        back to the task's own lifecycle. ``card_id`` (reserved, no behavior yet) rides on the
+        progress-post body when the task carries one, for future per-idea threading; it is only
+        forwarded when set, so clients without the parameter are untouched. Never raises and never
+        affects the task's success/failure: if the conversation post fails (network, conversation
+        gone), the task still reports its result normally via PATCH."""
         if not conv_id or not content:
             return
         post = getattr(self._client, "post_conversation_message", None)
         if callable(post):
-            self._safe(lambda: post(conv_id, content, kind=kind, task_id=task_id))
+            extra = {"card_id": card_id} if card_id else {}
+            self._safe(lambda: post(conv_id, content, kind=kind, task_id=task_id, **extra))
 
     def _build_context_view(self, goal_id: Optional[str], quest_id: Optional[str],
                             conv_id: Optional[str] = None) -> str:
@@ -398,7 +420,10 @@ class TaskExecutor:
     # --- result -> Quest callback -------------------------------------------
 
     def _report(self, task_id: str, result: OrchestratorResult,
-                conv_id: Optional[str] = None) -> ExecutionOutcome:
+                conv_id: Optional[str] = None, *,
+                request_text: Optional[str] = None,
+                rep_preamble: Optional[str] = None,
+                card_id: Optional[str] = None) -> ExecutionOutcome:
         # Cooperative cancellation: ``result.kind == "cancelled"`` is the orchestrator's OWN
         # cooperative signal (its ``cancel_check`` returned True mid-run); the extra
         # ``_is_task_cancelled`` re-check covers the race where the run finished (or an async
@@ -416,7 +441,7 @@ class TaskExecutor:
             if getattr(result, "claim_corrected", False):
                 self._report_progress(task_id, "done", text="Paused. Needs you.", output=text)
                 self._safe(lambda: self._client.report_needs_you(task_id, text, ""))
-                self._post_conv(conv_id, text, kind="done", task_id=task_id)
+                self._post_conv(conv_id, text, kind="done", task_id=task_id, card_id=card_id)
                 return ExecutionOutcome(task_id, "needs_you", text)
             # Append goal-verdict reasoning so the reader knows whether the goal was confirmed
             # met, hit max iterations unverified, or was a best-effort partial answer.
@@ -436,7 +461,7 @@ class TaskExecutor:
             done_text = text + verdict_suffix if verdict_suffix else text
             self._report_progress(task_id, "done", text="Done.", output=done_text)
             self._safe(lambda: self._client.report_done(task_id, done_text))
-            self._post_conv(conv_id, done_text, kind="done", task_id=task_id)
+            self._post_conv(conv_id, done_text, kind="done", task_id=task_id, card_id=card_id)
             return ExecutionOutcome(task_id, "done", done_text)
 
         if result.kind == "confirm":
@@ -444,7 +469,7 @@ class TaskExecutor:
             # needs_you is a terminal-but-paused state; close the live stream with a 'done' tick
             # noting it now needs a human, so the stream doesn't hang open.
             self._report_progress(task_id, "done", text=f"Paused, needs you: {summary}")
-            self._post_conv(conv_id, summary, kind="decision", task_id=task_id)
+            self._post_conv(conv_id, summary, kind="decision", task_id=task_id, card_id=card_id)
             if result.decision_id:
                 self._safe(lambda: self._client.report_needs_you(task_id, summary, result.decision_id))
                 return ExecutionOutcome(task_id, "needs_you", summary, result.decision_id)
@@ -456,10 +481,16 @@ class TaskExecutor:
         deep = result.deep_results
         if deep and all(d.met for d in deep):
             summary = "\n\n".join(d.output for d in deep if d.output) or "Goal(s) met."
-            self._report_progress(task_id, "done", text="Done.", output=summary)
-            self._safe(lambda: self._client.report_done(task_id, summary))
-            self._post_conv(conv_id, summary, kind="done", task_id=task_id)
-            return ExecutionOutcome(task_id, "done", summary)
+            # FOLD-BACK: the raw deep output is a worker transcript tail; the done post into the
+            # chat should read as the AI reporting its own finished work. The synthesized report
+            # is CLAIM-CHECKED against the run's execution record before it replaces the raw
+            # summary; any doubt keeps the raw (already goal-verified) output.
+            done_report = self._compose_done_report(request_text, summary, result, rep_preamble)
+            self._report_progress(task_id, "done", text="Done.", output=done_report)
+            self._safe(lambda: self._client.report_done(task_id, done_report))
+            self._post_conv(conv_id, done_report, kind="done", task_id=task_id,
+                            card_id=card_id)
+            return ExecutionOutcome(task_id, "done", done_report)
         # A deep run that raised a human decision instead of finishing.
         decision_id = next((d.decision_id for d in deep if d.decision_id), None)
         if decision_id:
@@ -468,16 +499,70 @@ class TaskExecutor:
             chat_text = next((d.output for d in deep if d.output), None) or summary
             self._report_progress(task_id, "done", text=f"Paused, needs you: {summary}")
             self._safe(lambda: self._client.report_needs_you(task_id, summary, decision_id))
-            self._post_conv(conv_id, chat_text, kind="decision", task_id=task_id)
+            self._post_conv(conv_id, chat_text, kind="decision", task_id=task_id,
+                            card_id=card_id)
             return ExecutionOutcome(task_id, "needs_you", summary, decision_id)
+        # UNVERIFIED is never reported as done, and never as a bare failure either: the work RAN
+        # but its verification could not (LLM outage, no verify tier, parse failure), so the
+        # outcome is genuinely unknown. The chat message must say that plainly, presenting any
+        # work output as unconfirmed, and the task stays non-done (failed) so a human checks it.
+        unverified = [d for d in deep if not d.met and (d.error or "").startswith("Unverified")]
+        if unverified:
+            reasons = "; ".join((d.error or "").strip() for d in unverified)
+            work = "\n\n".join(d.output for d in deep if d.output).strip()
+            disclosure = ("Important: this work ran but I could NOT verify the result as "
+                          f"complete ({reasons}). Treat it as unconfirmed until someone checks "
+                          "it. It is not marked done.")
+            msg = (work + "\n\n" + disclosure) if work else disclosure
+            self._report_progress(task_id, "error", text=disclosure)
+            self._safe(lambda: self._client.report_failed(task_id, msg))
+            self._post_conv(conv_id, msg, kind="done", task_id=task_id, card_id=card_id)
+            return ExecutionOutcome(task_id, "failed", msg)
         # Otherwise the run hit a limit / errored.
         errs = "; ".join(d.error for d in deep if d.error) or "the goal was not met"
         if not deep:                 # deep requested but no runner wired -> needs human/runner
             errs = "deep work required but no deep-runner is configured: " + "; ".join(result.goals)
         self._report_progress(task_id, "error", text=errs)
         self._safe(lambda: self._client.report_failed(task_id, errs))
-        self._post_conv(conv_id, f"I couldn't complete this: {errs}", kind="done", task_id=task_id)
+        self._post_conv(conv_id, f"I couldn't complete this: {errs}", kind="done", task_id=task_id,
+                        card_id=card_id)
         return ExecutionOutcome(task_id, "failed", errs)
+
+    def _compose_done_report(self, request_text: Optional[str], raw_summary: str,
+                             result: OrchestratorResult,
+                             rep_preamble: Optional[str] = None) -> str:
+        """Fold a fully met deep run's raw output into the done message posted back to the user.
+
+        Uses the orchestrator's report synthesis (same prompt shape as the interactive after-deep
+        fold-back, worker tier) so the message reads as the AI reporting its own finished work,
+        then CLAIM-CHECKS the rewrite against the run's execution record (claims_unexecuted): a
+        rewrite that claims work the record does not back, or that cannot be checked at all, is
+        discarded for the raw summary, which is the goal-verified output itself. Never raises and
+        never loses the substance: any failure returns ``raw_summary`` unchanged.
+        """
+        request = (request_text or "").strip()
+        if not request or not (raw_summary or "").strip():
+            return raw_summary
+        synthesize = getattr(self._orch, "synthesize_task_report", None)
+        claim_check = getattr(self._orch, "report_claims_unbacked", None)
+        if not callable(synthesize) or not callable(claim_check):
+            return raw_summary        # older/stub brains: keep the raw verified output
+        try:
+            synthesized = (synthesize(request, raw_summary,
+                                      rep_preamble=rep_preamble) or "").strip()
+            if not synthesized or synthesized == raw_summary:
+                return raw_summary
+            unbacked = claim_check(request, synthesized,
+                                   getattr(result, "execution_record", None))
+            if unbacked is False:
+                return synthesized
+            # True (unbacked claim) or None (check could not run): never post an unchecked
+            # rewrite; the raw summary is the output the goal loop already verified.
+            log.info("done-report rewrite discarded (claim check: %s); posting raw output",
+                     "unbacked claim" if unbacked else "not checkable")
+        except Exception:  # noqa: BLE001 — report composition must never affect the outcome
+            log.warning("done-report composition failed; posting raw output", exc_info=True)
+        return raw_summary
 
     # --- safety wrappers (reporting must not crash the poller) ---------------
 

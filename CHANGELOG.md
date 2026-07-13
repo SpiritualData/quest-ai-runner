@@ -7,6 +7,43 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Truly asynchronous deferred deep work (queued deployments).** A consumer whose deep runner
+  QUEUES a planner `deferred_deep` as a background task (returning
+  `DeepResult(met=True, deferred=True, output=<hand-off sentinel>)` only after the enqueue is
+  confirmed) can now set `OrchestratorConfig.deferred_deep_queued=True` and get truthful,
+  loop-safe behavior end to end:
+  - **Dynamic planner wording.** The planner doctrine sentence and the decide-tool
+    `deferred_deep` description now match the configured mechanism: inline (default) keeps the
+    same-turn wording; queued says the work is handed to the background task queue and the user
+    is told in the conversation when it finishes (`DEFERRED_DEEP_INLINE_SEMANTICS` /
+    `DEFERRED_DEEP_QUEUED_SEMANTICS`, `decide_tool_for(...)`). Both wordings are only ever shown
+    when true.
+  - **Confirmed hand-off contract.** A deferred met result activates the dormant
+    `DeepResult.deferred` contract in the answer path too: the reply is re-synthesized through a
+    new queued hand-off prompt (`SYNTHESIZE_AFTER_QUEUED_PROMPT`, reports the work as queued,
+    never as done), the answer goal-verification loop is skipped for the turn (no re-verify of a
+    sentinel, no remediation relaunch that could double-enqueue), and the result's
+    `exit_reason` is `"deferred"`.
+  - **Honest enqueue.** When the deployment queues deferred work and NO hand-off was confirmed
+    (the enqueue failed), the reply is regenerated with a steer that forbids claiming the work
+    was queued, started, or done; nothing silently retries the enqueue.
+  - **Pinned queue runner.** A named runner registered under the reserved `deep_runners` key
+    `DEFERRED_RUNNER_KEY` ("deferred") receives every deferred_deep hand-off directly, so the
+    runner classifier can never re-route deferred work to an inline runner (`_run_deep` grew a
+    `runner_override` for this).
+- **Executor done posts read as the AI reporting its own finished work.** The runner executor's
+  fully-met deep done message is now folded through a report synthesis
+  (`Orchestrator.synthesize_task_report`, worker tier, same prompt shape as the interactive
+  after-deep fold-back) and CLAIM-CHECKED against the run's execution record before posting
+  (`Orchestrator.report_claims_unbacked`, the existing claims_unexecuted machinery): a rewrite
+  with an unbacked completion claim, or one that cannot be checked, is discarded for the raw
+  goal-verified output. An UNVERIFIED deep result (verification could not run) now posts a
+  message that says so plainly, presenting any work output as unconfirmed, and keeps a non-done
+  status; it is never a bare "Done".
+- **Reserved `card_id` on conversation progress posts (no behavior).** A task carrying a
+  `card_id` has it forwarded on every progress post body
+  (`QuestClient.post_conversation_message(card_id=...)`) so a future backend can thread a
+  task's posts under a per-idea context card. Absent, nothing changes.
 - **Brainstorm mode now says out loud when it held a directive back.** While the brainstorm
   latch is active, a turn whose message reads as a request to act (or whose planner chose
   deep/confirm, or set `deferred_deep` / `answer_contains_work_to_execute`, and was degraded by

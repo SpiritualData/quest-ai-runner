@@ -1454,25 +1454,169 @@ def test_empty_partial_assembly_is_not_reported_as_used(caplog):
 
 
 # ---------------------------------------------------------------------------
-# deferred_deep wording: the words must match the synchronous same-turn reality.
+# deferred_deep wording: the words must match the configured mechanism (inline vs queued).
 # ---------------------------------------------------------------------------
 
-def test_deferred_deep_wording_says_it_runs_in_the_same_turn():
-    """deferred_deep executes synchronously right after the answer, in the same turn. The
-    planner doctrine, decide-tool schema, and status line must not describe it as queued
-    for later (there is no queue; that wording lied about the mechanism)."""
-    import inspect
+def test_deferred_deep_wording_matches_configuration():
+    """The deferred_deep wording must describe the ACTUAL behavior of each configuration.
 
+    INLINE (default, deferred_deep_queued=False): the work runs synchronously right after the
+    answer, in the same turn; the doctrine and schema must say that and never describe a queue.
+    QUEUED (deferred_deep_queued=True): the consumer wired a runner that enqueues the work as a
+    background task; the doctrine and schema must say the work is queued in the background and
+    the user is told when it finishes, and never claim it runs in the same turn."""
     from quest_ai_runner.core import orchestrator as orch_mod
 
-    src = inspect.getsource(orch_mod)
-    for stale in ("queue a deep task to run after answering",
-                  "Queuing follow-up work",
-                  "Why this deep work is queued",
-                  "gets done in the deferred task"):
-        assert stale not in src, f"stale queued-for-later wording still present: {stale!r}"
+    # Inline semantics: same-turn, no queue.
+    inline = orch_mod.DEFERRED_DEEP_INLINE_SEMANTICS
+    assert "SAME" in inline and "turn" in inline
+    assert "queue" not in inline.lower()
+    inline_desc = orch_mod.DECIDE_TOOL["input_schema"]["properties"]["deferred_deep"]["description"]
+    assert "immediately after the answer" in inline_desc
+    assert "same turn" in inline_desc
+    assert "queue" not in inline_desc.lower()
 
-    desc = orch_mod.DECIDE_TOOL["input_schema"]["properties"]["deferred_deep"]["description"]
-    assert "immediately after the answer" in desc
-    assert "same turn" in desc
-    assert "immediately after it in the SAME turn" in orch_mod.PLANNER_PROMPT
+    # Queued semantics: background queue + report-back, no same-turn claim.
+    queued = orch_mod.DEFERRED_DEEP_QUEUED_SEMANTICS
+    assert "background" in queued.lower()
+    assert "when the background work finishes" in queued
+    assert "SAME turn" not in queued
+    queued_tool = orch_mod.decide_tool_for(False, True)
+    queued_desc = queued_tool["input_schema"]["properties"]["deferred_deep"]["description"]
+    assert "background task queue" in queued_desc
+    assert "same turn" not in queued_desc.lower()
+    # The variant is a copy: the shared base schema keeps its inline description.
+    assert (orch_mod.DECIDE_TOOL["input_schema"]["properties"]["deferred_deep"]["description"]
+            == inline_desc)
+    # decide_tool_for with the flag off returns the base schemas untouched.
+    assert orch_mod.decide_tool_for(False, False) is orch_mod.DECIDE_TOOL
+    assert orch_mod.decide_tool_for(True, False) is orch_mod.DECIDE_TOOL_WITH_MODE_SIGNAL
+    # Queued + mode signals keeps the mode_signal field alongside the queued description.
+    both = orch_mod.decide_tool_for(True, True)
+    assert "mode_signal" in both["input_schema"]["properties"]
+    assert ("background task queue"
+            in both["input_schema"]["properties"]["deferred_deep"]["description"])
+
+
+def test_planner_prompt_carries_the_configured_deferred_semantics():
+    """The rendered planner prompt carries the semantics sentence matching the configuration:
+    inline (default) says same-turn; queued says background + report-back. Both truthful."""
+    from quest_ai_runner.core import orchestrator as orch_mod
+
+    # Default (inline) configuration.
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    _orch(provider, StubRetrieval()).run("hello")
+    assert orch_mod.DEFERRED_DEEP_INLINE_SEMANTICS in provider.plan_prompts[0]
+    assert orch_mod.DEFERRED_DEEP_QUEUED_SEMANTICS not in provider.plan_prompts[0]
+    inline_dd = provider.plan_tool_schemas[0]["input_schema"]["properties"]["deferred_deep"]
+    assert "same turn" in inline_dd["description"]
+
+    # Queued configuration.
+    provider2 = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    _orch(provider2, StubRetrieval(),
+          config=OrchestratorConfig(deferred_deep_queued=True)).run("hello")
+    assert orch_mod.DEFERRED_DEEP_QUEUED_SEMANTICS in provider2.plan_prompts[0]
+    assert orch_mod.DEFERRED_DEEP_INLINE_SEMANTICS not in provider2.plan_prompts[0]
+    queued_dd = provider2.plan_tool_schemas[0]["input_schema"]["properties"]["deferred_deep"]
+    assert "background task queue" in queued_dd["description"]
+
+
+# ---------------------------------------------------------------------------
+# Deferred hand-off (queued deployments): the dormant DeepResult.deferred contract, active.
+# ---------------------------------------------------------------------------
+
+def test_deferred_handoff_short_circuits_and_reports_queued():
+    """A queued deployment's deferred_deep: the runner confirms the enqueue and returns
+    DeepResult(met=True, deferred=True, output=<sentinel>). The goal loop must trust met and
+    stop (ONE runner call: no re-verify of the sentinel, no relaunch), the reply must be
+    re-synthesized through the queued hand-off prompt (grounded in the sentinel, reporting the
+    work as queued rather than done), and the turn's exit_reason must be "deferred" (the answer
+    goal-verification loop is skipped: the goal is intentionally not met yet)."""
+    sentinel = "Queued as task #77: research the vendor options."
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then queue",
+                    "deferred_deep": {"goal": "Research vendor options",
+                                      "brief": "compare vendors",
+                                      "rationale": "long-running"}}],
+        answer_text="I'll look into the vendors.",
+    )
+    runner = StubDeepRunner(met=True, output=sentinel, deferred=True)
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(deferred_deep_queued=True)).run(
+        "research vendor options overnight")
+    assert res.kind == "answer"
+    assert res.exit_reason == "deferred"
+    assert len(runner.calls) == 1, "a deferred hand-off must never relaunch or re-enqueue"
+    # The final reply came from the queued synthesis prompt, grounded in the hand-off sentinel.
+    joined = "\n".join(
+        (m["content"] if isinstance(m["content"], str) else str(m["content"]))
+        for m in provider.last_answer_messages)
+    assert "CONFIRMED HAND-OFF RECORD" in joined
+    assert sentinel in joined
+    assert "ACTUAL RESULT OF THE WORK YOU JUST DID" not in joined, (
+        "a queue receipt must never be presented as finished work")
+
+
+def test_deferred_handoff_pins_the_registered_deferred_runner():
+    """With deferred_deep_queued on and a runner registered under the reserved 'deferred' key,
+    the deferred_deep hand-off must go to THAT runner even when the classifier would route the
+    goal elsewhere (deferred work must reach the queue, never an inline runner)."""
+    sentinel = "Queued as task #5."
+    queue_runner = StubDeepRunner(met=True, output=sentinel, deferred=True)
+    inline_runner = StubDeepRunner(met=True, output="did it inline")
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then queue",
+                    "deferred_deep": {"goal": "Do the thing"}}],
+    )
+    res = _orch(provider, StubRetrieval(),
+                deep_runners={"deferred": queue_runner, "inline": inline_runner},
+                deep_runner_classifier=lambda msg, goal, brief: "inline",
+                config=OrchestratorConfig(deferred_deep_queued=True)).run("do the thing later")
+    assert res.exit_reason == "deferred"
+    assert len(queue_runner.calls) == 1
+    assert inline_runner.calls == [], "classifier must not re-route deferred work inline"
+
+
+def test_deferred_handoff_failure_reply_does_not_claim_queued():
+    """HONEST-ENQUEUE: in a queued deployment, when the hand-off is NOT confirmed (the enqueue
+    failed), the reply must be regenerated with a steer saying the work was NOT queued; it must
+    never pass the failure through the queued hand-off synthesis."""
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then queue",
+                    "deferred_deep": {"goal": "Do the thing"}}],
+        answer_text="I'll queue that up.",
+    )
+    runner = StubDeepRunner(met=False, output="", error="enqueue failed: api down")
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(deferred_deep_queued=True,
+                                          answer_goal_max_iterations=1,
+                                          verify_claims=False)).run("do the thing later")
+    assert res.kind == "answer"
+    assert res.exit_reason != "deferred"
+    # The regeneration steer told the model the hand-off failed and forbade claiming queued.
+    all_answer_prompts = "\n".join(
+        (m["content"] if isinstance(m["content"], str) else str(m["content"]))
+        for m in provider.last_answer_messages)
+    assert "FAILED" in all_answer_prompts
+    assert "has NOT been queued" in all_answer_prompts
+    assert "CONFIRMED HAND-OFF RECORD" not in all_answer_prompts
+
+
+def test_inline_default_never_uses_queued_synthesis():
+    """Regression: with deferred_deep_queued off (the default), a deferred_deep still runs
+    inline in the same turn and folds back through the after-deep synthesis, exactly as before;
+    the queued hand-off prompt must not appear."""
+    deliverable = "INLINE_DELIVERABLE: the analysis."
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then run",
+                    "deferred_deep": {"goal": "Analyze it"}}],
+    )
+    runner = StubDeepRunner(met=True, output=deliverable)
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run("analyze it")
+    assert res.kind == "answer"
+    assert res.exit_reason != "deferred"
+    assert runner.calls, "inline deferred_deep must still execute in the same turn"
+    joined = "\n".join(
+        (m["content"] if isinstance(m["content"], str) else str(m["content"]))
+        for m in provider.last_answer_messages)
+    assert "CONFIRMED HAND-OFF RECORD" not in joined
