@@ -436,12 +436,14 @@ _RATIONALE_INSTRUCTION_NARRATE_REPLAN = (
 # and full intelligence. Contains no literal {/} so it is .format()-safe.
 _BRAINSTORM_PLANNER_NOTE = """\
 --- BRAINSTORM MODE (active for this turn) ---
-The user has asked to think out loud in this conversation: nothing gets executed, changed, or
-turned into a task while this mode is on. The actions "deep" and "confirm" are UNAVAILABLE this
-turn -- use "read", "answer", or "clarify" only, and do not set `deferred_deep` or
-`answer_contains_work_to_execute`. Read as much as you need and answer with your full judgment:
-explore, compare, weigh options, sketch plans, advise. Describing possible work is CORRECT here,
-not a failure -- the ordinary rule that a change request must escalate to "deep" is suspended.
+The user has asked to think out loud in this conversation: nothing gets executed, changed, turned
+into a task, or parked as a pending question while this mode is on. The actions "deep", "confirm"
+and "clarify" are ALL UNAVAILABLE this turn -- use "read" or "answer" only, and do not set
+`deferred_deep` or `answer_contains_work_to_execute`. Read as much as you need and answer with
+your full judgment: explore, compare, weigh options, sketch plans, advise. Describing possible
+work is CORRECT here, not a failure -- the ordinary rule that a change request must escalate to
+"deep" is suspended. If something is ambiguous, do NOT stop to ask for a decision: answer with
+your best reading and put the open question to the user inside the reply itself.
 """
 
 # Appended to _BRAINSTORM_PLANNER_NOTE only when mode signals are enabled (the mode vocabulary the
@@ -457,20 +459,33 @@ a goal called X and add it to my plan", "send her an email about it", "book it")
 out loud, not a release, so answer it without acting on it.
 """
 
-# Folded into the ANSWER grounding context (zero extra LLM calls) when the turn is latched in
-# brainstorm mode AND the intent machinery detected the message as a directive to act, or the
-# planner tried to act and the latch degraded it. Deliberately phrased as GUIDANCE with explicit
-# permission to skip or soften: a rhetorical "directive", or a reply that already makes the
-# no-action state obvious, must not be forced into a robotic disclaimer. No em dashes: this
-# steers user-facing text.
+# Folded into the grounding of EVERY reply a latched turn produces, whatever terminal path it took
+# (zero extra LLM calls). It carries two things:
+#
+#   1. The HONESTY FLOOR (a hard rule): a held turn ran nothing, so no reply of it may say or imply
+#      that it did, or that execution is imminent. A real held reply once said "The system will now
+#      execute this action to add it directly to your plan" while nothing ran: the worst possible
+#      failure, and the reason this rides on EVERY latched reply.
+#   2. The NO-ACTION ACKNOWLEDGMENT (guidance, with explicit permission to skip): if the message
+#      asked for something, name the hold out loud so the user knows why nothing happened and how to
+#      lift it. This is deliberately NOT gated on an intent detector. A real run proved why: the
+#      cheap regex prefilter does not see "Set that up.", "Book it." or "Do the thing we discussed"
+#      as directives at all, so gating on it left exactly the turns that most needed the
+#      acknowledgment without it. The ANSWERING model reads the message anyway; it is the better
+#      judge of whether the message asked for something, and the note tells it to skip the
+#      acknowledgment when the user was plainly just thinking out loud.
+#
+# No em dashes: this steers user-facing text.
 BRAINSTORM_NO_ACTION_ACK_NOTE = """\
 --- BRAINSTORM MODE: NOTHING WAS EXECUTED THIS TURN ---
-This conversation is in brainstorm mode and this message reads like a request to act, so nothing
-was executed, changed, or scheduled this turn. Unless your reply already makes that obvious, or
-the request was clearly rhetorical, say plainly that you have not acted because brainstorm mode
-is on, and that the user can tell you to go ahead when they are ready. This is guidance, not a
-script: use your judgment, and skip or soften the acknowledgment when it would read as awkward
-or redundant.
+This conversation is on hold: nothing was executed, changed, sent, scheduled, or queued this turn,
+and nothing will be until the user lifts the hold. Never say or imply that you have acted, that
+something is underway, or that anything is about to run. Talk about the work as something you would
+do once they say go ahead.
+If this message asked you to do something, say plainly that you have not done it because brainstorm
+mode is on, and that the user can tell you to go ahead when they are ready. That part is guidance,
+not a script: use your judgment, and skip or soften the acknowledgment when the user was clearly
+just thinking out loud, or when your reply already makes the no-action state obvious.
 """
 
 # Appended to the note above only when the PLANNER itself was ready to act this turn (it chose
@@ -478,6 +493,17 @@ or redundant.
 BRAINSTORM_HELD_WORK_ACK_NOTE = """\
 You were ready to start this work and held off only because of brainstorm mode. Make clear that
 you will begin as soon as the user says to go ahead.
+"""
+
+# Appended to the no-action note when the turn WANTED to stop and ask the user something (the
+# planner chose "clarify", or the input-understanding stage could not resolve the message). While
+# the latch is held, asking is not allowed to park a decision-request: a latched turn escalates
+# NOTHING. The question is carried into the reply instead, so the user still gets asked, in the
+# conversation, with no pending ask created anywhere. ``question`` is appended by the caller.
+BRAINSTORM_CLARIFY_ACK_PREFIX = """\
+Before you could act on this you would need one thing settled. Put that question to the user
+directly in your reply, in your own words, and give your best thinking on it meanwhile. Do not
+assume an answer and do not act on one. The open question is:
 """
 
 # Assemble the final format()-able prompt. The gate constants from context_doctrine have NO
@@ -1100,6 +1126,22 @@ def _truncate_goal(goal: str, max_chars: int = 3900) -> str:
     return goal
 
 
+def _clarify_question_text(plan: "PlanDecision") -> str:
+    """Render a planner ``clarify`` decision as ONE user-facing question (options folded in).
+
+    Shared by the escalating path (``_run_clarify``, which parks it as a decision-request) and the
+    brainstorm path (which is forbidden to escalate, so it puts the same question in the reply).
+    """
+    clarif = (plan.clarification or {}) if plan is not None else {}
+    question = (clarif.get("question") or "").strip() or "Need your input to proceed"
+    options = clarif.get("options") or []
+    if options:
+        question += "\n\nOptions:\n" + "\n".join(f"- {opt}" for opt in options)
+        if clarif.get("allow_free_input", False):
+            question += "\n\n(You can also provide custom input)"
+    return question
+
+
 # A decision's summary is stored by Quest as a goal CONDITION — a short, human-readable done-standard.
 # Raw text (a verbose planner question, a deep brief, dumped gathered context) must NEVER be written
 # there: it overflows Quest's 4000-char limit and reads as a wall of text instead of a decision ask.
@@ -1273,11 +1315,12 @@ MODE_RELEASE_TOOL: Dict[str, Any] = {
         "properties": {
             "release_brainstorm": {
                 "type": "boolean",
-                "description": "True ONLY when the user speaks about the MODE itself and lifts the "
-                               "hold ('okay go ahead and do it now', 'we are done brainstorming, act "
-                               "on this'). False for anything about the SUBJECT MATTER, including "
-                               "imperatives ('create a goal called X', 'add that to my plan', 'email "
-                               "her about it'), which is how people think out loud.",
+                "description": "True ONLY when the user speaks about the HOLD itself and lifts it "
+                               "('okay go ahead', 'we are done brainstorming', 'stop holding off'). "
+                               "False for anything about the SUBJECT MATTER, including bare and "
+                               "anaphoric imperatives ('create a goal called X', 'add that to my "
+                               "plan', 'email her about it', 'do the thing we discussed', 'set that "
+                               "up', 'just do it'), which is how people think out loud.",
             },
             "reason": {"type": "string", "description": "One short sentence: why."},
         },
@@ -1291,31 +1334,37 @@ executed, changed, or scheduled until they release that hold. Judge ONE thing ab
 message: does it RELEASE the hold?
 
 The distinction that decides it:
-  * Talking about the SUBJECT MATTER is NOT a release, not even in the imperative. If the message
-    names WHAT should happen to the thing being discussed (create it, add it, email her, book it,
-    set it up, track it), that is a person thinking out loud about the thing, and it stays held:
-    release_brainstorm = false.
+  * Talking about the SUBJECT MATTER is NOT a release, not even in the imperative, and not even
+    when the imperative points BACK at something already discussed. If the message says WHAT should
+    happen (create it, add it, email her, book it, set it up, do the thing we talked about), that is
+    a person thinking out loud about the thing, and it stays held: release_brainstorm = false. A
+    bare, blunt or impatient imperative ("just do it", "handle it", "set that up") is still the
+    user saying WHAT they want, not that the hold is over.
   * Agreeing with an IDEA is not a release either. Settling on a plan in the first person ("let us
     do it", "I love that, that is the plan") says the user likes the idea, not that the hold is
     lifted. False.
-  * Releasing the hold means the user speaks to YOU about the holding itself: they tell you to stop
-    holding back and start acting on what was already discussed, naming no new work of their own
-    ("go ahead", "go for it", "do it now", "act on this", "make it happen", "we are done
-    brainstorming"). release_brainstorm = true.
+  * Releasing the hold means the user speaks to YOU about the HOLD itself: the brainstorming, the
+    waiting, the holding back, or an explicit go-ahead ("go ahead", "go for it", "you can act now",
+    "stop holding off", "we are done brainstorming"). Only that lifts it:
+    release_brainstorm = true.
 
 Contrasting examples:
   "Create a goal called Morning Pages and add it to my plan."  -> false (subject matter, phrased as
       an instruction; the user is still shaping the idea out loud)
   "Send her an email about it and book the room."              -> false (subject matter)
+  "Do the thing we discussed."                                 -> false (an imperative pointing back
+      at the work; it says WHAT they want, it does not lift the hold)
+  "Set that up." / "Book it." / "Just do it."                  -> false (blunt subject-matter
+      imperatives; still thinking out loud about the thing)
   "Let us do it."                                              -> false (first-person agreement with
       the idea; it does not tell you to stop holding back)
-  "Okay, go ahead and do it now."                              -> true (spoken to you, about your
-      holding back; the hold itself is lifted)
+  "Okay, go ahead and do it now."                              -> true (an explicit go-ahead, spoken
+      to you about your holding back; the hold itself is lifted)
   "We are done brainstorming. Act on what we discussed."       -> true (explicit release)
   "Stop holding off, make it happen."                          -> true (explicit release)
 
-Unless the message unmistakably tells you to start acting, answer false. Holding is recoverable in
-one sentence (the user says go ahead and everything runs); acting is not.
+Unless the message unmistakably lifts the hold, answer false. Holding is recoverable in one
+sentence (the user says go ahead and everything runs); acting is not.
 
 Do NOT use em dashes.
 
@@ -3740,7 +3789,8 @@ class Orchestrator:
     def _grounded_answer(self, user_message: str, transcript: str, context_view: str,
                          gathered: List[Dict[str, Any]], model: str, partial: bool,
                          native_blocks: Optional[List[Dict[str, Any]]] = None,
-                         rep_preamble: Optional[str] = None) -> str:
+                         rep_preamble: Optional[str] = None,
+                         reply_directive: Optional[str] = None) -> str:
         messages = []
         if rep_preamble:
             messages.append({"role": "user", "content": rep_preamble})
@@ -3765,7 +3815,16 @@ class Orchestrator:
         # gathered content + the new message are the volatile L3 tail. Skipped for a multimodal turn
         # (native image blocks can't be flattened into the tail) and for any provider without the
         # layered surface, both of which keep the untouched ``messages`` path.
-        answer_kwargs: Dict[str, Any] = {"model": model, "system": REPLY_VOICE_SYSTEM}
+        # ``reply_directive`` is a HOW-TO-REPLY instruction for this turn (today: the brainstorm
+        # no-action acknowledgment). It rides on the SYSTEM prompt, with the rest of the reply
+        # contract, NOT inside the grounding block: that block is introduced to the model as
+        # material to answer FROM and to never mention, which is exactly the wrong frame for an
+        # instruction the reply must obey and speak to.
+        answer_kwargs: Dict[str, Any] = {
+            "model": model,
+            "system": (f"{REPLY_VOICE_SYSTEM}\n\n{reply_directive}" if reply_directive
+                       else REPLY_VOICE_SYSTEM),
+        }
         if not native_blocks and provider_call_accepts_layers(provider.answer):
             tail_parts: List[str] = []
             if transcript:
@@ -3893,12 +3952,17 @@ class Orchestrator:
     def _answer_subquestions(self, user_message: str, transcript: str, context_view: str,
                              gathered: List[Dict[str, Any]], model: str,
                              subquestions: List[str],
-                             native_blocks: Optional[List[Dict[str, Any]]] = None) -> str:
+                             native_blocks: Optional[List[Dict[str, Any]]] = None,
+                             reply_directive: Optional[str] = None) -> str:
         subs = [s for s in subquestions if s][: self.cfg.max_subquestions]
         if len(subs) < 2:
             return self._grounded_answer(user_message, transcript, context_view, gathered, model,
-                                         False, native_blocks=native_blocks)
+                                         False, native_blocks=native_blocks,
+                                         reply_directive=reply_directive)
         ground = _grounding_block(context_view, gathered, False)
+        # Same contract as _grounded_answer: a per-turn reply directive rides on the system prompt.
+        sub_system = (f"{REPLY_VOICE_SYSTEM}\n\n{reply_directive}" if reply_directive
+                      else REPLY_VOICE_SYSTEM)
 
         def answer_one(sub: str) -> Optional[Dict[str, str]]:
             try:
@@ -3915,7 +3979,7 @@ class Orchestrator:
                 provider = self.get_provider_for_model(model)
                 # A single surviving sub-answer is returned to them verbatim (see below), so each one
                 # is written under the same voice contract as a whole reply.
-                return {"q": sub, "a": provider.answer(msgs, model=model, system=REPLY_VOICE_SYSTEM)}
+                return {"q": sub, "a": provider.answer(msgs, model=model, system=sub_system)}
             except Exception as e:  # noqa: BLE001
                 log.warning(f"Sub-question answer generation failed: {type(e).__name__}: {e}", exc_info=True)
                 return None
@@ -3933,7 +3997,8 @@ class Orchestrator:
         ok = [a for a in out if a and (a.get("a") or "").strip()]
         if not ok:
             return self._grounded_answer(user_message, transcript, context_view, gathered, model,
-                                         False, native_blocks=native_blocks)
+                                         False, native_blocks=native_blocks,
+                                         reply_directive=reply_directive)
         if len(ok) == 1:
             return ok[0]["a"]
         merged = "\n\n".join(f"SUB-QUESTION: {a['q']}\nANSWER: {a['a']}" for a in ok)
@@ -3948,7 +4013,7 @@ class Orchestrator:
                     "non-repetitive reply written straight to them, and never mention the split, "
                     "the sub-questions, or the headings below.\n\n" + merged)}],
                 model=model,
-                system=REPLY_VOICE_SYSTEM,
+                system=sub_system,     # the merge writes the reply too, so it obeys the directive
             )
         except Exception:  # noqa: BLE001
             return "\n\n".join(a["a"] for a in ok)
@@ -5949,17 +6014,12 @@ class Orchestrator:
         respond on the frontend or terminal. Returns with kind="confirm" to trigger UI.
         """
         clarif = plan.clarification or {}
-        question = clarif.get("question", "Need your input to proceed").strip()
+        question = (clarif.get("question") or "").strip() or "Need your input to proceed"
         options = clarif.get("options") or []
         allow_free = clarif.get("allow_free_input", False)
-
-        # Format options for display
-        if options:
-            question_with_opts = f"{question}\n\nOptions:\n" + "\n".join(f"- {opt}" for opt in options)
-            if allow_free:
-                question_with_opts += "\n\n(You can also provide custom input)"
-        else:
-            question_with_opts = question
+        # Same rendering the brainstorm (non-escalating) path uses, so the user is asked the same
+        # question whichever way it reaches them.
+        question_with_opts = _clarify_question_text(plan)
 
         decision_id = None
         if self.escalation is not None:
@@ -6165,10 +6225,18 @@ class Orchestrator:
         # EVENT_MODE_SIGNAL + OrchestratorResult.mode_signal; the orchestrator persists nothing.
         brainstorm_active = (cfg.execution_mode == "brainstorm")
         mode_signal_detected: Optional[str] = None
-        # The action ("deep"/"confirm") the planner chose this turn that the brainstorm latch
-        # degraded to "answer", if any. Feeds the no-action acknowledgment steer on the answer
-        # path so the reply can say the work was held rather than silently dropping it.
+        # The action ("deep"/"confirm"/"clarify") the turn chose that the brainstorm latch degraded
+        # to "answer", if any. Feeds the no-action acknowledgment steer on the answer path so the
+        # reply can say the work was held rather than silently dropping it.
         brainstorm_suppressed_action: Optional[str] = None
+        # The question a suppressed "clarify" (planner) or a suppressed understanding-clarify
+        # (stage 1) wanted to park as a decision-request. While the latch is held nothing may
+        # escalate, so the question rides into the REPLY instead (see BRAINSTORM_CLARIFY_ACK_PREFIX).
+        brainstorm_clarify_question: Optional[str] = None
+        # True when the release judge LIFTED the hold on this very turn. The user just told us to
+        # stop holding back and act on what was discussed, so the turn is a directive by definition:
+        # it must not end as one more proposal (that is what the whole conversation already was).
+        brainstorm_released_this_turn = False
 
         # Reset per-turn token counters on the provider (if it tracks them).
         try:
@@ -6261,6 +6329,30 @@ class Orchestrator:
                 _inbox = self.input_inbox
                 pending_inputs = lambda: _inbox.drain(_conv_key)  # noqa: E731
 
+        # --- BRAINSTORM RELEASE (latched turns only; the exit authority) -----------------------
+        # While the latch is held, ONE dedicated structured judgment decides whether this message
+        # lifts the hold (see judge_brainstorm_release). It runs BEFORE ANY stage that could act or
+        # escalate (input understanding, the planner loop, the terminal paths), so the whole turn --
+        # understanding, planner note, action gating, acknowledgment -- runs in the mode the user is
+        # actually in. A HOLD verdict (including every failure mode) leaves the latch on; only a
+        # release flips it, and that release is what the consumer sees as mode_signal.
+        # Cost is bounded to brainstorm turns: nothing here runs in normal mode.
+        if brainstorm_active and cfg.mode_signals_enabled:
+            _released, _release_reason = self.judge_brainstorm_release(user_message, transcript)
+            log.info("Brainstorm-release judge: %s (%s)",
+                     "RELEASE" if _released else "HOLD", _release_reason)
+            if _released:
+                brainstorm_active = False
+                brainstorm_released_this_turn = True
+                mode_signal_detected = "exit_brainstorm"
+                try:
+                    emit.emit(ProgressEvent(type=EVENT_MODE_SIGNAL, step=0,
+                                            data={"signal": "exit_brainstorm",
+                                                  "execution_mode": cfg.execution_mode,
+                                                  "reason": _release_reason}))
+                except Exception:  # noqa: BLE001 — reporting the signal must never break the turn
+                    pass
+
         # --- STAGE 1: USER INPUT UNDERSTANDING (resolve the request) --------------------------
         # Three distinct stages follow, each relating to the goal condition but kept separate:
         #   1. UNDERSTAND the input -> a self-contained GOAL CONDITION (uses CONVERSATION context).
@@ -6290,7 +6382,14 @@ class Orchestrator:
                     user_message, conv_id, conv_scope or {}, emit)
             except Exception:  # noqa: BLE001 — understanding must never break the run
                 goal_condition, conv_ctx_text, clarify_q = user_message, "", None
-            if clarify_q:
+            if clarify_q and brainstorm_active:
+                # BRAINSTORM: a latched turn escalates NOTHING, so this may not park a decision-
+                # request. Carry the question into the reply instead (the answer asks it inline) and
+                # let the loop run normally on the best available reading of the message.
+                log.info("Brainstorm mode: understanding-clarify degraded to an in-reply question.")
+                brainstorm_suppressed_action = brainstorm_suppressed_action or "clarify"
+                brainstorm_clarify_question = clarify_q
+            elif clarify_q:
                 # Short-circuit the turn: ask the user, do NOT run the planner loop. Reuse the
                 # clarify/confirm mechanism so the executor maps it to needs_you and chat posts it.
                 plan = PlanDecision(action="confirm", confirm_question=clarify_q,
@@ -6851,28 +6950,6 @@ class Orchestrator:
             emit.emit(ProgressEvent(type=EVENT_DONE, result_kind=res.kind, step=steps))
             return res
 
-        # --- BRAINSTORM RELEASE (latched turns only; the exit authority) -----------------------
-        # While the latch is held, ONE dedicated structured judgment decides whether this message
-        # lifts the hold (see judge_brainstorm_release). It runs before the first plan, so the whole
-        # turn -- planner note, action gating, acknowledgment -- runs in the mode the user is
-        # actually in. A HOLD verdict (including every failure mode) leaves the latch on; only a
-        # release flips it, and that release is what the consumer sees as mode_signal.
-        # Cost is bounded to brainstorm turns: nothing here runs in normal mode.
-        if brainstorm_active and cfg.mode_signals_enabled:
-            _released, _release_reason = self.judge_brainstorm_release(user_message, transcript)
-            log.info("Brainstorm-release judge: %s (%s)",
-                     "RELEASE" if _released else "HOLD", _release_reason)
-            if _released:
-                brainstorm_active = False
-                mode_signal_detected = "exit_brainstorm"
-                try:
-                    emit.emit(ProgressEvent(type=EVENT_MODE_SIGNAL, step=0,
-                                            data={"signal": "exit_brainstorm",
-                                                  "execution_mode": cfg.execution_mode,
-                                                  "reason": _release_reason}))
-                except Exception:  # noqa: BLE001 — reporting the signal must never break the turn
-                    pass
-
         plan: Optional[PlanDecision] = None
         steps = 0
         consecutive_reads = 0  # Track how many steps in a row chose "read"
@@ -7000,13 +7077,20 @@ class Orchestrator:
                     except Exception:  # noqa: BLE001 — reporting must never break the turn
                         pass
 
-            # BRAINSTORM GATE: acting is unavailable while the latch is held. If the planner
-            # still chose "deep" or "confirm" despite the prompt note, degrade to "answer" with
-            # everything gathered so far (same fail-safe style as a planner failure above): the
-            # turn keeps its full context and produces a grounded reply, it just does not act.
-            if plan and brainstorm_active and plan.action in ("deep", "confirm"):
+            # BRAINSTORM GATE: acting AND escalating are both unavailable while the latch is held.
+            # If the planner still chose "deep", "confirm" or "clarify" despite the prompt note,
+            # degrade to "answer" with everything gathered so far (same fail-safe style as a planner
+            # failure above): the turn keeps its full context and produces a grounded reply, it just
+            # does not act. "clarify" is included because it surfaces its question through the
+            # ESCALATION SINK (a real decision-request in a consumer), which would park a pending ask
+            # on a conversation the user explicitly put on hold. Its question is not lost: it rides
+            # into the reply text instead (see brainstorm_clarify_question below).
+            if plan and brainstorm_active and plan.action in ("deep", "confirm", "clarify"):
                 log.info("Brainstorm mode: degrading planner action %r to 'answer'.", plan.action)
                 brainstorm_suppressed_action = plan.action
+                if plan.action == "clarify":
+                    brainstorm_clarify_question = (
+                        _clarify_question_text(plan) or brainstorm_clarify_question)
                 plan.action = "answer"
 
             # Safety gate: if planner chose "read" for many consecutive steps, force a terminal action
@@ -7129,15 +7213,79 @@ class Orchestrator:
 
         final = (plan or PlanDecision(action="answer")).action
 
+        # --- BRAINSTORM TERMINAL GATE (the single choke point) --------------------------------
+        # Whatever set the action -- the planner, the read-loop safety escalation, an overseer
+        # signal -- a latched turn may neither ACT nor ESCALATE. Every terminal path below funnels
+        # through here, so the invariant ("a latched turn executes nothing and creates no
+        # decision-request") holds structurally instead of depending on each path remembering to
+        # check the latch. "clarify"/"confirm" carry a question the user still deserves to hear, so
+        # it is not dropped: it rides into the reply text via the acknowledgment note below.
+        if brainstorm_active and final in ("deep", "confirm", "clarify"):
+            log.info("Brainstorm mode: degrading terminal action %r to 'answer'.", final)
+            brainstorm_suppressed_action = brainstorm_suppressed_action or final
+            if final == "clarify":
+                brainstorm_clarify_question = (_clarify_question_text(plan)
+                                               or brainstorm_clarify_question)
+            elif final == "confirm" and plan.confirm_question:
+                brainstorm_clarify_question = (brainstorm_clarify_question
+                                               or plan.confirm_question.strip())
+            plan.action = final = "answer"
+
+        # BRAINSTORM NO-ACTION ACKNOWLEDGMENT (zero extra LLM calls): while the latch is held, the
+        # escalation nets are suppressed wholesale, so a held turn would otherwise end with a reply
+        # that never says nothing ran (or, worse, improvises that it is about to run). The note is
+        # computed ONCE, HERE, before ANY reply-producing path runs, and passed as the
+        # ``reply_directive`` of EVERY reply generator below (the read-budget wrap-up, the main
+        # answer, the sub-question answerer, and every regeneration, all of which run through
+        # ``_gen_answer``). It lands on the answering call's SYSTEM prompt, next to the rest of the
+        # reply contract, which is the layer an instruction the reply must OBEY belongs in.
+        #
+        # Both halves of that are the fix for a real failure. It used to be folded into the answer
+        # GROUNDING at the main answer only, so (a) turns that returned earlier (clarify, the
+        # read-budget wrap-up) shipped replies that had never been told the turn was held, and
+        # (b) even when it did reach the model it sat inside a block introduced as "answer FROM
+        # this, never mention that you read it", the wrong frame for an instruction to speak up.
+        # It rides on every latched turn, not only ones an intent detector flags (see the note's own
+        # comment: the detector missed exactly the phrasings that needed it most), and the two extra
+        # steers below are added when the turn ALSO wanted to act or to ask.
+        brainstorm_ack_note: Optional[str] = None
+        if brainstorm_active:
+            brainstorm_ack_note = BRAINSTORM_NO_ACTION_ACK_NOTE
+            planner_tried_to_act = (brainstorm_suppressed_action in ("deep", "confirm")
+                                    or bool(plan.deferred_deep)
+                                    or bool(plan.answer_contains_work_to_execute))
+            if planner_tried_to_act:
+                brainstorm_ack_note += BRAINSTORM_HELD_WORK_ACK_NOTE
+            if brainstorm_clarify_question:
+                brainstorm_ack_note += (BRAINSTORM_CLARIFY_ACK_PREFIX
+                                        + brainstorm_clarify_question.strip() + "\n")
+
+        def _answer_grounding(steering: Optional[str] = None) -> str:
+            # The L2 grounding EVERY reply this turn is built on.
+            cv = context_view
+            if steering:
+                cv = ((context_view + "\n\n" if context_view else "")
+                      + "--- IMPROVE YOUR ANSWER (it did not yet meet the goal) ---\n" + steering)
+            # Forward the planner's reasoning so the answerer benefits from what the planner
+            # already worked out. Without this the answerer re-derives from scratch and may
+            # reach a different (wrong) conclusion, e.g. "no prior history" despite the planner
+            # having already found and summarised the conversation history correctly.
+            if plan.rationale and plan.action == "answer":
+                planner_block = f"--- PLANNER ANALYSIS ---\n{plan.rationale}"
+                cv = (cv + "\n\n" + planner_block if cv else planner_block)
+            return cv
+
         # Cap/budget fallback: still in read mode -> best-effort answer or escalate to deep.
         # In brainstorm mode escalation is unavailable, so a budget-capped turn always wraps up
-        # with a best-effort grounded answer (even with nothing gathered) instead of acting.
+        # with a best-effort grounded answer (even with nothing gathered) instead of acting -- and
+        # it grounds through ``_answer_grounding``, so it carries the no-action acknowledgment too.
         if final not in ("answer", "deep", "confirm", "clarify"):
             if gathered or brainstorm_active:
                 emit.status("Wrapping up with a best-effort answer…")
                 model = self._answer_model(plan, "balanced", hint=model_hint)
-                text = self._grounded_answer(user_message, transcript, context_view, gathered, model,
-                                             True, native_blocks=native_blocks)
+                text = self._grounded_answer(user_message, transcript, _answer_grounding(), gathered,
+                                             model, True, native_blocks=native_blocks,
+                                             reply_directive=brainstorm_ack_note)
                 return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
                                                  partial=True, model=model,
                                                  exit_reason="read_budget"))
@@ -7187,48 +7335,21 @@ class Orchestrator:
         # answer
         model = self._answer_model(plan, "sonnet", hint=model_hint)
 
-        # BRAINSTORM NO-ACTION ACKNOWLEDGMENT (zero extra LLM calls): while the latch is held,
-        # the escalation nets below are suppressed wholesale, so a directive turn would otherwise
-        # end with a reply that never says nothing ran. The suppressed verdict is already known
-        # here for free: the planner tried to act (deep/confirm degraded by the latch above, or
-        # deferred_deep / answer_contains_work_to_execute set), or the message itself trips the
-        # same regex prefilter whose escalation the latch suppresses (_message_requests_change;
-        # the ambiguous-band LLM judgment is deliberately NOT run here, keeping this free). Fold
-        # the acknowledgment guidance into the answer grounding so the reply says out loud that
-        # nothing was done and the user can say to go ahead; the note itself grants the model
-        # permission to skip or soften it when that would read as awkward or redundant.
-        brainstorm_ack_note: Optional[str] = None
-        if brainstorm_active:
-            planner_tried_to_act = (brainstorm_suppressed_action is not None
-                                    or bool(plan.deferred_deep)
-                                    or bool(plan.answer_contains_work_to_execute))
-            if planner_tried_to_act or _message_requests_change(user_message):
-                brainstorm_ack_note = BRAINSTORM_NO_ACTION_ACK_NOTE
-                if planner_tried_to_act:
-                    brainstorm_ack_note += BRAINSTORM_HELD_WORK_ACK_NOTE
-
         def _gen_answer(steering: Optional[str]) -> str:
             # Produce an answer, optionally STEERED by goal-verification feedback (the prior answer
-            # plus why it fell short + what to fix) folded into the grounding context.
-            cv = context_view
-            if steering:
-                cv = ((context_view + "\n\n" if context_view else "")
-                      + "--- IMPROVE YOUR ANSWER (it did not yet meet the goal) ---\n" + steering)
-            # Forward the planner's reasoning so the answerer benefits from what the planner
-            # already worked out. Without this the answerer re-derives from scratch and may
-            # reach a different (wrong) conclusion, e.g. "no prior history" despite the planner
-            # having already found and summarised the conversation history correctly.
-            if plan.rationale and plan.action == "answer":
-                planner_block = f"--- PLANNER ANALYSIS ---\n{plan.rationale}"
-                cv = (cv + "\n\n" + planner_block if cv else planner_block)
-            if brainstorm_ack_note:
-                cv = (cv + "\n\n" + brainstorm_ack_note) if cv else brainstorm_ack_note
+            # plus why it fell short + what to fix) folded into the grounding context. EVERY reply
+            # this turn produces (including each regeneration) goes through here or the read-budget
+            # wrap-up above, and both pass ``brainstorm_ack_note`` as the reply directive, so a
+            # latched turn cannot ship a reply that was never told the turn was held.
+            cv = _answer_grounding(steering)
             if len(plan.subquestions) >= 2:
                 return self._answer_subquestions(user_message, transcript, cv, gathered,
-                                                 model, plan.subquestions, native_blocks=native_blocks)
+                                                 model, plan.subquestions, native_blocks=native_blocks,
+                                                 reply_directive=brainstorm_ack_note)
             return self._grounded_answer(user_message, transcript, cv, gathered, model,
                                          False, native_blocks=native_blocks,
-                                         rep_preamble=rep_preamble)
+                                         rep_preamble=rep_preamble,
+                                         reply_directive=brainstorm_ack_note)
 
         emit.status(f"Answering {len(plan.subquestions)} parts in parallel…"
                     if len(plan.subquestions) >= 2 else "Answering")
@@ -7386,8 +7507,15 @@ class Orchestrator:
             # this never adds a blocking call to the ordinary "clearly not a directive" case, and
             # never blocks the turn even in the ambiguous case.
             elif exec_record is None or not exec_record.any_mutation_attempted:
-                _is_directive = _message_requests_change(user_message)
-                _directive_reason = "message-intent fallback (regex)"
+                # A turn that just RELEASED the brainstorm hold is a directive by definition: the
+                # release judge only says true when the user told us to stop holding back and act on
+                # what was discussed. The work itself usually lives in the transcript, not in that
+                # short message ("go ahead"), so the regex below cannot see it and the turn would
+                # otherwise end with one more proposal (and, worse, a reply claiming it had acted).
+                _is_directive = brainstorm_released_this_turn or _message_requests_change(user_message)
+                _directive_reason = ("brainstorm release: the user lifted the hold and told us to act"
+                                     if brainstorm_released_this_turn
+                                     else "message-intent fallback (regex)")
                 if not _is_directive and message_change_signal_ambiguous(user_message):
                     _is_directive, _llm_reason = self.judge_execution_directive(user_message, text)
                     _directive_reason = f"message-intent fallback (LLM judgment: {_llm_reason})"

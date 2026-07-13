@@ -9,6 +9,7 @@ from .adapters import (
     EVENT_DONE,
     EVENT_EXEC,
     EVENT_MILESTONE,
+    EVENT_MODE_SIGNAL,
     EVENT_OVERSEER,
     EVENT_PARTIAL,
     EVENT_PLAN,
@@ -64,8 +65,12 @@ from .model_registry import (
     is_vision_capable,
 )
 from .orchestrator import (
+    BRAINSTORM_HELD_WORK_ACK_NOTE,
+    BRAINSTORM_NO_ACTION_ACK_NOTE,
     DECIDE_TOOL,
     DEFERRED_RUNNER_KEY,
+    MODE_RELEASE_PROMPT,
+    MODE_RELEASE_TOOL,
     PLANNER_PROMPT,
     Orchestrator,
     OrchestratorConfig,
@@ -99,7 +104,7 @@ __all__ = [
     "StreamSink", "MilestoneSink", "FanoutSink", "SURFACING_EVENTS",
     "EVENT_STATUS", "EVENT_PLAN", "EVENT_READ", "EVENT_REPLAN", "EVENT_PARTIAL",
     "EVENT_EXEC", "EVENT_RESULT", "EVENT_DECISION", "EVENT_MILESTONE", "EVENT_DONE",
-    "EVENT_UNDERSTANDING", "EVENT_OVERSEER",
+    "EVENT_UNDERSTANDING", "EVENT_OVERSEER", "EVENT_MODE_SIGNAL",
     # storage-agnostic conversation-history retrieval (User Input Understanding)
     "ConversationContext", "ConversationStore",
     # registry
@@ -113,6 +118,14 @@ __all__ = [
     "PLANNER_PROMPT", "DECIDE_TOOL", "normalize_decision",
     # render PLANNER_PROMPT without knowing its full slot set (non-breaking path for consumers)
     "render_planner_prompt", "planner_prompt_defaults",
+    # EXECUTION MODES (the brainstorm no-action latch). A consumer's compat probe can key on these
+    # STABLE public names to tell whether the library it loaded has the judged latch:
+    #   * OrchestratorConfig fields ``execution_mode``, ``mode_signals_enabled``, ``mode_release_tier``
+    #   * the exit authority ``Orchestrator.judge_brainstorm_release`` (+ its MODE_RELEASE_TOOL schema)
+    #   * ``OrchestratorResult.mode_signal`` and the EVENT_MODE_SIGNAL event
+    # A build without the latch lacks all of them, so a stale library can never look like it holds.
+    "MODE_RELEASE_TOOL", "MODE_RELEASE_PROMPT",
+    "BRAINSTORM_NO_ACTION_ACK_NOTE", "BRAINSTORM_HELD_WORK_ACK_NOTE",
     # reserved deep_runners key for a queued deferred deployment
     "DEFERRED_RUNNER_KEY",
     # execution record (claim honesty is judged inside the goal verification)

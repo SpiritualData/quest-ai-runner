@@ -452,11 +452,15 @@ def test_brainstorm_without_signals_gates_but_prompt_stays_signal_free():
 # ---------------------------------------------------------------------------
 
 _ACK_MARKER = "BRAINSTORM MODE: NOTHING WAS EXECUTED THIS TURN"
+_HONESTY_MARKER = "Never say or imply that you have acted"
 _HELD_MARKER = "held off only because of brainstorm mode"
 
 
 def _answer_prompt(provider) -> str:
-    return "\n".join(str(m["content"]) for m in provider.last_answer_messages)
+    """Everything the LAST answer call saw: its system prompt (where a per-turn reply directive
+    rides) plus its messages."""
+    system = str(provider.answer_systems[-1] or "") if provider.answer_systems else ""
+    return system + "\n" + "\n".join(str(m["content"]) for m in provider.last_answer_messages)
 
 
 def test_brainstorm_directive_message_injects_no_action_ack_steer():
@@ -510,14 +514,21 @@ def test_brainstorm_suppressed_deferred_deep_injects_held_work_ack():
     assert _HELD_MARKER in prompt
 
 
-def test_brainstorm_plain_question_injects_no_ack_steer():
+def test_brainstorm_plain_question_carries_the_ack_with_permission_to_skip():
+    """A musing is not forced into a robotic disclaimer: the note rides along (its honesty floor
+    applies to every latched reply) but explicitly tells the model to skip the acknowledgment when
+    the user was only thinking out loud. Held work is NOT claimed."""
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "weighing options"}])
     res = _orch(provider, StubRetrieval(),
                 config=OrchestratorConfig(execution_mode="brainstorm")).run(
         "what are the tradeoffs of approach A?")
     assert res.kind == "answer"
-    assert _ACK_MARKER not in _answer_prompt(provider)
-    for p in provider.plan_prompts:
+    prompt = _answer_prompt(provider)
+    assert _ACK_MARKER in prompt
+    assert _HONESTY_MARKER in prompt
+    assert "skip or soften" in prompt
+    assert _HELD_MARKER not in prompt
+    for p in provider.plan_prompts:            # never leaks into the PLANNER prompt
         assert _ACK_MARKER not in p
 
 
@@ -540,8 +551,9 @@ class _AckAwareProvider(StubProvider):
     def answer(self, messages, *, model, system=None) -> str:
         self.answer_calls += 1
         self.last_answer_messages = messages
+        self.all_answer_messages.append(list(messages))
         self.answer_systems.append(system)
-        joined = "\n".join(str(m["content"]) for m in messages)
+        joined = str(system or "") + "\n" + "\n".join(str(m["content"]) for m in messages)
         if _ACK_MARKER in joined:
             return ("I have not acted on this because we are in brainstorm mode. "
                     "Say the word and I will go ahead.")
@@ -581,3 +593,157 @@ def test_normal_mode_deep_unchanged():
     assert res.kind == "deep"
     assert res.mode_signal is None
     assert runner.calls[0]["goal"] == "Write the one-pager"
+
+
+# ---------------------------------------------------------------------------
+# THE TWO INVARIANTS (a latched turn):
+#   1. it ESCALATES NOTHING and EXECUTES NOTHING, via ANY action or escalation path,
+#   2. EVERY reply-producing path carries the no-action acknowledgment guidance.
+# Both were broken in the real product even though the stubs above passed: "clarify" (which the
+# planner note used to invite) escalated a real decision-request through the escalation sink, and
+# the two EARLY terminal paths (clarify, read-budget wrap-up) never reached the acknowledgment,
+# which was folded in at the main answer's grounding only.
+# ---------------------------------------------------------------------------
+
+def test_brainstorm_clarify_raises_no_decision_request():
+    """A latched turn may not park an ask: "clarify" degrades to an answer that asks in the reply."""
+    provider = StubProvider(decisions=[
+        {"action": "clarify", "rationale": "ambiguous",
+         "clarification": {"question": "Which project do you mean?",
+                           "options": ["Quest", "Research"], "allow_free_input": True}},
+    ])
+    escalation = StubEscalation()
+    runner = StubDeepRunner(met=True)
+    res = _orch(provider, StubRetrieval(), deep_runner=runner, escalation=escalation,
+                config=OrchestratorConfig(execution_mode="brainstorm")).run("Set that up.")
+    assert res.kind == "answer"          # not "confirm"
+    assert res.decision_id is None
+    assert escalation.raised == []       # ZERO decision-requests from a latched turn
+    assert runner.calls == []            # and nothing executed
+    prompt = _answer_prompt(provider)
+    assert _ACK_MARKER in prompt         # the reply still says nothing ran
+    assert "Which project do you mean?" in prompt   # and the question rides into the reply
+    assert "Quest" in prompt and "Research" in prompt
+
+
+def test_brainstorm_planner_note_no_longer_invites_clarify():
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    _orch(provider, StubRetrieval(),
+          config=OrchestratorConfig(execution_mode="brainstorm")).run("mulling something over")
+    note = provider.plan_prompts[0]
+    assert '"deep", "confirm"' in note and '"clarify" are ALL UNAVAILABLE' in note
+    assert 'use "read" or "answer" only' in note
+
+
+def test_brainstorm_read_budget_wrapup_carries_the_ack():
+    """The budget/cap wrap-up is a reply path that returns EARLY (it never reaches the main answer
+    assembly), so it has to carry the acknowledgment itself."""
+    provider = StubProvider(decisions=[
+        {"action": "read", "reads": [{"rel_path": "README.md"}], "rationale": "grounding"},
+    ])
+    runner = StubDeepRunner(met=True)
+    escalation = StubEscalation()
+    res = _orch(provider, StubRetrieval({"README.md": "GROUNDING notes"}), deep_runner=runner,
+                escalation=escalation,
+                config=OrchestratorConfig(execution_mode="brainstorm", max_steps=1)).run(
+        "fix the login bug")
+    assert res.kind == "answer"
+    assert res.exit_reason == "read_budget"
+    assert runner.calls == []
+    assert escalation.raised == []
+    prompt = _answer_prompt(provider)
+    assert _ACK_MARKER in prompt         # the early-return reply path carries the note too
+    assert _HONESTY_MARKER in prompt
+
+
+def test_brainstorm_read_budget_wrapup_in_normal_mode_unchanged():
+    """The same cap in NORMAL mode still wraps up with the best-effort answer and no brainstorm
+    steer of any kind (the wrap-up change is brainstorm-only)."""
+    provider = StubProvider(decisions=[
+        {"action": "read", "reads": [{"rel_path": "README.md"}], "rationale": "grounding"},
+        {"met": True, "reason": "done"},
+    ])
+    runner = StubDeepRunner(met=True, output="did it")
+    res = _orch(provider, StubRetrieval({"README.md": "GROUNDING notes"}), deep_runner=runner,
+                config=OrchestratorConfig(max_steps=1)).run("fix the login bug")
+    assert res.kind == "answer"          # gathered something -> best-effort answer, as before
+    assert res.exit_reason == "read_budget"
+    assert _ACK_MARKER not in _answer_prompt(provider)
+    assert _HONESTY_MARKER not in _answer_prompt(provider)
+
+
+def test_brainstorm_regenerated_answers_keep_the_ack():
+    """The goal-verification loop and the overseer redirect REGENERATE the reply. Every one of
+    those regenerations grounds through the same builder, so none of them can ship a reply that
+    was never told the turn was held."""
+    provider = StubProvider(decisions=[
+        {"action": "answer", "rationale": "talking it through"},
+        {"met": False, "reason": "thin", "next_action": "go deeper"},   # forces one regeneration
+        {"met": True, "reason": "good"},
+    ])
+    res = _orch(provider, StubRetrieval(), deep_runner=StubDeepRunner(met=True),
+                config=OrchestratorConfig(execution_mode="brainstorm",
+                                          answer_goal_max_iterations=2)).run("fix the login bug")
+    assert res.kind == "answer"
+    # Only the REPLY calls (the ones carrying the grounding block); the turn also makes cheap
+    # non-reply calls (goal-condition derivation, verification).
+    replies = [str(sysp or "") + "\n" + "\n".join(str(m["content"]) for m in msgs)
+               for sysp, msgs in zip(provider.answer_systems, provider.all_answer_messages)
+               if any("GROUNDING CONTEXT" in str(m["content"]) for m in msgs)]
+    assert len(replies) >= 2                     # the first answer plus at least one regeneration
+    assert all(_ACK_MARKER in p for p in replies)
+
+
+def test_brainstorm_understanding_clarify_does_not_escalate():
+    """Stage 1 (input understanding) can also want to stop and ask. While latched it must not:
+    the question rides into the reply and the loop runs on."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "best reading"}])
+    escalation = StubEscalation()
+    runner = StubDeepRunner(met=True)
+    orch = _orch(provider, StubRetrieval(), deep_runner=runner, escalation=escalation,
+                 config=OrchestratorConfig(execution_mode="brainstorm"))
+    orch._understand_input = lambda *a, **kw: ("Do the thing we discussed", "",
+                                               "Which thing did you mean?")
+    orch._needs_context_to_understand = lambda _m: True
+    orch.conversation_store = object()   # only presence is checked before stage 1 runs
+    res = orch.run("Do the thing we discussed", conv_id="c1")
+    assert res.kind == "answer"
+    assert res.decision_id is None
+    assert escalation.raised == []
+    assert runner.calls == []
+    prompt = _answer_prompt(provider)
+    assert _ACK_MARKER in prompt
+    assert "Which thing did you mean?" in prompt
+
+
+def test_brainstorm_understanding_clarify_still_escalates_in_normal_mode():
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "r"}])
+    escalation = StubEscalation()
+    orch = _orch(provider, StubRetrieval(), escalation=escalation)
+    orch._understand_input = lambda *a, **kw: ("do it", "", "Which thing did you mean?")
+    orch._needs_context_to_understand = lambda _m: True
+    orch.conversation_store = object()
+    res = orch.run("Do the thing we discussed", conv_id="c1")
+    assert res.kind == "confirm"
+    assert escalation.raised          # unchanged: a normal turn still asks the human
+
+
+# ---------------------------------------------------------------------------
+# CAPABILITY INTROSPECTION: a consumer's compat probe must be able to tell whether the library it
+# loaded actually has the judged latch (a stale build must never look like it holds). These are the
+# stable public names it keys on; do not rename them without updating the consumers.
+# ---------------------------------------------------------------------------
+
+def test_brainstorm_latch_is_introspectable_from_the_public_core_namespace():
+    import quest_ai_runner.core as core
+
+    assert hasattr(core.Orchestrator, "judge_brainstorm_release")
+    fields = core.OrchestratorConfig.__dataclass_fields__
+    for name in ("execution_mode", "mode_signals_enabled", "mode_release_tier"):
+        assert name in fields, name
+    assert "mode_signal" in core.OrchestratorResult.__dataclass_fields__
+    assert core.MODE_RELEASE_TOOL["name"] == "brainstorm_release_verdict"
+    assert core.EVENT_MODE_SIGNAL == "mode_signal"
+    for name in ("MODE_RELEASE_TOOL", "MODE_RELEASE_PROMPT", "BRAINSTORM_NO_ACTION_ACK_NOTE",
+                 "EVENT_MODE_SIGNAL"):
+        assert name in core.__all__, name

@@ -105,18 +105,24 @@ All notable changes to this project are documented here. The format is based on
   `card_id` has it forwarded on every progress post body
   (`QuestClient.post_conversation_message(card_id=...)`) so a future backend can thread a
   task's posts under a per-idea context card. Absent, nothing changes.
-- **Brainstorm mode now says out loud when it held a directive back.** While the brainstorm
-  latch is active, a turn whose message reads as a request to act (or whose planner chose
-  deep/confirm, or set `deferred_deep` / `answer_contains_work_to_execute`, and was degraded by
-  the latch) folds an acknowledgment steer into the answer's grounding context: tell the user
-  nothing was executed because brainstorm mode is on and they can say to go ahead when ready,
-  plus, when the planner itself was ready to act, that the work will begin on a go-ahead. The
-  steer is guidance with explicit permission to skip or soften it when it would read as awkward
-  or redundant (e.g. a rhetorical "directive", or a reply that already makes the no-action state
-  obvious), never an absolute rule. Zero extra LLM calls: the verdict reuses the latch's own
-  degradation plus the existing message-intent regex prefilter (the ambiguous-band LLM judgment
-  is not run for this), and unlatched turns are unchanged (no steer text in any prompt). Tests
-  in `tests/test_brainstorm_mode.py`.
+- **Brainstorm mode now says out loud when it held a directive back.** Every reply a latched turn
+  produces carries a no-action acknowledgment as its `reply_directive` (on the answering call's
+  system prompt): nothing was executed because brainstorm mode is on, and the user can say to go
+  ahead when ready, plus, when the turn itself was ready to act, that the work will begin on a
+  go-ahead, and, when it wanted to ask something first, the question itself. The steer is guidance
+  with explicit permission to skip or soften it when it would read as awkward or redundant (e.g. a
+  reply that already makes the no-action state obvious, or a user who was plainly just musing),
+  never an absolute rule; its one hard rule is that the reply may never say or imply that anything
+  ran, is running, or is about to run. Zero extra LLM calls, and unlatched turns are unchanged (no
+  steer text in any prompt). Tests in `tests/test_brainstorm_mode.py`. (See Fixed below for the two
+  real-model defects this shape fixes.)
+- **The brainstorm latch is introspectable from the public `core` namespace.** A consumer's compat
+  probe can now key on stable exported names to tell whether the library build it loaded actually
+  has the judged latch (a stale build must never be able to report the latch as working):
+  `Orchestrator.judge_brainstorm_release`, the `OrchestratorConfig` fields `execution_mode` /
+  `mode_signals_enabled` / `mode_release_tier`, `OrchestratorResult.mode_signal`, and the newly
+  exported `MODE_RELEASE_TOOL` (`name == "brainstorm_release_verdict"`), `MODE_RELEASE_PROMPT`,
+  `BRAINSTORM_NO_ACTION_ACK_NOTE`, `BRAINSTORM_HELD_WORK_ACK_NOTE` and `EVENT_MODE_SIGNAL`.
 - **`QAR_VECTOR_BACKEND`: an explicit switch for the auto-built context vector store.**
   `resolve_context_assembler` previously always attempted to construct the auto-built
   Qdrant vector arm when no explicit `vector_store` was configured, logging a
@@ -156,6 +162,49 @@ All notable changes to this project are documented here. The format is based on
   immediately.
 
 ### Fixed
+- **A latched brainstorm turn now escalates nothing and acknowledges the hold on every reply.**
+  Two holes, both found by driving the REAL orchestrator (not stubs) on a latched conversation:
+  - **"clarify" escaped the hold.** The latch degraded only `deep` and `confirm`, while the
+    planner note invited `clarify` as an available action and `clarify` surfaces its question
+    through the ESCALATION SINK, so a conversation the user explicitly put on hold still parked a
+    real decision-request. The same was true of the input-understanding stage, which short-circuits
+    the turn with a `confirm` when it cannot resolve a short/anaphoric message. Now: the planner
+    note offers only `read` and `answer`; `deep`/`confirm`/`clarify` are degraded to `answer` both
+    in the loop and again at a single TERMINAL gate every path funnels through (whatever set the
+    action: planner, read-loop safety escalation, overseer), and the understanding stage does not
+    escalate while latched. The question is not lost: it rides into the reply text, so the user is
+    still asked, in the conversation, with no pending ask created anywhere. The release judgment
+    also runs BEFORE the understanding stage now, so nothing can escalate ahead of it. The
+    invariant, and the test: a latched turn creates NO decision-request and executes NOTHING, via
+    any action or any escalation path (deep, confirm, clarify, read-budget wrap-up, overseer,
+    claim remediation, need-more-context).
+  - **The no-action acknowledgment never reached the model.** It was folded into the answer
+    GROUNDING at one call site, so the terminal paths that return earlier (clarify, the read-budget
+    wrap-up) shipped replies that had never been told the turn was held; across real held turns the
+    note appeared in ZERO model calls, the replies improvised, and one claimed execution was
+    imminent ("the system will now execute this action") while nothing ran. It is now computed once
+    per turn and passed as a `reply_directive` to EVERY reply generator (`_grounded_answer`,
+    `_answer_subquestions`, the read-budget wrap-up, and every regeneration), landing on the
+    answering call's SYSTEM prompt with the rest of the reply contract rather than inside a
+    grounding block introduced as "answer FROM this, never mention that you read it". It also rides
+    on every latched turn instead of only ones an intent detector flags: the cheap regex prefilter
+    does not see "Set that up.", "Book it." or "Do the thing we discussed" as directives at all, so
+    gating on it left exactly the turns that needed it most without it. Its hard rule is the honesty
+    floor (never say or imply that anything ran, is running, or is about to run); naming the hold
+    keeps its explicit permission to skip or soften when the user was plainly just musing.
+  - **A genuine release now actually does the work.** When the release judge lifts the hold, the
+    turn is a directive by definition (the user just said to stop holding back and act), but the
+    work usually lives in the transcript rather than in the short release message, so the
+    message-intent net could not see it and the turn ended with one more proposal, or worse a reply
+    claiming it had acted. A released turn is now treated as a directive by the same net.
+  - **The release judge holds an anaphoric imperative.** "Do the thing we discussed." was being read
+    as a release. Its doctrine (LLM judgment, still no keyword lists) now says plainly that an
+    imperative pointing back at the work is subject matter, and only words about the HOLD itself
+    lift it.
+  Evidence: a real-model matrix over 14 phrasings (9 held, 2 read-budget, 3 releases) passes 14/14:
+  zero escalations and zero executions on every held turn, the acknowledgment present in 100% of
+  reply calls, no reply claiming action, every actionable held reply naming the hold, and every
+  genuine release exiting the latch and executing.
 - **The brainstorm latch now holds against an imperative.** A conversation latched in
   `execution_mode="brainstorm"` released mid-turn on a plain subject-matter instruction ("create a
   goal called X and add it to my plan"), executed the work, and never gave the user the no-action
