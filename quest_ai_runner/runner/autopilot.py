@@ -1,7 +1,7 @@
 """Autopilot — the recurring "autopilot pass" task that scans opted-in quests and makes progress.
 
 Design of record: ``quest_autopilot_design.md`` (Part B). In one sentence: Autopilot is itself a
-recurring assistant task (``handler == "autopilot"``, routed by ``runner.executor`` before the
+recurring assistant task (``task_kind == "autopilot"``, routed by ``runner.executor`` before the
 normal deep-run path). Each pass:
 
   1. Lists the team's quests; keeps the ones opted in (``autopilot.mode`` in ``suggest``/``act``).
@@ -37,6 +37,31 @@ log = logging.getLogger("quest-ai-runner.autopilot")
 # Team-wide daily cap on autopilot-created tasks (batches + goal proposals both count as one
 # unit each). Overridable via ``RunnerConfig.autopilot_daily_budget``.
 DEFAULT_TEAM_DAILY_BUDGET = 3
+
+# --- the two PERSISTENT task_kind markers (see QuestClient.create_task) ---------------------
+# ``task_kind`` is written once at create and never overwritten by the claim path (unlike
+# ``handler``, which every claim stamps with the claiming worker's own label). Two DISTINCT values,
+# and the distinction is load-bearing:
+#   * PASS_KIND     -- the recurring "autopilot pass" task itself. The executor routes THIS to
+#                      AutopilotPass instead of a deep run.
+#   * WORK_KIND     -- the work batches / goal proposals the pass CREATES. They must NOT carry
+#                      PASS_KIND, or the executor would route each created task back into another
+#                      autopilot pass (an infinite self-spawning loop). They are ordinary tasks
+#                      that happen to be autopilot-authored, and this marker is what makes them
+#                      countable for the daily budget and the per-quest backpressure gate.
+AUTOPILOT_PASS_KIND = "autopilot"
+AUTOPILOT_WORK_KIND = "autopilot_work"
+
+# The ``source`` stamped on autopilot-created tasks. The Quest API validates source against a
+# CLOSED enum -- {"reflection", "chat", "review"} -- and 400s anything else (create_task raises,
+# by design). "autopilot" is NOT in that enum today, so sending it would make every single
+# autopilot task creation fail. The autopilot-authored marker is therefore ``task_kind``
+# (AUTOPILOT_WORK_KIND above), not ``source``, and source stays a valid value.
+AUTOPILOT_TASK_SOURCE = "chat"
+
+# A legacy/forward-compatible source value: if the backend's source enum ever gains "autopilot",
+# rows stamped that way still count toward the budget and backpressure gates below.
+AUTOPILOT_LEGACY_SOURCE = "autopilot"
 
 # Cadence name -> minimum days between passes for a given quest. An unrecognized cadence string
 # falls back to "weekly" rather than erroring, so a bad/unknown value never wedges a quest either
@@ -89,17 +114,32 @@ def cadence_due(autopilot_cfg: Dict[str, Any], now: datetime) -> bool:
 
 
 def _current_period_key(scope: str, now: datetime) -> Optional[str]:
-    """The canonical period string for ``scope`` at ``now`` (e.g. day -> "2026-07-12")."""
+    """The canonical period id for ``scope`` at ``now``, in the QUEST BACKEND'S exact format.
+
+    Mirrors quest-backend's ``app/utils/period_utils.get_current_period`` byte-for-byte -- the
+    separator is an UNDERSCORE for every scope except day (which is a plain ISO date):
+
+        day     -> "2026-07-12"   (date.isoformat())
+        week    -> "2026_W28"     (ISO year + zero-padded ISO week)
+        month   -> "2026_07"      (zero-padded month)
+        quarter -> "2026_Q3"
+        year    -> "2026"
+
+    Getting a separator wrong here is not a cosmetic bug: the key is compared for EQUALITY against
+    each period group's ``period`` string, so a hyphen where the backend writes an underscore
+    means the current period never matches, every quest silently falls through to the "unscoped"
+    fallback, and today's goals are never worked. Keep this in lock-step with period_utils.
+    """
     if scope == "day":
         return now.date().isoformat()
     if scope == "week":
         iso_year, iso_week, _ = now.isocalendar()
-        return f"{iso_year}-W{iso_week:02d}"
+        return f"{iso_year}_W{iso_week:02d}"
     if scope == "month":
-        return now.strftime("%Y-%m")
+        return f"{now.year}_{now.month:02d}"
     if scope == "quarter":
         q = (now.month - 1) // 3 + 1
-        return f"{now.year}-Q{q}"
+        return f"{now.year}_Q{q}"
     if scope == "year":
         return str(now.year)
     return None
@@ -214,10 +254,23 @@ def _definition_of_done(goal: Dict[str, Any]) -> str:
     return dod
 
 
-def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]]) -> str:
+def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
+                       persona: Optional[str] = None) -> str:
     """Quest outcome + each goal's name/description (the description IS the brief) + a per-goal
-    Definition of Done, per the design's task-composition rule."""
+    Definition of Done, per the design's task-composition rule.
+
+    ``persona``, when resolved, is named in the TEXT rather than in a structured field. The Quest
+    API's task-create route has no persona/rep field at all (its only routing field is
+    ``assignee_user_id``, which must be a real team member and so cannot carry a character rep id),
+    so a structured stamp would be silently dropped. Naming the persona in the request text is the
+    channel a consumer's resolver actually reads (e.g. the personal lane's LLM explicit-ask judge
+    resolves "Act as X" to that character's persona), which keeps the routing HONEST instead of
+    depending on a field the backend never stores.
+    """
     parts: List[str] = []
+    if persona:
+        parts.append(f"Act as {persona}. This quest's autopilot roster assigns this work to "
+                     f"{persona}, so carry it out in that persona.")
     if quest_outcome:
         parts.append(f"Quest outcome: {quest_outcome}")
     for goal in goals:
@@ -254,6 +307,11 @@ class AutopilotResult:
     skipped: List[Dict[str, Any]] = field(default_factory=list)      # {quest_id, reason}
     proposals: List[Dict[str, Any]] = field(default_factory=list)    # dry-run "would create" items
     errors: List[Dict[str, Any]] = field(default_factory=list)       # {quest_id, error}
+    # Bookkeeping writes the backend ACCEPTED (200) but did not actually persist. Kept separate
+    # from ``errors`` because the pass itself succeeded; what failed is the cadence/miss_streak
+    # memory, which silently degrades the NEXT pass (a last_pass_at that never sticks means the
+    # cadence gate can never fire). Surfaced in the reported summary so it can never pass silently.
+    bookkeeping_warnings: List[Dict[str, Any]] = field(default_factory=list)  # {quest_id, detail}
 
     def summary_text(self) -> str:
         lines: List[str] = []
@@ -281,6 +339,14 @@ class AutopilotResult:
             lines.append(f"Errors on {len(self.errors)} quest(s):")
             for e in self.errors:
                 lines.append(f"  - {e.get('quest_id')}: {e.get('error')}")
+        if self.bookkeeping_warnings:
+            lines.append(
+                f"WARNING: autopilot bookkeeping did not persist on "
+                f"{len(self.bookkeeping_warnings)} quest(s). The cadence gate reads "
+                f"last_pass_at, so until this is fixed those quests are considered due on EVERY "
+                f"pass (the per-quest cadence cannot hold them back):")
+            for w in self.bookkeeping_warnings:
+                lines.append(f"  - {w.get('quest_id')}: {w.get('detail')}")
         if not (self.created_task_ids or self.proposals or self.skipped or self.errors):
             lines.append("No opted-in quests found.")
         return "\n".join(lines)
@@ -290,8 +356,9 @@ class AutopilotPass:
     """Runs ONE autopilot pass against a Quest client. See the module docstring for the algorithm.
 
     ``client`` is a ``QuestClient`` (or any object with the same methods this class calls:
-    ``list_quests``, ``list_quest_goals``, ``list_tasks``, ``list_open_decisions_for_quest``,
-    ``create_task``, ``update_quest_autopilot``, ``create_goal`` [optional]).
+    ``list_quests``, ``get_quest_autopilot``, ``list_quest_goals``, ``get_goal``, ``list_tasks``,
+    ``list_open_decisions_for_quest``, ``create_task``, ``update_task``,
+    ``update_quest_autopilot``, and optionally ``create_goal``).
 
     ``persona_resolver`` is the consumer-injected fallback (step 4 of ``resolve_persona``) -- e.g.
     the personal lane's card-vote resolver. Given a goal dict, returns a rep_id or ``None``.
@@ -344,6 +411,12 @@ class AutopilotPass:
 
         goals_payload = self._client.list_quest_goals(quest_id, team_id=self._team_id or None) or {}
         target_goals, scope_label = select_target_goals(goals_payload, self._now())
+        # The goals-grouping payload does NOT carry each goal's ``description`` (the backend's
+        # handler builds a slim per-goal dict: id/name/time_scope/period/deadline/completed/
+        # parent_goal_id/ai_help/assignee_rep_id). But the description IS the brief -- it is the
+        # entire statement of what the AI is being asked to do. So fetch it per TARGET goal (a
+        # handful at most, only for goals that survived the gates and the scope filter).
+        target_goals = [self._with_description(quest_id, g) for g in target_goals]
 
         produced = False
         if target_goals:
@@ -378,22 +451,78 @@ class AutopilotPass:
                 self._skip(result, quest_id, "team daily budget reached mid-pass")
 
         if not dry_run:
-            self._update_pass_bookkeeping(quest_id, autopilot_cfg, produced)
+            self._update_pass_bookkeeping(quest_id, autopilot_cfg, produced, result)
         return budget_used
 
     # --- gates -------------------------------------------------------------------------------
 
     def _eligible_quests(self) -> List[Dict[str, Any]]:
+        """The team's quests that are opted in (``autopilot.mode`` in suggest/act).
+
+        TWO reads per quest, deliberately. The team quest LISTING
+        (``GET /api/teams/{team_id}/quests``) returns only
+        ``{quest_id, outcome, completed, owner_user_ids}`` -- it does NOT include the ``autopilot``
+        block. Reading the opt-in mode off those rows would find no ``autopilot`` on ANY quest,
+        treat every one as mode "off", and make the whole feature a silent no-op forever. The
+        ``autopilot`` settings live on the full QuestState, so we fetch it per quest
+        (``get_quest_autopilot`` -> ``GET /api/quests/{quest_id}/state``) and merge it onto the
+        listing row. Cost is one small read per team quest, once per pass.
+        """
         quests = self._client.list_quests(team_id=self._team_id or None) or []
         eligible = []
-        for quest in quests:
-            mode = str((quest.get("autopilot") or {}).get("mode") or "off")
-            quest_id = quest.get("quest_id") or quest.get("id")
-            if mode in ("suggest", "act"):
-                eligible.append(quest)
-            else:
+        for row in quests:
+            quest_id = str(row.get("quest_id") or row.get("id") or "")
+            if not quest_id:
+                continue
+            state = self._quest_state(quest_id)
+            autopilot_cfg = (state.get("autopilot") or {}) if state else {}
+            mode = str(autopilot_cfg.get("mode") or "off")
+            if mode not in ("suggest", "act"):
                 log.info("autopilot: quest %s mode=%r -- not opted in, skipping", quest_id, mode)
+                continue
+            eligible.append({
+                "quest_id": quest_id,
+                # Prefer the full state's outcome; fall back to the listing row's.
+                "outcome": state.get("outcome") or row.get("outcome") or "",
+                "autopilot": autopilot_cfg,
+            })
         return eligible
+
+    def _quest_state(self, quest_id: str) -> Dict[str, Any]:
+        """The quest's full state (for ``autopilot`` + ``outcome``). ``{}`` on any failure."""
+        reader = getattr(self._client, "get_quest_autopilot", None)
+        if not callable(reader):
+            return {}
+        try:
+            return reader(quest_id) or {}
+        except Exception:  # noqa: BLE001 -- a bad read must never abort the whole pass
+            log.warning("autopilot: could not read quest %s state; treating as not opted in",
+                       quest_id, exc_info=True)
+            return {}
+
+    def _with_description(self, quest_id: str, goal: Dict[str, Any]) -> Dict[str, Any]:
+        """Return ``goal`` enriched with its ``description`` (the AI's brief), fetched per goal.
+
+        The grouping payload omits ``description``; ``get_goal`` returns the full goal document.
+        Best-effort: on any failure the goal is used as-is (``compose_batch_text`` simply omits the
+        Brief line), which degrades the task's richness but never drops the goal from the batch."""
+        if goal.get("description"):
+            return goal
+        get_goal = getattr(self._client, "get_goal", None)
+        goal_id = goal.get("id")
+        if not callable(get_goal) or not goal_id:
+            return goal
+        try:
+            full = get_goal(str(goal_id), quest_id=quest_id,
+                           team_id=self._team_id or None) or {}
+            description = (full.get("description") or "").strip()
+            if description:
+                enriched = dict(goal)
+                enriched["description"] = description
+                return enriched
+        except Exception:  # noqa: BLE001 -- enrichment is best-effort, never fatal
+            log.info("autopilot: could not fetch description for goal %s", goal_id, exc_info=True)
+        return goal
 
     def _gate_quest(self, quest: Dict[str, Any], quest_id: str) -> Optional[str]:
         """Per-quest gates, cheapest first. Returns a skip reason, or None if the quest passes."""
@@ -406,20 +535,47 @@ class AutopilotPass:
             return "an open HOLD decision is pending on this quest"
         return None
 
+    @staticmethod
+    def _is_autopilot_authored(task: Dict[str, Any]) -> bool:
+        """Whether a task was created by autopilot (so it counts against the budget/backpressure).
+
+        The marker is ``task_kind == "autopilot_work"`` (persistent, never overwritten by a claim).
+        ``source == "autopilot"`` is ALSO accepted so that, if the backend's source enum later
+        gains that value, rows stamped the new way still count -- and any already-created row is
+        never miscounted as human work."""
+        return (task.get("task_kind") == AUTOPILOT_WORK_KIND
+                or task.get("source") == AUTOPILOT_LEGACY_SOURCE)
+
     def _count_autopilot_tasks_today(self) -> int:
-        tasks = self._client.list_tasks(team_id=self._team_id or None, source="autopilot") or []
+        """Autopilot-authored tasks created TODAY, team-wide (the daily budget's denominator).
+
+        The Quest list route has no ``source``/``task_kind`` query filter, so this pulls the
+        team's tasks and narrows client-side (``list_tasks`` does the same, honestly)."""
+        tasks = self._client.list_tasks(team_id=self._team_id or None) or []
         today = self._now().date()
         count = 0
         for t in tasks:
+            if not self._is_autopilot_authored(t):
+                continue
             created = _parse_dt(t.get("created_at") or t.get("scheduled_at"))
             if created is not None and created.date() == today:
                 count += 1
         return count
 
     def _has_backpressure(self, quest_id: str) -> bool:
+        """True when a previous autopilot task for THIS quest is still open (queued/in_progress/
+        needs_you/suggested) -- the human has not worked through the last thing we produced.
+
+        A task's link to its quest is its ``goal_id``: the Quest API resolves that field as a
+        QUEST id (its handler loads the quest by it), and there is no separate ``quest_id`` field
+        on a task at all. So the per-quest listing is ``list_tasks(goal_id=quest_id)``."""
         tasks = self._client.list_tasks(
-            team_id=self._team_id or None, quest_id=quest_id, source="autopilot") or []
-        return any(str(t.get("status", "")).strip().lower() in _OPEN_TASK_STATUSES for t in tasks)
+            team_id=self._team_id or None, goal_id=quest_id) or []
+        return any(
+            self._is_autopilot_authored(t)
+            and str(t.get("status", "")).strip().lower() in _OPEN_TASK_STATUSES
+            for t in tasks
+        )
 
     def _has_open_hold_decision(self, quest_id: str) -> bool:
         lister = getattr(self._client, "list_open_decisions_for_quest", None)
@@ -434,27 +590,57 @@ class AutopilotPass:
 
     # --- side effects --------------------------------------------------------------------------
 
-    def _create_batch_task(self, quest: Dict[str, Any], quest_id: str, persona: Optional[str],
-                           goals: List[Dict[str, Any]], mode: str) -> Optional[str]:
-        text = compose_batch_text(str(quest.get("outcome") or ""), goals)
-        status = "queued" if mode == "act" else "suggested"
+    def _create_autopilot_task(self, quest: Dict[str, Any], quest_id: str, text: str, mode: str,
+                               goal_id: Optional[str] = None,
+                               force_suggested: bool = False) -> Optional[str]:
+        """Create ONE autopilot-authored task and land it in the right status.
+
+        Two calls, because the Quest API's create route accepts NO ``status`` field (the backend
+        always creates a task queued). To land a task in ``"suggested"`` -- the whole point of
+        suggest mode, where the human must press Run before any deep agent spends a token -- we
+        create it and then PATCH the status. ``update_task`` RAISES on failure by design: a
+        proposal that silently stayed ``queued`` would EXECUTE without the approval that suggest
+        mode exists to require, so a failed demotion must never pass quietly. It surfaces to the
+        caller's per-quest try/except and is reported as that quest's error.
+
+        The created task carries ``task_kind="autopilot_work"`` (NOT the pass's own
+        ``"autopilot"`` kind, which the executor routes into another pass -- that would spawn an
+        infinite loop) and a source the API's closed enum actually accepts.
+        """
         kwargs: Dict[str, Any] = dict(
             team_id=self._team_id or None,
-            goal_id=goals[0].get("id"),
-            quest_id=quest_id,
-            source="autopilot",
-            status=status,
+            # A task's goal_id IS its quest link (the API resolves it as a quest id). For a work
+            # batch this is the primary (first) goal; for a goal proposal with no real goal object
+            # yet, it is the quest itself, so the proposal still lands on the quest.
+            goal_id=goal_id or quest_id,
+            source=AUTOPILOT_TASK_SOURCE,
+            task_kind=AUTOPILOT_WORK_KIND,
         )
         env_id = (quest.get("autopilot") or {}).get("env_id")
         if env_id:
             kwargs["env_id"] = env_id
-        if persona:
-            kwargs["rep_id"] = persona
+        created = self._client.create_task(text, **kwargs) or {}
+        task_id = created.get("id") or created.get("task_id")
+        if not task_id:
+            return None
+        # suggest mode (and every goal proposal, which is always a proposal for a human) must not
+        # be runnable until a human approves it.
+        if force_suggested or mode != "act":
+            self._client.update_task(str(task_id), {"status": "suggested"})
+        return str(task_id)
+
+    def _create_batch_task(self, quest: Dict[str, Any], quest_id: str, persona: Optional[str],
+                           goals: List[Dict[str, Any]], mode: str) -> Optional[str]:
+        # The persona rides in the TEXT, not a structured field: the Quest task-create route has
+        # no persona/rep field, so a structured stamp would be silently dropped (see
+        # compose_batch_text). It still decides the BATCHING (which goals share one task).
+        text = compose_batch_text(str(quest.get("outcome") or ""), goals, persona)
         try:
-            created = self._client.create_task(text, **kwargs) or {}
-            return created.get("id") or created.get("task_id")
+            return self._create_autopilot_task(
+                quest, quest_id, text, mode, goal_id=goals[0].get("id"))
         except Exception as e:  # noqa: BLE001 -- surfaced to the caller's per-quest try/except
-            log.error("autopilot: create_task failed for quest %s: %s", quest_id, e, exc_info=True)
+            log.error("autopilot: task creation failed for quest %s: %s", quest_id, e,
+                      exc_info=True)
             raise
 
     def _maybe_create_goal(self, quest_id: str, title: str, description: str,
@@ -485,35 +671,51 @@ class AutopilotPass:
             return
         created_goal_id = self._maybe_create_goal(quest_id, title, description, mode)
         task_text = f"Proposed goal: {title}\n\n{description}"
-        kwargs: Dict[str, Any] = dict(
-            team_id=self._team_id or None, quest_id=quest_id,
-            source="autopilot", status="suggested",
-        )
-        if created_goal_id:
-            kwargs["goal_id"] = created_goal_id
-        env_id = (quest.get("autopilot") or {}).get("env_id")
-        if env_id:
-            kwargs["env_id"] = env_id
-        created = self._client.create_task(task_text, **kwargs) or {}
-        task_id = created.get("id") or created.get("task_id")
+        # A proposed goal is ALWAYS surfaced for a human to accept, even on an `act` quest: the
+        # design keeps AI-created goals reviewable ("attributed and editable"), so force suggested.
+        task_id = self._create_autopilot_task(
+            quest, quest_id, task_text, mode,
+            goal_id=created_goal_id, force_suggested=True)
         if task_id:
             result.created_task_ids.append(task_id)
 
     def _update_pass_bookkeeping(self, quest_id: str, autopilot_cfg: Dict[str, Any],
-                                 produced: bool) -> None:
+                                 produced: bool, result: AutopilotResult) -> None:
+        """Stamp ``last_pass_at`` (and the ``miss_streak``) on the quest, then VERIFY it stuck.
+
+        The verify is not paranoia. The quest autopilot PATCH endpoint's request schema currently
+        accepts only mode/planning/cadence/personas/env_id; ``last_pass_at`` and ``miss_streak``
+        exist on the stored model but are NOT in that schema, and its Pydantic model ignores
+        unknown keys -- so this write can return 200 having persisted nothing. If we assumed
+        success, ``last_pass_at`` would stay null forever, the cadence gate would consider every
+        quest due on every pass, and the per-quest cadence (a core budget control) would be
+        silently inert. So: read the echoed settings back, compare, and record a LOUD warning when
+        a field did not stick. Never raises -- bookkeeping must not fail an otherwise-good pass --
+        but it must never fail SILENTLY either.
+        """
         now_iso = self._now().astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         fields: Dict[str, Any] = {"last_pass_at": now_iso}
-        if produced:
-            fields["miss_streak"] = 0
-        else:
-            fields["miss_streak"] = int(autopilot_cfg.get("miss_streak") or 0) + 1
+        fields["miss_streak"] = 0 if produced else int(autopilot_cfg.get("miss_streak") or 0) + 1
         update = getattr(self._client, "update_quest_autopilot", None)
-        if callable(update):
-            try:
-                update(quest_id, fields, team_id=self._team_id or None)
-            except Exception:  # noqa: BLE001 -- bookkeeping must never fail an otherwise-good pass
-                log.warning("autopilot: last_pass_at/miss_streak update failed for quest %s",
-                           quest_id, exc_info=True)
+        if not callable(update):
+            return
+        try:
+            resp = update(quest_id, fields) or {}
+        except Exception as e:  # noqa: BLE001 -- bookkeeping must never fail an otherwise-good pass
+            log.warning("autopilot: last_pass_at/miss_streak update failed for quest %s",
+                       quest_id, exc_info=True)
+            result.bookkeeping_warnings.append(
+                {"quest_id": quest_id, "detail": f"update raised {type(e).__name__}: {e}"})
+            return
+        echoed = (resp or {}).get("autopilot")
+        if not isinstance(echoed, dict):
+            return  # nothing echoed back to check against (an older/mock client); assume nothing
+        unpersisted = [k for k, v in fields.items() if echoed.get(k) != v]
+        if unpersisted:
+            detail = (f"the backend accepted the PATCH but did not persist {unpersisted} "
+                      f"(its autopilot update schema does not accept these bookkeeping fields)")
+            log.warning("autopilot: quest %s -- %s", quest_id, detail)
+            result.bookkeeping_warnings.append({"quest_id": quest_id, "detail": detail})
 
     def _skip(self, result: AutopilotResult, quest_id: str, reason: str) -> None:
         log.info("autopilot: skipping quest %s (%s)", quest_id, reason)

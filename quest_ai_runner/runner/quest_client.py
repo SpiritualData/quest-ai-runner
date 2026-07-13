@@ -459,25 +459,28 @@ class QuestClient:
             log.warning("resolve_decision failed for decision %s: %s", decision_id, e)
             return {}
 
-    def list_open_decisions_for_quest(self, quest_id: str, *,
-                                      team_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def list_open_decisions_for_quest(self, quest_id: str) -> List[Dict[str, Any]]:
         """GET the OPEN (unresolved) decisions that reference a specific quest.
 
-        Used by Autopilot's HOLD-backpressure gate (see ``runner.autopilot``): a quest with an
-        open human decision already pending should not have more autonomous work piled onto it.
-        Best-effort: filters the team's decisions listing by ``quest_id`` + ``status=open``;
-        returns ``[]`` on any failure, an unconfigured client, or a backend that doesn't support
-        the filter (never blocks the caller — the gate simply doesn't fire in that case).
+        Used by Autopilot's HOLD gate (see ``runner.autopilot``): a quest with an open human
+        decision already pending should not have more autonomous work piled onto it.
+
+        The backend route is ``GET /api/teams/decisions/for-quest?quest_id=`` (NOT a team-scoped
+        path: it is quest-scoped and derives access from the quest). It returns a BARE LIST of
+        ALL the quest's decisions, open AND resolved, with no status filter available server-side
+        -- so the open-only narrowing happens HERE, on ``status == "open"``
+        (``TeamDecisionStatus.OPEN``; the other values are ``resolved`` / ``expired``).
+
+        Best-effort: returns ``[]`` on any failure (unconfigured client, network, a backend
+        without the route) so a gate check can never abort a pass. The CALLER logs the skip
+        reason either way, so a quest is never silently passed over.
         """
         try:
-            tid = team_id or self.team_id
-            if not tid:
-                raise QuestNotConfigured("team_id is required to list a quest's open decisions")
-            resp = self._request("GET", f"/api/teams/{tid}/decisions",
-                                 params={"quest_id": quest_id, "status": "open"})
-            if isinstance(resp, dict):
-                return list(resp.get("decisions") or [])
-            return resp if isinstance(resp, list) else []
+            resp = self._request("GET", "/api/teams/decisions/for-quest",
+                                 params={"quest_id": quest_id})
+            rows = resp if isinstance(resp, list) else list((resp or {}).get("decisions") or [])
+            return [d for d in rows
+                    if str(d.get("status") or "").strip().lower() == "open"]
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("list_open_decisions_for_quest failed for quest %s: %s", quest_id, e)
             return []
@@ -649,30 +652,37 @@ class QuestClient:
     def create_task(self, text: str, *,
                     team_id: Optional[str] = None,
                     goal_id: Optional[str] = None,
-                    quest_id: Optional[str] = None,
                     scheduled_at: Optional[str] = None,
                     source: str = "chat",
-                    status: Optional[str] = None,
                     env_id: Optional[str] = None,
-                    rep_id: Optional[str] = None) -> Dict[str, Any]:
-        """POST a new AI task to /api/assistant-tasks.
+                    task_kind: Optional[str] = None) -> Dict[str, Any]:
+        """POST a new queued AI task to /api/assistant-tasks.
 
         ``team_id`` routes the task to a specific team's runner (defaults to the client's
-        configured team). ``goal_id`` attaches the task to a goal so results appear on it.
-        ``quest_id`` links the task to a quest (alongside or instead of ``goal_id``), e.g. so an
-        Autopilot batch shows up in that quest's Assistant activity even when a single goal isn't
-        the sole target. ``scheduled_at`` is an ISO-8601 UTC datetime string; omit it to run as
-        soon as the runner's next poll picks it up. ``source`` must be a value the Quest API
-        accepts (chat / reflection / review / autopilot; "chat" fits an interactive send - the old
-        default "cli" was rejected with a 400 by the API, so every CLI enqueue silently failed).
+        configured team). ``goal_id`` attaches the task to a goal so results appear on it -- note
+        the Quest API resolves ``goal_id`` as a QUEST id (its handler loads the quest by this id),
+        so this single field is BOTH the quest link and the goal link; there is no separate
+        ``quest_id`` field on the create route. ``scheduled_at`` is an ISO-8601 UTC datetime
+        string; omit it to run as soon as the runner's next poll picks it up. ``source`` must be a
+        value the Quest API accepts (chat / reflection / review; "chat" fits an interactive send -
+        the old default "cli" was rejected with a 400 by the API, so every CLI enqueue silently
+        failed).
 
-        ``status`` overrides the backend's default "queued" status on create (e.g. "suggested"
-        for an Autopilot proposal the user must Run before it executes); omit for the default.
         ``env_id`` pins the task to one of the team's connected runner environments (e.g. a
         quest's configured ``autopilot.env_id``); omit to let the backend's normal env routing
-        apply. ``rep_id`` stamps a structured persona assignment recognized by a consumer's
-        rep-resolution chain (e.g. the personal lane's ``rep_sync_resolver`` / character resolver),
-        so the task runs AS that persona when claimed; omit for the plain assistant.
+        apply.
+
+        ``task_kind`` is the PERSISTENT routing classification (e.g. ``"autopilot"`` for the
+        recurring autopilot pass task). Unlike ``handler`` -- which the claim path OVERWRITES on
+        every claim with the claiming worker's own label -- ``task_kind`` is written once at create
+        and never touched by the claim/status/progress paths, so a poller can route on it reliably
+        even across a recurring series' spawned occurrences. Route autopilot on THIS, not on
+        ``handler``.
+
+        NOTE: the create route accepts NO ``status`` field (the backend always creates the task
+        queued and fills status server-side) and no persona/rep field. A caller that needs a
+        different initial status (e.g. ``"suggested"``) must create the task and then PATCH it
+        via ``update_task``; see ``runner.autopilot``.
 
         Returns the created task dict (includes its ``id``).
 
@@ -687,70 +697,120 @@ class QuestClient:
             body["team_id"] = tid
         if goal_id is not None:
             body["goal_id"] = goal_id
-        if quest_id is not None:
-            body["quest_id"] = quest_id
         if scheduled_at is not None:
             body["scheduled_at"] = scheduled_at
-        if status is not None:
-            body["status"] = status
         if env_id is not None:
             body["env_id"] = env_id
-        if rep_id is not None:
-            body["rep_id"] = rep_id
+        if task_kind is not None:
+            body["task_kind"] = task_kind
         return self._request("POST", "/api/assistant-tasks", body=body) or {}
+
+    def update_task(self, task_id: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+        """PATCH arbitrary updatable fields on a task (the generic write the report_* helpers wrap).
+
+        The Quest API's task PATCH accepts ``status`` (queued|in_progress|done|needs_you|failed|
+        cancelled|suggested), ``result``, ``decision_id``, ``scheduled_date``/``scheduled_time``,
+        ``text``, ``recurrence``, ``team_id``, ``goal_id``, ``handler``, ``authored_request``, and
+        ``task_kind``. Used by Autopilot to flip a freshly created task to ``"suggested"`` (the
+        create route has no ``status`` field, so create-then-PATCH is the only way to land a task
+        in the suggested state).
+
+        RAISES on failure rather than swallowing: the caller that just created a task and is
+        demoting it to ``suggested`` must know if that demotion failed, otherwise a proposal the
+        user never approved would sit in the queue and RUN. Silent failure here is not acceptable.
+        """
+        return self._request("PATCH", f"/api/assistant-tasks/{task_id}", body=dict(fields)) or {}
 
     def list_tasks(self, *, team_id: Optional[str] = None,
                   status: Optional[str] = None,
-                  source: Optional[str] = None,
                   goal_id: Optional[str] = None,
-                  quest_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """GET /api/assistant-tasks with flexible filters, for Autopilot's budget/backpressure math.
+                  source: Optional[str] = None,
+                  task_kind: Optional[str] = None) -> List[Dict[str, Any]]:
+        """GET /api/assistant-tasks, for Autopilot's budget/backpressure math.
 
-        Unlike ``discover_due`` (which is hardcoded to ``status=queued`` + a due-before floor, the
-        poll-mode discovery contract), this is a general listing: pass whichever of
-        ``status``/``source``/``goal_id``/``quest_id`` the caller has, omit the rest. A backend
-        that ignores an unknown filter still returns a superset the caller can narrow further
-        CLIENT-SIDE (e.g. "created today", or a set of acceptable statuses) — this method never
-        assumes server-side filtering is exact. Returns ``[]`` on any failure. Never raises.
+        SERVER-SIDE filters (the only ones the Quest API's list route actually implements):
+        ``status``, ``goal_id``, ``team_id``. Everything else it ignores -- there is no
+        ``source``, ``task_kind``, or ``quest_id`` query parameter -- and an unknown query param
+        is silently dropped by FastAPI rather than erroring, which would hand a caller a
+        SUPERSET it mistook for a filtered set.
+
+        So ``source`` and ``task_kind`` are applied CLIENT-SIDE here, on the returned rows. This
+        is the honest split: the method's contract is "these filters hold on the result", and it
+        does whatever the backend won't. (``goal_id`` on a task IS the quest id -- see
+        ``create_task`` -- so filtering by a quest means passing that quest id as ``goal_id``.)
+
+        Returns ``[]`` on any failure. Never raises.
         """
         tid = team_id if team_id is not None else self.team_id
         params: Dict[str, Any] = {}
         if status is not None:
             params["status"] = status
-        if source is not None:
-            params["source"] = source
         if goal_id is not None:
             params["goal_id"] = goal_id
-        if quest_id is not None:
-            params["quest_id"] = quest_id
         if tid:
             params["team_id"] = tid
         try:
             resp = self._request("GET", "/api/assistant-tasks", params=params)
-            return _as_task_list(resp)
+            tasks = _as_task_list(resp)
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("list_tasks failed: %s", e)
             return []
+        if source is not None:
+            tasks = [t for t in tasks if t.get("source") == source]
+        if task_kind is not None:
+            tasks = [t for t in tasks if t.get("task_kind") == task_kind]
+        return tasks
 
-    # --- quest autopilot config (read via get_quest/list_quests; write here) -------
+    # --- quest autopilot config -----------------------------------------------
 
-    def update_quest_autopilot(self, quest_id: str, fields: Dict[str, Any], *,
-                              team_id: Optional[str] = None) -> Dict[str, Any]:
-        """PATCH a quest's ``autopilot`` metadata (e.g. ``last_pass_at``, ``miss_streak``,
-        ``mode``, ``cadence``, ``planning``, ``personas``, ``env_id``, ``helpful``/``unhelpful``).
+    def get_quest_autopilot(self, quest_id: str) -> Dict[str, Any]:
+        """Read ONE quest's full state, for its ``autopilot`` settings + ``outcome``.
 
-        Only the given ``fields`` are sent, nested under ``autopilot`` so a partial update (e.g.
-        just ``last_pass_at`` after a pass) does not clobber the rest of the quest's autopilot
-        config — the backend is expected to merge, not replace, the nested object. Returns the
-        updated quest, or ``{}`` on failure (never raises; a bookkeeping write failing must not
-        break the pass that produced it).
+        WHY THIS EXISTS (and why the team quest LIST is not enough): the team's quest listing
+        (``list_quests`` -> ``GET /api/teams/{team_id}/quests``) returns only
+        ``{quest_id, outcome, completed, owner_user_ids}``. It does NOT carry ``autopilot``. A
+        scanner that read the opt-in mode off those rows would see every quest as mode "off" and
+        do nothing, forever, without a single error -- precisely the silent-failure class this
+        codebase bans. The ``autopilot`` block is serialized on the full QuestState, which is what
+        ``GET /api/quests/{quest_id}/state`` returns.
+
+        Returns the quest STATE dict (``{outcome, completed, autopilot: {...}, ...}``), or ``{}``
+        when the quest is missing/inaccessible or the read fails. Never raises.
         """
         try:
-            tid = team_id or self.team_id
-            if not tid:
-                raise QuestNotConfigured("team_id is required to update a quest's autopilot config")
-            body = {"autopilot": dict(fields)}
-            return self._request("PATCH", f"/api/teams/{tid}/quests/{quest_id}", body=body) or {}
+            resp = self.get_my_quest(quest_id) or {}
+            state = resp.get("state") if isinstance(resp, dict) else None
+            return state if isinstance(state, dict) else {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("get_quest_autopilot failed for quest %s: %s", quest_id, e)
+            return {}
+
+    def update_quest_autopilot(self, quest_id: str,
+                              fields: Dict[str, Any]) -> Dict[str, Any]:
+        """PATCH a quest's autopilot settings -- ``PATCH /api/quests/{quest_id}/autopilot``.
+
+        The route is QUEST-scoped (no team id) and its body is FLAT (``{"mode": ..., "cadence":
+        ...}``), NOT nested under an ``autopilot`` key. It MERGES server-side: the handler reads
+        the quest's current AutopilotSettings and overwrites only the fields present in the
+        request, so a partial update cannot wipe sibling fields.
+
+        IMPORTANT -- the write path is currently NARROWER than the model. The endpoint's request
+        schema accepts only ``mode``, ``planning``, ``cadence``, ``personas``, and ``env_id``. The
+        scanner's own bookkeeping fields (``last_pass_at``, ``miss_streak``, ``helpful``,
+        ``unhelpful``) EXIST on the stored model but are not accepted by this endpoint, and an
+        unknown key is silently ignored by its Pydantic model -- so PATCHing them returns 200 and
+        persists NOTHING. The caller must therefore VERIFY, not assume (see
+        ``runner.autopilot._update_pass_bookkeeping``, which reads the echoed settings back and
+        reports loudly when a field it wrote did not stick, rather than letting the cadence gate
+        silently never advance).
+
+        Returns the endpoint's response (``{"quest_id": ..., "autopilot": {...}}``), or ``{}`` on
+        failure. Never raises: a bookkeeping write failing must not break the pass that produced
+        the work.
+        """
+        try:
+            return self._request("PATCH", f"/api/quests/{quest_id}/autopilot",
+                                 body=dict(fields)) or {}
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("update_quest_autopilot failed for quest %s: %s", quest_id, e)
             return {}

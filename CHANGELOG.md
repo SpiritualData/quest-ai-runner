@@ -8,22 +8,47 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 - **Autopilot pass (`runner/autopilot.py`).** A new `AutopilotPass`, routed by the executor for
-  any task whose `handler == "autopilot"` (a recurring pass task, e.g. created via a consumer's
-  UI). Scans a team's quests whose `autopilot.mode` is `suggest`/`act`; gates each quest, cheapest
-  first (a team-wide daily budget via a new `RunnerConfig.autopilot_daily_budget`, per-quest
-  cadence off `autopilot.last_pass_at`, backpressure from a still-open prior autopilot task, an
-  open HOLD decision on the quest); targets the quest's current-scope incomplete `ai_help` goals
-  (today's/this period's, or the single next incomplete one when unscoped); resolves a persona per
-  goal (goal `assignee_rep_id` -> a day-matched/unrestricted `autopilot.personas` entry -> a
-  consumer-injected `RunnerConfig.autopilot_persona_resolver` fallback) and batches goals sharing a
-  persona into one task; creates it `status="suggested"` (suggest mode) or `"queued"` (act mode)
-  via `QuestClient.create_task`'s new `quest_id`/`status`/`env_id`/`rep_id` parameters; proposes the
-  quest's next goal instead when `planning=="plan_and_work"` and nothing is eligible; updates
-  `autopilot.last_pass_at`/`miss_streak` via a new `QuestClient.update_quest_autopilot`. A pass
-  task whose text contains "dry-run" reports what WOULD be created and creates nothing. Per-quest
-  failures are isolated (one quest's error never aborts the pass) and every skipped quest is
-  logged with its gate reason. New `QuestClient.list_tasks` (flexible filters, for the budget/
-  backpressure math) and `list_open_decisions_for_quest`.
+  any task whose **`task_kind == "autopilot"`** (a recurring pass task). Routing reads `task_kind`,
+  the backend's PERSISTENT classification, never `handler` — the poller overwrites `handler` on
+  every `claim()` with the claiming worker's label, so a re-polled/retried/resumed pass task would
+  otherwise stop routing (`handler == "autopilot"` is still honored as a back-compat fallback).
+  Scans a team's quests whose `autopilot.mode` is `suggest`/`act`; gates each quest, cheapest first
+  (a team-wide daily budget via a new `RunnerConfig.autopilot_daily_budget`, per-quest cadence off
+  `autopilot.last_pass_at`, backpressure from a still-open prior autopilot task, an open HOLD
+  decision on the quest); targets the quest's current-scope incomplete `ai_help` goals (today's/this
+  period's, or the single next incomplete one when unscoped); resolves a persona per goal (goal
+  `assignee_rep_id` -> a day-matched/unrestricted `autopilot.personas` entry -> a consumer-injected
+  `RunnerConfig.autopilot_persona_resolver` fallback) and batches goals sharing a persona into one
+  task; proposes the quest's next goal instead when `planning=="plan_and_work"` and nothing is
+  eligible. A pass task whose text contains "dry-run" reports what WOULD be created and creates
+  nothing. Per-quest failures are isolated (one quest's error never aborts the pass) and every
+  skipped quest is logged with its gate reason.
+
+  Coded against the **verified** Quest API contract, which differs from the design sketch in ways
+  that would each have failed silently:
+  - Autopilot settings are read per quest from the full quest state (`get_quest_autopilot` ->
+    `GET /api/quests/{id}/state`); the team quest *listing* carries no `autopilot` block, so
+    reading opt-in from it would treat every quest as `off` forever.
+  - Created work carries `task_kind="autopilot_work"` (**not** the pass's own kind, which would
+    route each created task into another pass: an infinite loop). `source` stays within the API's
+    closed enum (`chat`/`reflection`/`review`) — `source="autopilot"` is rejected with a 400.
+  - The create route has no `status`, `quest_id`, or persona field: `suggested` is reached by
+    create-then-PATCH (`QuestClient.update_task`, which raises on failure so an unapproved
+    proposal can never silently stay queued and execute), a task's `goal_id` **is** its quest link,
+    and the resolved persona is named in the task text (it still decides the batching).
+  - Goal descriptions (the AI's brief) are fetched per target goal via `get_goal`; the grouping
+    payload omits them.
+  - Period ids use the backend's underscore format (`2026_W28` / `2026_07` / `2026_Q3`).
+  - `update_quest_autopilot` targets `PATCH /api/quests/{id}/autopilot` (flat body, merges
+    server-side). That endpoint does **not** yet accept `last_pass_at`/`miss_streak`, so the pass
+    verifies the echoed settings and reports a loud `bookkeeping_warnings` entry when a write did
+    not persist, rather than letting the cadence gate go silently inert.
+
+  New `QuestClient` methods: `get_quest_autopilot`, `update_quest_autopilot`, `update_task`,
+  `list_tasks` (server-side `status`/`goal_id`/`team_id`; `source`/`task_kind` applied client-side,
+  since the API has no such query params), `list_open_decisions_for_quest`
+  (`GET /api/teams/decisions/for-quest`, open-only filtering done client-side since the route
+  returns open *and* resolved). `create_task` gains `env_id` and `task_kind`.
 - **Per-task working directory.** The executor now resolves a task's `goal_id`/`quest_id` through
   the configured `RunnerConfig.quest_folder_map` and, when mapped, passes that folder as a per-run
   `working_dir` override to the deep run (a new optional `working_dir` kwarg on `DeepRunner.run_goal`,

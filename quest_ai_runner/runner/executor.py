@@ -44,6 +44,29 @@ CANCEL_CHECK_INTERVAL_SECONDS = 15.0
 # ``ClaudeConversationsAdapter.read_section``).
 CONV_CONTEXT_MAX_BYTES = 16_000
 
+# The value that marks a task as the recurring AUTOPILOT PASS (see ``runner.autopilot``).
+AUTOPILOT_PASS_KIND = "autopilot"
+
+
+def _is_autopilot_pass(task: Dict[str, Any]) -> bool:
+    """Whether this task is the recurring autopilot pass (routed to ``AutopilotPass``).
+
+    Reads ``task_kind`` FIRST, and that ordering is the whole point. ``task_kind`` is a PERSISTENT
+    classification: the Quest API writes it once at create and never touches it again, and a
+    recurring series' spawned occurrences inherit it. ``handler``, by contrast, is the CLAIMING
+    WORKER'S OWN LABEL -- the poller stamps it on every ``claim()`` with the rep slug or runner
+    label, OVERWRITING whatever was there. So routing on ``handler`` alone is unsound: it survives
+    only because each recurring occurrence happens to be a fresh document, and it breaks the moment
+    a task is re-polled, retried, or resumed after a claim (the claim label has replaced
+    "autopilot", and the pass task would then be run as an ordinary deep task).
+
+    ``handler`` is still accepted as a BACK-COMPAT fallback so a pass task queued before the
+    backend gained ``task_kind`` still routes correctly.
+    """
+    if str(task.get("task_kind") or "").strip().lower() == AUTOPILOT_PASS_KIND:
+        return True
+    return str(task.get("handler") or "").strip().lower() == AUTOPILOT_PASS_KIND
+
 
 @dataclass
 class ExecutionOutcome:
@@ -181,11 +204,10 @@ class TaskExecutor:
         caller, or no rep resolved), behaviour is exactly as before.
         """
         task_id = str(task.get("id") or task.get("task_id") or "")
-        # An Autopilot pass task (``handler == "autopilot"``, stamped when the recurring pass task
-        # was created) REPLACES the normal deep-run path entirely: the pass itself is the work for
-        # this task (it scans opted-in quests and creates/suggests other tasks as a side effect),
-        # so it is routed BEFORE any of the context/orchestrator machinery below runs.
-        if str(task.get("handler") or "").strip().lower() == "autopilot":
+        # An Autopilot pass task REPLACES the normal deep-run path entirely: the pass itself is the
+        # work for this task (it scans opted-in quests and creates/suggests other tasks as a side
+        # effect), so it is routed BEFORE any of the context/orchestrator machinery below runs.
+        if _is_autopilot_pass(task):
             return self._execute_autopilot(task, task_id)
         text = self._task_text(task)
         goal_id = task.get("goal_id")
