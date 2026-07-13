@@ -390,10 +390,16 @@ MODE SIGNAL (`mode_signal`, optional -- almost always omit it): detect an EXPLIC
     * "enter_brainstorm": ONLY when the user explicitly says they want to think out loud /
       explore ideas together WITHOUT anything being executed, changed, or turned into a task.
       They must be asking for the no-action mode itself, in whatever words.
-    * "exit_brainstorm": ONLY when the user explicitly asks to move from talking to doing --
-      proceed, act on what was discussed, make it happen.
+    * "exit_brainstorm": ONLY when the user speaks about the MODE itself and lifts the hold --
+      they tell you to stop holding back and start acting ("okay go ahead and do it now", "we are
+      done brainstorming, act on this", "stop holding off, make it happen").
+      An instruction about the SUBJECT MATTER is NOT a mode release, even in the imperative:
+      "create a goal called X and add it to my plan", "send her an email about it", "book it" are
+      how a person thinks out loud about a thing. The user talking ABOUT the work is not the user
+      asking to LEAVE the mode. Those stay in brainstorm; do NOT signal an exit for them.
     * omit (null): EVERYTHING else. A topic shift, musing, a hypothetical, an open-ended
-      question, or discussing ideas is NOT a mode signal. When in ANY doubt, omit it.
+      question, or discussing ideas is NOT a mode signal. When in ANY doubt, omit it: holding is
+      recoverable in one sentence (the user says go ahead), acting is not.
 
 """
 
@@ -438,11 +444,17 @@ explore, compare, weigh options, sketch plans, advise. Describing possible work 
 not a failure -- the ordinary rule that a change request must escalate to "deep" is suspended.
 """
 
-# Appended to _BRAINSTORM_PLANNER_NOTE only when mode signals are enabled (the exit path relies
-# on the `mode_signal` tool field, which only exists in the schema when the consumer opted in).
+# Appended to _BRAINSTORM_PLANNER_NOTE only when mode signals are enabled (the mode vocabulary the
+# note leans on only exists in the schema when the consumer opted in). The planner does NOT own the
+# exit while the latch is held: a dedicated structured judgment (Orchestrator.judge_brainstorm_release,
+# MODE_RELEASE_PROMPT) already decided, before this plan, whether the user released the hold, and its
+# verdict is the one that counts. Telling the planner that here keeps the prompt honest and stops it
+# from reading a subject-matter imperative as permission to act.
 _BRAINSTORM_EXIT_SIGNAL_NOTE = """\
-EXCEPTION: if THIS message explicitly asks to proceed / act on what was discussed, set
-mode_signal="exit_brainstorm" and treat every action as available again.
+Whether the user has RELEASED this mode was already judged, separately, before this plan, so do not
+try to leave it yourself: leave `mode_signal` empty. An instruction about the SUBJECT MATTER ("create
+a goal called X and add it to my plan", "send her an email about it", "book it") is part of thinking
+out loud, not a release, so answer it without acting on it.
 """
 
 # Folded into the ANSWER grounding context (zero extra LLM calls) when the turn is latched in
@@ -775,6 +787,15 @@ class OrchestratorConfig:
     # verdict on any failure/timeout/parse miss -- it can only ever ADD an escalation the regex
     # missed, never block the turn or override a "yes" the regex already gave.
     intent_judge_tier: str = "balanced"
+    # BRAINSTORM-RELEASE JUDGE TIER. The tier ``judge_brainstorm_release`` (does THIS message lift
+    # the no-action hold?) resolves its model from. Deliberately NOT the planner tier: the planner
+    # is cheap by design, and a cheap model reads any imperative -- including one purely about the
+    # subject matter ("create a goal called X and add it to my plan") -- as "the user is asking to
+    # proceed", which silently releases the latch and executes work in a conversation the user put
+    # on hold. "balanced" buys the judgment that distinguishes an instruction ABOUT THE WORK (held)
+    # from a release OF THE MODE (exit), on ONE small call that only ever runs while the latch is
+    # held. Fail-safe: any failure/timeout/parse miss HOLDS (see judge_brainstorm_release).
+    mode_release_tier: str = "balanced"
     # EXECUTION MODE for this run, supplied by the CONSUMER per run (the orchestrator is stateless
     # about it; the consumer owns the latch and persists it wherever its conversation state lives).
     #   * "normal" (default): today's behavior, byte-for-byte.
@@ -794,9 +815,16 @@ class OrchestratorConfig:
     # for a consumer that never asked for modes). When ON, mode CHANGES are detected by the
     # planner itself (LLM judgment on the planning call that already runs every turn, never
     # phrase matching) and reported via ``PlanDecision.mode_signal`` -> EVENT_MODE_SIGNAL +
-    # ``OrchestratorResult.mode_signal``; an "exit_brainstorm" signal releases the gating for
-    # the SAME turn (the user explicitly asked to proceed), an "enter_brainstorm" signal
-    # engages it. The orchestrator stays stateless; the consumer owns persisting the latch.
+    # ``OrchestratorResult.mode_signal``; an "enter_brainstorm" signal engages the gating for the
+    # SAME turn. The orchestrator stays stateless; the consumer owns persisting the latch.
+    #
+    # EXIT is different, and deliberately does NOT ride the planner call. While the latch is held
+    # (``execution_mode="brainstorm"``), a planner "exit_brainstorm" is IGNORED; the release is
+    # decided once per turn by ``judge_brainstorm_release`` (a dedicated structured call at
+    # ``mode_release_tier``), whose verdict is what sets ``mode_signal="exit_brainstorm"`` and
+    # releases the gating for the same turn. See ``mode_release_tier`` for why: a cheap planner
+    # judges a subject-matter imperative ("create a goal called X and add it to my plan") as a
+    # request to proceed, which broke the latch exactly when it mattered most.
     mode_signals_enabled: bool = False
     # DEFERRED DEEP IS QUEUED. Set True by a consumer whose wired deep runner QUEUES a planner
     # ``deferred_deep`` as a background task (confirming the enqueue and returning
@@ -1222,6 +1250,80 @@ Do NOT use em dashes.
 
 --- THE ASSISTANT'S DRAFT ANSWER THIS TURN (context only; judge the MESSAGE, not the answer) ---
 {answer}
+"""
+
+# ---------------------------------------------------------------------------
+# BRAINSTORM-RELEASE JUDGE: the ONE structured judgment that decides, on a LATCHED brainstorm turn,
+# whether the user released the hold. It exists because that decision is too consequential to ride
+# the planner call at the cheap planner tier: a cheap planner reads a bare subject-matter imperative
+# ("create a goal called X and add it to my plan") as "the user is asking to proceed", releases the
+# latch mid-turn, and the work executes in a conversation the user explicitly put on hold. Acting is
+# not recoverable; holding is (one sentence from the user). So the exit gets its own call, at its own
+# tier, whose fail-safe direction is HOLD. It runs at most ONCE per turn and ONLY while the latch is
+# held, so normal turns cost exactly what they cost today. Generic and app-agnostic.
+# ---------------------------------------------------------------------------
+
+MODE_RELEASE_TOOL: Dict[str, Any] = {
+    "name": "brainstorm_release_verdict",
+    "description": "Judge whether the user's newest message RELEASES the brainstorm hold (tells the "
+                   "assistant to stop holding back and start acting) rather than simply talking "
+                   "about the work.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "release_brainstorm": {
+                "type": "boolean",
+                "description": "True ONLY when the user speaks about the MODE itself and lifts the "
+                               "hold ('okay go ahead and do it now', 'we are done brainstorming, act "
+                               "on this'). False for anything about the SUBJECT MATTER, including "
+                               "imperatives ('create a goal called X', 'add that to my plan', 'email "
+                               "her about it'), which is how people think out loud.",
+            },
+            "reason": {"type": "string", "description": "One short sentence: why."},
+        },
+        "required": ["release_brainstorm"],
+    },
+}
+
+MODE_RELEASE_PROMPT = """\
+This conversation is LATCHED in brainstorm mode: the user asked to think out loud, and nothing is
+executed, changed, or scheduled until they release that hold. Judge ONE thing about their newest
+message: does it RELEASE the hold?
+
+The distinction that decides it:
+  * Talking about the SUBJECT MATTER is NOT a release, not even in the imperative. If the message
+    names WHAT should happen to the thing being discussed (create it, add it, email her, book it,
+    set it up, track it), that is a person thinking out loud about the thing, and it stays held:
+    release_brainstorm = false.
+  * Agreeing with an IDEA is not a release either. Settling on a plan in the first person ("let us
+    do it", "I love that, that is the plan") says the user likes the idea, not that the hold is
+    lifted. False.
+  * Releasing the hold means the user speaks to YOU about the holding itself: they tell you to stop
+    holding back and start acting on what was already discussed, naming no new work of their own
+    ("go ahead", "go for it", "do it now", "act on this", "make it happen", "we are done
+    brainstorming"). release_brainstorm = true.
+
+Contrasting examples:
+  "Create a goal called Morning Pages and add it to my plan."  -> false (subject matter, phrased as
+      an instruction; the user is still shaping the idea out loud)
+  "Send her an email about it and book the room."              -> false (subject matter)
+  "Let us do it."                                              -> false (first-person agreement with
+      the idea; it does not tell you to stop holding back)
+  "Okay, go ahead and do it now."                              -> true (spoken to you, about your
+      holding back; the hold itself is lifted)
+  "We are done brainstorming. Act on what we discussed."       -> true (explicit release)
+  "Stop holding off, make it happen."                          -> true (explicit release)
+
+Unless the message unmistakably tells you to start acting, answer false. Holding is recoverable in
+one sentence (the user says go ahead and everything runs); acting is not.
+
+Do NOT use em dashes.
+
+--- THE USER'S NEWEST MESSAGE (judge THIS) ---
+{message}
+
+--- RECENT TRANSCRIPT (context only; earlier turns, most recent last) ---
+{transcript}
 """
 
 # Inserted into VERIFY_GOAL_PROMPT (the {claims_rules} slot) ONLY when an execution record is
@@ -2600,6 +2702,22 @@ def intent_judge_timeout_seconds() -> float:
     only runs in the ambiguous band the regex prefilter left undecided, and must never be the reason
     a turn feels slow -- a timeout falls back to the regex verdict instead of blocking."""
     raw = os.getenv("QAR_INTENT_JUDGE_TIMEOUT_SECONDS")
+    if raw is None or not raw.strip():
+        return 8.0
+    try:
+        value = float(raw)
+    except ValueError:
+        return 8.0
+    return value if value > 0 else 8.0
+
+
+def mode_release_timeout_seconds() -> float:
+    """Wall-clock budget for the ONE structured brainstorm-release judgment (see
+    ``Orchestrator.judge_brainstorm_release``). Env ``QAR_MODE_RELEASE_TIMEOUT_SECONDS`` (default 8,
+    accepts a float); read fresh on every call, not cached. A timeout HOLDS the latch (the fail-safe
+    direction), so a slow provider can delay a brainstorm turn by at most this budget and can never
+    cause work to run in a conversation the user put on hold."""
+    raw = os.getenv("QAR_MODE_RELEASE_TIMEOUT_SECONDS")
     if raw is None or not raw.strip():
         return 8.0
     try:
@@ -4039,6 +4157,76 @@ class Orchestrator:
         is_directive = bool(result.get("is_execution_directive"))
         reason = str(result.get("reason") or "").strip() or "LLM intent judgment"
         return is_directive, reason
+
+    def judge_brainstorm_release(self, user_message: str, transcript: str = "") -> Tuple[bool, str]:
+        """ONE structured LLM judgment, on a LATCHED brainstorm turn only: did the user RELEASE the
+        no-action hold, or are they still talking about the work?
+
+        This is the exit authority while ``execution_mode="brainstorm"``. It replaces the planner's
+        own ``mode_signal="exit_brainstorm"`` for that case (which is ignored while latched) because
+        the planner runs at the cheap ``planner_tier`` and a cheap model treats ANY imperative as a
+        request to proceed: "create a goal called X and add it to my plan" is an instruction about
+        the SUBJECT MATTER, exactly what a person says while thinking out loud, and it released the
+        latch mid-turn. Here the question is asked on its own, at ``cfg.mode_release_tier``, with the
+        subject-matter vs mode-release distinction spelled out (``MODE_RELEASE_PROMPT``).
+
+        Still LLM judgment, never phrase matching: no keyword list, no regex, no trigger phrases.
+
+        Cost: at most ONE extra structured call, and ONLY while the latch is held. Normal turns are
+        untouched. Hard-capped by ``mode_release_timeout_seconds()``.
+
+        FAIL-SAFE DIRECTION IS HOLD. An unresolvable tier, a provider failure, a timeout, a
+        malformed response, an empty message: every one of them returns ``(False, reason)``, i.e.
+        the latch stays on and the turn produces the no-action acknowledgment. Holding costs the
+        user one sentence ("go ahead"); acting on a conversation they put on hold cannot be undone.
+        Never raises.
+
+        Returns ``(release, reason)``.
+        """
+        message = (user_message or "").strip()
+        if not message:
+            return False, "empty message; holding the brainstorm latch"
+        try:
+            model = self.registry.resolve_tier(self.cfg.mode_release_tier)
+        except Exception as e:  # noqa: BLE001 — an unresolvable tier must not release the latch
+            log.warning("Brainstorm-release judge: could not resolve tier %r (%s); HOLDING the latch.",
+                       self.cfg.mode_release_tier, e)
+            return False, "release judge unavailable (tier unresolvable); holding the latch"
+        if not model:
+            return False, "release judge unavailable (no model); holding the latch"
+        prompt = MODE_RELEASE_PROMPT.format(
+            message=message[:1000],
+            transcript=(transcript or "").strip()[:1500] or "(no prior turns)",
+        )
+
+        def call_judge() -> Dict[str, Any]:
+            provider = self.get_provider_for_model(model)
+            raw = provider.plan(prompt, model=model, tool_schema=MODE_RELEASE_TOOL)
+            if isinstance(raw, str):
+                raw = json.loads(_extract_json(raw) or "{}")
+            return raw if isinstance(raw, dict) else {}
+
+        timeout = mode_release_timeout_seconds()
+        pool = ThreadPoolExecutor(max_workers=1)
+        try:
+            future = pool.submit(call_judge)
+            result = future.result(timeout=timeout)
+        except FuturesTimeoutError:
+            log.warning("Brainstorm-release judge timed out after %.0fs "
+                       "(QAR_MODE_RELEASE_TIMEOUT_SECONDS to adjust); HOLDING the latch.", timeout)
+            return False, "release judge timed out; holding the latch"
+        except Exception as e:  # noqa: BLE001 — the judgment must never break the turn
+            log.warning("Brainstorm-release judge failed (%s: %s); HOLDING the latch.",
+                       type(e).__name__, e)
+            return False, "release judge failed; holding the latch"
+        finally:
+            pool.shutdown(wait=False)
+        if not isinstance(result, dict) or "release_brainstorm" not in result:
+            log.warning("Brainstorm-release judge returned no usable verdict; HOLDING the latch.")
+            return False, "release judge gave no verdict; holding the latch"
+        release = bool(result.get("release_brainstorm"))
+        reason = str(result.get("reason") or "").strip() or "LLM mode-release judgment"
+        return release, reason
 
     def _deep_models(self, model_hint: Optional[str], quality_standards: Optional[str],
                      fallback: Optional[str]) -> List[Optional[str]]:
@@ -5969,10 +6157,10 @@ class Orchestrator:
 
         # --- EXECUTION MODE (brainstorm latch, consumer-owned) --------------------------------
         # ``brainstorm_active`` gates every path that could ACT this turn (deep, confirm, and the
-        # nets that can only ADD execution). It starts from the consumer-supplied config; an
-        # explicit planner-detected signal THIS turn adjusts it immediately (an "exit_brainstorm"
-        # releases the gating for the same turn the user asked to proceed in, an
-        # "enter_brainstorm" engages it). Any other execution_mode value behaves as "normal".
+        # nets that can only ADD execution). It starts from the consumer-supplied config. Two
+        # things can move it within the turn: the dedicated release judgment below (the ONLY way a
+        # held latch opens; fail-safe HOLD), and a planner "enter_brainstorm" signal, which engages
+        # the gating from an unlatched turn. Any other execution_mode value behaves as "normal".
         # ``mode_signal_detected`` is the first (and only) signal captured this turn, surfaced via
         # EVENT_MODE_SIGNAL + OrchestratorResult.mode_signal; the orchestrator persists nothing.
         brainstorm_active = (cfg.execution_mode == "brainstorm")
@@ -6663,6 +6851,28 @@ class Orchestrator:
             emit.emit(ProgressEvent(type=EVENT_DONE, result_kind=res.kind, step=steps))
             return res
 
+        # --- BRAINSTORM RELEASE (latched turns only; the exit authority) -----------------------
+        # While the latch is held, ONE dedicated structured judgment decides whether this message
+        # lifts the hold (see judge_brainstorm_release). It runs before the first plan, so the whole
+        # turn -- planner note, action gating, acknowledgment -- runs in the mode the user is
+        # actually in. A HOLD verdict (including every failure mode) leaves the latch on; only a
+        # release flips it, and that release is what the consumer sees as mode_signal.
+        # Cost is bounded to brainstorm turns: nothing here runs in normal mode.
+        if brainstorm_active and cfg.mode_signals_enabled:
+            _released, _release_reason = self.judge_brainstorm_release(user_message, transcript)
+            log.info("Brainstorm-release judge: %s (%s)",
+                     "RELEASE" if _released else "HOLD", _release_reason)
+            if _released:
+                brainstorm_active = False
+                mode_signal_detected = "exit_brainstorm"
+                try:
+                    emit.emit(ProgressEvent(type=EVENT_MODE_SIGNAL, step=0,
+                                            data={"signal": "exit_brainstorm",
+                                                  "execution_mode": cfg.execution_mode,
+                                                  "reason": _release_reason}))
+                except Exception:  # noqa: BLE001 — reporting the signal must never break the turn
+                    pass
+
         plan: Optional[PlanDecision] = None
         steps = 0
         consecutive_reads = 0  # Track how many steps in a row chose "read"
@@ -6762,21 +6972,33 @@ class Orchestrator:
             # explicit mode change the planner detected this turn (LLM judgment riding the
             # planning call that already ran; zero extra calls). Surfaced to the consumer as an
             # event here and on the result in finish(); the consumer owns persisting the latch.
-            # An exit signal releases the brainstorm gating for the REST of this same turn (the
-            # user explicitly asked to proceed); an enter signal engages it. Fail-safe by
+            # An "enter_brainstorm" engages the gating for the rest of this same turn. Fail-safe by
             # construction: normalize_decision already reduced anything unrecognized -- and, with
             # the flag off, ANY value -- to None, and None changes nothing; the flag check here
             # is belt and braces so a disabled consumer can never see a latch flip or the event.
+            #
+            # EXIT WHILE LATCHED IS NOT THE PLANNER'S TO GIVE. The planner runs at the cheap
+            # planner tier and judges any imperative -- including one purely about the subject
+            # matter ("create a goal called X and add it to my plan") -- as the user asking to
+            # proceed, which released the latch mid-turn and executed work in a conversation the
+            # user had put on hold. The release was already decided ONCE, before the loop, by
+            # judge_brainstorm_release (fail-safe HOLD). So while cfg.execution_mode is
+            # "brainstorm", a planner exit_brainstorm is dropped here.
             if (cfg.mode_signals_enabled and plan and plan.mode_signal
                     and mode_signal_detected is None):
-                mode_signal_detected = plan.mode_signal
-                brainstorm_active = (plan.mode_signal == "enter_brainstorm")
-                try:
-                    emit.emit(ProgressEvent(type=EVENT_MODE_SIGNAL, step=steps,
-                                            data={"signal": mode_signal_detected,
-                                                  "execution_mode": cfg.execution_mode}))
-                except Exception:  # noqa: BLE001 — reporting the signal must never break the turn
-                    pass
+                if (cfg.execution_mode == "brainstorm"
+                        and plan.mode_signal == "exit_brainstorm"):
+                    log.info("Brainstorm mode: ignoring the planner's exit_brainstorm; the release "
+                             "judge owns the exit while the latch is held.")
+                else:
+                    mode_signal_detected = plan.mode_signal
+                    brainstorm_active = (plan.mode_signal == "enter_brainstorm")
+                    try:
+                        emit.emit(ProgressEvent(type=EVENT_MODE_SIGNAL, step=steps,
+                                                data={"signal": mode_signal_detected,
+                                                      "execution_mode": cfg.execution_mode}))
+                    except Exception:  # noqa: BLE001 — reporting must never break the turn
+                        pass
 
             # BRAINSTORM GATE: acting is unavailable while the latch is held. If the planner
             # still chose "deep" or "confirm" despite the prompt note, degrade to "answer" with

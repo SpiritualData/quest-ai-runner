@@ -10,6 +10,7 @@ Covers the four contract points:
     the deferred-deep escalation nets) while reads/answers stay fully functional,
   * default behavior (``execution_mode="normal"``, no signal) is unchanged.
 """
+import time
 from typing import Any, Dict, List
 
 from quest_ai_runner.core.adapters import EVENT_MODE_SIGNAL, StreamSink
@@ -17,6 +18,7 @@ from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import (
     BRAINSTORM_HELD_WORK_ACK_NOTE,
     BRAINSTORM_NO_ACTION_ACK_NOTE,
+    MODE_RELEASE_TOOL,
     Orchestrator,
     OrchestratorConfig,
     normalize_decision,
@@ -28,6 +30,37 @@ from .conftest import StubDeepRunner, StubEscalation, StubProvider, StubRetrieva
 def _orch(provider, retrieval, **kw):
     return Orchestrator(retrieval=retrieval, provider=provider,
                         registry=ModelRegistry(provider), **kw)
+
+
+class ReleaseJudgeProvider(StubProvider):
+    """StubProvider plus a scripted verdict for the BRAINSTORM-RELEASE judge call.
+
+    The judge call is routed by tool name, so it never consumes a scripted planner decision and a
+    test can assert exactly how many times it ran (zero on normal turns).
+    """
+
+    def __init__(self, decisions, *, release: bool = False,
+                 verdict: Any = None, fail: bool = False, delay: float = 0.0, **kw):
+        super().__init__(decisions, **kw)
+        self._release = release
+        self._verdict = verdict          # a raw dict/str verdict, overrides `release`
+        self._fail = fail                # raise instead of answering
+        self._delay = delay              # sleep before answering (timeout tests)
+        self.judge_calls = 0
+        self.judge_prompts: List[str] = []
+
+    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Any:
+        if tool_schema.get("name") == MODE_RELEASE_TOOL["name"]:
+            self.judge_calls += 1
+            self.judge_prompts.append(prompt)
+            if self._fail:
+                raise RuntimeError("release-judge provider is down")
+            if self._delay:
+                time.sleep(self._delay)
+            if self._verdict is not None:
+                return self._verdict
+            return {"release_brainstorm": self._release, "reason": "stub verdict"}
+        return super().plan(prompt, model=model, tool_schema=tool_schema)
 
 
 # ---------------------------------------------------------------------------
@@ -172,22 +205,163 @@ def test_brainstorm_planner_prompt_carries_the_mode_note():
 
 
 # ---------------------------------------------------------------------------
-# exit_brainstorm releases the latch for the SAME turn the user asked to proceed in.
+# THE EXIT AUTHORITY: while the latch is held, only the dedicated release judge can open it.
+# The planner (cheap tier) judges a subject-matter imperative ("create a goal called X and add it
+# to my plan") as "the user is asking to proceed" and emits exit_brainstorm; honoring that broke
+# the latch mid-turn and executed work in a conversation the user had put on hold. The judge
+# decides instead, once per latched turn, and its fail-safe direction is HOLD.
 # ---------------------------------------------------------------------------
 
-def test_exit_signal_releases_latch_same_turn():
-    provider = StubProvider(decisions=[
+def _brainstorm_cfg(**kw) -> OrchestratorConfig:
+    return OrchestratorConfig(execution_mode="brainstorm", mode_signals_enabled=True, **kw)
+
+
+def test_release_judge_verdict_releases_the_latch_same_turn():
+    provider = ReleaseJudgeProvider(decisions=[
         {"action": "deep", "goal": "Ship the plan we discussed", "deep_brief": "do it",
-         "rationale": "user said go", "mode_signal": "exit_brainstorm"},
+         "rationale": "user said go"},
         {"met": True, "reason": "done"},           # goal verification
-    ])
+    ], release=True)
     runner = StubDeepRunner(met=True, output="shipped")
     res = _orch(provider, StubRetrieval(), deep_runner=runner,
-                config=OrchestratorConfig(execution_mode="brainstorm",
-                                          mode_signals_enabled=True)).run("ok, go do it")
-    assert res.kind == "deep"                      # acted, despite brainstorm config
-    assert res.mode_signal == "exit_brainstorm"
+                config=_brainstorm_cfg()).run("ok, go ahead and do it now")
+    assert provider.judge_calls == 1               # exactly one extra call, on a latched turn
+    assert res.kind == "deep"                      # acted, despite the brainstorm config
+    assert res.mode_signal == "exit_brainstorm"    # the judge's verdict is what the consumer sees
     assert runner.calls and runner.calls[0]["goal"] == "Ship the plan we discussed"
+
+
+def test_latched_planner_exit_signal_is_ignored_when_the_judge_holds():
+    """THE REGRESSION: a subject-matter imperative makes the cheap planner emit exit_brainstorm.
+    While latched, that signal must not release anything: the judge said hold, so the work is
+    held and the reply acknowledges it."""
+    provider = ReleaseJudgeProvider(decisions=[
+        {"action": "deep", "goal": "Create the goal", "deep_brief": "create it",
+         "rationale": "planner read the imperative as permission to act",
+         "mode_signal": "exit_brainstorm"},
+    ], release=False)
+    runner = StubDeepRunner(met=True)
+    res = _orch(provider, StubRetrieval(), deep_runner=runner, config=_brainstorm_cfg()).run(
+        "Create a goal on this quest called Morning Pages and add it to my plan")
+    assert provider.judge_calls == 1
+    assert res.kind == "answer"
+    assert runner.calls == []                      # nothing executed
+    assert res.mode_signal is None                 # the planner's exit never reaches the consumer
+    assert _ACK_MARKER in _answer_prompt(provider)  # and the reply says nothing ran
+
+
+def test_release_judge_failure_holds_the_latch():
+    """Fail-safe direction: a provider failure in the judge leaves the latch ON, even when the
+    planner is shouting exit_brainstorm."""
+    provider = ReleaseJudgeProvider(decisions=[
+        {"action": "deep", "goal": "Do it", "deep_brief": "do it", "rationale": "r",
+         "mode_signal": "exit_brainstorm"},
+    ], fail=True)
+    runner = StubDeepRunner(met=True)
+    res = _orch(provider, StubRetrieval(), deep_runner=runner, config=_brainstorm_cfg()).run(
+        "set that up")
+    assert res.kind == "answer"
+    assert runner.calls == []
+    assert res.mode_signal is None
+
+
+def test_release_judge_unusable_verdict_holds_the_latch():
+    for verdict in ({"reason": "no verdict field"}, {}, "not a dict", None, 42):
+        provider = ReleaseJudgeProvider(decisions=[
+            {"action": "deep", "goal": "Do it", "deep_brief": "do it", "rationale": "r",
+             "mode_signal": "exit_brainstorm"},
+        ], verdict=verdict)
+        runner = StubDeepRunner(met=True)
+        res = _orch(provider, StubRetrieval(), deep_runner=runner, config=_brainstorm_cfg()).run(
+            "book it")
+        assert res.kind == "answer", f"verdict {verdict!r} must hold the latch"
+        assert runner.calls == []
+        assert res.mode_signal is None
+
+
+def test_release_judge_timeout_holds_the_latch(monkeypatch):
+    monkeypatch.setenv("QAR_MODE_RELEASE_TIMEOUT_SECONDS", "0.05")
+    provider = ReleaseJudgeProvider(decisions=[
+        {"action": "deep", "goal": "Do it", "deep_brief": "do it", "rationale": "r",
+         "mode_signal": "exit_brainstorm"},
+    ], release=True, delay=0.5)                    # would release, but too slow
+    runner = StubDeepRunner(met=True)
+    res = _orch(provider, StubRetrieval(), deep_runner=runner, config=_brainstorm_cfg()).run(
+        "add that to my plan")
+    assert res.kind == "answer"
+    assert runner.calls == []
+    assert res.mode_signal is None
+
+
+def test_release_judge_never_runs_on_normal_turns():
+    """Cost is bounded to brainstorm turns: an unlatched turn makes ZERO extra calls, even with
+    mode signals enabled."""
+    provider = ReleaseJudgeProvider(decisions=[
+        {"action": "deep", "goal": "Write the one-pager", "deep_brief": "do it",
+         "rationale": "real work"},
+        {"met": True, "reason": "done"},
+    ], release=True)
+    runner = StubDeepRunner(met=True, output="written")
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(mode_signals_enabled=True)).run("write the one-pager")
+    assert provider.judge_calls == 0
+    assert res.kind == "deep"
+
+
+def test_release_judge_never_runs_when_signals_are_disabled():
+    """A consumer that drives execution_mode from its own state (signals off) has no exit channel,
+    so the judge does not run and the latch simply holds."""
+    provider = ReleaseJudgeProvider(decisions=[
+        {"action": "deep", "goal": "Do it", "deep_brief": "do it", "rationale": "r"},
+    ], release=True)
+    runner = StubDeepRunner(met=True)
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(execution_mode="brainstorm")).run("ok go ahead and do it")
+    assert provider.judge_calls == 0
+    assert res.kind == "answer"
+    assert runner.calls == []
+
+
+def test_release_verdict_surfaces_as_event_with_reason():
+    provider = ReleaseJudgeProvider(decisions=[{"action": "answer", "rationale": "acting now"}],
+                                    release=True)
+    events: List[Dict[str, Any]] = []
+    sink = StreamSink(lambda ev: events.append(ev))
+    res = _orch(provider, StubRetrieval(), config=_brainstorm_cfg()).run(
+        "we're done brainstorming, act on this", sink=sink)
+    assert res.mode_signal == "exit_brainstorm"
+    mode_events = [e for e in events if e["type"] == EVENT_MODE_SIGNAL]
+    assert len(mode_events) == 1
+    assert mode_events[0]["data"]["signal"] == "exit_brainstorm"
+    assert mode_events[0]["data"]["reason"]    # why the judge released, for the consumer's log
+
+
+def test_release_judge_prompt_carries_the_subject_matter_distinction():
+    provider = ReleaseJudgeProvider(decisions=[{"action": "answer", "rationale": "held"}],
+                                    release=False)
+    _orch(provider, StubRetrieval(), config=_brainstorm_cfg()).run("send her an email about it")
+    prompt = provider.judge_prompts[0]
+    assert "SUBJECT MATTER" in prompt
+    assert "send her an email about it" in prompt   # the message under judgment
+    assert "false" in prompt                       # the safe direction is spelled out
+
+
+def test_latched_planner_prompt_tells_the_planner_it_does_not_own_the_exit():
+    provider = ReleaseJudgeProvider(decisions=[{"action": "answer", "rationale": "held"}],
+                                    release=False)
+    _orch(provider, StubRetrieval(), config=_brainstorm_cfg()).run("create a goal called X")
+    planner_prompt = provider.plan_prompts[0]      # judge calls never land here (routed by name)
+    assert "SUBJECT MATTER is NOT a mode release" in planner_prompt
+    assert "already judged" in planner_prompt
+
+
+def test_judge_brainstorm_release_holds_on_empty_message():
+    provider = ReleaseJudgeProvider(decisions=[], release=True)
+    orch = _orch(provider, StubRetrieval(), config=_brainstorm_cfg())
+    released, reason = orch.judge_brainstorm_release("   ")
+    assert released is False
+    assert provider.judge_calls == 0
+    assert "holding" in reason
 
 
 def test_enter_signal_gates_the_same_turn_even_in_normal_mode():

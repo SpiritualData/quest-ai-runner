@@ -156,6 +156,30 @@ All notable changes to this project are documented here. The format is based on
   immediately.
 
 ### Fixed
+- **The brainstorm latch now holds against an imperative.** A conversation latched in
+  `execution_mode="brainstorm"` released mid-turn on a plain subject-matter instruction ("create a
+  goal called X and add it to my plan"), executed the work, and never gave the user the no-action
+  acknowledgment. Verified against real models, not stubs: under the previous doctrine the real
+  cheap planner emitted `mode_signal="exit_brainstorm"` for 3 of 8 must-hold phrasings at the
+  `fast` tier and 6 of 8 at `balanced`, and the orchestrator honored it. Three changes, together:
+  - **The exit is no longer the planner's to give.** While the latch is held, a planner
+    `exit_brainstorm` is ignored; the release is decided ONCE per turn by a new dedicated judgment,
+    `Orchestrator.judge_brainstorm_release` (one structured call, `MODE_RELEASE_TOOL` /
+    `MODE_RELEASE_PROMPT`, at the new `OrchestratorConfig.mode_release_tier`, default `"balanced"`,
+    hard-capped by `QAR_MODE_RELEASE_TIMEOUT_SECONDS`, default 8s). The planner runs at the cheap
+    planner tier by design, and a cheap model reads any imperative as a request to proceed; this
+    decision is too consequential for a judgment riding a call made for something else.
+  - **The distinction is stated, not pattern-matched** (still pure LLM judgment: no keyword lists,
+    no regex, no trigger phrases). An instruction about the SUBJECT MATTER ("create a goal called
+    X", "email her about it", "book it") is how a person thinks out loud, and it is HELD. A release
+    is the user speaking to you about the holding itself ("okay go ahead and do it now", "we are
+    done brainstorming, act on this", "stop holding off, make it happen"). The same distinction is
+    now in the planner's own MODE SIGNAL doctrine.
+  - **The fail-safe direction is HOLD.** An unresolvable tier, provider failure, timeout, malformed
+    verdict, or plain ambiguity all leave the latch on and produce the no-action acknowledgment.
+    Holding costs the user one sentence; acting on a conversation they put on hold cannot be undone.
+  Cost is bounded to brainstorm turns: the judge runs only while the latch is held (and only when
+  `mode_signals_enabled`), so normal turns make exactly the calls they made before.
 - **A queued deployment can no longer deny work it actually did.** Review follow-ups to the
   deferred hand-off, all in the honesty direction (every user-facing word must match what really
   happened this turn):
