@@ -2284,3 +2284,134 @@ class TestHybridConsolidationVerbatimRebuild:
         assert "doc-1" in rs
         # The attached section is a verbatim slice of the context_view.
         assert rs in ac.context_view
+
+
+# ---------------------------------------------------------------------------
+# QAR_VECTOR_BACKEND: gates the auto-built Qdrant vector arm
+# ---------------------------------------------------------------------------
+
+class TestVectorBackendEnvSwitch:
+    """QAR_VECTOR_BACKEND controls resolve_context_assembler's auto-built Qdrant arm.
+
+    "auto" (default) attempts Qdrant and falls back to keyword-only with a warning;
+    "none"/"off" skips the attempt entirely and silently; "qdrant" requires Qdrant
+    and logs an ERROR when it is unavailable (still degrading to keyword-only).
+    """
+
+    CLEAR_ENV = (
+        "QAR_QUEST_API_URL", "QAR_QUEST_API_KEY", "QAR_USER_ID",
+        "QAR_CARDS_BACKEND", "QAR_QDRANT_URL", "QAR_VECTOR_QDRANT_URL",
+        "QDRANT_URL", "QAR_EMBEDDER_BACKEND",
+    )
+
+    def resolve(self, tmp_path, monkeypatch, backend_value, qdrant_cls):
+        """Run resolve_context_assembler with a patched QdrantVectorStore class."""
+        import quest_ai_runner.adapters as adapters_mod
+        from quest_ai_runner.config import RunnerConfig, resolve_context_assembler
+
+        for var in self.CLEAR_ENV:
+            monkeypatch.delenv(var, raising=False)
+        if backend_value is None:
+            monkeypatch.delenv("QAR_VECTOR_BACKEND", raising=False)
+        else:
+            monkeypatch.setenv("QAR_VECTOR_BACKEND", backend_value)
+        # Patch the class config.py imports (from .adapters import QdrantVectorStore)
+        # so the tests are deterministic whether or not the [qdrant] extra is installed.
+        monkeypatch.setattr(adapters_mod, "QdrantVectorStore", qdrant_cls)
+
+        repo = tmp_path / "repo"
+        repo.mkdir(exist_ok=True)
+        (repo / "main.py").write_text(
+            '"""Main entry point."""\n\ndef run():\n    pass\n', encoding="utf-8",
+        )
+        provider = MagicMock()
+        provider.list_models.return_value = []
+        provider.answer.return_value = "[]"
+        cfg = RunnerConfig(
+            quest_base_url="http://example.com",
+            quest_api_key="qsk_test",
+            retrieval=None,
+            model_provider=provider,
+            corpus_root=str(repo),
+            context_cards_dir=str(tmp_path / "cards"),
+        )
+        return resolve_context_assembler(cfg)
+
+    def unavailable_qdrant(self):
+        """A QdrantVectorStore stand-in that fails like the missing [qdrant] extra."""
+        return MagicMock(
+            side_effect=RuntimeError(
+                "QdrantVectorStore requires qdrant-client and fastembed. "
+                "Install with: pip install 'quest-ai-runner[qdrant]'"
+            )
+        )
+
+    @pytest.mark.parametrize("value", ["none", "off"])
+    def test_none_skips_qdrant_attempt_and_logs_nothing(
+        self, tmp_path, monkeypatch, caplog, value
+    ):
+        import logging
+        qdrant = self.unavailable_qdrant()
+        with caplog.at_level(logging.DEBUG, logger="quest-ai-runner.context"):
+            assembler = self.resolve(tmp_path, monkeypatch, value, qdrant)
+        assert assembler is not None, "keyword-only assembler must still be built"
+        qdrant.assert_not_called()
+        qdrant_records = [r for r in caplog.records if "qdrant" in r.getMessage().lower()]
+        assert not qdrant_records, (
+            f"'{value}' must be silent about Qdrant, got: "
+            f"{[r.getMessage() for r in qdrant_records]}"
+        )
+        # And the resolved assembler has no vector (hybrid) arm.
+        from quest_ai_runner.core.composite_assembler import CompositeContextAssembler
+        assert isinstance(assembler, CompositeContextAssembler)
+        assert not any(
+            isinstance(a, HybridContextAssembler) for a in assembler._assemblers
+        ), "'none' must resolve to the keyword-only arm, not a hybrid"
+
+    def test_auto_attempts_qdrant_and_falls_back_with_warning(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        import logging
+        qdrant = self.unavailable_qdrant()
+        with caplog.at_level(logging.DEBUG, logger="quest-ai-runner.context"):
+            # Unset env resolves to "auto" (current default behavior).
+            assembler = self.resolve(tmp_path, monkeypatch, None, qdrant)
+        assert assembler is not None
+        assert qdrant.called, "auto must still attempt the Qdrant construction"
+        warnings = [
+            r for r in caplog.records
+            if r.levelno == logging.WARNING and "Qdrant open failed" in r.getMessage()
+        ]
+        assert warnings, "auto keeps today's visible fallback warning"
+        assert not [r for r in caplog.records if r.levelno >= logging.ERROR], (
+            "auto degrades with a warning, never an error"
+        )
+
+    def test_qdrant_required_logs_error_when_unavailable(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        import logging
+        qdrant = self.unavailable_qdrant()
+        with caplog.at_level(logging.DEBUG, logger="quest-ai-runner.context"):
+            assembler = self.resolve(tmp_path, monkeypatch, "qdrant", qdrant)
+        assert assembler is not None, "runner must still start on keyword-only fallback"
+        assert qdrant.called
+        errors = [
+            r for r in caplog.records
+            if r.levelno == logging.ERROR
+            and "QAR_VECTOR_BACKEND=qdrant" in r.getMessage()
+        ]
+        assert errors, "'qdrant' must log a loud ERROR when the store cannot be opened"
+
+    def test_unrecognized_value_treated_as_auto_with_warning(
+        self, tmp_path, monkeypatch, caplog
+    ):
+        import logging
+        qdrant = self.unavailable_qdrant()
+        with caplog.at_level(logging.DEBUG, logger="quest-ai-runner.context"):
+            assembler = self.resolve(tmp_path, monkeypatch, "bogus", qdrant)
+        assert assembler is not None
+        assert qdrant.called, "unrecognized value falls back to auto (attempts Qdrant)"
+        assert any(
+            "unrecognized QAR_VECTOR_BACKEND" in r.getMessage() for r in caplog.records
+        )

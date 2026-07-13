@@ -86,6 +86,23 @@ Install the extra:
 pip install 'quest-ai-runner[qdrant]'
 ```
 
+### Turning the auto-built vector arm on/off (``QAR_VECTOR_BACKEND``)
+
+When no explicit vector store is configured, ``resolve_context_assembler`` auto-builds
+this Qdrant store so hybrid search is on by default.  The ``QAR_VECTOR_BACKEND`` env
+var controls that attempt:
+
+| Value | Behavior |
+|-------|----------|
+| ``auto`` (default / unset) | Attempt Qdrant; fall back to keyword-only search with a warning when it cannot be opened |
+| ``none`` / ``off`` | Skip the Qdrant attempt entirely: keyword-only search, no warning logged |
+| ``qdrant`` | Require Qdrant: log an error when it is unavailable (still degrades to keyword-only so the runner starts) |
+
+Set ``none`` on deployments that intentionally run without the ``[qdrant]`` extra so
+startup does not log a "Qdrant open failed" warning on every build.  The variable never
+overrides an explicitly configured ``vector_store`` or the qdrant card backend's
+query-only vector arm.
+
 ---
 
 ## Remote / self-hosted Qdrant

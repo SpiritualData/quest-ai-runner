@@ -7,6 +7,19 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **`QAR_VECTOR_BACKEND`: an explicit switch for the auto-built context vector store.**
+  `resolve_context_assembler` previously always attempted to construct the auto-built
+  Qdrant vector arm when no explicit `vector_store` was configured, logging a
+  "Qdrant open failed" warning on every build for deployments that intentionally run
+  without the `[qdrant]` extra. The new env var gates that attempt: `auto`
+  (default/unset) keeps the previous behavior (attempt Qdrant, fall back to
+  keyword-only with a warning), `none`/`off` skips the Qdrant attempt entirely (silent
+  keyword-only fallback: no construction attempt, no warning), and `qdrant` requires
+  Qdrant, logging an ERROR when it cannot be opened (still degrading to keyword-only so
+  the runner starts). The switch never overrides an explicitly configured
+  `vector_store` or the qdrant card backend's query-only vector arm. Unrecognized
+  values are treated as `auto` with a warning. Documented in `cli.py`'s env reference
+  and `docs/vector-context.md`.
 - **Brainstorm execution mode: a consumer-owned no-action latch.**
   `OrchestratorConfig.execution_mode` ("normal", the default, or "brainstorm") lets a consumer
   run a turn in which the user is explicitly thinking out loud: reads, context assembly, and

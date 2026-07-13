@@ -715,10 +715,26 @@ def resolve_context_assembler(
         # installed and no explicit store is configured (file backend), we auto-build an embedded
         # QdrantVectorStore (local filesystem, no server) so hybrid search is ON by default without
         # any consumer config. Keyword-only is the fallback when the extra is missing.
+        #
+        # QAR_VECTOR_BACKEND gates the AUTO-BUILT arm (it never overrides an explicit
+        # cfg.vector_store or the qdrant card backend's query-only arm):
+        #   "auto" (default/unset) — attempt Qdrant, fall back to keyword-only with a warning
+        #                            when it cannot be opened (today's behavior).
+        #   "none" / "off"        — skip the Qdrant attempt entirely: keyword-only, silent
+        #                            (no construction attempt, no warning log).
+        #   "qdrant"              — require Qdrant: log an ERROR when it cannot be opened
+        #                            (still degrades to keyword-only so the runner starts).
+        vector_backend = (os.getenv("QAR_VECTOR_BACKEND") or "").strip().lower() or "auto"
+        if vector_backend not in ("auto", "none", "off", "qdrant"):
+            _log.warning(
+                "context index: unrecognized QAR_VECTOR_BACKEND=%r; treating as 'auto'",
+                vector_backend,
+            )
+            vector_backend = "auto"
         vector_store = cfg.vector_store
         if vector_store is None and _cards_vector_store is not None:
             vector_store = _cards_vector_store
-        if vector_store is None:
+        if vector_store is None and vector_backend not in ("none", "off"):
             try:
                 from .adapters import QdrantVectorStore as _QdrantVS
                 if _QdrantVS is not None:
@@ -821,6 +837,13 @@ def resolve_context_assembler(
             except (ImportError, Exception):  # noqa: BLE001
                 # qdrant-client / fastembed not installed, or construction failed: keyword-only.
                 vector_store = None
+            if vector_store is None and vector_backend == "qdrant":
+                _log.error(
+                    "context index: QAR_VECTOR_BACKEND=qdrant but no Qdrant vector store "
+                    "could be opened. Install the [qdrant] extra (qdrant-client + fastembed) "
+                    "or point QAR_QDRANT_URL / QDRANT_URL at a running Qdrant server. "
+                    "Falling back to keyword-only context search."
+                )
 
         # Bootstrap (first run) or refresh stale cards (subsequent runs).
         # Always runs in the background — the vector arm seeds lazily on first

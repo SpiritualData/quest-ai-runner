@@ -55,6 +55,15 @@ Env it reads:
   QAR_MODEL_BACKEND (optional)                   — "anthropic" | "claude_cli". Default: auto —
                                                    "anthropic" if ANTHROPIC_API_KEY is set, else
                                                    "claude_cli" (keyless, via the subscription login).
+  QAR_VECTOR_BACKEND (optional)                  — gates the auto-built context vector store:
+                                                   "auto" (default) attempts Qdrant and falls
+                                                   back to keyword-only search with a warning
+                                                   when it cannot be opened; "none"/"off" skips
+                                                   the Qdrant attempt entirely (keyword-only,
+                                                   silent); "qdrant" requires Qdrant and logs
+                                                   an error when it is unavailable (still
+                                                   degrades to keyword-only). Never overrides
+                                                   an explicitly configured vector store.
   QAR_EMBEDDER_BACKEND (optional)                — embedding backend for the auto-built context
                                                    vector store: "voyage" (Voyage AI, needs voyageai
                                                    package + VOYAGE_API_KEY / VOYAGE_MODEL),
