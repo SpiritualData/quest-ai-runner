@@ -95,6 +95,43 @@ All notable changes to this project are documented here. The format is based on
   immediately.
 
 ### Fixed
+- **A queued deployment can no longer deny work it actually did.** Review follow-ups to the
+  deferred hand-off, all in the honesty direction (every user-facing word must match what really
+  happened this turn):
+  - **Inline work is reported, never denied.** The honest-enqueue branch keyed only on "did a
+    deferred hand-off come back?", so a queued consumer whose `deep_runners` map lacked (or
+    typoed) the reserved `DEFERRED_RUNNER_KEY` fell through the normal wiring, RAN the deep work
+    for real, and was then told the work had not been queued, started, or done, with the real
+    output discarded. The turn now distinguishes "queued mode was configured but no hand-off came
+    back" from "the work actually ran and produced output": a real inline result is folded back
+    and reported exactly as an inline turn (plus a WARNING naming the missing key), and the
+    not-queued reply is reserved for a turn that genuinely completed nothing.
+  - **A hand-off is validated, not assumed.** The deferred short-circuit believed any result with
+    `deferred=True, met=True`, ignoring `error` and an empty receipt, so a consumer runner that
+    reports `met=True` on a FAILED enqueue was taken at its word and the user was promised a queue
+    entry that did not exist. A hand-off is now trusted only when the deployment is in queued mode
+    AND the result is deferred, met, error-free and carries a non-empty receipt; anything else
+    takes the honest not-queued path.
+  - **The reserved runner key is not classifier-selectable.** `DEFERRED_RUNNER_KEY` was still a
+    candidate for the deep-runner classifier, so a classifier returning `"deferred"` for an
+    ordinary deep turn handed the goal loop a queue receipt to verify as finished work (the
+    executor would then mark the task done and report on a receipt). The classifier's choice of
+    that key is now rejected (default runner takes the turn); it is reachable only through the
+    hand-off's explicit `runner_override`.
+  - **Honesty no longer depends on a model call.** If the honest-enqueue regeneration LLM call
+    itself threw, the reply silently reverted to the pre-deep draft, which under queued doctrine
+    may already claim "I have queued this". On regeneration failure a plain not-queued sentence
+    (`NOT_QUEUED_NOTE`) is now appended deterministically, with no model call.
+  - **A queue-only wiring can reach its queue.** `_run_deep`'s capability gate ran before
+    `runner_override`, so a consumer that registered ONLY the queue runner (no default
+    `deep_runner`, no classifier) found the deferred path unreachable. An explicit
+    `runner_override` now IS the capability, the deferred escalation nets accept a wired queue as
+    capability (`_has_deferred_queue_capability`), and the precondition is documented on
+    `deferred_deep_queued`. Every other deep path (planner `deep`, overseer `escalate_deep`, claim
+    remediation) still requires real inline capability, since those execute inline.
+  - `Orchestrator.synthesize_task_report`'s docstring said its default `tier` was a "worker" tier;
+    the default is `"balanced"` and no worker tier exists. Corrected.
+  Regression tests in `tests/test_orchestrator.py`.
 - **`deferred_deep` wording now matches its synchronous reality.** The planner doctrine and the
   decide-tool schema described `deferred_deep` as queuing a deep task for later, and the status
   line said "Queuing follow-up work", but the implementation has always run that work
@@ -138,6 +175,14 @@ All notable changes to this project are documented here. The format is based on
   unless the API returned a task id.
 
 ### Changed
+- **BREAKING (public prompt): `PLANNER_PROMPT` gained a mandatory `{deferred_deep_semantics}`
+  format slot.** The queued/inline doctrine sentence is selected per configuration, so a raw
+  `PLANNER_PROMPT.format(...)` by an external consumer that does not pass that slot now raises
+  `KeyError`. Non-breaking path, and the recommended way to render the prompt from now on: the new
+  public `render_planner_prompt(**slots)` fills every slot the caller omits from
+  `planner_prompt_defaults()` (the default `deferred_deep_semantics` is the INLINE wording, which
+  is what the default configuration actually does), so a future slot cannot break consumers again.
+  Both are exported from `quest_ai_runner.core`, alongside `DEFERRED_RUNNER_KEY`.
 - **The learned-notes always-recent floor is relevance-gated.** `NoteContextStore.assemble`
   unconditionally included the 2 most recent notes in every turn's context, which bled the
   previous topic into an unrelated next turn. A floored note must now clear a minimal relevance

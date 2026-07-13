@@ -65,11 +65,14 @@ from .model_registry import (
 )
 from .orchestrator import (
     DECIDE_TOOL,
+    DEFERRED_RUNNER_KEY,
     PLANNER_PROMPT,
     Orchestrator,
     OrchestratorConfig,
     OrchestratorResult,
     normalize_decision,
+    planner_prompt_defaults,
+    render_planner_prompt,
 )
 from .guard import (
     ExecutionFact,
@@ -108,6 +111,10 @@ __all__ = [
     # orchestrator
     "Orchestrator", "OrchestratorConfig", "OrchestratorResult",
     "PLANNER_PROMPT", "DECIDE_TOOL", "normalize_decision",
+    # render PLANNER_PROMPT without knowing its full slot set (non-breaking path for consumers)
+    "render_planner_prompt", "planner_prompt_defaults",
+    # reserved deep_runners key for a queued deferred deployment
+    "DEFERRED_RUNNER_KEY",
     # execution record (claim honesty is judged inside the goal verification)
     "ExecutionRecord", "ExecutionFact", "classify_exec_phase",
     # goal runner

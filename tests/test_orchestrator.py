@@ -1620,3 +1620,185 @@ def test_inline_default_never_uses_queued_synthesis():
         (m["content"] if isinstance(m["content"], str) else str(m["content"]))
         for m in provider.last_answer_messages)
     assert "CONFIRMED HAND-OFF RECORD" not in joined
+
+
+# ---------------------------------------------------------------------------
+# Deferred hand-off: the honesty edges. A queued deployment may be MISCONFIGURED (no runner under
+# the reserved key, a runner that lies about its enqueue, a classifier reaching for the reserved
+# key) and the reply must still describe what really happened this turn.
+# ---------------------------------------------------------------------------
+
+def _all_answer_prompts(provider) -> str:
+    """Every answer() prompt the provider saw this run, joined (not just the last one)."""
+    return "\n".join(
+        (m["content"] if isinstance(m["content"], str) else str(m["content"]))
+        for msgs in provider.all_answer_messages for m in msgs)
+
+
+def test_queued_mode_without_deferred_runner_reports_the_inline_work_it_really_did():
+    """FINDING 1 (the important one): a queued consumer whose ``deep_runners`` map LACKS (or
+    typos) the reserved 'deferred' key. The hand-off pin then resolves to nothing, the normal
+    wiring executes the deferred work FOR REAL and inline, and it produces output.
+
+    The turn must report that real output (fold-back through the after-deep synthesis). It must
+    NOT take the honest-enqueue branch, which would tell the user nothing was queued or done while
+    the work was in fact done, and would throw the deliverable away."""
+    deliverable = "INLINE_DELIVERABLE: vendor A is cheapest."
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then queue",
+                    "deferred_deep": {"goal": "Research vendor options"}}],
+        answer_text="Here is what I know so far.",
+    )
+    # The consumer MEANT to register the queue runner but typoed the reserved key.
+    inline_runner = StubDeepRunner(met=True, output=deliverable)
+    res = _orch(provider, StubRetrieval(),
+                deep_runners={"defered": inline_runner, "inline": inline_runner},
+                deep_runner_classifier=lambda msg, goal, brief: "inline",
+                config=OrchestratorConfig(deferred_deep_queued=True,
+                                          answer_goal_max_iterations=1,
+                                          verify_claims=False)).run("research vendor options")
+    assert res.kind == "answer"
+    assert inline_runner.calls, "the work really ran (no queue runner was reachable)"
+    assert res.exit_reason != "deferred", "nothing was queued: this was not a hand-off"
+    prompts = _all_answer_prompts(provider)
+    # The real output was folded back through the after-deep synthesis...
+    assert deliverable in prompts, "the inline deliverable must reach the final reply"
+    assert "ACTUAL RESULT OF THE WORK YOU JUST DID" in prompts
+    # ...and the turn never claimed the work was not queued/started/done.
+    assert "has NOT been queued" not in prompts, (
+        "the work RAN inline; claiming nothing happened would be a false not-queued claim")
+    assert "CONFIRMED HAND-OFF RECORD" not in prompts
+
+
+def test_queued_mode_does_not_trust_a_deferred_result_that_carries_an_error():
+    """FINDING 2: a consumer runner that returns met=True, deferred=True on a FAILED enqueue must
+    not be believed. Only a deferred result that is met, error-free AND carries a receipt is a
+    confirmed hand-off; anything else takes the honest not-queued path."""
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then queue",
+                    "deferred_deep": {"goal": "Do the thing"}}],
+        answer_text="I'll queue that up.",
+    )
+    runner = StubDeepRunner(met=True, deferred=True, output="Queued as task #9.",
+                            error="enqueue rejected: 500 from the task API")
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(deferred_deep_queued=True,
+                                          answer_goal_max_iterations=1,
+                                          verify_claims=False)).run("do the thing later")
+    assert res.exit_reason != "deferred", "a failed enqueue is not a hand-off, whatever met says"
+    prompts = _all_answer_prompts(provider)
+    assert "has NOT been queued" in prompts
+    assert "CONFIRMED HAND-OFF RECORD" not in prompts, (
+        "an errored hand-off must never be synthesized as queued")
+
+
+def test_queued_mode_does_not_trust_an_empty_deferred_receipt():
+    """FINDING 2 (second half): deferred + met but NO receipt at all. There is nothing to report
+    as queued, so the turn takes the honest not-queued path rather than inventing a hand-off."""
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then queue",
+                    "deferred_deep": {"goal": "Do the thing"}}],
+        answer_text="I'll queue that up.",
+    )
+    runner = StubDeepRunner(met=True, deferred=True, output="")
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(deferred_deep_queued=True,
+                                          answer_goal_max_iterations=1,
+                                          verify_claims=False)).run("do the thing later")
+    assert res.exit_reason != "deferred"
+    assert "has NOT been queued" in _all_answer_prompts(provider)
+
+
+def test_classifier_may_not_select_the_reserved_deferred_runner_key():
+    """FINDING 3: the reserved 'deferred' key is reachable ONLY through the deferred hand-off's
+    explicit runner_override. A classifier returning it for an ORDINARY deep turn would hand the
+    goal loop a queue receipt to verify, and the caller would report a receipt as finished work.
+    Such a key is rejected: the default runner takes the turn."""
+    queue_runner = StubDeepRunner(met=True, output="Queued as task #12.", deferred=True)
+    default_runner = StubDeepRunner(met=True, output="the real work product")
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "Write the report", "deep_brief": "do it"},
+        {"met": True, "reason": "report written"},
+    ])
+    res = _orch(provider, StubRetrieval(), deep_runner=default_runner,
+                deep_runners={"deferred": queue_runner},
+                deep_runner_classifier=lambda msg, goal, brief: "deferred",
+                config=OrchestratorConfig(deferred_deep_queued=True)).run("write the report")
+    assert res.kind == "deep"
+    assert queue_runner.calls == [], "the reserved queue runner is not classifier-selectable"
+    assert default_runner.calls, "an ordinary deep turn falls back to the default runner"
+    assert res.deep_results[0].deferred is False
+
+
+def test_honest_enqueue_has_a_deterministic_floor_when_the_rewrite_call_fails():
+    """FINDING 4: the honest-enqueue rewrite is itself an LLM call. If it throws, the reply would
+    fall back to the pre-deep draft, which under queued doctrine may already claim the work is
+    queued. The correction must not depend on a model call: a plain not-queued sentence is
+    appended deterministically."""
+    from quest_ai_runner.core.orchestrator import NOT_QUEUED_NOTE
+
+    class _RegenFailsProvider(StubProvider):
+        """Answers normally until the honest-enqueue regeneration, then goes down."""
+
+        def answer(self, messages, *, model, system=None):
+            joined = "\n".join(
+                (m["content"] if isinstance(m["content"], str) else str(m["content"]))
+                for m in messages)
+            if "hand this work to the background queue FAILED" in joined:
+                raise RuntimeError("model outage during the honesty rewrite")
+            return super().answer(messages, model=model, system=system)
+
+    provider = _RegenFailsProvider(
+        decisions=[{"action": "answer", "rationale": "answer then queue",
+                    "deferred_deep": {"goal": "Do the thing"}}],
+        # The pre-deep draft was written under queued doctrine: it already claims the queue.
+        answer_text="I have queued this to run in the background.",
+    )
+    runner = StubDeepRunner(met=False, output="", error="enqueue failed: api down")
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(deferred_deep_queued=True,
+                                          answer_goal_max_iterations=1,
+                                          verify_claims=False)).run("do the thing later")
+    assert res.kind == "answer"
+    assert res.exit_reason != "deferred"
+    assert NOT_QUEUED_NOTE in (res.text or ""), (
+        "with the rewrite down, the reply must still say plainly that nothing was queued")
+    assert "has NOT been queued" in NOT_QUEUED_NOTE
+
+
+def test_queue_only_wiring_can_still_hand_off():
+    """FINDING 6: a consumer that registers ONLY the queue runner (no default deep_runner, no
+    classifier) has no INLINE execution capability, but the deferred hand-off pins its runner
+    explicitly, so the queue must still be reachable."""
+    sentinel = "Queued as task #33."
+    queue_runner = StubDeepRunner(met=True, output=sentinel, deferred=True)
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then queue",
+                    "deferred_deep": {"goal": "Do the thing"}}],
+    )
+    res = _orch(provider, StubRetrieval(),
+                deep_runners={"deferred": queue_runner},
+                config=OrchestratorConfig(deferred_deep_queued=True)).run("do the thing later")
+    assert res.exit_reason == "deferred"
+    assert len(queue_runner.calls) == 1
+
+
+def test_render_planner_prompt_fills_every_slot_by_default():
+    """FINDING 5b: PLANNER_PROMPT gained a mandatory {deferred_deep_semantics} slot, so a raw
+    .format() by an external consumer now raises KeyError. render_planner_prompt is the
+    non-breaking path: pass what you have, defaults fill the rest."""
+    from quest_ai_runner.core.orchestrator import (
+        DEFERRED_DEEP_INLINE_SEMANTICS,
+        DEFERRED_DEEP_QUEUED_SEMANTICS,
+        render_planner_prompt,
+    )
+
+    rendered = render_planner_prompt(user_message="what is the price?")
+    assert "what is the price?" in rendered
+    assert "{deferred_deep_semantics}" not in rendered
+    assert "{mode_signal_block}" not in rendered
+    # The default deployment is INLINE, so the default wording must be the inline one.
+    assert DEFERRED_DEEP_INLINE_SEMANTICS in rendered
+    queued = render_planner_prompt(user_message="x",
+                                   deferred_deep_semantics=DEFERRED_DEEP_QUEUED_SEMANTICS)
+    assert DEFERRED_DEEP_QUEUED_SEMANTICS in queued

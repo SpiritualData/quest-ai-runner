@@ -24,6 +24,10 @@ class StubProvider:
         self.plan_calls = 0
         self.answer_calls = 0
         self.last_answer_messages: List[Dict[str, str]] = []
+        # EVERY answer() call's messages, in order (the last one alone is not enough when a turn
+        # answers, then re-synthesizes: a test asserting what a turn did or did not claim has to
+        # see all of them).
+        self.all_answer_messages: List[List[Dict[str, str]]] = []
         # Every system prompt an answer() call was given, in order, so a test can assert the
         # reply-voice contract actually reaches the model (None = no system prompt was passed).
         self.answer_systems: List[Any] = []
@@ -45,6 +49,7 @@ class StubProvider:
     def answer(self, messages, *, model, system=None) -> str:
         self.answer_calls += 1
         self.last_answer_messages = messages
+        self.all_answer_messages.append(list(messages))
         self.answer_systems.append(system)
         joined = "\n".join(m["content"] for m in messages)
         return f"{self._answer_text} [grounded_on:{'README' in joined or 'GROUNDING' in joined}]"

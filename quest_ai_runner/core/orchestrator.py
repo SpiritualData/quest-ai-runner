@@ -247,6 +247,15 @@ DEFERRED_DEEP_QUEUED_SEMANTICS = (
     "conversation when the background work finishes."
 )
 
+# The DETERMINISTIC floor for the honest-enqueue path (queued deployments): appended to the reply
+# when the hand-off failed AND the LLM rewrite that would have said so also failed. Honesty about a
+# failed enqueue must never depend on a second model call succeeding, because the un-rewritten
+# draft was written under queued doctrine and may already claim the work is queued.
+NOT_QUEUED_NOTE = (
+    "Correction: I was not able to hand this work to the background queue, so it has NOT been "
+    "queued, started, or done. Ask me to try again when you are ready."
+)
+
 _PLANNER_ACTIONS = """\
 The four actions:
   - "read": TARGETED, PARTIAL reads to gather what you need. In `reads`, list one or more of:
@@ -477,6 +486,45 @@ PLANNER_PROMPT = (
     + _PLANNER_TAIL
 )
 
+
+def planner_prompt_defaults() -> Dict[str, Any]:
+    """PUBLIC: a safe default for EVERY ``PLANNER_PROMPT`` format slot.
+
+    ``PLANNER_PROMPT`` is a public export, and every slot it carries is mandatory for a raw
+    ``.format()`` call: adding one (``deferred_deep_semantics``, for the queued-deferred wording)
+    breaks any external consumer that renders the prompt itself. This is the non-breaking path:
+    pair it with ``render_planner_prompt``, which fills whatever the caller does not pass, so a
+    future slot can be added without breaking anyone again.
+    """
+    cfg = OrchestratorConfig()
+    return {
+        "user_message": "",
+        "transcript": "(no prior messages)",
+        "context_view": "(no context)",
+        "gathered": "(nothing gathered yet)",
+        "max_reads": cfg.max_reads_per_step,
+        "max_subq": cfg.max_subquestions,
+        "max_deep": cfg.max_deep_subtasks,
+        "mode_signal_block": "",
+        # Inline is the DEFAULT deployment (OrchestratorConfig.deferred_deep_queued = False), so
+        # the default wording must be the inline one: it is the only one true by default.
+        "deferred_deep_semantics": DEFERRED_DEEP_INLINE_SEMANTICS,
+        "rationale_instruction": _RATIONALE_INSTRUCTION_PLAIN,
+    }
+
+
+def render_planner_prompt(**slots: Any) -> str:
+    """PUBLIC: render ``PLANNER_PROMPT`` with defaults for every slot the caller omits.
+
+    ``render_planner_prompt(user_message="...")`` is the stable way for an external consumer to
+    render the planner prompt. Pass any subset of the slots (see ``planner_prompt_defaults``);
+    the rest are filled with their defaults instead of raising ``KeyError``.
+    """
+    values = planner_prompt_defaults()
+    values.update(slots)
+    return PLANNER_PROMPT.format(**values)
+
+
 # The structured decision schema the planner MUST return (forced tool use).
 DECIDE_TOOL: Dict[str, Any] = {
     "name": "decide",
@@ -606,6 +654,11 @@ DEFERRED_DEEP_FIELD_DESC_QUEUED = (
 # ``deep_runners``, every planner ``deferred_deep`` is PINNED to that runner (bypassing the
 # classifier) so deferred work always reaches the queue and is never re-routed to an inline
 # runner. Without this key, deferred work resolves through the normal runner wiring.
+#
+# RESERVED, NOT CLASSIFIER-SELECTABLE: this key is reachable ONLY through the deferred hand-off's
+# explicit runner_override. A ``deep_runner_classifier`` that returns it for an ordinary deep turn
+# is REJECTED (the default runner handles that turn instead), because routing normal deep work to
+# the queue runner would hand the goal loop a queue receipt and let it be reported as finished work.
 DEFERRED_RUNNER_KEY = "deferred"
 
 
@@ -756,10 +809,24 @@ class OrchestratorConfig:
     #      queued synthesis prompt (report the work as queued, never as done) and skips the
     #      answer goal-verification loop (the deferred contract: trust met, no re-verify of a
     #      sentinel, no relaunch); the result's exit_reason becomes "deferred".
-    #   3. A deferred attempt that produced NO confirmed hand-off regenerates the reply with an
-    #      honesty steer so it never claims the work was queued or done (the honest-enqueue
-    #      rule: "queued" may only be claimed after the enqueue is confirmed).
+    #   3. A deferred attempt that produced NO confirmed hand-off, AND no real inline output to
+    #      report, regenerates the reply with an honesty steer so it never claims the work was
+    #      queued or done (the honest-enqueue rule: "queued" may only be claimed after the enqueue
+    #      is confirmed). A hand-off is only CONFIRMED when the result is deferred, met, error-free
+    #      and carries a non-empty receipt; anything else is treated as a failed enqueue. If the
+    #      deep work actually RAN inline this turn (e.g. the deferred runner key is missing from
+    #      ``deep_runners``, so the normal wiring executed it for real), its output is folded back
+    #      and reported as done: a turn that produced real work is never described as "not queued".
     # False (default): deferred_deep runs inline right after the answer, exactly as before.
+    #
+    # WIRING PRECONDITION: register the queue runner under ``deep_runners[DEFERRED_RUNNER_KEY]``.
+    # That alone is enough for a planner-chosen ``deferred_deep`` to reach the queue: the hand-off
+    # pins the runner explicitly, so it needs neither a ``deep_runner`` nor a
+    # ``deep_runner_classifier``. The escalation nets that INFER deferred work from an answer
+    # (answer_contains_work_to_execute, the described-work net, the message-intent fallback) also
+    # fire for a queue-only wiring. Every OTHER deep path (a planner "deep" action, an overseer
+    # escalate_deep, claim remediation) still needs real inline capability: a ``deep_runner`` or
+    # ``deep_runners`` + a ``deep_runner_classifier``.
     deferred_deep_queued: bool = False
     # MINIMAL-INTERVENTION OVERSEER. A high-quality model reads a tiny digest of the run and writes a
     # tiny signal, watching the loop the way a person's awareness watches their own body walk: almost
@@ -3651,8 +3718,9 @@ class Orchestrator:
         Used by the runner's executor to fold a deep run's raw output into a message that reads
         as the AI reporting its own finished work (same prompt shape as the interactive
         after-deep synthesis), before posting the task's done message into the originating chat.
-        ``tier`` resolves through the registry (worker tier by default). Never raises: any
-        failure returns the raw ``deep_output`` unchanged.
+        ``tier`` resolves through the registry ("balanced" by default; the registry's tiers are
+        "fast", "balanced" and "best"). Never raises: any failure returns the raw ``deep_output``
+        unchanged.
         """
         try:
             model = self.registry.resolve_tier(tier)
@@ -4372,6 +4440,21 @@ class Orchestrator:
         return self.deep_runner is not None or bool(
             self.deep_runners and self.deep_runner_classifier is not None)
 
+    def _has_deferred_queue_capability(self) -> bool:
+        """Whether DEFERRED work can be handed off, even with no inline execution capability.
+
+        A queued deployment (``deferred_deep_queued``) that registered its queue runner under
+        ``deep_runners[DEFERRED_RUNNER_KEY]`` can hand deferred work off with nothing else wired:
+        the hand-off PINS that runner via ``_run_deep(runner_override=...)``, so it needs neither a
+        default ``deep_runner`` nor a ``deep_runner_classifier``. Without this, such a consumer hit
+        the ``_has_deep_execution_capability`` gate on the deferred nets and the queue was simply
+        unreachable. Deliberately NOT merged into ``_has_deep_execution_capability``: the other
+        gates it guards (planner "deep", overseer escalate_deep, claim remediation) run work INLINE
+        through the normal wiring, which a queue-only consumer genuinely does not have.
+        """
+        return bool(self.cfg.deferred_deep_queued and self.deep_runners
+                    and self.deep_runners.get(DEFERRED_RUNNER_KEY) is not None)
+
     def _run_deep(self, plan: PlanDecision, user_message: str, model: str,
                   emit: Optional[_Emitter] = None,
                   rep_preamble: Optional[str] = None,
@@ -4403,9 +4486,13 @@ class Orchestrator:
         if not subtasks:
             subtasks = [{"goal": _truncate_goal(plan.goal or f"Fully address the request: {user_message}"),
                          "brief": plan.deep_brief or user_message}]
-        if not self._has_deep_execution_capability():
+        if runner_override is None and not self._has_deep_execution_capability():
             # No runner configured at all (neither a default runner nor the named registry):
-            # surface the goal(s) without executing (caller may spawn).
+            # surface the goal(s) without executing (caller may spawn). An explicit
+            # ``runner_override`` IS the capability (the caller pinned a real runner, e.g. the
+            # queued deferred hand-off pinning DEFERRED_RUNNER_KEY), so it bypasses this gate:
+            # otherwise a consumer that wires ONLY the queue runner would find the deferred path
+            # unreachable and the work would silently never be handed off.
             goals = [(st.get("goal") or "").strip() or user_message for st in subtasks]
             # Record each goal as REQUESTED-but-not-executed (neither success nor failure) so the
             # guard knows a re-run is the SAFE remediation here (nothing actually mutated).
@@ -4482,7 +4569,18 @@ class Orchestrator:
                     and self.deep_runner_classifier is not None):
                 try:
                     key = self.deep_runner_classifier(user_message, goal, brief)
-                    if key in self.deep_runners:
+                    if key == DEFERRED_RUNNER_KEY:
+                        # RESERVED KEY, never classifier-selectable. The queue runner returns a
+                        # hand-off receipt, not finished work; routing an ordinary deep turn to it
+                        # would give the goal loop a receipt to verify and let the caller report a
+                        # queue acknowledgement as completed work. It is reachable ONLY through the
+                        # deferred hand-off's explicit runner_override (handled above).
+                        log.warning(
+                            f"deep_runner_classifier returned the reserved key "
+                            f"{DEFERRED_RUNNER_KEY!r}; it is not selectable for ordinary deep work, "
+                            f"using default runner"
+                        )
+                    elif key in self.deep_runners:
                         active_runner = self.deep_runners[key]
                         log.debug(f"deep_runner_classifier selected runner {key!r}")
                     else:
@@ -6988,7 +7086,12 @@ class Orchestrator:
         # no work-to-execute flag, no described-work net, no message-intent fallback (regex OR
         # LLM judgment). Describing possible work IS the product in brainstorm.
         should_defer_deep = None if brainstorm_active else plan.deferred_deep
-        if not should_defer_deep and not brainstorm_active and self._has_deep_execution_capability():
+        # Capability for these nets = inline execution OR a wired deferred queue: everything they
+        # can set flows through the deferred block below, which reaches the queue runner by explicit
+        # override, so a queue-only consumer (no default runner, no classifier) is capable here.
+        if (not should_defer_deep and not brainstorm_active
+                and (self._has_deep_execution_capability()
+                     or self._has_deferred_queue_capability())):
             # Primary: trust planner's explicit flag
             if plan.answer_contains_work_to_execute:
                 should_defer_deep = {"goal": f"Execute what the answer describes: {user_message}",
@@ -7089,41 +7192,49 @@ class Orchestrator:
                                          runner_override=_deferred_runner)
                 if deep_res.kind == "cancelled":
                     return finish(deep_res)
-                # DEFERRED HAND-OFF (queued deployments): the runner did not execute the work,
-                # it queued it out-of-band. A CONFIRMED hand-off (met=True) rewrites the reply to
-                # report the queue honestly; the real work is reported back into the conversation
-                # by the external runner when it finishes. The sentinel output is never folded
-                # through the after-deep prompt (that would present a queue receipt as finished
-                # work).
-                _handoffs = [d for d in (deep_res.deep_results or [])
-                             if getattr(d, "deferred", False)]
-                if _handoffs and any(d.met for d in _handoffs):
+                # WHAT ACTUALLY CAME BACK? Three outcomes, and the reply must match the one that
+                # really happened this turn:
+                #   * CONFIRMED HAND-OFF (queued deployments only): the runner did not execute the
+                #     work, it queued it out-of-band and returned a receipt. Report it as queued,
+                #     never as done; the real work is reported back into the conversation by the
+                #     external runner when it finishes. A receipt is never folded through the
+                #     after-deep prompt (that would present a queue acknowledgement as finished work).
+                #   * REAL INLINE OUTPUT: the work RAN and produced something. Fold it back and
+                #     report it, EVEN IN QUEUED MODE. That is exactly what happens when a queued
+                #     consumer's ``deep_runners`` map lacks (or typos) DEFERRED_RUNNER_KEY: the
+                #     hand-off pin resolves to nothing, the normal wiring executes the work for
+                #     real, and telling that user "this was not queued" would be a lie about a turn
+                #     that did the job, with the output dropped on the floor.
+                #   * NEITHER: no receipt, no output. Only then may the turn say it is not queued.
+                _results = deep_res.deep_results or []
+                # A hand-off is TRUSTED only when this deployment actually queues deferred work AND
+                # the runner CONFIRMED the enqueue: deferred, met, no error, and a non-empty
+                # receipt. A runner that reports met=True with deferred=True on a FAILED enqueue (or
+                # returns an empty receipt) is not believed; that turn falls through to the honest
+                # paths below rather than promising a queue entry that does not exist.
+                _handoffs = ([d for d in _results if getattr(d, "deferred", False)]
+                             if _queued_mode else [])
+                _confirmed = [d for d in _handoffs
+                              if d.met and not (d.error or "").strip() and (d.output or "").strip()]
+                # Inline output = output from results that are NOT hand-off receipts. In queued mode
+                # every deferred result is a receipt (trusted or not) and never counts as work
+                # output; with the flag off there is no hand-off contract at all, so every result is
+                # ordinary deep output, exactly as before.
+                _inline_results = ([d for d in _results if not getattr(d, "deferred", False)]
+                                   if _queued_mode else list(_results))
+                deep_output = "\n\n".join(
+                    s for s in (_strip_future_context(d.output) for d in _inline_results) if s
+                ).strip()
+                if _confirmed:
                     _handoff_out = "\n\n".join(
-                        (d.output or "").strip() for d in _handoffs if d.met).strip()
+                        (d.output or "").strip() for d in _confirmed).strip()
                     if emit is not None:
                         emit.status("Queued. It will report back here when it finishes.")
                     text = self._synthesize_after_queued(
                         user_message, prior_answer=text, handoff_output=_handoff_out,
                         transcript=transcript, model=model, rep_preamble=rep_preamble)
                     _deferred_handoff_confirmed = True
-                elif _queued_mode:
-                    # HONEST-ENQUEUE: this deployment queues deferred work, and NO hand-off was
-                    # confirmed this turn (the enqueue failed, or the run errored before it).
-                    # The reply must not claim the work is queued, running, or done. Nothing here
-                    # retries the enqueue: a silent second attempt could double-queue.
-                    _handoff_err = "; ".join(
-                        (d.error or "").strip() for d in (deep_res.deep_results or [])
-                        if (d.error or "").strip()) or "the hand-off did not complete"
-                    if emit is not None:
-                        emit.status("Could not queue the background work.")
-                    text = _gen_answer(
-                        "The attempt to hand this work to the background queue FAILED: "
-                        + _handoff_err + "\n\nRewrite your reply to be honest: the work has NOT "
-                        "been queued, started, or done. Keep any real findings you already have, "
-                        "say plainly that the background hand-off failed, and suggest the user "
-                        "try again or ask you to retry. Do not use em dashes.\n\n"
-                        f"--- YOUR PREVIOUS ANSWER ---\n{text}")
-                else:
+                elif deep_output:
                     # FOLD THE DEEP OUTPUT BACK INTO THE FINAL ANSWER. The pre-deep `text` is a proposal
                     # ("shall I proceed?"); the real deliverable is what the deep run just produced. If we
                     # only emit it as a side milestone, the user-facing reply stays the stale proposal with
@@ -7131,20 +7242,50 @@ class Orchestrator:
                     # so the substance is lost. Re-synthesize the reply grounded in the deep output, ground
                     # the context_view in it too (so any goal-verification regeneration stays aware of it),
                     # and flag the turn so the goal loop below still holds it to the overall goal.
-                    deep_output = ""
-                    if deep_res and deep_res.deep_results:
-                        deep_output = "\n\n".join(
-                            s for s in (_strip_future_context(d.output) for d in deep_res.deep_results) if s
-                        ).strip()
-                    if deep_output:
-                        if emit is not None:
-                            emit.status("Writing up what was done…")
-                        text = self._synthesize_after_deep(
-                            user_message, prior_answer=text, deep_output=deep_output,
-                            transcript=transcript, model=model, rep_preamble=rep_preamble)
-                        _deep_block = "--- WHAT WAS JUST EXECUTED (deep run output) ---\n" + deep_output
-                        context_view = (context_view + "\n\n" + _deep_block) if context_view else _deep_block
-                        _deferred_deep_grounded = True
+                    if _queued_mode:
+                        # Queued mode, yet the work ran inline: the queue runner is not reachable
+                        # (missing/typoed DEFERRED_RUNNER_KEY, or a runner that executed instead of
+                        # enqueueing). Loud in the log, honest to the user: they get the real result.
+                        log.warning(
+                            "deferred_deep_queued is on but the deferred work ran INLINE and "
+                            "produced output (no confirmed hand-off): check that deep_runners has a "
+                            "runner under the %r key. Reporting the real inline result.",
+                            DEFERRED_RUNNER_KEY)
+                    if emit is not None:
+                        emit.status("Writing up what was done…")
+                    text = self._synthesize_after_deep(
+                        user_message, prior_answer=text, deep_output=deep_output,
+                        transcript=transcript, model=model, rep_preamble=rep_preamble)
+                    _deep_block = "--- WHAT WAS JUST EXECUTED (deep run output) ---\n" + deep_output
+                    context_view = (context_view + "\n\n" + _deep_block) if context_view else _deep_block
+                    _deferred_deep_grounded = True
+                elif _queued_mode:
+                    # HONEST-ENQUEUE: this deployment queues deferred work, NO hand-off was
+                    # confirmed this turn (the enqueue failed, or the run errored before it), and
+                    # nothing ran inline either, so there is genuinely no completed work to report.
+                    # The reply must not claim the work is queued, running, or done. Nothing here
+                    # retries the enqueue: a silent second attempt could double-queue.
+                    _handoff_err = "; ".join(
+                        (d.error or "").strip() for d in _results
+                        if (d.error or "").strip()) or "the hand-off did not complete"
+                    if emit is not None:
+                        emit.status("Could not queue the background work.")
+                    try:
+                        text = _gen_answer(
+                            "The attempt to hand this work to the background queue FAILED: "
+                            + _handoff_err + "\n\nRewrite your reply to be honest: the work has NOT "
+                            "been queued, started, or done. Keep any real findings you already have, "
+                            "say plainly that the background hand-off failed, and suggest the user "
+                            "try again or ask you to retry. Do not use em dashes.\n\n"
+                            f"--- YOUR PREVIOUS ANSWER ---\n{text}")
+                    except Exception:  # noqa: BLE001 — honesty must not depend on an LLM call
+                        # DETERMINISTIC FLOOR. The regeneration is the only thing standing between
+                        # the user and a pre-deep draft that (under queued doctrine) may already
+                        # claim "I have queued this". If that call fails, we still correct the
+                        # record without a model: append the plain not-queued sentence.
+                        log.warning("honest-enqueue rewrite failed; appending the not-queued note",
+                                    exc_info=True)
+                        text = ((text or "").strip() + "\n\n" + NOT_QUEUED_NOTE).strip()
                 # Async, best-effort: prepare this user's cards for next time from the deferred run.
                 # Skipped for a confirmed hand-off: a queue receipt sentinel holds nothing to learn.
                 if not _deferred_handoff_confirmed:
