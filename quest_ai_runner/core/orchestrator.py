@@ -25,6 +25,7 @@ message, a deep run, or a Quest decision-request.
 """
 from __future__ import annotations
 
+import copy
 import inspect
 import json
 import logging
@@ -329,18 +330,7 @@ PARALLEL SUB-QUESTIONS (optional): if the message has INDEPENDENT parts, set `su
 DEEP FAN-OUT (optional, for "deep"): if the work splits into INDEPENDENT subtasks, set
   `deep_subtasks` to 2-{max_deep} of {{"goal": "...", "brief": "..."}} -- each a concurrent run.
 
-MODE SIGNAL (`mode_signal`, optional -- almost always omit it): detect an EXPLICIT request from
-  the user to change the WORKING MODE of this conversation. Judge their INTENT in their own
-  words; there are no trigger phrases.
-    * "enter_brainstorm": ONLY when the user explicitly says they want to think out loud /
-      explore ideas together WITHOUT anything being executed, changed, or turned into a task.
-      They must be asking for the no-action mode itself, in whatever words.
-    * "exit_brainstorm": ONLY when the user explicitly asks to move from talking to doing --
-      proceed, act on what was discussed, make it happen.
-    * omit (null): EVERYTHING else. A topic shift, musing, a hypothetical, an open-ended
-      question, or discussing ideas is NOT a mode signal. When in ANY doubt, omit it.
-
-{rationale_instruction}
+{mode_signal_block}{rationale_instruction}
 
 --- THE USER'S MESSAGE ---
 {user_message}
@@ -358,6 +348,25 @@ answer lives -- use it and answer from it instead of re-searching the corpus.
 
 --- GATHERED SO FAR (targeted reads/greps done this turn; [] = nothing yet) ---
 {gathered}
+"""
+
+# Injected into the {mode_signal_block} slot of _PLANNER_TAIL ONLY when the consumer opted into
+# planner-detected mode signals (OrchestratorConfig.mode_signals_enabled). With the flag off
+# (the default) the slot renders empty, the DECIDE_TOOL schema carries no `mode_signal` field,
+# and any stray `mode_signal` in a response is ignored -- the planner never hears about working
+# modes, so a misread musing can never suppress a turn's actions.
+_MODE_SIGNAL_PLANNER_BLOCK = """\
+MODE SIGNAL (`mode_signal`, optional -- almost always omit it): detect an EXPLICIT request from
+  the user to change the WORKING MODE of this conversation. Judge their INTENT in their own
+  words; there are no trigger phrases.
+    * "enter_brainstorm": ONLY when the user explicitly says they want to think out loud /
+      explore ideas together WITHOUT anything being executed, changed, or turned into a task.
+      They must be asking for the no-action mode itself, in whatever words.
+    * "exit_brainstorm": ONLY when the user explicitly asks to move from talking to doing --
+      proceed, act on what was discussed, make it happen.
+    * omit (null): EVERYTHING else. A topic shift, musing, a hypothetical, an open-ended
+      question, or discussing ideas is NOT a mode signal. When in ANY doubt, omit it.
+
 """
 
 # The `rationale` field is dual-purpose: by default it is the planner's terse internal reasoning,
@@ -399,6 +408,11 @@ turn -- use "read", "answer", or "clarify" only, and do not set `deferred_deep` 
 `answer_contains_work_to_execute`. Read as much as you need and answer with your full judgment:
 explore, compare, weigh options, sketch plans, advise. Describing possible work is CORRECT here,
 not a failure -- the ordinary rule that a change request must escalate to "deep" is suspended.
+"""
+
+# Appended to _BRAINSTORM_PLANNER_NOTE only when mode signals are enabled (the exit path relies
+# on the `mode_signal` tool field, which only exists in the schema when the consumer opted in).
+_BRAINSTORM_EXIT_SIGNAL_NOTE = """\
 EXCEPTION: if THIS message explicitly asks to proceed / act on what was discussed, set
 mode_signal="exit_brainstorm" and treat every action as available again.
 """
@@ -511,20 +525,27 @@ DECIDE_TOOL: Dict[str, Any] = {
                 },
                 "required": ["question"],
             },
-            "mode_signal": {
-                "type": ["string", "null"],
-                "enum": ["enter_brainstorm", "exit_brainstorm", None],
-                "description": "Set ONLY when the user EXPLICITLY asks to change the working "
-                               "mode: 'enter_brainstorm' when they explicitly want to think out "
-                               "loud with nothing acted on, 'exit_brainstorm' when they "
-                               "explicitly ask to proceed/act on what was discussed. Otherwise "
-                               "null. Judge intent; a topic shift or musing is never a signal.",
-            },
             "rationale": {"type": "string"},
         },
         "required": ["action", "rationale"],
     },
 }
+
+# The opt-in DECIDE_TOOL variant used when OrchestratorConfig.mode_signals_enabled is on: the
+# base schema plus the `mode_signal` field. Kept as a separate schema (rather than a field the
+# planner is told to ignore) so a consumer that never opted in exposes no mode vocabulary at
+# all -- the planner cannot misfire a signal it cannot express.
+_MODE_SIGNAL_TOOL_FIELD: Dict[str, Any] = {
+    "type": ["string", "null"],
+    "enum": ["enter_brainstorm", "exit_brainstorm", None],
+    "description": "Set ONLY when the user EXPLICITLY asks to change the working "
+                   "mode: 'enter_brainstorm' when they explicitly want to think out "
+                   "loud with nothing acted on, 'exit_brainstorm' when they "
+                   "explicitly ask to proceed/act on what was discussed. Otherwise "
+                   "null. Judge intent; a topic shift or musing is never a signal.",
+}
+DECIDE_TOOL_WITH_MODE_SIGNAL: Dict[str, Any] = copy.deepcopy(DECIDE_TOOL)
+DECIDE_TOOL_WITH_MODE_SIGNAL["input_schema"]["properties"]["mode_signal"] = _MODE_SIGNAL_TOOL_FIELD
 
 
 @dataclass
@@ -632,13 +653,21 @@ class OrchestratorConfig:
     #     what is disabled is ACTING: a planner "deep" or "confirm" degrades to "answer", and the
     #     nets that can only ADD execution (deferred deep, the message-intent escalation fallback,
     #     overseer escalations, claim-remediation and insufficient-context deep re-runs) are
-    #     skipped. Mode CHANGES are detected by the planner itself (LLM judgment on the planning
-    #     call that already runs every turn, never phrase matching) and reported via
-    #     ``PlanDecision.mode_signal`` -> EVENT_MODE_SIGNAL + ``OrchestratorResult.mode_signal``;
-    #     an "exit_brainstorm" signal releases the gating for the SAME turn (the user explicitly
-    #     asked to proceed), an "enter_brainstorm" signal engages it. Any unrecognized value of
-    #     this field behaves as "normal" (fail-safe).
+    #     skipped. Any unrecognized value of this field behaves as "normal" (fail-safe). A
+    #     consumer may drive this mode purely from its own state (a settings toggle, a slash
+    #     command) without ever enabling planner-detected signals below.
     execution_mode: str = "normal"
+    # PLANNER-DETECTED MODE SIGNALS, opt-in (default OFF -- with the flag off, behavior is
+    # byte-identical to a build without the feature: the planner prompt carries no MODE SIGNAL
+    # block, the decide tool schema has no ``mode_signal`` field, and a stray ``mode_signal`` in
+    # a response is ignored, so a planner misfire can never silently suppress a turn's actions
+    # for a consumer that never asked for modes). When ON, mode CHANGES are detected by the
+    # planner itself (LLM judgment on the planning call that already runs every turn, never
+    # phrase matching) and reported via ``PlanDecision.mode_signal`` -> EVENT_MODE_SIGNAL +
+    # ``OrchestratorResult.mode_signal``; an "exit_brainstorm" signal releases the gating for
+    # the SAME turn (the user explicitly asked to proceed), an "enter_brainstorm" signal
+    # engages it. The orchestrator stays stateless; the consumer owns persisting the latch.
+    mode_signals_enabled: bool = False
     # MINIMAL-INTERVENTION OVERSEER. A high-quality model reads a tiny digest of the run and writes a
     # tiny signal, watching the loop the way a person's awareness watches their own body walk: almost
     # always silent, occasionally sending one small course correction. It is consulted at two points
@@ -841,10 +870,12 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
             "allow_free_input": bool(clarif_raw.get("allow_free_input", False)),
         }
 
-    # Mode signal: strictly validated -- anything but the two known values (wrong type, empty,
-    # garbage, a hallucinated mode name) normalizes to None, so a detection failure can never
-    # change the consumer's mode (fail-safe).
-    mode_signal = raw.get("mode_signal")
+    # Mode signal: only parsed when the consumer opted into planner-detected mode signals
+    # (``cfg.mode_signals_enabled``); with the flag off a stray ``mode_signal`` in the response
+    # is ignored outright. When on, strictly validated -- anything but the two known values
+    # (wrong type, empty, garbage, a hallucinated mode name) normalizes to None, so a detection
+    # failure can never change the consumer's mode (fail-safe).
+    mode_signal = raw.get("mode_signal") if cfg.mode_signals_enabled else None
     if not (isinstance(mode_signal, str)
             and mode_signal.strip().lower() in ("enter_brainstorm", "exit_brainstorm")):
         mode_signal = None
@@ -3280,6 +3311,15 @@ class Orchestrator:
         # for this step (Approach B), in the selected rep's voice — so we layer the persona on top
         # and swap in the conversational rationale instruction. No extra LLM call: the beat rides on
         # the planning call the orchestrator already makes.
+        # Mode signals are opt-in: with the flag off the planner prompt carries no MODE SIGNAL
+        # block, the decide schema has no `mode_signal` field, and the brainstorm note (when a
+        # consumer drives the mode from its own state) omits the exit-signal exception.
+        mode_signal_block = _MODE_SIGNAL_PLANNER_BLOCK if self.cfg.mode_signals_enabled else ""
+        brainstorm_note = _BRAINSTORM_PLANNER_NOTE
+        if self.cfg.mode_signals_enabled:
+            brainstorm_note += _BRAINSTORM_EXIT_SIGNAL_NOTE
+        decide_tool = (DECIDE_TOOL_WITH_MODE_SIGNAL if self.cfg.mode_signals_enabled
+                       else DECIDE_TOOL)
         prompt = PLANNER_PROMPT.format(
             user_message=user_message,
             transcript=plan_transcript or "(no prior messages)",
@@ -3289,13 +3329,14 @@ class Orchestrator:
             max_reads=self.cfg.max_reads_per_step,
             max_subq=self.cfg.max_subquestions,
             max_deep=self.cfg.max_deep_subtasks,
+            mode_signal_block=mode_signal_block,
             rationale_instruction=(
                 (_RATIONALE_INSTRUCTION_NARRATE_REPLAN if step > 0 else _RATIONALE_INSTRUCTION_NARRATE)
                 if narrate else _RATIONALE_INSTRUCTION_PLAIN),
         )
         preamble_parts: List[str] = []
         if brainstorm:
-            preamble_parts.append(_BRAINSTORM_PLANNER_NOTE)
+            preamble_parts.append(brainstorm_note)
         if narrate and persona.strip():
             preamble_parts.append(
                 "--- SPEAK AS THIS PERSONA (for your `rationale` line only) ---\n"
@@ -3316,7 +3357,7 @@ class Orchestrator:
         # relocated to a pointer, since the real context now sits above in L2). Only passed to a
         # provider that accepts ``layers``; the flattened ``prompt`` remains the faithful fallback so
         # a provider without the layered surface is byte-for-byte unchanged.
-        plan_kwargs: Dict[str, Any] = {"model": model, "tool_schema": DECIDE_TOOL}
+        plan_kwargs: Dict[str, Any] = {"model": model, "tool_schema": decide_tool}
         if provider_call_accepts_layers(provider.plan):
             plan_body = PLANNER_PROMPT.format(
                 user_message=user_message,
@@ -3327,13 +3368,14 @@ class Orchestrator:
                 max_reads=self.cfg.max_reads_per_step,
                 max_subq=self.cfg.max_subquestions,
                 max_deep=self.cfg.max_deep_subtasks,
+                mode_signal_block=mode_signal_block,
                 rationale_instruction=(
                     (_RATIONALE_INSTRUCTION_NARRATE_REPLAN if step > 0 else _RATIONALE_INSTRUCTION_NARRATE)
                     if narrate else _RATIONALE_INSTRUCTION_PLAIN),
             )
             tail_parts: List[str] = []
             if brainstorm:
-                tail_parts.append(_BRAINSTORM_PLANNER_NOTE)
+                tail_parts.append(brainstorm_note)
             if narrate and already_said:
                 tail_parts.append(
                     "--- ALREADY SAID OUT LOUD THIS TURN (do NOT repeat, echo, or paraphrase) ---\n"
@@ -5119,7 +5161,8 @@ class Orchestrator:
 
     def _finish_oversee_in_background(self, pending: Optional[Dict[str, Any]], *,
                                       emit: Optional[_Emitter],
-                                      quest_id: Optional[str] = None) -> None:
+                                      quest_id: Optional[str] = None,
+                                      brainstorm_active: bool = False) -> None:
         """Fire-and-forget continuation for hook B (Fix 11): when the answer-checkpoint consult has
         NOT resolved by the time the answer ships, the answer is returned immediately and this
         BACKGROUND daemon thread waits (bounded by ``overseer_background_finish_timeout_seconds``)
@@ -5139,6 +5182,11 @@ class Orchestrator:
             with its answer, so auto-running unattended work with no supervision is out of scope; see
             docs/overseer.md for this tradeoff.
           - ``proceed`` / a timeout: nothing to do.
+
+        ``brainstorm_active`` (the latch's value when the answer shipped) mirrors the synchronous
+        hook-B rule: while a brainstorm turn is active, overseer escalations may not ADD actions,
+        so a late ``escalate_human`` raises NO decision-request (the late event is still emitted
+        as telemetry); ``proceed``/``redirect``/``answer_now`` handling is unchanged.
 
         Never raises. Runs in a daemon thread so it cannot keep the process alive or crash on
         interpreter shutdown; started best-effort (a failure to even start the thread is swallowed).
@@ -5167,7 +5215,8 @@ class Orchestrator:
                         data={"signal": signal.signal, "hint": signal.hint, "late": True}))
                 except Exception:  # noqa: BLE001
                     pass
-            if signal.signal == "escalate_human" and self.escalation is not None:
+            if (signal.signal == "escalate_human" and not brainstorm_active
+                    and self.escalation is not None):
                 try:
                     q = signal.reason or "A prior response may need your input; please confirm."
                     self.escalation.escalate(Escalation(
@@ -6361,14 +6410,17 @@ class Orchestrator:
                 )
                 plan = PlanDecision(action="answer", rationale="planner error → grounded answer")
 
-            # --- EXECUTION-MODE SIGNAL: capture the first explicit mode change the planner
-            # detected this turn (LLM judgment riding the planning call that already ran; zero
-            # extra calls). Surfaced to the consumer as an event here and on the result in
-            # finish(); the consumer owns persisting the latch. An exit signal releases the
-            # brainstorm gating for the REST of this same turn (the user explicitly asked to
-            # proceed); an enter signal engages it. Fail-safe by construction: normalize_decision
-            # already reduced anything unrecognized to None, and None changes nothing.
-            if plan and plan.mode_signal and mode_signal_detected is None:
+            # --- EXECUTION-MODE SIGNAL (opt-in via cfg.mode_signals_enabled): capture the first
+            # explicit mode change the planner detected this turn (LLM judgment riding the
+            # planning call that already ran; zero extra calls). Surfaced to the consumer as an
+            # event here and on the result in finish(); the consumer owns persisting the latch.
+            # An exit signal releases the brainstorm gating for the REST of this same turn (the
+            # user explicitly asked to proceed); an enter signal engages it. Fail-safe by
+            # construction: normalize_decision already reduced anything unrecognized -- and, with
+            # the flag off, ANY value -- to None, and None changes nothing; the flag check here
+            # is belt and braces so a disabled consumer can never see a latch flip or the event.
+            if (cfg.mode_signals_enabled and plan and plan.mode_signal
+                    and mode_signal_detected is None):
                 mode_signal_detected = plan.mode_signal
                 brainstorm_active = (plan.mode_signal == "enter_brainstorm")
                 try:
@@ -6636,7 +6688,9 @@ class Orchestrator:
                         _bsig = _collected
                     else:
                         # Not resolved yet: ship the draft now; a late resolution is handled async.
-                        self._finish_oversee_in_background(_bpending, emit=emit, quest_id=quest_id)
+                        self._finish_oversee_in_background(
+                            _bpending, emit=emit, quest_id=quest_id,
+                            brainstorm_active=brainstorm_active)
                 if brainstorm_active and _bsig.signal in ("escalate_deep", "escalate_human"):
                     # Brainstorm mode: overseer escalations may not ADD actions; ship the draft.
                     pass

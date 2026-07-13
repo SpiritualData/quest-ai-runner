@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from quest_ai_runner.core.note_context_store import NoteContextStore
+from quest_ai_runner.core.note_context_store import NoteContextStore, _stem_candidates
 from quest_ai_runner.core.adapters import AssembledContext
 
 
@@ -208,7 +208,7 @@ def test_floor_gate_fresh_note_bypasses_gate(tmp_path):
     """A note learned within the freshness window floors in even on a keyword-unrelated query:
     a just-given correction is almost certainly still in-topic."""
     store = NoteContextStore(str(tmp_path / "notes"))
-    # No created_at on the note: sync stamps it with now, inside the 60-minute window.
+    # No created_at on the note: sync stamps it with now, inside the freshness window.
     store.sync_from_notes([_make_note("n1", "be concise")])
     result = store.assemble("xyzzy completely unrelated query")
     assert "be concise" in result.context_view
@@ -281,6 +281,52 @@ def test_assemble_never_raises_on_corrupt_card(tmp_path):
     store = NoteContextStore(str(notes_dir))
     result = store.assemble("anything")
     assert isinstance(result, AssembledContext)
+
+
+# ---------------------------------------------------------------------------
+# _stem_candidates — the gate's conservative candidate-set stemmer
+# ---------------------------------------------------------------------------
+
+
+def _stems_match(a: str, b: str) -> bool:
+    return bool(_stem_candidates(a) & _stem_candidates(b))
+
+
+def test_stem_statuses_matches_status():
+    """"es" tried before "ed"/"s": "statuses" -> "status" (the old first-match ordering hit
+    "s" first and produced "statuse")."""
+    assert _stems_match("statuses", "status")
+
+
+def test_stem_used_matches_use():
+    """"ed" strip with the trailing "e" restored: "used" ~ "use" (the bare stem "us" is below
+    the 4-char floor and is never a candidate)."""
+    assert _stems_match("used", "use")
+    assert "us" not in _stem_candidates("used")
+
+
+def test_stem_cares_does_not_collide_with_car():
+    """The 4-char floor refuses "cares" minus "es" = "car"; the "s" strip yields "care", which
+    shares nothing with "car". Short words stay distinct."""
+    assert not _stems_match("cares", "car")
+    assert not _stems_match("caring", "car")
+
+
+def test_stem_cares_matches_caring():
+    """Both reach "care": "cares" via the "s" strip, "caring" via the "ing" strip with the
+    trailing "e" restored."""
+    assert _stems_match("cares", "caring")
+
+
+def test_stem_updates_still_matches_update():
+    """The pre-existing leniency contract holds under the candidate-set stemmer."""
+    assert _stems_match("updates", "update")
+    assert _stems_match("deploying", "deploy")
+
+
+def test_stem_exact_word_always_matches_itself():
+    for w in ("car", "use", "status", "ing", "es"):
+        assert _stems_match(w, w)
 
 
 # ---------------------------------------------------------------------------

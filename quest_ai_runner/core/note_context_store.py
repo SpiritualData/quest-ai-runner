@@ -39,18 +39,35 @@ def _keywords(text: str) -> List[str]:
     return [w for w in words if w not in _STOP and len(w) > 2]
 
 
-def _stem(word: str) -> str:
-    """Conservative, dependency-free suffix strip used ONLY by the floor's relevance gate.
+def _stem_candidates(word: str) -> frozenset:
+    """Conservative, dependency-free stem CANDIDATE set used ONLY by the floor's relevance gate.
 
     The gate must not drop a genuinely applicable correction over a trivial inflection
-    ("update" vs "updates", "deploy" vs "deploying"), so gate comparison happens on stemmed
-    forms: the first matching suffix of ``ing``/``ed``/``es``/``s``/``e`` is stripped when at
-    least 3 characters remain.  Deliberately crude and conservative -- ranked scoring
-    (``_idf_score``) stays exact-token so selection order is unchanged."""
-    for suffix in ("ing", "ed", "es", "s", "e"):
-        if word.endswith(suffix) and len(word) - len(suffix) >= 3:
-            return word[: -len(suffix)]
-    return word
+    ("update" vs "updates", "deploy" vs "deploying"), so gate comparison happens on candidate
+    sets: two words match when their sets intersect.  The word itself is always a candidate;
+    each matching suffix of ``ing``/``es``/``ed``/``s`` (tried longest-first) additionally
+    contributes:
+
+    * the bare stripped stem, when at least 4 characters remain (3 for the ``s`` strip) -- the
+      higher floor on the longer suffixes keeps short words distinct ("cares" minus ``es`` is
+      "car", refused, so "cares" never collides with "car"; its ``s`` strip "care" is what
+      carries the match);
+    * for an ``ing``/``ed`` strip, also the stem with a trailing ``e`` restored (at least 3
+      characters), so "used" ~ "use" and "caring" ~ "cares" (both via "care").
+
+    Deliberately crude and conservative -- ranked scoring (``_idf_score``) stays exact-token so
+    selection order is unchanged."""
+    candidates = {word}
+    for suffix in ("ing", "es", "ed", "s"):
+        if not word.endswith(suffix):
+            continue
+        stem = word[: -len(suffix)]
+        floor = 3 if suffix == "s" else 4
+        if len(stem) >= floor:
+            candidates.add(stem)
+        if suffix in ("ing", "ed") and len(stem) + 1 >= 3:
+            candidates.add(stem + "e")
+    return frozenset(candidates)
 
 
 def _now_iso() -> str:
@@ -75,16 +92,20 @@ def _floor_fresh_minutes() -> float:
 
     A correction learned within the last N minutes is almost certainly still in-topic (it was
     just given), so it floors in even when its wording shares no keyword with the query --
-    style/behavior corrections ("be concise") relate semantically, not lexically.  Env
-    ``QAR_NOTE_FLOOR_FRESH_MINUTES`` (default 60, accepts a float); read fresh on every call so
-    it can be tuned without a restart.  A non-positive value disables the freshness bypass."""
+    style/behavior corrections ("be concise") relate semantically, not lexically.  The window
+    is deliberately SHORT: it exists for the just-synced / just-learned case, and a wide window
+    reintroduces exactly the topic bleed the gate removes (during an active session most notes
+    are "fresh", making the relevance gate inert, so a correction from earlier in the session
+    rides into an unrelated request).  Env ``QAR_NOTE_FLOOR_FRESH_MINUTES`` (default 5, accepts
+    a float); read fresh on every call so it can be tuned without a restart.  A non-positive
+    value disables the freshness bypass."""
     raw = os.getenv("QAR_NOTE_FLOOR_FRESH_MINUTES")
     if raw is None or not raw.strip():
-        return 60.0
+        return 5.0
     try:
         return float(raw)
     except ValueError:
-        return 60.0
+        return 5.0
 
 
 def _card_id_for_note(note: Dict[str, Any]) -> str:
@@ -261,9 +282,9 @@ class NoteContextStore:
           unconditionally (a just-given correction is almost certainly still in-topic, and
           style/behavior corrections often share no keyword with the query at all).
         * LENIENT keyword overlap -- a single shared meaningful keyword clears it, compared on
-          conservatively STEMMED forms (see ``_stem``) so a trivial inflection ("update" vs
-          "updates") cannot drop an applicable correction.  Ranked selection keeps exact-token
-          ``_idf_score`` scoring; the leniency is gate-only.
+          conservatively stemmed CANDIDATE sets (see ``_stem_candidates``) so a trivial
+          inflection ("update" vs "updates") cannot drop an applicable correction.  Ranked
+          selection keeps exact-token ``_idf_score`` scoring; the leniency is gate-only.
         * CANNOT JUDGE -- when either side yields no keywords the note is KEPT.
 
         Only a clearly unrelated, non-fresh note -- both sides have keywords, zero stemmed
@@ -273,8 +294,10 @@ class NoteContextStore:
         card_kw = card.get("keywords", []) or []
         if not query_kw or not card_kw:
             return True
-        card_stems = {_stem(w) for w in card_kw}
-        return any(_stem(w) in card_stems for w in query_kw)
+        card_stems: set = set()
+        for w in card_kw:
+            card_stems |= _stem_candidates(w)
+        return any(card_stems & _stem_candidates(w) for w in query_kw)
 
     def assemble(
         self, task_text: str, *, meta: Optional[Dict[str, Any]] = None

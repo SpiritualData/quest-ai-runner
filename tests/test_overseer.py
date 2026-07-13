@@ -732,6 +732,33 @@ def test_hook_b_background_finish_raises_decision_for_late_escalate_human():
     assert len(escalation.raised) == 1
 
 
+def test_hook_b_background_finish_skips_escalate_human_in_brainstorm():
+    """Brainstorm turns may not ADD actions: a hook-B consult that resolves LATE (after the
+    draft shipped) with escalate_human must raise NO decision-request while the latch is held,
+    mirroring the synchronous hook-B rule."""
+    provider = _BlockingOverseerProvider(signal="escalate_human", reason="needs your OK")
+    escalation = StubEscalation(decision_id="dec_late")
+    orch = _orch(
+        provider, StubRetrieval(), escalation=escalation,
+        config=OrchestratorConfig(
+            overseer=True, answer_goal_max_iterations=1,
+            overseer_background_finish_timeout_seconds=5.0,
+            execution_mode="brainstorm",
+        ),
+    )
+    res = orch.run("thinking out loud about X", sink=_CaptureSink())
+    assert res.kind == "answer"  # the answer shipped without waiting
+
+    # Let the slow consult resolve and give the background finisher ample time to (wrongly)
+    # raise; the brainstorm gate must keep the sink empty.
+    provider.release.set()
+    assert provider.finished.wait(timeout=2.0)
+    deadline = time.monotonic() + 1.0
+    while time.monotonic() < deadline and not escalation.raised:
+        time.sleep(0.02)
+    assert escalation.raised == []
+
+
 # ---------------------------------------------------------------------------
 # Fix 12: cheap, non-LLM pre-filter gate for hook A.
 # ---------------------------------------------------------------------------

@@ -13,17 +13,24 @@ All notable changes to this project are documented here. The format is based on
   answers are untouched (full context, full intelligence), but nothing may ACT. A planner
   "deep" or "confirm" degrades to "answer", and every net that can only ADD execution to a turn
   (planner `deferred_deep`, the described-work and message-intent escalation fallbacks, overseer
-  escalations, claim-remediation and insufficient-context deep re-runs) is skipped. Mode changes
-  are detected by the planner itself via a new optional `mode_signal` field
+  escalations -- including a late hook-B consult finishing in the background, which raises no
+  decision-request while the latch is held -- and claim-remediation and insufficient-context
+  deep re-runs) is skipped. Planner-detected mode changes are a separate OPT-IN flag,
+  `OrchestratorConfig.mode_signals_enabled` (default off): when enabled, the planner detects an
+  explicit request to change mode via an optional `mode_signal` field
   ("enter_brainstorm" | "exit_brainstorm" | null) on the structured decision it already returns
-  every turn (LLM judgment of explicit user intent; zero extra calls, no phrase matching) and
-  surfaced to the consumer through the new always-surfacing `EVENT_MODE_SIGNAL` event and
-  `OrchestratorResult.mode_signal`. The orchestrator stays stateless: the consumer owns
-  persisting the latch and passing the mode back in per run. Fail-safe throughout: an
-  unrecognized `mode_signal` value normalizes to null (no mode change), an unrecognized
-  `execution_mode` behaves as "normal", and with the defaults behavior is unchanged. An
-  "exit_brainstorm" signal releases the gating for the same turn the user asked to proceed in;
-  an "enter_brainstorm" signal engages it immediately.
+  every turn (LLM judgment of explicit user intent; zero extra calls, no phrase matching),
+  surfaced to the consumer through the new `EVENT_MODE_SIGNAL` event and
+  `OrchestratorResult.mode_signal`. With the flag off, the planner prompt carries no mode
+  vocabulary, the decide tool schema has no `mode_signal` field, and a stray `mode_signal` in a
+  response is ignored -- a consumer that never opted in can never have a turn's actions
+  suppressed by a misread musing, and may still drive `execution_mode` purely from its own
+  state. The orchestrator stays stateless: the consumer owns persisting the latch and passing
+  the mode back in per run. Fail-safe throughout: an unrecognized `mode_signal` value
+  normalizes to null (no mode change), an unrecognized `execution_mode` behaves as "normal",
+  and with the defaults behavior is unchanged. An "exit_brainstorm" signal releases the gating
+  for the same turn the user asked to proceed in; an "enter_brainstorm" signal engages it
+  immediately.
 
 ### Fixed
 - **Context assembly timeout no longer throws away work that finished in time: partial results
@@ -63,12 +70,17 @@ All notable changes to this project are documented here. The format is based on
   unconditionally included the 2 most recent notes in every turn's context, which bled the
   previous topic into an unrelated next turn. A floored note must now clear a minimal relevance
   bar against the current query, with three deliberately permissive ways through: a note
-  learned within the last 60 minutes always passes (a just-given correction is almost certainly
-  still in-topic, and style/behavior corrections relate semantically rather than lexically;
-  window tunable via `QAR_NOTE_FLOOR_FRESH_MINUTES`, non-positive disables the bypass); a
-  single shared meaningful keyword passes, compared on conservatively stemmed forms
-  (dependency-free suffix stripping, so a trivial inflection like "update" vs "updates" cannot
-  drop an applicable correction -- ranked selection keeps exact-token scoring); and when either
+  learned within the last 5 minutes always passes (a just-given correction is almost certainly
+  still in-topic, and style/behavior corrections relate semantically rather than lexically; the
+  window is deliberately short -- it covers the just-synced/just-learned case, while a wide
+  window would leave most of an active session's notes "fresh" and the gate inert against
+  rapid topic switches; tunable via `QAR_NOTE_FLOOR_FRESH_MINUTES`, non-positive disables the
+  bypass); a single shared meaningful keyword passes, compared on conservatively stemmed
+  candidate sets (dependency-free suffix stripping, longest-suffix-first with a length floor
+  and a restored trailing "e" variant, so a trivial inflection like "update" vs "updates",
+  "statuses" vs "status", or "used" vs "use" cannot drop an applicable correction while short
+  words like "car" stay distinct from "cares" -- ranked selection keeps exact-token scoring);
+  and when either
   side yields no keywords the note is kept (cannot judge relevance, so do not drop). Only a
   clearly unrelated, non-fresh note is dropped. When nothing (floor included) relates to the
   query, `assemble` now returns an empty context instead of a header with stale notes. Set

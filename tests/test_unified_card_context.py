@@ -211,7 +211,7 @@ def test_late_partial_prefetch_served_once_but_never_cached():
 def test_planner_prompt_and_schema_mention_card_ops():
     # Prompt (formatted with the same slots _plan uses) advertises both ops.
     rendered = PLANNER_PROMPT.format(
-        max_reads=6, max_subq=3, max_deep=3, rationale_instruction="x",
+        max_reads=6, max_subq=3, max_deep=3, mode_signal_block="", rationale_instruction="x",
         user_message="m", transcript="", context_view="", gathered="[]")
     assert '{"cards":' in rendered or '"cards"' in rendered
     assert '{"card":' in rendered or '"card"' in rendered

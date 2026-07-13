@@ -1,7 +1,11 @@
 """Brainstorm execution mode: the consumer-owned no-action latch.
 
-Covers the three contract points:
-  * ``mode_signal`` parsing is strict and fail-safe (garbage never changes the mode),
+Covers the four contract points:
+  * mode signals are OPT-IN (``mode_signals_enabled``, default off): by default the planner
+    prompt and tool schema carry no mode_signal material and a stray ``mode_signal`` in the
+    LLM response is ignored,
+  * ``mode_signal`` parsing (when enabled) is strict and fail-safe (garbage never changes the
+    mode),
   * ``execution_mode="brainstorm"`` gates every path that could ACT (planner deep/confirm,
     the deferred-deep escalation nets) while reads/answers stay fully functional,
   * default behavior (``execution_mode="normal"``, no signal) is unchanged.
@@ -25,28 +29,36 @@ def _orch(provider, retrieval, **kw):
 
 
 # ---------------------------------------------------------------------------
-# mode_signal parsing (normalize_decision): strict values, fail-safe on garbage.
+# mode_signal parsing (normalize_decision): opt-in, strict values, fail-safe on garbage.
 # ---------------------------------------------------------------------------
 
 def test_mode_signal_parses_known_values():
-    cfg = OrchestratorConfig()
+    cfg = OrchestratorConfig(mode_signals_enabled=True)
     for value in ("enter_brainstorm", "exit_brainstorm", " Enter_Brainstorm "):
         d = normalize_decision({"action": "answer", "rationale": "r", "mode_signal": value}, cfg)
         assert d.mode_signal == value.strip().lower()
 
 
 def test_mode_signal_absent_is_none():
-    d = normalize_decision({"action": "answer", "rationale": "r"}, OrchestratorConfig())
+    d = normalize_decision({"action": "answer", "rationale": "r"},
+                           OrchestratorConfig(mode_signals_enabled=True))
     assert d.mode_signal is None
 
 
 def test_mode_signal_garbage_fails_safe_to_none():
-    cfg = OrchestratorConfig()
+    cfg = OrchestratorConfig(mode_signals_enabled=True)
     for garbage in ("brainstorm", "exit", "", "yes", 42, True, ["enter_brainstorm"],
                     {"signal": "enter_brainstorm"}, None):
         d = normalize_decision({"action": "answer", "rationale": "r",
                                 "mode_signal": garbage}, cfg)
         assert d.mode_signal is None, f"garbage {garbage!r} must normalize to None"
+
+
+def test_mode_signal_ignored_when_disabled():
+    """Default config (mode_signals_enabled=False): even a VALID mode_signal is ignored."""
+    d = normalize_decision({"action": "answer", "rationale": "r",
+                            "mode_signal": "enter_brainstorm"}, OrchestratorConfig())
+    assert d.mode_signal is None
 
 
 # ---------------------------------------------------------------------------
@@ -59,8 +71,9 @@ def test_enter_signal_surfaces_on_event_and_result():
     ])
     events: List[Dict[str, Any]] = []
     sink = StreamSink(lambda ev: events.append(ev))
-    res = _orch(provider, StubRetrieval()).run("hold my calls, thinking out loud",
-                                               sink=sink)
+    res = _orch(provider, StubRetrieval(),
+                config=OrchestratorConfig(mode_signals_enabled=True)).run(
+        "hold my calls, thinking out loud", sink=sink)
     assert res.kind == "answer"
     assert res.mode_signal == "enter_brainstorm"
     mode_events = [e for e in events if e["type"] == EVENT_MODE_SIGNAL]
@@ -168,7 +181,8 @@ def test_exit_signal_releases_latch_same_turn():
     ])
     runner = StubDeepRunner(met=True, output="shipped")
     res = _orch(provider, StubRetrieval(), deep_runner=runner,
-                config=OrchestratorConfig(execution_mode="brainstorm")).run("ok, go do it")
+                config=OrchestratorConfig(execution_mode="brainstorm",
+                                          mode_signals_enabled=True)).run("ok, go do it")
     assert res.kind == "deep"                      # acted, despite brainstorm config
     assert res.mode_signal == "exit_brainstorm"
     assert runner.calls and runner.calls[0]["goal"] == "Ship the plan we discussed"
@@ -182,11 +196,77 @@ def test_enter_signal_gates_the_same_turn_even_in_normal_mode():
          "rationale": "confused planner", "mode_signal": "enter_brainstorm"},
     ])
     runner = StubDeepRunner(met=True)
-    res = _orch(provider, StubRetrieval(), deep_runner=runner).run(
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(mode_signals_enabled=True)).run(
         "let me think out loud, no acting on this")
     assert res.kind == "answer"
     assert res.mode_signal == "enter_brainstorm"
     assert runner.calls == []
+
+
+# ---------------------------------------------------------------------------
+# Mode signals are OPT-IN: with the default config (mode_signals_enabled=False) the planner
+# never hears about working modes and a stray signal in a response cannot suppress actions.
+# ---------------------------------------------------------------------------
+
+def test_default_config_planner_prompt_has_no_mode_signal_material():
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    _orch(provider, StubRetrieval()).run("let's think through the design as we go")
+    assert "MODE SIGNAL" not in provider.plan_prompts[0]
+    assert "mode_signal" not in provider.plan_prompts[0]
+    assert "enter_brainstorm" not in provider.plan_prompts[0]
+
+
+def test_default_config_tool_schema_has_no_mode_signal_field():
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    _orch(provider, StubRetrieval()).run("hello")
+    props = provider.plan_tool_schemas[0]["input_schema"]["properties"]
+    assert "mode_signal" not in props
+
+
+def test_enabled_config_planner_prompt_and_schema_carry_mode_signal():
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    _orch(provider, StubRetrieval(),
+          config=OrchestratorConfig(mode_signals_enabled=True)).run("hello")
+    assert "MODE SIGNAL" in provider.plan_prompts[0]
+    props = provider.plan_tool_schemas[0]["input_schema"]["properties"]
+    assert "mode_signal" in props
+
+
+def test_default_config_stray_mode_signal_is_ignored():
+    """A planner misfire ("let's think through the design as we go" -> enter_brainstorm) on a
+    consumer that never opted in must not suppress the turn's actions: the deep run proceeds,
+    no EVENT_MODE_SIGNAL is emitted, and the result carries no signal."""
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "Build the design", "deep_brief": "do it",
+         "rationale": "misfired planner", "mode_signal": "enter_brainstorm"},
+        {"met": True, "reason": "done"},           # goal verification
+    ])
+    runner = StubDeepRunner(met=True, output="built")
+    events: List[Dict[str, Any]] = []
+    sink = StreamSink(lambda ev: events.append(ev))
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run(
+        "let's think through the design as we go", sink=sink)
+    assert res.kind == "deep"                      # the action was NOT suppressed
+    assert res.mode_signal is None
+    assert runner.calls and runner.calls[0]["goal"] == "Build the design"
+    assert [e for e in events if e["type"] == EVENT_MODE_SIGNAL] == []
+
+
+def test_brainstorm_without_signals_gates_but_prompt_stays_signal_free():
+    """A consumer may drive execution_mode purely from its own state: the latch still gates,
+    but the planner prompt mentions no mode_signal vocabulary anywhere (the brainstorm note's
+    exit-signal exception is part of the opt-in)."""
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "Do the thing", "deep_brief": "do it", "rationale": "r"},
+    ])
+    runner = StubDeepRunner(met=True)
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(execution_mode="brainstorm")).run("what if we...")
+    assert res.kind == "answer"
+    assert runner.calls == []
+    assert "BRAINSTORM MODE" in provider.plan_prompts[0]
+    assert "mode_signal" not in provider.plan_prompts[0]
 
 
 # ---------------------------------------------------------------------------

@@ -29,11 +29,15 @@ class StubProvider:
         self.answer_systems: List[Any] = []
         self.last_plan_prompt: str = ""
         self.plan_prompts: List[str] = []
+        # Every tool schema a plan() call was given, in order, so a test can assert which fields
+        # the planner was actually allowed to fill (e.g. the opt-in `mode_signal` field).
+        self.plan_tool_schemas: List[Dict[str, Any]] = []
 
     def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
         self.plan_calls += 1
         self.last_plan_prompt = prompt
         self.plan_prompts.append(prompt)
+        self.plan_tool_schemas.append(tool_schema)
         if self._decisions:
             return self._decisions.pop(0)
         return {"action": "answer", "rationale": "fallback", "model_tier": "sonnet"}
