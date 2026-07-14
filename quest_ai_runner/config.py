@@ -1083,6 +1083,15 @@ def build_orchestrator(
             original_provider = cfg.model_provider
             cfg.model_provider = MultiProvider(
                 original_provider, all_providers, usage_tracker=cfg.usage_tracker)
+            # Attach a registry so a quota/rate-limit error on a tier-resolved model
+            # (e.g. a "quality"/"balanced" model hitting its enforced daily Gemini quota)
+            # automatically steps down to the next cheaper tier instead of erroring out.
+            # Built after cfg.model_provider is wrapped so the registry's own auto-bucketing
+            # sees the full multi-provider model list, same as build_registry(cfg) below.
+            try:
+                cfg.model_provider.set_tier_registry(build_registry(cfg))
+            except Exception:  # noqa: BLE001 — fallback wiring must never block startup
+                _log.debug("Could not attach tier registry to MultiProvider; fallback disabled")
             _log.debug("Wrapped primary provider with MultiProvider for intelligent routing")
 
     # Also wrap vision_provider if configured (used for image description fallback)

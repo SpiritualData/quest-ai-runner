@@ -23,6 +23,33 @@ from .adapters import ModelProvider
 # Semantic names (provider-agnostic): fast/balanced/quality (best = quality if not overridden)
 TIERS = ("fast", "balanced", "quality", "best")
 
+# Downgrade order (expensive -> cheap), used when a tier's resolved model exhausts its
+# quota/rate limit: stepping down to a cheaper tier keeps the caller answered instead of
+# erroring out, since backoff alone does not fix a per-model DAILY quota. See
+# MultiProvider's tier-fallback wrapping (added 2026-07-14 alongside enforced per-model
+# daily Gemini quotas).
+TIER_DOWNGRADE_ORDER = {
+    "best": "quality",
+    "quality": "balanced",
+    "balanced": "fast",
+    # "fast" has no lower tier to fall back to.
+}
+
+
+def next_lower_tier(tier: Optional[str]) -> Optional[str]:
+    """The next cheaper tier to fall back to when ``tier``'s model is exhausted.
+
+    Args:
+        tier: The tier whose resolved model just failed (quota/rate limit).
+
+    Returns:
+        The next cheaper tier name, or None if ``tier`` is unset/unrecognized or
+        already the cheapest ("fast").
+    """
+    if not tier:
+        return None
+    return TIER_DOWNGRADE_ORDER.get(tier)
+
 
 # ---------------------------------------------------------------------------
 # Vision-capability seam — the ONE place "can this model take images natively?"
