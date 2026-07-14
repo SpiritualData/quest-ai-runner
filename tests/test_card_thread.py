@@ -16,6 +16,7 @@ What these tests pin, in the order the design demands it:
 import pytest
 
 from quest_ai_runner.core.adapters import PlanDecision
+from quest_ai_runner.core.context_doctrine import CARD_THREAD_GATE
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.card_thread import (
     ACTION_CONTINUE,
@@ -467,3 +468,66 @@ def test_a_turn_that_never_expresses_a_topic_keeps_the_fail_safe():
 
     assert res.card_thread == {"action": "continue", "card_id": "topic:general", "label": None,
                                "raw": "", "fell_back": True}
+
+
+# --------------------------------------------------------------------------------------------
+# THE INDEPENDENT-RECALL TEST -- a sub-decision inside a plan (pricing, timeline, a vendor pick)
+# often SOUNDS like its own subject without BEING independently recallable. This pins the gate's
+# doctrine text to the concrete test (not a "match on meaning" vibe) and a couple of its worked
+# examples end to end, so a future edit cannot silently drop the test or water it back down.
+# --------------------------------------------------------------------------------------------
+
+def test_the_gate_text_states_the_independent_recall_test_not_a_meaning_match_vibe():
+    """PINNED: the vague 'match on meaning, not on shared words' instruction was replaced by a
+    concrete test (would this still be worth looking up if the current card were deleted), because
+    it gave no real answer for a sub-decision that sounds like its own subject (pricing, timeline)
+    without being one. Guard both the removal and the replacement."""
+    assert "match on meaning" not in CARD_THREAD_GATE.lower()
+    assert "card were deleted" in CARD_THREAD_GATE
+    assert "sub-decision" in CARD_THREAD_GATE
+    assert "its own future" in CARD_THREAD_GATE
+    # The worked examples that motivated the fix are present as few-shot guidance.
+    assert "charge for the launch" in CARD_THREAD_GATE
+    assert "Sarah's onboarding" in CARD_THREAD_GATE
+    assert "Q3 budget" in CARD_THREAD_GATE
+
+
+def test_a_pricing_sub_decision_continues_the_launch_card_not_a_new_one():
+    """Worked example 1: 'what should we charge?' mid launch-planning is a sub-decision that only
+    ever gets looked up in service of the launch, so it must continue rather than open its own card
+    even though "pricing" shares no words with "launch"."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "r", "model_tier": "sonnet",
+                                        "card_thread": "continue"}])
+    orch = _orch(provider, card_thread_enabled=True, assembler=_StubAssembler(CARDS))
+    res = orch.run("what should we charge for the launch?",
+                   card_thread={"active_card_id": "topic:launch-plan", "active_label": "Launch plan"})
+
+    assert res.card_thread["action"] == "continue"
+    assert res.card_thread["card_id"] == "topic:launch-plan"
+
+
+def test_a_different_persons_progress_opens_a_new_card_mid_launch_planning():
+    """Worked example 2: asked mid launch-planning, 'how's Sarah's onboarding going' has its own
+    independent trajectory (it would be asked about even if the launch never happened), so it must
+    open a new card rather than continue the launch card just because it is the current one."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "r", "model_tier": "sonnet",
+                                        "card_thread": "new:Sarah's onboarding"}])
+    orch = _orch(provider, card_thread_enabled=True, assembler=_StubAssembler(CARDS))
+    res = orch.run("how's Sarah's onboarding going",
+                   card_thread={"active_card_id": "topic:launch-plan", "active_label": "Launch plan"})
+
+    assert res.card_thread["action"] == "new"
+    assert res.card_thread["label"] == "Sarah's onboarding"
+
+
+def test_a_signposted_unrelated_ask_opens_a_new_card():
+    """Worked example 3: an explicit signpost ('separately') plus a subject unconnected to whether
+    the launch succeeds or fails -- a new card, not a continue."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "r", "model_tier": "sonnet",
+                                        "card_thread": "new:Q3 budget"}])
+    orch = _orch(provider, card_thread_enabled=True, assembler=_StubAssembler(CARDS))
+    res = orch.run("separately, can you check on the Q3 budget",
+                   card_thread={"active_card_id": "topic:launch-plan", "active_label": "Launch plan"})
+
+    assert res.card_thread["action"] == "new"
+    assert res.card_thread["label"] == "Q3 budget"

@@ -89,6 +89,15 @@ USING A CACHED CONTEXT HINT:
 # Injected into the planner prompt ONLY when the consumer opted in (cfg.card_thread_enabled), and
 # it teaches the ONE field the planner emits. The candidate list under it is a PRIOR: it narrows
 # and surfaces, it never decides. Judgment decides.
+#
+# The continue-vs-new call is graded by an INDEPENDENT-RECALL test (would this still be worth
+# looking up if the current card had never existed), not a same-subject/different-subject vibe:
+# a plan's sub-decisions (pricing, timeline, a vendor pick) routinely SOUND like their own subject
+# without BEING independently recallable, and that mismatch is what used to misfile them.
+#
+# NOT handled here, intentionally: "graduation" (a sub-topic that keeps recurring across several
+# cards eventually earning its own card) is a cross-turn mechanism and out of scope for this
+# per-turn gate.
 # ---------------------------------------------------------------------------
 CARD_THREAD_GATE: str = """\
 TOPIC (`card_thread`, REQUIRED on every plan): which topic is THIS message about?
@@ -98,22 +107,41 @@ TOPIC (`card_thread`, REQUIRED on every plan): which topic is THIS message about
     * "continue"            -- it is about the CURRENT TOPIC: a follow-up, a refinement, a question
                                about what you just said, a correction.
     * "switch_to:<card_id>" -- it is about one of the KNOWN TOPICS listed below. Use the id EXACTLY
-                               as given. Match on MEANING, not on shared words: this is how "back to
-                               the launch plan" resolves, and how a question about a specific piece
-                               of work reaches that work's own topic.
+                               as given: this is how "back to the launch plan" resolves, and how a
+                               question about a specific piece of work reaches that work's own topic.
     * "new:<short label>"   -- it is a genuinely different subject that is NOT on the list. Label it
                                the way a person would name the idea, in 2 to 5 words.
+
+  THE TEST (use this, not a guess about shared or different words): if the CURRENT card were deleted
+  tomorrow, would anyone still want to look THIS up on its own, unconnected to what the current card
+  was for?
+    * NO  -- it is a sub-decision that only exists in service of the current effort (a price, a
+      timeline, a vendor, a channel). It stays on the current card ("continue"), no matter how
+      different or its own-subject the surface words sound.
+    * YES -- it is a distinct, standalone thing with its own future: worth recalling even if the
+      current card had never mattered. Give it its own card: "switch_to:<card_id>" if it is one of
+      the KNOWN TOPICS below, "new:<short label>" otherwise.
+
+  Examples:
+    * "what should we charge for the launch?" (mid launch planning) -> continue: pricing here only
+      ever gets looked up in service of "how did we launch this".
+    * "actually let's delay the launch a week" -> continue: a correction to the same effort.
+    * "how's Sarah's onboarding going" (asked mid launch planning) -> new: a different person with
+      her own independent trajectory, one that would be asked about even if the launch never
+      happened.
+    * "separately, can you check on the Q3 budget" -> new: an explicit signpost, and the budget's
+      standing is unconnected to whether the launch succeeds.
+    * "thanks, that's helpful" -> stays on the general/current topic: chit-chat never opens one.
+
   DO NOT STAY ON A TOPIC JUST BECAUSE IT IS THE CURRENT ONE. Filing an exchange under the wrong idea
   buries it in another idea's history, and it stays buried. When the user signposts a change
   ("separately", "different question", "unrelated", "on another note", "back to ..."), believe them:
-  the subject has changed, even when the words resemble what came before. A subject that merely
-  shares a category with the current topic ("pricing" alongside "the launch") is a DIFFERENT subject
-  unless the message itself ties them together.
+  the subject has changed, even when the words resemble what came before.
   CHIT-CHAT: greetings, thanks, "how are you", small talk with no subject of its own belong on the
   general topic when one is listed (switch to it). Never open a new topic for those.
   A topic assignment is NOT a mode change and NOT an action: it never suppresses, triggers, or
   approves any work, and it says nothing about how the conversation should run.
-  Only when two readings are genuinely equally plausible, prefer "continue".\
+  Only when the test above is genuinely a toss-up, prefer "continue".\
 """
 
 # ---------------------------------------------------------------------------
