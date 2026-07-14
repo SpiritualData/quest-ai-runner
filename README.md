@@ -58,7 +58,12 @@ QUEST_BASE_URL=... QUEST_API_KEY=qsk_... QAR_CORPUS_ROOT=... quest-ai-runner --o
 ## Documentation
 
 - [Quickstart tutorial](docs/quickstart.md) — install, ground the brain, run the executor lane.
+- [Context assembly](docs/context-assembly.md) — the context engine design of record, including the
+  principled test (not a vibe) for when a message stays on its current topic card vs. opens a new one.
 - [TF-DF-IDF Sampling](docs/TF_DF_IDF_SAMPLING.md) — smart context selection: 62% fewer tokens, zero external deps.
+- [Claude conversations integration](docs/claude-conversations-integration.md) — grounding on past
+  Claude sessions, including how a cross-session recall hit is learned onto the active card and
+  gains the same usage-recency boost files and collections already get.
 - [The minimal-intervention overseer](docs/overseer.md) — a cheap, high-quality watcher that almost always stays silent.
 - [Architecture Standards](docs/ARCHITECTURE_STANDARDS.md) — brain / runner / adapters, why `core` is `core`, and the standards code here must follow.
 - [Writing a consumer](docs/writing-a-consumer.md) — wire the library to your own Quest backend.

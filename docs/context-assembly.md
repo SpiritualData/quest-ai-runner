@@ -147,7 +147,10 @@ Matches the repo's zero-dependency rule (core + runner import only the stdlib).
   dropped). The stamp happens AFTER rendering and never appears in the rendered text, so two
   identical turns render byte-identically (prompt-cache prefixes are safe), and it is debounced
   (`_SOURCE_USAGE_MIN_INTERVAL_SECONDS`) because one turn assembles context several times. Missing
-  fields mean "never used": legacy cards need no migration.
+  fields mean "never used": legacy cards need no migration. `conversation`-type items reach this
+  same seam through `ClaudeConversationsAdapter`'s cross-session recall learning — see
+  [Cross-session recall becomes card-scoped learning](claude-conversations-integration.md#card-scoped-learning-cross-session-recall-joins-the-card-system)
+  for how a recall hit is chosen and attached in the first place.
 
 ## The two prompt gates (doctrine, generic)
 
@@ -164,6 +167,62 @@ runner's `context_preamble`.
 - **Model-tier gate (cheap by default):** Haiku to find/gather, Sonnet for clear implementation,
   Opus for review/quality/ambiguity/irreversible — **and escalate one tier on a failed verification
   rather than re-running identically.**
+
+A third gate, `CARD_THREAD_GATE`, governs a different decision — not proceed-vs-explore or which
+model tier, but *which card a message belongs to*. It's injected alongside the two gates above and
+is documented on its own below because it is the one that determines whether a turn's context (and
+any cross-session recall learned onto that turn — see
+[Cross-session recall becomes card-scoped learning](claude-conversations-integration.md#card-scoped-learning-cross-session-recall-joins-the-card-system))
+lands on the right card at all.
+
+### Card assignment: the independent-recall test
+
+Every message needs a `card_thread` decision: continue the current topic card, switch to a known
+one, or open a new one (`CARD_THREAD_GATE` in `quest_ai_runner/core/context_doctrine.py` — read
+that constant for the exact, current prompt text). The gate used to say "match on meaning, not
+shared words," which is true but untestable, and it let one specific failure mode through
+repeatedly: a **sub-decision inside a plan** — a price, a timeline, a vendor pick, a channel — often
+*sounds* like its own subject in isolation, so the model filed it onto its own new card instead of
+leaving it with the effort it actually serves. Surface novelty was being mistaken for genuine
+independence.
+
+The fix replaces the vibe with one falsifiable question:
+
+> If the CURRENT card were deleted tomorrow, would anyone still want to look THIS up on its own,
+> unconnected to what the current card was for?
+
+- **NO** — it's a sub-decision that only exists in service of the current effort. It stays on the
+  current card (`continue`), no matter how different or how much "its own subject" the surface
+  words sound.
+- **YES** — it's a distinct, standalone thing with a future of its own: worth recalling even if the
+  current card had never mattered. It gets its own card (`switch_to:<card_id>` when it matches a
+  KNOWN TOPIC already listed, `new:<short label>` otherwise).
+
+Worked examples from the gate (a few of the five; see the constant for the full set):
+
+- *"what should we charge for the launch?"*, asked mid launch planning → **continue**: pricing here
+  is only ever looked up in service of "how did we launch this" — delete the launch card and no one
+  goes looking for this number on its own.
+- *"how's Sarah's onboarding going"*, asked mid launch planning → **new**: a different person with
+  her own independent trajectory, one that would be asked about even if the launch had never
+  happened.
+- *"separately, can you check on the Q3 budget"* → **new**: an explicit signpost ("separately"), and
+  the budget's standing has nothing to do with whether the launch succeeds.
+- *"thanks, that's helpful"* → stays on the current/general topic: chit-chat never opens a card.
+
+**Why this is the right test, not just a stricter one.** Cards are the unit the rest of the context
+engine builds on — usage-recency (`last_used_ts`/`use_count`), staleness, retrieval ranking, and now
+cross-session recall learning all key off *which card* a piece of context landed on. Misfiling a
+sub-decision onto its own card fragments the plan it belongs to across two cards permanently; the
+independent-recall test targets the actual failure (surface distinctness vs. genuine independence)
+instead of asking the model to eyeball "different enough," which is exactly the vibe that let the
+old wording drift.
+
+A sibling gate, `CARD_LIFECYCLE_GATE` (immediately below `CARD_THREAD_GATE` in the same file),
+covers a related but separate failure: treating a card's already-finished work as if it were still
+open. A **"graduation" mechanism** — a recurring sub-decision that keeps resurfacing eventually
+earning its own card — is intentionally out of scope for this per-turn gate; each turn's assignment
+is a fresh, independent decision with no memory of how often a sub-topic has come up before.
 
 ## Three retrieval arms and how they divide the problem
 

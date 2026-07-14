@@ -171,6 +171,63 @@ The brain will:
 - Cross-reference with code files for implementation
 - Synthesize an answer grounded in all sources
 
+## Card-scoped learning: cross-session recall joins the card system
+
+Cross-session recall used to be a disconnected side-channel. On every single turn,
+`ClaudeConversationsAdapter.assemble()` re-scanned the user's ENTIRE conversation history,
+keyword-gated it against just that turn's query text, ranked the survivors with TF-DF-IDF
+(`select_representatives` — see [TF-DF-IDF Sampling](TF_DF_IDF_SAMPLING.md)), and returned an
+ephemeral context view. Nothing about that pass persisted: no `last_used_ts`, no `use_count`, no
+link to the card the user was actually working on. Every turn paid the full re-scan cost again,
+even for a conversation it had already found relevant.
+
+`assemble()` now participates in the card system the same way file and collection references
+already do, whenever two things are true for the turn: it carries an ACTIVE card
+(`meta["thread_card_id"]`, set by the `CARD_THREAD_GATE` decision — see
+[Card assignment: the independent-recall test](context-assembly.md#card-assignment-the-independent-recall-test)),
+and the adapter was constructed with a `card_store` (a `FileContextStore`-shaped object; wired
+automatically in `config.py`'s default assembler stack).
+
+**The gate widens; the learning narrows.** Two different term sets do two different jobs:
+
+- **Union gate, for surfacing.** The relevance gate that decides which candidate conversations are
+  even considered widens from "this turn's query terms" to "this turn's query terms UNION the
+  active card's own topic terms" (`_active_card_terms`, pulled from the card's `keywords` plus the
+  natural-language terms of its `name` / `summary` / `description`). A conversation about the card's
+  ongoing idea can now surface even when this turn's specific wording doesn't match it — the recall
+  is scoped to the *card*, not just the sentence.
+- **Intersection learn, for persistence.** Of the TF-DF-IDF-ranked survivors, only the ones that
+  overlap BOTH the query terms AND the card terms get LEARNED onto the card
+  (`_learn_card_references`). A hit that only cleared the widened gate because of the card, but has
+  nothing to do with this specific question, still helps answer this turn but is not written back —
+  so a card never accumulates references that only ever mattered to a passing question.
+
+TF-DF-IDF selection itself (`select_representatives`) is unchanged by this work; what changed is
+what happens to the ranked output, not how the ranking is computed.
+
+**Same usage-recency mechanism files and collections already have.** A learned hit is attached as a
+`conversation`-type content item via `FileContextStore.update_card` (the card system's existing
+typed-reference schema — see [Card Fields](conversation-cards.md#card-fields)), then immediately
+stamped through the existing `mark_sources_used` seam so its `last_used_ts` / `use_count` bump to
+now — exactly the mechanism described in the "Per-source usage recency" bullet of
+[context-assembly.md](context-assembly.md) (under "The reference implementation —
+`FileContextStore`") for file and collection references. Re-selecting the same conversation on a later turn re-warms the
+SAME reference (deduped by `conv_id`) instead of duplicating it. The practical effect: a
+conversation recalled once keeps getting found by recency on later turns about the same card,
+instead of QAR re-scanning the whole history from zero every time.
+
+**Degrades exactly to the old behavior with no active card.** With no `thread_card_id` in `meta`,
+or no `card_store` wired, `assemble()` runs the identical prior global keyword + TF-DF-IDF scan —
+byte-for-byte what it did before this change.
+
+**Known gap, explicitly out of scope.** Team-chat thread context (`google_chat_adapter.py`) is not
+wired into this card-learning path. The adapter's own docstring flags it directly:
+
+> NOTE (known related gap, deliberately OUT OF SCOPE here): team-chat thread context
+> (`google_chat_adapter`) is NOT wired into this card-learning path. Scoping a chat thread to a
+> card needs its own thread-to-card assignment logic, not just usage-recency wiring, and is a
+> separate follow-up.
+
 ## Tips
 
 ### Keep Conversations Fresh
