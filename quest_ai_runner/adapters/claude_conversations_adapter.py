@@ -13,8 +13,9 @@ Example:
 from __future__ import annotations
 
 import re
+import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from quest_ai_runner.core.adapters import AssembledContext, Observation, RetrievalAdapter
 from .conversation_format import (
@@ -44,7 +45,13 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
     - Defaults to ~/.claude/sessions
     """
 
-    def __init__(self, corpus_root: Optional[str] = None, sessions_dir: Optional[str] = None):
+    def __init__(
+        self,
+        corpus_root: Optional[str] = None,
+        sessions_dir: Optional[str] = None,
+        *,
+        card_store: Optional[Any] = None,
+    ):
         """Initialize with either a corpus root or explicit sessions directory.
 
         Args:
@@ -56,9 +63,21 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
             sessions_dir: Path to Claude Code sessions directory explicitly.
                          Used if corpus_root is not provided.
                          Defaults to ~/.claude/sessions if both are None.
+            card_store: OPTIONAL card store (duck-typed like ``FileContextStore``) used to turn a
+                        cross-session recall hit into a LEARNED ``conversation`` reference on the
+                        turn's ACTIVE card. When supplied AND ``meta`` carries a ``thread_card_id``,
+                        ``assemble()`` (a) widens its relevance gate with the active card's own topic
+                        terms and (b) attaches / re-warms the selected conversations on that card via
+                        ``update_card`` + ``mark_sources_used``, so recall participates in the SAME
+                        usage-recency retrieval that files and collections already get. When absent
+                        (or no card is active) the adapter falls back to the pure global keyword +
+                        TF-DF-IDF scan, exactly as before. Requires only ``get_card``,
+                        ``update_card``, and ``mark_sources_used`` on the object — any store exposing
+                        them participates.
         """
         self.corpus_root = Path(corpus_root) if corpus_root else None
         self.sessions_dir = Path(sessions_dir) if sessions_dir else Path.home() / ".claude" / "sessions"
+        self._card_store = card_store
         self._conversations: Dict[str, Any] = {}
         self._conversation_filepaths: Dict[str, Path] = {}
         self._conv_id_lookup: Dict[str, str] = {}
@@ -191,6 +210,110 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
             get_score_boost=self._recency_boost,
         )
 
+    def _active_card_terms(self, active_card_id: Optional[str]) -> Set[str]:
+        """Topic terms for the turn's ACTIVE card (or empty when there is none / no store).
+
+        Pulls the card's own ``keywords`` plus the natural-language terms of its ``name`` /
+        ``summary`` / ``description`` through the SAME ``keywords_from_text`` tokenizer the query
+        and conversation digests use, so the widened gate compares like vocabularies. Returns an
+        empty set (the neutral value that leaves the global scan unchanged) whenever there is no
+        active card, no wired store, or the card cannot be read. Never raises.
+        """
+        if not active_card_id or self._card_store is None:
+            return set()
+        getter = getattr(self._card_store, "get_card", None)
+        if not callable(getter):
+            return set()
+        try:
+            card = getter(active_card_id)
+        except Exception:  # noqa: BLE001
+            return set()
+        if not isinstance(card, dict):
+            return set()
+        terms: Set[str] = set()
+        try:
+            for kw in card.get("keywords", []) or []:
+                token = str(kw).strip().lower()
+                if len(token) > 2:
+                    terms.add(token)
+            prose = " ".join(
+                str(card.get(field) or "")
+                for field in ("name", "summary", "description")
+            )
+            terms.update(keywords_from_text(prose))
+        except Exception:  # noqa: BLE001
+            return terms
+        return terms
+
+    def _learn_card_references(
+        self,
+        active_card_id: str,
+        selected: List[str],
+        conv_kw: Dict[str, Set[str]],
+        query_terms: Set[str],
+        card_terms: Set[str],
+        *,
+        now: float,
+    ) -> None:
+        """Attach the selected recall hits as ``conversation`` references on the active card.
+
+        A conversation is LEARNED onto the card only when it is relevant to BOTH the immediate
+        request (overlaps ``query_terms``) AND the card's own topic (overlaps ``card_terms``) -- so a
+        card is never diluted by something that merely matched the question. Each qualifying
+        conversation is added via ``update_card`` (whose dedupe collapses a re-add of the same
+        ``conv_id`` onto the existing item, so no duplicates accrue across turns) and then stamped
+        via ``mark_sources_used`` with ``now``, which bumps its ``last_used_ts`` / ``use_count`` so
+        the reference participates in the SAME usage-recency retrieval files and collections already
+        get on later turns -- no re-scan of the whole history required. Best-effort: any failure
+        here must never discard the context the caller already assembled, so the caller wraps this.
+        """
+        store = self._card_store
+        update = getattr(store, "update_card", None)
+        mark = getattr(store, "mark_sources_used", None)
+        if not callable(update):
+            return
+
+        learn_ids = [
+            cid for cid in selected
+            if (conv_kw.get(cid) or set()) & query_terms
+            and (conv_kw.get(cid) or set()) & card_terms
+        ]
+        if not learn_ids:
+            return
+
+        additions = [
+            {
+                "id": f"conversation-{cid}",
+                "type": "conversation",
+                "locator": {"conv_id": cid},
+                "why": "cross-session recall match",
+                "ts": now,
+            }
+            for cid in learn_ids
+        ]
+        update(active_card_id, add=additions)
+
+        # Re-read the card so the item ids we stamp are the ones that ACTUALLY landed (dedupe keeps
+        # the first occurrence's id, so a re-add on a later turn resolves to the existing item id).
+        if not callable(mark):
+            return
+        getter = getattr(store, "get_card", None)
+        want = set(learn_ids)
+        used_item_ids: List[str] = []
+        try:
+            card = getter(active_card_id) if callable(getter) else None
+            for item in (card or {}).get("content", []) or []:
+                if not isinstance(item, dict) or item.get("type") != "conversation":
+                    continue
+                loc = item.get("locator") if isinstance(item.get("locator"), dict) else {}
+                cid = str(loc.get("conv_id") or loc.get("id") or "").strip()
+                if cid in want and item.get("id"):
+                    used_item_ids.append(str(item["id"]))
+        except Exception:  # noqa: BLE001
+            used_item_ids = [f"conversation-{cid}" for cid in learn_ids]
+        if used_item_ids:
+            mark(active_card_id, item_ids=used_item_ids, now=now)
+
     def assemble(
         self, task_text: str, *, meta: Optional[Dict[str, Any]] = None
     ) -> AssembledContext:
@@ -198,7 +321,20 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
 
         Uses keywords_from_text for natural-language term extraction and
         select_representatives (TF-DF-IDF + recency) to pick the best sessions.
-        Never raises.
+
+        When ``meta`` carries a ``thread_card_id`` (the turn's ACTIVE card) AND a ``card_store`` was
+        wired, the relevance gate is WIDENED to the union of the query terms and the card's own topic
+        terms (so a conversation on the card's topic surfaces even when it does not match the exact
+        wording of this turn), and the selected conversations that are relevant to BOTH the request
+        and the card are LEARNED as ``conversation`` references on that card -- persisted and
+        usage-stamped so future turns retrieve them by recency instead of re-scanning the whole
+        history. With no active card (or no store) this degrades EXACTLY to the prior global keyword
+        + TF-DF-IDF scan. Never raises.
+
+        NOTE (known related gap, deliberately OUT OF SCOPE here): team-chat thread context
+        (``google_chat_adapter``) is NOT wired into this card-learning path. Scoping a chat thread to
+        a card needs its own thread-to-card assignment logic, not just usage-recency wiring, and is a
+        separate follow-up.
         """
         try:
             self._ensure_loaded()
@@ -206,6 +342,13 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
                 return AssembledContext()
 
             query_terms = set(keywords_from_text(task_text))
+            active_card_id = str((meta or {}).get("thread_card_id") or "").strip() or None
+            card_terms = self._active_card_terms(active_card_id)
+            # Widen the gate with the active card's topic terms so a conversation about the card's
+            # idea surfaces even when it doesn't match this turn's exact wording. With no active card
+            # (card_terms empty) this is exactly the prior query-only gate.
+            gate_terms = query_terms | card_terms
+
             conv_kw = {
                 cid: set(keywords_from_text(
                     self._get_conversation_digest(conv)
@@ -213,7 +356,7 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
                 for cid, conv in self._conversations.items()
             }
 
-            overlapping = [cid for cid, kw in conv_kw.items() if kw & query_terms]
+            overlapping = [cid for cid, kw in conv_kw.items() if kw & gate_terms]
             if not overlapping:
                 return AssembledContext()
 
@@ -226,6 +369,17 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
 
             if not selected:
                 return AssembledContext()
+
+            # Learn the recall hits onto the active card (best-effort, wrapped so a store failure
+            # never discards the context we already have).
+            if active_card_id and card_terms and self._card_store is not None:
+                try:
+                    self._learn_card_references(
+                        active_card_id, selected, conv_kw, query_terms, card_terms,
+                        now=time.time(),
+                    )
+                except Exception:  # noqa: BLE001 — learning is a side effect, never the answer
+                    pass
 
             lines = ["--- RELEVANT PAST CLAUDE SESSIONS ---"]
             for cid in selected:

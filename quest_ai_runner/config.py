@@ -968,6 +968,11 @@ def resolve_context_assembler(
             claude_assembler = ClaudeConversationsAdapter(
                 corpus_root=root,
                 sessions_dir=sessions_dir,
+                # Wire the keyword card store so a cross-session recall hit becomes a LEARNED
+                # ``conversation`` reference on the turn's active card (usage-recency tracked),
+                # instead of being recomputed from the whole history every turn. Inert unless a
+                # ``thread_card_id`` is in the assemble meta.
+                card_store=keyword,
             )
         except Exception:  # noqa: BLE001
             claude_assembler = None

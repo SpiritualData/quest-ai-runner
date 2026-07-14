@@ -1540,6 +1540,21 @@ class FileContextStore(ContextAssemblerBase):
         except Exception:  # noqa: BLE001
             return False
 
+    def get_card(self, card_id: str) -> Optional[Dict[str, Any]]:
+        """Return the RAW stored card dict for ``card_id`` (or None if absent). Never raises.
+
+        The read seam for any consumer that needs a card's own fields (its ``keywords`` / ``name`` /
+        ``summary`` / ``description`` topic terms, its content items) without going through the
+        rendered-string ``render_card`` path. Reads through the persistence boundary (never a stale
+        in-memory copy), so it reflects concurrent writes from other agents. Used by the cross-session
+        recall path (``ClaudeConversationsAdapter``) to pull the active card's topic terms.
+        """
+        try:
+            loaded = self._repo.read(card_id)
+            return loaded if isinstance(loaded, dict) else None
+        except Exception:  # noqa: BLE001
+            return None
+
     def find_similar_card(
         self, text: str, *, user_id: Optional[str] = None, min_score: float
     ) -> Optional[str]:

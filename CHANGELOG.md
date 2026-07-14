@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Cross-session recall now becomes a LEARNED card reference instead of being recomputed from the
+  whole history every turn.** `ClaudeConversationsAdapter.assemble` used to keyword-gate past Claude
+  sessions against the query alone and return them as an ephemeral view, disconnected from the card
+  store: no persistence, no `last_used_ts`/`use_count`. It now takes the turn's ACTIVE card
+  (`meta["thread_card_id"]`, already threaded by the orchestrator) and an injected `card_store`, and:
+  (a) WIDENS the relevance gate to the union of the query terms and the card's own topic terms (so a
+  conversation about the card's idea surfaces even when it doesn't match this turn's wording), and
+  (b) for the selected conversations relevant to BOTH the request and the card, attaches each as a
+  `conversation` reference via `FileContextStore.update_card` and stamps it via `mark_sources_used`
+  — so recall participates in the SAME usage-recency retrieval that files and collections already
+  get, and future turns retrieve it by recency instead of re-scanning. With no active card (or no
+  store) it degrades to the exact prior global keyword + TF-DF-IDF scan. Re-selecting the same
+  conversation on a later turn re-warms the existing reference (dedupe by `conv_id`) rather than
+  duplicating it. New `FileContextStore.get_card` read seam. Team-chat thread context
+  (`google_chat_adapter`) is a deliberately out-of-scope follow-up (needs its own thread-to-card
+  assignment logic). (`quest_ai_runner/adapters/claude_conversations_adapter.py`,
+  `file_context_store.py`, `config.py`.)
+
 ### Fixed
 - **`CARD_THREAD_GATE`'s continue-vs-new call now uses a concrete test, not a "match on meaning"
   vibe.** A sub-decision inside a plan (pricing, timeline, a vendor pick) routinely sounds like its
