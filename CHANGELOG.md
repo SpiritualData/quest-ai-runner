@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **`CARD_THREAD_GATE`'s continue-vs-new call now uses a concrete test, not a "match on meaning"
+  vibe.** A sub-decision inside a plan (pricing, timeline, a vendor pick) routinely sounds like its
+  own subject without being independently recallable, and the old wording had no real test for that
+  mismatch, so it sometimes misfiled a sub-decision onto its own card instead of the effort it
+  serves. Replaced with: "if the current card were deleted tomorrow, would anyone still want to look
+  this up on its own?", plus worked few-shot examples (`quest_ai_runner/core/context_doctrine.py`).
+  The "graduation" mechanism (a recurring sub-topic eventually earning its own card) remains
+  intentionally out of scope for this per-turn gate.
 - **The reference-reuse loop is closed: a deep run's findings now actually reach the next deep run.**
   A deep run explored an environment, wrote what it found as future context, and the updater turned
   that into a card of typed, resolvable file REFERENCES. Then the loop broke, silently, in three
