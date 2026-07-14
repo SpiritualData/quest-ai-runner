@@ -314,6 +314,37 @@ class RetrievalAdapter(Protocol):
         """DISCOVERY (drill-down): the full signature/usage/example for ONE operation named
         by ``list_operations``. Never raises."""
 
+    # --- OPTIONAL: PERSISTED REFERENCE RESOLUTION ------------------------------------
+    # A context card can LEARN a source hit as a durable, typed REFERENCE that is re-resolved
+    # FRESH every time the card is used (see adapters/reference_resolver.py +
+    # adapters/card_scoped_learning.py) — never a stale snapshot. An adapter opts INTO being a
+    # source whose content can be persisted-and-refetched this way by advertising a NON-None
+    # ``reference_type`` (the content ``type`` its references register under, e.g. "conversation"
+    # or "chat_thread") and implementing ``make_locator`` + ``resolve_reference``. This is the SAME
+    # optional-capability convention as ``query`` above: an adapter that does NOT support it simply
+    # leaves ``reference_type = None`` (the ``RetrievalAdapterBase`` default), and THAT is the
+    # structural, checkable signal — ``adapter.reference_type is not None`` — no second Protocol and
+    # no reading call chains to find out. ``resolve_reference`` mirrors ``ReferenceResolver.resolve``
+    # (reference_resolver.py) exactly, so an adapter's own bound method drops STRAIGHT into
+    # ``build_resolver_registry``'s ``consumer_resolvers`` as the resolver for its type — no wrapper.
+
+    # The content ``type`` this adapter's learned references register under, or None (the default in
+    # ``RetrievalAdapterBase``) when the adapter does not support persisted reference resolution.
+    reference_type: Optional[str]
+
+    def make_locator(self, candidate: Any) -> Dict[str, Any]:
+        """Build the type-specific locator dict for ``candidate`` (one item this adapter surfaced),
+        so ``card_scoped_learning.learn_card_references`` can persist it as a reference. Return ``{}``
+        when the candidate cannot be located. Adapters that leave ``reference_type = None`` need not
+        implement this. Never raises."""
+
+    def resolve_reference(self, locator: Dict[str, Any], *, max_chars: int = 2000) -> Optional[str]:
+        """Re-fetch FRESH rendered text for a learned reference this adapter owns, given the
+        ``locator`` built by ``make_locator``. Mirrors ``ReferenceResolver.resolve`` exactly (same
+        signature, same contract): return the fresh text, or ``None`` / ``""`` on empty / failure /
+        unsupported. NEVER raises — so the bound method can be wired directly as the
+        ``ReferenceResolver`` for ``reference_type``. Default (unsupported): ``None``."""
+
 
 @runtime_checkable
 class ModelProvider(Protocol):
@@ -875,6 +906,22 @@ class RetrievalAdapterBase(abc.ABC):
     def describe_operation(self, name: str) -> Observation:
         return Observation(kind="query", locator=f"describe_operation({name})",
                            text=f"No detail available for operation {name!r}.")
+
+    # PERSISTED REFERENCE RESOLUTION (optional capability, off by default). An adapter whose content
+    # can be a learned card reference overrides ``reference_type`` (to its content ``type``) and the
+    # two methods below. Leaving them as-is is the structural "not supported" signal: callers check
+    # ``adapter.reference_type is not None``. Non-abstract so every existing adapter keeps satisfying
+    # the ABC untouched.
+    reference_type: Optional[str] = None
+
+    def make_locator(self, candidate: Any) -> Dict[str, Any]:
+        """Default: unsupported — no locator. Override in an adapter that sets ``reference_type``."""
+        return {}
+
+    def resolve_reference(self, locator: Dict[str, Any], *, max_chars: int = 2000) -> Optional[str]:
+        """Default: unsupported — nothing to resolve. Override in an adapter that sets
+        ``reference_type`` to re-fetch fresh content for its own references. Never raises."""
+        return None
 
 
 class ModelProviderBase(abc.ABC):

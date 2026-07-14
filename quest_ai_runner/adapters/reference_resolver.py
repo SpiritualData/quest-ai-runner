@@ -27,9 +27,14 @@ from __future__ import annotations
 from typing import Any, Callable, Dict, Optional, Protocol, runtime_checkable
 
 # Item ``type`` values understood by the card content model. ``note`` and ``file`` have built-in
-# resolvers; the other three are consumer-injected (and degrade to an unresolved-pointer line when
-# absent). Kept here so both this module and the store agree on the vocabulary.
-CONTENT_TYPES = ("file", "collection", "conversation", "query", "note")
+# resolvers; the data-backed types are consumer-injected (and degrade to an unresolved-pointer line
+# when absent). ``conversation`` resolves via a local Claude session file by conv_id
+# (``ClaudeConversationsAdapter.resolve_reference``); ``chat_thread`` resolves a Google Chat thread
+# by re-fetching it through ``GoogleChatAdapter.resolve_reference``. Both are just RetrievalAdapters
+# advertising a ``reference_type`` -- their own ``resolve_reference`` wires straight in as the
+# resolver (see ``build_resolver_registry``). Kept here so this module and the store agree on the
+# vocabulary.
+CONTENT_TYPES = ("file", "collection", "conversation", "chat_thread", "query", "note")
 
 
 @runtime_checkable
@@ -67,6 +72,10 @@ def _render_unresolved(item_type: str, locator: Dict[str, Any]) -> str:
             cid = str(loc.get("conv_id") or loc.get("id") or "?").strip() or "?"
             q = str(loc.get("query") or "").strip()
             return f"[conversation ref: {cid}{(' query=' + q) if q else ''} (unresolved)]"
+        if item_type == "chat_thread":
+            tid = str(loc.get("thread_or_message_id") or loc.get("id") or "?").strip() or "?"
+            space = str(loc.get("space") or "").strip()
+            return f"[chat_thread ref: {tid}{(' in ' + space) if space else ''} (unresolved)]"
         if item_type == "query":
             q = str(loc.get("query") or loc.get("text") or "?").strip() or "?"
             return f"[query ref: {q} (unresolved)]"
@@ -116,6 +125,71 @@ def make_file_resolver(read_text: Callable[[str, int], str]) -> "ReferenceResolv
     return _FileResolver()
 
 
+def coerce_resolver(resolver: Any) -> Optional[Any]:
+    """Normalize a registry value into a ReferenceResolver (an object with ``resolve``).
+
+    Accepts either a ReferenceResolver object (has a callable ``resolve``) -- returned unchanged --
+    or a BARE CALLABLE with the ``resolve``/``resolve_reference`` signature ``fn(locator, *,
+    max_chars) -> Optional[str]`` (e.g. a resolvable adapter's ``resolve_reference`` bound method),
+    which is wrapped so ``.resolve`` calls it. This is what lets an adapter's ``resolve_reference`` be
+    wired DIRECTLY into ``consumer_resolvers`` with no wrapper class. Returns ``None`` for anything
+    that is neither. Never raises.
+    """
+    try:
+        if resolver is None:
+            return None
+        if callable(getattr(resolver, "resolve", None)):
+            return resolver
+
+        if callable(resolver):
+            fn = resolver
+
+            class _CallableResolver:
+                def resolve(self, locator: Dict[str, Any], *, max_chars: int = 2000) -> str:
+                    try:
+                        return fn(locator, max_chars=max_chars) or ""
+                    except Exception:  # noqa: BLE001 — a resolver must never raise
+                        return ""
+
+            return _CallableResolver()
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
+def collect_reference_resolvers(retrieval: Optional[Any]) -> Dict[str, Any]:
+    """Discover ``{reference_type: resolve_reference}`` from any resolvable retrieval adapter.
+
+    Walks a retrieval adapter (or a composite exposing an ``adapters`` list, recursively) and, for
+    each one that advertises the RetrievalAdapter reference-resolution capability -- a non-None
+    ``reference_type`` and a callable ``resolve_reference`` (see ``core.adapters.RetrievalAdapter``)
+    -- maps its type to its OWN ``resolve_reference`` bound method. That method mirrors
+    ``ReferenceResolver.resolve``'s signature/contract exactly, so it can be dropped straight into
+    ``build_resolver_registry``'s ``consumer_resolvers`` with no wrapper. Fully DUCK-TYPED (never
+    imports the adapter classes), so a consumer's own resolvable adapter participates automatically.
+    Earlier adapters win a type collision. Never raises -- returns ``{}`` on any problem.
+    """
+    out: Dict[str, Any] = {}
+
+    def visit(node: Any) -> None:
+        if node is None:
+            return
+        children = getattr(node, "adapters", None)
+        if isinstance(children, (list, tuple)):
+            for child in children:
+                visit(child)
+        ref_type = getattr(node, "reference_type", None)
+        resolve = getattr(node, "resolve_reference", None)
+        if isinstance(ref_type, str) and ref_type and callable(resolve) and ref_type not in out:
+            out[ref_type] = resolve
+
+    try:
+        visit(retrieval)
+    except Exception:  # noqa: BLE001 — discovery must never break wiring
+        return out
+    return out
+
+
 def build_resolver_registry(
     *,
     file_read_text: Optional[Callable[[str, int], str]] = None,
@@ -127,15 +201,20 @@ def build_resolver_registry(
       * ``note``  — always wired (``NoteResolver``).
       * ``file``  — wired only when ``file_read_text`` is supplied (the store's fresh-read fn).
 
-    ``consumer_resolvers`` (e.g. from ``RunnerConfig.reference_resolvers``) supplies ``collection``
-    / ``conversation`` / ``query`` (or overrides a built-in). Consumer entries WIN on key collision,
-    so a host can replace the built-in ``file`` resolver if it wants. Any type absent from the final
-    registry degrades to an unresolved-pointer line at render time. Never raises.
+    ``consumer_resolvers`` (e.g. from ``RunnerConfig.reference_resolvers``) supplies the data-backed
+    types (``collection`` / ``conversation`` / ``chat_thread`` / ``query``) or overrides a built-in.
+    Each value may be a ReferenceResolver object OR a bare callable with the ``resolve`` signature
+    (e.g. a resolvable adapter's ``resolve_reference`` bound method) -- bare callables are coerced via
+    ``coerce_resolver``. Consumer entries WIN on key collision, so a host can replace the built-in
+    ``file`` resolver if it wants. Any type absent from the final registry degrades to an
+    unresolved-pointer line at render time. Never raises.
     """
     registry: Dict[str, Any] = {"note": NoteResolver()}
     if file_read_text is not None:
         registry["file"] = make_file_resolver(file_read_text)
     for key, resolver in (consumer_resolvers or {}).items():
-        if resolver is not None and isinstance(key, str) and key:
-            registry[key] = resolver
+        if isinstance(key, str) and key:
+            coerced = coerce_resolver(resolver)
+            if coerced is not None:
+                registry[key] = coerced
     return registry

@@ -88,6 +88,8 @@ from .reference_resolver import (
     ReferenceResolver,
     NoteResolver,
     build_resolver_registry,
+    collect_reference_resolvers,
+    coerce_resolver,
     make_file_resolver,
 )
 from .vector_context_assembler import VectorContextAssembler
@@ -170,6 +172,8 @@ __all__ = [
     "ReferenceResolver",
     "NoteResolver",
     "build_resolver_registry",
+    "collect_reference_resolvers",
+    "coerce_resolver",
     "make_file_resolver",
     "VectorContextAssembler",
     "HybridContextAssembler",

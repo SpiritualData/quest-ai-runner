@@ -51,6 +51,12 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
     - Defaults to ~/.claude/sessions
     """
 
+    # PERSISTED REFERENCE RESOLUTION (RetrievalAdapter optional capability). A learned recall hit is
+    # a ``conversation`` reference whose locator is ``{"conv_id": <id>}``; ``resolve_reference``
+    # re-reads the session transcript FRESH by that id. Advertising a non-None ``reference_type`` is
+    # the structural signal that this adapter's content can be a durable card reference.
+    reference_type = "conversation"
+
     def __init__(
         self,
         corpus_root: Optional[str] = None,
@@ -216,6 +222,31 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
             get_score_boost=self._recency_boost,
         )
 
+    def make_locator(self, candidate: Any) -> Dict[str, Any]:
+        """Build a ``conversation`` locator ``{"conv_id": <id>}`` for a recall candidate (a
+        conversation id/key this adapter surfaced). Returns ``{}`` for an empty candidate. Never
+        raises. This is the single place the ``conversation`` locator shape is defined, reused by both
+        card-scoped learning (persist) and ``resolve_reference`` (re-fetch)."""
+        cid = str(candidate or "").strip()
+        return {"conv_id": cid} if cid else {}
+
+    def resolve_reference(self, locator: Dict[str, Any], *, max_chars: int = 2000) -> Optional[str]:
+        """Re-fetch a learned ``conversation`` reference FRESH: re-read the session transcript by its
+        ``conv_id`` every time it is used (never a stale snapshot). Mirrors
+        ``ReferenceResolver.resolve`` so it wires straight into ``build_resolver_registry``. Returns
+        the transcript text, or ``None`` when the id is missing/unknown or anything fails. Never
+        raises."""
+        try:
+            conv_id = str((locator or {}).get("conv_id") or "").strip()
+            if not conv_id:
+                return None
+            obs = self.read_section(conv_id, max_bytes=max_chars)
+            if obs.kind == "error" or not obs.text:
+                return None
+            return obs.text
+        except Exception:  # noqa: BLE001 — a resolver must never raise
+            return None
+
     def _learn_card_references(
         self,
         active_card_id: str,
@@ -230,12 +261,15 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
 
         A thin, conversation-specific wrapper over the adapter-agnostic
         ``card_scoped_learning`` module: it fixes only the three type-specific choices -- the
-        ``ref_type`` (``"conversation"``), the ``locator_fn`` (``{"conv_id": cid}``) and the ``why``
-        (``"cross-session recall match"``) -- and delegates the actual union/intersection filtering,
-        attach, dedupe and usage-stamp to the shared functions so any other adapter can reuse the
-        exact same mechanism. A conversation is learned only when it is relevant to BOTH the request
-        (``query_terms``) AND the card's own topic (``card_terms``); the shared
-        ``learnable_candidates`` applies that intersection test. Best-effort; never raises out.
+        ``ref_type`` (this adapter's own ``reference_type``), the ``locator_fn`` (its own
+        ``make_locator``) and the ``why`` (``"cross-session recall match"``) -- and delegates the
+        actual union/intersection filtering, attach, dedupe and usage-stamp to the shared functions so
+        any other adapter can reuse the exact same mechanism. Reusing ``reference_type`` /
+        ``make_locator`` here keeps the persisted locator shape identical to what ``resolve_reference``
+        re-fetches, so learning and resolution can never drift apart. A conversation is learned only
+        when it is relevant to BOTH the request (``query_terms``) AND the card's own topic
+        (``card_terms``); the shared ``learnable_candidates`` applies that intersection test.
+        Best-effort; never raises out.
         """
         eligible = learnable_candidates(
             selected, lambda cid: conv_kw.get(cid) or set(), query_terms, card_terms
@@ -244,8 +278,8 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
             self._card_store,
             active_card_id,
             eligible,
-            ref_type="conversation",
-            locator_fn=lambda cid: {"conv_id": cid},
+            ref_type=self.reference_type,
+            locator_fn=self.make_locator,
             why="cross-session recall match",
             now=now,
         )
@@ -272,14 +306,12 @@ class ClaudeConversationsAdapter(RetrievalAdapter):
         ``gate_terms`` / ``learnable_candidates`` / ``learn_card_references``), so any other adapter
         can adopt the same behaviour by supplying its own ``ref_type`` / ``locator_fn`` / ``why``.
 
-        NOTE (known related gap, deliberately OUT OF SCOPE here): team-chat thread context
-        (``google_chat_adapter``) is structurally ready to adopt ``card_scoped_learning`` but is NOT
-        wired into it yet, because a Google Chat thread has no reference resolver that can re-fetch it
-        later (the only ``conversation`` resolver reads local Claude session files), so persisting a
-        chat thread as a ``conversation`` reference would leave a DANGLING pointer. Wiring it needs a
-        chat-content resolver first; see the note in ``google_chat_adapter.assemble``. Full
-        thread-to-card topic assignment is a separate, deeper problem (its own gate), also out of
-        scope here.
+        The same mechanism is now also adopted by ``google_chat_adapter`` under its OWN
+        ``reference_type`` (``"chat_thread"``, distinct from ``"conversation"``): it advertises the
+        ``RetrievalAdapter`` reference-resolution capability (``reference_type`` / ``make_locator`` /
+        ``resolve_reference``) and learns chat threads onto the active card exactly like this adapter
+        learns Claude sessions. (Full thread-to-card TOPIC assignment -- which chat thread belongs on
+        which card -- is a separate, deeper problem with its own gate, still out of scope.)
         """
         try:
             self._ensure_loaded()

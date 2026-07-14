@@ -1390,6 +1390,7 @@ class FileContextStore(ContextAssemblerBase):
             self._resolvers = {}
 
         # In-memory card cache: {card_id: card_dict} or None when not yet loaded.
+        # (see register_reference_resolver below for adding a resolver after construction)
         self._cache: Optional[Dict[str, Dict[str, Any]]] = None
         # Dirty flag: set after any write so next _load_all() reloads from the repo.
         self._cache_dirty: bool = False
@@ -1398,6 +1399,30 @@ class FileContextStore(ContextAssemblerBase):
         # whatever opaque change-stamp that repo returns. _load_all() reloads when it changes. The
         # initial sentinel never matches a real revision, so the first _load_all() always loads.
         self._cache_dir_stamp: Any = (0.0, 0)
+
+    def register_reference_resolver(
+        self, ref_type: str, resolver: Any, *, override: bool = False
+    ) -> None:
+        """Wire a resolver for content ``type`` ``ref_type`` AFTER construction. Best-effort.
+
+        Lets a caller add a resolver for a resolvable adapter that is only built later than this store
+        (e.g. an adapter whose own construction depends on this store). ``resolver`` is either a
+        ReferenceResolver object (has ``resolve(locator, *, max_chars)``) or a bare callable with that
+        same signature -- e.g. an adapter's ``resolve_reference`` bound method. By default an existing
+        wired resolver for the type is KEPT (so a consumer-injected one always wins); pass
+        ``override=True`` to replace it. A callable is adapted to the ReferenceResolver surface. Never
+        raises."""
+        try:
+            if not isinstance(ref_type, str) or not ref_type or resolver is None:
+                return
+            if ref_type in self._resolvers and not override:
+                return
+            from .reference_resolver import coerce_resolver
+            coerced = coerce_resolver(resolver)
+            if coerced is not None:
+                self._resolvers[ref_type] = coerced
+        except Exception:  # noqa: BLE001 — resolver registration must never break a run
+            pass
 
     def _recency_boost_factor(self, card: Dict[str, Any]) -> float:
         """A small bounded multiplier (1.0 .. 1.0+max) that nudges a recently-used / recently-updated
