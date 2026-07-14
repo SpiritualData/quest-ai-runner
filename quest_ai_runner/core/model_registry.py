@@ -79,10 +79,11 @@ def is_vision_capable(model: Optional[str]) -> bool:
 # LAST-KNOWN fallback — used for tiers not explicitly overridden, and when the live list is
 # empty/unreachable. A consumer can override this map via ModelRegistry(fallback=...).
 # User-specified models (via fallback) take FULL precedence and bypass auto-bucketing entirely.
-# Default to Gemini 3.5 + 3.1-lite hybrid for best performance.
+# Balanced uses flash-lite (cheap, high-volume filtering/judgment work); quality stays on
+# gemini-3.5-flash for tasks that need the stronger model.
 DEFAULT_FALLBACK_TOP = {
     "fast": "gemini-3.1-flash-lite",
-    "balanced": "gemini-3.5-flash",
+    "balanced": "gemini-3.1-flash-lite",
     "quality": "gemini-3.5-flash",
     "best": "claude-opus-4-8",  # fallback to best available
 }
