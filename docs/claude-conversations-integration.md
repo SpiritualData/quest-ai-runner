@@ -192,15 +192,26 @@ automatically in `config.py`'s default assembler stack).
 
 - **Union gate, for surfacing.** The relevance gate that decides which candidate conversations are
   even considered widens from "this turn's query terms" to "this turn's query terms UNION the
-  active card's own topic terms" (`_active_card_terms`, pulled from the card's `keywords` plus the
-  natural-language terms of its `name` / `summary` / `description`). A conversation about the card's
-  ongoing idea can now surface even when this turn's specific wording doesn't match it — the recall
-  is scoped to the *card*, not just the sentence.
+  active card's own topic terms" (`active_card_terms` + `gate_terms`, pulled from the card's
+  `keywords` plus the natural-language terms of its `name` / `summary` / `description`). A
+  conversation about the card's ongoing idea can now surface even when this turn's specific wording
+  doesn't match it — the recall is scoped to the *card*, not just the sentence.
 - **Intersection learn, for persistence.** Of the TF-DF-IDF-ranked survivors, only the ones that
-  overlap BOTH the query terms AND the card terms get LEARNED onto the card
-  (`_learn_card_references`). A hit that only cleared the widened gate because of the card, but has
+  overlap BOTH the query terms AND the card terms get LEARNED onto the card (`learnable_candidates`
+  + `learn_card_references`). A hit that only cleared the widened gate because of the card, but has
   nothing to do with this specific question, still helps answer this turn but is not written back —
   so a card never accumulates references that only ever mattered to a passing question.
+
+**The logic is a shared, adapter-agnostic module — not private to this adapter.** The
+union-gate / intersection-learn / usage-stamp behavior lives in
+[`quest_ai_runner/adapters/card_scoped_learning.py`](../quest_ai_runner/adapters/card_scoped_learning.py),
+which knows nothing about conversations. It exposes `active_card_terms(card_store, card_id)`,
+`gate_terms(query_terms, card_terms)`, `learnable_candidates(candidates, terms_of, query, card)`, and
+`learn_card_references(card_store, card_id, candidates, *, ref_type, locator_fn, why, now)`.
+`ClaudeConversationsAdapter` is just the first consumer: it fixes only the three conversation-specific
+choices (`ref_type="conversation"`, `locator_fn=lambda cid: {"conv_id": cid}`,
+`why="cross-session recall match"`) and delegates the rest. Any other adapter can adopt the identical
+behavior by supplying its own `ref_type` / `locator_fn` / `why` — no copy-pasting.
 
 TF-DF-IDF selection itself (`select_representatives`) is unchanged by this work; what changed is
 what happens to the ranked output, not how the ranking is computed.
@@ -220,13 +231,23 @@ instead of QAR re-scanning the whole history from zero every time.
 or no `card_store` wired, `assemble()` runs the identical prior global keyword + TF-DF-IDF scan —
 byte-for-byte what it did before this change.
 
-**Known gap, explicitly out of scope.** Team-chat thread context (`google_chat_adapter.py`) is not
-wired into this card-learning path. The adapter's own docstring flags it directly:
+**Google Chat: structurally ready, blocked on a resolver (out of scope).** `google_chat_adapter.py`
+uses the same global keyword + TF-DF-IDF selection, so it could adopt `card_scoped_learning` with a
+`card_store` ctor param exactly the way the Claude adapter does. It is deliberately NOT wired,
+because a Google Chat thread has **no reference resolver** that can re-fetch it later: the only wired
+`conversation` resolver reads local Claude session files, and Chat content is bounded by
+`lookback_days` (it drops out of the window). Persisting a chat thread as a `conversation` reference
+would leave a **dangling pointer**, which violates the card system's "everything must be resolvable"
+principle. The real prerequisite is a chat-content resolver (re-fetch a thread/space by its
+resource-name locator), not the learning wiring; that remains open. The adapter's own
+`assemble()` docstring records this directly:
 
-> NOTE (known related gap, deliberately OUT OF SCOPE here): team-chat thread context
-> (`google_chat_adapter`) is NOT wired into this card-learning path. Scoping a chat thread to a
-> card needs its own thread-to-card assignment logic, not just usage-recency wiring, and is a
-> separate follow-up.
+> CARD-SCOPED LEARNING (structurally ready, deliberately NOT wired): … blocked on a chat-content
+> resolver (re-fetch a thread/space by its resource-name locator); that resolver, not this wiring, is
+> the real prerequisite, and remains open/out of scope.
+
+Full thread-to-card *topic assignment* (which thread belongs on which card) is a separate, deeper
+problem — its own gate — also out of scope here.
 
 ## Tips
 

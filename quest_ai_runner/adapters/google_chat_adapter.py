@@ -519,7 +519,21 @@ class GoogleChatAdapter(RetrievalAdapterBase):
     def assemble(
         self, task_text: str, *, meta: Optional[Dict[str, Any]] = None, on_event: Optional[Any] = None
     ) -> AssembledContext:
-        """Inject digests of Chat conversations relevant to ``task_text``. Never raises."""
+        """Inject digests of Chat conversations relevant to ``task_text``. Never raises.
+
+        CARD-SCOPED LEARNING (structurally ready, deliberately NOT wired): this adapter uses the same
+        global keyword + TF-DF-IDF selection as ``ClaudeConversationsAdapter``, so it could adopt the
+        shared ``card_scoped_learning`` module (widen the gate with ``active_card_terms`` +
+        ``gate_terms``; learn the ``learnable_candidates`` via ``learn_card_references``) with a
+        ``card_store`` ctor param, exactly like the Claude adapter. It is intentionally left unwired
+        because a Google Chat thread has NO reference resolver that can re-fetch it later -- the only
+        wired ``conversation`` resolver reads local Claude session files, and Chat content here is
+        bounded by ``lookback_days`` (it disappears from the window). Persisting a chat thread as a
+        ``conversation`` reference would therefore leave a DANGLING pointer, which violates the card
+        system's "everything must be resolvable" principle. Adopting the module here is blocked on a
+        chat-content resolver (re-fetch a thread/space by its resource-name locator); that resolver,
+        not this wiring, is the real prerequisite, and remains open/out of scope.
+        """
         try:
             self._ensure_loaded()
             if not self._conversations:

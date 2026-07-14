@@ -7,6 +7,20 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Card-scoped learning is now a shared, adapter-agnostic module** so any retrieval adapter can
+  reuse it, not just `ClaudeConversationsAdapter`. The union-gate / intersection-learn / usage-stamp
+  logic moved out of that adapter's private methods into
+  `quest_ai_runner/adapters/card_scoped_learning.py`, exposing `active_card_terms(card_store,
+  card_id)`, `gate_terms(query_terms, card_terms)`, `learnable_candidates(candidates, terms_of,
+  query, card)`, and `learn_card_references(card_store, card_id, candidates, *, ref_type, locator_fn,
+  why, now)`. Nothing in the module hardcodes `"conversation"` / `conv_id`: the caller supplies the
+  `ref_type`, a `locator_fn(candidate) -> dict`, and the `why`, and any card store duck-typed like
+  `FileContextStore` (`get_card` / `update_card` / `mark_sources_used`) participates. Behavior is
+  unchanged — `ClaudeConversationsAdapter` now delegates to the shared functions. `google_chat_adapter`
+  is structurally ready to adopt it but is deliberately left unwired: a Chat thread has no reference
+  resolver that can re-fetch it, so persisting one as a `conversation` ref would dangle; that resolver
+  is the real prerequisite and stays out of scope. (`quest_ai_runner/adapters/card_scoped_learning.py`,
+  `claude_conversations_adapter.py`, `google_chat_adapter.py`.)
 - **Cross-session recall now becomes a LEARNED card reference instead of being recomputed from the
   whole history every turn.** `ClaudeConversationsAdapter.assemble` used to keyword-gate past Claude
   sessions against the query alone and return them as an ephemeral view, disconnected from the card
