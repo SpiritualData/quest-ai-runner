@@ -231,23 +231,77 @@ instead of QAR re-scanning the whole history from zero every time.
 or no `card_store` wired, `assemble()` runs the identical prior global keyword + TF-DF-IDF scan —
 byte-for-byte what it did before this change.
 
-**Google Chat: structurally ready, blocked on a resolver (out of scope).** `google_chat_adapter.py`
-uses the same global keyword + TF-DF-IDF selection, so it could adopt `card_scoped_learning` with a
-`card_store` ctor param exactly the way the Claude adapter does. It is deliberately NOT wired,
-because a Google Chat thread has **no reference resolver** that can re-fetch it later: the only wired
-`conversation` resolver reads local Claude session files, and Chat content is bounded by
-`lookback_days` (it drops out of the window). Persisting a chat thread as a `conversation` reference
-would leave a **dangling pointer**, which violates the card system's "everything must be resolvable"
-principle. The real prerequisite is a chat-content resolver (re-fetch a thread/space by its
-resource-name locator), not the learning wiring; that remains open. The adapter's own
-`assemble()` docstring records this directly:
+**Google Chat: now WIRED via a formal adapter capability.** The blocker used to be that a Google
+Chat thread had no reference resolver, so persisting it as a reference would dangle. That is fixed by
+turning "can this adapter's content be a learned reference?" into a **formal, checkable capability on
+the `RetrievalAdapter` interface itself** rather than tribal knowledge (see
+[The `RetrievalAdapter` reference-resolution capability](#the-retrievaladapter-reference-resolution-capability)
+below). `GoogleChatAdapter` now:
 
-> CARD-SCOPED LEARNING (structurally ready, deliberately NOT wired): … blocked on a chat-content
-> resolver (re-fetch a thread/space by its resource-name locator); that resolver, not this wiring, is
-> the real prerequisite, and remains open/out of scope.
+- advertises `reference_type = "chat_thread"` — a **new, distinct** content type (NOT overloading
+  `"conversation"`, which contractually resolves via a local Claude session file by `conv_id`;
+  `"chat_thread"` is registered in `reference_resolver.CONTENT_TYPES`),
+- implements `make_locator(candidate) -> {"space", "thread_or_message_id"}` at the finest granularity
+  it can address (a real Chat **thread** when `group_by="thread"`, else a whole space — the honest
+  limit is stated in the code), and
+- implements `resolve_reference(locator)` that re-fetches the thread **FRESH** through the adapter's
+  own read path (`read_section` → `_ensure_loaded`, which re-hits the Chat API once `cache_ttl` has
+  elapsed), so a learned reference is never a stale snapshot. Content that has aged out of
+  `lookback_days` degrades to a graceful unresolved-pointer line, not a crash.
 
-Full thread-to-card *topic assignment* (which thread belongs on which card) is a separate, deeper
-problem — its own gate — also out of scope here.
+With a `card_store` wired, `GoogleChatAdapter.assemble()` now calls `card_scoped_learning` with its
+own `reference_type` / `make_locator` (union-gate for surfacing, intersection-learn for persistence)
+exactly as the Claude adapter does. The `chat_thread` resolver reaches the running app's registry
+automatically: `config.py` discovers any resolvable retrieval adapter in `cfg.retrieval` via
+`collect_reference_resolvers` and wires each one's `resolve_reference` straight into the
+`FileContextStore` resolver registry (a bare callable, coerced by `build_resolver_registry`) — no
+consumer boilerplate, no wrapper class.
+
+**Still open — full thread-to-card *topic assignment*.** What is solved here is only that Chat
+content **can be persisted as a learned reference and re-fetched fresh** across turns. Deciding
+*which* chat thread belongs on *which* card for a team-chat participant — given this adapter's flat
+keyword matching with no per-thread topic isolation — is a separate, harder problem with its own
+gate, and remains out of scope. Do not read "Google Chat is wired" as "team-chat context is fully
+solved"; resolvability + learning is done, topic routing is not.
+
+## The `RetrievalAdapter` reference-resolution capability
+
+"Can this adapter's content be persisted as a learned card reference and re-fetched later?" used to
+be tribal knowledge — you had to read code to find out, and the one `conversation` resolver was
+hard-wired to local Claude session files. It is now a **formal, checkable capability on the single
+interface every retrieval adapter already implements**, `core.adapters.RetrievalAdapter` — the same
+optional-capability convention `query()` already uses there (an adapter that does not do it returns a
+benign default). There is deliberately **no second Protocol**: a `ReferenceResolvable`-style marker
+would collide confusingly with the existing `ReferenceResolver` (the resolver-*object* shape in
+`reference_resolver.py`) and add a concept for nothing.
+
+Three members carry the capability:
+
+| Member | Meaning |
+| --- | --- |
+| `reference_type: Optional[str]` | The content `type` this adapter's learned references register under (e.g. `"conversation"`, `"chat_thread"`), or `None` when the adapter does not support persisted resolution. |
+| `make_locator(candidate) -> Dict` | Builds the type-specific locator dict for an item the adapter surfaced, so `card_scoped_learning` can persist it. |
+| `resolve_reference(locator, *, max_chars) -> Optional[str]` | Re-fetches **fresh** rendered text for a learned reference. Mirrors `ReferenceResolver.resolve` exactly, so the bound method drops straight into the resolver registry. NEVER raises. |
+
+The default lives on `RetrievalAdapterBase` (`reference_type = None`; `make_locator` → `{}`;
+`resolve_reference` → `None`), so **every existing adapter is already, structurally, "does not
+support it"** with zero changes. The whole check is `adapter.reference_type is not None` — no
+`isinstance` against a second protocol, no call-chain reading.
+
+- `ClaudeConversationsAdapter` → `reference_type = "conversation"`, locator `{"conv_id": ...}`,
+  resolves by re-reading the session transcript.
+- `GoogleChatAdapter` → `reference_type = "chat_thread"`, locator
+  `{"space", "thread_or_message_id"}`, resolves by re-fetching the thread through its own read path.
+- A pure retrieval adapter (e.g. `WebSearchAdapter`, `FilesAdapter`) → `reference_type = None`.
+
+**Wiring is automatic.** `reference_resolver.collect_reference_resolvers(retrieval)` walks a retrieval
+adapter (or a composite, recursively) and maps each resolvable adapter's `reference_type` to its own
+`resolve_reference`. `config.py` merges that into the `FileContextStore` resolver registry (consumer
+-supplied `cfg.reference_resolvers` win a collision), and `build_resolver_registry` coerces a bare
+`resolve_reference` callable into a `ReferenceResolver`. A consumer that wires a `GoogleChatAdapter`
+into `retrieval` therefore gets working `chat_thread` resolution with no extra configuration. (The
+config-internal Claude session assembler, built after the store, is registered explicitly via
+`FileContextStore.register_reference_resolver` for the same effect.)
 
 ## Tips
 

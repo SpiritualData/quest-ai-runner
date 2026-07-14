@@ -100,9 +100,10 @@ class _FakeChatAdapter:
 
     Proves the shared module is not conversation-specific: it uses a different ``ref_type``
     (``"chat_thread"``) and a different locator shape (``{"space", "thread"}``), and still gets the
-    union-gate, intersection-learn, attach, dedupe and usage-stamp for free. (In production this
-    would additionally need a resolver for chat threads before it should persist references -- see
-    the note in ``google_chat_adapter.assemble`` -- so this lives only in the test.)
+    union-gate, intersection-learn, attach, dedupe and usage-stamp for free. (The REAL
+    ``GoogleChatAdapter`` now implements exactly this -- with a genuine ``resolve_reference`` so the
+    persisted references resolve fresh; see ``test_google_chat_card_learning.py``. This minimal
+    double stays here to pin the shared module in isolation, independent of that adapter.)
     """
 
     REF_TYPE = "chat_thread"

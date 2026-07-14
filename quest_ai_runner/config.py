@@ -754,13 +754,24 @@ def resolve_context_assembler(
         elif _cards_backend == "qdrant":
             _card_repository, _cards_vector_store = _build_qdrant_card_repo_from_env(cards_dir)
 
+        # Auto-discover reference resolvers from any RESOLVABLE retrieval adapter the consumer wired
+        # (structural: the adapter advertises a non-None ``reference_type`` + ``resolve_reference`` on
+        # the RetrievalAdapter interface). Its OWN ``resolve_reference`` IS the resolver for its type,
+        # so e.g. a wired ``GoogleChatAdapter`` makes its learned ``chat_thread`` references resolve
+        # FRESH with no extra config. Consumer-supplied ``cfg.reference_resolvers`` win a collision.
+        from .adapters.reference_resolver import collect_reference_resolvers
+        _store_resolvers = {
+            **collect_reference_resolvers(cfg.retrieval),
+            **(cfg.reference_resolvers or {}),
+        }
         keyword = FileContextStore(
             cards_dir, repo_root=root, auto_bootstrap=False,
             provider=cfg.model_provider,
             model=_registry.resolve_tier("balanced"),
-            # Source-agnostic card content: consumer-injected resolvers for the data-backed
-            # reference types (collection/conversation/query). file/note are built in.
-            reference_resolvers=cfg.reference_resolvers,
+            # Source-agnostic card content: built-in file/note resolvers, plus the data-backed types
+            # (collection/conversation/chat_thread/query) from resolvable retrieval adapters and any
+            # consumer-injected ``cfg.reference_resolvers``.
+            reference_resolvers=_store_resolvers,
             # qdrant backend: route ALL card persistence through the Qdrant repo (no cards_dir). None
             # (file backend) keeps the default FilesystemCardRepository(cards_dir).
             card_repository=_card_repository,
@@ -974,6 +985,16 @@ def resolve_context_assembler(
                 # ``thread_card_id`` is in the assemble meta.
                 card_store=keyword,
             )
+            # The Claude adapter is itself resolvable (reference_type="conversation"); it is built
+            # AFTER the store (it needs the store as its card_store), so it can't be discovered by
+            # collect_reference_resolvers above. Register its resolver now so a LEARNED
+            # ``conversation`` reference resolves FRESH by conv_id instead of dangling. Kept only if a
+            # consumer/discovered ``conversation`` resolver isn't already wired (override=False).
+            if getattr(claude_assembler, "reference_type", None):
+                keyword.register_reference_resolver(
+                    claude_assembler.reference_type,
+                    claude_assembler.resolve_reference,
+                )
         except Exception:  # noqa: BLE001
             claude_assembler = None
 

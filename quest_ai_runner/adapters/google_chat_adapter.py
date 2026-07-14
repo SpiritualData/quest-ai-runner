@@ -54,6 +54,12 @@ import urllib.request
 from typing import Any, Callable, Dict, List, Optional
 
 from ..core.adapters import AssembledContext, Observation, RetrievalAdapterBase
+from .card_scoped_learning import (
+    active_card_terms,
+    gate_terms,
+    learn_card_references,
+    learnable_candidates,
+)
 from .conversation_format import (
     conversation_digest,
     conversation_timestamp,
@@ -176,6 +182,14 @@ class GoogleChatAdapter(RetrievalAdapterBase):
     a single planner loop's repeated read/grep calls hit the network once.
     """
 
+    # PERSISTED REFERENCE RESOLUTION (RetrievalAdapter optional capability). A learned Chat hit is a
+    # ``chat_thread`` reference -- a DISTINCT type from ``ClaudeConversationsAdapter``'s
+    # ``"conversation"`` (which contractually resolves via a LOCAL Claude session file by conv_id;
+    # overloading it would make chat content unresolvable). ``resolve_reference`` re-fetches the
+    # thread FRESH through this adapter's own read path. Advertising a non-None ``reference_type`` is
+    # the structural signal that Chat content can be a durable, resolvable card reference.
+    reference_type = "chat_thread"
+
     def __init__(
         self,
         token_provider: Optional[TokenProvider] = None,
@@ -188,6 +202,7 @@ class GoogleChatAdapter(RetrievalAdapterBase):
         cache_ttl_seconds: float = 300.0,
         timeout_seconds: float = 20.0,
         api_base: str = _CHAT_API_BASE,
+        card_store: Optional[Any] = None,
     ) -> None:
         """
         Args:
@@ -204,8 +219,17 @@ class GoogleChatAdapter(RetrievalAdapterBase):
             cache_ttl_seconds: How long a fetch is reused before re-hitting the API.
             timeout_seconds: Per-request HTTP timeout.
             api_base: Chat REST base URL (override only for testing / proxies).
+            card_store: OPTIONAL card store (duck-typed like ``FileContextStore``) used to turn a
+                relevance hit into a LEARNED ``chat_thread`` reference on the turn's ACTIVE card,
+                exactly as ``ClaudeConversationsAdapter`` does for Claude sessions. When supplied AND
+                ``assemble`` meta carries a ``thread_card_id``, ``assemble()`` widens its relevance
+                gate with the card's own topic terms and attaches / re-warms the selected threads on
+                that card via the shared ``card_scoped_learning`` module. When absent (or no card is
+                active) the adapter falls back to the pure global keyword + TF-DF-IDF scan, exactly as
+                before. Requires only ``get_card`` / ``update_card`` / ``mark_sources_used``.
         """
         self._token_provider = token_provider
+        self._card_store = card_store
         self._space_names = list(space_names) if space_names else None
         self._group_by = "space" if str(group_by).lower() == "space" else "thread"
         self._lookback_days = lookback_days
@@ -512,6 +536,79 @@ class GoogleChatAdapter(RetrievalAdapterBase):
             _log.debug("google chat query failed: %s", exc)
             return Observation(kind="error", error=f"google chat query error: {exc}")
 
+    def make_locator(self, candidate: Any) -> Dict[str, Any]:
+        """Build a ``chat_thread`` locator for a candidate conversation key this adapter surfaced.
+
+        GRANULARITY (honest): the finest unit this adapter can ADDRESS is one of its grouped
+        conversations -- a THREAD when ``group_by="thread"`` (``candidate`` is the thread resource
+        name, a real Chat thread boundary taken from each message's ``thread.name``), or a whole SPACE
+        when ``group_by="space"``. So the locator is ``{"space": <space resource name>,
+        "thread_or_message_id": <the conversation key>}``: ``thread_or_message_id`` is the addressable
+        id at whatever granularity this adapter groups by, NOT a guaranteed single-message id. Returns
+        ``{}`` for an unknown/empty candidate. Never raises."""
+        try:
+            key = str(candidate or "").strip()
+            if not key:
+                return {}
+            conv = self._conversations.get(key) or {}
+            return {"space": conv.get("space") or "", "thread_or_message_id": key}
+        except Exception:  # noqa: BLE001
+            return {}
+
+    def resolve_reference(self, locator: Dict[str, Any], *, max_chars: int = 2000) -> Optional[str]:
+        """Re-fetch a learned ``chat_thread`` reference FRESH through this adapter's OWN read path.
+
+        Never a stale snapshot: ``read_section`` calls ``_ensure_loaded`` (which re-hits the Chat API
+        once its ``cache_ttl_seconds`` has elapsed), so a resolve returns the thread's CURRENT
+        content. Mirrors ``ReferenceResolver.resolve`` exactly, so this bound method wires straight
+        into ``build_resolver_registry``'s ``consumer_resolvers`` under ``"chat_thread"``. Returns the
+        transcript text, or ``None`` when the thread is unknown / has aged out of the ``lookback_days``
+        window / anything fails (an honest limit: content older than the window is no longer
+        re-fetchable and degrades to a graceful unresolved-pointer line, never a crash). Never
+        raises."""
+        try:
+            key = str((locator or {}).get("thread_or_message_id") or "").strip()
+            if not key:
+                return None
+            obs = self.read_section(key, max_bytes=max_chars)
+            if obs.kind == "error" or not obs.text:
+                return None
+            return obs.text
+        except Exception:  # noqa: BLE001 — a resolver must never raise
+            return None
+
+    def _learn_card_references(
+        self,
+        active_card_id: str,
+        selected: List[str],
+        conv_kw: Dict[str, Any],
+        query_terms: Any,
+        card_terms: Any,
+        *,
+        now: float,
+    ) -> None:
+        """Learn the selected relevance hits as ``chat_thread`` references on the active card.
+
+        The Google-Chat twin of ``ClaudeConversationsAdapter._learn_card_references``: it fixes only
+        the three type-specific choices -- this adapter's own ``reference_type`` (``"chat_thread"``),
+        its own ``make_locator``, and the ``why`` (``"chat topic match"``) -- and delegates the
+        union/intersection filtering, attach, dedupe and usage-stamp to the shared
+        ``card_scoped_learning`` functions. Reusing ``make_locator`` keeps the persisted locator shape
+        identical to what ``resolve_reference`` re-fetches, so learning and resolution never drift.
+        Best-effort; never raises out."""
+        eligible = learnable_candidates(
+            selected, lambda cid: conv_kw.get(cid) or set(), query_terms, card_terms
+        )
+        learn_card_references(
+            self._card_store,
+            active_card_id,
+            eligible,
+            ref_type=self.reference_type,
+            locator_fn=self.make_locator,
+            why="chat topic match",
+            now=now,
+        )
+
     # ------------------------------------------------------------------
     # Pre-flight ContextAssembler interface (optional, same as the Claude adapter)
     # ------------------------------------------------------------------
@@ -521,18 +618,23 @@ class GoogleChatAdapter(RetrievalAdapterBase):
     ) -> AssembledContext:
         """Inject digests of Chat conversations relevant to ``task_text``. Never raises.
 
-        CARD-SCOPED LEARNING (structurally ready, deliberately NOT wired): this adapter uses the same
-        global keyword + TF-DF-IDF selection as ``ClaudeConversationsAdapter``, so it could adopt the
-        shared ``card_scoped_learning`` module (widen the gate with ``active_card_terms`` +
-        ``gate_terms``; learn the ``learnable_candidates`` via ``learn_card_references``) with a
-        ``card_store`` ctor param, exactly like the Claude adapter. It is intentionally left unwired
-        because a Google Chat thread has NO reference resolver that can re-fetch it later -- the only
-        wired ``conversation`` resolver reads local Claude session files, and Chat content here is
-        bounded by ``lookback_days`` (it disappears from the window). Persisting a chat thread as a
-        ``conversation`` reference would therefore leave a DANGLING pointer, which violates the card
-        system's "everything must be resolvable" principle. Adopting the module here is blocked on a
-        chat-content resolver (re-fetch a thread/space by its resource-name locator); that resolver,
-        not this wiring, is the real prerequisite, and remains open/out of scope.
+        CARD-SCOPED LEARNING (now WIRED). When ``meta`` carries a ``thread_card_id`` (the turn's
+        ACTIVE card) AND a ``card_store`` was supplied, the relevance gate is WIDENED to the union of
+        the query terms and the card's own topic terms (so a chat thread on the card's topic surfaces
+        even when it doesn't match this turn's exact wording), and the selected threads relevant to
+        BOTH the request and the card are LEARNED as ``chat_thread`` references on that card --
+        persisted and usage-stamped so future turns retrieve them by recency. Each such reference is
+        re-fetched FRESH by ``resolve_reference`` (this adapter's own read path), so nothing dangles:
+        the ``"everything must be resolvable"`` principle holds because ``chat_thread`` now HAS a
+        resolver (this adapter). With no active card (or no store) this degrades EXACTLY to the prior
+        global keyword + TF-DF-IDF scan. The union-gate / intersection-learn / usage-stamp logic is
+        the shared, adapter-agnostic ``card_scoped_learning`` module, identical to the Claude adapter.
+
+        STILL OUT OF SCOPE (separate, harder problem): full thread-to-card TOPIC ROUTING -- deciding
+        WHICH chat thread belongs on WHICH card for a team-chat participant, given this adapter's flat
+        keyword matching with no per-thread topic isolation. What is solved here is only that Chat
+        content CAN be persisted as a learned reference and re-fetched fresh across turns; it does not
+        by itself solve assigning threads to the right card.
         """
         try:
             self._ensure_loaded()
@@ -540,11 +642,18 @@ class GoogleChatAdapter(RetrievalAdapterBase):
                 return AssembledContext()
 
             query_terms = set(keywords_from_text(task_text))
+            active_card_id = str((meta or {}).get("thread_card_id") or "").strip() or None
+            card_terms = active_card_terms(self._card_store, active_card_id)
+            # Widen the gate with the active card's topic terms so a thread about the card's idea
+            # surfaces even when it doesn't match this turn's exact wording. With no active card
+            # (card_terms empty) this is exactly the prior query-only gate.
+            surfacing_terms = gate_terms(query_terms, card_terms)
+
             conv_kw = {
                 cid: set(keywords_from_text(conversation_digest(conv)))
                 for cid, conv in self._conversations.items()
             }
-            overlapping = [cid for cid, kw in conv_kw.items() if kw & query_terms]
+            overlapping = [cid for cid, kw in conv_kw.items() if kw & surfacing_terms]
             if not overlapping:
                 return AssembledContext()
 
@@ -556,6 +665,17 @@ class GoogleChatAdapter(RetrievalAdapterBase):
             )
             if not selected:
                 return AssembledContext()
+
+            # Learn the hits onto the active card (best-effort; a store failure never discards the
+            # context we already assembled).
+            if active_card_id and card_terms and self._card_store is not None:
+                try:
+                    self._learn_card_references(
+                        active_card_id, selected, conv_kw, query_terms, card_terms,
+                        now=_time.time(),
+                    )
+                except Exception:  # noqa: BLE001 — learning is a side effect, never the answer
+                    pass
 
             lines = ["--- RELEVANT GOOGLE CHAT CONVERSATIONS ---"]
             for cid in selected:

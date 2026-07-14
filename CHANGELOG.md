@@ -32,11 +32,32 @@ All notable changes to this project are documented here. The format is based on
   why, now)`. Nothing in the module hardcodes `"conversation"` / `conv_id`: the caller supplies the
   `ref_type`, a `locator_fn(candidate) -> dict`, and the `why`, and any card store duck-typed like
   `FileContextStore` (`get_card` / `update_card` / `mark_sources_used`) participates. Behavior is
-  unchanged — `ClaudeConversationsAdapter` now delegates to the shared functions. `google_chat_adapter`
-  is structurally ready to adopt it but is deliberately left unwired: a Chat thread has no reference
-  resolver that can re-fetch it, so persisting one as a `conversation` ref would dangle; that resolver
-  is the real prerequisite and stays out of scope. (`quest_ai_runner/adapters/card_scoped_learning.py`,
-  `claude_conversations_adapter.py`, `google_chat_adapter.py`.)
+  unchanged — `ClaudeConversationsAdapter` now delegates to the shared functions. (`google_chat_adapter`
+  now adopts this too — see the reference-resolution capability entry below.)
+  (`quest_ai_runner/adapters/card_scoped_learning.py`, `claude_conversations_adapter.py`,
+  `google_chat_adapter.py`.)
+- **Reference resolution is now a formal, checkable `RetrievalAdapter` capability — and Google Chat is
+  wired through it.** "Can this adapter's content be persisted as a learned card reference and
+  re-fetched fresh later?" was tribal knowledge (you had to read code); the one `conversation` resolver
+  was hard-wired to local Claude session files. `core.adapters.RetrievalAdapter` (and its ABC
+  `RetrievalAdapterBase`) now carry three optional members — `reference_type: Optional[str]`,
+  `make_locator(candidate) -> dict`, `resolve_reference(locator, *, max_chars) -> Optional[str]` — the
+  same optional-capability convention `query()` already uses (NO second protocol). The ABC default is
+  `reference_type = None`, so every existing adapter is structurally "unsupported" untouched, and the
+  whole check is `adapter.reference_type is not None`. `ClaudeConversationsAdapter` formalizes its
+  existing conv_id/session-file logic under `reference_type = "conversation"` (behavior unchanged).
+  `GoogleChatAdapter` gains a REAL `reference_type = "chat_thread"` (a new distinct type, registered in
+  `reference_resolver.CONTENT_TYPES`), a `make_locator` (`{"space", "thread_or_message_id"}`, thread-
+  level when `group_by="thread"`), and a `resolve_reference` that re-fetches the thread FRESH through
+  its own read path; with a `card_store` its `assemble()` now learns threads onto the active card via
+  `card_scoped_learning`, exactly like the Claude adapter. `reference_resolver.collect_reference_resolvers`
+  discovers resolvable adapters from `cfg.retrieval` (walks composites) and `build_resolver_registry`
+  coerces a bare `resolve_reference` callable into a `ReferenceResolver`, so `config.py` wires a
+  consumer's `GoogleChatAdapter` with no boilerplate; `FileContextStore.register_reference_resolver`
+  wires the config-internal Claude assembler. Resolvability + learning are done; full thread-to-card
+  TOPIC routing for team chat remains a separate, open problem. (`quest_ai_runner/core/adapters.py`,
+  `adapters/reference_resolver.py`, `adapters/claude_conversations_adapter.py`,
+  `adapters/google_chat_adapter.py`, `adapters/file_context_store.py`, `config.py`.)
 - **Cross-session recall now becomes a LEARNED card reference instead of being recomputed from the
   whole history every turn.** `ClaudeConversationsAdapter.assemble` used to keyword-gate past Claude
   sessions against the query alone and return them as an ephemeral view, disconnected from the card
