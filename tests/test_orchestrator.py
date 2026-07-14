@@ -1802,3 +1802,98 @@ def test_render_planner_prompt_fills_every_slot_by_default():
     queued = render_planner_prompt(user_message="x",
                                    deferred_deep_semantics=DEFERRED_DEEP_QUEUED_SEMANTICS)
     assert DEFERRED_DEEP_QUEUED_SEMANTICS in queued
+
+
+# ---------------------------------------------------------------------------
+# Cross-turn narration memory (``prior_narration`` / ``OrchestratorResult.narration_said``).
+# ---------------------------------------------------------------------------
+
+def test_narrator_prior_narration_suppresses_repeated_ack():
+    """A fresh Narrator is built every turn, so without help the ack has no memory of what it said
+    in EARLIER turns of the same conversation, only of _said (this turn). Seeding prior_narration
+    with a line already spoken must let the repeat-detector catch and suppress an ack that repeats
+    it, not just repeats within a single turn."""
+    from quest_ai_runner.core.orchestrator import EVENT_PARTIAL, Mode, Narrator, _Emitter
+
+    events = []
+
+    class _Sink:
+        def update(self, ev, mode):
+            events.append(ev)
+
+    class _Provider:
+        def answer(self, messages, *, model, system=None):
+            return "Let me look into that for you."
+
+    emit = _Emitter(_Sink(), Mode.LIVE, lambda _m: None)
+    narrator = Narrator(
+        provider=_Provider(), model="m", emit=emit, enabled=True,
+        prior_narration=["Let me look into that for you."],
+    )
+    narrator.begin("what's on my plate today?")
+    narrator._first_future.result(timeout=5.0)
+
+    beats = [e for e in events if e.type == EVENT_PARTIAL and e.data.get("narration")]
+    assert beats == [], "an ack repeating a prior-turn line must be suppressed, not spoken again"
+
+
+def test_narrator_prior_narration_shown_in_ack_prompt():
+    """The ack prompt must show prior-turn narration as its own explicit 'said in earlier turns, do
+    not repeat this shape' block, distinct from this-turn's _said list, so the model itself (not
+    just the word-overlap backstop) has a real chance to vary or go quiet."""
+    from quest_ai_runner.core.orchestrator import Mode, Narrator, _Emitter
+
+    seen_prompts = []
+
+    class _Sink:
+        def update(self, ev, mode):
+            pass
+
+    class _Provider:
+        def answer(self, messages, *, model, system=None):
+            seen_prompts.append(messages[-1]["content"])
+            return "Checking your marathon plan specifically now."
+
+    emit = _Emitter(_Sink(), Mode.LIVE, lambda _m: None)
+    narrator = Narrator(
+        provider=_Provider(), model="m", emit=emit, enabled=True,
+        prior_narration=["Let me look into that for you."],
+    )
+    narrator.begin("what's my next step?")
+    narrator._first_future.result(timeout=5.0)
+
+    assert seen_prompts, "the ack call must have run"
+    prompt = seen_prompts[0]
+    assert "EARLIER turns" in prompt
+    assert "Let me look into that for you." in prompt
+
+
+def test_orchestrator_result_narration_said_round_trips_into_next_turn():
+    """End to end: OrchestratorResult.narration_said carries forward what the narrator actually
+    said, and feeding it back in as the next run's prior_narration suppresses a would-be-identical
+    repeat ack -- the exact pattern a voice consumer uses so the ack stops reopening every turn with
+    its own recent generic line."""
+    from quest_ai_runner.core.orchestrator import EVENT_PARTIAL
+
+    provider = StubProvider(decisions=[
+        {"action": "answer", "rationale": "chit-chat", "model_tier": "haiku"},
+    ])
+    orch = _orch(provider, StubRetrieval({"README.md": "x"}),
+                 config=OrchestratorConfig(instant_ack=True))
+
+    sink1 = _CapturingSink()
+    res1 = orch.run("hello there", sink=sink1)
+    assert res1.narration_said, "the ack should have produced at least one narration line"
+
+    # Reset the scripted decisions for the second turn (StubProvider consumes its queue).
+    provider._decisions = [{"action": "answer", "rationale": "chit-chat", "model_tier": "haiku"}]
+    sink2 = _CapturingSink()
+    res2 = orch.run("hello again", sink=sink2, prior_narration=res1.narration_said)
+
+    narration2 = [e for e in sink2.events
+                 if e.type == EVENT_PARTIAL and isinstance(e.data, dict) and e.data.get("narration")]
+    # StubProvider.answer() ignores prompt content and always returns the same fixed ack text
+    # regardless of turn, so without prior_narration wired through this would repeat every turn;
+    # with it threaded through run() -> Narrator, the second turn's identical ack is suppressed.
+    assert narration2 == []
+    assert res2.kind == "answer"

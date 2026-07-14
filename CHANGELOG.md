@@ -7,6 +7,22 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Narrator cross-turn repeat memory** (`prior_narration` on `Orchestrator.run` /
+  `OrchestratorResult.narration_said`): a fresh `Narrator` is built for every turn, so it previously
+  had no memory of narration it already spoke aloud in EARLIER turns of the same conversation, only
+  of what it said within the current turn (`_said`). On a voice consumer that speaks every beat, the
+  ack (`begin()`) is grounded only in message content, so it could open turn after turn with its own
+  differently-worded but equally content-free "let me look into that" / "searching for that now"
+  line. A caller now passes the last few lines it actually delivered to audio back in via
+  `run(prior_narration=[...])` (a reasonable source is `OrchestratorResult.narration_said` from
+  earlier turns, capped by the caller); they seed the repeat-detector (`_is_repeat`) and are shown to
+  the model as an explicit "already said in earlier turns, do not repeat this shape" block, separate
+  from the this-turn `_said` block. Also fixed a real gap in `_is_repeat` itself: a line that
+  normalizes to NO content words at all (every word stopworded away, e.g. "Let me look into that for
+  you") previously always returned "not a repeat" (nothing to word-overlap-compare), so purely
+  generic filler could recur without limit; it is now capped to at most one per conversation. The
+  ack path (`_gen_and_say`) is now also backstopped by `_is_repeat` (previously only `relay()` was).
+  Absent `prior_narration`, behavior is unchanged. (`quest_ai_runner/core/orchestrator.py`.)
 - **Card-scoped learning is now a shared, adapter-agnostic module** so any retrieval adapter can
   reuse it, not just `ClaudeConversationsAdapter`. The union-gate / intersection-learn / usage-stamp
   logic moved out of that adapter's private methods into

@@ -1097,6 +1097,12 @@ class OrchestratorResult:
     # decision ``card_id`` is None: the CONSUMER creates (or dedupes onto) the card, since it owns
     # the store. Also emitted live as EVENT_CARD_THREAD. None when threading is off.
     card_thread: Optional[Dict[str, Any]] = None
+    # Every narration line actually spoken THIS turn (ack + relayed rationale beats, oldest first),
+    # when narration is on. Empty when narration is off/disabled or nothing was said. A caller that
+    # wants the narrator's ack to stop reopening every turn with its own recent generic shape (see
+    # ``Narrator`` / ``run(prior_narration=...)``) reads this back and passes the last few lines
+    # forward as the next turn's ``prior_narration``. The orchestrator persists nothing itself.
+    narration_said: List[str] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -3274,6 +3280,12 @@ class _Emitter:
             pass
 
 
+# Cap on how many prior-turn narration lines a consumer's ``prior_narration`` can carry into a
+# Narrator: bounds prompt growth from a long voice conversation to the last handful of beats, which
+# is enough to stop the ack repeating its own recent pattern without re-reading a whole session.
+_MAX_PRIOR_NARRATION = 8
+
+
 class Narrator:
     """Conversational, single-train-of-thought progress narration for one turn.
 
@@ -3293,6 +3305,19 @@ class Narrator:
     PERSONA when one is given. HOW the ack narrates is overridable by the consumer via
     ``system_prompt`` (the persona is always layered on top). Every failure is swallowed: the turn
     never depends on narration.
+
+    Cross-turn awareness (``prior_narration``): a fresh ``Narrator`` is built for every turn, so
+    without help the ack has no memory of what it already said in EARLIER turns of the same
+    conversation, only of ``transcript_tail`` (the actual message content). On a voice consumer that
+    speaks every beat aloud, that gap is what makes consecutive turns each open with their own
+    differently-worded but equally generic "let me look into that" / "searching for that now" line:
+    each ack sounds fresh to the model, so it never learns to stop. The caller (a consumer that
+    persists a short rolling history of what actually reached this conversation's audio) can pass
+    those lines in via ``prior_narration``; they seed both the repeat-detector (``_is_repeat``) and
+    the ack/relay prompts with an explicit instruction to go quiet on that pattern rather than vary
+    the wording. ``_said`` (this turn's own beats) stays separate so a consumer reading it back after
+    the turn (e.g. via ``OrchestratorResult.narration_said``) gets exactly what to persist forward,
+    with no double-counting of the seed.
     """
 
     DEFAULT_SYSTEM = (
@@ -3303,17 +3328,28 @@ class Narrator:
         "line to one short, natural, spoken sentence. No lists, no markdown, no greeting, no "
         "restating the request back, no sign-off. Stay light and human, never robotic status labels. "
         "Connect to what was last said or done with the user when it helps the moment feel "
-        "continuous. Do NOT use em dashes; use a comma or a period. If nothing fresh is worth saying "
-        "at this moment, reply with an empty string."
+        "continuous. Do NOT use em dashes; use a comma or a period. Only speak when you have a "
+        "concrete, specific thing to name (an actual finding, a specific next step, a real detail) "
+        "worth saying out loud; a generic line that just restates that you are working on it, "
+        "searching, or checking something, without naming anything specific, is not worth saying "
+        "twice in a row and is not worth saying again if you already said one like it earlier in "
+        "this same conversation. If nothing fresh and specific is worth saying at this moment, reply "
+        "with an empty string rather than repeat the shape of an earlier line."
     )
 
     def __init__(self, *, provider: Any, model: str, emit: "_Emitter",
                  persona: str = "", transcript_tail: str = "",
-                 system_prompt: Optional[str] = None, enabled: bool = True):
+                 system_prompt: Optional[str] = None, enabled: bool = True,
+                 prior_narration: Optional[List[str]] = None):
         self._provider = provider
         self._model = model
         self._emit = emit
         self._persona = (persona or "").strip()
+        # Lines already spoken aloud in EARLIER turns of this conversation (consumer-supplied, most
+        # recent last). Read-only here: used for repeat detection and shown to the model, but never
+        # mutated or re-emitted, so this turn always answers "what have I ALREADY told this user, in
+        # total" without re-narrating any of it.
+        self._prior: List[str] = list(prior_narration or [])[-_MAX_PRIOR_NARRATION:]
         self._recent = (transcript_tail or "").strip()[-800:]
         self._system = (system_prompt or self.DEFAULT_SYSTEM).strip()
         self.enabled = bool(enabled and provider is not None)
@@ -3331,6 +3367,13 @@ class Narrator:
         user = ""
         if self._recent:
             user += f"The conversation so far (recent):\n{self._recent}\n\n"
+        if self._prior:
+            user += (
+                "Lines you already said out loud in EARLIER turns of this same conversation "
+                "(do not say another line in this same generic shape; only speak now if you have "
+                "something concretely new to name):\n"
+                + "\n".join(f"- {s}" for s in self._prior) + "\n\n"
+            )
         if self._said:
             user += "What you've already said out loud this turn:\n" + "\n".join(self._said) + "\n\n"
         user += f"What just happened: {moment}\n\nSay the next line of your thinking (or empty)."
@@ -3377,9 +3420,19 @@ class Narrator:
             self._first_future = None
 
     def _gen_and_say(self, moment: str) -> None:
-        """Generate the first beat and emit it immediately from this background thread."""
+        """Generate the first beat and emit it immediately from this background thread.
+
+        Backstopped by ``_is_repeat`` against ``_prior`` (this is the one beat with no earlier
+        beats THIS turn to compare against, so without ``prior_narration`` it would never be
+        caught): the ack is exactly the beat that repeats a generic "let me look into that" shape
+        turn after turn when the consumer has no cross-turn memory to give it.
+        """
         try:
-            self._say(self._gen(moment))
+            line = self._gen(moment)
+            clean = (line or "").strip()
+            if clean and self._is_repeat(clean):
+                return
+            self._say(clean)
         except Exception:  # noqa: BLE001 — narration must never break the run
             pass
 
@@ -3406,8 +3459,9 @@ class Narrator:
         """Emit a pre-composed beat (the planner's conversational rationale). No LLM call.
 
         Used for every beat after the instant ack: the planner already wrote this line in the
-        rep's voice, so we just speak it. De-duplicated against what was already said this turn so a
-        planner that repeats itself across re-plan steps doesn't echo.
+        rep's voice, so we just speak it. De-duplicated against what was already said this turn AND
+        against ``_prior`` (earlier turns) so a planner that repeats itself across re-plan steps, or
+        across separate turns of a longer voice conversation, doesn't echo.
         """
         if not self.enabled or not line:
             return
@@ -3417,16 +3471,27 @@ class Narrator:
         self._say(clean)
 
     def _is_repeat(self, line: str) -> bool:
-        """True if ``line`` repeats or near-repeats something already said this turn.
+        """True if ``line`` repeats or near-repeats something already said, THIS turn or earlier.
 
         Catches not just exact echoes but paraphrases (the bug was six lines that all meant
         "looking up your marathon quest"): compare on a normalized word set and treat a high
-        overlap as a repeat. This is the backstop; the planner prompt is the primary defense.
+        overlap as a repeat. Checked against ``_prior`` (earlier turns, consumer-supplied) as well
+        as ``_said`` (this turn), since the same generic-filler repeat can happen either within one
+        long turn or across the separate turns of one voice conversation. This is the backstop; the
+        system/planner prompts (which are shown both lists) are the primary defense.
+
+        A line that normalizes to NO content words at all (e.g. "Let me look into that for you",
+        every word of which is stopworded away) is exactly the content-free "still searching/
+        checking" filler users hear as "the same thing over and over": there is nothing left to
+        word-overlap-compare, so without a special case it would never match anything and could
+        repeat indefinitely. Treat it instead as a repeat the moment ANY earlier line (this turn or
+        prior) was ALSO content-free, capping content-free filler to at most one per conversation.
         """
+        all_prev = (*self._prior, *self._said)
         norm = self._norm(line)
         if not norm:
-            return False
-        for prev in self._said:
+            return any(not self._norm(prev) for prev in all_prev)
+        for prev in all_prev:
             p = self._norm(prev)
             if not p:
                 continue
@@ -6368,6 +6433,7 @@ class Orchestrator:
             prior_escalations: Optional[List[Dict[str, Any]]] = None,
             cancel_check: Optional[Callable[[], bool]] = None,
             card_thread: Optional[Any] = None,
+            prior_narration: Optional[List[str]] = None,
             now: Optional[str] = None) -> OrchestratorResult:
         """Run the bounded loop for one request and return a terminal OrchestratorResult.
 
@@ -6452,6 +6518,17 @@ class Orchestrator:
                             EVENT_CARD_THREAD. The orchestrator persists nothing: the consumer owns
                             the card store and stamps its own messages. Absent/None (or the flag off)
                             means exactly today's behavior.
+        * ``prior_narration`` -- optional list of narration lines (most recent last) already spoken
+                            aloud to this user in EARLIER turns of this same conversation, when
+                            narration is on (``cfg.narrate``). The brain has no persistent storage of
+                            its own (same reasoning as ``prior_escalations`` above), so a caller that
+                            narrates every turn out loud (e.g. a voice consumer) and wants the ack to
+                            stop reopening with its own recent generic "let me look into that" shape
+                            passes the last few lines it actually delivered to audio back in here; a
+                            reasonable source is ``OrchestratorResult.narration_said`` from the
+                            PREVIOUS turn(s), capped by the caller to a handful of lines. Feeds the
+                            narrator's repeat-detector and its ack/relay prompts (see ``Narrator``).
+                            Absent/None means "no cross-turn memory" (today's behavior).
         * ``now``          -- optional ISO date/datetime string, the CALLER's notion of "now". Fed
                             into goal-condition/constraint derivation (see ``_derive_goal_condition``)
                             so a relative date in the message ("Wednesday", "last week") resolves
@@ -6566,6 +6643,7 @@ class Orchestrator:
             transcript_tail=transcript,
             system_prompt=cfg.narration_system_prompt,
             enabled=bool(cfg.narrate or cfg.instant_ack),
+            prior_narration=prior_narration,
         )
         if narrator.enabled:
             try:
@@ -7167,6 +7245,12 @@ class Orchestrator:
                 res.card_thread = card_thread_decision.as_dict()
             if overseer_signals:
                 res.overseer_signals = list(overseer_signals)
+            # What the narrator actually said aloud this turn (empty when narration is off or it
+            # said nothing) — a consumer that persists a rolling window of this across turns and
+            # passes it back in as ``run(prior_narration=...)`` is what lets the ack stop reopening
+            # every turn with its own recent generic shape; see ``Narrator``.
+            if narrator.enabled:
+                res.narration_said = list(narrator._said)
             # Tear down the background overseer worker (Fix 1). ``wait=False`` mirrors the
             # context-assembly teardown: any still-running consult (a bounded provider call) finishes
             # on its own without blocking the return, and is never joined synchronously here.
