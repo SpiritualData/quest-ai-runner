@@ -2163,10 +2163,17 @@ def _message_requests_change(message: Optional[str]) -> bool:
         # mishandled as tasks.
         if _INFO_QUESTION_RE.search(m):
             return False
-        # A message that ends in "?" with no imperative change verb reads as a question, not a
-        # command (e.g. "the back button doesn't work?"). A bug statement ("it incorrectly X") or
-        # a plain imperative ("fix the date bug") still escalates.
-        if m.endswith("?") and not has_verb:
+        # A message ending in "?" reads as a question by default, not a command, unless it was
+        # already caught above as a polite command directed at the assistant ("can you fix...?").
+        # This also covers conversational/opinion questions that carry a change verb but no
+        # "you"-directed phrasing or interrogative opener ("can we improve conversion here?",
+        # "should we optimize this query?") -- previously these fell through to True here even
+        # though they read as questions. Returning False does not silently drop them: a verb/
+        # wrongness signal still makes ``message_change_signal_ambiguous`` true, so they land in
+        # the one-shot LLM judgment band (``judge_execution_directive``) instead of being forced
+        # into a task by regex alone. A bug statement or plain imperative with no "?" still
+        # escalates via the plain ``return True`` below.
+        if m.endswith("?"):
             return False
         return True
     except Exception:  # noqa: BLE001
@@ -7948,8 +7955,15 @@ class Orchestrator:
             # answer_contains_work_to_execute on code/file-change tasks, so without this net the
             # turn ends having only TALKED about the fix instead of doing it (the "it just finishes
             # the request" regression). Re-wired here so a described-but-unexecuted fix still
-            # escalates to a deep run that actually applies it.
-            elif _answer_describes_unexecuted_work(text):
+            # escalates to a deep run that actually applies it -- but ONLY when the user's own
+            # message was itself a change request (``_message_requests_change``), never for a
+            # genuine question ("why is X broken?", "what would it take to fix Y?"). Explaining
+            # what a fix would involve IS the correct answer to a question; describing it must
+            # never silently open a task. A question whose message still carries an ambiguous
+            # action signal gets a fair shot at the message-intent LLM judgment below, which sees
+            # this same answer text (``judge_execution_directive``), instead of being escalated by
+            # this regex alone.
+            elif _answer_describes_unexecuted_work(text) and _message_requests_change(user_message):
                 should_defer_deep = {"goal": f"Execute the work the answer describes: {user_message}",
                                       "rationale": "auto-detected unexecuted work in answer (fallback)"}
                 if emit is not None:

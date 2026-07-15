@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **A genuine question no longer silently opens a task.** Two gaps in the answer->deep escalation
+  net let a question phrased with a change verb (or answered with fix-shaped language) get
+  escalated to execution even when the planner correctly chose "answer": (1) `_message_requests_change`
+  only treated a "?"-ending message as a question when it had NO change verb at all, so
+  conversational questions like "can we improve conversion here?" or "should we optimize this
+  query?" fell through to `True` and were escalated by regex alone instead of reaching the
+  ambiguous-band LLM judgment (`judge_execution_directive`) built for exactly this case. Now any
+  "?"-ending message defaults to `False` (a question) unless it was already caught as a
+  "you"-directed polite command ("can you fix...?"); a verb/wrongness signal still routes it into
+  the LLM judgment band rather than dropping it. (2) `_answer_describes_unexecuted_work` escalated
+  purely off the ANSWER text ("the fix is to update X", "this needs to be updated") with no regard
+  to whether the user's own message was a change request at all -- so answering an honest question
+  ("why is X broken?") with an explanation of what a fix would involve could silently open a task.
+  It is now additionally gated on `_message_requests_change(user_message)`, so a described-but-
+  unexecuted fix only auto-escalates when the user actually asked for a change; a question that
+  still carries an ambiguous signal gets the same fair LLM judgment instead of a blind regex verdict.
+  (`quest_ai_runner/core/orchestrator.py`.)
+
 ### Added
 - **`GoogleDriveAdapter`** (`quest_ai_runner/adapters/google_drive_adapter.py`) — a generic
   `RetrievalAdapter` over Google Drive files and folders, mirroring `GoogleChatAdapter` exactly:
