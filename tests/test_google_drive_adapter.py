@@ -171,7 +171,8 @@ def test_query_list_returns_file_metadata():
     obs = a.query({"action": "list", "folder_id": fake.FOLDER_ID})
     assert obs.kind == "query"
     payload = json.loads(obs.text)
-    assert payload == [
+    assert "truncated" not in payload
+    assert payload["files"] == [
         {
             "id": "child1", "name": "child1.txt", "mimeType": "text/plain",
             "webViewLink": "https://drive.google.com/file/d/child1/view",
@@ -184,6 +185,28 @@ def test_query_list_requires_folder_id():
     a = _adapter(_FakeDrive())
     obs = a.query({"action": "list"})
     assert obs.kind == "error" and "folder_id" in obs.error
+
+
+def test_query_list_truncates_huge_folder():
+    """A folder with more children than _MAX_LIST_FILES is capped, not dumped unbounded into the
+    LLM's grounding context (regression test for an unbounded-listing prompt-blowup risk)."""
+    from quest_ai_runner.adapters import google_drive_adapter as mod
+
+    fake = _FakeDrive()
+    fake.children = [
+        {
+            "id": f"child{i}", "name": f"child{i}.txt", "mimeType": "text/plain",
+            "webViewLink": f"https://drive.google.com/file/d/child{i}/view",
+            "modifiedTime": "2026-02-01T00:00:00Z", "size": "10",
+        }
+        for i in range(mod._MAX_LIST_FILES + 50)
+    ]
+    a = _adapter(fake)
+    obs = a.query({"action": "list", "folder_id": fake.FOLDER_ID})
+    assert obs.kind == "query"
+    payload = json.loads(obs.text)
+    assert len(payload["files"]) == mod._MAX_LIST_FILES
+    assert payload["truncated"] is True
 
 
 # ---------------------------------------------------------------------------
@@ -249,7 +272,7 @@ def test_query_folder_id_via_read_action_lists_instead():
     obs = a.query({"action": "read", "file_id": fake.FOLDER_ID})
     assert obs.kind == "query"
     payload = json.loads(obs.text)
-    assert payload[0]["id"] == "child1"
+    assert payload["files"][0]["id"] == "child1"
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +359,7 @@ def test_read_section_folder_id_lists():
     obs = a.read_section(fake.FOLDER_ID)
     assert obs.kind == "query"
     payload = json.loads(obs.text)
-    assert payload[0]["id"] == "child1"
+    assert payload["files"][0]["id"] == "child1"
 
 
 def test_read_section_applies_line_range():
@@ -377,7 +400,7 @@ def test_list_sources_with_root_folder_lists_it():
     obs = a.list_sources()
     assert obs.kind == "query"
     payload = json.loads(obs.text)
-    assert payload[0]["id"] == "child1"
+    assert payload["files"][0]["id"] == "child1"
 
 
 def test_describe_source_file():

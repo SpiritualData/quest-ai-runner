@@ -86,6 +86,12 @@ _TEXT_LIKE_MIMES = {"application/json", "application/xml"}
 _METADATA_FIELDS = "id, name, mimeType, webViewLink, modifiedTime, size"
 _LIST_FIELDS = f"nextPageToken, files({_METADATA_FIELDS})"
 
+# Hard cap on a single folder listing, independent of any caller-supplied max_bytes: stops paginating
+# once this many children have been collected, and truncates the serialized listing to this many
+# entries. Without this, a folder with thousands of items would fold an unbounded metadata blob into
+# an LLM's grounding context (pagination itself is otherwise unbounded).
+_MAX_LIST_FILES = 200
+
 
 # ---------------------------------------------------------------------------
 # URL parsing helper
@@ -215,8 +221,13 @@ class GoogleDriveAdapter(RetrievalAdapterBase):
         )
         return self._get_json(url, token)
 
-    def _list_folder(self, folder_id: str, token: str) -> List[Dict[str, Any]]:
-        """List files directly inside ``folder_id``, newest metadata call, paginated. May raise."""
+    def _list_folder(self, folder_id: str, token: str) -> tuple[List[Dict[str, Any]], bool]:
+        """List files directly inside ``folder_id``, paginated up to ``_MAX_LIST_FILES``.
+
+        Returns ``(files, truncated)`` -- ``truncated`` is True when the folder has more children
+        than the cap (stops paginating early rather than walking every page for a huge folder). May
+        raise (caller wraps in a try/except and converts to an error Observation).
+        """
         out: List[Dict[str, Any]] = []
         page_token: Optional[str] = None
         q = f"'{folder_id}' in parents and trashed = false"
@@ -235,9 +246,13 @@ class GoogleDriveAdapter(RetrievalAdapterBase):
             data = self._get_json(url, token)
             out.extend(data.get("files", []) or [])
             page_token = data.get("nextPageToken")
+            if len(out) >= _MAX_LIST_FILES:
+                # Enforce the cap even if a single response returned more than one page's worth
+                # (e.g. a server/fake ignoring pageSize) -- never rely on pagination alone.
+                truncated = bool(page_token) or len(out) > _MAX_LIST_FILES
+                return out[:_MAX_LIST_FILES], truncated
             if not page_token:
-                break
-        return out
+                return out, False
 
     def _export(self, file_id: str, mime_type: str, token: str) -> bytes:
         url = self._build_url(
@@ -258,7 +273,7 @@ class GoogleDriveAdapter(RetrievalAdapterBase):
 
     def _list_as_observation(self, folder_id: str, token: str) -> Observation:
         try:
-            files = self._list_folder(folder_id, token)
+            files, truncated = self._list_folder(folder_id, token)
         except Exception as exc:  # noqa: BLE001
             return Observation(
                 kind="error", rel_path=folder_id, error=f"could not list Drive folder {folder_id}: {exc}"
@@ -274,11 +289,18 @@ class GoogleDriveAdapter(RetrievalAdapterBase):
             }
             for f in files
         ]
+        body: Dict[str, Any] = {"files": payload}
+        if truncated:
+            body["truncated"] = True
+            body["note"] = (
+                f"showing the first {len(payload)} items; this folder has more -- narrow the "
+                "query or browse a subfolder instead"
+            )
         return Observation(
             kind="query",
             rel_path=folder_id,
             locator="list",
-            text=json.dumps(payload, indent=2),
+            text=json.dumps(body, indent=2),
         )
 
     def _read_file(
