@@ -9,6 +9,13 @@ These satisfy the core interfaces; a consumer wires the ones it needs into a Run
                                 provider (``static_token_provider`` or, for a Google Workspace,
                                 ``service_account_token_provider`` with domain-wide delegation —
                                 the latter needs the optional [google] extra). HTTP is stdlib-only.
+  * GoogleDriveAdapter        — RetrievalAdapter over Google Drive files/folders (list a folder,
+                                read a file's text content: Google Docs, Google Sheets first sheet,
+                                PDF via the optional [drive] extra, or plain text). Auth is injected
+                                the SAME way as GoogleChatAdapter (reuses its token-provider
+                                helpers); HTTP is stdlib-only except the lazy ``pypdf`` import used
+                                only when a PDF is actually read. ``parse_drive_url`` parses a Drive/
+                                Docs/Sheets URL into a file/folder id.
   * QuestRetrievalAdapter     — RetrievalAdapter: query Quest API for goal/quest context, notes, related goals.
   * WebSearchAdapter          — RetrievalAdapter that searches the live web via the Tavily API (stdlib
                                 urllib only; no extra deps). Enable with WEB_SEARCH_ENABLED=true +
@@ -67,6 +74,11 @@ from .google_chat_adapter import (
     GoogleChatAdapter,
     static_token_provider,
     service_account_token_provider,
+)
+from .google_drive_adapter import (
+    GoogleDriveAdapter,
+    parse_drive_url,
+    DEFAULT_DRIVE_SCOPES,
 )
 from .composite_retrieval_adapter import CompositeRetrievalAdapter
 from .session_file_conversation_store import SessionFileConversationStore
@@ -153,6 +165,9 @@ __all__ = [
     "GoogleChatAdapter",
     "static_token_provider",
     "service_account_token_provider",
+    "GoogleDriveAdapter",
+    "parse_drive_url",
+    "DEFAULT_DRIVE_SCOPES",
     "SessionFileConversationStore",
     "QuestRetrievalAdapter",
     "WebSearchAdapter",

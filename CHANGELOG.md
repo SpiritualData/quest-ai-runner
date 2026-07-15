@@ -7,6 +7,27 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **`GoogleDriveAdapter`** (`quest_ai_runner/adapters/google_drive_adapter.py`) — a generic
+  `RetrievalAdapter` over Google Drive files and folders, mirroring `GoogleChatAdapter` exactly:
+  auth is injected via a token provider (reuses `google_chat_adapter`'s `service_account_token_provider`
+  / `static_token_provider`, not duplicated; pass `scopes=DEFAULT_DRIVE_SCOPES`), HTTP is
+  stdlib-only, and every method returns `Observation(kind="error")` rather than raising.
+  `query({"action": "list", "folder_id": ...})` lists a folder's direct children (id, name,
+  mimeType, webViewLink, modifiedTime, size); `query({"action": "read", "file_id": ...})` reads a
+  file's text content — Google Docs export as plain text, Google Sheets export their FIRST sheet as
+  CSV (a documented limitation), PDFs are extracted via the optional `pypdf` package (new `[drive]`
+  extra; lazy-imported so it's never a hard dependency), and plain-text mimeTypes are decoded as
+  UTF-8; any other mimeType returns a clear "not supported yet" error instead of raw binary.
+  `read_section(file_or_folder_id_or_url)` delegates to the same read/list logic so the adapter
+  works through the generic surface, not only `query()`; a folder id is auto-detected via its
+  mimeType and listed. `grep` is not supported (Drive has no cheap full-text index here), matching
+  the same "use query() instead" convention `CachedDbAdapter` / `QuestRetrievalAdapter` use.
+  `parse_drive_url(url)` parses `drive.google.com/file/d/...`, `drive.google.com/drive/folders/...`,
+  `docs.google.com/document/d/...`, and `docs.google.com/spreadsheets/d/...` into
+  `{"kind": "file"|"folder", "id": ...}`. Discovery (`list_sources`/`describe_source`/
+  `list_operations`/`describe_operation`) follows the same tone as the other adapters.
+  (`quest_ai_runner/adapters/google_drive_adapter.py`, exported from `adapters/__init__.py`;
+  `pyproject.toml` `[drive]` extra; tests in `tests/test_google_drive_adapter.py`.)
 - **Narrator cross-turn repeat memory** (`prior_narration` on `Orchestrator.run` /
   `OrchestratorResult.narration_said`): a fresh `Narrator` is built for every turn, so it previously
   had no memory of narration it already spoke aloud in EARLIER turns of the same conversation, only
