@@ -275,6 +275,27 @@ def test_query_folder_id_via_read_action_lists_instead():
     assert payload["files"][0]["id"] == "child1"
 
 
+def test_query_read_by_url_resolves_to_file_id():
+    """A pasted Docs/Sheets/Drive URL works as file_id, same as read_section already did."""
+    fake = _FakeDrive()
+    a = _adapter(fake)
+    url = f"https://docs.google.com/document/d/{fake.DOC_ID}/edit"
+    obs = a.query({"action": "read", "file_id": url})
+    assert obs.kind == "read"
+    assert obs.text == "Doc plain text content"
+
+
+def test_query_list_by_url_resolves_to_folder_id():
+    """A pasted Drive folder URL works as folder_id, same as read_section already did."""
+    fake = _FakeDrive()
+    a = _adapter(fake)
+    url = f"https://drive.google.com/drive/folders/{fake.FOLDER_ID}"
+    obs = a.query({"action": "list", "folder_id": url})
+    assert obs.kind == "query"
+    payload = json.loads(obs.text)
+    assert payload["files"][0]["id"] == "child1"
+
+
 # ---------------------------------------------------------------------------
 # PDF extraction (optional pypdf dependency)
 # ---------------------------------------------------------------------------

@@ -28,6 +28,13 @@ All notable changes to this project are documented here. The format is based on
   `list_operations`/`describe_operation`) follows the same tone as the other adapters.
   (`quest_ai_runner/adapters/google_drive_adapter.py`, exported from `adapters/__init__.py`;
   `pyproject.toml` `[drive]` extra; tests in `tests/test_google_drive_adapter.py`.)
+- **`GoogleDriveAdapter.query()` now accepts pasted URLs, not just bare ids** — `folder_id` (for
+  `action: "list"`) and `file_id` (for `action: "read"`) are each resolved via `parse_drive_url`
+  before use, exactly like `read_section` already did. Previously only `read_section` accepted a
+  raw Drive/Docs/Sheets URL; a consumer whose planner only ever calls `query()` (e.g. one source
+  among several routed through a single `query({"source": ..., ...})` dispatch) would fail on a
+  pasted link because the Drive REST API needs a bare id, not a URL. Non-URL ids are unaffected
+  (`parse_drive_url` returns `None` for a bare id and the original string is used as-is).
 - **Narrator cross-turn repeat memory** (`prior_narration` on `Orchestrator.run` /
   `OrchestratorResult.narration_said`): a fresh `Narrator` is built for every turn, so it previously
   had no memory of narration it already spoke aloud in EARLIER turns of the same conversation, only

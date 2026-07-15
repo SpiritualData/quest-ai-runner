@@ -431,8 +431,11 @@ class GoogleDriveAdapter(RetrievalAdapterBase):
 
         Spec keys:
           ``action``    -- "list" (folder contents) or "read" (one file's content). Required.
-          ``folder_id`` -- Drive folder id, required when ``action == "list"``.
-          ``file_id``   -- Drive file id, required when ``action == "read"``.
+          ``folder_id`` -- Drive folder id OR a Drive/Docs/Sheets URL, required when
+              ``action == "list"`` (a URL is resolved via ``parse_drive_url``, same as
+              ``read_section``).
+          ``file_id``   -- Drive file id OR a Drive/Docs/Sheets URL, required when
+              ``action == "read"`` (resolved the same way).
           ``max_bytes`` -- optional cap on returned text size for ``action == "read"``.
         """
         try:
@@ -442,18 +445,22 @@ class GoogleDriveAdapter(RetrievalAdapterBase):
 
             action = str(spec.get("action") or "").strip().lower()
             if action == "list":
-                folder_id = str(spec.get("folder_id") or "").strip()
-                if not folder_id:
+                raw_folder_id = str(spec.get("folder_id") or "").strip()
+                if not raw_folder_id:
                     return Observation(
                         kind="error", error="query({'action': 'list', ...}) requires a folder_id"
                     )
+                parsed = parse_drive_url(raw_folder_id)
+                folder_id = parsed["id"] if parsed else raw_folder_id
                 return self._list_as_observation(folder_id, token)
             if action == "read":
-                file_id = str(spec.get("file_id") or "").strip()
-                if not file_id:
+                raw_file_id = str(spec.get("file_id") or "").strip()
+                if not raw_file_id:
                     return Observation(
                         kind="error", error="query({'action': 'read', ...}) requires a file_id"
                     )
+                parsed = parse_drive_url(raw_file_id)
+                file_id = parsed["id"] if parsed else raw_file_id
                 return self._read_file(file_id, token, max_bytes=spec.get("max_bytes"))
             return Observation(
                 kind="error", error=f"unknown Drive query action {action!r}; use 'list' or 'read'"
