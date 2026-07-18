@@ -655,7 +655,8 @@ class QuestClient:
                     scheduled_at: Optional[str] = None,
                     source: str = "chat",
                     env_id: Optional[str] = None,
-                    task_kind: Optional[str] = None) -> Dict[str, Any]:
+                    task_kind: Optional[str] = None,
+                    card_ids: Optional[List[str]] = None) -> Dict[str, Any]:
         """POST a new queued AI task to /api/assistant-tasks.
 
         ``team_id`` routes the task to a specific team's runner (defaults to the client's
@@ -678,6 +679,11 @@ class QuestClient:
         and never touched by the claim/status/progress paths, so a poller can route on it reliably
         even across a recurring series' spawned occurrences. Route autopilot on THIS, not on
         ``handler``.
+
+        ``card_ids`` attaches existing context cards (from the same card store the retrieval
+        adapters manage, e.g. ``FileContextStore``/``QuestApiCardRepository``) to the task as
+        relevant context, either explicitly chosen by the caller or resolved from the task text
+        via a card search. Omit or pass an empty list to send no cards, matching prior behavior.
 
         NOTE: the create route accepts NO ``status`` field (the backend always creates the task
         queued and fills status server-side) and no persona/rep field. A caller that needs a
@@ -703,6 +709,8 @@ class QuestClient:
             body["env_id"] = env_id
         if task_kind is not None:
             body["task_kind"] = task_kind
+        if card_ids:
+            body["card_ids"] = card_ids
         return self._request("POST", "/api/assistant-tasks", body=body) or {}
 
     def update_task(self, task_id: str, fields: Dict[str, Any]) -> Dict[str, Any]:

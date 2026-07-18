@@ -403,6 +403,51 @@ def _config_from_env() -> RunnerConfig:
     return cfg
 
 
+def select_card_ids_for_text(text: str, *, corpus: Optional[str] = None,
+                             cards_dir: Optional[str] = None,
+                             use_llm: bool = True):
+    """Resolve which existing context cards ``text`` selects, via the same card store the
+    ``search-context`` command and card-aware task creation (``send``) both use.
+
+    ``corpus``/``cards_dir`` default the same way ``search-context`` does (QAR_CORPUS_ROOT / cwd,
+    and ``<corpus>/.quest-context`` or QAR_CONTEXT_CARDS_DIR). ``use_llm`` mirrors that command's
+    ``--no-llm`` flag (skip the relevance filter, keyword/IDF selection only).
+
+    Best-effort by design: building the model provider or the card store can fail (unconfigured
+    backend, unreadable corpus, no cards bootstrapped yet). Any failure here is swallowed and an
+    empty ``AssembledContext`` (``card_ids == []``) is returned rather than raised, so a caller
+    that auto-attaches cards to a task never lets card selection block sending the task.
+    """
+    from .adapters.file_context_store import FileContextStore
+    from .core.adapters import AssembledContext
+
+    resolved_corpus = corpus or os.getenv("QAR_CORPUS_ROOT") or os.getcwd()
+    resolved_cards_dir = (cards_dir or os.getenv("QAR_CONTEXT_CARDS_DIR")
+                          or os.path.join(resolved_corpus, ".quest-context"))
+
+    provider = None
+    filter_model = None
+    if use_llm:
+        try:
+            from .config import build_orchestrator
+            cfg = _config_from_env()
+            build_orchestrator(cfg)  # wraps cfg.model_provider with MultiProvider
+            provider = cfg.model_provider
+            if provider is not None:
+                from .core.model_registry import ModelRegistry
+                filter_model = ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_tier("balanced")
+        except Exception:  # noqa: BLE001 -- fall back to keyword-only card selection
+            provider = None
+            filter_model = None
+
+    try:
+        store = FileContextStore(resolved_cards_dir, repo_root=resolved_corpus, auto_bootstrap=False,
+                                 provider=provider, model=filter_model)
+        return store.assemble(text)
+    except Exception:  # noqa: BLE001 -- card selection must never block the caller
+        return AssembledContext()
+
+
 def _check_chat_prerequisites(env=None, which=shutil.which) -> List[str]:
     """Validate what `chat` needs before it can run, without opening the TUI.
 
@@ -464,6 +509,11 @@ def main(argv=None) -> int:
     send_p.add_argument("--goal-id", default=None, help="attach to this goal id")
     send_p.add_argument("--at", dest="scheduled_at", default=None,
                         help="ISO-8601 UTC datetime to schedule (omit = run at next poll)")
+    send_p.add_argument("--card", action="append", dest="card_ids", metavar="CARD_ID",
+                        help="Attach a context card (topic) to the task; repeatable.")
+    send_p.add_argument("--no-auto-cards", action="store_true",
+                        help="Do not auto-select context cards from the task text when no "
+                             "--card is given.")
 
     # --- bootstrap subcommand: build/refresh the context card store ----------
     boot_p = sub.add_parser("bootstrap", help="build or refresh the context card store for the corpus")
@@ -588,12 +638,36 @@ def main(argv=None) -> int:
             log.error("QUEST_BASE_URL and QUEST_API_KEY must be set")
             return 1
         client = QuestClient(base_url, api_key, team_id=team_id)
+
+        # Card ids come from two sources: explicit --card flags, or (when none were given and
+        # auto-selection isn't disabled) a best-effort card search over the task text, reusing
+        # the same selection logic as `search-context`. Selection failure never blocks the send.
+        card_ids: List[str] = list(args.card_ids) if getattr(args, "card_ids", None) else []
+        auto_result = None
+        if not card_ids and not getattr(args, "no_auto_cards", False):
+            try:
+                auto_result = select_card_ids_for_text(args.text)
+                if auto_result and auto_result.card_ids:
+                    card_ids = list(auto_result.card_ids)
+            except Exception:  # noqa: BLE001 -- auto card selection must never block send
+                auto_result = None
+                card_ids = []
+
+        if card_ids:
+            topic_names = [
+                (m.get("title") or m.get("id"))
+                for m in (getattr(auto_result, "card_metadata", None) or [])
+            ] if auto_result is not None else []
+            label = ", ".join(str(t) for t in topic_names) if topic_names else ", ".join(card_ids)
+            print(f"Attached {len(card_ids)} context card(s): {label}")
+
         try:
             task = client.create_task(
                 args.text,
                 team_id=args.team_id,
                 goal_id=args.goal_id,
                 scheduled_at=args.scheduled_at,
+                card_ids=card_ids,
             )
         except (QuestApiError, QuestNotConfigured) as e:
             log.error("failed to enqueue task: %s", e)
@@ -878,25 +952,12 @@ def main(argv=None) -> int:
 
     # --- search-context: show which cards a query selects ---------------------
     if args.command == "search-context":
-        import os as _os
-        corpus = getattr(args, "corpus", None) or _os.getenv("QAR_CORPUS_ROOT") or _os.getcwd()
-        cards_dir = getattr(args, "cards_dir", None) or _os.getenv("QAR_CONTEXT_CARDS_DIR") or _os.path.join(corpus, ".quest-context")
-
-        from .adapters.file_context_store import FileContextStore
-        provider = None
-        filter_model = None
-        if not getattr(args, "no_llm", False):
-            from .config import build_orchestrator
-            cfg = _config_from_env()
-            build_orchestrator(cfg)  # wraps cfg.model_provider with MultiProvider
-            provider = cfg.model_provider
-            if provider is not None:
-                from .core.model_registry import ModelRegistry
-                filter_model = ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_tier("balanced")
-
-        store = FileContextStore(cards_dir, repo_root=corpus, auto_bootstrap=False,
-                                 provider=provider, model=filter_model)
-        result = store.assemble(args.query)
+        result = select_card_ids_for_text(
+            args.query,
+            corpus=getattr(args, "corpus", None),
+            cards_dir=getattr(args, "cards_dir", None),
+            use_llm=not getattr(args, "no_llm", False),
+        )
 
         if not result.card_ids:
             print("No context cards matched.")

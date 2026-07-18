@@ -51,3 +51,21 @@ def test_create_task_passes_routing_fields():
     assert body["team_id"] == "team_9"
     assert body["goal_id"] == "goal_3"
     assert body["scheduled_at"] == "2026-07-12T09:00:00Z"
+
+
+def test_create_task_includes_card_ids_when_given():
+    client, captured = client_capturing_body()
+    client.create_task("t", card_ids=["a", "b"])
+    assert captured["body"]["card_ids"] == ["a", "b"]
+
+
+def test_create_task_omits_card_ids_when_not_given():
+    client, captured = client_capturing_body()
+    client.create_task("t")
+    assert "card_ids" not in captured["body"]
+
+
+def test_create_task_omits_card_ids_when_empty_list():
+    client, captured = client_capturing_body()
+    client.create_task("t", card_ids=[])
+    assert "card_ids" not in captured["body"]
