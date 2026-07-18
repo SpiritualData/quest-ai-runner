@@ -98,7 +98,7 @@ from .guard import (
 )
 from .model_registry import TIERS, ModelRegistry
 from .overseer import OverseerSignal, build_digest, oversee
-from .prompt_layers import PromptLayers, compose_layers, turn_prompt_head
+from .prompt_layers import PromptLayers, compose_layers, language_instruction, turn_prompt_head
 from .recent_context import (
     GLOBAL_SCOPE_KEY,
     RecentContextStore,
@@ -446,7 +446,7 @@ _RATIONALE_INSTRUCTION_NARRATE = (
     "look at (not 'details'). You have NOT read anything yet, so name what you're going to check, "
     "never what you expect to find or conclude. No em dashes, greeting, or markdown. Empty if "
     "nothing worth saying. Also set `model_tier`."
-)
+) + "\n\n" + language_instruction()
 # Re-plan steps (step > 0): data is in GATHERED. React to it like a coach, then say what it makes
 # you do next. Bridge insight to intent, never narrate a read in isolation. Also set `model_tier`.
 _RATIONALE_INSTRUCTION_NARRATE_REPLAN = (
@@ -459,7 +459,7 @@ _RATIONALE_INSTRUCTION_NARRATE_REPLAN = (
     "before you've read enough to back it; while it's still a hunch, voice it as a hunch or a "
     "question, not a fact. Never repeat anything in 'Already said'. No em dashes, greeting, or "
     "markdown. Empty if nothing genuinely new. Also set `model_tier`."
-)
+) + "\n\n" + language_instruction()
 
 # Injected at the top of the planner prompt (both the flattened and the layered shape) when the
 # consumer runs the turn with execution_mode="brainstorm". It narrows the ACTION space only; the
@@ -1999,7 +1999,7 @@ Style:
 - Lead with the substance. Your first sentence answers them.
 - Concrete and concise. No filler.
 - Never use an em dash. Use a comma, a colon, parentheses, or two sentences.
-"""
+""" + "\n\n" + language_instruction()
 
 # Synthesize the FINAL user-facing reply after a deferred deep run, grounding it in what the deep
 # run ACTUALLY did/produced. Without this, a deferred-deep turn returns the pre-deep proposal (which

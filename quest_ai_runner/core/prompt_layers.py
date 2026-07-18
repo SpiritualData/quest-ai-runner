@@ -26,7 +26,7 @@ the cache markers.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 # A single ordered prompt block handed to a provider: its text and whether that text is a stable,
 # cache-eligible layer. ``{"text": str, "cache": bool}``.
@@ -41,6 +41,50 @@ MAX_CACHE_BREAKPOINTS = 4
 # line so the flattened form reads naturally and ``prefix()`` stays a true byte-prefix of
 # ``render()`` (see ``join_layers``).
 LAYER_SEPARATOR = "\n\n"
+
+# Supported non-English language codes a user-facing prompt can pin a reply to. Small and
+# deliberate: only add a code here once a consumer actually offers it as a stored preference.
+# Mirrors quest-backend's ``app/prompts/quest_ai_prompts.py`` ``_LANGUAGE_NAMES`` so the two
+# Quest AI prompt surfaces describe language the same way.
+LANGUAGE_NAMES = {"es": "Spanish"}
+
+
+def language_instruction(language: Optional[str] = None) -> str:
+    """A LANGUAGE instruction block for a user-facing prompt surface: a reply/system voice
+    contract, or a narration/rationale instruction.
+
+    Deliberately NOT wired into ``turn_prompt_head``/``compose_layers``: not every call built
+    through those produces text a user ever sees (the silent plan/decide tool call, the internal
+    verify judge), so a caller whose text IS user-facing appends this to its own prompt/system
+    text instead (see ``orchestrator.REPLY_VOICE_SYSTEM`` and the narrate rationale instructions).
+
+    - A code in ``LANGUAGE_NAMES`` pins the reply to that language explicitly, the shape a stored
+      per-user preference would use once one is wired in here (mirrors quest-backend's
+      ``app/prompts/quest_ai_prompts.py`` ``_language_addendum``).
+    - ``None`` or anything else (the default, since quest-ai-runner has no per-user preference
+      lookup of its own) asks the model to mirror whatever language the user's own message is
+      written in. This needs no new plumbing, and it is what actually fixes the reported bug:
+      every reply defaults to English regardless of the language the user writes in.
+    """
+    name = LANGUAGE_NAMES.get((language or "").strip().lower())
+    if name:
+        return (
+            "--- LANGUAGE ---\n"
+            f"Reply in {name}, and keep any reasoning or narration shown to the user in {name} "
+            "too, regardless of what language their message is written in. Keep product names, "
+            "code, file paths, URLs, and their own proper nouns (people, quest titles they wrote) "
+            "exactly as written; do not translate them. Never use em dashes; split the sentence "
+            "or use a comma, colon, or parentheses instead."
+        )
+    return (
+        "--- LANGUAGE ---\n"
+        "Reply in the same language the user's most recent message is written in, and keep any "
+        "reasoning or narration shown to them in that language too. If the message mixes "
+        "languages or the language is unclear, use English. Keep product names, code, file "
+        "paths, URLs, and their own proper nouns (people, quest titles they wrote) exactly as "
+        "written; do not translate them. Never use em dashes; split the sentence or use a comma, "
+        "colon, or parentheses instead."
+    )
 
 
 def join_layers(*parts: str) -> str:
