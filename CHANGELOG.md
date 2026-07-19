@@ -7,6 +7,17 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **`cli send` is instant and offline again by default.** `select_card_ids_for_text`'s
+  LLM-backed card relevance filter defaulted to `use_llm=True`, and `send`'s auto-card-selection
+  called it with no `use_llm` argument -- so every `send` (an offline, instant command before
+  the auto-card-selection feature) started making a model call for card selection by default,
+  adding latency and cost, with the whole selection path (LLM provider setup AND the card store
+  assemble) wrapped in a bare `except Exception: return AssembledContext()` that swallowed any
+  failure with no trace. `use_llm` now defaults to `False` (keyword/IDF selection only, no model
+  call); `search-context` is unaffected since it always passes `use_llm` explicitly (its own
+  `--no-llm` flag). Swallowed exceptions in both the LLM-provider setup and the card-store
+  assemble are now logged as warnings instead of vanishing silently. (`quest_ai_runner/cli.py`.)
+
 - **A genuine question no longer silently opens a task.** Two gaps in the answer->deep escalation
   net let a question phrased with a change verb (or answered with fix-shaped language) get
   escalated to execution even when the planner correctly chose "answer": (1) `_message_requests_change`

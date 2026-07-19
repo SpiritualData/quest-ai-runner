@@ -405,21 +405,26 @@ def _config_from_env() -> RunnerConfig:
 
 def select_card_ids_for_text(text: str, *, corpus: Optional[str] = None,
                              cards_dir: Optional[str] = None,
-                             use_llm: bool = True):
+                             use_llm: bool = False):
     """Resolve which existing context cards ``text`` selects, via the same card store the
     ``search-context`` command and card-aware task creation (``send``) both use.
 
     ``corpus``/``cards_dir`` default the same way ``search-context`` does (QAR_CORPUS_ROOT / cwd,
-    and ``<corpus>/.quest-context`` or QAR_CONTEXT_CARDS_DIR). ``use_llm`` mirrors that command's
-    ``--no-llm`` flag (skip the relevance filter, keyword/IDF selection only).
+    and ``<corpus>/.quest-context`` or QAR_CONTEXT_CARDS_DIR). ``use_llm`` defaults to False
+    (keyword/IDF selection only, no model call) so a caller that doesn't ask for it explicitly
+    gets an instant, offline result; pass ``use_llm=True`` to opt into the LLM relevance filter
+    (what ``search-context`` does unless its ``--no-llm`` flag is given).
 
     Best-effort by design: building the model provider or the card store can fail (unconfigured
-    backend, unreadable corpus, no cards bootstrapped yet). Any failure here is swallowed and an
-    empty ``AssembledContext`` (``card_ids == []``) is returned rather than raised, so a caller
-    that auto-attaches cards to a task never lets card selection block sending the task.
+    backend, unreadable corpus, no cards bootstrapped yet). Any failure here is logged as a
+    warning and an empty ``AssembledContext`` (``card_ids == []``) is returned rather than
+    raised, so a caller that auto-attaches cards to a task never lets card selection block
+    sending the task -- but the failure is not invisible.
     """
     from .adapters.file_context_store import FileContextStore
     from .core.adapters import AssembledContext
+
+    log = logging.getLogger("quest-ai-runner")
 
     resolved_corpus = corpus or os.getenv("QAR_CORPUS_ROOT") or os.getcwd()
     resolved_cards_dir = (cards_dir or os.getenv("QAR_CONTEXT_CARDS_DIR")
@@ -436,7 +441,9 @@ def select_card_ids_for_text(text: str, *, corpus: Optional[str] = None,
             if provider is not None:
                 from .core.model_registry import ModelRegistry
                 filter_model = ModelRegistry(provider, fallback=cfg.model_fallback or None).resolve_tier("balanced")
-        except Exception:  # noqa: BLE001 -- fall back to keyword-only card selection
+        except Exception as e:  # noqa: BLE001 -- fall back to keyword-only card selection
+            log.warning("card selection: could not set up LLM relevance filter, "
+                        "falling back to keyword/IDF only: %s", e)
             provider = None
             filter_model = None
 
@@ -444,7 +451,8 @@ def select_card_ids_for_text(text: str, *, corpus: Optional[str] = None,
         store = FileContextStore(resolved_cards_dir, repo_root=resolved_corpus, auto_bootstrap=False,
                                  provider=provider, model=filter_model)
         return store.assemble(text)
-    except Exception:  # noqa: BLE001 -- card selection must never block the caller
+    except Exception as e:  # noqa: BLE001 -- card selection must never block the caller
+        log.warning("card selection failed, sending with no auto-attached cards: %s", e)
         return AssembledContext()
 
 
@@ -641,7 +649,8 @@ def main(argv=None) -> int:
 
         # Card ids come from two sources: explicit --card flags, or (when none were given and
         # auto-selection isn't disabled) a best-effort card search over the task text, reusing
-        # the same selection logic as `search-context`. Selection failure never blocks the send.
+        # the same selection logic as `search-context`. Keyword/IDF only by default (no model
+        # call) so `send` stays instant and offline; selection failure never blocks the send.
         card_ids: List[str] = list(args.card_ids) if getattr(args, "card_ids", None) else []
         auto_result = None
         if not card_ids and not getattr(args, "no_auto_cards", False):
