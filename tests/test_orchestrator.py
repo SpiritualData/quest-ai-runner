@@ -107,6 +107,43 @@ def test_confirm_raises_escalation_and_returns_decision_id():
     assert sink.raised[0].default_on_silence == "hold"
 
 
+def test_redundant_confirm_on_explicit_request_executes_instead():
+    # Caught live (2026-07-19 reliability battery round 3): a task whose text explicitly and
+    # completely specified a trivial file write was parked as needs_you with "Do you approve this
+    # change?" — a human round-trip with zero information gain. A planner-originated confirm that
+    # merely restates the user's own explicit, non-destructive request must execute via deep.
+    provider = StubProvider(decisions=[
+        {"action": "confirm",
+         "confirm_question": "I will create the file with the exact line requested. Approve?",
+         "rationale": "cautious"},
+        {"met": True, "reason": "done"},
+    ])
+    runner = StubDeepRunner(met=True, output="wrote the file")
+    sink = StubEscalation(decision_id="dec_never")
+    res = _orch(provider, StubRetrieval(), deep_runner=runner, escalation=sink).run(
+        "Create the file probes/probe_alpha.md. Its entire content must be exactly this "
+        "single line and nothing else: PROBE-ALPHA abc123")
+    assert runner.calls, "redundant confirm must execute via the deep runner"
+    assert sink.raised == [], "no decision-request may be raised for a redundant confirm"
+    assert res.kind != "confirm"
+
+
+def test_confirm_with_fork_marker_still_confirms():
+    # The gate is conservative: a destructive/outward/spend marker in either the request or the
+    # proposed act keeps the human fork, even for an explicit imperative.
+    from quest_ai_runner.core.orchestrator import _confirm_is_redundant
+
+    assert not _confirm_is_redundant("delete every probe file in the folder", "Delete them all?")
+    assert not _confirm_is_redundant("email the donor about the event", "Send the donor email now?")
+    assert not _confirm_is_redundant("buy item X", "Buy item X for $50?")
+    # Not a change request at all -> never redundant.
+    assert not _confirm_is_redundant("what does this file do?", "Open the file?")
+    # The live probe shape -> redundant.
+    assert _confirm_is_redundant(
+        "Create the file probes/probe_alpha.md with exactly this line: PROBE-ALPHA abc123",
+        "I will create a new entry with that content. Do you approve this change?")
+
+
 def test_cap_falls_back_to_best_effort_answer():
     # Planner keeps saying "read" forever -> hit max_steps -> best-effort grounded answer.
     provider = StubProvider(decisions=[

@@ -67,6 +67,21 @@ All notable changes to this project are documented here. The format is based on
   confession shapes it missed: "I cannot execute/run …" and "the system will need to execute/
   write …". (`quest_ai_runner/core/orchestrator.py`.)
 
+- **A redundant confirm executes instead of asking.** A planner-originated confirm that merely
+  re-asks permission for exactly what the user already explicitly requested (an explicit change
+  request with no destructive/outward/spend marker in either the request or the proposed act)
+  now re-routes to deep execution instead of parking the task as a needs_you decision-request —
+  caught live by the same reliability battery, where "create this file with exactly this line"
+  was answered with "Do you approve this change?". Conservative: any fork marker
+  (delete/send/publish/deploy/pay/…) in either text keeps the human fork, and overseer
+  `escalate_human` confirms are never re-routed. (`quest_ai_runner/core/orchestrator.py`.)
+
+- **A missing per-team ai-profile no longer warns on every poll.** `get_ai_profile` /
+  `update_ai_profile` logged a WARNING on any error; a 404 just means the member has no per-team
+  AI rep profile (e.g. a registry-rep-only executor), an expected state hit twice per task by
+  the rep-sync loop. 404s now log at debug; real failures still warn.
+  (`quest_ai_runner/runner/quest_client.py`.)
+
 ### Added
 - **`GoogleDriveAdapter`** (`quest_ai_runner/adapters/google_drive_adapter.py`) — a generic
   `RetrievalAdapter` over Google Drive files and folders, mirroring `GoogleChatAdapter` exactly:

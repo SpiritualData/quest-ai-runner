@@ -847,7 +847,12 @@ class QuestClient:
         except QuestNotConfigured:
             raise
         except QuestApiError as e:
-            log.warning("get_ai_profile failed for user %s: %s", user_id, e)
+            # 404 = this member simply has no per-team AI rep profile (e.g. a registry-rep-only
+            # executor). An expected state on every poll, not a warning.
+            if getattr(e, "status", None) == 404:
+                log.debug("no ai-profile for user %s on team: %s", user_id, e)
+            else:
+                log.warning("get_ai_profile failed for user %s: %s", user_id, e)
             return {}
 
     def update_ai_profile(self, user_id: str, *, display_name: Optional[str] = None,
@@ -876,7 +881,10 @@ class QuestClient:
             return self._request(
                 "PUT", f"/api/teams/{tid}/members/{user_id}/ai-profile", body=body) or {}
         except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("update_ai_profile failed for user %s: %s", user_id, e)
+            if getattr(e, "status", None) == 404:
+                log.debug("no ai-profile to edit for user %s on team: %s", user_id, e)
+            else:
+                log.warning("update_ai_profile failed for user %s: %s", user_id, e)
             return {}
 
     def add_rep_correction(self, user_id: str, correction: str, *,

@@ -2180,6 +2180,41 @@ def _message_requests_change(message: Optional[str]) -> bool:
         return False
 
 
+# Markers of acts a confirm fork is genuinely FOR: destructive, outward-facing, or spend. If any
+# appears in the user's request OR the planner's confirm question, the confirm stands. Substring
+# match, deliberately broad ("irreversib" catches irreversible/irreversibly) — false negatives
+# (keeping a confirm) are cheap; false positives (skipping one) are not.
+_CONFIRM_FORK_MARKERS = (
+    "delete", "remove", "drop", "erase", "wipe", "destroy", "truncate", "revert", "reset",
+    "uninstall", "deactivate", "disable", "overwrite", "rename", "migrate",
+    "send", "email", "e-mail", "publish", "post", "tweet", "announce", "notify",
+    "deploy", "release", "push", "merge", "production", "prod ",
+    "pay", "payment", "purchase", "buy", "order", "invoice", "refund", "subscribe",
+    "unsubscribe", "cancel", "irreversib",
+)
+
+
+def _confirm_is_redundant(user_message: Optional[str], confirm_question: Optional[str]) -> bool:
+    """True when a planner-originated confirm merely re-asks permission for exactly what the
+    user already explicitly requested.
+
+    The AI-first operating doctrine routes ROUTINE work to execution and reserves the human fork
+    for genuine forks (destructive, outward-facing, spend, ambiguity). A confirm on a message
+    that (a) IS an explicit change request and (b) carries no fork marker in either the request
+    or the proposed act adds a human round-trip with zero information gain — caught live by the
+    2026-07-19 reliability battery, where "create this file with exactly this line" was answered
+    with "Do you approve this change?" and parked as needs_you. Conservative by construction:
+    any fork marker in either text keeps the confirm. Never raises.
+    """
+    try:
+        if not _message_requests_change(user_message):
+            return False
+        blob = f"{user_message or ''}\n{confirm_question or ''}".lower()
+        return not any(marker in blob for marker in _CONFIRM_FORK_MARKERS)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def message_change_signal_ambiguous(message: Optional[str]) -> bool:
     """True when ``message`` carries a cheap signal of an executable directive (a change verb or a
     wrongness description) but ``_message_requests_change`` still returned False for it -- because
@@ -7777,6 +7812,19 @@ class Orchestrator:
                 return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
                                                  partial=True, model=model,
                                                  exit_reason="read_budget"))
+            plan.action = final = "deep"
+            plan.goal = _truncate_goal(plan.goal or f"Fully address the request: {user_message}")
+            plan.deep_brief = plan.deep_brief or user_message
+
+        # CONFIRM REDUNDANCY GATE: a planner-originated confirm that merely re-asks permission
+        # for exactly what the user already explicitly requested executes instead (deep). Runs
+        # BEFORE the deep branch below so the re-route takes the normal deep path. Overseer
+        # escalate_human confirms are genuine human forks and are never re-routed; brainstorm
+        # turns cannot reach here as "confirm" (the terminal gate above degraded them to answer).
+        if (final == "confirm" and overseer_decided != "overseer_escalated_human"
+                and _confirm_is_redundant(user_message, plan.confirm_question)):
+            log.info("Confirm redundancy gate: user message already explicitly requests this "
+                     "non-destructive act; executing via deep instead of asking approval.")
             plan.action = final = "deep"
             plan.goal = _truncate_goal(plan.goal or f"Fully address the request: {user_message}")
             plan.deep_brief = plan.deep_brief or user_message
