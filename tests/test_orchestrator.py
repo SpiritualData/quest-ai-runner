@@ -165,6 +165,23 @@ def test_answer_describing_unexecuted_work_escalates_to_deep():
     assert runner.calls, "expected a deferred deep run to execute the described work"
 
 
+def test_unexecuted_work_classifier_catches_inability_confessions():
+    # Caught live (2026-07-19 reliability battery): a write-a-file task was answered with an
+    # explicit inability confession + a plan for "the system" to run, and reported done. The
+    # classifier missed both shapes; they must register as unexecuted work.
+    from quest_ai_runner.core.orchestrator import _answer_describes_unexecuted_work as describes
+
+    assert describes(
+        "I cannot execute this task in the read-and-answer step -- I can't run commands or "
+        "edit files here. The system will need to execute the following: run the command "
+        "and write the file."
+    )
+    assert describes("The system will need to write the branch name to the file.")
+    # User-dependent asks and plain informational answers must stay False.
+    assert not describes("Please provide your API key so I can continue.")
+    assert not describes("The current branch is july.")
+
+
 def test_deferred_deep_output_is_folded_into_final_answer():
     # Regression: a deferred deep run did the real work, but the user-facing reply stayed the
     # pre-deep proposal (which reads as "shall I proceed?") with NO awareness of what the deep run

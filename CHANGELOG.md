@@ -44,6 +44,18 @@ All notable changes to this project are documented here. The format is based on
   iteration. These now wrap into `QuestApiError` like every other transport failure, so callers
   degrade calmly and retry. (`quest_ai_runner/runner/quest_client.py`.)
 
+- **A budget-capped CHANGE REQUEST escalates to deep instead of wrapping up with words.** The
+  read-budget fallback answered with a best-effort reply whenever ANY observation had been
+  gathered — even for an explicit "do X" task with escalation available — and that reply path
+  returns early, bypassing the `_answer_describes_unexecuted_work` net that guards the normal
+  answer path. Caught live by an artifact-verified reliability battery (2026-07-19): a
+  write-a-file probe was answered "I cannot execute this task in the read-and-answer step …
+  the system will need to execute the following …" and reported `done` with nothing executed.
+  Now `_message_requests_change` gates the wrap-up: a change request escalates to deep (brainstorm
+  mode unchanged — escalation is unavailable there by design). The classifier also learned two
+  confession shapes it missed: "I cannot execute/run …" and "the system will need to execute/
+  write …". (`quest_ai_runner/core/orchestrator.py`.)
+
 ### Added
 - **`GoogleDriveAdapter`** (`quest_ai_runner/adapters/google_drive_adapter.py`) — a generic
   `RetrievalAdapter` over Google Drive files and folders, mirroring `GoogleChatAdapter` exactly:

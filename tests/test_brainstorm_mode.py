@@ -658,7 +658,27 @@ def test_brainstorm_read_budget_wrapup_carries_the_ack():
 
 def test_brainstorm_read_budget_wrapup_in_normal_mode_unchanged():
     """The same cap in NORMAL mode still wraps up with the best-effort answer and no brainstorm
-    steer of any kind (the wrap-up change is brainstorm-only)."""
+    steer of any kind (the wrap-up change is brainstorm-only). Uses a NON-change message: a
+    budget-capped CHANGE request escalates to deep instead (see the next test)."""
+    provider = StubProvider(decisions=[
+        {"action": "read", "reads": [{"rel_path": "README.md"}], "rationale": "grounding"},
+        {"met": True, "reason": "done"},
+    ])
+    runner = StubDeepRunner(met=True, output="did it")
+    res = _orch(provider, StubRetrieval({"README.md": "GROUNDING notes"}), deep_runner=runner,
+                config=OrchestratorConfig(max_steps=1)).run(
+        "summarize what the README says about setup")
+    assert res.kind == "answer"          # gathered something -> best-effort answer, as before
+    assert res.exit_reason == "read_budget"
+    assert _ACK_MARKER not in _answer_prompt(provider)
+    assert _HONESTY_MARKER not in _answer_prompt(provider)
+
+
+def test_read_budget_change_request_escalates_to_deep_in_normal_mode():
+    """A budget-capped CHANGE REQUEST must never wrap up with words in normal mode: the
+    best-effort answer path used to answer 'here is what the system would need to do' and get
+    reported done with nothing executed (caught live by the 2026-07-19 reliability battery, a
+    write-a-file probe). With escalation available, the work escalates to deep instead."""
     provider = StubProvider(decisions=[
         {"action": "read", "reads": [{"rel_path": "README.md"}], "rationale": "grounding"},
         {"met": True, "reason": "done"},
@@ -666,10 +686,8 @@ def test_brainstorm_read_budget_wrapup_in_normal_mode_unchanged():
     runner = StubDeepRunner(met=True, output="did it")
     res = _orch(provider, StubRetrieval({"README.md": "GROUNDING notes"}), deep_runner=runner,
                 config=OrchestratorConfig(max_steps=1)).run("fix the login bug")
-    assert res.kind == "answer"          # gathered something -> best-effort answer, as before
-    assert res.exit_reason == "read_budget"
-    assert _ACK_MARKER not in _answer_prompt(provider)
-    assert _HONESTY_MARKER not in _answer_prompt(provider)
+    assert runner.calls, "budget-capped change request must reach the deep runner"
+    assert res.exit_reason != "read_budget"
 
 
 def test_brainstorm_regenerated_answers_keep_the_ack():

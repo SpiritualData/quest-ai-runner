@@ -2213,6 +2213,14 @@ def _answer_describes_unexecuted_work(text: Optional[str]) -> bool:
         # Patterns for work AI CAN execute (executable patterns)
         # Match "I/we/you need to", "the system needs to", "the code needs to", etc.
         executable = [
+            # Explicit inability confession: "I cannot execute this task", "I can't run commands
+            # or edit files here" — the answer itself admits the work was not done.
+            r"(?:i|we)\s+(?:cannot|can'?t|am\s+not\s+able\s+to|was\s+unable\s+to)\s+"
+            r"(?:execute|run|perform|complete|do|apply|write|edit|modify|create)",
+            # "The system will need to execute/run/write ..." — deferring the work to
+            # an unnamed executor instead of doing it.
+            r"the\s+system\s+(?:will\s+)?(?:need|have)s?\s+to\s+"
+            r"(?:execute|run|perform|write|update|modify|change|create|apply)",
             r"(?:i|we|the\s+(?:code|system|logic|field|implementation))\s+(?:need|should|must)\s+(?:to\s+)?(?:update|modify|change|fix|add|remove|delete|create|implement|edit)",
             r"(?:i|we)\s+(?:need|should|must)\s+(?:to\s+)?(?:update|edit|modify).{0,30}(?:code|file|logic|field|database|api|endpoint)",
             r"to\s+(?:fix|address|resolve)\s+this,?\s+(?:i|we)\s+(?:need|should|must)",
@@ -7752,8 +7760,15 @@ class Orchestrator:
         # In brainstorm mode escalation is unavailable, so a budget-capped turn always wraps up
         # with a best-effort grounded answer (even with nothing gathered) instead of acting -- and
         # it grounds through ``_answer_grounding``, so it carries the no-action acknowledgment too.
+        # A CHANGE REQUEST never wraps up with words when escalation is available: a budget-capped
+        # "do X" answered with "here is what the system would need to do" used to be reported done
+        # with nothing executed (caught live by the 2026-07-19 reliability battery: a write-a-file
+        # probe answered "I cannot execute this task in the read-and-answer step" and PATCHed done,
+        # bypassing the _answer_describes_unexecuted_work net below, which only guards the normal
+        # answer path). Requests for work escalate to deep instead.
         if final not in ("answer", "deep", "confirm", "clarify"):
-            if gathered or brainstorm_active:
+            must_execute = (not brainstorm_active) and _message_requests_change(user_message)
+            if (gathered or brainstorm_active) and not must_execute:
                 emit.status("Wrapping up with a best-effort answer…")
                 model = self._answer_model(plan, "balanced", hint=model_hint)
                 text = self._grounded_answer(user_message, transcript, _answer_grounding(), gathered,
