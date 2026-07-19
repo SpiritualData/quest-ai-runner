@@ -37,6 +37,13 @@ All notable changes to this project are documented here. The format is based on
   the stdout envelope (`is_error`/`result`), which is now surfaced in the raised error.
   (`quest_ai_runner/adapters/claude_cli_provider.py`.)
 
+- **Socket-level transport errors no longer escape `QuestClient` raw.** `_request` wrapped only
+  `HTTPError`/`URLError`, but a read that times out (or a connection reset) escapes `urlopen` as
+  a RAW `TimeoutError`/`OSError` — blowing through every "never raises" caller contract (e.g. the
+  fast lane's `wait_for_interactive`) and spamming the poller log with a full traceback per
+  iteration. These now wrap into `QuestApiError` like every other transport failure, so callers
+  degrade calmly and retry. (`quest_ai_runner/runner/quest_client.py`.)
+
 ### Added
 - **`GoogleDriveAdapter`** (`quest_ai_runner/adapters/google_drive_adapter.py`) — a generic
   `RetrievalAdapter` over Google Drive files and folders, mirroring `GoogleChatAdapter` exactly:

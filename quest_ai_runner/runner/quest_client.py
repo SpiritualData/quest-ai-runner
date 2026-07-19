@@ -110,6 +110,12 @@ class QuestClient:
             raise QuestApiError(f"Quest API {method} {path} -> {e.code}: {detail}", status=e.code) from e
         except urllib.error.URLError as e:
             raise QuestApiError(f"Quest API {method} {path} unreachable: {e.reason}") from e
+        except (TimeoutError, OSError) as e:
+            # A socket-level timeout/reset during the read escapes urlopen as a raw TimeoutError/
+            # OSError, NOT a URLError — without this wrap it would blow through every "never
+            # raises" caller contract (e.g. wait_for_interactive) and spam the poller with
+            # tracebacks instead of a calm retry.
+            raise QuestApiError(f"Quest API {method} {path} transport error: {e}") from e
 
     # --- identity ------------------------------------------------------------
 
