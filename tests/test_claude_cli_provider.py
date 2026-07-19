@@ -15,10 +15,44 @@ def test_cli_model_maps_family_ids_to_aliases():
     assert cli_model("claude-haiku-4-5-20251001") == "haiku"
     # already an alias -> unchanged family alias
     assert cli_model("sonnet") == "sonnet"
-    # unknown id passes through; None stays None
-    assert cli_model("some-other-model") == "some-other-model"
+    # fully-qualified Claude ids without a family word pass through
+    assert cli_model("us.anthropic.claude-x-1") == "us.anthropic.claude-x-1"
     assert cli_model(None) is None
     assert cli_model("") is None
+
+
+def test_cli_model_drops_non_claude_ids():
+    # The CLI only runs Claude models. A tier map built for a Gemini/OpenAI deployment must not
+    # leak a foreign id into --model (the CLI exits 1 having done nothing); fall back to the
+    # CLI's default model instead — the same gate the deep runner applies (_is_claude_model).
+    assert cli_model("gemini-3.1-flash-lite") is None
+    assert cli_model("gemini-3.5-flash") is None
+    assert cli_model("gpt-4o") is None
+    assert cli_model("some-other-model") is None
+
+
+def test_invoke_error_surfaces_stdout_envelope(monkeypatch):
+    # In --output-format json mode the CLI reports errors in the stdout envelope with an EMPTY
+    # stderr; the raised error must carry the envelope's result text, not "no stderr".
+    import json
+    import subprocess
+
+    provider = ClaudeCliProvider()
+    envelope = {"is_error": True, "result": "API Error: 404 model not found"}
+
+    def fake_run(cmd, **kwargs):
+        class P:
+            returncode = 1
+            stdout = json.dumps(envelope).encode()
+            stderr = b""
+        return P()
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    try:
+        provider._invoke("hi", model="haiku")
+        raise AssertionError("expected RuntimeError")
+    except RuntimeError as e:
+        assert "API Error: 404 model not found" in str(e)
 
 
 def test_extract_json_object_bare():

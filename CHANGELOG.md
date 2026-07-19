@@ -25,6 +25,18 @@ All notable changes to this project are documented here. The format is based on
   still carries an ambiguous signal gets the same fair LLM judgment instead of a blind regex verdict.
   (`quest_ai_runner/core/orchestrator.py`.)
 
+- **A claude_cli deployment no longer dies on a foreign tier model.** With
+  `QAR_MODEL_BACKEND=claude_cli` and no tier overrides, `ModelRegistry`'s generic last-known
+  defaults resolve the fast/balanced/quality tiers to Gemini ids; the orchestrator's
+  provider-routing then found no Gemini provider, fell back to the primary claude_cli provider,
+  and passed the Gemini id straight to `claude --model` — which exits 1 having done nothing, so
+  EVERY queued task failed at its first planner call. `cli_model()` now applies the same gate the
+  deep runner's `_is_claude_model` has always applied: a non-Claude id maps to `None` (the CLI's
+  default model) instead of leaking into `--model`. Additionally, `_invoke` no longer reports a
+  useless "no stderr" on failure: in `--output-format json` mode the CLI puts the real error in
+  the stdout envelope (`is_error`/`result`), which is now surfaced in the raised error.
+  (`quest_ai_runner/adapters/claude_cli_provider.py`.)
+
 ### Added
 - **`GoogleDriveAdapter`** (`quest_ai_runner/adapters/google_drive_adapter.py`) — a generic
   `RetrievalAdapter` over Google Drive files and folders, mirroring `GoogleChatAdapter` exactly:

@@ -55,9 +55,12 @@ _FAMILY_ALIASES = ("opus", "sonnet", "haiku")
 def cli_model(model: Optional[str]) -> Optional[str]:
     """Map a resolved model id to a CLI-acceptable model arg.
 
-    If the id names a known family it becomes that family's alias (latest of family); otherwise it
-    is passed through unchanged (a fully-qualified id the CLI also accepts). ``None`` → ``None``
-    (let the CLI use its default model).
+    If the id names a known family it becomes that family's alias (latest of family). A non-Claude
+    id (e.g. ``gemini-3.1-flash-lite`` from a tier map built for a Gemini deployment) maps to
+    ``None`` — the CLI only runs Claude models, and passing a foreign id as ``--model`` makes it
+    exit 1 having done nothing (same trap the deep runner's ``_is_claude_model`` gate closes).
+    Remaining Claude ids pass through unchanged (fully-qualified ids the CLI also accepts).
+    ``None`` → ``None`` (let the CLI use its default model).
     """
     if not model:
         return None
@@ -65,6 +68,8 @@ def cli_model(model: Optional[str]) -> Optional[str]:
     for fam in _FAMILY_ALIASES:
         if fam in low:
             return fam
+    if "claude" not in low and "anthropic" not in low:
+        return None
     return model
 
 
@@ -269,6 +274,16 @@ class ClaudeCliProvider(ModelProviderBase):
         out = (proc.stdout or b"").decode("utf-8", errors="replace")
         if proc.returncode != 0:
             err = (proc.stderr or b"").decode("utf-8", errors="replace").strip()
+            # In --output-format json mode the CLI reports errors in the STDOUT envelope
+            # ({"is_error": true, "result": "API Error: ..."}), often with an empty stderr —
+            # surface that instead of a useless "no stderr".
+            if not err and out:
+                try:
+                    envelope = json.loads(out)
+                    if isinstance(envelope, dict) and envelope.get("result"):
+                        err = str(envelope["result"])
+                except (ValueError, TypeError):
+                    err = out[:300].strip()
             raise RuntimeError(f"claude CLI exited {proc.returncode}: {err or 'no stderr'}")
         try:
             envelope = json.loads(out)
