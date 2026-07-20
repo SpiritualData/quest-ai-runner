@@ -29,12 +29,14 @@ stays fresh without any separate re-index step.
 MULTI-TENANT SCOPING
 --------------------
 Every operation accepts an optional ``scope`` dict (e.g.
-``{org_id: ..., team_id: ..., quest_id: ...}``).  All points live in ONE
-collection (``{collection_prefix}_default``); the sorted scope items are hashed
-to a short digest stored on each point as the ``_scope`` payload field, and
-searches filter on it (the same payload-filter multitenancy model as
-``QdrantCardVectorStore``, and the model Qdrant itself recommends over
-collection-per-tenant).
+``{org_id: ..., team_id: ..., quest_id: ...}``).  All points of a store live in
+ONE collection — ``{collection_prefix}_default_{vector_size}``, keyed on the
+embedder's true dimension so differently-embedding stores sharing a server
+never collide (a bare legacy ``{collection_prefix}_default`` is reused when its
+size matches).  The sorted scope items are hashed to a short digest stored on
+each point as the ``_scope`` payload field, and searches filter on it (the same
+payload-filter multitenancy model as ``QdrantCardVectorStore``, and the model
+Qdrant itself recommends over collection-per-tenant).
 
 Visibility rules:
 
@@ -253,9 +255,10 @@ class QdrantVectorStore(VectorStoreBase):
     url:
         If given, connect to this Qdrant server URL instead of using embedded mode.
     collection_prefix:
-        All points live in the single collection ``{collection_prefix}_default``
-        (scope is a payload filter, not a collection suffix — see MULTI-TENANT
-        SCOPING in the module docstring).  Default: ``"qar_ctx"``.
+        All points of this store live in the single collection
+        ``{collection_prefix}_default_{vector_size}`` (scope is a payload
+        filter, not a collection suffix — see MULTI-TENANT SCOPING in the
+        module docstring).  Default: ``"qar_ctx"``.
     embedder:
         Optional callable ``(texts: List[str]) -> List[List[float]]``.  Used for
         ``upsert`` and ``sync`` (items being stored).  When omitted the store
@@ -267,8 +270,12 @@ class QdrantVectorStore(VectorStoreBase):
         query input types (e.g. Voyage AI ``input_type="document"`` /
         ``"query"``).
     vector_size:
-        Dimensionality of the embedding vectors.  Must match whatever ``embedder``
-        produces.  Default: 384 (matches the fastembed default model).
+        Expected dimensionality of the embedding vectors.  Default: 384
+        (matches the fastembed default model).  This is only the initial
+        expectation: the store adopts the REAL dimension observed from the
+        embedder's output before any collection is created, so a misdeclared
+        size never pins a collection to the wrong dimension (which would make
+        Qdrant silently decline every write).
     """
 
     def __init__(
@@ -297,6 +304,10 @@ class QdrantVectorStore(VectorStoreBase):
 
         self._prefix = collection_prefix
         self._vector_size = vector_size
+        # Resolved shared-collection name (see _resolve_collection).  None until
+        # first resolved; reset whenever the effective vector size changes.
+        self._resolved_collection: Optional[str] = None
+        self._size_mismatch_warned = False
 
         # Build the client (embedded or remote).
         if url:
@@ -337,15 +348,79 @@ class QdrantVectorStore(VectorStoreBase):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _collection_name(self) -> str:
-        """The single collection ALL points live in, regardless of scope.
+    def _adopt_embedding_dim(self, dim: int) -> None:
+        """Adopt the REAL embedding dimension observed from the embedder.
 
-        Named ``{prefix}_default`` — the same name the legacy layout used for
-        unscoped points — so existing unscoped data is picked up with no
-        migration.  Scope is a payload filter (``_SCOPE_KEY``), not a
-        collection-name suffix.
+        ``vector_size`` is only the constructor's expectation; consumers wire
+        embedders (Voyage 1024-d, OpenAI 1536-d, fastembed 384-d) without
+        always updating it.  Creating a collection at the declared size and
+        then upserting differently-sized vectors makes Qdrant decline every
+        point server-side while the never-raises contract keeps the caller
+        oblivious — a silent context loss.  Adopting the observed dimension
+        BEFORE any collection is resolved/created kills that class of bug: the
+        shared collection is always created at the embedder's true size.
         """
-        return f"{self._prefix}_default"
+        if dim and dim != self._vector_size:
+            logger.warning(
+                "QdrantVectorStore: embedder produced %d-dim vectors but "
+                "vector_size=%d was configured; adopting %d",
+                dim, self._vector_size, dim,
+            )
+            self._vector_size = dim
+            self._resolved_collection = None
+
+    def _collection_name(self) -> str:
+        """The single collection ALL points of this store live in, regardless of scope.
+
+        Scope is a payload filter (``_SCOPE_KEY``), not a collection-name
+        suffix.  The name is keyed on the vector size —
+        ``{prefix}_default_{size}`` — so two stores with different embedder
+        configurations pointing at the SAME shared server never collide on one
+        collection (mixed vector sizes in one collection make Qdrant decline
+        the mismatched writes point-by-point, silently under the never-raises
+        contract).
+
+        Legacy compatibility: when the bare ``{prefix}_default`` collection
+        (the pre-size-keyed layout) exists AND its configured vector size
+        matches, it is reused so existing data needs no migration.  When it
+        exists with a DIFFERENT size, a warning is logged once and the
+        size-keyed name is used instead — writes land somewhere real rather
+        than being declined against the mismatched collection.
+        """
+        if self._resolved_collection is not None:
+            return self._resolved_collection
+        legacy = f"{self._prefix}_default"
+        sized = f"{self._prefix}_default_{self._vector_size}"
+        try:
+            exists = bool(self._client.collection_exists(legacy))
+        except Exception:  # noqa: BLE001 — transport trouble: fall back, don't cache
+            logger.debug("QdrantVectorStore: legacy collection check failed", exc_info=True)
+            return sized
+        name = sized
+        if exists:
+            legacy_size = self._collection_vector_size(legacy)
+            if legacy_size == self._vector_size:
+                name = legacy
+            elif legacy_size is not None and not self._size_mismatch_warned:
+                logger.warning(
+                    "QdrantVectorStore: existing collection %s holds %s-dim vectors "
+                    "but this store embeds %s-dim; using %s instead",
+                    legacy, legacy_size, self._vector_size, sized,
+                )
+                self._size_mismatch_warned = True
+        self._resolved_collection = name
+        return name
+
+    def _collection_vector_size(self, name: str) -> Optional[int]:
+        """The configured (unnamed single-)vector size of a collection, or None."""
+        try:
+            info = self._client.get_collection(collection_name=name)
+            vectors = info.config.params.vectors
+            size = getattr(vectors, "size", None)
+            return int(size) if size is not None else None
+        except Exception:  # noqa: BLE001
+            logger.debug("QdrantVectorStore: could not read %s vector size", name, exc_info=True)
+            return None
 
     def _ensure_collection(self, name: str) -> None:
         """Create the Qdrant collection if it does not exist yet.  WRITE paths only.
@@ -460,6 +535,7 @@ class QdrantVectorStore(VectorStoreBase):
             vecs = self._query_embed_safe([query])
             if not vecs:
                 return []
+            self._adopt_embedding_dim(len(vecs[0]))
             coll = self._collection_name()
             # Use query_points (the current Qdrant API; the old .search() was removed).
             response = self._client.query_points(
@@ -506,6 +582,7 @@ class QdrantVectorStore(VectorStoreBase):
             vecs = self._embed_safe(texts)
             if not vecs or len(vecs) != len(items):
                 return
+            self._adopt_embedding_dim(len(vecs[0]))
             coll = self._collection_name()
             self._ensure_collection(coll)
             digest = _scope_hash(scope)
@@ -663,7 +740,7 @@ class QdrantVectorStore(VectorStoreBase):
     # Maintenance
     # ------------------------------------------------------------------
 
-    def prune_scope_collections(self) -> int:
+    def prune_scope_collections(self, *, pace_seconds: float = 0.0) -> int:
         """Delete EMPTY legacy per-scope collections left by the old layout.
 
         An earlier version of this store created one collection per unique
@@ -671,19 +748,26 @@ class QdrantVectorStore(VectorStoreBase):
         long-lived shared server accumulates hundreds of empty collections,
         each adding shard-recovery time to server startup.  This deletes every
         ``{prefix}_``-prefixed collection that holds ZERO points, except the
-        unified ``{prefix}_default`` collection.  Non-empty legacy collections
-        are left untouched (logged at warning level) — by construction of the
-        old code they should not exist, so one deserves a human look.
+        unified collections (``{prefix}_default`` and any size-keyed
+        ``{prefix}_default_*``).  Non-empty legacy collections are left
+        untouched (logged at warning level) — by construction of the old code
+        they should not exist, so one deserves a human look.
+
+        ``pace_seconds`` sleeps between deletions — pass a small value (e.g.
+        0.25) on a busy shared server so a long sweep does not starve its
+        other clients.
 
         Returns the number of collections deleted.  Never raises.  Safe to run
         repeatedly; call it once per deployment after upgrading.
         """
+        import time as _time
+
         deleted = 0
         try:
-            unified = self._collection_name()
+            keep_prefix = f"{self._prefix}_default"
             names = [c.name for c in self._client.get_collections().collections]
             for name in names:
-                if not name.startswith(f"{self._prefix}_") or name == unified:
+                if not name.startswith(f"{self._prefix}_") or name.startswith(keep_prefix):
                     continue
                 try:
                     info = self._client.get_collection(collection_name=name)
@@ -696,6 +780,8 @@ class QdrantVectorStore(VectorStoreBase):
                         continue
                     self._client.delete_collection(collection_name=name)
                     deleted += 1
+                    if pace_seconds > 0:
+                        _time.sleep(pace_seconds)
                 except Exception:  # noqa: BLE001 — one bad collection must not stop the sweep
                     logger.debug(
                         "QdrantVectorStore.prune_scope_collections: skipping %s",

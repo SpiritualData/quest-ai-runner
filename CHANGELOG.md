@@ -27,6 +27,22 @@ All notable changes to this project are documented here. The format is based on
   `prune_scope_collections()` maintenance method deletes the empty legacy per-scope
   collections left behind by the old layout (run once per deployment after upgrading).
   (`quest_ai_runner/adapters/qdrant_vector_store.py`, `docs/vector-context.md`.)
+- **`QdrantVectorStore` collections are keyed on the embedder's true dimension, and the store
+  adopts the real embedding size instead of trusting the declared `vector_size`.** Two stores
+  with different embedder configurations (e.g. fastembed 384-d and Voyage 1024-d) pointing at
+  the same shared server used to collide on one collection: whichever config created it pinned
+  the dimension, and every write from the other config was declined point-by-point server-side
+  ("Vector dimension error: expected dim: 384, got 1024") while the never-raises contract kept
+  callers oblivious — observed live against a shared dev server. Worse, `vector_size` was only
+  a declaration: the auto-wired Voyage/OpenAI embedder paths never set it, so the store could
+  create a 384-d collection and then embed 1024-d vectors into it. The unified collection is
+  now named `{prefix}_default_{size}`, the store adopts the REAL dimension observed from
+  embedder output before any collection is created (warning when it differs from the declared
+  size), and a bare legacy `{prefix}_default` is reused only when its configured size matches
+  (mismatched legacy collections are left alone with a one-time warning). `prune_scope_collections()`
+  never touches `{prefix}_default*` collections and gained a `pace_seconds` throttle for
+  sweeping busy shared servers. (`quest_ai_runner/adapters/qdrant_vector_store.py`,
+  `tests/test_qdrant_vector_store_scoping.py`.)
 - **`cli send` is instant and offline again by default.** `select_card_ids_for_text`'s
   LLM-backed card relevance filter defaulted to `use_llm=True`, and `send`'s auto-card-selection
   called it with no `use_llm` argument -- so every `send` (an offline, instant command before

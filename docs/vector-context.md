@@ -321,7 +321,15 @@ store.upsert(items, scope=scope)
 store.sync(items, scope=scope)
 ```
 
-All points live in ONE Qdrant collection (``{collection_prefix}_default``).
+All points of a store live in ONE Qdrant collection,
+``{collection_prefix}_default_{vector_size}`` — keyed on the embedder's true
+dimension (adopted from real embedder output, not just the declared
+``vector_size``) so two stores with different embedder configurations sharing
+one server never collide on a collection.  Mixed vector sizes in a single
+collection make Qdrant decline the mismatched writes point-by-point, which the
+never-raises contract would otherwise hide.  A bare legacy
+``{collection_prefix}_default`` collection is reused as-is when its configured
+size matches the embedder, so pre-existing data needs no migration.
 The store hashes the sorted scope items to a short digest stored on each point
 as the ``_scope`` payload field, and searches filter on it — the payload-filter
 multitenancy model Qdrant recommends over collection-per-tenant.

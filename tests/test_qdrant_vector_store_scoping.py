@@ -78,7 +78,7 @@ class TestSingleCollection:
         store.upsert([{"id": "a", "text": "alpha"}], scope=None)
         store.upsert([{"id": "b", "text": "beta"}], scope={"team": "t1"})
         store.upsert([{"id": "c", "text": "gamma"}], scope={"team": "t2"})
-        assert collection_names(store) == {"qar_ctx_default"}
+        assert collection_names(store) == {f"qar_ctx_default_{VEC_SIZE}"}
 
 
 class TestScopeVisibility:
@@ -173,6 +173,110 @@ class TestPruneLegacyCollections:
 
         assert store.prune_scope_collections() == 3
         names = collection_names(store)
-        assert names == {"qar_ctx_default", "qar_ctx_dddddddddddd", "someone_elses"}
+        assert names == {
+            f"qar_ctx_default_{VEC_SIZE}",
+            "qar_ctx_dddddddddddd",
+            "someone_elses",
+        }
         # Idempotent.
         assert store.prune_scope_collections() == 0
+
+    def test_prune_never_deletes_default_collections(self, store, tmp_path):
+        from qdrant_client.models import Distance, VectorParams
+
+        params = VectorParams(size=VEC_SIZE, distance=Distance.COSINE)
+        client = store._client
+        # Empty bare-legacy default and an empty size-keyed default of ANOTHER
+        # embedder config must both survive a prune.
+        client.create_collection("qar_ctx_default", vectors_config=params)
+        client.create_collection("qar_ctx_default_1024", vectors_config=params)
+        client.create_collection("qar_ctx_aaaaaaaaaaaa", vectors_config=params)
+        assert store.prune_scope_collections() == 1
+        assert collection_names(store) == {"qar_ctx_default", "qar_ctx_default_1024"}
+
+
+class TestVectorSizeIsolation:
+    """Two stores with different embedder dimensions on the same server must not
+    collide on one collection (mixed sizes make Qdrant decline the mismatched
+    writes point-by-point, silently under the never-raises contract)."""
+
+    def test_different_vector_sizes_get_distinct_collections(self, tmp_path):
+        path = str(tmp_path / "qdrant")
+
+        def embed16(texts):
+            return [[float((i + 1) % 7) for i in range(16)] for _ in texts]
+
+        store_a = QdrantVectorStore(path=path, embedder=toy_embedder, vector_size=VEC_SIZE)
+        store_a.upsert([{"id": "a", "text": "alpha item"}])
+        assert [h.id for h in store_a.search("alpha item", top_k=5)] == ["a"]
+        store_a._client.close()
+
+        store_b = QdrantVectorStore(path=path, embedder=embed16, vector_size=16)
+        # Must NOT be silently declined against store_a's 8-dim collection.
+        store_b.upsert([{"id": "b", "text": "beta item"}])
+        assert [h.id for h in store_b.search("beta item", top_k=5)] == ["b"]
+        names = {c.name for c in store_b._client.get_collections().collections}
+        assert names == {f"qar_ctx_default_{VEC_SIZE}", "qar_ctx_default_16"}
+        store_b._client.close()
+
+        # store_a's data is intact after store_b wrote.
+        store_a2 = QdrantVectorStore(path=path, embedder=toy_embedder, vector_size=VEC_SIZE)
+        assert [h.id for h in store_a2.search("alpha item", top_k=5)] == ["a"]
+
+    def test_misdeclared_vector_size_adopts_real_embedding_dim(self, tmp_path):
+        """The SD-prod regression shape: a store built with the DEFAULT
+        vector_size (384) but a 1024-class embedder must not create a
+        wrong-sized collection and then silently lose every write."""
+        def embed16(texts):
+            return [[1.0] * 16 for _ in texts]
+
+        store = QdrantVectorStore(
+            path=str(tmp_path / "qdrant"), embedder=embed16, vector_size=VEC_SIZE,
+        )
+        store.upsert([{"id": "x", "text": "real dim wins"}])
+        assert [h.id for h in store.search("real dim wins", top_k=5)] == ["x"]
+        names = {c.name for c in store._client.get_collections().collections}
+        assert names == {"qar_ctx_default_16"}
+
+    def test_matching_legacy_default_collection_is_reused(self, tmp_path):
+        """Pre-size-keyed deployments keep their data: a bare {prefix}_default
+        whose size matches the embedder is used as-is, no migration."""
+        from qdrant_client.models import Distance, PointStruct, VectorParams
+
+        path = str(tmp_path / "qdrant")
+        seed = QdrantVectorStore(path=path, embedder=toy_embedder, vector_size=VEC_SIZE)
+        client = seed._client
+        client.create_collection(
+            "qar_ctx_default",
+            vectors_config=VectorParams(size=VEC_SIZE, distance=Distance.COSINE),
+        )
+        client.upsert(
+            "qar_ctx_default",
+            points=[PointStruct(
+                id=1,
+                vector=toy_embedder(["legacy point"])[0],
+                payload={"_text": "legacy point"},
+            )],
+        )
+        hits = seed.search("legacy point", top_k=5)
+        assert len(hits) == 1 and hits[0].text == "legacy point"
+        # New writes land in the same legacy collection (no split brain).
+        seed.upsert([{"id": "n", "text": "new point"}])
+        names = {c.name for c in client.get_collections().collections}
+        assert names == {"qar_ctx_default"}
+
+    def test_mismatched_legacy_default_collection_is_left_alone(self, tmp_path):
+        """A bare {prefix}_default with a DIFFERENT size is not written to (its
+        points would be declined); the store uses its size-keyed collection."""
+        from qdrant_client.models import Distance, VectorParams
+
+        path = str(tmp_path / "qdrant")
+        store = QdrantVectorStore(path=path, embedder=toy_embedder, vector_size=VEC_SIZE)
+        store._client.create_collection(
+            "qar_ctx_default",
+            vectors_config=VectorParams(size=999, distance=Distance.COSINE),
+        )
+        store.upsert([{"id": "k", "text": "kept safe"}])
+        assert [h.id for h in store.search("kept safe", top_k=5)] == ["k"]
+        names = {c.name for c in store._client.get_collections().collections}
+        assert names == {"qar_ctx_default", f"qar_ctx_default_{VEC_SIZE}"}
