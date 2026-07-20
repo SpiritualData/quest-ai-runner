@@ -7,6 +7,26 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **`QdrantVectorStore` no longer creates one Qdrant collection per scope (collection sprawl),
+  and scoped searches now see the shared corpus.** The store derived a collection name from a
+  hash of every distinct `scope` dict and created that collection even on mere *search* — and
+  since `VectorContextAssembler.assemble()` forwards its `meta` dict (e.g. the executor's
+  per-goal `{"goal_id": ...}`) straight through as scope, every distinct goal/conversation left
+  a permanent empty collection on the shared Qdrant server (observed: 327 empty collections,
+  adding ~35s of sequential shard recovery to server startup). Worse, all real writes were
+  unscoped (they landed in `{prefix}_default`), so those scoped searches queried freshly
+  created empty collections and silently returned no context. The store now keeps ALL points
+  in the single `{prefix}_default` collection with the scope digest as an indexed `_scope`
+  payload filter (the same multitenancy model as `QdrantCardVectorStore`, and what Qdrant
+  recommends over collection-per-tenant): unscoped points are shared (visible to every scoped
+  search), scoped points are private to their exact scope, read paths never create
+  collections, point ids are scope-namespaced so the same item id in two scopes cannot
+  collide, and search hits now carry the original item id (preserved in the `_id` payload
+  field) instead of an opaque numeric hash. Existing unscoped data is picked up unchanged (the
+  unified collection is the same `{prefix}_default` the old layout wrote to). A new
+  `prune_scope_collections()` maintenance method deletes the empty legacy per-scope
+  collections left behind by the old layout (run once per deployment after upgrading).
+  (`quest_ai_runner/adapters/qdrant_vector_store.py`, `docs/vector-context.md`.)
 - **`cli send` is instant and offline again by default.** `select_card_ids_for_text`'s
   LLM-backed card relevance filter defaulted to `use_llm=True`, and `send`'s auto-card-selection
   called it with no `use_llm` argument -- so every `send` (an offline, instant command before

@@ -29,9 +29,27 @@ stays fresh without any separate re-index step.
 MULTI-TENANT SCOPING
 --------------------
 Every operation accepts an optional ``scope`` dict (e.g.
-``{org_id: ..., team_id: ..., quest_id: ...}``).  The store hashes the sorted
-scope items to derive a collection-name suffix, creating one Qdrant collection
-per unique scope.  When ``scope`` is None the default collection is used.
+``{org_id: ..., team_id: ..., quest_id: ...}``).  All points live in ONE
+collection (``{collection_prefix}_default``); the sorted scope items are hashed
+to a short digest stored on each point as the ``_scope`` payload field, and
+searches filter on it (the same payload-filter multitenancy model as
+``QdrantCardVectorStore``, and the model Qdrant itself recommends over
+collection-per-tenant).
+
+Visibility rules:
+
+- Unscoped points (``scope=None``) are SHARED: visible to unscoped searches and
+  to every scoped search (shared corpus + scope-private additions).
+- Scoped points are visible only to searches carrying the SAME scope.
+- Unscoped searches see only unscoped points (never any scope's private data).
+
+Read operations (``search``/``count``/``evict_oldest``) NEVER create a
+collection; only writes do.  An earlier version of this store created one
+Qdrant collection per unique scope — including on *search* — which sprawled
+into hundreds of permanently empty collections (each adding startup shard-
+recovery time on the server).  Deployments that ran that version can call
+``prune_scope_collections()`` once to delete the empty leftover per-scope
+collections.
 
 NEVER-RAISES CONTRACT
 ---------------------
@@ -192,19 +210,36 @@ def make_openai_embedder(
     return _embed
 
 
-def _scope_suffix(scope: Optional[Dict[str, Any]], prefix: str) -> str:
-    """Derive a stable collection name from a scope dict + prefix.
+# Payload field carrying a point's scope digest.  Absent on unscoped (shared)
+# points.  Matches the underscore-prefixed reserved-field style of ``_text`` /
+# ``_fingerprint`` below.
+_SCOPE_KEY = "_scope"
 
-    When ``scope`` is None or empty the suffix is ``"default"``.  Otherwise
-    the sorted (key, value) pairs are hashed to a short hex digest so that
-    distinct scopes map to distinct collections and the name stays within
-    Qdrant's collection-name limits.
+
+def _scope_hash(scope: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Derive a stable short digest identifying a scope dict.
+
+    Returns ``None`` for an empty/absent scope.  Otherwise the sorted
+    (key, value) pairs are hashed to a short hex digest — the same digest the
+    legacy collection-per-scope layout used as its collection-name suffix.
     """
     if not scope:
-        return f"{prefix}_default"
+        return None
     parts = sorted(f"{k}={v}" for k, v in scope.items())
-    digest = hashlib.sha256("|".join(parts).encode()).hexdigest()[:12]
-    return f"{prefix}_{digest}"
+    return hashlib.sha256("|".join(parts).encode()).hexdigest()[:12]
+
+
+def _point_id(item_id: Any, scope_digest: Optional[str]) -> int:
+    """Deterministic numeric Qdrant point id for an item id within a scope.
+
+    Scoped ids are namespaced by the scope digest so the same item id in two
+    different scopes never collides now that all scopes share one collection.
+    Unscoped ids use the bare item id — unchanged from the legacy layout, so
+    existing unscoped points keep their identity (fingerprint-based ``sync``
+    still recognizes them).
+    """
+    ns = f"{scope_digest}|{item_id}" if scope_digest else str(item_id)
+    return int(hashlib.sha256(ns.encode()).hexdigest()[:15], 16)
 
 
 class QdrantVectorStore(VectorStoreBase):
@@ -218,8 +253,9 @@ class QdrantVectorStore(VectorStoreBase):
     url:
         If given, connect to this Qdrant server URL instead of using embedded mode.
     collection_prefix:
-        All collections created by this store are named
-        ``{collection_prefix}_{scope-suffix}``.  Default: ``"qar_ctx"``.
+        All points live in the single collection ``{collection_prefix}_default``
+        (scope is a payload filter, not a collection suffix — see MULTI-TENANT
+        SCOPING in the module docstring).  Default: ``"qar_ctx"``.
     embedder:
         Optional callable ``(texts: List[str]) -> List[List[float]]``.  Used for
         ``upsert`` and ``sync`` (items being stored).  When omitted the store
@@ -265,9 +301,11 @@ class QdrantVectorStore(VectorStoreBase):
         # Build the client (embedded or remote).
         if url:
             self._client = QdrantClient(url=url)
+            self._server_mode = True
         else:
             _path = path or ".quest-context/qdrant"
             self._client = QdrantClient(path=_path)
+            self._server_mode = False
 
         # Resolve the document embedder (used by upsert/sync).
         if embedder is not None:
@@ -299,11 +337,23 @@ class QdrantVectorStore(VectorStoreBase):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _collection_name(self, scope: Optional[Dict[str, Any]]) -> str:
-        return _scope_suffix(scope, self._prefix)
+    def _collection_name(self) -> str:
+        """The single collection ALL points live in, regardless of scope.
+
+        Named ``{prefix}_default`` — the same name the legacy layout used for
+        unscoped points — so existing unscoped data is picked up with no
+        migration.  Scope is a payload filter (``_SCOPE_KEY``), not a
+        collection-name suffix.
+        """
+        return f"{self._prefix}_default"
 
     def _ensure_collection(self, name: str) -> None:
-        """Create the Qdrant collection if it does not exist yet."""
+        """Create the Qdrant collection if it does not exist yet.  WRITE paths only.
+
+        Read paths (``search``/``count``/``evict_oldest``) must never call this:
+        creating collections on read is how the legacy collection-per-scope
+        layout sprawled into hundreds of empty collections.
+        """
         from qdrant_client.models import Distance, VectorParams
 
         existing = {c.name for c in self._client.get_collections().collections}
@@ -315,6 +365,64 @@ class QdrantVectorStore(VectorStoreBase):
                     distance=Distance.COSINE,
                 ),
             )
+        # Keyword index on the scope field so scoped filters stay fast as the
+        # collection grows.  Server mode only (the embedded local engine has no
+        # payload indexes and warns; filtering works without one).  Idempotent,
+        # best-effort.
+        if self._server_mode:
+            try:
+                self._client.create_payload_index(
+                    collection_name=name,
+                    field_name=_SCOPE_KEY,
+                    field_schema="keyword",
+                )
+            except Exception:  # noqa: BLE001
+                logger.debug("QdrantVectorStore: payload index creation skipped", exc_info=True)
+
+    def _visibility_filter(self, scope: Optional[Dict[str, Any]]) -> Any:
+        """Filter for SEARCH visibility under ``scope``.
+
+        Scoped search: points carrying this scope's digest OR shared (unscoped)
+        points.  Unscoped search: shared points only — no scope's private data.
+        """
+        from qdrant_client.models import (
+            FieldCondition,
+            Filter,
+            IsEmptyCondition,
+            MatchValue,
+            PayloadField,
+        )
+
+        shared = IsEmptyCondition(is_empty=PayloadField(key=_SCOPE_KEY))
+        digest = _scope_hash(scope)
+        if digest is None:
+            return Filter(must=[shared])
+        return Filter(
+            should=[
+                FieldCondition(key=_SCOPE_KEY, match=MatchValue(value=digest)),
+                shared,
+            ]
+        )
+
+    def _exact_scope_filter(self, scope: Optional[Dict[str, Any]]) -> Any:
+        """Filter matching ONLY points belonging to exactly ``scope``.
+
+        Used by ``count``/``evict_oldest`` so capacity accounting and eviction
+        stay per-scope (shared points are counted/evicted only by unscoped
+        callers, as under the legacy one-collection-per-scope layout).
+        """
+        from qdrant_client.models import (
+            FieldCondition,
+            Filter,
+            IsEmptyCondition,
+            MatchValue,
+            PayloadField,
+        )
+
+        digest = _scope_hash(scope)
+        if digest is None:
+            return Filter(must=[IsEmptyCondition(is_empty=PayloadField(key=_SCOPE_KEY))])
+        return Filter(must=[FieldCondition(key=_SCOPE_KEY, match=MatchValue(value=digest))])
 
     def _embed_safe(self, texts: List[str]) -> Optional[List[List[float]]]:
         """Embed a list of texts (document path); return None on any error."""
@@ -343,17 +451,21 @@ class QdrantVectorStore(VectorStoreBase):
         scope: Optional[Dict[str, Any]] = None,
         top_k: int = 8,
     ) -> List[VectorHit]:
-        """Embed ``query`` and return the top-``top_k`` nearest hits.  Never raises."""
+        """Embed ``query`` and return the top-``top_k`` nearest hits.  Never raises.
+
+        Never creates a collection: when nothing has been written yet the
+        search simply returns ``[]``.
+        """
         try:
             vecs = self._query_embed_safe([query])
             if not vecs:
                 return []
-            coll = self._collection_name(scope)
-            self._ensure_collection(coll)
+            coll = self._collection_name()
             # Use query_points (the current Qdrant API; the old .search() was removed).
             response = self._client.query_points(
                 collection_name=coll,
                 query=vecs[0],
+                query_filter=self._visibility_filter(scope),
                 limit=top_k,
                 with_payload=True,
             )
@@ -361,9 +473,13 @@ class QdrantVectorStore(VectorStoreBase):
             for r in response.points:
                 payload = dict(r.payload) if r.payload else {}
                 text = payload.pop("_text", "") or ""
+                payload.pop(_SCOPE_KEY, None)
+                # Prefer the original item id stored at upsert; points written
+                # before the ``_id`` field existed fall back to the numeric id.
+                item_id = payload.pop("_id", None) or str(r.id)
                 hits.append(
                     VectorHit(
-                        id=str(r.id),
+                        id=str(item_id),
                         score=float(r.score),
                         text=text,
                         payload=payload,
@@ -390,8 +506,9 @@ class QdrantVectorStore(VectorStoreBase):
             vecs = self._embed_safe(texts)
             if not vecs or len(vecs) != len(items):
                 return
-            coll = self._collection_name(scope)
+            coll = self._collection_name()
             self._ensure_collection(coll)
+            digest = _scope_hash(scope)
             points: List[PointStruct] = []
             for item, vec in zip(items, vecs):
                 item_id = item["id"]
@@ -400,13 +517,15 @@ class QdrantVectorStore(VectorStoreBase):
                 if fp is not None:
                     payload["_fingerprint"] = fp
                 payload["_text"] = item.get("text", "") or ""
+                # Preserve the caller's item id so search hits carry it back
+                # (the numeric point id is a hash, meaningless to consumers).
+                payload["_id"] = str(item_id)
+                if digest is not None:
+                    payload[_SCOPE_KEY] = digest
                 # Qdrant point ids must be unsigned int or uuid string; hash the
-                # string id to a deterministic integer.
-                numeric_id = int(
-                    hashlib.sha256(str(item_id).encode()).hexdigest()[:15], 16
-                )
+                # (scope-namespaced) string id to a deterministic integer.
                 points.append(
-                    PointStruct(id=numeric_id, vector=vec, payload=payload)
+                    PointStruct(id=_point_id(item_id, digest), vector=vec, payload=payload)
                 )
             self._client.upsert(collection_name=coll, points=points)
         except Exception:
@@ -422,17 +541,12 @@ class QdrantVectorStore(VectorStoreBase):
         try:
             if not items:
                 return 0
-            coll = self._collection_name(scope)
+            coll = self._collection_name()
             self._ensure_collection(coll)
-
-            # Build a map of item-id -> item for fast lookup.
-            item_map: Dict[str, Dict[str, Any]] = {str(i["id"]): i for i in items}
+            digest = _scope_hash(scope)
 
             # Fetch stored points to compare fingerprints.
-            numeric_ids = [
-                int(hashlib.sha256(str(i["id"]).encode()).hexdigest()[:15], 16)
-                for i in items
-            ]
+            numeric_ids = [_point_id(i["id"], digest) for i in items]
             try:
                 stored_points = self._client.retrieve(
                     collection_name=coll,
@@ -451,9 +565,7 @@ class QdrantVectorStore(VectorStoreBase):
             # Determine which items need re-embedding.
             to_upsert: List[Dict[str, Any]] = []
             for item in items:
-                nid = int(
-                    hashlib.sha256(str(item["id"]).encode()).hexdigest()[:15], 16
-                )
+                nid = _point_id(item["id"], digest)
                 new_fp = item.get("fingerprint")
                 old_fp = stored_fps.get(nid)
                 if nid not in stored_fps or new_fp != old_fp:
@@ -469,12 +581,19 @@ class QdrantVectorStore(VectorStoreBase):
             return 0
 
     def count(self, *, scope: Optional[Dict[str, Any]] = None) -> int:
-        """Return the number of stored points in the scope collection.  Never raises."""
+        """Return the number of stored points belonging to exactly ``scope``.
+
+        Shared (unscoped) points are counted only when ``scope`` is None, so
+        per-scope capacity accounting matches the eviction filter.  Never
+        raises, and never creates a collection (missing collection -> 0).
+        """
         try:
-            coll = self._collection_name(scope)
-            self._ensure_collection(coll)
-            info = self._client.get_collection(collection_name=coll)
-            return int(info.points_count or 0)
+            result = self._client.count(
+                collection_name=self._collection_name(),
+                count_filter=self._exact_scope_filter(scope),
+                exact=True,
+            )
+            return int(result.count or 0)
         except Exception:
             logger.debug("QdrantVectorStore.count failed", exc_info=True)
             return 0
@@ -486,26 +605,28 @@ class QdrantVectorStore(VectorStoreBase):
         scope: Optional[Dict[str, Any]] = None,
         ts_key: str = "ts",
     ) -> int:
-        """Delete the ``n`` oldest points (sorted by ``ts_key`` payload field, asc).
+        """Delete the ``n`` oldest points of exactly ``scope`` (by ``ts_key``, asc).
 
-        Uses scroll to list all points with payload, sorts by the ``ts_key`` field
-        (ascending; missing ts treated as 0), then deletes the oldest ``n`` via
-        client.delete.  Returns the count actually deleted.  Never raises.
+        Uses scroll (filtered to the exact scope, so one scope's eviction never
+        deletes another scope's or the shared points), sorts by the ``ts_key``
+        field (ascending; missing ts treated as 0), then deletes the oldest
+        ``n`` via client.delete.  Returns the count actually deleted.  Never
+        raises, and never creates a collection.
         """
         try:
             if n <= 0:
                 return 0
             from qdrant_client.models import PointIdsList
 
-            coll = self._collection_name(scope)
-            self._ensure_collection(coll)
+            coll = self._collection_name()
 
-            # Scroll through ALL points to collect (numeric_id, ts).
+            # Scroll through the scope's points to collect (numeric_id, ts).
             all_points: List[tuple] = []  # list of (ts_value, numeric_id)
             offset = None
             while True:
                 scroll_result = self._client.scroll(
                     collection_name=coll,
+                    scroll_filter=self._exact_scope_filter(scope),
                     limit=256,
                     offset=offset,
                     with_payload=True,
@@ -537,3 +658,50 @@ class QdrantVectorStore(VectorStoreBase):
         except Exception:
             logger.debug("QdrantVectorStore.evict_oldest failed", exc_info=True)
             return 0
+
+    # ------------------------------------------------------------------
+    # Maintenance
+    # ------------------------------------------------------------------
+
+    def prune_scope_collections(self) -> int:
+        """Delete EMPTY legacy per-scope collections left by the old layout.
+
+        An earlier version of this store created one collection per unique
+        scope (``{prefix}_<digest>``) — including on mere *search* — so a
+        long-lived shared server accumulates hundreds of empty collections,
+        each adding shard-recovery time to server startup.  This deletes every
+        ``{prefix}_``-prefixed collection that holds ZERO points, except the
+        unified ``{prefix}_default`` collection.  Non-empty legacy collections
+        are left untouched (logged at warning level) — by construction of the
+        old code they should not exist, so one deserves a human look.
+
+        Returns the number of collections deleted.  Never raises.  Safe to run
+        repeatedly; call it once per deployment after upgrading.
+        """
+        deleted = 0
+        try:
+            unified = self._collection_name()
+            names = [c.name for c in self._client.get_collections().collections]
+            for name in names:
+                if not name.startswith(f"{self._prefix}_") or name == unified:
+                    continue
+                try:
+                    info = self._client.get_collection(collection_name=name)
+                    if int(info.points_count or 0) > 0:
+                        logger.warning(
+                            "QdrantVectorStore.prune_scope_collections: legacy scope "
+                            "collection %s is non-empty (%s points); leaving it in place",
+                            name, info.points_count,
+                        )
+                        continue
+                    self._client.delete_collection(collection_name=name)
+                    deleted += 1
+                except Exception:  # noqa: BLE001 — one bad collection must not stop the sweep
+                    logger.debug(
+                        "QdrantVectorStore.prune_scope_collections: skipping %s",
+                        name, exc_info=True,
+                    )
+            return deleted
+        except Exception:
+            logger.debug("QdrantVectorStore.prune_scope_collections failed", exc_info=True)
+            return deleted

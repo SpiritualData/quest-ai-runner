@@ -321,12 +321,30 @@ store.upsert(items, scope=scope)
 store.sync(items, scope=scope)
 ```
 
-The store hashes the sorted scope items to derive a Qdrant collection name,
-creating one collection per unique scope.  Searches are fully isolated between
-scopes.
+All points live in ONE Qdrant collection (``{collection_prefix}_default``).
+The store hashes the sorted scope items to a short digest stored on each point
+as the ``_scope`` payload field, and searches filter on it — the payload-filter
+multitenancy model Qdrant recommends over collection-per-tenant.
+
+Visibility rules:
+
+- Unscoped points (``scope=None``) are **shared**: visible to unscoped searches
+  and to every scoped search (shared corpus + scope-private additions).
+- Scoped points are visible only to searches carrying the **same** scope.
+- Unscoped searches see only shared points, never any scope's private data.
+
+Read operations (``search`` / ``count`` / ``evict_oldest``) never create a
+collection; only writes do.  (An earlier version created one collection per
+unique scope — including on mere search — which sprawled into hundreds of
+permanently empty collections on a long-lived shared server, each adding
+startup shard-recovery time.  Deployments that ran that version can call
+``store.prune_scope_collections()`` once to delete the empty leftovers.)
 
 When used via ``VectorContextAssembler``, the ``meta`` dict passed to
 ``assemble(task_text, meta=meta)`` is forwarded directly as the scope.
+Because shared points are visible under every scope, a caller passing
+high-cardinality meta (e.g. a per-goal id) still retrieves the shared corpus
+seeded by the keyword bootstrap.
 
 ---
 
