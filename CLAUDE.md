@@ -121,6 +121,31 @@ result = provider.answer([{"role": "user", "content": prompt}], model=model)
 
 **JSON parsing:** LLM responses often include markdown fences. Never call `json.loads(raw)` directly — strip fences first with a helper like `_extract_json()` in `core/card_filter.py`.
 
+## 🔒 Hard rule #3 — do not gate decisions on keywords in AI output
+
+**Never make a control-flow or safety decision by scanning the model's own generated text for a
+fixed list of words** (a denylist of "risky" verbs, an allowlist of "safe" ones, "if the confirm
+question contains `delete`/`send`/…" and so on). This pattern is brittle by construction: the model
+phrases its output arbitrarily, so any fixed list silently leaks every case it did not anticipate.
+A real example that was removed: a `_confirm_is_redundant` gate auto-executed a planner's confirm
+(skipping the human-in-the-loop approval) unless a denylist word appeared in the request or in the
+planner's own confirm question — so "share this doc with the team" and "invite Jane to the quest"
+auto-executed, because `share`/`invite`/`grant`/`message`/`gift`/`transfer` were not on the list.
+Flipping it to an allowlist does not fix it; both make safety depend on the model happening to use
+a word the code guessed.
+
+Instead:
+
+- **Honor the model's structured decision.** If the planner emits `action: "confirm"`, that IS the
+  decision that this needs a human — surface it. Do not second-guess it by inspecting the wording
+  of its message.
+- **If the model decides wrong too often, fix the model, not the output.** Improve the planner's
+  prompt / instructions / the schema it fills in, so the decision it returns is the right one.
+  Keyword post-processing of model output is not an acceptable substitute.
+- Reading the **user's own words** to interpret THEIR intent is different and fine (that is what
+  `_message_requests_change` and `judge_execution_directive` do on the user message). The rule is
+  specifically about gating on words the *model* generated.
+
 ## Conventions
 
 - Match the surrounding code's style, naming, and comment density.

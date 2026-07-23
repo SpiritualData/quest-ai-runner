@@ -2180,39 +2180,19 @@ def _message_requests_change(message: Optional[str]) -> bool:
         return False
 
 
-# Markers of acts a confirm fork is genuinely FOR: destructive, outward-facing, or spend. If any
-# appears in the user's request OR the planner's confirm question, the confirm stands. Substring
-# match, deliberately broad ("irreversib" catches irreversible/irreversibly) — false negatives
-# (keeping a confirm) are cheap; false positives (skipping one) are not.
-_CONFIRM_FORK_MARKERS = (
-    "delete", "remove", "drop", "erase", "wipe", "destroy", "truncate", "revert", "reset",
-    "uninstall", "deactivate", "disable", "overwrite", "rename", "migrate",
-    "send", "email", "e-mail", "publish", "post", "tweet", "announce", "notify",
-    "deploy", "release", "push", "merge", "production", "prod ",
-    "pay", "payment", "purchase", "buy", "order", "invoice", "refund", "subscribe",
-    "unsubscribe", "cancel", "irreversib",
-)
-
-
-def _confirm_is_redundant(user_message: Optional[str], confirm_question: Optional[str]) -> bool:
-    """True when a planner-originated confirm merely re-asks permission for exactly what the
-    user already explicitly requested.
-
-    The AI-first operating doctrine routes ROUTINE work to execution and reserves the human fork
-    for genuine forks (destructive, outward-facing, spend, ambiguity). A confirm on a message
-    that (a) IS an explicit change request and (b) carries no fork marker in either the request
-    or the proposed act adds a human round-trip with zero information gain — caught live by the
-    2026-07-19 reliability battery, where "create this file with exactly this line" was answered
-    with "Do you approve this change?" and parked as needs_you. Conservative by construction:
-    any fork marker in either text keeps the confirm. Never raises.
-    """
-    try:
-        if not _message_requests_change(user_message):
-            return False
-        blob = f"{user_message or ''}\n{confirm_question or ''}".lower()
-        return not any(marker in blob for marker in _CONFIRM_FORK_MARKERS)
-    except Exception:  # noqa: BLE001
-        return False
+# NOTE (do not reintroduce): there was once a `_confirm_is_redundant` gate here, keyed on a
+# `_CONFIRM_FORK_MARKERS` denylist, that auto-executed a planner-originated confirm (skipping the
+# human fork) whenever neither the user's request NOR THE PLANNER'S OWN CONFIRM QUESTION contained
+# a risky keyword (delete/send/pay/deploy/…). It was removed deliberately. Gating a human-in-the-
+# loop safety decision on substring matches against free-form MODEL OUTPUT is exactly the brittle
+# pattern QAR must not use: the planner phrases its confirm question arbitrarily, so any fixed
+# denylist silently leaks (share/invite/grant/message/gift/transfer/… all slipped through and
+# auto-executed), and an allowlist is no better — both make safety depend on the model happening
+# to use a word the code anticipated. When the planner decides an act needs confirmation, HONOR
+# that decision; do not second-guess it with keyword logic over the planner's text. If the planner
+# over-asks for confirmation, fix that in the PLANNER (its prompt/instructions), not with a
+# post-hoc keyword filter on its output. See CLAUDE.md ("Do not gate decisions on keywords in AI
+# output") and the qar-playbook.
 
 
 def message_change_signal_ambiguous(message: Optional[str]) -> bool:
@@ -7816,18 +7796,10 @@ class Orchestrator:
             plan.goal = _truncate_goal(plan.goal or f"Fully address the request: {user_message}")
             plan.deep_brief = plan.deep_brief or user_message
 
-        # CONFIRM REDUNDANCY GATE: a planner-originated confirm that merely re-asks permission
-        # for exactly what the user already explicitly requested executes instead (deep). Runs
-        # BEFORE the deep branch below so the re-route takes the normal deep path. Overseer
-        # escalate_human confirms are genuine human forks and are never re-routed; brainstorm
-        # turns cannot reach here as "confirm" (the terminal gate above degraded them to answer).
-        if (final == "confirm" and overseer_decided != "overseer_escalated_human"
-                and _confirm_is_redundant(user_message, plan.confirm_question)):
-            log.info("Confirm redundancy gate: user message already explicitly requests this "
-                     "non-destructive act; executing via deep instead of asking approval.")
-            plan.action = final = "deep"
-            plan.goal = _truncate_goal(plan.goal or f"Fully address the request: {user_message}")
-            plan.deep_brief = plan.deep_brief or user_message
+        # A planner-originated "confirm" is HONORED as a confirm (it surfaces below via
+        # _run_confirm). QAR does not re-route or auto-execute a confirm by inspecting keywords in
+        # the planner's confirm question — that brittle keyword gate was removed (see the note by
+        # message_change_signal_ambiguous). If the planner over-confirms, fix the planner, not this.
 
         if final == "clarify":
             # User clarification/selection needed: surface as decision-request

@@ -103,14 +103,16 @@ All notable changes to this project are documented here. The format is based on
   confession shapes it missed: "I cannot execute/run …" and "the system will need to execute/
   write …". (`quest_ai_runner/core/orchestrator.py`.)
 
-- **A redundant confirm executes instead of asking.** A planner-originated confirm that merely
-  re-asks permission for exactly what the user already explicitly requested (an explicit change
-  request with no destructive/outward/spend marker in either the request or the proposed act)
-  now re-routes to deep execution instead of parking the task as a needs_you decision-request —
-  caught live by the same reliability battery, where "create this file with exactly this line"
-  was answered with "Do you approve this change?". Conservative: any fork marker
-  (delete/send/publish/deploy/pay/…) in either text keeps the human fork, and overseer
-  `escalate_human` confirms are never re-routed. (`quest_ai_runner/core/orchestrator.py`.)
+- **Removed the keyword-driven "confirm redundancy" gate (`_confirm_is_redundant` /
+  `_CONFIRM_FORK_MARKERS`).** It auto-executed a planner-originated confirm (skipping the human
+  fork) unless a fixed denylist of risky words (delete/send/pay/deploy/...) appeared in the
+  request or in the planner's own confirm question. Gating a human-in-the-loop safety decision on
+  substring matches against free-form model output is brittle by construction: the denylist
+  silently leaked every outward-facing verb it did not anticipate (share/invite/grant/message/
+  gift/transfer/...), so "share this doc with the team" auto-executed with no approval. QAR now
+  honors the planner's confirm decision directly and never inspects keywords in the planner's text
+  to decide whether to execute; an over-asking planner is fixed in the planner, not with a
+  post-hoc filter on its output. (`quest_ai_runner/core/orchestrator.py`, `CLAUDE.md`.)
 
 - **A missing per-team ai-profile no longer warns on every poll.** `get_ai_profile` /
   `update_ai_profile` logged a WARNING on any error; a 404 just means the member has no per-team
