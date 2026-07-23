@@ -2,7 +2,9 @@
 
 > Status: **opt-in, off by default** (`OrchestratorConfig.anticipation_enabled = False`). With the
 > flag off, or no `Anticipator` wired, a run is byte-for-byte identical to today's behavior: zero
-> anticipation calls, zero background threads, zero store files touched.
+> anticipation calls, zero background threads, zero store files touched. The optional LLM refresh
+> (below) is a SECOND, separately-gated flag (`anticipation_llm_enabled` / `QAR_ANTICIPATION_LLM`),
+> also off by default; with it off the engine is fully model-free even when anticipation itself is on.
 
 ## The idea
 
@@ -12,9 +14,64 @@ uses them to predict the user's likely next ask *before* they type it. When a pr
 its context is precomputed in the background, so if the real ask matches, the turn is seeded with
 a cheap, already-assembled bundle instead of starting cold.
 
-This is pattern-based, not model-based: **no LLM calls happen anywhere in this engine**. Learning
-is pure keyword/time-signature matching plus a simple online weight update, so it's cheap enough to
-run on every turn and safe enough to never be the reason a turn is slow or wrong.
+This is pattern-based, not model-based, at its core: **no LLM calls happen in the learning/matching
+engine itself**. Learning is pure keyword/time-signature matching plus a simple online weight
+update, so it's cheap enough to run on every turn and safe enough to never be the reason a turn is
+slow or wrong. The only place a model is ever optionally consulted is the display-text refresh
+described below, and it is capped at one call per turn.
+
+## v2: durable patterns, read-time chips
+
+The chips shown to the user are **recomputed from the durable pattern store on every read**, not
+tied to a short-lived planned prediction:
+
+- **Patterns are the durable store.** A learned pattern persists until it's pruned by miss-decay
+  (`PRUNE_WEIGHT`), 30-day inactivity (`PRUNE_AGE_DAYS`), or the per-scope cap
+  (`MAX_PATTERNS_PER_SCOPE`). Nothing else expires a pattern — a user who returns next week or next
+  month still has every pattern they built.
+- **Chips are recomputed from patterns on every read.** `chips_for_now(patterns, now, recent_texts)`
+  (module-level, pure) and `Anticipator.chips_for_now(scope_keys, recent_texts, now)` (the store-backed
+  entry point) rank the stored patterns against the CURRENT moment's time signature (hour bucket +
+  day of week), softly biased by `recent_texts` as a topic seed, and return the top `K` as chips.
+  This depends only on the patterns, never on a stored live prediction or its TTL — a pattern
+  learned days ago at this hour/weekday surfaces a chip now, with zero replanning.
+- **Stored predictions are precompute SLOTS, not chip visibility.** `plan_next` still generates and
+  persists live `Prediction`s at turn end and, when an assembler is wired, precomputes each one's
+  context bundle. `PREDICTION_TTL_SECONDS` (4 hours) now only bounds how long that precomputed
+  BUNDLE stays trusted — it no longer gates whether a chip shows.
+- **Exact-id serve.** Each chip `chips_for_now` returns carries a STABLE id, `chip_id(scope, text)`.
+  A client can send that id back on the next ask: `Anticipator.observe(actual_text, scope_keys,
+  anticipated_id=chip_id)` serves that exact slot's precomputed bundle directly, bypassing keyword
+  matching. This matters once a chip's `display_text` (below) can diverge from its `canonical_text`
+  enough that keyword matching against the tapped chip's wording would miss the stored slot; the id
+  also matches a `plan_next`-stored prediction's own id, so either kind of id round-trips. The
+  outcome is still scored and logged for learning either way; keyword matching remains the fallback
+  for a typed ask with no id.
+- **Display vs canonical text.** A `Pattern`/`Prediction` may carry a `display_text`: a refined,
+  natural-language rewording of the raw `canonical_text`/`text` used for display on a chip.
+  `canonical_text`/`text` is the scoring and pattern-linkage key and is NEVER rewritten; a chip
+  renders `display_text` when set, else falls back to the canonical text.
+
+## The optional one-LLM-call-per-turn refresh
+
+With no `refiner` wired (the default, `QAR_ANTICIPATION_LLM=0`), `Anticipator.refresh` is a no-op
+and the engine stays fully model-free. When enabled, `resolve_anticipator` wires a refiner built
+from `cfg.model_provider` at the `"balanced"` tier; `Orchestrator` calls
+`anticipator.refresh(keys, recent_texts, now=...)` once per turn, inside the SAME single-flight
+background thread as `learn`/`plan_next` (so it never blocks the answer and never runs more than
+one refresh concurrently). One batched call takes every currently-planned prediction's canonical
+text plus the last few conversation messages and returns, per candidate: a refined `display_text`
+(or empty to keep the raw text) and a `drop` flag (for asks the conversation just answered or
+obsoleted), plus up to `MAX_FOLLOWUPS` (2) brand-new follow-up predictions guessed from the
+conversation. `apply_refresh` (pure) applies the result: the refined `display_text` is stamped onto
+BOTH the matching stored pattern (so a later read-time chip keeps the refinement) and the matching
+planned prediction; dropped predictions are removed for this round only (their source pattern is
+untouched and can recur later); follow-ups are stored as new `source="followup"` predictions that
+create no pattern. `build_refresh_prompt` + `parse_refresh_response` + `REFRESH_SYSTEM_PROMPT` are
+generic and reusable; a consumer with a centralized prompt store (e.g. quest-backend) can supply
+its own prompt string and still reuse `parse_refresh_response` + `apply_refresh`. A refiner failure
+(exception, unparseable response) is swallowed and leaves the planned predictions exactly as
+`plan_next` left them.
 
 ## The objective function and online learning
 
@@ -54,7 +111,12 @@ The two turn-boundary operations:
   (`0.5 + 0.5 * similarity`, or `1.0` with no topic keywords at all) so a reliably time-based
   pattern (the every-morning ask) is damped, never zeroed, by unrelated recent chatter. Patterns
   whose score clears `CONF_FLOOR` become live `Prediction`s (deduped by canonical text, capped at
-  `K = 3` per scope), each with a `PREDICTION_TTL_SECONDS` (30 min) expiry.
+  `K = 3` per scope), each with a `PREDICTION_TTL_SECONDS` (4 hours) expiry on its precomputed
+  bundle only — as covered above, this TTL no longer gates chip visibility; `chips_for_now` reruns
+  this same ranking read-time against the CURRENT moment, independent of any stored live
+  prediction's age. `generate_predictions` is also what `chips_for_now` calls under the hood (with
+  an empty ask text, so the ranking is driven by time signature + weight, softly topic-seeded by
+  `recent_texts`).
 
 ## Scope keys
 
@@ -119,7 +181,9 @@ anticipated context this turn*, never a broken one:
 ## Enabling it
 
 ```bash
-QAR_ANTICIPATION=1     # opt in (off by default); read in cli.py's _config_from_env
+QAR_ANTICIPATION=1       # opt in the engine itself (off by default); read in cli.py's _config_from_env
+QAR_ANTICIPATION_LLM=1   # ALSO opt in the optional one-call-per-turn display-text refresh (off by
+                          # default, and inert unless QAR_ANTICIPATION is also on)
 ```
 
 Or from config directly:
@@ -129,8 +193,10 @@ from quest_ai_runner.config import RunnerConfig, build_orchestrator
 
 cfg = RunnerConfig(...)
 cfg.orchestrator.anticipation_enabled = True
+cfg.orchestrator.anticipation_llm_enabled = True   # optional; leave False to stay fully model-free
 orch = build_orchestrator(cfg)   # resolve_anticipator wires a FilePredictionStore-backed
-                                  # Anticipator over the same context_cards_dir the card store uses
+                                  # Anticipator over the same context_cards_dir the card store uses,
+                                  # plus a refiner built from cfg.model_provider when the LLM flag is on
 ```
 
 `resolve_anticipator(cfg, context_assembler=...)` builds the `Anticipator` over whatever
@@ -140,11 +206,17 @@ carry no precomputed bundle.
 
 ## Reusing the pure functions with your own storage
 
-The learning algorithm lives once, as pure functions with no file or LLM I/O:
+The learning algorithm lives once, as pure functions with no file I/O and no REQUIRED LLM I/O:
 `extract_features`, `similarity`, `score_outcome`, `update_weight`, `reinforce_or_create`,
-`rank_patterns`, `generate_predictions`, `match_actual`. A consumer with its own persistence (an
-async database, a distributed cache) reuses these directly instead of porting a duplicate
-implementation — read/write `Pattern`/`Prediction` dataclasses from your own store, call the same
-functions, and the online-learning contract (the EMA formula, the pruning thresholds, the objective
-function) stays identical everywhere the module is used. `FilePredictionStore` + `Anticipator` are
-just the runner lane's own wrapper of that same core.
+`rank_patterns`, `generate_predictions`, `match_actual`, `chip_id`, `chips_for_now`. A consumer
+with its own persistence (an async database, a distributed cache) reuses these directly instead of
+porting a duplicate implementation — read/write `Pattern`/`Prediction` dataclasses from your own
+store, call the same functions, and the online-learning contract (the EMA formula, the pruning
+thresholds, the objective function) stays identical everywhere the module is used.
+`FilePredictionStore` + `Anticipator` are just the runner lane's own wrapper of that same core.
+
+The optional refresh's application step is pure too: `apply_refresh` (never touches storage) and
+`parse_refresh_response` (never calls a model) are shared by any consumer that wires its own
+`refiner` callable into `Anticipator(..., refiner=...)` or reimplements `Anticipator.refresh`'s
+loop over its own store; only `build_refresh_prompt` + `REFRESH_SYSTEM_PROMPT` are optional to
+reuse (a consumer with a centralized prompt store can substitute its own prompt).

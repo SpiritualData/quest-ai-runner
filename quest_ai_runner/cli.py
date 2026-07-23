@@ -410,6 +410,15 @@ def _config_from_env() -> RunnerConfig:
         cfg.orchestrator.anticipation_enabled = True
     elif _ant in ("0", "false", "off", "no"):
         cfg.orchestrator.anticipation_enabled = False
+    # QAR_ANTICIPATION_LLM: the OPTIONAL one-call-per-turn refresh (see core/anticipation.py
+    # Anticipator.refresh) -- OFF by default so the lane stays zero-LLM. "1"/"true" wires a refiner
+    # from cfg.model_provider (balanced tier) in resolve_anticipator; it only fires when the main
+    # anticipation flag is also on.
+    _ant_llm = (os.getenv("QAR_ANTICIPATION_LLM") or "").strip().lower()
+    if _ant_llm in ("1", "true", "on", "yes"):
+        cfg.orchestrator.anticipation_llm_enabled = True
+    elif _ant_llm in ("0", "false", "off", "no"):
+        cfg.orchestrator.anticipation_llm_enabled = False
     return cfg
 
 

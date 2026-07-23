@@ -32,6 +32,27 @@ PATTERN <-> PREDICTION LINKAGE: a pattern-sourced prediction's ``text`` IS its s
 ``canonical_text`` (see ``generate_predictions``), so an outcome is attributed to its source
 pattern by canonical-text equality. Consumers applying outcome scores to stored patterns should
 use the same convention (the ``Prediction`` dataclass deliberately carries no pattern id).
+
+V2 SEMANTICS (durable patterns, read-time chips):
+
+  * PATTERNS ARE THE DURABLE STORE. A learned pattern persists until it is pruned by miss-decay
+    (its EMA weight crossing ``PRUNE_WEIGHT``), by 30-day inactivity (``PRUNE_AGE_DAYS``), or by
+    the per-scope cap (``MAX_PATTERNS_PER_SCOPE``). Nothing else expires a pattern. A user who
+    returns next week or next month still has every pattern they built.
+  * CHIPS ARE RECOMPUTED FROM PATTERNS ON EVERY READ (``chips_for_now``). The suggestions shown are
+    whichever stored patterns match the CURRENT moment's time signature (and any recent topic
+    seed), ranked by ``rank_patterns``. Chips do NOT depend on stored live predictions or their
+    TTL: a pattern learned days ago at this hour/weekday surfaces again now, with zero replanning.
+  * STORED PREDICTIONS ARE "PRECOMPUTE SLOTS", not chip visibility. Each stored prediction pairs a
+    prediction id with a precomputed context bundle. ``PREDICTION_TTL_SECONDS`` now only bounds how
+    long that precomputed bundle stays trusted, never whether a chip shows. On a chip tap the
+    client can pass the chip's prediction id (``anticipated_id``) so the exact slot's bundle is
+    served regardless of keyword or display-text drift (see ``Anticipator.observe``).
+  * DISPLAY vs CANONICAL. A prediction/pattern may carry a refined ``display_text`` (a natural
+    question shown to the user); ``canonical_text``/``text`` stays the scoring + linkage key and is
+    never rewritten. An optional one-LLM-per-turn refresh (see ``apply_refresh`` +
+    ``Anticipator.refresh``) fills ``display_text``, drops predictions the conversation obsoleted,
+    and adds a few conversational follow-up predictions.
 """
 from __future__ import annotations
 
@@ -69,8 +90,12 @@ CONF_FLOOR = 0.35
 DRAFT_CONF = 0.6
 # EMA step size for update_weight.
 ALPHA = 0.3
-# How long a planned prediction stays live before it expires unserved.
-PREDICTION_TTL_SECONDS = 1800
+# How long a stored prediction's PRECOMPUTED CONTEXT BUNDLE stays trusted (4 hours). This is a
+# precompute-slot freshness bound ONLY -- it does NOT bound chip visibility. Chips are recomputed
+# from the durable PATTERNS on every read (see ``chips_for_now``), so a pattern learned days ago
+# still surfaces a chip now; this TTL just decides when a paired precomputed bundle is considered
+# stale enough to drop rather than serve as a hint.
+PREDICTION_TTL_SECONDS = 14400
 # Prune a pattern once its EMA weight decays below this (it keeps missing).
 PRUNE_WEIGHT = 0.05
 # Prune a pattern not seen for this many days.
@@ -122,6 +147,10 @@ class Pattern:
     misses: int = 0
     last_seen_ts: float = 0.0
     created_ts: float = 0.0
+    # Optional refined natural-question text for chips (filled by the LLM refresh, see
+    # ``apply_refresh``). ``canonical_text`` stays the scoring/linkage key and is never rewritten;
+    # a read-time chip prefers ``display_text`` when set, so the refinement survives across reads.
+    display_text: str = ""
 
 
 @dataclass
@@ -141,6 +170,11 @@ class Prediction:
     expires_ts: float = 0.0
     context_card_ids: List[str] = field(default_factory=list)
     draft_answer: Optional[str] = None
+    # Optional refined natural-question text shown on the chip. A client renders ``display_text``
+    # when set, else ``text``; because a refined display may DIVERGE from the canonical ``text``,
+    # a tap should send this prediction's id (see ``Anticipator.observe(anticipated_id=...)``)
+    # rather than rely on keyword matching the display text back to the prediction.
+    display_text: str = ""
 
 
 # --- Pure functions (no file I/O, no LLM calls, no hidden state) --------------------------------
@@ -363,10 +397,46 @@ def generate_predictions(
             source="pattern",
             created_ts=now_ts,
             expires_ts=now_ts + PREDICTION_TTL_SECONDS,
+            display_text=pattern.display_text or "",
         ))
         if len(out) >= k:
             break
     return out
+
+
+def chip_id(scope: str, text: str) -> str:
+    """The STABLE chip prediction id for ``(scope, canonical text)``: the id convention
+    ``chips_for_now`` stamps on every chip it returns. Shared as a function so
+    ``Anticipator.observe`` can recognize a tapped chip's id against a STORED precompute slot
+    (whose own ``prediction_id`` came from ``generate_predictions`` and differs). Pure."""
+    return hashlib.sha1(f"chip|{scope}|{text}".encode("utf-8")).hexdigest()[:16]
+
+
+def chips_for_now(
+    patterns: List[Pattern], now: datetime, recent_texts: List[str], k: int = K,
+) -> List[Prediction]:
+    """READ-TIME chips: rank the DURABLE patterns against the CURRENT moment and return the top
+    ``k`` as ``Prediction``s, WITHOUT consulting any stored live prediction or its TTL.
+
+    The current moment's features are extracted with an EMPTY ask text (``extract_features("",
+    now, scope)``), so the ranking is driven by each pattern's time signature (hour bucket + day of
+    week) and its EMA weight, softly biased by ``recent_texts`` as a topic seed (via
+    ``generate_predictions``' recent-text merge). This is the whole point of v2: a pattern learned
+    days ago at this hour surfaces a chip NOW, recomputed fresh, instead of depending on a
+    prediction planned at the previous turn's end that has long since expired.
+
+    ``patterns`` must all share one scope (the store is per-scope); the scope is taken from the
+    first pattern. Each returned prediction gets a STABLE id derived from ``(scope, canonical_text)``
+    so a precomputed bundle saved under that id is found on a later chip tap (exact-id serve),
+    regardless of when the chip was regenerated. ``[]`` when there are no patterns. Pure apart from
+    reading the clock inside ``generate_predictions``.
+    """
+    if not patterns:
+        return []
+    scope = patterns[0].scope
+    features = extract_features("", now, scope)
+    preds = generate_predictions(patterns, features, recent_texts or [], k=k)
+    return [replace(p, prediction_id=chip_id(scope, p.text)) for p in preds]
 
 
 def match_actual(
@@ -391,6 +461,167 @@ def match_actual(
     if best is None or best_score < MATCH_SERVE:
         return None, best_score, outcomes
     return best, best_score, outcomes
+
+
+# --- LLM refresh (optional, ONE call per turn max) ----------------------------------------------
+#
+# The refresh is the ONLY place a model is ever consulted, and it is OPTIONAL: with no refiner
+# wired the engine is model-free end to end (the runner lane's default). When wired, exactly one
+# batched call per turn takes the top predicted asks plus the last few conversation messages and
+# returns, per candidate, a refined natural-question ``display_text`` and a ``drop`` flag (for asks
+# the conversation just made obsolete), plus up to two brand-new follow-up asks. The PROMPT +
+# PARSER live here so both lanes share one shape; ``apply_refresh`` is the PURE application step
+# (no I/O) both lanes reuse and tests exercise directly. A consumer with a centralized prompt store
+# (e.g. quest-backend) supplies its OWN prompt string and still reuses ``parse_refresh_response`` +
+# ``apply_refresh``.
+
+# Max novel follow-up predictions accepted from one refresh.
+MAX_FOLLOWUPS = 2
+
+REFRESH_SYSTEM_PROMPT = (
+    "You refine a short list of predicted next questions for an assistant's suggestion chips. "
+    "You never invent facts and you never rewrite the canonical meaning of a candidate. "
+    "You return only valid JSON, no prose. Never use em dashes; use a comma, colon, or two "
+    "sentences instead."
+)
+
+
+def build_refresh_prompt(candidates: List[str], recent_texts: List[str]) -> str:
+    """Build the human prompt for the refresh call: the numbered candidate asks + the recent
+    conversation. Generic (domain-free); a consumer with a centralized prompt store may build its
+    own equivalent instead and still reuse ``parse_refresh_response``. Pure."""
+    lines: List[str] = []
+    lines.append("Candidates (predicted next questions), by number:")
+    for i, c in enumerate(candidates or [], 1):
+        lines.append(f"{i}. {c}")
+    lines.append("")
+    recent = [t for t in (recent_texts or []) if t]
+    if recent:
+        lines.append("Recent conversation (most recent last):")
+        for t in recent[-6:]:
+            lines.append(f"- {t}")
+        lines.append("")
+    lines.append(
+        "Return ONLY this JSON shape:\n"
+        '{\n'
+        '  "candidates": [\n'
+        '    {"n": 1, "display": "<a short, natural rewording of candidate 1, or empty to keep '
+        'it>", "drop": false}\n'
+        '  ],\n'
+        f'  "followups": ["<up to {MAX_FOLLOWUPS} brand-new questions the user is likely to ask '
+        'next given the conversation>"]\n'
+        '}\n'
+        "Rules: keep each display a short natural question with the SAME meaning as the candidate; "
+        "set drop=true only when the conversation already answered or obsoleted that candidate; "
+        "leave display empty when the candidate is already fine. Never use em dashes."
+    )
+    return "\n".join(lines)
+
+
+def parse_refresh_response(
+    raw: Any, candidates: List[str],
+) -> Tuple[Dict[str, str], List[str], List[str]]:
+    """Parse a refresh model response into ``(refinements, drops, followups)``.
+
+    ``refinements`` maps a candidate's canonical text -> its refined ``display`` (only non-empty
+    ones); ``drops`` is the canonical texts flagged obsolete; ``followups`` is up to
+    ``MAX_FOLLOWUPS`` new question strings. ``candidates`` is the SAME list passed to
+    ``build_refresh_prompt`` (the ``n`` in the response is 1-based into it). Accepts a dict or a raw
+    JSON string (markdown fences tolerated). Never raises: anything unparseable yields three empties
+    so the caller proceeds exactly as if no refresh ran. Pure."""
+    refinements: Dict[str, str] = {}
+    drops: List[str] = []
+    followups: List[str] = []
+    try:
+        data = raw
+        if isinstance(raw, str):
+            text = raw.strip()
+            if text.startswith("```"):
+                # Strip a leading ```json / ``` fence and the trailing fence.
+                text = text.split("```", 2)[1] if text.count("```") >= 2 else text
+                if text.lstrip().lower().startswith("json"):
+                    text = text.lstrip()[4:]
+            data = json.loads(text)
+        if not isinstance(data, dict):
+            return refinements, drops, followups
+        cands = list(candidates or [])
+        for item in (data.get("candidates") or []):
+            if not isinstance(item, dict):
+                continue
+            try:
+                idx = int(item.get("n"))
+            except (TypeError, ValueError):
+                continue
+            if idx < 1 or idx > len(cands):
+                continue
+            canonical = cands[idx - 1]
+            display = str(item.get("display") or "").strip()
+            if display and display != canonical:
+                refinements[canonical] = display
+            if bool(item.get("drop")):
+                drops.append(canonical)
+        for q in (data.get("followups") or []):
+            q = str(q or "").strip()
+            if q:
+                followups.append(q)
+            if len(followups) >= MAX_FOLLOWUPS:
+                break
+    except Exception:  # noqa: BLE001 -- a bad refresh is just no refresh
+        return {}, [], []
+    return refinements, drops, followups
+
+
+def apply_refresh(
+    patterns: List[Pattern], predictions: List[Prediction],
+    refinements: Dict[str, str], drops: List[str], followups: List[str],
+    now_ts: float, k: int = K,
+) -> Tuple[List[Pattern], List[Prediction]]:
+    """Apply a parsed refresh to ONE scope's patterns + planned predictions. Pure (no I/O).
+
+    * ``refinements`` (canonical_text -> display_text): sets ``display_text`` on the matching
+      PATTERN (so future read-time chips keep the refined wording) AND on the matching planned
+      PREDICTION. ``canonical_text``/``text`` is never touched; it stays the scoring + linkage key.
+    * ``drops`` (canonical_texts): removes those planned predictions for this round (the pattern is
+      untouched, so it can still recur later).
+    * ``followups``: appended as NEW ``source="followup"`` predictions (deduped, capped at ``k``
+      total predictions, at most ``MAX_FOLLOWUPS`` new). They create NO pattern -- they are a
+      conversational guess that still participates in outcome scoring via the store.
+
+    Returns ``(updated_patterns, updated_predictions)`` (fresh lists; inputs are not mutated)."""
+    refinements = refinements or {}
+    drop_set = set(drops or [])
+
+    new_patterns: List[Pattern] = []
+    for p in patterns or []:
+        dt = refinements.get(p.canonical_text)
+        new_patterns.append(replace(p, display_text=str(dt)) if dt else p)
+
+    new_preds: List[Prediction] = []
+    for pred in predictions or []:
+        if pred.text in drop_set:
+            continue
+        dt = refinements.get(pred.text)
+        new_preds.append(replace(pred, display_text=str(dt)) if dt else pred)
+
+    existing = {pred.text for pred in new_preds}
+    added = 0
+    for q in (followups or []):
+        q = (q or "").strip()
+        if not q or q in existing or len(new_preds) >= k or added >= MAX_FOLLOWUPS:
+            continue
+        existing.add(q)
+        added += 1
+        pid = hashlib.sha1(f"followup|{q}|{now_ts}".encode("utf-8")).hexdigest()[:16]
+        new_preds.append(Prediction(
+            prediction_id=pid,
+            text=q,
+            confidence=CONF_FLOOR,
+            source="followup",
+            created_ts=now_ts,
+            expires_ts=now_ts + PREDICTION_TTL_SECONDS,
+            display_text=q,
+        ))
+    return new_patterns, new_preds
 
 
 # --- Runner-lane wrapper: file store + Anticipator ----------------------------------------------
@@ -422,6 +653,7 @@ def _pattern_from_dict(d: Dict[str, Any]) -> Optional[Pattern]:
             misses=int(d.get("misses", 0)),
             last_seen_ts=float(d.get("last_seen_ts", 0.0)),
             created_ts=float(d.get("created_ts", 0.0)),
+            display_text=str(d.get("display_text") or ""),
         )
     except Exception:  # noqa: BLE001
         return None
@@ -441,6 +673,7 @@ def _prediction_from_dict(d: Dict[str, Any]) -> Optional[Prediction]:
             expires_ts=float(d.get("expires_ts", 0.0)),
             context_card_ids=[str(x) for x in (d.get("context_card_ids") or [])],
             draft_answer=d.get("draft_answer"),
+            display_text=str(d.get("display_text") or ""),
         )
     except Exception:  # noqa: BLE001
         return None
@@ -611,9 +844,17 @@ class Anticipator:
     can register the background thread like an index thread and join it at shutdown.
     """
 
-    def __init__(self, store: FilePredictionStore, assembler: Any = None):
+    def __init__(self, store: FilePredictionStore, assembler: Any = None,
+                 refiner: Any = None):
         self.store = store
         self.assembler = assembler
+        # Optional ONE-CALL-PER-TURN refresh hook. A callable
+        # ``refiner(candidates: List[str], recent_texts: List[str]) ->
+        # (refinements: Dict[str, str], drops: List[str], followups: List[str])`` -- the ONLY
+        # place this engine ever spends a model token. None (the default) keeps the lane model-free;
+        # ``refresh`` is then a no-op. Each lane builds its own refiner (its own prompt + provider)
+        # and both reuse ``parse_refresh_response`` + ``apply_refresh``.
+        self.refiner = refiner
         self._closed = False
 
     def close(self) -> None:
@@ -624,7 +865,7 @@ class Anticipator:
 
     def observe(
         self, actual_text: str, scope_keys: Union[str, List[str]],
-        now: Optional[datetime] = None,
+        now: Optional[datetime] = None, anticipated_id: Optional[str] = None,
     ) -> MatchResult:
         """Score the ACTUAL message against every live prediction in every scope, log every
         outcome (hits AND misses -- the objective function's measurable record), apply the miss
@@ -632,11 +873,21 @@ class Anticipator:
         by the canonical-text linkage), consume the judged predictions, and return the best match
         across scopes with its precomputed bundle when one cleared ``MATCH_SERVE``.
 
+        ``anticipated_id`` (optional) is the EXACT prediction id the client tapped: when given and a
+        stored prediction with that id exists in any consulted scope, that slot's precomputed bundle
+        is served DIRECTLY, taking precedence over keyword matching (a refined ``display_text`` can
+        diverge from the canonical ``text`` enough that keyword matching would miss). The id may be
+        either a STORED prediction's own id (a ``plan_next`` slot) or the STABLE chip id
+        ``chips_for_now`` stamps (``chip_id(scope, text)``); both resolve to the same slot. The
+        outcome is still scored and logged for learning either way. Keyword matching remains the
+        fallback for a typed ask with no id.
+
         Scope keys are consulted in the order given (pass narrowest first: conv, quest, global);
         on a score tie the earlier key wins. Never raises: any failure returns an empty
         ``MatchResult`` and the turn proceeds on the normal path.
         """
         result = MatchResult()
+        served_exact = False
         try:
             now_ts = (now or datetime.now()).timestamp()
             for key in _as_key_list(scope_keys):
@@ -644,7 +895,26 @@ class Anticipator:
                 if not preds:
                     continue
                 best, best_score, outcomes = match_actual(preds, actual_text)
-                if best is not None and best_score > result.score:
+                # EXACT-ID SERVE: honor the id the client tapped, regardless of keyword score.
+                # Match a stored slot by its own id OR by its stable chip id, since a chip
+                # returned by ``chips_for_now`` carries ``chip_id(scope, text)``, not the id
+                # ``plan_next`` stored the precompute slot under.
+                if anticipated_id and not served_exact:
+                    exact = next(
+                        (p for p in preds
+                         if p.prediction_id == anticipated_id
+                         or chip_id(key, p.text) == anticipated_id), None)
+                    if exact is not None:
+                        view = self.store.load_view(key, exact.prediction_id)
+                        result.matched = exact
+                        result.score = score_outcome(exact.text, actual_text)
+                        result.precomputed = (
+                            AssembledContext(context_view=view,
+                                             card_ids=list(exact.context_card_ids))
+                            if view else None
+                        )
+                        served_exact = True
+                if not served_exact and best is not None and best_score > result.score:
                     view = self.store.load_view(key, best.prediction_id)
                     result.matched = best
                     result.score = best_score
@@ -667,6 +937,34 @@ class Anticipator:
         except Exception:  # noqa: BLE001 -- anticipation must never break a turn
             log.debug("Anticipator.observe failed", exc_info=True)
         return result
+
+    # --- read time ------------------------------------------------------------------------------
+
+    def chips_for_now(
+        self, scope_keys: Union[str, List[str]], recent_texts: Optional[List[str]] = None,
+        now: Optional[datetime] = None, k: int = K,
+    ) -> Dict[str, List[Prediction]]:
+        """READ-TIME chips per scope: load each scope's DURABLE patterns from the store and rank
+        them against the CURRENT moment via the module-level ``chips_for_now`` (time signature +
+        EMA weight, softly topic-seeded by ``recent_texts``). This is the consumer entry point for
+        "what should the suggestion chips show right now": it depends only on the patterns, never
+        on stored live predictions or their TTL, so a pattern learned days ago at this hour still
+        surfaces. Returns ``{scope_key: [Prediction, ...]}`` with only the scopes that produced
+        chips; each chip carries the stable ``chip_id(scope, text)`` a later tap can send back as
+        ``observe(anticipated_id=...)``. Never raises ({} on any failure)."""
+        out: Dict[str, List[Prediction]] = {}
+        try:
+            now_dt = now or datetime.now()
+            for key in _as_key_list(scope_keys):
+                patterns = self.store.load_patterns(key)
+                if not patterns:
+                    continue
+                chips = chips_for_now(patterns, now_dt, list(recent_texts or []), k=k)
+                if chips:
+                    out[key] = chips
+        except Exception:  # noqa: BLE001 -- a read-time chip failure is just no chips
+            log.debug("Anticipator.chips_for_now failed", exc_info=True)
+        return out
 
     def _apply_outcomes(
         self, scope_key: str, preds: List[Prediction], outcomes: List[Tuple[str, float]],
@@ -764,3 +1062,60 @@ class Anticipator:
         except Exception:  # noqa: BLE001
             log.debug("Anticipator.plan_next failed", exc_info=True)
         return planned
+
+    def refresh(
+        self, scope_keys: Union[str, List[str]], recent_texts: List[str],
+        now: Optional[datetime] = None,
+    ) -> None:
+        """OPTIONAL one-LLM-call-per-turn refresh of the planned predictions across scopes.
+
+        No-op (zero model calls) when no ``refiner`` is wired -- the model-free default. When wired,
+        gathers the currently planned predictions across ``scope_keys``, makes EXACTLY ONE
+        ``refiner`` call for the whole turn, then applies the result per scope via ``apply_refresh``:
+        a refined ``display_text`` is stamped onto the matching PATTERN (so later read-time chips
+        keep it) and prediction, conversation-obsoleted predictions are dropped for this round, and
+        up to ``MAX_FOLLOWUPS`` novel follow-up predictions are stored (narrowest scope only; they
+        create no pattern). Existing precomputed bundles are preserved. Call AFTER ``plan_next`` in
+        the same turn-end background thread, so it stays off the response path and single-flight.
+        Never raises: any refiner failure leaves the planned predictions exactly as ``plan_next``
+        left them."""
+        if self.refiner is None:
+            return
+        try:
+            now_ts = (now or datetime.now()).timestamp()
+            keys = _as_key_list(scope_keys)
+            scope_state: Dict[str, Tuple[List[Pattern], List[Prediction]]] = {}
+            candidates: List[str] = []
+            seen: set = set()
+            for key in keys:
+                patterns = self.store.load_patterns(key)
+                preds = self.store.load_predictions(key)
+                scope_state[key] = (patterns, preds)
+                for p in preds:
+                    if p.text not in seen:
+                        seen.add(p.text)
+                        candidates.append(p.text)
+            if not candidates:
+                return
+            refinements, drops, followups = self.refiner(
+                candidates, list(recent_texts or []))
+            if not (refinements or drops or followups):
+                return
+            for i, key in enumerate(keys):
+                if self._closed:
+                    break
+                patterns, preds = scope_state[key]
+                # Follow-ups are conversational, so they belong only to the narrowest scope.
+                scope_followups = followups if i == 0 else []
+                new_patterns, new_preds = apply_refresh(
+                    patterns, preds, refinements, drops, scope_followups, now_ts)
+                # Preserve each surviving prediction's precomputed bundle across the re-save.
+                views: Dict[str, str] = {}
+                for p in new_preds:
+                    v = self.store.load_view(key, p.prediction_id)
+                    if v:
+                        views[p.prediction_id] = v
+                self.store.save_patterns(key, new_patterns)
+                self.store.save_predictions(key, new_preds, views)
+        except Exception:  # noqa: BLE001 -- a refresh failure must never break a turn
+            log.debug("Anticipator.refresh failed", exc_info=True)

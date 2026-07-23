@@ -1053,6 +1053,13 @@ class OrchestratorConfig:
     # Pattern-based only in this lane: NO LLM calls anywhere in the engine. Env: QAR_ANTICIPATION
     # ("1"/"true" enables; read in cli.py's _config_from_env).
     anticipation_enabled: bool = False
+    # OPTIONAL one-LLM-call-per-turn refresh of the anticipation predictions (see
+    # core/anticipation.py ``Anticipator.refresh``): refines chip display text, drops
+    # conversation-obsoleted predictions, adds a few follow-ups. Default OFF so the lane stays
+    # zero-LLM by default; enabling it only takes effect when an Anticipator with a wired ``refiner``
+    # is present (``resolve_anticipator`` builds one from ``cfg.model_provider`` when this is on).
+    # Env: QAR_ANTICIPATION_LLM ("1"/"true" enables; read in cli.py's _config_from_env).
+    anticipation_llm_enabled: bool = False
 
 
 @dataclass
@@ -5993,6 +6000,11 @@ class Orchestrator:
                     bg_now = datetime.now()
                     anticipator.learn(user_message, keys, now=bg_now)
                     anticipator.plan_next(keys, recent_texts, now=bg_now)
+                    # OPTIONAL one-LLM-call refresh (no-op unless a refiner is wired): refine the
+                    # just-planned predictions' display text, drop the conversation-obsoleted ones,
+                    # and add a few follow-ups. Kept inside this single-flight background thread so
+                    # it stays off the response path and never exceeds one model call per turn.
+                    anticipator.refresh(keys, recent_texts, now=bg_now)
                 except Exception:  # noqa: BLE001 -- background learning must never raise out
                     log.debug("background anticipation learn/plan failed", exc_info=True)
 
@@ -6558,6 +6570,7 @@ class Orchestrator:
             cancel_check: Optional[Callable[[], bool]] = None,
             card_thread: Optional[Any] = None,
             prior_narration: Optional[List[str]] = None,
+            anticipated_id: Optional[str] = None,
             now: Optional[str] = None) -> OrchestratorResult:
         """Run the bounded loop for one request and return a terminal OrchestratorResult.
 
@@ -7028,7 +7041,8 @@ class Orchestrator:
                 _ant_view = ""
                 if _ant_keys:
                     _ant_match = self.anticipator.observe(
-                        user_message, _ant_keys, now=datetime.now())
+                        user_message, _ant_keys, now=datetime.now(),
+                        anticipated_id=anticipated_id)
                     if (_ant_match is not None and _ant_match.matched is not None
                             and _ant_match.precomputed is not None):
                         _ant_view = (getattr(_ant_match.precomputed, "context_view", "")

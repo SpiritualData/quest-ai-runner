@@ -20,7 +20,9 @@ from quest_ai_runner.core.anticipation import (
     CONF_FLOOR,
     K,
     MATCH_SERVE,
+    MAX_FOLLOWUPS,
     MAX_PATTERNS_PER_SCOPE,
+    PREDICTION_TTL_SECONDS,
     PRUNE_AGE_DAYS,
     PRUNE_WEIGHT,
     AskFeatures,
@@ -28,9 +30,12 @@ from quest_ai_runner.core.anticipation import (
     FilePredictionStore,
     Pattern,
     Prediction,
+    apply_refresh,
+    chips_for_now,
     extract_features,
     generate_predictions,
     match_actual,
+    parse_refresh_response,
     rank_patterns,
     reinforce_or_create,
     score_outcome,
@@ -874,3 +879,235 @@ def test_resolve_anticipator_returns_anticipator_when_flag_on(tmp_path):
     assert isinstance(anticipator, Anticipator)
     assert isinstance(anticipator.store, FilePredictionStore)
     assert anticipator.store._dir == (tmp_path / "predictions")
+
+
+# =================================================================================================
+# v2: TTL semantics, chips_for_now, display_text, exact-id serve, refresh
+# =================================================================================================
+
+
+def test_prediction_ttl_is_four_hours():
+    # v2: the TTL now bounds a precomputed BUNDLE's freshness, not chip visibility.
+    assert PREDICTION_TTL_SECONDS == 14400
+
+
+def test_chips_for_now_empty_patterns_returns_empty():
+    assert chips_for_now([], datetime(2026, 7, 20, 9, 0, 0), recent_texts=[]) == []
+
+
+def test_chips_for_now_time_matched_pattern_from_days_ago_still_surfaces():
+    # A pattern learned days ago at THIS hour/weekday still produces a chip now (read-time),
+    # with no live prediction and no replanning.
+    now = datetime(2026, 7, 20, 9, 0, 0)  # Monday, hour bucket 1
+    feats = extract_features("what is our roadmap", now, "global")
+    old = Pattern(
+        pattern_id="old", scope="global", hour_bucket=feats.hour_bucket, dow=feats.dow,
+        is_weekend=feats.is_weekend, canonical_text="what is our roadmap",
+        keywords=feats.keywords, weight=0.9, hits=5, misses=0,
+        last_seen_ts=1000.0, created_ts=1000.0)
+    chips = chips_for_now([old], now, recent_texts=[])
+    assert [c.text for c in chips] == ["what is our roadmap"]
+
+
+def test_chips_for_now_orders_time_matched_ahead_of_time_far():
+    now = datetime(2026, 7, 20, 9, 0, 0)  # bucket 1, dow 0
+    near = _pattern(pattern_id="near", canonical_text="near ask", keywords=["near"],
+                    weight=0.9, hour_bucket=1, dow=0)
+    far = _pattern(pattern_id="far", canonical_text="far ask", keywords=["far"],
+                   weight=0.9, hour_bucket=4, dow=3)
+    chips = chips_for_now([near, far], now, recent_texts=[])
+    assert chips[0].text == "near ask"
+
+
+def test_chips_for_now_dedupes_and_caps():
+    now = datetime(2026, 7, 20, 9, 0, 0)
+    dup_a = _pattern(pattern_id="a", canonical_text="same ask", keywords=["same"],
+                     weight=0.9, hour_bucket=1, dow=0)
+    dup_b = _pattern(pattern_id="b", canonical_text="same ask", keywords=["same"],
+                     weight=0.8, hour_bucket=1, dow=0)
+    extras = [
+        _pattern(pattern_id=f"p{i}", canonical_text=f"ask {i}", keywords=[f"topic{i}"],
+                 weight=0.9, hour_bucket=1, dow=0)
+        for i in range(K + 3)
+    ]
+    chips = chips_for_now([dup_a, dup_b] + extras, now, recent_texts=[], k=K)
+    texts = [c.text for c in chips]
+    assert texts.count("same ask") == 1  # deduped by canonical text
+    assert len(chips) == K               # capped at k
+
+
+def test_chips_for_now_ids_are_stable_across_calls():
+    now1 = datetime(2026, 7, 20, 9, 0, 0)
+    now2 = datetime(2026, 7, 20, 9, 30, 0)  # same bucket/day, different minute
+    p = _pattern(canonical_text="what is our roadmap", keywords=["roadmap"], weight=0.9,
+                 hour_bucket=1, dow=0)
+    id1 = chips_for_now([p], now1, recent_texts=[])[0].prediction_id
+    id2 = chips_for_now([p], now2, recent_texts=[])[0].prediction_id
+    assert id1 == id2  # stable id -> a precomputed bundle is found on a later tap
+
+
+def test_chips_for_now_carries_pattern_display_text():
+    now = datetime(2026, 7, 20, 9, 0, 0)
+    p = _pattern(canonical_text="roadmap status", keywords=["roadmap"], weight=0.9,
+                 hour_bucket=1, dow=0)
+    p = Pattern(**{**p.__dict__, "display_text": "How's the roadmap looking?"})
+    chips = chips_for_now([p], now, recent_texts=[])
+    assert chips[0].display_text == "How's the roadmap looking?"
+    assert chips[0].text == "roadmap status"  # canonical unchanged
+
+
+def test_pattern_display_text_round_trips_through_file_store(tmp_path):
+    store = FilePredictionStore(str(tmp_path))
+    p = Pattern(pattern_id="p1", scope="global", hour_bucket=1, dow=0, is_weekend=False,
+                canonical_text="roadmap status", keywords=["roadmap"], weight=0.9,
+                display_text="How's the roadmap looking?")
+    store.save_patterns("global", [p])
+    loaded = store.load_patterns("global")
+    assert loaded[0].display_text == "How's the roadmap looking?"
+    assert loaded[0].canonical_text == "roadmap status"
+
+
+def test_prediction_display_text_round_trips_through_file_store(tmp_path):
+    store = FilePredictionStore(str(tmp_path))
+    pred = Prediction(prediction_id="pr1", text="roadmap status", confidence=0.8,
+                      created_ts=1000.0, expires_ts=time_far_future(),
+                      display_text="How's the roadmap looking?")
+    store.save_predictions("global", [pred])
+    loaded = store.load_predictions("global")
+    assert loaded[0].display_text == "How's the roadmap looking?"
+
+
+def test_observe_exact_id_serves_bundle_regardless_of_keyword_match(tmp_path):
+    store = FilePredictionStore(str(tmp_path))
+    anticipator = Anticipator(store, assembler=None)
+    # A prediction whose canonical text does NOT keyword-match the actual message: keyword
+    # matching alone would serve nothing, but the exact tapped id must serve its bundle.
+    pred = Prediction(prediction_id="pr_exact", text="what is our quarterly roadmap",
+                      confidence=0.8, created_ts=1000.0, expires_ts=time_far_future(),
+                      context_card_ids=["card-9"])
+    store.save_predictions("global", [pred], views={"pr_exact": "precomputed exact bundle"})
+
+    result = anticipator.observe("totally different phrasing here", "global",
+                                 anticipated_id="pr_exact")
+
+    assert result.matched is not None
+    assert result.matched.prediction_id == "pr_exact"
+    assert result.precomputed is not None
+    assert result.precomputed.context_view == "precomputed exact bundle"
+    assert result.precomputed.card_ids == ["card-9"]
+
+
+def test_observe_exact_id_missing_falls_back_to_keyword_match(tmp_path):
+    store = FilePredictionStore(str(tmp_path))
+    anticipator = Anticipator(store, assembler=None)
+    pred = Prediction(prediction_id="pr1", text="what is our roadmap", confidence=0.8,
+                      created_ts=1000.0, expires_ts=time_far_future())
+    store.save_predictions("global", [pred], views={"pr1": "kw bundle"})
+
+    # An id that is not present -> keyword matching still serves the roadmap prediction.
+    result = anticipator.observe("what is our roadmap", "global", anticipated_id="nope")
+    assert result.matched is not None
+    assert result.matched.prediction_id == "pr1"
+    assert result.precomputed.context_view == "kw bundle"
+
+
+def test_apply_refresh_sets_display_text_and_never_rewrites_canonical():
+    p = _pattern(canonical_text="roadmap status", keywords=["roadmap"])
+    pred = Prediction(prediction_id="pr1", text="roadmap status", confidence=0.7,
+                      created_ts=1.0, expires_ts=2.0)
+    refinements = {"roadmap status": "How's the roadmap looking?"}
+    new_patterns, new_preds = apply_refresh([p], [pred], refinements, drops=[], followups=[],
+                                            now_ts=100.0)
+    assert new_patterns[0].display_text == "How's the roadmap looking?"
+    assert new_patterns[0].canonical_text == "roadmap status"  # canonical never rewritten
+    assert new_preds[0].display_text == "How's the roadmap looking?"
+    assert new_preds[0].text == "roadmap status"
+
+
+def test_apply_refresh_drops_flagged_predictions():
+    keep = Prediction(prediction_id="keep", text="keep this", confidence=0.7,
+                      created_ts=1.0, expires_ts=2.0)
+    obsolete = Prediction(prediction_id="drop", text="obsolete ask", confidence=0.7,
+                          created_ts=1.0, expires_ts=2.0)
+    _, new_preds = apply_refresh([], [keep, obsolete], refinements={},
+                                 drops=["obsolete ask"], followups=[], now_ts=100.0)
+    texts = [pr.text for pr in new_preds]
+    assert texts == ["keep this"]
+
+
+def test_apply_refresh_adds_followups_as_followup_source_no_pattern():
+    new_patterns, new_preds = apply_refresh([], [], refinements={}, drops=[],
+                                            followups=["what should I do next", "when is it due",
+                                                       "a third one over the cap"],
+                                            now_ts=100.0)
+    assert new_patterns == []  # follow-ups create no pattern
+    followups = [pr for pr in new_preds if pr.source == "followup"]
+    assert len(followups) == MAX_FOLLOWUPS  # capped
+    assert followups[0].display_text == followups[0].text
+
+
+def test_parse_refresh_response_maps_indices_and_followups():
+    candidates = ["roadmap status", "obsolete ask"]
+    raw = (
+        '{"candidates": ['
+        '{"n": 1, "display": "How is the roadmap?", "drop": false},'
+        '{"n": 2, "display": "", "drop": true}],'
+        '"followups": ["what is next", "when is it due", "too many"]}'
+    )
+    refinements, drops, followups = parse_refresh_response(raw, candidates)
+    assert refinements == {"roadmap status": "How is the roadmap?"}
+    assert drops == ["obsolete ask"]
+    assert followups == ["what is next", "when is it due"]  # capped at MAX_FOLLOWUPS
+
+
+def test_parse_refresh_response_tolerates_fences_and_garbage():
+    candidates = ["roadmap status"]
+    fenced = '```json\n{"candidates": [{"n": 1, "display": "Refined", "drop": false}]}\n```'
+    refinements, drops, followups = parse_refresh_response(fenced, candidates)
+    assert refinements == {"roadmap status": "Refined"}
+    # Garbage returns three empties, never raises.
+    assert parse_refresh_response("not json at all", candidates) == ({}, [], [])
+
+
+def test_anticipator_refresh_no_refiner_is_noop(tmp_path):
+    store = FilePredictionStore(str(tmp_path))
+    anticipator = Anticipator(store, assembler=None, refiner=None)
+    pred = Prediction(prediction_id="pr1", text="roadmap status", confidence=0.7,
+                      created_ts=1000.0, expires_ts=time_far_future())
+    store.save_predictions("global", [pred])
+    anticipator.refresh("global", recent_texts=["hi"])
+    # Untouched: no refiner means no model call and no change.
+    loaded = store.load_predictions("global")
+    assert len(loaded) == 1
+    assert loaded[0].display_text == ""
+
+
+def test_anticipator_refresh_applies_refiner_output_and_preserves_views(tmp_path):
+    store = FilePredictionStore(str(tmp_path))
+    p = _pattern(pattern_id="src", scope="global", canonical_text="roadmap status",
+                 keywords=["roadmap"], weight=0.9)
+    store.save_patterns("global", [p])
+    pred = Prediction(prediction_id="pr1", text="roadmap status", confidence=0.7,
+                      created_ts=1000.0, expires_ts=time_far_future())
+    store.save_predictions("global", [pred], views={"pr1": "the bundle"})
+
+    calls = []
+
+    def fake_refiner(candidates, recent_texts):
+        calls.append((list(candidates), list(recent_texts)))
+        return ({"roadmap status": "How's the roadmap?"}, [], ["what is next"])
+
+    anticipator = Anticipator(store, assembler=None, refiner=fake_refiner)
+    anticipator.refresh("global", recent_texts=["tell me about the roadmap"])
+
+    assert len(calls) == 1  # exactly one refiner (LLM) call
+    assert calls[0][0] == ["roadmap status"]
+    patterns = store.load_patterns("global")
+    assert patterns[0].display_text == "How's the roadmap?"  # persisted onto the pattern
+    preds = store.load_predictions("global")
+    by_text = {pr.text: pr for pr in preds}
+    assert by_text["roadmap status"].display_text == "How's the roadmap?"
+    assert "what is next" in by_text  # follow-up stored
+    assert by_text["what is next"].source == "followup"
+    # The existing precomputed bundle survived the re-save.
+    assert store.load_view("global", "pr1") == "the bundle"

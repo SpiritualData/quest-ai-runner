@@ -34,6 +34,31 @@ All notable changes to this project are documented here. The format is based on
   `core/orchestrator.py`, `config.py`, `cli.py`; `docs/anticipation.md`;
   `tests/test_anticipation.py`.)
 
+### Changed
+- **Anticipation v2: patterns are the durable store, chips are recomputed read-time from the
+  CURRENT moment instead of depending on a 30-minute-TTL live prediction.** Previously a chip only
+  showed while a `plan_next` prediction from the *previous* turn was still unexpired
+  (`PREDICTION_TTL_SECONDS` was 30 minutes and directly gated visibility), so a pattern learned
+  days or weeks ago never resurfaced until the user happened to ask again inside that window. Now
+  `chips_for_now(patterns, now, recent_texts)` (and `Anticipator.chips_for_now`) ranks the
+  DURABLE, never-expiring patterns against the current time signature on every read, so a pattern
+  learned days ago at this hour/weekday surfaces again with zero replanning; `PREDICTION_TTL_SECONDS`
+  (now 4 hours) only bounds how long a stored prediction's PRECOMPUTED bundle stays trusted, never
+  whether a chip shows. Each chip carries a stable id (`chip_id(scope, text)`); a tap can pass it
+  back as `Anticipator.observe(..., anticipated_id=...)` for an EXACT-ID serve of that slot's
+  precomputed bundle, bypassing keyword matching entirely (needed once display text can diverge
+  from canonical text, see below). Added an OPTIONAL one-LLM-call-per-turn refresh
+  (`Anticipator.refresh`, off unless a `refiner` is wired): refines each candidate's raw
+  `canonical_text` into a natural `display_text` for the chip (the canonical text itself is never
+  rewritten — it stays the scoring/linkage key), drops predictions the conversation just
+  obsoleted, and adds up to `MAX_FOLLOWUPS` (2) new conversational follow-up predictions. Gated by
+  a new `OrchestratorConfig.anticipation_llm_enabled` / env `QAR_ANTICIPATION_LLM` (default
+  `False` — the engine stays fully model-free by default; when on, `resolve_anticipator` wires a
+  refiner from `cfg.model_provider` at the `"balanced"` tier). `apply_refresh` and
+  `parse_refresh_response` are pure and shared so a consumer with a centralized prompt store
+  (e.g. quest-backend) can supply its own prompt and still reuse them. (`core/anticipation.py`,
+  `core/orchestrator.py`, `config.py`, `cli.py`; `docs/anticipation.md`; `tests/test_anticipation.py`.)
+
 ### Fixed
 - **`QdrantVectorStore` no longer creates one Qdrant collection per scope (collection sprawl),
   and scoped searches now see the shared corpus.** The store derived a collection name from a

@@ -1048,8 +1048,47 @@ def resolve_anticipator(cfg: RunnerConfig, context_assembler: Any = None):
         from .core.anticipation import Anticipator, FilePredictionStore
         root = cfg.corpus_root or os.getcwd()
         cards_dir = cfg.context_cards_dir or os.path.join(root, ".quest-context")
-        return Anticipator(FilePredictionStore(cards_dir), assembler=context_assembler)
+        refiner = _resolve_anticipation_refiner(cfg)
+        return Anticipator(FilePredictionStore(cards_dir), assembler=context_assembler,
+                           refiner=refiner)
     except Exception:  # noqa: BLE001 -- never let this wiring break runner construction
+        return None
+
+
+def _resolve_anticipation_refiner(cfg: RunnerConfig):
+    """Build the OPTIONAL one-LLM-call anticipation refiner from config, or None.
+
+    Only when ``cfg.orchestrator.anticipation_llm_enabled`` is True (env ``QAR_ANTICIPATION_LLM``,
+    default OFF -- the lane stays zero-LLM by default) AND a ``model_provider`` is configured. The
+    provider is ``cfg.model_provider`` (already wrapped with ``MultiProvider`` by
+    ``build_orchestrator`` before this runs, per the repo's MultiProvider rule), and the model is
+    resolved via ``ModelRegistry.resolve_tier("balanced")`` -- never a hardcoded model id. Returns
+    the callable ``Anticipator`` expects: ``(candidates, recent_texts) -> (refinements, drops,
+    followups)``. None (so the engine stays model-free) on any failure or when disabled."""
+    if not getattr(cfg.orchestrator, "anticipation_llm_enabled", False):
+        return None
+    if cfg.model_provider is None:
+        return None
+    try:
+        from .core.anticipation import (
+            REFRESH_SYSTEM_PROMPT,
+            build_refresh_prompt,
+            parse_refresh_response,
+        )
+        from .core.model_registry import ModelRegistry
+        provider = cfg.model_provider
+        registry = ModelRegistry(provider, fallback=cfg.model_fallback or None)
+
+        def refiner(candidates, recent_texts):
+            model = registry.resolve_tier("balanced")
+            prompt = build_refresh_prompt(candidates, recent_texts)
+            raw = provider.answer(
+                [{"role": "user", "content": prompt}], model=model,
+                system=REFRESH_SYSTEM_PROMPT)
+            return parse_refresh_response(raw, candidates)
+
+        return refiner
+    except Exception:  # noqa: BLE001 -- never let refiner wiring break runner construction
         return None
 
 
