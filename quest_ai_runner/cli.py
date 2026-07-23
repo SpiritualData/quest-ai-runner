@@ -400,6 +400,16 @@ def _config_from_env() -> RunnerConfig:
         cfg.orchestrator.recent_context_global_enabled = False
     elif _rcg in ("1", "true", "on", "yes"):
         cfg.orchestrator.recent_context_global_enabled = True
+    # QAR_ANTICIPATION: the anticipation engine (see core/anticipation.py) -- OFF by default.
+    # "1"/"true" enables it: build_orchestrator's resolve_anticipator then wires an Anticipator
+    # (file store under <cards_dir>/predictions, precompute via the resolved context assembler),
+    # so each turn observes/learns ask patterns and pre-plans the next predictions. With the flag
+    # off (or unset) no Anticipator is wired and the run is byte-for-byte identical.
+    _ant = (os.getenv("QAR_ANTICIPATION") or "").strip().lower()
+    if _ant in ("1", "true", "on", "yes"):
+        cfg.orchestrator.anticipation_enabled = True
+    elif _ant in ("0", "false", "off", "no"):
+        cfg.orchestrator.anticipation_enabled = False
     return cfg
 
 

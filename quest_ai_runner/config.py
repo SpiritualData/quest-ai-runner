@@ -1030,6 +1030,29 @@ def resolve_recent_context_store(cfg: RunnerConfig):
         return None
 
 
+def resolve_anticipator(cfg: RunnerConfig, context_assembler: Any = None):
+    """Resolve the ANTICIPATION engine from config -- OFF BY DEFAULT.
+
+    Only when ``cfg.orchestrator.anticipation_enabled`` is True (env ``QAR_ANTICIPATION``, read in
+    ``cli.py``'s ``_config_from_env``) does this build an ``Anticipator`` over a
+    ``FilePredictionStore`` rooted at the same ``cards_dir`` the card/recent-context stores use
+    (predictions live under ``<cards_dir>/predictions``). ``context_assembler`` is the ALREADY
+    RESOLVED assembler build_orchestrator wired (passed in so the assembler is never constructed
+    twice); it powers per-prediction context precompute and may be None (predictions then carry no
+    precomputed bundle, matching still works). Construction never raises -- any failure yields
+    ``None`` (the orchestrator behaves exactly as if no engine were wired).
+    """
+    if not cfg.orchestrator.anticipation_enabled:
+        return None
+    try:
+        from .core.anticipation import Anticipator, FilePredictionStore
+        root = cfg.corpus_root or os.getcwd()
+        cards_dir = cfg.context_cards_dir or os.path.join(root, ".quest-context")
+        return Anticipator(FilePredictionStore(cards_dir), assembler=context_assembler)
+    except Exception:  # noqa: BLE001 -- never let this wiring break runner construction
+        return None
+
+
 def build_orchestrator(
     cfg: RunnerConfig,
     *,
@@ -1193,6 +1216,7 @@ def build_orchestrator(
     from .core.inbox import InMemoryInbox
     input_inbox = getattr(cfg, "input_inbox", None) or InMemoryInbox()
 
+    context_assembler = resolve_context_assembler(cfg, notify=notify)
     return Orchestrator(
         retrieval=get_retrieval_adapter(cfg),
         provider=cfg.model_provider,
@@ -1204,9 +1228,10 @@ def build_orchestrator(
         config=cfg.orchestrator,
         status=status,
         vision_provider=cfg.vision_provider,
-        context_assembler=resolve_context_assembler(cfg, notify=notify),
+        context_assembler=context_assembler,
         guidance=guidance,
         input_inbox=input_inbox,
         conversation_store=cfg.conversation_store,
         recent_context=resolve_recent_context_store(cfg),
+        anticipator=resolve_anticipator(cfg, context_assembler),
     )

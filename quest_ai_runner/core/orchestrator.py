@@ -90,6 +90,7 @@ from .context_doctrine import (
     SPECIFICITY_GATE,
     SUFFICIENCY_GATE,
 )
+from .anticipation import Anticipator
 from .inbox import InputInbox
 from .guard import (
     ExecutionFact,
@@ -1038,6 +1039,20 @@ class OrchestratorConfig:
     # keep working unchanged. Env: QAR_RECENT_CONTEXT_GLOBAL ("0"/"false" disables; read in
     # cli.py's _config_from_env).
     recent_context_global_enabled: bool = True
+    # QUEST AI ANTICIPATION ENGINE (see core/anticipation.py), opt-in (default OFF -- with the
+    # flag off, or no Anticipator wired, the run is BYTE-FOR-BYTE identical: zero anticipation
+    # calls, zero threads, zero events, no store files touched; the same guarantee the overseer
+    # gives). When ON and an Anticipator is wired (``Orchestrator.anticipator``), each turn:
+    #   * at TURN START, observes the actual message against the live predictions planned after
+    #     the previous turn (every prediction gets an outcome score -- the logged objective
+    #     function -- and its source pattern gets the EMA hit/miss update), and when the best
+    #     match clears MATCH_SERVE, seeds the turn with that prediction's PRECOMPUTED context as
+    #     a cheap discardable hint (CACHED_HINT_GATE doctrine; the normal path is untouched);
+    #   * at TURN END, learns the ask pattern and plans the next predictions (with precomputed
+    #     bundles) in a background daemon thread that never blocks the returned answer.
+    # Pattern-based only in this lane: NO LLM calls anywhere in the engine. Env: QAR_ANTICIPATION
+    # ("1"/"true" enables; read in cli.py's _config_from_env).
+    anticipation_enabled: bool = False
 
 
 @dataclass
@@ -3564,6 +3579,7 @@ class Orchestrator:
         input_inbox: Optional["InputInbox"] = None,
         conversation_store: Optional[ConversationStore] = None,
         recent_context: Optional[RecentContextStore] = None,
+        anticipator: Optional[Anticipator] = None,
     ):
         self.retrieval = retrieval
         self.provider = provider
@@ -3618,6 +3634,14 @@ class Orchestrator:
         # as a hint to the consolidating LLM pass when a card is re-found by fresh assembly. Never
         # raises. None = exactly today's behavior (no recent-turn fallback).
         self.recent_context = recent_context
+        # Optional ANTICIPATION ENGINE (see core/anticipation.py). Only consulted when BOTH an
+        # Anticipator is wired here AND ``cfg.anticipation_enabled`` is True; otherwise the run is
+        # byte-for-byte identical (zero calls, zero threads, zero events). Never raises: every
+        # touch point is guarded so any failure degrades to the normal path.
+        self.anticipator = anticipator
+        # The single-flight handle for the turn-end anticipation learn/plan thread (see
+        # _kickoff_anticipation): while it is alive, further kickoffs are skipped, not queued.
+        self._anticipation_thread: Optional[threading.Thread] = None
 
     def get_provider_for_model(self, model: str) -> ModelProvider:
         """Auto-detect and return the provider for a given model based on name prefix.
@@ -4754,6 +4778,26 @@ class Orchestrator:
                 keys.append(quest_scope_key(quest_id))
             if self.cfg.recent_context_global_enabled:
                 keys.append(GLOBAL_SCOPE_KEY)
+        except Exception:  # noqa: BLE001
+            return []
+        return keys
+
+    def _anticipation_scope_keys(self, ctx_meta: Optional[Dict[str, Any]]) -> List[str]:
+        """The ANTICIPATION engine's scope keys for this run (see core/anticipation.py):
+        ``conv:<conv_id>`` when a conversation id is in scope, ``quest:<quest_id>`` when a quest
+        id is in scope, plus always ``"global"`` -- narrowest first, which is the precedence
+        ``Anticipator.observe`` honors on a score tie. Same key vocabulary as the warm
+        recent-context store (``core.recent_context``). Never raises; [] on any failure."""
+        keys: List[str] = []
+        try:
+            meta = ctx_meta or {}
+            conv_id = meta.get("conv_id")
+            quest_id = meta.get("quest_id")
+            if conv_id:
+                keys.append(conv_scope_key(conv_id))
+            if quest_id:
+                keys.append(quest_scope_key(quest_id))
+            keys.append(GLOBAL_SCOPE_KEY)
         except Exception:  # noqa: BLE001
             return []
         return keys
@@ -5916,6 +5960,56 @@ class Orchestrator:
         except Exception:  # noqa: BLE001 — kicking off the updater must never break the turn
             log.debug("card-update kickoff failed", exc_info=True)
 
+    def _kickoff_anticipation(self, *, user_message: str,
+                              ctx_meta: Optional[Dict[str, Any]]) -> None:
+        """Turn-end half of the ANTICIPATION engine (see core/anticipation.py): learn this turn's
+        ask pattern, then plan + precompute the next predictions, in a BACKGROUND daemon thread
+        (mirroring ``_update_cards_after_deep_async``) so it never blocks the returned answer.
+        The thread is registered like the background context-index threads, so a consumer/test
+        joins it via ``config.shutdown_background_index()`` (which asks the Anticipator to stop
+        between bundles via ``close()``). SINGLE-FLIGHT per orchestrator: while the previous
+        turn's learn/plan thread is still running, this turn's kickoff is skipped entirely (a
+        dropped best-effort learning signal, never a queue), so fast turns cannot pile up threads
+        racing the assembler and the scope files. Ranking sees only the USER's own words: the
+        model's reply text is deliberately NOT fed in (its extra vocabulary dilutes the keyword
+        similarity enough to suppress serving; the thing predicted is the user's next ask, so the
+        user's asks are the topic signal). Inert when the flag is off or nothing is wired; a
+        failure to even start the thread is swallowed. Never raises."""
+        if self.anticipator is None or not self.cfg.anticipation_enabled:
+            return
+        try:
+            prev = getattr(self, "_anticipation_thread", None)
+            if prev is not None and prev.is_alive():
+                log.debug("anticipation kickoff skipped: previous learn/plan still running")
+                return
+            keys = self._anticipation_scope_keys(ctx_meta)
+            if not keys:
+                return
+            anticipator = self.anticipator
+            recent_texts = [user_message] if user_message else []
+
+            def _bg() -> None:
+                try:
+                    bg_now = datetime.now()
+                    anticipator.learn(user_message, keys, now=bg_now)
+                    anticipator.plan_next(keys, recent_texts, now=bg_now)
+                except Exception:  # noqa: BLE001 -- background learning must never raise out
+                    log.debug("background anticipation learn/plan failed", exc_info=True)
+
+            thread = threading.Thread(target=_bg, daemon=True, name="qar-anticipation")
+            self._anticipation_thread = thread
+            thread.start()
+            try:
+                # Register with the owned-background-thread registry (lazy import: core must not
+                # import config at module load). shutdown_background_index() will close() the
+                # anticipator and join this thread, the same ownership contract index threads have.
+                from ..config import _register_index_thread
+                _register_index_thread(thread, anticipator)
+            except Exception:  # noqa: BLE001
+                pass
+        except Exception:  # noqa: BLE001 -- kicking off anticipation must never break the turn
+            log.debug("anticipation kickoff failed", exc_info=True)
+
     # --- minimal-intervention overseer ---------------------------------------
 
     def _run_spend_metrics(self, gathered: List[Dict[str, Any]],
@@ -6920,6 +7014,35 @@ class Orchestrator:
             except Exception:  # noqa: BLE001
                 pass
 
+        # --- Anticipation engine, TURN START (opt-in; see core/anticipation.py) ----------------
+        # Score the ACTUAL message against the predictions planned after the previous turn: every
+        # live prediction gets an outcome (hit or miss decay, logged -- the objective function's
+        # measurable record), and when the best match clears MATCH_SERVE, this turn is seeded with
+        # that prediction's PRECOMPUTED context as a cheap, discardable hint under the
+        # CACHED_HINT_GATE doctrine (it may only ever save work, never cost work: the fresh
+        # assembly below still runs and its context still leads). Guarded so ANY failure degrades
+        # to the normal path; with the flag off (the default) this block does nothing at all.
+        if self.anticipator is not None and cfg.anticipation_enabled:
+            try:
+                _ant_keys = self._anticipation_scope_keys(_ctx_meta)
+                _ant_view = ""
+                if _ant_keys:
+                    _ant_match = self.anticipator.observe(
+                        user_message, _ant_keys, now=datetime.now())
+                    if (_ant_match is not None and _ant_match.matched is not None
+                            and _ant_match.precomputed is not None):
+                        _ant_view = (getattr(_ant_match.precomputed, "context_view", "")
+                                     or "").strip()
+                if _ant_view:
+                    _ant_block = (
+                        "--- ANTICIPATED CONTEXT (precomputed for a predicted ask) ---\n"
+                        + CACHED_HINT_GATE + "\n\n" + _ant_view)
+                    context_view = (_ant_block + "\n\n" + context_view if context_view
+                                    else _ant_block)
+            except Exception:  # noqa: BLE001 -- anticipation must never break the turn
+                log.debug("anticipation observe failed; continuing on the normal path",
+                          exc_info=True)
+
         # ONE shared, query-keyed in-run context cache (the unified primitive, docs sec. 3): the
         # turn-start pre-fetch below and any mid-loop {"cards": ...} / {"card": ...} read reach the
         # SAME assembler through it, so a turn-start assembly timeout is recoverable mid-loop (a
@@ -7329,6 +7452,13 @@ class Orchestrator:
                     )
                 except Exception:  # noqa: BLE001 -- write-back must never break the run
                     pass
+            # --- Anticipation engine, TURN END (opt-in; see core/anticipation.py) --------------
+            # Learn this turn's ask pattern and plan + precompute the NEXT predictions in a
+            # background daemon thread (registered like the index threads so tests/consumers can
+            # join it). With the flag off (the default) this is dead code: zero calls, zero
+            # threads, zero events.
+            if self.anticipator is not None and cfg.anticipation_enabled:
+                self._kickoff_anticipation(user_message=user_message, ctx_meta=_ctx_meta)
             # Final token event so consumers get the definitive total alongside the result.
             _fti = res.tokens_in
             _fto = res.tokens_out

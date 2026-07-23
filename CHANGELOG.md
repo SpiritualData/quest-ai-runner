@@ -6,6 +6,34 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Anticipation engine (opt-in, off by default): the assistant learns recurring ask patterns
+  (time-of-day/day-of-week + keyword profile per scope), predicts the likely next ask, and
+  precomputes its context BEFORE the user asks.** `core/anticipation.py` is the shared learning
+  core: pure functions (`extract_features`, `similarity`, `score_outcome`, `update_weight`,
+  `reinforce_or_create`, `rank_patterns`, `generate_predictions`, `match_actual`) plus a
+  runner-lane wrapper (`FilePredictionStore`, one JSON file per scope key under
+  `.quest-context/predictions/`, and `Anticipator`). Every turn, when enabled: at TURN START
+  the actual message is scored against the predictions planned after the previous turn (the
+  objective function — keyword similarity between predicted and actual text — is logged for
+  EVERY prediction, hit or miss, to `predictions/prediction_log.jsonl`, so hit rate/mean score
+  are measurable offline); a match at/above `MATCH_SERVE` seeds the turn with that prediction's
+  PRECOMPUTED context as a cheap, discardable `--- ANTICIPATED CONTEXT` hint (the normal fresh
+  assembly still runs and leads). At TURN END, a background daemon thread learns this turn's ask
+  pattern (an online EMA weight update via `update_weight`, `w <- w + ALPHA * (score - w)`, so a
+  pattern that keeps matching drifts toward 1.0 and one that keeps missing decays toward 0.0 and
+  is eventually pruned) and plans + precomputes the next turn's predictions, never blocking the
+  answer. Pattern-based only: NO LLM calls anywhere in this engine. Wired into
+  `OrchestratorConfig.anticipation_enabled` (default `False` — with it off, or no `Anticipator`
+  wired, a run is byte-for-byte identical: zero calls, zero threads, zero store files touched)
+  and `config.resolve_anticipator` (built over the same `context_cards_dir` the card/recent-context
+  stores use); opt in via env `QAR_ANTICIPATION=1`. Every touch point is guarded so a failure
+  degrades to the normal path — anticipation can only ever save work, never break a turn. A
+  consumer with its own storage (e.g. an async database) reuses the pure functions directly
+  instead of porting a duplicate. (`quest_ai_runner/core/anticipation.py`, wired in
+  `core/orchestrator.py`, `config.py`, `cli.py`; `docs/anticipation.md`;
+  `tests/test_anticipation.py`.)
+
 ### Fixed
 - **`QdrantVectorStore` no longer creates one Qdrant collection per scope (collection sprawl),
   and scoped searches now see the shared corpus.** The store derived a collection name from a

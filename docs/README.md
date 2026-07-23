@@ -24,6 +24,8 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 - **[Streaming & modes](streaming-and-modes.md)** — LIVE vs BACKGROUND, the `ProgressSink`
   discipline, and the live↔background handoff.
 - **[Quest API contract](quest-api-contract.md)** — the exact endpoints the runner speaks.
+- **[The anticipation engine](anticipation.md)** — learned ask patterns, the objective function and
+  online EMA learning, precomputed context, and the opt-in `QAR_ANTICIPATION` flag.
 
 ## See also
 
