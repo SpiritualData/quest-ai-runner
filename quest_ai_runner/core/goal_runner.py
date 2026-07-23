@@ -222,6 +222,15 @@ def compose_goal_prompt(goal: str, brief: str, *, preamble: str = "") -> str:
         "Avoid any broad exploration that duplicates what the context already provides."
     )
     body_parts.append(
+        "HEADLESS RUN CONTRACT: You are running non-interactively; the process exits the moment "
+        "you produce your final message, and any subagents still running in the background are "
+        "killed at that instant, their work lost. Never end your turn while delegated work is "
+        "pending: if you launch subagents, wait for every one to finish and fold its results into "
+        "work you have verified yourself before writing the final summary. A final message that "
+        "promises ongoing or future work (\"agents are still running\", \"I'll review and commit "
+        "next\") means that work will simply never happen; it is a failed run, not a handoff."
+    )
+    body_parts.append(
         "When done, summarize CONCRETELY what you changed (the files and the actual edits/actions). "
         "If you could not fully meet the goal, say exactly what remains and why."
     )

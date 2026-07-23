@@ -1338,6 +1338,11 @@ CRITICAL: Future intent is NOT a result. If the output says things like "Let me 
 up", "I'll look at", "I'm going to", "I will now", "I'm searching", or any other phrase that describes
 what the worker is ABOUT to do rather than reporting what it DID, set met=false. The worker must have
 actually executed the task and reported the outcome -- not described its plan to do so.
+The same applies to DELEGATED work: if the output says helper agents or subagents "are still
+running", "are building in parallel", or that the worker "will review/test/commit their results
+next", the run ended with that work unfinished and unverified (a headless worker's pending
+subagents are killed the moment it stops), so set met=false and say in next_action that the next
+attempt must wait for and verify all delegated work before reporting.
 
 CRITICAL: Absence of context can be the correct answer. If the goal asks about prior conversation
 history, prior messages, or what was previously said, and the CONVERSATION HISTORY below confirms
