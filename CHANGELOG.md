@@ -58,6 +58,37 @@ All notable changes to this project are documented here. The format is based on
   `parse_refresh_response` are pure and shared so a consumer with a centralized prompt store
   (e.g. quest-backend) can supply its own prompt and still reuse them. (`core/anticipation.py`,
   `core/orchestrator.py`, `config.py`, `cli.py`; `docs/anticipation.md`; `tests/test_anticipation.py`.)
+- **`core/card_filter.py` cuts LLM calls in the card/file selection path (task #2462 latency
+  reduction).** Within-card file ranking (`filter_cards_by_relevance`'s stage 2) is now ONE
+  batched LLM call ranking files across ALL selected cards (bounded by `_RANK_MAX_CARDS` = 24
+  cards and `_RANK_MAX_FILES` = 40 files/card shown in the prompt), replacing the old
+  one-LLM-call-per-relevant-card loop (up to 8 parallel calls via `ThreadPoolExecutor`, each
+  silently defaulting to `model=None` instead of the caller-resolved cheap tier); the batched call
+  still returns the top 5 files per card, the same contract the per-card loop had, and a malformed
+  or missing per-card entry falls back to that card's original file order. Both LLM selection
+  entry points (`filter_cards_by_relevance`, `consolidate_context`) also gained a bounded,
+  PER-PROVIDER LRU selection memo (`clear_selection_memo()`): a repeat ask whose candidate cards
+  (ids + content) and topic keywords are unchanged skips the LLM call(s) entirely and returns a
+  copy of the prior verdict. The memo key hashes every input that can change the verdict (candidate
+  signatures, topic keywords, resolved model id, usage hint), so any change misses the cache; a
+  fallback verdict (no provider, or a stage-1/consolidation call or parse failure) is never
+  memoized, so a transient failure is retried rather than pinned. Provider identity is handled by
+  a `WeakKeyDictionary` keyed on the provider instance itself (not `id(provider)`, which is unsound
+  since ids are reused after garbage collection): a different provider instance never shares a
+  verdict, and a provider's entries die with it. (`core/card_filter.py`;
+  `tests/test_card_filter_selection.py`.)
+- **`VectorContextAssembler` can delegate its in-arm LLM hit review to the hybrid's downstream
+  consolidating pass, so a hit's relevance is judged by exactly one model call per turn instead of
+  two.** New `VectorContextAssembler(..., llm_review=True)` constructor flag (default preserves the
+  prior in-arm review); `resolve_context_assembler` wires it `False` for the vector arm feeding
+  `HybridContextAssembler`, since that hybrid already runs ONE holistic `consolidate_context` pass
+  over the merged card set. `HybridContextAssembler`'s consolidation gate widens to also fire when
+  the vector arm delegated its review and actually contributed cards (`llm_review_delegated`
+  property), so those hits still get judged exactly once; on the no-provider / budget-exceeded /
+  any-failure paths, delegated hits fall back to serving unreviewed (still confidence-gated on raw
+  similarity and capped at `max_in_view`), the same keep-all degradation consolidation itself falls
+  back to. (`adapters/vector_context_assembler.py`, `adapters/hybrid_context_assembler.py`,
+  `config.py`.)
 
 ### Fixed
 - **`QdrantVectorStore` no longer creates one Qdrant collection per scope (collection sprawl),

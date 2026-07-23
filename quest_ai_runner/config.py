@@ -954,6 +954,11 @@ def resolve_context_assembler(
                 vector_store,
                 provider=cfg.model_provider,
                 query_model=query_model,
+                # The hybrid below runs ONE holistic consolidating pass over the merged card set,
+                # which judges these same vector hits as cards. Delegate the in-arm hit review to
+                # it so hit relevance costs one model call per turn, not two (with no provider the
+                # review was a no-op anyway, so this flag is safe unconditionally here).
+                llm_review=False,
                 seed_source=keyword.export_for_embedding,
             )
             # Wire the consolidating LLM pass: one holistic filter over the merged card set that

@@ -1,16 +1,119 @@
 """Card filter — LLM-based relevance filtering for context cards."""
 from __future__ import annotations
 
-import concurrent.futures
+import hashlib
 import json
 import logging
 import re
-from dataclasses import dataclass, field
+import threading
+import weakref
+from collections import OrderedDict
+from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Optional
 
 from .adapters import ModelProvider
 
 _log = logging.getLogger("quest-ai-runner.card-filter")
+
+
+# ---------------------------------------------------------------------------
+# Selection memo — skip a repeated LLM SELECTION when nothing changed.
+# ---------------------------------------------------------------------------
+# A tiny in-process, bounded PER-PROVIDER LRU shared by the two LLM SELECTION entry points in this
+# module (``filter_cards_by_relevance`` and ``consolidate_context``). A repeat ask whose candidate
+# cards (ids + their content) and topic keywords are UNCHANGED resolves to the same cache key and
+# skips the LLM call entirely, returning a COPY of the prior verdict. Staleness is impossible by
+# construction: the key hashes every input that can change the verdict (each candidate's id + a
+# content fingerprint, the topic keywords, the resolved model id, and any usage hint), so ANY change
+# misses the cache and recomputes. Provider identity is handled by STRUCTURE, not by key: each
+# provider instance owns its own LRU inside a ``WeakKeyDictionary``, so a different provider can
+# never be served another provider's verdict, and a provider's entries die WITH the provider (a
+# fresh provider built with identical inputs, e.g. per test, always starts cold -- this is what
+# makes test isolation automatic; ``str(id(provider))`` in the key was tried first and is unsound
+# because id() values are reused after garbage collection). A provider that cannot be weak-
+# referenced or hashed is simply never memoized (correct, just uncached). The memo only engages
+# when a real provider is wired -- the no-provider fallbacks stay byte-for-byte identical and are
+# never cached.
+_SELECTION_MEMO_MAX = 64
+_selection_memos: "weakref.WeakKeyDictionary[Any, OrderedDict]" = weakref.WeakKeyDictionary()
+_selection_memo_lock = threading.Lock()
+
+
+def _topic_keywords(task: str) -> str:
+    """A stable, order-independent topic-keyword signature of the task text.
+
+    Lowercased alphanumeric tokens, deduped and sorted, so paraphrases that differ only in word
+    order / casing / punctuation still hit the same memo entry (the memo is keyword-scoped, not
+    exact-string-scoped, matching how retrieval already treats the task).
+    """
+    return " ".join(sorted(set(re.findall(r"[a-z0-9]+", (task or "").lower()))))
+
+
+def _selection_key(
+    tag: str,
+    task: str,
+    signatures: List[str],
+    *,
+    model: Optional[str],
+    extra: str = "",
+) -> str:
+    """Build the memo key. ``signatures`` are sorted so candidate ORDER never changes the key.
+    The provider is NOT part of the key: it is the ``WeakKeyDictionary`` key of the per-provider
+    LRU the entry lives in (see the module comment above)."""
+    h = hashlib.sha256()
+    for part in (tag, _topic_keywords(task), model or "", extra):
+        h.update(part.encode("utf-8", "replace"))
+        h.update(b"\x00")
+    for sig in sorted(signatures):
+        h.update(sig.encode("utf-8", "replace"))
+        h.update(b"\x00")
+    return h.hexdigest()
+
+
+def _memo_get(provider: Any, key: str) -> Any:
+    with _selection_memo_lock:
+        try:
+            memo = _selection_memos.get(provider)
+        except TypeError:  # unhashable provider: never memoized
+            return None
+        if memo is not None and key in memo:
+            memo.move_to_end(key)
+            return memo[key]
+    return None
+
+
+def _memo_put(provider: Any, key: str, value: Any) -> None:
+    with _selection_memo_lock:
+        try:
+            memo = _selection_memos.get(provider)
+            if memo is None:
+                memo = OrderedDict()
+                _selection_memos[provider] = memo
+        except TypeError:  # unhashable or non-weak-referenceable provider: skip caching
+            return
+        memo[key] = value
+        memo.move_to_end(key)
+        while len(memo) > _SELECTION_MEMO_MAX:
+            memo.popitem(last=False)
+
+
+def clear_selection_memo() -> None:
+    """Drop every memoized selection verdict (also safe to call in production). Tests do NOT need
+    to call this: isolation is automatic because each provider's entries die with the provider."""
+    with _selection_memo_lock:
+        _selection_memos.clear()
+
+
+def _copy_consolidation(verdict: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Deep-ish copy of a consolidation verdict so a cached value can never be mutated by a caller."""
+    return [
+        {
+            "card_id": c.get("card_id", ""),
+            "priority_rank": c.get("priority_rank"),
+            "items": [dict(it) for it in (c.get("items") or [])],
+        }
+        for c in verdict
+    ]
 
 
 def _extract_json(text: str) -> str:
@@ -232,8 +335,29 @@ def consolidate_context(
         return []
     if model_provider is None:
         return _consolidate_keep_all(cards)
+    recent_item_usage = recent_item_usage or {}
+
+    # Selection memo: identical merged card set + topic keywords + usage hint -> skip the LLM call.
+    signatures: List[str] = []
+    for card in cards:
+        items_sig = ",".join(
+            f"{it.get('id', '')}:{(it.get('preview', '') or '')[:80]}"
+            for it in (card.get("items") or []) if isinstance(it, dict)
+        )
+        signatures.append(
+            f"{card.get('id', '')}|{card.get('title', '')}|{(card.get('preview', '') or '')[:80]}|{items_sig}"
+        )
+    usage_sig = ";".join(
+        f"{cid}={','.join(ids or [])}" for cid, ids in sorted(recent_item_usage.items())
+    )
+    memo_key = _selection_key(
+        "consolidate", task, signatures, model=model, extra=usage_sig,
+    )
+    cached = _memo_get(model_provider, memo_key)
+    if cached is not None:
+        return _copy_consolidation(cached)
+
     try:
-        recent_item_usage = recent_item_usage or {}
         card_lines: List[str] = []
         for card in cards[:_CONSOLIDATE_MAX_CARDS]:
             cid = card.get("id", "")
@@ -269,10 +393,103 @@ def consolidate_context(
         result = _validate_consolidation(parsed, cards)
         if result is None:
             return _consolidate_keep_all(cards)
-        return stable_card_order(result)
+        ordered = stable_card_order(result)
+        # Cache only a real LLM verdict: a keep-all FALLBACK is never memoized, so a transient
+        # parse failure is retried next time rather than pinned.
+        _memo_put(model_provider, memo_key, _copy_consolidation(ordered))
+        return _copy_consolidation(ordered)
     except Exception as e:  # noqa: BLE001
         _log.debug("consolidate_context failed, keeping all cards/items: %s", e)
         return _consolidate_keep_all(cards)
+
+
+# ---------------------------------------------------------------------------
+# Batched within-card file ranking: ONE LLM call ranks files for ALL selected cards.
+# ---------------------------------------------------------------------------
+# Replaces the old one-LLM-call-per-card loop (up to N parallel calls, one per relevant card). A
+# single prompt lists every selected card with its file list; the model returns per-card file scores
+# in one JSON object. Bounds keep the prompt from blowing up on a huge selection: cap the cards shown
+# and the files shown per card (the returned ranking still yields the top 5 files per card, the same
+# contract the per-card loop had).
+_RANK_MAX_CARDS = 24        # cards shown in one batched ranking prompt
+_RANK_MAX_FILES = 40        # files shown per card in the prompt (then top 5 are returned)
+
+_RANK_FILES_PROMPT = """You are a code relevance expert. Given a task and several context cards, \
+rank the files WITHIN EACH card by how relevant they are to the task.
+
+TASK: {task}
+
+CARDS (each lists its own files):
+{cards_block}
+
+For every card, score each of its files 0-1 where:
+- 1 = essential for this task
+- 0.5 = might be useful
+- 0 = not relevant to this task
+
+Respond with ONLY valid JSON (no markdown, no extra text). Score files under the card they belong \
+to, using the card id shown in brackets:
+{{
+  "cards": [
+    {{"card_id": "<card id>", "files": [{{"path": "path/to/file.py", "score": 0.95}}]}}
+  ]
+}}"""
+
+
+def _rank_files_batched(
+    task: str,
+    cards_with_files: List[tuple],
+    *,
+    model_provider: ModelProvider,
+    model: Optional[str],
+) -> Dict[str, List[str]]:
+    """ONE LLM call ranking files within ALL cards that have files. Returns ``{card_id: [top-5]}``.
+
+    ``cards_with_files`` is a list of ``(card_dict, score)``. On ANY failure (call error, unparseable
+    JSON, wrong shape) returns ``{}`` so the caller falls back to each card's original file order --
+    never raises, never retries in a loop. ``model`` is the caller-resolved tier (e.g. "balanced");
+    it is passed through so this ranking uses the SAME cheap tier as the card-level pass instead of
+    silently defaulting to the provider's most expensive model.
+    """
+    if not cards_with_files:
+        return {}
+    blocks: List[str] = []
+    for card, _ in cards_with_files[:_RANK_MAX_CARDS]:
+        cid = card.get("id", "")
+        title = card.get("title", "Untitled")
+        files = card.get("files", [])[:_RANK_MAX_FILES]
+        file_lines = "\n".join(f"  - {f}" for f in files)
+        blocks.append(f"[{cid}] {title}\n{file_lines}")
+    prompt = _RANK_FILES_PROMPT.format(task=task, cards_block="\n\n".join(blocks))
+    try:
+        raw = model_provider.answer([{"role": "user", "content": prompt}], model=model)
+        parsed = json.loads(_extract_json(raw or "") or "{}")
+    except Exception as e:  # noqa: BLE001
+        _log.debug("batched file ranking failed, using original file order: %s", e)
+        return {}
+    cards_out = parsed.get("cards") if isinstance(parsed, dict) else parsed
+    if not isinstance(cards_out, list):
+        return {}
+    files_by_id = {c.get("id", ""): c.get("files", []) for c, _ in cards_with_files}
+    ranked: Dict[str, List[str]] = {}
+    for entry in cards_out:
+        if not isinstance(entry, dict):
+            continue
+        cid = entry.get("card_id", "")
+        if cid not in files_by_id:
+            continue
+        scored = entry.get("files")
+        if not isinstance(scored, list):
+            continue
+        score_map: Dict[str, float] = {}
+        for f in scored:
+            if isinstance(f, dict):
+                score_map[f.get("path", "")] = f.get("score", 0.5)
+        card_files = files_by_id[cid]
+        ranked[cid] = sorted(
+            card_files, key=lambda f: score_map.get(f, 0), reverse=True
+        )[:5]
+    return ranked
 
 
 @dataclass
@@ -301,8 +518,9 @@ def filter_cards_by_relevance(
     """Use LLM to filter context cards by relevance to the task.
 
     Two-stage filtering:
-    1. Card-level: score each card 0-1 by relevance to the task
-    2. File-level: within each selected card, rank files by relevance
+    1. Card-level: score each card 0-1 by relevance to the task (ONE LLM call)
+    2. File-level: within the selected cards, rank files by relevance (ONE batched LLM call over
+       ALL selected cards -- not one call per card)
 
     Returns only cards with relevance > 0.5. SELECTION is still LLM-driven (the score decides
     which cards survive), but the RETURNED order is stable: sorted by card id (lexicographic),
@@ -339,6 +557,17 @@ def filter_cards_by_relevance(
             for c in candidate_cards
         ]
 
+    # Selection memo: identical candidate set (ids + file lists) + topic keywords -> skip both LLM
+    # calls and reuse the prior verdict (returned as COPIES so the cache is never mutated).
+    signatures = [
+        f"{c.get('id', '')}|{c.get('title', '')}|{','.join(c.get('files', []) or [])}"
+        for c in candidate_cards
+    ]
+    memo_key = _selection_key("filter", task, signatures, model=model)
+    cached = _memo_get(model_provider, memo_key)
+    if cached is not None:
+        return [replace(m, files=list(m.files)) for m in cached]
+
     # --- Stage 1: Card-level relevance scoring ---
     card_list = "\n".join(
         f"[{c.get('id', '?')}] {c.get('title', 'Untitled')} ({len(c.get('files', []))} files)"
@@ -367,6 +596,7 @@ Respond with ONLY valid JSON (no markdown, no extra text):
 
 Return ONLY cards with score >= 0.5."""
 
+    stage1_ok = True
     try:
         card_scores_json = model_provider.answer(
             [{"role": "user", "content": card_prompt}],
@@ -378,9 +608,12 @@ Return ONLY cards with score >= 0.5."""
         _log.debug("card-level scoring failed, falling back: %s", e)
         # Fallback: neutral scores for all
         card_scores = {c.get("id", ""): 0.7 for c in candidate_cards}
+        stage1_ok = False
 
-    # --- Stage 2: File-level relevance ranking (within selected cards, PARALLEL) ---
-    # Filter to only relevant cards, then score files in parallel
+    # --- Stage 2: File-level relevance ranking (within selected cards) ---
+    # Filter to only relevant cards, then rank their files in ONE batched LLM call (not one call
+    # per card). The batched ranking uses the caller-resolved ``model`` tier (e.g. "balanced"), not
+    # the provider's expensive default.
     relevant_cards = []
     for card in candidate_cards:
         card_id = card.get("id", "")
@@ -388,92 +621,27 @@ Return ONLY cards with score >= 0.5."""
         if score >= 0.5:
             relevant_cards.append((card, score))
 
-    # Define work unit: one card's file ranking
-    def _rank_files_for_card(card_and_score: tuple) -> CardMetadata:
-        card, score = card_and_score
+    # Only cards that actually have files need ranking; a file-less card keeps an empty file list.
+    cards_with_files = [(c, s) for (c, s) in relevant_cards if c.get("files")]
+    ranked_by_card = _rank_files_batched(
+        task, cards_with_files, model_provider=model_provider, model=model,
+    )
+
+    results = []
+    for card, score in relevant_cards:
         card_id = card.get("id", "")
         card_files = card.get("files", [])
-
-        if not card_files:
-            return CardMetadata(
-                id=card_id,
-                title=card.get("title", ""),
-                file_count=0,
-                files=[],
-                relevance_score=score,
-                adapter=card.get("adapter", ""),
-            )
-
-        # Rank files within this card by relevance to task
-        file_list = "\n".join(f"- {f}" for f in card_files)
-        file_prompt = f"""You are a code relevance expert. Given a task and a list of files within a context card, rank which files are most relevant.
-
-TASK: {task}
-
-CARD: {card_id} - {card.get('title', 'Untitled')}
-
-FILES IN THIS CARD:
-{file_list}
-
-Rank these files by relevance (most to least). Score each 0-1 where:
-- 1 = essential for this task
-- 0.5 = might be useful
-- 0 = not relevant to task
-
-Respond with ONLY valid JSON (no markdown, no extra text):
-{{
-  "files": [
-    {{"path": "path/to/file.py", "score": 0.95}},
-    ...
-  ]
-}}"""
-
-        try:
-            file_scores_json = model_provider.answer(
-                [{"role": "user", "content": file_prompt}],
-                model=None,
-            )
-            file_scores_raw = json.loads(_extract_json(file_scores_json or "") or "{}")
-            # Build path -> score map from response
-            file_scores_map = {}
-            for f in (file_scores_raw.get("files") or []):
-                path = f.get("path", "")
-                score_val = f.get("score", 0.5)
-                file_scores_map[path] = score_val
-            # Sort files by score descending, take top 5
-            ranked_files = sorted(
-                card_files,
-                key=lambda f: file_scores_map.get(f, 0),
-                reverse=True
-            )[:5]
-        except Exception as e:
-            _log.debug("file-level scoring failed for card %s, using original order: %s", card_id, e)
-            # Fallback: use original order, top 5
-            ranked_files = card_files[:5]
-
-        return CardMetadata(
+        # Ranked top-5 when the batched call named this card; otherwise the pre-existing non-LLM
+        # ordering (original order, top 5) -- the same fallback the per-card loop used.
+        files = ranked_by_card.get(card_id, card_files[:5])
+        results.append(CardMetadata(
             id=card_id,
             title=card.get("title", ""),
             file_count=len(card_files),
-            files=ranked_files,
+            files=files,
             relevance_score=score,
             adapter=card.get("adapter", ""),
-        )
-
-    # Run file ranking IN PARALLEL for all relevant cards
-    results = []
-    if relevant_cards:
-        try:
-            # Use ThreadPoolExecutor to run file-ranking prompts concurrently
-            # Cap at min(8, len(relevant_cards)) workers to avoid overwhelming the LLM
-            max_workers = min(8, len(relevant_cards))
-            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-                ranked_metadata = list(executor.map(_rank_files_for_card, relevant_cards))
-                results = ranked_metadata
-        except Exception as e:
-            _log.debug("parallel file ranking failed, falling back to sequential: %s", e)
-            # Fallback: sequential ranking
-            results = [_rank_files_for_card(cs) for cs in relevant_cards]
+        ))
 
     # Presentation order is STABLE by card id, not by relevance score: provider prompt caches
     # are PREFIX caches, so re-sorting the same selected cards by a score that drifts call to
@@ -481,4 +649,9 @@ Respond with ONLY valid JSON (no markdown, no extra text):
     # costs MORE than no caching at all). relevance_score above already carries the LLM's
     # usefulness judgment for any caller that needs "the most relevant card".
     results.sort(key=lambda r: r.id)
+    # Cache only a real stage-1 verdict: the neutral-score FALLBACK (stage-1 call/parse failure)
+    # is never memoized, so a transient failure is retried next time rather than pinned (same
+    # rule as ``consolidate_context``'s keep-all fallback).
+    if stage1_ok:
+        _memo_put(model_provider, memo_key, [replace(m, files=list(m.files)) for m in results])
     return results

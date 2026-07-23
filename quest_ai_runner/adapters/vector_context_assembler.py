@@ -192,6 +192,7 @@ class VectorContextAssembler(ContextAssemblerBase):
         *,
         provider: Any = None,
         query_model: str = "fast",
+        llm_review: bool = True,
         num_queries: int = 3,
         top_k: int = 8,
         confidence_min_score: float = 0.0,
@@ -207,6 +208,12 @@ class VectorContextAssembler(ContextAssemblerBase):
         self._store = vector_store
         self._provider = provider
         self._query_model = query_model
+        # In-arm LLM relevance review of the search hits (step c). False DELEGATES that judgment
+        # to a downstream holistic pass: the HybridContextAssembler wires this off when its ONE
+        # consolidating LLM pass over the merged card set will judge these same hits as cards, so
+        # hit relevance is decided by exactly one model call per turn instead of two (see
+        # ``llm_review_delegated`` and the hybrid's consolidation gate).
+        self._llm_review_enabled = llm_review
         self._num_queries = num_queries
         self._top_k = top_k
         self._confidence_min_score = confidence_min_score
@@ -232,6 +239,13 @@ class VectorContextAssembler(ContextAssemblerBase):
         self._seed_done: bool = False
         # Injectable clock for deterministic tests; defaults to time.time.
         self._clock: Callable[[], float] = _clock if _clock is not None else time.time
+
+    @property
+    def llm_review_delegated(self) -> bool:
+        """True when this arm HAS a provider but skips its in-arm hit review (``llm_review=False``),
+        deferring hit relevance to a downstream holistic pass. The HybridContextAssembler reads
+        this to widen its consolidation gate so delegated hits are always judged exactly once."""
+        return self._provider is not None and not self._llm_review_enabled
 
     # ------------------------------------------------------------------
     # ContextAssemblerBase implementation
@@ -632,8 +646,9 @@ class VectorContextAssembler(ContextAssemblerBase):
         if not candidates:
             return AssembledContext()
 
-        # Step c: LLM review when provider is available.
-        if self._provider is not None:
+        # Step c: LLM review when provider is available and the judgment is not delegated to a
+        # downstream holistic pass (the hybrid's consolidating filter; see ``llm_review_delegated``).
+        if self._provider is not None and self._llm_review_enabled:
             candidates = self._llm_review(task_text, candidates)
 
         # Step d: rank by an effective score = raw similarity x SPECIFICITY x recency, used to pick

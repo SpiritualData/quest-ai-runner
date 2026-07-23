@@ -84,11 +84,14 @@ class HybridContextAssembler(ContextAssemblerBase):
         Optional resolved model id for that consolidation call (e.g. the
         "balanced" tier). Never a hardcoded id.
     consolidate:
-        When True (default) and a ``model_provider`` is wired and at least one
-        merged card carries structured ``items``, run ``consolidate_context`` to
-        drop/rerank cards across arms and prune their content items, then rebuild
+        When True (default) and a ``model_provider`` is wired and there is
+        something to judge (at least one merged card carries structured ``items``,
+        or the vector arm delegated its in-arm hit review to this pass, see
+        ``VectorContextAssembler.llm_review_delegated``), run ``consolidate_context``
+        to drop/rerank cards across arms and prune their content items, then rebuild
         ``context_view`` verbatim from the survivors. Any failure (or no provider /
-        no items) falls back to the mechanical merge (the never-worse guarantee).
+        nothing to judge) falls back to the mechanical merge (the never-worse
+        guarantee).
     """
 
     def __init__(
@@ -316,19 +319,28 @@ class HybridContextAssembler(ContextAssemblerBase):
         # --- ONE consolidating LLM pass over the MERGED card set --------------------------------
         # Drops tangential/redundant cards across arms, reranks them, and prunes which content items
         # survive (content stays VERBATIM, the LLM selects ids only). Engages ONLY when a provider is
-        # wired AND at least one merged card carries structured ``items``. On no-provider / no-items /
-        # any failure -> the mechanical merge above (the never-worse guarantee), unchanged.
+        # wired AND there is something for it to judge: at least one merged card carries structured
+        # ``items``, OR the vector arm DELEGATED its in-arm hit review to this pass (see
+        # ``VectorContextAssembler.llm_review_delegated``) and actually contributed cards -- in that
+        # wiring this is the single relevance judgment those hits get, so it must run even when no
+        # card carries items. On no-provider / nothing-to-judge / any failure -> the mechanical merge
+        # above (the never-worse guarantee), unchanged.
         # BUDGET GATE: a partial result means the deadline already expired, and even a full fuse
         # skips consolidation when less than CONSOLIDATE_MIN_REMAINING_SECONDS of budget is left --
         # an LLM pass that would blow the caller's budget is worse than the mechanical merge
-        # (fails never worse, same philosophy as core/card_filter.py).
+        # (fails never worse, same philosophy as core/card_filter.py). With a delegated vector
+        # review, these bypass paths serve UNREVIEWED hits -- still confidence-gated on raw
+        # similarity and capped at max_in_view, i.e. the same keep-all degradation consolidation
+        # itself falls back to.
+        vector_delegated = bool(getattr(self._vector, "llm_review_delegated", False))
         if (
             self._consolidate
             and self._model_provider is not None
             and not partial
             and (deadline is None
                  or (deadline - time.monotonic()) >= CONSOLIDATE_MIN_REMAINING_SECONDS)
-            and any((m.get("items") for m in merged_metadata))
+            and (any((m.get("items") for m in merged_metadata))
+                 or (vector_delegated and bool(vec_result.card_ids)))
         ):
             consolidated = self._consolidate_merged(task_text, merged_metadata, mechanical, meta=meta)
             if consolidated is not None:
