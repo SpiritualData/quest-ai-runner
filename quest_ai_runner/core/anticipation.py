@@ -635,8 +635,11 @@ def _as_key_list(scope_keys: Union[str, List[str]]) -> List[str]:
     return list(dict.fromkeys(k for k in (scope_keys or []) if k))
 
 
-def _pattern_from_dict(d: Dict[str, Any]) -> Optional[Pattern]:
-    """Rebuild a ``Pattern`` from a stored dict, tolerating missing fields. None when unusable."""
+def pattern_from_dict(d: Dict[str, Any]) -> Optional[Pattern]:
+    """Rebuild a ``Pattern`` from a stored dict, tolerating missing fields. None when unusable.
+
+    Public: any consumer with its own storage (e.g. the Mongo-backed twin in quest-backend)
+    rebuilds stored records through this, rather than porting the field mapping."""
     try:
         if not isinstance(d, dict) or not d.get("pattern_id"):
             return None
@@ -659,8 +662,10 @@ def _pattern_from_dict(d: Dict[str, Any]) -> Optional[Pattern]:
         return None
 
 
-def _prediction_from_dict(d: Dict[str, Any]) -> Optional[Prediction]:
-    """Rebuild a ``Prediction`` from a stored dict, tolerating missing fields. None when unusable."""
+def prediction_from_dict(d: Dict[str, Any]) -> Optional[Prediction]:
+    """Rebuild a ``Prediction`` from a stored dict, tolerating missing fields. None when unusable.
+
+    Public, for the same reason as ``pattern_from_dict`` above."""
     try:
         if not isinstance(d, dict) or not d.get("prediction_id"):
             return None
@@ -677,6 +682,12 @@ def _prediction_from_dict(d: Dict[str, Any]) -> Optional[Prediction]:
         )
     except Exception:  # noqa: BLE001
         return None
+
+
+# Deprecated underscore aliases, kept for ONE release so an in-flight consumer pinned to an older
+# version keeps importing. Remove after the next release; use the public names above.
+_pattern_from_dict = pattern_from_dict
+_prediction_from_dict = prediction_from_dict
 
 
 class FilePredictionStore:
@@ -738,7 +749,7 @@ class FilePredictionStore:
         """The stored patterns for ``scope_key``. [] on any failure."""
         try:
             raw = self._load_state(scope_key).get("patterns") or []
-            return [p for p in (_pattern_from_dict(d) for d in raw) if p is not None]
+            return [p for p in (pattern_from_dict(d) for d in raw) if p is not None]
         except Exception:  # noqa: BLE001
             return []
 
@@ -761,7 +772,7 @@ class FilePredictionStore:
             raw = self._load_state(scope_key).get("predictions") or []
             out: List[Prediction] = []
             for d in raw:
-                p = _prediction_from_dict(d)
+                p = prediction_from_dict(d)
                 if p is not None and p.expires_ts > now_ts:
                     out.append(p)
             return out

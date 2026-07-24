@@ -35,6 +35,12 @@ All notable changes to this project are documented here. The format is based on
   `tests/test_anticipation.py`.)
 
 ### Changed
+- **`core/anticipation`: the stored-record rebuilders are now public API.** `_pattern_from_dict`
+  and `_prediction_from_dict` are renamed to `pattern_from_dict` and `prediction_from_dict`. A
+  consumer with its own storage (quest-backend's Mongo-backed twin of `FilePredictionStore`) was
+  importing them by their underscore-private names, which is exactly the field mapping the design
+  contract says to REUSE rather than port, so they should never have been private. The old
+  underscore names remain as aliases for ONE release and will be removed after the next release.
 - **Anticipation v2: patterns are the durable store, chips are recomputed read-time from the
   CURRENT moment instead of depending on a 30-minute-TTL live prediction.** Previously a chip only
   showed while a `plan_next` prediction from the *previous* turn was still unexpired
@@ -68,11 +74,19 @@ All notable changes to this project are documented here. The format is based on
   or missing per-card entry falls back to that card's original file order. Both LLM selection
   entry points (`filter_cards_by_relevance`, `consolidate_context`) also gained a bounded,
   PER-PROVIDER LRU selection memo (`clear_selection_memo()`): a repeat ask whose candidate cards
-  (ids + content) and topic keywords are unchanged skips the LLM call(s) entirely and returns a
+  (ids + content) and task text are unchanged skips the LLM call(s) entirely and returns a
   copy of the prior verdict. The memo key hashes every input that can change the verdict (candidate
-  signatures, topic keywords, resolved model id, usage hint), so any change misses the cache; a
+  signatures, the task signature, resolved model id, usage hint), so any change misses the cache; a
   fallback verdict (no provider, or a stage-1/consolidation call or parse failure) is never
-  memoized, so a transient failure is retried rather than pinned. Provider identity is handled by
+  memoized, so a transient failure is retried rather than pinned. The task signature
+  (`_task_signature`) is ORDER-SENSITIVE: it is the lowercased alphanumeric token sequence as
+  written, nothing sorted and nothing deduped. An earlier revision of this same unreleased change
+  used a sorted, deduped keyword SET, which made "move goal A under quest B" and "move quest B
+  under goal A" share a key, so the second ask silently received the first ask's verdict; a memo
+  is a pure speed optimization, so a needless miss costs one LLM call while a wrong hit feeds the
+  wrong context into the answer. The one remaining collision boundary is documented and tested:
+  asks that differ only in casing, punctuation or whitespace normalize to the same signature and
+  do share an entry. Provider identity is handled by
   a `WeakKeyDictionary` keyed on the provider instance itself (not `id(provider)`, which is unsound
   since ids are reused after garbage collection): a different provider instance never shares a
   verdict, and a provider's entries die with it. (`core/card_filter.py`;
