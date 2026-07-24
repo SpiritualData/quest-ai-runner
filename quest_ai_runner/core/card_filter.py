@@ -483,8 +483,20 @@ def _rank_files_batched(
             continue
         score_map: Dict[str, float] = {}
         for f in scored:
-            if isinstance(f, dict):
-                score_map[f.get("path", "")] = f.get("score", 0.5)
+            if not isinstance(f, dict):
+                continue
+            # Coerce per file: the model returns a score of any JSON shape (a "0.9" string, a
+            # null, a word). A non-numeric value left in the map makes the sort below raise
+            # TypeError comparing it against the default -- and that raise escapes the try
+            # around the call/parse, so every caller's blanket except would discard the WHOLE
+            # card-level selection, not just this file ranking. Contain it per file, the way the
+            # per-card loop this replaced contained a failure per card.
+            raw_score = f.get("score", 0.5)
+            try:
+                score = float(raw_score)
+            except (TypeError, ValueError):
+                score = 0.5
+            score_map[f.get("path", "")] = score
         card_files = files_by_id[cid]
         ranked[cid] = sorted(
             card_files, key=lambda f: score_map.get(f, 0), reverse=True

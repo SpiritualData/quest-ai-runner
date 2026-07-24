@@ -91,6 +91,18 @@ All notable changes to this project are documented here. The format is based on
   `config.py`.)
 
 ### Fixed
+- **A non-numeric file score from the model no longer discards the entire card selection.**
+  `_rank_files_batched` in `core/card_filter.py` built its score map from raw JSON values, so a
+  score the model returned as a string (`"0.9"`), a `null`, or a word landed in the map untouched;
+  the `sorted(...)` call that consumes it sits OUTSIDE the try that guards the LLM call and the
+  JSON parse, so comparing that value against the numeric default raised `TypeError` straight out
+  of `filter_cards_by_relevance`. All three callers (`adapters/file_context_store.py`,
+  `core/turn_context_store.py`, `core/guidance_provider.py`) wrap the call in a blanket `except`,
+  so a single malformed score silently threw away the whole card-level LLM selection, not just the
+  file ranking (the per-card loop this batched pass replaced contained such a failure per card).
+  Each score is now coerced with `float()` inside a per-file try, falling back to the 0.5 neutral
+  score, so a bad value costs at most that one file's rank position. Regression test:
+  `tests/test_card_filter_selection.py::TestBatchedFileRanking::test_non_numeric_scores_are_coerced_and_never_kill_the_selection`.
 - **`QdrantVectorStore` no longer creates one Qdrant collection per scope (collection sprawl),
   and scoped searches now see the shared corpus.** The store derived a collection name from a
   hash of every distinct `scope` dict and created that collection even on mere *search* — and

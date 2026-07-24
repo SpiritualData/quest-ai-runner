@@ -98,6 +98,30 @@ class TestBatchedFileRanking:
         assert by_id["card-a"].files == ["a1.py", "a2.py", "a3.py"]
         assert by_id["card-b"].files == ["b1.py", "b2.py"]
 
+    def test_non_numeric_scores_are_coerced_and_never_kill_the_selection(self):
+        # Regression: the model is free to return a score of any JSON shape. A "0.9" string, a
+        # null, or a word used to land in the score map untouched, and the sort compared it
+        # against the numeric default -> TypeError. That raise escaped ``_rank_files_batched``
+        # and ``filter_cards_by_relevance`` entirely, so each caller's blanket except threw away
+        # the whole card-level LLM selection, not just the file ranking.
+        ranking = (
+            '{"cards": ['
+            '{"card_id": "card-a", "files": ['
+            '{"path": "a1.py", "score": 0.1}, {"path": "a2.py", "score": null}, '
+            '{"path": "a3.py", "score": "0.9"}]},'
+            '{"card_id": "card-b", "files": ['
+            '{"path": "b1.py", "score": "very relevant"}, {"path": "b2.py", "score": 1.0}]}'
+            ']}'
+        )
+        prov = _CountingProvider([_STAGE1_KEEP_ALL, ranking])
+        out = filter_cards_by_relevance("billing task", _cards(), model_provider=prov)
+        # The card-level selection survives in full.
+        assert [m.id for m in out] == ["card-a", "card-b", "card-c"]
+        by_id = {m.id: m for m in out}
+        # "0.9" parses as 0.9; null and "very relevant" fall back to the 0.5 neutral score.
+        assert by_id["card-a"].files == ["a3.py", "a2.py", "a1.py"]
+        assert by_id["card-b"].files == ["b2.py", "b1.py"]
+
     def test_ranking_call_uses_the_caller_resolved_model(self):
         captured: List[Any] = []
 
