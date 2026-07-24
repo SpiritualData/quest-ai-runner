@@ -6,9 +6,11 @@ Covers the two call-reduction changes in ``core/card_filter.py``:
   call per card; a malformed ranking response degrades to each card's original file order.
 * The selection memo is PER-PROVIDER (a ``WeakKeyDictionary`` of bounded LRUs): a repeat ask with
   identical inputs skips the LLM calls and returns copies of the prior verdict; ANY changed input
-  (card content, topic keywords, model, provider instance) misses; fallback verdicts (no provider,
-  stage-1 failure) are byte-identical and never cached; a provider's entries die with the provider
-  so a NEW provider always starts cold (the ``str(id(provider))`` key bug regression).
+  (card content, task wording INCLUDING word order, model, provider instance) misses; fallback
+  verdicts (no provider, stage-1 failure) are byte-identical and never cached; a provider's entries
+  die with the provider so a NEW provider always starts cold (the ``str(id(provider))`` key bug
+  regression). The one deliberate collision boundary, asks differing only in casing/punctuation/
+  whitespace, is pinned by its own test.
 """
 from __future__ import annotations
 
@@ -151,11 +153,46 @@ class TestSelectionMemo:
         assert prov.answer_calls == 2  # zero additional calls
         assert second == first
 
-    def test_memo_hit_on_keyword_equivalent_paraphrase(self):
+    def test_memo_hit_when_only_casing_and_punctuation_differ(self):
         prov = _CountingProvider([_STAGE1_KEEP_ALL, _STAGE2_RANKING])
         filter_cards_by_relevance("billing task", _cards(), model_provider=prov)
-        # Same keyword SET (order/case/punctuation differ) -> same memo entry.
-        filter_cards_by_relevance("Task: BILLING!", _cards(), model_provider=prov)
+        # The documented collision boundary: same token SEQUENCE, differing only in casing,
+        # punctuation and whitespace, is the same ask -> same memo entry.
+        filter_cards_by_relevance("  BILLING, task!! ", _cards(), model_provider=prov)
+        assert prov.answer_calls == 2
+
+    def test_memo_miss_on_reordered_words(self):
+        # Regression: the memo signature used to be a sorted, deduped keyword SET, so two asks
+        # with the same words in a different order shared a key and the second silently received
+        # the first's verdict. Word order carries the meaning here (which thing moves under
+        # which), so a reordering MUST recompute.
+        prov = _CountingProvider([_STAGE1_KEEP_ALL, _STAGE2_RANKING])
+        filter_cards_by_relevance(
+            "move goal A under quest B", _cards(), model_provider=prov)
+        filter_cards_by_relevance(
+            "move quest B under goal A", _cards(), model_provider=prov)
+        assert prov.answer_calls == 4
+
+    def test_memo_miss_on_repeated_word_only(self):
+        # Dedup is gone too: a repeated token is a different task string, so it misses.
+        prov = _CountingProvider([_STAGE1_KEEP_ALL, _STAGE2_RANKING])
+        filter_cards_by_relevance("billing task", _cards(), model_provider=prov)
+        filter_cards_by_relevance("billing billing task", _cards(), model_provider=prov)
+        assert prov.answer_calls == 4
+
+    def test_consolidate_memo_misses_on_reordered_words_too(self):
+        # The same key builder backs consolidate_context, so the ordering fix covers it as well.
+        cards = [{
+            "id": "card-a", "title": "Quests",
+            "items": [{"id": "a1", "type": "note", "why": "entry", "preview": "goals and quests"}],
+        }]
+        verdict = (
+            '{"cards": [{"card_id": "card-a", '
+            '"items": [{"item_id": "a1", "deliver": "paste"}]}]}'
+        )
+        prov = _CountingProvider([verdict])
+        consolidate_context("move goal A under quest B", cards, model_provider=prov)
+        consolidate_context("move quest B under goal A", cards, model_provider=prov)
         assert prov.answer_calls == 2
 
     def test_cached_verdict_is_returned_as_copies(self):
@@ -173,7 +210,7 @@ class TestSelectionMemo:
         filter_cards_by_relevance("billing task", changed, model_provider=prov)
         assert prov.answer_calls == 4
 
-    def test_memo_miss_on_changed_topic_keywords(self):
+    def test_memo_miss_on_changed_task_words(self):
         prov = _CountingProvider([_STAGE1_KEEP_ALL, _STAGE2_RANKING])
         filter_cards_by_relevance("billing task", _cards(), model_provider=prov)
         filter_cards_by_relevance("theme colors", _cards(), model_provider=prov)

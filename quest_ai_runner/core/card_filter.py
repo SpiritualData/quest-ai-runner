@@ -21,11 +21,13 @@ _log = logging.getLogger("quest-ai-runner.card-filter")
 # ---------------------------------------------------------------------------
 # A tiny in-process, bounded PER-PROVIDER LRU shared by the two LLM SELECTION entry points in this
 # module (``filter_cards_by_relevance`` and ``consolidate_context``). A repeat ask whose candidate
-# cards (ids + their content) and topic keywords are UNCHANGED resolves to the same cache key and
+# cards (ids + their content) and task text are UNCHANGED resolves to the same cache key and
 # skips the LLM call entirely, returning a COPY of the prior verdict. Staleness is impossible by
 # construction: the key hashes every input that can change the verdict (each candidate's id + a
-# content fingerprint, the topic keywords, the resolved model id, and any usage hint), so ANY change
-# misses the cache and recomputes. Provider identity is handled by STRUCTURE, not by key: each
+# content fingerprint, the task signature, the resolved model id, and any usage hint), so ANY change
+# misses the cache and recomputes. The task signature is order-sensitive: see ``_task_signature``
+# for why, and for the one collision boundary that remains. Provider identity is handled by
+# STRUCTURE, not by key: each
 # provider instance owns its own LRU inside a ``WeakKeyDictionary``, so a different provider can
 # never be served another provider's verdict, and a provider's entries die WITH the provider (a
 # fresh provider built with identical inputs, e.g. per test, always starts cold -- this is what
@@ -39,14 +41,30 @@ _selection_memos: "weakref.WeakKeyDictionary[Any, OrderedDict]" = weakref.WeakKe
 _selection_memo_lock = threading.Lock()
 
 
-def _topic_keywords(task: str) -> str:
-    """A stable, order-independent topic-keyword signature of the task text.
+def _task_signature(task: str) -> str:
+    """A stable, ORDER-SENSITIVE signature of the task text.
 
-    Lowercased alphanumeric tokens, deduped and sorted, so paraphrases that differ only in word
-    order / casing / punctuation still hit the same memo entry (the memo is keyword-scoped, not
-    exact-string-scoped, matching how retrieval already treats the task).
+    Lowercased alphanumeric tokens in the order they were written, nothing deduped, nothing
+    sorted. Only casing, punctuation and whitespace are normalized away, because those never
+    change what is being asked.
+
+    Word ORDER is deliberately part of the signature. An earlier version sorted and deduped the
+    tokens on the theory that the memo should be keyword-scoped like retrieval, but selection is
+    not retrieval: it produces a verdict about THIS ask, and word order routinely carries the
+    whole meaning. "move goal A under quest B" and "move quest B under goal A" have identical
+    keyword sets and opposite intent, so the second ask silently inherited the first's verdict.
+    A memo is a pure speed optimization, so a needless MISS only costs one LLM call, while a
+    wrong HIT feeds the wrong context into the answer. Order sensitivity is the cheap side of
+    that trade, and the dominant hit case (the same task string re-entering selection several
+    times within one turn) is byte-identical anyway, so it loses nothing real.
+
+    Collision boundary, stated explicitly: two DIFFERENT task strings still share a key when they
+    normalize to the same token sequence, i.e. they differ only in casing, punctuation,
+    whitespace, or other non-alphanumeric characters ("card_filter.py" and "card filter py" both
+    become "card filter py"). That is intended and is exercised in the tests. Any difference in
+    which words appear, how many times, or in what order is a MISS.
     """
-    return " ".join(sorted(set(re.findall(r"[a-z0-9]+", (task or "").lower()))))
+    return " ".join(re.findall(r"[a-z0-9]+", (task or "").lower()))
 
 
 def _selection_key(
@@ -61,7 +79,7 @@ def _selection_key(
     The provider is NOT part of the key: it is the ``WeakKeyDictionary`` key of the per-provider
     LRU the entry lives in (see the module comment above)."""
     h = hashlib.sha256()
-    for part in (tag, _topic_keywords(task), model or "", extra):
+    for part in (tag, _task_signature(task), model or "", extra):
         h.update(part.encode("utf-8", "replace"))
         h.update(b"\x00")
     for sig in sorted(signatures):
@@ -337,7 +355,7 @@ def consolidate_context(
         return _consolidate_keep_all(cards)
     recent_item_usage = recent_item_usage or {}
 
-    # Selection memo: identical merged card set + topic keywords + usage hint -> skip the LLM call.
+    # Selection memo: identical merged card set + task signature + usage hint -> skip the LLM call.
     signatures: List[str] = []
     for card in cards:
         items_sig = ",".join(
@@ -569,7 +587,7 @@ def filter_cards_by_relevance(
             for c in candidate_cards
         ]
 
-    # Selection memo: identical candidate set (ids + file lists) + topic keywords -> skip both LLM
+    # Selection memo: identical candidate set (ids + file lists) + task signature -> skip both LLM
     # calls and reuse the prior verdict (returned as COPIES so the cache is never mutated).
     signatures = [
         f"{c.get('id', '')}|{c.get('title', '')}|{','.join(c.get('files', []) or [])}"
