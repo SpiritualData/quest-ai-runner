@@ -233,8 +233,8 @@ class TaskExecutor:
         if not text:
             self._report_progress(task_id, "error", text="task had no instruction text to run")
             self._safe_report_failed(task_id, "task had no text/description to run")
-            self._post_conv(conv_id, "I couldn't run this — the task had no instruction text.",
-                            kind="done", task_id=task_id, card_id=card_id)
+            self._post_conv(conv_id, "I couldn't run this: the task had no instruction text.",
+                            kind="failed", task_id=task_id, card_id=card_id)
             return ExecutionOutcome(task_id, "failed", "task had no text/description")
 
         # Announce the start: a live progress event on the task (the task-detail stream) AND, when a
@@ -300,7 +300,7 @@ class TaskExecutor:
             msg = f"orchestrator error: {type(e).__name__}: {e}"
             self._report_progress(task_id, "error", text=msg)
             self._safe_report_failed(task_id, msg)
-            self._post_conv(conv_id, f"I hit an error working on this: {msg}", kind="done",
+            self._post_conv(conv_id, f"I hit an error working on this: {msg}", kind="failed",
                             task_id=task_id, card_id=card_id)
             return ExecutionOutcome(task_id, "failed", msg)
 
@@ -489,7 +489,7 @@ class TaskExecutor:
             if getattr(result, "claim_corrected", False):
                 self._report_progress(task_id, "done", text="Paused. Needs you.", output=text)
                 self._safe(lambda: self._client.report_needs_you(task_id, text, ""))
-                self._post_conv(conv_id, text, kind="done", task_id=task_id, card_id=card_id)
+                self._post_conv(conv_id, text, kind="needs_you", task_id=task_id, card_id=card_id)
                 return ExecutionOutcome(task_id, "needs_you", text)
             # Append goal-verdict reasoning so the reader knows whether the goal was confirmed
             # met, hit max iterations unverified, or was a best-effort partial answer.
@@ -564,7 +564,7 @@ class TaskExecutor:
             msg = (work + "\n\n" + disclosure) if work else disclosure
             self._report_progress(task_id, "error", text=disclosure)
             self._safe(lambda: self._client.report_failed(task_id, msg))
-            self._post_conv(conv_id, msg, kind="done", task_id=task_id, card_id=card_id)
+            self._post_conv(conv_id, msg, kind="failed", task_id=task_id, card_id=card_id)
             return ExecutionOutcome(task_id, "failed", msg)
         # Otherwise the run hit a limit / errored.
         errs = "; ".join(d.error for d in deep if d.error) or "the goal was not met"
@@ -572,7 +572,7 @@ class TaskExecutor:
             errs = "deep work required but no deep-runner is configured: " + "; ".join(result.goals)
         self._report_progress(task_id, "error", text=errs)
         self._safe(lambda: self._client.report_failed(task_id, errs))
-        self._post_conv(conv_id, f"I couldn't complete this: {errs}", kind="done", task_id=task_id,
+        self._post_conv(conv_id, f"I couldn't complete this: {errs}", kind="failed", task_id=task_id,
                         card_id=card_id)
         return ExecutionOutcome(task_id, "failed", errs)
 

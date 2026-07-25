@@ -254,12 +254,16 @@ def test_executor_unverified_deep_reports_disclosure_and_non_done():
     out = ex.report("t5", result, "qaconv_1", request_text="do X")
     assert out.status == "failed"                       # non-done
     assert client.reports[0][1] == "failed"
-    done_posts = [t for (_c, t, k) in client.posts if k == "done"]
-    assert done_posts, "the chat must still hear the outcome"
-    assert "could NOT verify" in done_posts[0]
-    assert "unconfirmed" in done_posts[0]
-    assert "WORK PRODUCT" in done_posts[0]              # the work is presented, as unconfirmed
+    # The chat post's kind must match the terminal status (failed), not be posted as "done" --
+    # a "done" kind here would make the backend's fold-back think a terminal reply was already
+    # posted and suppress an honest failed message.
+    failed_posts = [t for (_c, t, k) in client.posts if k == "failed"]
+    assert failed_posts, "the chat must still hear the outcome"
+    assert "could NOT verify" in failed_posts[0]
+    assert "unconfirmed" in failed_posts[0]
+    assert "WORK PRODUCT" in failed_posts[0]              # the work is presented, as unconfirmed
     assert not any(t == "Done." for (_tid, _k, t, _o) in client.progress)
+    assert not any(k == "done" for (_c, _t, k) in client.posts)
 
 
 def test_executor_unverified_end_to_end_via_execute():
@@ -273,8 +277,8 @@ def test_executor_unverified_end_to_end_via_execute():
     ex = TaskExecutor(client, _brain(provider, deep_runner=StubDeepRunner(met=True, output="WORK")))
     out = ex.execute({"id": "t6", "text": "do X", "conv_id": "qaconv_z"})
     assert out.status == "failed"
-    done_posts = [t for (_c, t, k) in client.posts if k == "done"]
-    assert done_posts and "could NOT verify" in done_posts[-1]
+    failed_posts = [t for (_c, t, k) in client.posts if k == "failed"]
+    assert failed_posts and "could NOT verify" in failed_posts[-1]
 
 
 def test_executor_forwards_reserved_card_id_on_conv_posts():
@@ -305,6 +309,45 @@ def test_executor_never_raises_on_brain_error():
     out = ex.execute({"id": "t5", "text": "anything"})
     assert out.status in ("done", "failed")
     assert client.reports  # something was reported
+
+
+class _RaisingBrain:
+    """A stub brain whose ``run`` raises, so the executor's OWN try/except around
+    ``self._orch.run(...)`` is exercised (not a brain-internal error the orchestrator itself
+    swallows, as ``test_executor_never_raises_on_brain_error`` above covers)."""
+
+    retrieval = None
+    conversation_store = None
+
+    def run(self, *a, **k):
+        raise RuntimeError("orchestrator exploded")
+
+
+def test_executor_orchestrator_exception_posts_failed_kind_not_done():
+    """A crash inside the orchestrator run must post the chat message with kind='failed', not
+    kind='done'. The backend's fold-back check (TASK_CHAT_TERMINAL_KINDS) treats any kind='done'
+    message for a task_id as 'terminal reply already posted' and would otherwise suppress the
+    honest failed message for a run that actually crashed."""
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _RaisingBrain())
+    out = ex.execute({"id": "t9", "text": "do X", "conv_id": "qaconv_crash"})
+    assert out.status == "failed"
+    assert client.reports[0][1] == "failed"
+    assert not any(k == "done" for (_c, _t, k) in client.posts)
+    assert any(k == "failed" for (_c, _t, k) in client.posts)
+
+
+def test_executor_claim_corrected_posts_needs_you_kind_not_done():
+    """A claim-corrected answer (the orchestrator rewrote it to be honest about unfinished work)
+    is a needs_you pause, not a success -- the chat post's kind must say so, not kind='done'."""
+    result = OrchestratorResult(kind="answer", text="I actually could not finish this.",
+                                claim_corrected=True)
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _ReportBrain())
+    out = ex.report("t10", result, "qaconv_needsyou")
+    assert out.status == "needs_you"
+    assert not any(k == "done" for (_c, _t, k) in client.posts)
+    assert any(k == "needs_you" for (_c, _t, k) in client.posts)
 
 
 # --- live-progress-into-chat tests (conv_id linkage) ----------------------------
