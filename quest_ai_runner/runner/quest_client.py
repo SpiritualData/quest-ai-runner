@@ -347,6 +347,28 @@ class QuestClient:
             log.warning("progress post for task %s (%s) failed: %s", task_id, kind, e)
             return {}
 
+    # --- mid-run steering messages (human sends a message while a task runs) --
+
+    def claim_task_messages(self, task_id: str) -> List[Dict[str, Any]]:
+        """POST /api/assistant-tasks/{task_id}/messages/claim: ATOMICALLY claim pending messages.
+
+        The backend hands back every message on this task with ``delivered_at == None`` and stamps
+        ``delivered_at`` on them in the SAME call, so a message is handed to exactly one caller
+        exactly once: a re-poll right after this returns ``[]`` for those same messages (they were
+        already delivered). This is what lets a throttled poller call it repeatedly without ever
+        folding the same message into two different prompts.
+
+        BEST-EFFORT BY CONTRACT, same shape as ``report_progress`` / ``list_goal_notes``: never
+        raises, any API/transport error is logged as a warning and an empty list returned.
+        """
+        try:
+            resp = self._request(
+                "POST", f"/api/assistant-tasks/{task_id}/messages/claim") or {}
+            return resp.get("messages") or []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("claim_task_messages failed for task %s: %s", task_id, e)
+            return []
+
     # --- live progress into the originating chat -----------------------------
 
     def post_conversation_message(self, conv_id: str, content: str, *,

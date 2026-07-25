@@ -7546,6 +7546,27 @@ class Orchestrator:
             if cancel_check is not None and cancel_check():
                 return finish(OrchestratorResult(kind="cancelled", rationale="cancelled mid-run",
                                                   exit_reason="cancelled"))
+
+            # --- Mid-run user messages, OUTER planner-loop drain: fold in anything a human sent
+            # while this loop's own gather/plan/re-plan steps were running. The deep retry loop
+            # (:5403) and the answer-improve loop (:8531) already drain ``pending_inputs`` at their
+            # own iteration boundaries, but THIS loop never did -- so a message arriving during
+            # gather/plan iterations sat invisible until the run happened to reach one of those
+            # inner loops, which can be many steps away, or never on a plain answer turn. Folded
+            # into ``gathered`` as an observation the very next planner call reads, mirroring the
+            # OVERSEER's "COURSE CORRECTION" injection immediately below (same gathered-observation
+            # shape, same never-raise safety). Reuses ``_drain_pending`` as-is; does not touch it or
+            # the :5403 / :8531 drain points.
+            try:
+                _pending_block = self._drain_pending(pending_inputs)
+                if _pending_block:
+                    gathered.append({
+                        "kind": "query", "locator": "user_message",
+                        "text": _pending_block,
+                    })
+            except Exception:  # noqa: BLE001 -- draining must never break the loop
+                pass
+
             emit.status("Planning…" if step == 0 else "Re-planning…")
 
             # --- OVERSEER poll (hook A, applied ONE STEP LATE): pick up a consult SUBMITTED on a

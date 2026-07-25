@@ -23,7 +23,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from ..core.adapters import Mode, ProgressEvent
 from ..core.orchestrator import Orchestrator, OrchestratorResult
@@ -35,6 +35,13 @@ log = logging.getLogger("quest-ai-runner.executor")
 # boundary (frequently), but cancellation is a rare, human-triggered event -- hammering the API on
 # every check would waste calls for no benefit.
 CANCEL_CHECK_INTERVAL_SECONDS = 15.0
+
+# Same throttle, same reasoning, for the ``pending_inputs`` callable built by
+# ``_build_pending_inputs``: a human typing a mid-task steering message is rare and not
+# latency-sensitive down to the second, so claiming on every internal loop boundary would hammer
+# the Quest API for no benefit. A real message is never lost by the throttle, only delayed by up
+# to this many seconds until the next allowed claim.
+MESSAGE_CLAIM_INTERVAL_SECONDS = 15.0
 
 # Hard cap on the FALLBACK prior-conversation read in ``_build_context_view`` (the path taken only
 # when no ConversationStore is wired). Without a cap, a long-running conversation would dump its
@@ -158,6 +165,79 @@ class TaskExecutor:
 
         return _check
 
+    # --- mid-run steering messages (human sends a message while this task runs) --------------
+
+    def _claim_task_messages(self, task_id: str) -> List[Dict[str, Any]]:
+        """Best-effort: claim any pending mid-task messages for ``task_id`` via the Quest client.
+
+        No-ops (returns ``[]``) when there's no task id or the client lacks
+        ``claim_task_messages`` (older clients / mocks), and never raises -- the client's own
+        method is already best-effort by contract, but this call site guards too so a claim
+        failure can never affect the run.
+        """
+        if not task_id:
+            return []
+        claim = getattr(self._client, "claim_task_messages", None)
+        if not callable(claim):
+            return []
+        try:
+            return claim(task_id) or []
+        except Exception:  # noqa: BLE001
+            return []
+
+    @staticmethod
+    def _message_texts(claimed: List[Dict[str, Any]]) -> List[str]:
+        """Extract non-empty ``text`` fields from a list of claimed message dicts, in order."""
+        texts = [str(m.get("text") or "").strip() for m in (claimed or [])]
+        return [t for t in texts if t]
+
+    def _build_pending_inputs(self, task_id: str,
+                              interval: float = MESSAGE_CLAIM_INTERVAL_SECONDS
+                              ) -> Callable[[], List[str]]:
+        """Build a THROTTLED ``pending_inputs`` callable to pass EXPLICITLY into
+        ``Orchestrator.run()``.
+
+        Passing it explicitly (rather than leaving ``pending_inputs`` as ``None`` and letting the
+        orchestrator auto-wire from a wired ``input_inbox``) is deliberate: that auto-wiring's
+        ``_conv_key`` resolution (``orchestrator.py`` around lines 6839-6844) only resolves a key
+        via ``quest_id`` / ``conversation_id`` / ``session_id`` / ``user_id`` in the context meta --
+        a goal-only personal task (no quest_id, no chat identity in scope) would never resolve a
+        key there and so would never see a mid-run message at all. Claiming straight from this
+        task's own id sidesteps that: every claimed task has a task id, quest-linked or not.
+
+        Mirrors ``_build_cancel_check``'s throttle: the orchestrator may poll this at every
+        internal loop boundary (plan/gather/replan step, each deep-goal retry attempt, each
+        answer-improve attempt) -- far more often than a human is plausibly sending a new message,
+        so this only actually calls ``claim_task_messages`` at most once per ``interval`` seconds
+        of real time and returns ``[]`` in between. A message sent inside that window is never
+        lost, only picked up on the next allowed claim.
+
+        Posts a ``status`` progress tick whenever it actually hands messages over, so the human
+        sees the pickup in the task's live feed. Returns ``List[str]`` of message texts (the
+        orchestrator's own ``_drain_pending`` renders these into the fold-in block). Never raises.
+        """
+        state = {"checked_at": 0.0}
+
+        def _poll() -> List[str]:
+            now = time.monotonic()
+            if now - state["checked_at"] < interval:
+                return []
+            state["checked_at"] = now
+            try:
+                claimed = self._claim_task_messages(task_id)
+                texts = self._message_texts(claimed)
+            except Exception:  # noqa: BLE001 -- polling must never break the run
+                return []
+            if texts:
+                n = len(texts)
+                self._report_progress(
+                    task_id, "status",
+                    text=("Picked up your message." if n == 1
+                          else f"Picked up your {n} messages."))
+            return texts
+
+        return _poll
+
     def _is_task_cancelled(self, task_id: str) -> bool:
         """Best-effort, UNTHROTTLED cancellation check for the final reporting path.
 
@@ -243,6 +323,29 @@ class TaskExecutor:
         self._post_conv(conv_id, f"Started working on this: {text}", kind="started",
                         task_id=task_id, card_id=card_id)
 
+        # ONE initial drain: claim any messages the human sent while this task sat queued (e.g. a
+        # steer sent right after delegating, before a background lane picked it up) and fold them
+        # into the FIRST prompt the orchestrator sees, so they land on this run's opening attempt
+        # instead of waiting for a later drain point. The backend's claim endpoint already posts
+        # its own ``message_ack`` progress tick when it hands these over; this status tick is
+        # separate -- it names that the FOLD happened, for the live feed.
+        _initial_texts = self._message_texts(self._claim_task_messages(task_id))
+        if _initial_texts:
+            # Reuse the orchestrator's own rendering (a one-shot callable over the already-claimed
+            # texts) so this fold-in reads IDENTICAL to one folded in mid-run by the orchestrator's
+            # ``_drain_pending`` (deep retry loop, answer-improve loop, planner loop) -- one voice
+            # for "here is what the user said since you started", regardless of which drain point
+            # picked it up.
+            _folded_block = Orchestrator._drain_pending(lambda: _initial_texts)
+            if _folded_block:
+                text = f"{text}\n\n{_folded_block}"
+            _n = len(_initial_texts)
+            self._report_progress(
+                task_id, "status",
+                text=("Picked up your message that arrived before this started."
+                      if _n == 1 else
+                      f"Picked up your {_n} messages that arrived before this started."))
+
         # Fetch goal + quest context + conversation history from Quest API if available, and build
         # a context_view for the orchestrator so the deep agent knows what goal/quest it's working on
         # and the prior conversation that led to the task.
@@ -279,6 +382,14 @@ class TaskExecutor:
         # the run cleanly at its next loop boundary instead of running to completion regardless.
         cancel_check = self._build_cancel_check(task_id)
 
+        # Explicit mid-run steering channel: a THROTTLED callable (see _build_pending_inputs) that
+        # claims any NEW messages the human sends while this task is in_progress, so the deep retry
+        # loop / answer-improve loop / outer planner loop can fold them in at their next drain
+        # point. Passed EXPLICITLY rather than left as None -- see _build_pending_inputs' docstring
+        # for why relying on Orchestrator.run's own input_inbox auto-wiring would silently miss a
+        # goal-only personal task (its _conv_key resolution only resolves via quest_id today).
+        pending_inputs = self._build_pending_inputs(task_id)
+
         # Per-task working directory: when this task's goal/quest resolves through the configured
         # quest_folder_map, the deep run starts in THAT folder (its synced quest folder) for this
         # run only, instead of the deep-runner's configured global working_dir. Applies to every
@@ -291,7 +402,8 @@ class TaskExecutor:
                 text, quest_id=quest_id, context_view=context_view, mode=Mode.BACKGROUND,
                 sink=sink, model_hint=model_hint, rep_preamble=rep_preamble,
                 context_meta=context_meta, working_dir_override=working_dir_override,
-                conv_id=conv_id, conv_scope=conv_scope or None, cancel_check=cancel_check)
+                conv_id=conv_id, conv_scope=conv_scope or None, cancel_check=cancel_check,
+                pending_inputs=pending_inputs)
         except Exception as e:  # noqa: BLE001 — brain failure -> failed report, never crash poller
             # A run that raises BECAUSE it was interrupted must not be reported as failed: check
             # (unthrottled, this is the terminal path) whether the task was cancelled meanwhile.

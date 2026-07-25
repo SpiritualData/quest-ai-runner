@@ -507,6 +507,13 @@ def test_planner_list_output_does_not_crash():
 def test_input_inbox_auto_drains_into_deep_run():
     # The generic abstraction: an interface pushes a mid-run message to the wired inbox; the
     # orchestrator auto-drains this conversation (no explicit pending_inputs) and folds it in.
+    # It was queued BEFORE run() started, so the OUTER planner-loop drain (:7543, the FIRST drain
+    # point the loop reaches each step) claims it before the deep loop's own per-attempt drain
+    # (:5403) ever runs -- draining is consume-once by contract (mirrors the real backend's
+    # claim-once messages endpoint), so it lands in the planner's ``gathered`` context (visible
+    # for the very decision that chooses "deep") rather than literally inside the deep run's own
+    # brief text. A message that instead arrives WHILE the deep loop is already retrying still
+    # folds into the deep brief via :5403, unaffected (see test_deep_run_folds_in_new_user_messages).
     from quest_ai_runner.core.inbox import InMemoryInbox
     inbox = InMemoryInbox()
     inbox.push("conv1", "also handle nulls")
@@ -519,7 +526,8 @@ def test_input_inbox_auto_drains_into_deep_run():
                        deep_runner=runner, input_inbox=inbox,
                        config=OrchestratorConfig(deep_goal_max_iterations=2)).run("fix it", quest_id="conv1")
     assert res.kind == "deep"
-    assert "also handle nulls" in runner.calls[0]["brief"]  # drained + folded with no manual wiring
+    # drained + folded with no manual wiring, visible on the very first planner call.
+    assert "also handle nulls" in provider.plan_prompts[0]
 
 
 def test_deep_run_folds_in_new_user_messages():
@@ -539,6 +547,56 @@ def test_deep_run_folds_in_new_user_messages():
     assert len(runner.calls) == 2
     # The 2nd process (retry) brief includes the new user message folded in.
     assert "also handle the edge case" in runner.calls[1]["brief"]
+
+
+def test_planner_loop_drain_folds_pending_message_into_gathered():
+    # The OUTER plan -> gather -> re-plan loop (:7543) had NO drain before this change, unlike the
+    # deep retry loop (:5403) and the answer-improve loop (:8531) -- a message arriving while the
+    # planner was still choosing what to read was invisible until (if ever) the run reached one of
+    # those inner loops. The drain now runs at the top of every step and folds straight into
+    # ``gathered``, so it is visible even on the very first planner call.
+    provider = StubProvider(decisions=[
+        {"action": "read", "reads": [{"rel_path": "README.md"}], "rationale": "reading"},
+        {"action": "answer", "rationale": "have it"},
+    ])
+    retrieval = StubRetrieval({"README.md": "fact: yes"})
+    res = _orch(provider, retrieval).run(
+        "look into it", pending_inputs=lambda: ["actually also check the logs"])
+    assert res.kind == "answer"
+    assert "actually also check the logs" in provider.plan_prompts[0]
+    # Same rendering _drain_pending has always produced -- one voice across every drain point.
+    assert "NEW MESSAGES FROM THE USER SINCE YOU STARTED" in provider.plan_prompts[0]
+
+
+def test_planner_loop_drain_never_breaks_run_when_pending_inputs_raises():
+    # pending_inputs is a caller-supplied callable (network claim under the hood in the real
+    # runner); it must never be allowed to take the whole turn down.
+    def boom():
+        raise RuntimeError("claim endpoint unreachable")
+
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    retrieval = StubRetrieval({"README.md": "fact: yes"})
+    res = _orch(provider, retrieval).run("hi", pending_inputs=boom)
+    assert res.kind == "answer"
+    assert res.text is not None
+
+
+def test_planner_loop_drain_does_not_touch_existing_deep_or_answer_drains():
+    # Regression guard: adding the outer-loop drain must not double-fold or otherwise disturb the
+    # deep retry loop's own drain (:5403) -- the message still shows up exactly once per retry
+    # brief, same as before this change (see test_deep_run_folds_in_new_user_messages).
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
+        {"met": False, "reason": "incomplete", "next_action": "keep going"},
+        {"met": True, "reason": "done"},
+    ])
+    runner = StubDeepRunner(met=True, output="working")
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(deep_goal_max_iterations=3)).run(
+        "fix the thing", pending_inputs=lambda: ["also handle the edge case"])
+    assert res.kind == "deep"
+    assert len(runner.calls) == 2
+    assert runner.calls[1]["brief"].count("also handle the edge case") == 1
 
 
 def test_goal_loop_stops_when_first_attempt_verified_met():
