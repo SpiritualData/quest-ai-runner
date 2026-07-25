@@ -35,6 +35,19 @@ All notable changes to this project are documented here. The format is based on
   `tests/test_anticipation.py`.)
 
 ### Changed
+- **Fast lane task-eligibility wire flag renamed `interactive` → `real_time` (client/server
+  contract change only).** `QuestClient.list_interactive_due` and `.wait_for_interactive` now send
+  the query param as `real_time=true` instead of `interactive=true`, matching the backend's
+  corresponding rename of the assistant-task document field so any task-creation path (not just
+  one hardcoded feature) can flag itself as low-latency-eligible. Pure rename: no change to the
+  fast lane's control-flow, which was already gated on the boolean flag rather than on task type;
+  the separate, still-unchanged concern is `_handle_one`'s `context_request`-payload check, which
+  decides HOW a task executes (fast structured context assembly vs. the full goal/plan/execute
+  loop), not whether the fast lane serves it. Method names (`list_interactive_due`,
+  `wait_for_interactive`) are unchanged since they still describe the methods' behavior; only the
+  wire param and surrounding docs/comments changed. (`runner/quest_client.py`, `runner/poller.py`,
+  `config.py`; `tests/test_quest_client_transport_errors.py`,
+  `tests/test_context_request_fast_lane.py`, `tests/test_runner.py`.)
 - **`core/anticipation`: the stored-record rebuilders are now public API.** `_pattern_from_dict`
   and `_prediction_from_dict` are renamed to `pattern_from_dict` and `prediction_from_dict`. A
   consumer with its own storage (quest-backend's Mongo-backed twin of `FilePredictionStore`) was

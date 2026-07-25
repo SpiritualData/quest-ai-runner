@@ -289,7 +289,7 @@ def _config_from_env() -> RunnerConfig:
     if os.getenv("QAR_QUEST_FOLDER_SYNC_DIRECTION"):
         cfg.quest_folder_sync_direction = os.environ["QAR_QUEST_FOLDER_SYNC_DIRECTION"].strip().lower()
 
-    # --- fast lane for interactive context-requests (D2 revised: presence-aware push) -----------
+    # --- fast lane for real-time tasks (D2 revised: presence-aware push) -------------------------
     # QAR_WAIT_CHANNEL: "0"/"false"/"off" disables the long-poll wait channel, falling back to a
     # short interval poll (QAR_CONTEXT_POLL_SECONDS). Default: enabled.
     _wait_channel = (os.getenv("QAR_WAIT_CHANNEL") or "").strip().lower()

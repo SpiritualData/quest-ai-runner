@@ -42,7 +42,7 @@ optional but the instruction text):
 | `model` | per-task model/tier override (`model_hint`) |
 | `rep_preamble` | the persona to run and report as, when the task has no rep of its own (see below) |
 | `task_kind` (or `handler`) | routes special kinds, e.g. an autopilot pass |
-| `interactive`, `context_request` | the fast lane (see below) |
+| `real_time`, `context_request` | the fast lane (see below) |
 | `status`, `updated_at`, `scheduled_time` | dedup signature |
 | `team_id`, `user_id`, `env_id` | scoping (team lane, related-conversation search, environment pinning) |
 
@@ -125,27 +125,30 @@ the key's; `user_id` (the rep) is passed explicitly.
 The poller posts what the lane can honestly do (`web` / `corpus` / `code`, derived from the wired
 adapters) each cycle, so Quest's router only sends work the lane can handle.
 
-### Fast lane for interactive tasks (cross-environment context requests)
+### Fast lane for real-time tasks (cross-environment context requests)
 
-An INTERACTIVE task (`"interactive": true` on the task doc) is one raised from a LIVE chat turn
-that is waiting on the answer right now -- today the only producer is another environment's
-quest-context hub asking THIS runner for local context (a `context_request` task: `{"query",
-"user_id", "quest_ids", "visited", "max_chars"}`). The runner never runs the goal loop for one of
-these -- it assembles context locally via its own `context_assembler` and reports done.
+A REAL-TIME task (`"real_time": true` on the task doc) is one its creator flagged as
+low-latency-eligible because something is waiting on the answer right now. This is a generic flag
+any task-creation path can set -- today the only producer is another environment's quest-context
+hub asking THIS runner for local context (a `context_request` task: `{"query", "user_id",
+"quest_ids", "visited", "max_chars"}`), but the flag itself is not tied to that task type. Whether a
+task carries a `context_request` payload is a separate, execution-routing decision: the runner never
+runs the goal loop for one of those -- it assembles context locally via its own `context_assembler`
+and reports done.
 
 ```
-GET /api/assistant-tasks/wait?interactive=true&timeout=<secs>[&team_id=&env_id=]
+GET /api/assistant-tasks/wait?real_time=true&timeout=<secs>[&team_id=&env_id=]
   -> { "task": {...} | null }
 ```
-Long-poll: the backend BLOCKS (re-checking its store internally, ~0.25-0.5s cadence) until an
-interactive task is queued for the caller's env/team, or `timeout` elapses (server-capped at 30s)
+Long-poll: the backend BLOCKS (re-checking its store internally, ~0.25-0.5s cadence) until a
+real-time task is queued for the caller's env/team, or `timeout` elapses (server-capped at 30s)
 with nothing to deliver. `QuestClient.wait_for_interactive` calls this in a tight loop from its own
 thread (`Poller._fast_lane_loop`), reconnecting immediately after every return -- empty or not --
-so an interactive task is answered close to real time whenever the runner is up, without the
+so a real-time task is answered close to instantly whenever the runner is up, without the
 latency of the normal background scan (`poll_interval_seconds`, default 900s). `QAR_WAIT_CHANNEL=0`
 disables this and falls back to a plain short-interval poll:
 ```
-GET /api/assistant-tasks?status=queued&interactive=true[&team_id=&env_id=]
+GET /api/assistant-tasks?status=queued&real_time=true[&team_id=&env_id=]
 ```
 via `QuestClient.list_interactive_due`, on `QAR_CONTEXT_POLL_SECONDS` (default 5s; `0` disables the
 fast lane entirely).

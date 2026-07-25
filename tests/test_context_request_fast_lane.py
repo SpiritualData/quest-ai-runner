@@ -250,7 +250,7 @@ def test_fast_lane_long_poll_dispatches_delivered_task():
 
 def test_fast_lane_falls_back_to_short_poll_when_wait_channel_disabled():
     assembler = StubContextAssembler()
-    delivered = {"id": "ctx-10", "status": "queued", "team_id": "team1", "interactive": True,
+    delivered = {"id": "ctx-10", "status": "queued", "team_id": "team1", "real_time": True,
                  "context_request": {"query": "q"}}
     client = MockQuestClient([])
     calls = {"n": 0}
@@ -354,7 +354,7 @@ def test_quest_client_wait_for_interactive_builds_url_and_pads_timeout(monkeypat
 
     assert task == {"id": "t1", "context_request": {"query": "q"}}
     assert captured["url"].startswith("http://quest.example/api/assistant-tasks/wait?")
-    assert "interactive=true" in captured["url"]
+    assert "real_time=true" in captured["url"]
     assert "timeout=20" in captured["url"]
     assert "team_id=team1" in captured["url"]
     assert "env_id=env-A" in captured["url"]
@@ -422,7 +422,7 @@ def test_quest_client_list_interactive_due_builds_url(monkeypatch):
     monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
     client = QuestClient("http://quest.example", "qsk_test", team_id="team1")
     client.list_interactive_due(env_id="env-B")
-    assert "interactive=true" in captured["url"]
+    assert "real_time=true" in captured["url"]
     assert "status=queued" in captured["url"]
     assert "env_id=env-B" in captured["url"]
 

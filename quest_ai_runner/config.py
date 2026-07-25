@@ -145,19 +145,19 @@ class RunnerConfig:
     max_concurrent_tasks: int = 2
     default_assignee_user_id: Optional[str] = None   # decision routing default
 
-    # --- fast lane for INTERACTIVE work (context-requests from a live chat turn) ---
+    # --- fast lane for REAL-TIME work (context-requests from a live chat turn) ---
     # The background scan above (poll_interval_seconds, default 900s) is the right cadence for
     # scheduled/delegated work, but a live chat turn waiting on a remote-env context fetch needs an
     # answer in single-digit seconds. The poller runs a SECOND, always-on loop (its own daemon
-    # thread) dedicated to interactive tasks only, so it never competes with or slows the normal
+    # thread) dedicated to real-time tasks only, so it never competes with or slows the normal
     # scan. Two strategies, chosen by ``wait_channel_enabled``:
     #   * long-poll (default) -- hold ONE bounded GET at a time (server blocks up to
     #     ``wait_timeout_seconds``), reconnecting immediately after each return. Near-instant
     #     delivery whenever the runner is up; env QAR_WAIT_CHANNEL ("0"/"false" disables).
     #   * short poll (fallback, or when the wait endpoint is unavailable) -- a plain interval poll
-    #     over just the interactive queue, every ``context_poll_seconds``; env
+    #     over just the real-time queue, every ``context_poll_seconds``; env
     #     QAR_CONTEXT_POLL_SECONDS (0 disables the fast lane entirely, falling back to the normal
-    #     background scan cadence for interactive work too).
+    #     background scan cadence for real-time work too).
     wait_channel_enabled: bool = True
     context_poll_seconds: float = 5.0
     wait_timeout_seconds: float = 25.0

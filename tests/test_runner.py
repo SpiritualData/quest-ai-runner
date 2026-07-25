@@ -57,7 +57,7 @@ class MockQuestClient:
         return out
 
     def list_interactive_due(self, *, team_id=None, env_id=None):
-        return [t for t in self.discover_due(team_id=team_id, env_id=env_id) if t.get("interactive")]
+        return [t for t in self.discover_due(team_id=team_id, env_id=env_id) if t.get("real_time")]
 
     def wait_for_interactive(self, *, team_id=None, env_id=None, timeout=25.0):
         tasks = self.list_interactive_due(team_id=team_id, env_id=env_id)

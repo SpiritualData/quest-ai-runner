@@ -274,7 +274,7 @@ class Poller:
             self._release_slot(task_id)
 
     def _handle_one(self, task: Dict[str, Any]) -> Optional[str]:
-        # Interactive context-requests never run the goal loop: a small, bounded, side-effect-free
+        # Context-request tasks never run the goal loop: a small, bounded, side-effect-free
         # local context assembly, reported back as fast as possible. Route them BEFORE the
         # resource/token-budget gates below -- they cost far less than a real task and exist
         # specifically to be fast, so they should never be deferred by host-load pickup gating.
@@ -335,7 +335,7 @@ class Poller:
         self._record_rep_turn(task, target, outcome)
         return task_id
 
-    # --- D1: interactive context-request fast path (no goal execution, no LLM plan loop) ------
+    # --- D1: context-request fast path (no goal execution, no LLM plan loop) ------
 
     def _handle_context_request(self, task: Dict[str, Any]) -> Optional[str]:
         """Answer ONE ``context_request`` task: assemble context LOCALLY and report it.
@@ -651,17 +651,21 @@ class Poller:
             log.info("quest-folder push for %s failed (%s) — leaving Quest notes unchanged",
                      quest_id, e)
 
-    # --- fast lane: interactive context-requests, served faster than the background scan --------
+    # --- fast lane: real-time tasks, served faster than the background scan ----------------------
 
     def _dispatch_fast_task(self, task: Dict[str, Any]) -> None:
         """Claim-and-run ONE task delivered by the fast lane (wait channel or fallback poll).
 
-        So far every interactive task is a context-request (see ``_handle_context_request``), and
-        ``_handle_one`` already routes those without running the goal loop; anything else delivered
-        here (a future interactive task type) simply falls back to the normal execution path so the
-        fast lane never silently drops unrecognized work. Deduped against the shared signature store
-        and guarded against the background scan claiming the SAME task concurrently (see
-        ``_claim_slot``)."""
+        Eligibility for the fast lane is the backend's generic ``real_time`` flag, not a task type --
+        any task-creation path (a live chat delegate, a context-request, or a future real-time-
+        originated kind) can set it. So far every real_time task happens to be a context-request
+        (see ``_handle_context_request``), and ``_handle_one`` already routes those without running
+        the goal loop based on the presence of a ``context_request`` payload -- a separate,
+        execution-routing decision, not an eligibility one. Anything else delivered here (a
+        real_time task that is not a context-request) simply falls back to the normal execution path
+        so the fast lane never silently drops unrecognized work. Deduped against the shared
+        signature store and guarded against the background scan claiming the SAME task concurrently
+        (see ``_claim_slot``)."""
         task_id = str(task.get("id") or task.get("task_id") or "")
         if not task_id or self.state.seen(_task_signature(task)):
             return
@@ -675,7 +679,7 @@ class Poller:
             self._release_slot(task_id)
 
     def _fast_lane_loop(self, stop_event: threading.Event) -> None:
-        """Background thread: serve INTERACTIVE work with sub-poll-interval latency (D2 revised).
+        """Background thread: serve REAL-TIME work with sub-poll-interval latency (D2 revised).
 
         Two strategies, chosen by config:
           * ``wait_channel_enabled`` (default) -- hold a long-poll GET (blocks server-side up to
@@ -683,7 +687,7 @@ class Poller:
             the connection is reopened immediately after each return (empty or not) -- the long-poll
             itself provides the pacing, no extra sleep needed on the happy path.
           * disabled -- fall back to a short interval poll (``context_poll_seconds``) over just the
-            interactive queue. ``context_poll_seconds <= 0`` disables the fast lane entirely (the
+            real-time queue. ``context_poll_seconds <= 0`` disables the fast lane entirely (the
             background scan's ``poll_interval_seconds`` is then the only cadence, exactly the
             pre-fast-lane behavior).
 

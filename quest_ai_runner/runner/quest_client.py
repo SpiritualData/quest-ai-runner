@@ -10,9 +10,9 @@ polls/updates them). NO key is baked in — it comes from config.
 
 Endpoints implemented (the contract from integration_library_design.md §3):
   Discovery  : GET  /api/assistant-tasks?status=queued&due_before=<ISO-now>[&env_id=]
-  Fast lane  : GET  /api/assistant-tasks/wait?interactive=true&timeout=<secs>[&team_id=&env_id=]
-               (long-poll; blocks server-side until an interactive task is queued or timeout)
-               GET  /api/assistant-tasks?status=queued&interactive=true  (fallback short poll)
+  Fast lane  : GET  /api/assistant-tasks/wait?real_time=true&timeout=<secs>[&team_id=&env_id=]
+               (long-poll; blocks server-side until a real-time task is queued or timeout)
+               GET  /api/assistant-tasks?status=queued&real_time=true  (fallback short poll)
   Claim      : PATCH /api/assistant-tasks/{id}  {status: in_progress}
   Report     : PATCH /api/assistant-tasks/{id}  {status: done|needs_you|failed, result, decision_id}
   Escalate   : POST  /api/teams/{team_id}/decisions  (a HOLD-default decision-request)
@@ -172,17 +172,17 @@ class QuestClient:
 
     def list_interactive_due(self, *, team_id: Optional[str] = None,
                              env_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """GET queued INTERACTIVE tasks only (the fast-lane FALLBACK poll).
+        """GET queued REAL-TIME tasks only (the fast-lane FALLBACK poll).
 
-        Interactive tasks are context-requests (and similar) raised from a LIVE chat turn that is
-        waiting on a reply right now -- see ``wait_for_interactive`` for the preferred, lower-latency
-        long-poll channel. This method is the fallback used when the wait channel is disabled
-        (``QAR_WAIT_CHANNEL=0``): the fast lane calls it on a short interval
-        (``QAR_CONTEXT_POLL_SECONDS``) instead of waiting out the full background
-        ``poll_interval_seconds``. Same team/env scoping as ``discover_due``. Never raises.
+        Real-time tasks are ones a task-creation path flagged as low-latency-eligible (a live chat
+        context-request and similar) because a caller is waiting on a reply right now -- see
+        ``wait_for_interactive`` for the preferred, lower-latency long-poll channel. This method is
+        the fallback used when the wait channel is disabled (``QAR_WAIT_CHANNEL=0``): the fast lane
+        calls it on a short interval (``QAR_CONTEXT_POLL_SECONDS``) instead of waiting out the full
+        background ``poll_interval_seconds``. Same team/env scoping as ``discover_due``. Never raises.
         """
         tid = self.team_id if team_id is None else team_id
-        params: Dict[str, Any] = {"status": "queued", "interactive": "true"}
+        params: Dict[str, Any] = {"status": "queued", "real_time": "true"}
         if tid:
             params["team_id"] = tid
         if env_id:
@@ -199,8 +199,8 @@ class QuestClient:
                              timeout: float = 25.0) -> Optional[Dict[str, Any]]:
         """Long-poll GET /api/assistant-tasks/wait -- the presence-aware PUSH channel.
 
-        Blocks SERVER-SIDE (the backend holds the connection, polling Mongo internally) until an
-        interactive task is queued for this team/env, or ``timeout`` elapses with nothing to
+        Blocks SERVER-SIDE (the backend holds the connection, polling Mongo internally) until a
+        real-time task is queued for this team/env, or ``timeout`` elapses with nothing to
         deliver. The runner is meant to call this in a tight loop from its own thread: reconnect
         immediately after each return (empty or not) so a live chat context-request is answered in
         close to real time whenever this lane is up, without the fixed-poll latency of
@@ -213,7 +213,7 @@ class QuestClient:
         by our own transport.
         """
         tid = self.team_id if team_id is None else team_id
-        params: Dict[str, Any] = {"interactive": "true", "timeout": timeout}
+        params: Dict[str, Any] = {"real_time": "true", "timeout": timeout}
         if tid:
             params["team_id"] = tid
         if env_id:
