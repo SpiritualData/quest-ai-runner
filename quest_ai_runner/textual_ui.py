@@ -1688,7 +1688,18 @@ class QuestAITerminal(App):
         elif final is not None:
             self._record_turn(final, elapsed)
             self._maybe_handle_deep_plan(final)   # prints planned changes (once)
-            answer = final.text or ("\n".join(self._answer_parts).strip() or None)
+            # A deep turn's output already got a full per-run record (header, activity summary,
+            # result markdown) written to scrollback via _flush_pending_deep_runs() above, driven
+            # from the SAME text the orchestrator's terminal EVENT_RESULT carries for a "deep" kind
+            # result. _answer_parts (the fallback used below) picks that EVENT_RESULT text back up
+            # since deep runs never stream via EVENT_PARTIAL, so printing it again here duplicated
+            # the entire result body under a second "{rep} (AI): Executing: ..." bubble (2026-07-26
+            # bug report). Only fall back to the generic answer bubble when nothing was actually
+            # flushed to scrollback this turn (e.g. a deep run that captured no output at all).
+            if final.kind == "deep" and self._deep_flushed:
+                answer = None
+            else:
+                answer = final.text or ("\n".join(self._answer_parts).strip() or None)
             if answer:
                 if not self._ai_label_shown:
                     log.write(Text(""))

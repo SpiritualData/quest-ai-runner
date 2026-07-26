@@ -58,6 +58,9 @@ class _FakeConsole:
                 self.markup = t
         self._log.write(_MD(text))
 
+    def rule(self) -> None:
+        pass  # _finish_turn draws a divider after every turn; no-op for the recording stub
+
 
 def _make_app() -> tuple[QuestAITerminal, _RecordingLog]:
     app = QuestAITerminal(_FakeSession())
@@ -402,6 +405,79 @@ def test_final_output_alone_is_enough_to_flush():
     app._deep.set_final_output("r1", "The answer is 42.")
     app._flush_deep_run("r1")
     assert any("The answer is 42." in ln for ln in log.lines)
+
+
+# --- duplicate-answer regression (2026-07-26 bug report) -------------------
+
+class _FakeDeepFinal:
+    """Minimal OrchestratorResult-like stand-in for a completed deep turn. ``text`` mirrors what
+    ``Orchestrator._run_deep`` actually returns: never set for a "deep" kind result."""
+    kind = "deep"
+    text = None
+    deep_results = [type("R", (), {"met": True, "output": "did the thing", "tokens": 100})()]
+    goals = ["Build the thing"]
+    tokens_in = 10
+    tokens_out = 20
+    model = "claude-sonnet-4-6"
+    steps = 1
+
+
+class _FakeSessionForFinishTurn:
+    """A session stand-in with just enough surface for _finish_turn to run."""
+    _rep_name = "Tester"
+    _cfg = type("Cfg", (), {"corpus_root": None})()
+    _goal_id = None
+    _model_hint = None
+
+    def __init__(self) -> None:
+        self._last_user = ""
+        self._last_assistant = ""
+        self._session_history: list = []
+        self._turn_count = 0
+        self._turns: list = []
+        self._orch = type("Orch", (), {"context_assembler": None})()
+
+    def _write_session_file(self) -> None:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_deep_turn_answer_not_duplicated_after_flush():
+    """A deep turn's result gets ONE full record in scrollback (via
+    _flush_pending_deep_runs -> _flush_deep_run), not a second copy re-printed as a generic
+    "{rep} (AI): Executing: ..." chat bubble underneath it.
+
+    Root cause: the orchestrator's terminal EVENT_RESULT for a "deep" kind result carries the
+    same full text the per-run flush already wrote (deep_results' concatenated output), and
+    since a deep run never streams via EVENT_PARTIAL, that text lands in _answer_parts just
+    like a normal shallow answer would. _finish_turn then printed _answer_parts as a second,
+    duplicate bubble underneath the already-flushed record (2026-07-26 live bug report: the
+    full "What I changed" summary appeared twice in the terminal, once per code path)."""
+    app = QuestAITerminal(_FakeSessionForFinishTurn())
+    async with app.run_test():
+        log = _RecordingLog()
+        app._tlog = log
+        app._console = _FakeConsole(log)
+        app._deep = _DeepRunTracker()
+        app._deep_flushed = set()
+
+        goal = "Build the thing"
+        output = "What I changed:\n\n- did the thing"
+        app._deep.add_run("r1", goal)
+        app._deep.set_final_output("r1", output)
+        app._deep.set_run_status("r1", "done")
+        # Mirrors what the live event handlers populate for a deep turn: the "Executing: {goal}"
+        # header emitted before the run, plus the terminal EVENT_RESULT's full deep-output text.
+        app._answer_parts = [f"Executing: {goal}", output]
+        app._auto_pass = 1
+
+        app._finish_turn("build the thing", _FakeDeepFinal(), 3.4, cancelled=False, error=None)
+
+        body = "\n".join(log.lines)
+        assert body.count(output) == 1  # the result body appears exactly once, not twice
+        assert "⎅ [Pass 1] Build the thing" in body
+        assert "✓ deep task complete" in body
+        assert f"{app.rep_name} (AI):" not in body  # no second generic answer bubble
 
 
 def test_goal_updated_when_real_subgoal_arrives_later():
