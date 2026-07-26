@@ -46,8 +46,7 @@ All notable changes to this project are documented here. The format is based on
   loop), not whether the fast lane serves it. Method names (`list_interactive_due`,
   `wait_for_interactive`) are unchanged since they still describe the methods' behavior; only the
   wire param and surrounding docs/comments changed. (`runner/quest_client.py`, `runner/poller.py`,
-  `config.py`; `tests/test_quest_client_transport_errors.py`,
-  `tests/test_context_request_fast_lane.py`, `tests/test_runner.py`.)
+  `config.py`; `tests/test_context_request_fast_lane.py`, `tests/test_runner.py`.)
 - **`core/anticipation`: the stored-record rebuilders are now public API.** `_pattern_from_dict`
   and `_prediction_from_dict` are renamed to `pattern_from_dict` and `prediction_from_dict`. A
   consumer with its own storage (quest-backend's Mongo-backed twin of `FilePredictionStore`) was
@@ -118,6 +117,29 @@ All notable changes to this project are documented here. The format is based on
   `config.py`.)
 
 ### Fixed
+- **Mid-task steering: a message sent to a running or queued task now actually reaches it.**
+  `core/inbox.py`'s `InputInbox` and its drain points (deep-retry loop, answer-improve loop) had no
+  producer for background tasks for months, so "message a running task" was inert. A new
+  `QuestClient.claim_task_messages` (`POST /api/assistant-tasks/{id}/messages/claim`, atomic: the
+  backend stamps `delivered_at` so a re-poll returns `[]` and a message can never be folded into two
+  prompts) feeds a throttled callable the executor now passes explicitly as `pending_inputs=` to
+  `Orchestrator.run()`, rather than relying on the inbox's own auto-wiring — `_conv_key` only
+  resolves via `quest_id`/`conversation_id`/`session_id`/`user_id`, and a goal-only personal task's
+  `context_meta` is just `{"goal_id": ...}`, so auto-wiring alone would never see a message for that
+  case. The executor also does one drain before the first prompt (catches a message sent while the
+  task sat queued) and the outer plan → gather → re-plan loop now drains too (previously only the
+  deep-retry and answer-improve loops did, so a message during plain planning was invisible until,
+  if ever, an inner loop was reached). Honest limitation: a deep run is still one `claude -p`
+  subprocess and cannot be re-prompted mid-flight; a message during one is only visible at the next
+  attempt/verification boundary. (`runner/executor.py`, `runner/quest_client.py`,
+  `core/orchestrator.py`.)
+- **Failed and needs-you task replies no longer post to chat tagged as `kind="done"`.**
+  `TaskExecutor._post_conv` tagged four failure/needs-you branches (no-instruction-text,
+  orchestrator-exception, claim-corrected, unverified-deep-goal-failure) as `kind="done"`. Since
+  quest-backend's chat fold-back check treats any `kind="done"` post as "a terminal reply was
+  already posted" and suppresses further messages, a task that actually failed or needed a human
+  could read in chat as silently done, with no failure message ever following it. Each branch now
+  tags `failed`/`needs_you` correctly. (`runner/executor.py`; regression tests added.)
 - **A `claude_cli` deployment no longer resolves its model tiers to models it cannot run.**
   `ClaudeCliProvider.list_models()` returned `[]` (the CLI has no `models.list`), so
   `ModelRegistry.bucket_top` fell through to `DEFAULT_FALLBACK_TOP`, whose `fast`/`balanced`/
