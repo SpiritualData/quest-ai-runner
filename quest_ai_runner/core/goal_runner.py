@@ -887,10 +887,19 @@ class SubprocessGoalRunner(DeepRunner):
             if goal.strip() and not out.strip():
                 return DeepResult(
                     met=False, output=out, tokens=tokens, cost_usd=cost,
-                    error="worker exited cleanly but produced NO output — the goal did not actually "
-                          "run (check that the worker runs headless, e.g. Claude Code needs -p).")
+                    error="worker exited cleanly but produced NO output, so the goal did not "
+                          "actually run (check that the worker runs headless, e.g. Claude Code "
+                          "needs -p).")
             return DeepResult(met=True, output=out, tokens=tokens, cost_usd=cost)
         if not err:
-            err = (f"Goal run did not complete cleanly (exit {proc.returncode}) — likely hit the "
-                   "turn/budget limit before fully meeting the goal.")
+            # No stderr to quote. Say exactly that rather than ASSERTING a cause: the old wording
+            # ("likely hit the turn/budget limit") was a guess printed as fact, and it is the text
+            # a human reads on a failed task, so it sent every diagnosis down the wrong path. The
+            # worker's own output IS carried on this result, so point the reader at it.
+            tail = (out or "").strip()
+            err = (f"The worker exited {proc.returncode} with no error output. The goal was not "
+                   "confirmed met. Common causes: the turn or token budget ran out, or the worker "
+                   "itself errored. Read the run output below for what it actually did.")
+            if tail:
+                err = f"{err}\n\nLast output:\n{tail[-1500:]}"
         return DeepResult(met=False, output=out, error=err, tokens=tokens, cost_usd=cost)

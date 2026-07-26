@@ -154,6 +154,14 @@ All notable changes to this project are documented here. The format is based on
   fast/balanced/quality, `MultiProvider` routes them by the `claude` prefix, and `cli_model()`
   maps each back to the bare CLI alias on invoke. Explicit `QAR_MODEL_*` overrides still take
   full precedence, since user fallbacks are applied last.
+- **A nonzero worker exit with no stderr no longer asserts a cause it did not verify.**
+  `SubprocessGoalRunner` reported "Goal run did not complete cleanly (exit N), likely hit the
+  turn/budget limit before fully meeting the goal" whenever stderr was empty. That guess is the
+  text a human reads on a failed task, and it sent diagnosis straight to budget tuning even when
+  the worker had errored for an unrelated reason. It now states the exit code, says plainly that
+  no error output was produced and that the goal was not confirmed met, lists the candidate
+  causes as candidates, and appends the tail of the worker's own output so the reader can see
+  what the run actually did.
 - **A non-numeric file score from the model no longer discards the entire card selection.**
   `_rank_files_batched` in `core/card_filter.py` built its score map from raw JSON values, so a
   score the model returned as a string (`"0.9"`), a `null`, or a word landed in the map untouched;
