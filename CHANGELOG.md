@@ -118,6 +118,20 @@ All notable changes to this project are documented here. The format is based on
   `config.py`.)
 
 ### Fixed
+- **A `claude_cli` deployment no longer resolves its model tiers to models it cannot run.**
+  `ClaudeCliProvider.list_models()` returned `[]` (the CLI has no `models.list`), so
+  `ModelRegistry.bucket_top` fell through to `DEFAULT_FALLBACK_TOP`, whose `fast`/`balanced`/
+  `quality` entries are Gemini ids. On a keyless, CLI-only lane every tier therefore resolved to
+  a model no registered provider could execute, and runs died at the first planner call with
+  `Gemini model 'gemini-3.1-flash-lite' requested but Gemini provider not registered.
+  Available: []`. The only workaround was for each operator to pin `QAR_MODEL_FAST`,
+  `QAR_MODEL_BALANCED`, `QAR_MODEL_QUALITY` and `QAR_MODEL_BEST` by hand, which every new lane
+  silently forgot. The provider now advertises what it can actually run: the Claude FAMILY ids
+  `claude-opus`, `claude-sonnet`, `claude-haiku` (families, not pinned versions, so the list does
+  not age and each tier still means "latest of that family"). `bucket_top` buckets them into
+  fast/balanced/quality, `MultiProvider` routes them by the `claude` prefix, and `cli_model()`
+  maps each back to the bare CLI alias on invoke. Explicit `QAR_MODEL_*` overrides still take
+  full precedence, since user fallbacks are applied last.
 - **A non-numeric file score from the model no longer discards the entire card selection.**
   `_rank_files_batched` in `core/card_filter.py` built its score map from raw JSON values, so a
   score the model returned as a string (`"0.9"`), a `null`, or a word landed in the map untouched;

@@ -15,9 +15,13 @@ It satisfies the same :class:`~quest_ai_runner.core.adapters.ModelProvider` inte
                 leniently). The brain's :func:`normalize_decision` is tolerant, so a malformed
                 or empty parse degrades to a safe ``answer`` rather than crashing.
   * ``answer`` — flattens the message list into one headless prompt and returns the model's text.
-  * ``list_models`` — returns ``[]``: the CLI has no models.list, so the ModelRegistry falls back
-                to its last-known tier map. Tier ids are mapped to the CLI's family aliases
-                (``haiku``/``sonnet``/``opus``) so a tier always resolves to "latest of family".
+  * ``list_models`` — the CLI has no models.list, so this advertises the Claude FAMILIES the CLI
+                can run (``claude-haiku``/``claude-sonnet``/``claude-opus``) rather than an empty
+                list. That keeps every tier on a model this provider can actually execute; an
+                empty list made the ModelRegistry fall through to its Gemini-flavoured defaults,
+                which no provider on a claude_cli-only deployment could run. Tier ids are mapped
+                back to the CLI's bare family aliases on invoke, so a tier always resolves to
+                "latest of family".
 
 Like the subprocess deep-runner, the spawned process has ``ANTHROPIC_API_KEY`` /
 ``ANTHROPIC_AUTH_TOKEN`` / ``CLAUDECODE`` stripped from its env so it can't reuse our own session
@@ -50,6 +54,12 @@ _PURE_COMPLETION_DISALLOWED = (
 # concrete id the registry hands us onto its family alias so resolution is robust whether the id is
 # pinned ("claude-haiku-4-5"), date-suffixed, or already an alias.
 _FAMILY_ALIASES = ("opus", "sonnet", "haiku")
+
+# What ``list_models`` advertises (see its docstring for why this is not an empty list). Canonical
+# ``claude-<family>`` ids so ModelRegistry.bucket_top buckets them into fast/balanced/quality and
+# MultiProvider routes them by the "claude" prefix; cli_model() maps each back to the bare family
+# alias when the CLI is actually invoked, so the runner always gets the latest of that family.
+CLI_RUNNABLE_MODELS = ["claude-opus", "claude-sonnet", "claude-haiku"]
 
 
 def cli_model(model: Optional[str]) -> Optional[str]:
@@ -325,6 +335,18 @@ class ClaudeCliProvider(ModelProviderBase):
         return self._invoke(prompt, model=model, system=system)
 
     def list_models(self) -> List[str]:
-        # The CLI has no models.list; let ModelRegistry use its last-known fallback tier map.
-        # cli_model() maps those tier ids to family aliases when we actually invoke.
-        return []
+        # The CLI has no models.list, but it can only ever run CLAUDE models, so this provider
+        # must SAY so rather than return an empty list. Returning [] made ModelRegistry fall
+        # through to DEFAULT_FALLBACK_TOP, whose fast/balanced/quality entries are Gemini ids: on
+        # a claude_cli-only deployment every tier then resolved to a model no registered provider
+        # could run ("Gemini model 'gemini-3.1-flash-lite' requested but Gemini provider not
+        # registered"), and tasks died at the first planner call. Operators worked around it by
+        # setting QAR_MODEL_FAST/BALANCED/QUALITY/BEST by hand, which is config every claude_cli
+        # lane needs and any new lane silently forgets.
+        #
+        # These are FAMILY aliases in canonical id form, deliberately not pinned versions: the CLI
+        # treats a family as "latest of that family", which is exactly what a tier means, and it
+        # keeps this list from ageing. bucket_top() buckets them to fast/balanced/quality
+        # (haiku/sonnet/opus) and cli_model() maps each back to the bare alias on invoke. An
+        # explicit QAR_MODEL_* override still wins, since user fallbacks are applied last.
+        return CLI_RUNNABLE_MODELS

@@ -6,6 +6,7 @@ the lenient JSON extraction (the CLI can't force tool_choice) and the tier->CLI-
 """
 from quest_ai_runner.adapters import ClaudeCliProvider
 from quest_ai_runner.adapters.claude_cli_provider import cli_model, extract_json_object
+from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import DECIDE_TOOL
 
 
@@ -132,8 +133,35 @@ def test_answer_flattens_messages_and_returns_text(monkeypatch):
     assert captured["system"] == "be terse"
 
 
-def test_list_models_empty_so_registry_falls_back():
-    assert ClaudeCliProvider().list_models() == []
+def test_list_models_advertises_only_claude_families():
+    """The CLI can run Claude and nothing else, so it must advertise Claude families.
+
+    Regression guard: this used to return [], which made ModelRegistry fall through to its
+    Gemini-flavoured DEFAULT_FALLBACK_TOP on a claude_cli-only deployment.
+    """
+    models = ClaudeCliProvider().list_models()
+    assert models, "an empty list sends the registry to its Gemini defaults"
+    assert all("claude" in m.lower() for m in models)
+    assert {"haiku", "sonnet", "opus"} <= {cli_model(m) for m in models}
+
+
+def test_every_tier_resolves_to_a_cli_runnable_model():
+    """End to end of the bug: no tier may resolve to a model the CLI cannot run.
+
+    A tier resolving to e.g. ``gemini-3.1-flash-lite`` is what killed every task on the SD dev
+    lane at its first planner call, because no Gemini provider was registered to run it.
+    """
+    registry = ModelRegistry(ClaudeCliProvider())
+    for tier in ("fast", "balanced", "quality", "best"):
+        resolved = registry.resolve_tier(tier)
+        assert "claude" in resolved.lower(), f"tier {tier} resolved to non-Claude {resolved!r}"
+        assert cli_model(resolved) is not None, f"tier {tier} gave the CLI an unusable {resolved!r}"
+
+
+def test_explicit_tier_override_still_wins():
+    """Operators pinning QAR_MODEL_* keep full precedence over the advertised families."""
+    registry = ModelRegistry(ClaudeCliProvider(), fallback={"balanced": "claude-haiku-4-5"})
+    assert registry.resolve_tier("balanced") == "claude-haiku-4-5"
 
 
 def test_build_env_strips_billing_and_session_keys(monkeypatch):
