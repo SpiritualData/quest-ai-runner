@@ -732,6 +732,17 @@ def test_message_requests_change_distinguishes_questions_from_commands():
         "is it possible to add SSO?",
         "what's the best way to update a goal?",
         "do you think we should change this?",
+        # Casual/uncertain openers with NO trailing "?" -- these read as questions in speech
+        # (people drop the question mark when talking or typing fast) but were previously missed
+        # by both the interrogative-opener check and the "?"-ending check, so they fell through to
+        # the unconditional True at the end of the function and force-escalated to a task despite
+        # being genuine questions. _INFO_QUESTION_RE now recognizes these openers.
+        "Not sure why the export looks broken",
+        "No idea why this is failing",
+        "Any idea why the metrics look off",
+        "Any chance the login flow is broken",
+        "Wondering if the sync job is broken",
+        "I'm curious why the build is slow",
     ]:
         assert _message_requests_change(q) is False, f"question should NOT escalate: {q!r}"
 

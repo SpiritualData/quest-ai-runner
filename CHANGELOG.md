@@ -117,6 +117,20 @@ All notable changes to this project are documented here. The format is based on
   `config.py`.)
 
 ### Fixed
+- **Casual questions with no trailing "?" and no textbook interrogative opener no longer
+  force-escalate to a deep task.** `_message_requests_change` (the message-intent fallback net
+  that can override a planner's correct "answer" decision) recognized questions only via a fixed
+  interrogative-opener list or a trailing "?"; a spoken-style question like "Not sure why the
+  export looks broken" or "Any idea why the metrics look off" matched neither, so it fell through
+  to the function's unconditional `True` and force-escalated into a real task even after the
+  planner had already answered correctly. `_INFO_QUESTION_RE` now also recognizes casual/uncertain
+  openers ("any idea/clue/chance/reason", "no idea why", "not sure why", "wondering/curious
+  if/why/whether"); these route through the existing ambiguous-band LLM judgment
+  (`judge_execution_directive`, which defaults to "not a directive" on any failure) instead of
+  being decided by regex alone. Deliberate bug-report statements with no interrogative framing at
+  all (e.g. "the system incorrectly assigns dates to actions") are unaffected and still escalate
+  immediately, per the existing regression contract. (`core/orchestrator.py`; test added to
+  `tests/test_orchestrator.py`.)
 - **Mid-task steering: a message sent to a running or queued task now actually reaches it.**
   `core/inbox.py`'s `InputInbox` and its drain points (deep-retry loop, answer-improve loop) had no
   producer for background tasks for months, so "message a running task" was inert. A new

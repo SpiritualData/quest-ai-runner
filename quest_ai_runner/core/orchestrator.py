@@ -2144,10 +2144,16 @@ _WRONGNESS_RE = re.compile(
 # A purely interrogative opener: when the message ASKS ABOUT something (information, explanation,
 # or opinion), it wants an answer, not an edit -- even if it also mentions an action verb ("how
 # would I add X?", "should we refactor Y?"). Used to avoid auto-executing a question as a task.
+# Includes casual/uncertain openers ("any idea", "not sure why", "wondering if") that read as
+# questions in natural speech even though they are not textbook interrogatives -- these were
+# previously missed here, which meant they only survived via the "?"-ending check (and not at all
+# when the speaker dropped the question mark, as people often do when talking, not typing).
 _INFO_QUESTION_RE = re.compile(
     r"^\s*(?:how|what|what['’]?s|why|which|who|whom|whose|when|where|explain|describe|summari[sz]e|"
     r"tell\s+me|walk\s+me\s+through|is\s+it|are\s+there|is\s+there|do\s+you|does\s+it|did\s+you|"
-    r"would\s+it|could\s+we|should\s+(?:i|we|it)|do\s+we|is\s+it\s+possible)\b",
+    r"would\s+it|could\s+we|should\s+(?:i|we|it)|do\s+we|is\s+it\s+possible|"
+    r"any\s+(?:idea|clue|chance|reason)|no\s+idea\s+why|not\s+sure\s+why|"
+    r"(?:i'?m\s+)?(?:wondering|curious)\s+(?:if|why|whether))\b",
     re.IGNORECASE,
 )
 # A POLITE IMPERATIVE aimed at the assistant ("can you fix…", "could you add…", "please update…").
