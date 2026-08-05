@@ -53,6 +53,7 @@ Example workflow (task execution):
 from __future__ import annotations
 
 import json
+import logging
 import os
 import queue as _queue
 import sys
@@ -268,7 +269,9 @@ class _ContextPanel:
     def __init__(self, console: _Console) -> None:
         self._c = console
         self._tty = sys.stdout.isatty()
-        self._lock = threading.Lock()
+        # RLock (not Lock): start()/stop()/render()/erase() all take it, and stop()
+        # calls erase() while already holding it, so the acquire must be reentrant.
+        self._lock = threading.RLock()
         self._stop_ev = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._frame = 0
@@ -285,9 +288,19 @@ class _ContextPanel:
     def start(self) -> None:
         if not self._tty:
             return
-        self._stop_ev.clear()
-        self._thread = threading.Thread(target=self._spin, daemon=True)
-        self._thread.start()
+        with self._lock:
+            if self._thread is not None and self._thread.is_alive():
+                # Already spinning: starting a second thread would leave two
+                # writers racing over the same terminal region (the classic cause
+                # of the animation losing track of what it already printed).
+                return
+            self._stop_ev.clear()
+            self._thread = threading.Thread(target=self._spin, daemon=True)
+            self._thread.start()
+
+    def is_active(self) -> bool:
+        with self._lock:
+            return self._thread is not None and self._thread.is_alive()
 
     def set_phase(self, text: str) -> None:
         with self._lock:
@@ -337,11 +350,12 @@ class _ContextPanel:
     def stop(self) -> None:
         """Stop the spinner and erase the panel (final state)."""
         self._stop_ev.set()
-        if self._thread:
-            self._thread.join(timeout=0.5)
-            self._thread = None
+        thread, self._thread = self._thread, None
+        if thread:
+            thread.join(timeout=0.5)
         if self._tty:
-            self._erase()
+            with self._lock:
+                self._erase()
 
     def summary(self) -> Tuple[int, int]:
         """(total_sources, replans) for the turn footer."""
@@ -364,7 +378,15 @@ class _ContextPanel:
             overflow = self._overflow
             cards = list(self._cards)
             card_files_map = dict(self._card_files_map)
+            self._render_locked(frame, phase, sources, overflow, cards, card_files_map)
 
+    def _render_locked(self, frame, phase, sources, overflow, cards, card_files_map) -> None:
+        """Build and write one frame. Caller must hold self._lock for the whole
+        read-cursor-state -> write -> update-cursor-state sequence, otherwise a
+        concurrent stop()/erase() (e.g. from a logging handler on another thread)
+        can read a stale line count and clear the wrong rows, leaving the old
+        frame on screen and every subsequent frame appended below it instead of
+        overwriting in place."""
         lines: List[str] = [f"  {frame} {phase}"]
 
         # Show context cards with their files grouped underneath
@@ -411,30 +433,79 @@ class _ContextPanel:
         # Each render ends with \n after every line, so the cursor sits one line
         # BELOW the last spinner line. On the next render we move up by n lines
         # to land exactly on the first spinner line and overwrite from there.
+        # Built as one string and issued as a single write() (rather than one
+        # write() per escape/line): a multi-write render can be split across
+        # separate syscalls, and a concurrent writer (e.g. the logging handler,
+        # called from a different thread) can land a write in between them,
+        # so the terminal sees a half-drawn frame and the next tick's cursor
+        # math is off forever, showing every subsequent frame as a new line
+        # instead of overwriting. self._lock (held by the caller) keeps this
+        # write() and the _last_line_count update as one atomic step relative
+        # to stop()/erase() on other threads.
         n = self._last_line_count
-        if n:
-            sys.stdout.write(f"\033[{n}A")
-        for ln in lines:
-            sys.stdout.write(f"\r\033[2K{ln}\n")
+        out = (f"\033[{n}A" if n else "") + "".join(f"\r\033[2K{ln}\n" for ln in lines)
+        sys.stdout.write(out)
         sys.stdout.flush()
         self._last_line_count = len(lines)
 
     def _erase(self) -> None:
+        """Caller must hold self._lock (mirrors _render_locked's contract)."""
         n = self._last_line_count
         if not n:
             return
         # Cursor is one line below the last spinner line; move up n to reach the first.
-        sys.stdout.write(f"\033[{n}A")
+        parts = [f"\033[{n}A"]
         for i in range(n):
-            sys.stdout.write("\r\033[2K")
+            parts.append("\r\033[2K")
             if i < n - 1:
-                sys.stdout.write("\n")
+                parts.append("\n")
         # After the loop cursor is on the last cleared line; move back to the first.
         if n > 1:
-            sys.stdout.write(f"\033[{n-1}A")
-        sys.stdout.write("\r")
+            parts.append(f"\033[{n-1}A")
+        parts.append("\r")
+        sys.stdout.write("".join(parts))
         sys.stdout.flush()
         self._last_line_count = 0
+
+
+class _PanelAwareLogHandler(logging.Handler):
+    """Routes stdlib logging output through the context panel instead of straight
+    to stderr.
+
+    ``logging.basicConfig()`` (in cli.py) attaches the default StreamHandler,
+    which writes to stderr with no knowledge of the panel's cursor bookkeeping.
+    A log line landing mid-spin (background retrieval/indexing adapters log at
+    INFO, e.g. bm25_content_store's "BM25 context index: ..." and can fire
+    from the feed thread at any time, including during the plan/gather/replan
+    loop) shifts the terminal's actual cursor row without the panel knowing,
+    so every subsequent frame's cursor-up lands on the wrong row and gets
+    printed as a new line instead of overwriting the spinner in place. That
+    is what showed up as an endless stack of "Re-planning..." lines. Only
+    textual_ui.py had ever guarded against this (it clears the stderr handler
+    and routes into its own RichLog); this gives the ANSI fallback the same
+    protection by pausing/erasing the active panel before the line is written
+    and resuming it after, exactly like the "understanding"/"milestone"
+    events already do in ``_TurnRenderer.render()``.
+    """
+
+    def __init__(self, console: _Console, get_panel) -> None:
+        super().__init__()
+        self._c = console
+        self._get_panel = get_panel
+        self.setFormatter(logging.Formatter("%(levelname)s %(name)s %(message)s"))
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = self.format(record)
+            panel = self._get_panel()
+            was_active = bool(panel is not None and panel.is_active())
+            if was_active:
+                panel.stop()
+            self._c.dim(f"  {msg}")
+            if was_active:
+                panel.start()
+        except Exception:  # noqa: BLE001
+            self.handleError(record)
 
 
 # ── ESC watcher ───────────────────────────────────────────────────────────────
@@ -1289,19 +1360,27 @@ class InteractiveSession:
     def __init__(self, cfg: "RunnerConfig", *, rep_name: str = "Assistant",
                  persona: Optional[str] = None, goal_id: Optional[str] = None,
                  _startup_notify=None) -> None:
-        # Silence background-scanning INFO logs during interactive use.
-        # The context panel already shows what's being gathered turn by turn;
-        # raw log lines from background threads corrupt the prompt display because
-        # Python's logging writes to stderr, which patch_stdout() does not intercept.
-        import logging as _logging
-        _bg_log = _logging.getLogger("quest-ai-runner.context")
-        if _bg_log.level == _logging.NOTSET or _bg_log.level <= _logging.INFO:
-            _bg_log.setLevel(_logging.WARNING)
         from .config import build_orchestrator
         # Collect bootstrap/index notices to emit as system messages after the header.
         self._startup_notices: List[str] = []
         # Create a console reference that will be available in the notify callback
         self._console = _Console()
+        # The panel currently on screen, if any (recreated fresh each turn in
+        # _run_turn(); None between turns and before the first one).
+        self._active_panel: Optional[_ContextPanel] = None
+
+        # Background adapters (bm25 indexing, retries, providers, ...) log at
+        # INFO from the feed thread at any point during a turn, including
+        # mid-spin. logging.basicConfig() (cli.py) points the root logger's
+        # default handler at stderr, which has no idea the panel owns the
+        # cursor right now, and that mismatch is what corrupted the spinner
+        # into printing a new "Re-planning..." line per tick instead of
+        # overwriting. Swap in a handler that pauses/erases the active panel
+        # before writing and resumes it after, same as textual_ui.py does for
+        # its own UI.
+        root_logger = logging.getLogger()
+        root_logger.handlers.clear()
+        root_logger.addHandler(_PanelAwareLogHandler(self._console, lambda: self._active_panel))
 
         def notify_and_log(msg: str) -> None:
             """Show bootstrap/index messages to user and queue for header."""
@@ -1432,6 +1511,7 @@ class InteractiveSession:
             self._console.dim("  Replan mode: using opus for this turn.")
 
         panel = _ContextPanel(self._console)
+        self._active_panel = panel  # so the log handler can pause/resume this turn's panel
         renderer = _TurnRenderer(self._console, panel, self._rep_name, self._deep_tracker)
         renderer.begin()
 
@@ -1507,6 +1587,7 @@ class InteractiveSession:
             self._cancelled.set()
         finally:
             renderer.finish(cancelled=self._cancelled.is_set())
+            self._active_panel = None
 
         elapsed = time.monotonic() - t0
 

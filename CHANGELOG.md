@@ -117,6 +117,24 @@ All notable changes to this project are documented here. The format is based on
   `config.py`.)
 
 ### Fixed
+- **ANSI chat terminal (interactive.py, used whenever the Textual UI isn't available): the
+  gather-phase spinner stopped overwriting in place during long plan/gather/replan loops and
+  instead printed an endless stack of "Re-planning..." lines.** Root cause: `logging.basicConfig()`
+  attaches the default handler to stderr, which has no knowledge of `_ContextPanel`'s cursor
+  bookkeeping; background adapters logging at INFO from the feed thread (e.g.
+  `bm25_content_store`'s index-build/update notices) could land mid-spin and shift the real
+  terminal cursor without the panel knowing, permanently desyncing its `\x1b[nA` cursor-up math so
+  every later frame printed as a new line instead of overwriting the last one. Only `textual_ui.py`
+  had ever guarded against this (it clears the stderr handler and routes logs into its own RichLog).
+  `interactive.py` now installs `_PanelAwareLogHandler` on the root logger, which pauses/erases the
+  turn's active panel before writing a log line and resumes it after, same as the textual path.
+  Also hardened `_ContextPanel` itself: `start()` now no-ops if a spin thread is already alive
+  (previously it always spawned a new one, leaking the old thread as a second, uncoordinated
+  writer), and a frame's cursor-up/clear/write sequence and its `_last_line_count` update are now
+  built as one string and issued as a single atomic `write()` under the panel's lock, so a
+  concurrent `stop()`/`erase()` from another thread can no longer land between two of a frame's
+  writes and leave the terminal half-drawn. (`interactive.py`; tests added to
+  `tests/test_spinner_panel_overwrite.py`.)
 - **Casual questions with no trailing "?" and no textbook interrogative opener no longer
   force-escalate to a deep task.** `_message_requests_change` (the message-intent fallback net
   that can override a planner's correct "answer" decision) recognized questions only via a fixed
