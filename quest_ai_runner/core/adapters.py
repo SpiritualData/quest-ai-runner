@@ -103,6 +103,21 @@ EVENT_MODE_SIGNAL = "mode_signal"  # the planner detected an EXPLICIT user reque
                                # The orchestrator is STATELESS about modes: it only reports the
                                # signal; the consumer owns the latch (persisting the mode and
                                # passing it back in on future runs). ALWAYS surfaces.
+EVENT_EXPLANATION = "explanation"  # the USER-FACING account of how this turn reached its answer
+                               # (opt-in via OrchestratorConfig.explain_answer). Emitted once, AFTER
+                               # EVENT_RESULT and BEFORE EVENT_DONE, so the answer is already on the
+                               # consumer's screen while this is being written: it costs the reader
+                               # no latency. Carries ``data`` = the explanation payload (see
+                               # ``orchestrator.build_answer_explanation``): the model-written
+                               # sections (understood/approach/assumptions/confidence/limitations/
+                               # what_would_change) alongside ``used`` and ``signals``, which are a
+                               # RECORD of the run (cards, sources, reads, actions, goal verdict)
+                               # and not prose. Emitted ONLY on turns the model-free eligibility
+                               # predicate judged worth explaining, so a consumer that shows a
+                               # toggle simply shows nothing when no event arrives.
+                               # NOTE: this is NOT the internal narration channel. It carries wording
+                               # composed FOR THE READER, never the run's own internal wording
+                               # relayed. ALWAYS surfaces.
 EVENT_CARD_THREAD = "card_thread"  # this turn's TOPIC assignment: which context card (idea) the
                                # message belongs to (see core/card_thread.py; opt-in via
                                # OrchestratorConfig.card_thread_enabled). Carries ``data`` =
@@ -115,7 +130,7 @@ EVENT_CARD_THREAD = "card_thread"  # this turn's TOPIC assignment: which context
 
 # The event types a BACKGROUND (MilestoneSink) run forwards. Everything else is dropped as
 # intermediate chatter. Encoded ONCE here so every consumer inherits the same policy.
-SURFACING_EVENTS = frozenset({EVENT_UNDERSTANDING, EVENT_CONTEXT, EVENT_RESULT, EVENT_DECISION, EVENT_MILESTONE, EVENT_DONE, EVENT_TOKENS, EVENT_OVERSEER, EVENT_MODE_SIGNAL, EVENT_CARD_THREAD})
+SURFACING_EVENTS = frozenset({EVENT_UNDERSTANDING, EVENT_CONTEXT, EVENT_RESULT, EVENT_DECISION, EVENT_MILESTONE, EVENT_DONE, EVENT_TOKENS, EVENT_OVERSEER, EVENT_MODE_SIGNAL, EVENT_CARD_THREAD, EVENT_EXPLANATION})
 
 
 # ---------------------------------------------------------------------------

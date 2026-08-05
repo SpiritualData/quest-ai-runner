@@ -101,6 +101,17 @@ Env it reads:
                                                    tavily.com (free tier: 500 searches/month).
   WEB_SEARCH_TIER (optional)                    — model tier for native web search (default balanced).
   WEB_SEARCH_MAX_RESULTS (optional)             — max results per web search call (default 5).
+  QAR_EXPLAIN_ANSWER (optional)                 — "1"/"true" turns on the user-facing "Explain how
+                                                   I got this" panel (see core/answer_explanation.py).
+                                                   OFF by default. An ELIGIBLE turn (one that read,
+                                                   executed, ran deep, answered on assembled context,
+                                                   took more than one step, or searched the web) then
+                                                   makes ONE extra cheap-tier call AFTER its answer
+                                                   is already out and emits an "explanation" event.
+                                                   Ineligible turns (plain small talk) emit nothing.
+  QAR_EXPLAIN_TIER (optional)                   — tier that one extra call resolves to (default
+                                                   "fast": it summarizes a turn that already
+                                                   happened, it does not gate the turn's outcome).
   QAR_CONVERSATION_SEARCH (optional)           — set to "false"/"0"/"off" to disable searching
                                                    past Claude Code session transcripts during grep.
                                                    Enabled by default. Uses ~/.claude/sessions unless
@@ -436,6 +447,20 @@ def _config_from_env() -> RunnerConfig:
         cfg.orchestrator.anticipation_llm_enabled = True
     elif _ant_llm in ("0", "false", "off", "no"):
         cfg.orchestrator.anticipation_llm_enabled = False
+    # QAR_EXPLAIN_ANSWER: the user-facing "Explain how I got this" panel (see
+    # core/answer_explanation.py) -- OFF by default. "1"/"true" enables it: an ELIGIBLE turn (one
+    # that read, executed, ran deep, answered on assembled context, took more than one step, or
+    # searched the web) then emits one extra EVENT_EXPLANATION after its result. Ineligible turns
+    # cost nothing and emit nothing. QAR_EXPLAIN_TIER overrides the tier the one extra call
+    # resolves to (default "fast": it summarizes a turn that already happened, it does not gate it).
+    _explain = (os.getenv("QAR_EXPLAIN_ANSWER") or "").strip().lower()
+    if _explain in ("1", "true", "on", "yes"):
+        cfg.orchestrator.explain_answer = True
+    elif _explain in ("0", "false", "off", "no"):
+        cfg.orchestrator.explain_answer = False
+    _explain_tier = (os.getenv("QAR_EXPLAIN_TIER") or "").strip().lower()
+    if _explain_tier:
+        cfg.orchestrator.explain_tier = _explain_tier
     return cfg
 
 

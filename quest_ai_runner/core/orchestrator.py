@@ -45,6 +45,7 @@ from .adapters import (
     EVENT_DECISION,
     EVENT_DONE,
     EVENT_EXEC,
+    EVENT_EXPLANATION,
     EVENT_MILESTONE,
     EVENT_MODE_SIGNAL,
     EVENT_OVERSEER,
@@ -96,6 +97,16 @@ from .guard import (
     ExecutionFact,
     ExecutionRecord,
     classify_exec_phase,
+)
+from .answer_explanation import (
+    EXPLAIN_PROMPT,
+    EXPLAIN_TOOL,
+    TurnTrace,
+    build_payload,
+    has_renderable_content,
+    is_eligible,
+    render_record_for_prompt,
+    trace_from_result,
 )
 from .model_registry import TIERS, ModelRegistry
 from .overseer import OverseerSignal, build_digest, oversee
@@ -1060,6 +1071,19 @@ class OrchestratorConfig:
     # is present (``resolve_anticipator`` builds one from ``cfg.model_provider`` when this is on).
     # Env: QAR_ANTICIPATION_LLM ("1"/"true" enables; read in cli.py's _config_from_env).
     anticipation_llm_enabled: bool = False
+    # "EXPLAIN HOW I GOT THIS" (see core/answer_explanation.py), opt-in (default OFF -- with the
+    # flag off the run is byte-for-byte what it was: zero extra calls, no extra event).
+    # When ON, a turn that PASSES the model-free eligibility predicate (it read, executed, ran
+    # deep, answered on assembled context, took more than one step, or searched the web) emits ONE
+    # extra EVENT_EXPLANATION carrying a user-facing account of how the answer was reached.
+    # Placement is deliberate: the call runs AFTER EVENT_RESULT and BEFORE EVENT_DONE, so the
+    # answer is already on the reader's screen while it is being written. The answer is never
+    # delayed by it. Ineligible turns (plain small talk) emit nothing, so a consumer's toggle
+    # simply does not appear. Env: QAR_EXPLAIN_ANSWER ("1"/"true" enables).
+    explain_answer: bool = False
+    # The tier the explanation call resolves to. This is a summary of a turn that already happened,
+    # not a gate on its outcome (that is verify_tier), so it gets the cheap tier.
+    explain_tier: str = "fast"
 
 
 @dataclass
@@ -1125,6 +1149,12 @@ class OrchestratorResult:
     # ``Narrator`` / ``run(prior_narration=...)``) reads this back and passes the last few lines
     # forward as the next turn's ``prior_narration``. The orchestrator persists nothing itself.
     narration_said: List[str] = field(default_factory=list)
+    # The USER-FACING "how I got this" payload for this turn, when one was produced (see
+    # core/answer_explanation.py and OrchestratorConfig.explain_answer). Also emitted live as
+    # EVENT_EXPLANATION; carried here as well so a NON-streaming consumer can persist it from the
+    # returned result without having to observe the event stream. None whenever the feature is off
+    # or the turn was judged not worth explaining.
+    explanation: Optional[Dict[str, Any]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -4510,6 +4540,48 @@ class Orchestrator:
                            model, last_error, exc_info=True)
         return None, last_error
 
+    def write_answer_explanation(self, trace: TurnTrace) -> Optional[Dict[str, Any]]:
+        """Write the user-facing "how I got this" payload for a turn that already answered.
+
+        ONE cheap-tier call, constrained to ``trace``'s real record (see
+        ``render_record_for_prompt``). Called from ``finish()`` AFTER the terminal EVENT_RESULT has
+        gone out, so the answer is already on the reader's screen and this costs them no waiting.
+
+        Faithfulness is bounded on purpose. The model half of this payload is a reconstruction, not
+        a transcript, so it is (a) constrained to the execution record by the prompt, and (b) only
+        half the panel: ``used`` and ``signals`` are assembled from the trace and are true whatever
+        the model writes. A failed or unusable call therefore does NOT drop the panel; it returns
+        the trace-only payload. Never raises.
+        """
+        record = render_record_for_prompt(trace)
+        prompt = EXPLAIN_PROMPT.format(
+            user_message=(trace.user_message or "")[:2000],
+            goal_condition=(trace.goal_condition or trace.user_message or "")[:1000],
+            answer=(trace.answer or "")[:4000],
+            record=record[:4000],
+            language=("\n\n" + language_instruction()),
+        )
+        written: Optional[Dict[str, Any]] = None
+        try:
+            model = self.registry.resolve_tier(self.cfg.explain_tier or "fast")
+        except Exception:  # noqa: BLE001 -- an unresolvable tier just means no prose half
+            model = None
+        if model:
+            try:
+                provider = self.get_provider_for_model(model)
+                raw = provider.plan(prompt, model=model, tool_schema=EXPLAIN_TOOL)
+                if isinstance(raw, str):
+                    raw = json.loads(_extract_json(raw) or "{}")
+                if isinstance(raw, dict):
+                    written = raw
+            except Exception as e:  # noqa: BLE001 -- explaining must never break a turn
+                log.debug("Answer explanation call failed (model=%s): %s: %s",
+                          model, type(e).__name__, e, exc_info=True)
+        payload = build_payload(trace, written)
+        if not has_renderable_content(payload):
+            return None
+        return payload
+
     def judge_execution_directive(self, user_message: str, answer_text: str) -> Tuple[bool, str]:
         """ONE structured LLM judgment for the AMBIGUOUS band ``_message_requests_change`` (the
         cheap regex prefilter) leaves undecided -- see ``message_change_signal_ambiguous`` for
@@ -6689,6 +6761,15 @@ class Orchestrator:
         """
         user_message = (user_message or "").strip()
         gathered: List[Dict[str, Any]] = []
+        # "EXPLAIN HOW I GOT THIS" (cfg.explain_answer): the ALREADY-PROJECTED cards and sources
+        # this turn actually assembled, captured at the same place EVENT_CONTEXT is emitted. Kept
+        # here rather than re-derived in finish() for two reasons: what the panel shows can never
+        # disagree with what the context event showed, and nothing UNPROJECTED can reach the panel
+        # by some new route later (the projections deliberately strip item text and keep only
+        # labels, counts and path-like items). Stays empty when the feature is off or no context
+        # was assembled.
+        explain_cards: List[Dict[str, Any]] = []
+        explain_sources: List[Dict[str, Any]] = []
         # Per-run record of every minimal-intervention OVERSEER consultation (both hook points), and
         # the count both hooks share against cfg.overseer_max_signals. Stamped onto the result in
         # finish(). Stays empty (and overseer_signals None) whenever the overseer is off.
@@ -7320,6 +7401,9 @@ class Orchestrator:
                 # process. Nothing on this event quotes the person's own words back at them.
                 _card_meta_light = _project_card_metadata_for_event(_merged_card_meta)
                 _sources_light = _project_sources_for_event(_sources)
+                # Same projected shapes the panel is allowed to show (see explain_cards above).
+                explain_cards = list(_card_meta_light or [])
+                explain_sources = list(_sources_light or [])
                 # The text field used to concatenate the card titles ("Selected cards: Hi, Hello."),
                 # which is the same verbatim-turn leak by another route. Counts, not content.
                 _text = (f"Selected {len(_merged_card_meta)} context card"
@@ -7536,6 +7620,29 @@ class Orchestrator:
                     data={"future_context": _future,
                           "exit_reason": res.exit_reason,
                           "goal_verdict": res.goal_verdict} if (_future or res.exit_reason) else {}))
+            # --- "EXPLAIN HOW I GOT THIS" (opt-in; see core/answer_explanation.py) -------------
+            # ORDER IS THE POINT: this runs AFTER the terminal EVENT_RESULT above, so the answer
+            # has already left for the consumer's screen. The reader is reading while this is
+            # written, which is why a second call costs zero PERCEIVED latency. Folding it into the
+            # answer call instead would delay the answer itself by its whole generation time (the
+            # answer is one blocking call, not a token stream) and would fight REPLY_VOICE_SYSTEM,
+            # which forbids the reply from carrying exactly this material.
+            # The eligibility gate is model-free and runs first, so an ineligible turn (plain small
+            # talk: nothing read, nothing executed, answered at the first step) costs NOTHING and
+            # emits NOTHING, and the consumer's toggle simply does not appear.
+            if cfg.explain_answer and res.kind in ("answer", "deep"):
+                try:
+                    _trace = trace_from_result(
+                        res, user_message=user_message, goal_condition=goal_condition,
+                        cards=explain_cards, sources=explain_sources)
+                    if is_eligible(_trace):
+                        _explanation = self.write_answer_explanation(_trace)
+                        if _explanation:
+                            res.explanation = _explanation
+                            emit.emit(ProgressEvent(type=EVENT_EXPLANATION, data=_explanation))
+                except Exception as e:  # noqa: BLE001 -- explaining must never break a turn
+                    log.debug("Answer explanation skipped: %s: %s", type(e).__name__, e,
+                              exc_info=True)
             emit.emit(ProgressEvent(type=EVENT_DONE, result_kind=res.kind, step=steps))
             return res
 

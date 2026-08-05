@@ -7,6 +7,32 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **"Explain how I got this" (opt-in, off by default): a USER-FACING account of how a turn reached
+  its answer, emitted as a new `EVENT_EXPLANATION` after the result and before `done`.**
+  `core/answer_explanation.py` holds the whole feature: a `TurnTrace` assembled from data the loop
+  already produced (observations, execution record, projected cards and sources, goal verdict,
+  exit reason), a model-free `is_eligible` predicate, the `EXPLAIN_TOOL` forced-JSON schema, and
+  the payload builder. `Orchestrator.write_answer_explanation` makes ONE cheap-tier call
+  (`explain_tier`, default `"fast"`) constrained to that record.
+  Three properties are deliberate and covered by tests:
+  (1) **Ordering.** The call runs AFTER the terminal `EVENT_RESULT`, so the answer has already
+  reached the consumer and the reader waits for nothing. Folding it into the answer call instead
+  would delay the answer by its whole generation time (the answer is one blocking call, not a
+  token stream) and would fight `REPLY_VOICE_SYSTEM`, which forbids the reply from carrying
+  exactly this material.
+  (2) **The gate is model-free.** An ineligible turn (nothing read, nothing executed, no assembled
+  context, answered at the first step: i.e. plain small talk) emits nothing and costs nothing, so
+  a consumer's toggle simply does not appear on it.
+  (3) **Half the payload is a record, not prose.** `used` (cards, sources, reads, actions, web) and
+  `signals` (exit reason, goal verdict, claim-honesty flag, steps) are assembled from the trace, so
+  a failed or unusable generation call costs the written sections and nothing else. The written
+  half is constrained by prompt to what the execution record shows.
+  This is NOT the internal narration channel: it carries wording composed for the reader, never the
+  run's own internal wording relayed. `OrchestratorResult.explanation` carries the same payload for
+  a non-streaming consumer. Enable with `OrchestratorConfig.explain_answer` or env
+  `QAR_EXPLAIN_ANSWER=1` (`QAR_EXPLAIN_TIER` overrides the tier).
+  (`core/answer_explanation.py`, `core/adapters.py`, `core/orchestrator.py`, `cli.py`;
+  `tests/test_answer_explanation.py`.)
 - **`FileContextStore.bootstrap()` reuses a nested corpus's own already-bootstrapped cards
   instead of re-discovering them via the LLM.** When a directory under the walked corpus already
   has its own completed bootstrap (a `.quest-context/bootstrap_meta.json`), its cards are

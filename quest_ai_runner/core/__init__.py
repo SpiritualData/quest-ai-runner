@@ -9,6 +9,7 @@ from .adapters import (
     EVENT_DECISION,
     EVENT_DONE,
     EVENT_EXEC,
+    EVENT_EXPLANATION,
     EVENT_MILESTONE,
     EVENT_MODE_SIGNAL,
     EVENT_OVERSEER,
@@ -134,6 +135,7 @@ __all__ = [
     "EVENT_STATUS", "EVENT_PLAN", "EVENT_READ", "EVENT_REPLAN", "EVENT_PARTIAL",
     "EVENT_EXEC", "EVENT_RESULT", "EVENT_DECISION", "EVENT_MILESTONE", "EVENT_DONE",
     "EVENT_UNDERSTANDING", "EVENT_OVERSEER", "EVENT_MODE_SIGNAL", "EVENT_CARD_THREAD",
+    "EVENT_EXPLANATION",
     # storage-agnostic conversation-history retrieval (User Input Understanding)
     "ConversationContext", "ConversationStore",
     # registry

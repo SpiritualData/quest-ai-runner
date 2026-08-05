@@ -26,6 +26,9 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 - **[Quest API contract](quest-api-contract.md)** — the exact endpoints the runner speaks.
 - **[The anticipation engine](anticipation.md)** — learned ask patterns, the objective function and
   online EMA learning, precomputed context, and the opt-in `QAR_ANTICIPATION` flag.
+- **[Answer explanation](answer-explanation.md)** — the user-facing "Explain how I got this" panel:
+  why it is a second call after the answer, the model-free eligibility gate, and which half of the
+  payload is a record rather than prose.
 
 ## See also
 
