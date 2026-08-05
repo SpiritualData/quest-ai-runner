@@ -117,6 +117,16 @@ All notable changes to this project are documented here. The format is based on
   `config.py`.)
 
 ### Fixed
+- **Startup/bootstrap notices (e.g. "Context index: computing tfdfidf signatures...") no longer
+  print twice in the Textual UI.** `InteractiveSession`'s `notify_and_log` callback wrote every
+  notice straight to the console via `_Console.dim` AND forwarded it to the live Textual notice
+  callback (`_startup_notify`); under the Textual UI, the direct console write happens before the
+  session's console is swapped to the TUI's `RichLogConsole`, so it leaks onto the real stdout
+  underneath the TUI's alternate screen while the TUI itself displays the same message again via
+  the callback. Extracted the closure into a standalone `_make_startup_notifier` (`interactive.py`)
+  that writes to the console ONLY when no live callback is wired (plain ANSI fallback mode); the
+  Textual UI's own display is now the sole path for these notices. Test added:
+  `tests/test_interactive_startup_notice.py`.
 - **Casual questions with no trailing "?" and no textbook interrogative opener no longer
   force-escalate to a deep task.** `_message_requests_change` (the message-intent fallback net
   that can override a planner's correct "answer" decision) recognized questions only via a fixed
