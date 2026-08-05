@@ -1271,6 +1271,13 @@ class FileContextStore(ContextAssemblerBase):
                           (see ``_QUEST_FOLDER_BOOST``) so a run already known to be about that
                           quest grounds preferentially on its linked folder. Entries whose folder
                           isn't under ``repo_root`` are ignored (logged once at construction).
+      reuse_nested_cards -- when True (default; env ``QAR_REUSE_NESTED_CARDS=0`` to disable),
+                          ``bootstrap()``/``refresh_stale()`` reuse any sub-corpus that already has
+                          its own completed bootstrap (a ``.quest-context/bootstrap_meta.json``
+                          under a subdirectory) instead of re-running LLM topic discovery on the
+                          same files. E.g. a wider corpus root (``~/hq``) bootstrapping over a
+                          narrower one already indexed by its own store (``~/hq/.../product``)
+                          imports that store's cards wholesale, at zero extra LLM cost.
 
     Persistence boundary
     --------------------
@@ -1318,6 +1325,7 @@ class FileContextStore(ContextAssemblerBase):
         card_repository: Optional[CardRepository] = None,
         recency_boost_max: float = _RECENCY_BOOST_MAX_DEFAULT,
         quest_folder_map: Optional[Dict[str, str]] = None,
+        reuse_nested_cards: Optional[bool] = None,
     ) -> None:
         self._cards_dir = Path(cards_dir)
         # Card PERSISTENCE is pluggable behind a CardRepository. Default: per-card JSON files under
@@ -1344,6 +1352,15 @@ class FileContextStore(ContextAssemblerBase):
         self._max_cards = max_cards_in_view
         self._auto_bootstrap = auto_bootstrap
         self._dry_run = dry_run
+        # Reuse a sub-corpus's already-bootstrapped cards during bootstrap() instead of
+        # re-discovering them (see _discover_nested_card_dirs / _import_nested_cards). Default ON:
+        # it is pure filesystem reuse (no LLM call), matching the "reuse before re-exploring"
+        # principle. QAR_REUSE_NESTED_CARDS=0 opts a deployment out.
+        self._reuse_nested_cards = (
+            reuse_nested_cards
+            if reuse_nested_cards is not None
+            else os.getenv("QAR_REUSE_NESTED_CARDS", "1").strip().lower() not in ("0", "false", "no")
+        )
         # Optional ModelProvider for LLM-based card relevance filtering.
         # When wired, IDF-selected candidates are re-ranked and filtered by the LLM
         # so only cards genuinely relevant to the task are injected.
@@ -1654,8 +1671,15 @@ class FileContextStore(ContextAssemblerBase):
         - ``files``    -- every file the topic references, fingerprinted (sha256/mtime/git_sha).
         - ``provenance.created_by_task`` == "bootstrap".
 
-        Without a ``provider`` this is a NO-OP returning 0: topic cards require semantic
-        understanding, so cards accumulate via ``record()`` instead.
+        Before any LLM work, sub-corpora that already have their OWN completed bootstrap are
+        reused wholesale (see ``reuse_nested_cards`` on the constructor) — their cards are imported
+        with rewritten paths and a namespaced id, and their files are excluded from LLM discovery.
+        This makes a wider corpus root's bootstrap free for any subtree a narrower, already-indexed
+        QAR instance covers.
+
+        Without a ``provider`` this is a NO-OP returning 0 UNLESS nested-store reuse produced
+        cards: topic cards for genuinely new content require semantic understanding, so those
+        accumulate via ``record()`` instead, but reused cards need no LLM at all.
 
         On success (``n > 0``) a ``bootstrap_meta.json`` sidecar is written recording the
         algorithm version + card count, so a later run can detect a stale index and re-build.
@@ -1748,6 +1772,83 @@ class FileContextStore(ContextAssemblerBase):
         except Exception:  # noqa: BLE001
             return 0
 
+    def _discover_nested_card_dirs(self, walk_root: Path, skip_dirs: Set[str]) -> List[Path]:
+        """Find sub-corpora under ``walk_root`` that already have their OWN completed bootstrap.
+
+        A directory qualifies when ``<dir>/.quest-context/bootstrap_meta.json`` exists — the
+        signal a DIFFERENT (usually narrower-scoped) ``FileContextStore`` already indexed it, e.g.
+        a ``product/`` corpus nested under a wider ``~/hq`` corpus. Recursion stops at each match:
+        a nested store is trusted to have already reused whatever is bootstrapped beneath IT (if it
+        implements the same reuse), so importing its cards transitively covers its own subtree too.
+        Never raises; returns [] on any failure.
+        """
+        found: List[Path] = []
+        try:
+            walk_root_resolved = walk_root.resolve()
+            cards_dir_resolved = self._cards_dir.resolve()
+            for dirpath, dirnames, _filenames in os.walk(walk_root):
+                current_dir = Path(dirpath).resolve()
+                if current_dir == walk_root_resolved:
+                    prune_dirnames(dirnames, current=current_dir, base_skip=skip_dirs)
+                    continue
+                if current_dir == cards_dir_resolved:
+                    dirnames[:] = []
+                    continue
+                if (current_dir / ".quest-context" / _BOOTSTRAP_META_FILE).is_file():
+                    found.append(current_dir)
+                    dirnames[:] = []  # trust it transitively; don't look for nested-within-nested
+                    continue
+                prune_dirnames(dirnames, current=current_dir, base_skip=skip_dirs)
+        except Exception:  # noqa: BLE001
+            pass
+        return found
+
+    def _import_nested_cards(self, nested_root: Path, walk_root: Path) -> List[Dict[str, Any]]:
+        """Reuse a nested corpus's already-bootstrapped cards instead of re-discovering them.
+
+        Pure filesystem reuse: reads the nested store's on-disk cards directly (no LLM call), then
+        rewrites each file path from nested-root-relative to THIS store's walk-root-relative and
+        namespaces the card id by the nested root's path so ids from unrelated sub-corpora never
+        collide. Each returned dict carries ``imported_from`` (the nested root, relative to
+        ``walk_root``) so ``_bootstrap_inner`` can both write it into the card's provenance and
+        prune it later if the nested store stops offering it. Never raises; returns [] on failure.
+        """
+        try:
+            rel_root = nested_root.relative_to(walk_root)
+        except ValueError:
+            return []
+        prefix = rel_root.as_posix()
+        id_prefix = _path_slug(prefix)
+        try:
+            nested_cards = FilesystemCardRepository(str(nested_root / ".quest-context")).load_all()
+        except Exception:  # noqa: BLE001
+            return []
+        imported: List[Dict[str, Any]] = []
+        for card in nested_cards.values():
+            try:
+                files = [
+                    (rel_root / fe["path"]).as_posix()
+                    for fe in card.get("files", [])
+                    if isinstance(fe, dict) and fe.get("path")
+                ]
+                if not files:
+                    continue
+                cid = str(card.get("id") or "")
+                if not cid:
+                    continue
+                imported.append({
+                    "id": f"{id_prefix}--{cid}"[:200],
+                    "name": card.get("name", ""),
+                    "keywords": card.get("keywords", []),
+                    "summary": card.get("summary", ""),
+                    "description": card.get("description") or card.get("summary", ""),
+                    "files": files,
+                    "imported_from": prefix,
+                })
+            except Exception:  # noqa: BLE001
+                continue
+        return imported
+
     def _bootstrap_inner(
         self,
         root: Optional[str] = None,
@@ -1825,8 +1926,47 @@ class FileContextStore(ContextAssemblerBase):
         if not file_paths or self._closed.is_set():
             return 0
 
-        # Topic cards require semantic understanding. Without a provider, do nothing.
-        if provider is None:
+        existing = self._load_all()
+        existing_cards = list(existing.values())
+
+        # --- Nested-store reuse: a sub-corpus already bootstrapped by its OWN QAR instance is
+        # reused wholesale instead of re-discovered here. Pure filesystem reuse (no LLM call, no
+        # provider needed), so this runs even when this store has none wired. A card previously
+        # imported from a nested store that no longer offers it (renamed/deleted/de-bootstrapped)
+        # is pruned so imports never drift from their source.
+        imported_cards: List[Dict[str, Any]] = []
+        imported_covered: Set[str] = set()
+        if self._reuse_nested_cards:
+            for nested_root in self._discover_nested_card_dirs(walk_root, skip_dirs):
+                for ic in self._import_nested_cards(nested_root, walk_root):
+                    imported_cards.append(ic)
+                    imported_covered.update(ic.get("files", []))
+            if imported_cards:
+                _log.info(
+                    "context index: reusing %d card(s) from %d nested corpus root(s), covering "
+                    "%d file(s) with zero LLM calls",
+                    len(imported_cards),
+                    len({ic["imported_from"] for ic in imported_cards}),
+                    len(imported_covered),
+                )
+            imported_ids_now = {ic["id"] for ic in imported_cards}
+            for card in existing_cards:
+                prov = card.get("provenance")
+                cid = card.get("id")
+                if (
+                    isinstance(prov, dict)
+                    and prov.get("imported_from")
+                    and cid
+                    and cid not in imported_ids_now
+                ):
+                    try:
+                        self._repo.delete(cid)
+                    except Exception:  # noqa: BLE001
+                        pass
+
+        # Topic cards for genuinely NEW content require semantic understanding. Without a
+        # provider, only cards reused from a nested store (above) can be produced.
+        if provider is None and not imported_cards:
             _log.warning(
                 "context index: bootstrap skipped — no model provider wired, so no semantic "
                 "topic cards can be identified (cards accumulate via record() instead)"
@@ -1834,8 +1974,6 @@ class FileContextStore(ContextAssemblerBase):
             return 0
 
         # --- Incremental diff: what is uncovered (in no card) vs stale (covered but changed) ---
-        existing = self._load_all()
-        existing_cards = list(existing.values())
         covered: Set[str] = set()
         for card in existing_cards:
             for fe in card.get("files", []):
@@ -1843,7 +1981,7 @@ class FileContextStore(ContextAssemblerBase):
                 if p:
                     covered.add(p)
 
-        uncovered = [p for p in file_paths if p not in covered]
+        uncovered = [p for p in file_paths if p not in covered and p not in imported_covered]
         # A covered file is stale when its current sha256 differs from any card's stored sha.
         stale_covered: List[str] = []
         if covered:
@@ -1863,9 +2001,10 @@ class FileContextStore(ContextAssemblerBase):
                     if cur and cur != stored and p not in stale_covered:
                         stale_covered.append(p)
 
-        # On the very first bootstrap (no existing cards) everything is "uncovered".
+        # On the very first bootstrap (no existing cards) everything not covered by an import
+        # is "uncovered".
         if not existing_cards:
-            uncovered = list(file_paths)
+            uncovered = [p for p in file_paths if p not in imported_covered]
 
         # --- Feature migration: cards whose file entries have an outdated per-feature version ---
         # These cards already have correct LLM-generated content; only the cheap computed fields
@@ -1894,7 +2033,7 @@ class FileContextStore(ContextAssemblerBase):
                 len(tfdfidf_migration_cards), _TFDFIDF_VERSION,
             )
 
-        if not uncovered and not stale_covered and not tfdfidf_migration_cards:
+        if not uncovered and not stale_covered and not tfdfidf_migration_cards and not imported_cards:
             _log.info("context index: all files covered and up to date")
             return 0
 
@@ -1905,17 +2044,29 @@ class FileContextStore(ContextAssemblerBase):
 
         # --- LLM: identify topic cards for the NEW (uncovered) files, deduping vs existing ---
         topic_cards: List[Dict[str, Any]] = []
-        if uncovered:
+        if uncovered and provider is not None:
             _log.info("context index: stage 2 — analyzing %d new files for topics", len(uncovered))
             topic_cards = _llm_topic_cards(
                 uncovered, provider, model=model, existing_cards=existing_cards, walk_root=walk_root
             )
             _log.info("context index: identified %d topic card(s) from new files", len(topic_cards))
 
+        # Merge nested-imported cards now (before stale-covered regen below): a file re-imported
+        # unchanged from a nested store can also show up in ``stale_covered`` versus THIS store's
+        # own last-written fingerprint of it, and the regen loop already skips any id present in
+        # ``topic_cards`` — this avoids a wasted LLM regen call on content that isn't actually new,
+        # just imported. Different corpus roots never legitimately share a topic, so no LLM dedup
+        # is needed here.
+        if imported_cards:
+            queued_ids = {tc.get("id") for tc in topic_cards}
+            for ic in imported_cards:
+                if ic.get("id") not in queued_ids:
+                    topic_cards.append(ic)
+
         # --- Stale-covered: regenerate the cards that reference any stale file ---
         # Identify the cards touching a stale file and re-run topic extraction over each card's
         # file set so its summary/keywords/files reflect the current code, keeping the card id.
-        if stale_covered:
+        if stale_covered and provider is not None:
             _log.info("context index: stage 3 — regenerating %d stale card(s)", len(stale_covered))
             stale_set = set(stale_covered)
             regen_ids = {
@@ -2101,6 +2252,7 @@ class FileContextStore(ContextAssemblerBase):
                     "model": "",
                     "created_at": "",
                     "last_verified_at": "",
+                    **({"imported_from": tc["imported_from"]} if tc.get("imported_from") else {}),
                 },
                 "usage_count": existing.get("usage_count", 0),
                 "last_outcome": existing.get("last_outcome", "unknown"),

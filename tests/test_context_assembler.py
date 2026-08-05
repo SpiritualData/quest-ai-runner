@@ -1017,6 +1017,175 @@ class TestBootstrap:
 
 
 # ---------------------------------------------------------------------------
+# Nested-store reuse: a wider corpus root reuses a sub-corpus's own bootstrap
+# ---------------------------------------------------------------------------
+
+class TestNestedCardReuse:
+    def _make_child_repo(self, base: Path, name: str = "product") -> Path:
+        child = base / name
+        (child / "mypackage").mkdir(parents=True)
+        (child / "mypackage" / "models.py").write_text(
+            "class User:\n    pass\n", encoding="utf-8",
+        )
+        return child
+
+    def _bootstrap_child(self, child: Path, topics: Optional[List[Dict[str, Any]]] = None) -> Path:
+        cards_dir = child / ".quest-context"
+        store = FileContextStore(str(cards_dir), repo_root=str(child), auto_bootstrap=False)
+        topics = topics if topics is not None else [{
+            "id": "models",
+            "name": "Models",
+            "keywords": ["models", "user"],
+            "summary": "The User model.",
+            "files": ["mypackage/models.py"],
+        }]
+        n = store.bootstrap(root=str(child), provider=_topic_provider(topics))
+        assert n == len(topics)
+        return cards_dir
+
+    def test_nested_cards_imported_with_rewritten_paths_and_namespaced_id(self, tmp_path):
+        """A sub-corpus's cards are imported wholesale: file paths become parent-relative and
+        the card id is namespaced by the nested root so it can never collide."""
+        child = self._make_child_repo(tmp_path)
+        self._bootstrap_child(child)
+
+        parent_cards_dir = tmp_path / "parent_cards"
+        store = FileContextStore(str(parent_cards_dir), repo_root=str(tmp_path), auto_bootstrap=False)
+        n = store.bootstrap(root=str(tmp_path))  # no provider at all: pure reuse must still work
+        assert n == 1
+
+        cards = [json.loads(p.read_text()) for p in _card_files(parent_cards_dir)]
+        assert len(cards) == 1
+        imported = cards[0]
+        assert imported["id"].endswith("--models")
+        assert imported["provenance"].get("imported_from") == "product"
+        paths = {fe["path"] for fe in imported["files"]}
+        assert paths == {"product/mypackage/models.py"}
+
+    def test_imported_files_excluded_from_llm_discovery(self, tmp_path):
+        """Files already covered by an imported nested card must never be sent to the LLM again:
+        the parent only spends LLM calls on genuinely new content outside the nested root."""
+        child = self._make_child_repo(tmp_path)
+        self._bootstrap_child(child)
+        (tmp_path / "top_level.py").write_text("def helper():\n    pass\n", encoding="utf-8")
+
+        parent_cards_dir = tmp_path / "parent_cards"
+        parent_provider = _topic_provider([{
+            "id": "toplevel",
+            "name": "Top level",
+            "keywords": ["helper"],
+            "summary": "A top-level helper.",
+            "files": ["top_level.py"],
+        }])
+        store = FileContextStore(str(parent_cards_dir), repo_root=str(tmp_path), auto_bootstrap=False)
+        n = store.bootstrap(root=str(tmp_path), provider=parent_provider)
+        assert n == 2  # imported "models" card + freshly-discovered "toplevel" card
+
+        for call in parent_provider.answer.call_args_list:
+            prompt_text = json.dumps(call.args[0]) if call.args else ""
+            assert "mypackage/models.py" not in prompt_text, (
+                "a file already covered by an imported nested card must not be re-sent to the LLM"
+            )
+
+    def test_no_new_content_means_zero_llm_calls(self, tmp_path):
+        """When every file under the corpus root is covered by a nested import, bootstrap() must
+        not call the LLM at all, even when a provider is wired."""
+        child = self._make_child_repo(tmp_path)
+        self._bootstrap_child(child)
+
+        parent_cards_dir = tmp_path / "parent_cards"
+        parent_provider = _topic_provider([])
+        store = FileContextStore(str(parent_cards_dir), repo_root=str(tmp_path), auto_bootstrap=False)
+        n = store.bootstrap(root=str(tmp_path), provider=parent_provider)
+        assert n == 1
+        parent_provider.answer.assert_not_called()
+
+    def test_reuse_can_be_disabled(self, tmp_path):
+        """reuse_nested_cards=False restores the old behavior: nested content is rediscovered
+        through the LLM like any other file, with no import/namespacing."""
+        child = self._make_child_repo(tmp_path)
+        self._bootstrap_child(child)
+
+        parent_cards_dir = tmp_path / "parent_cards"
+        parent_provider = _topic_provider([{
+            "id": "everything",
+            "name": "Everything",
+            "keywords": ["models"],
+            "summary": "All files.",
+            "files": ["product/mypackage/models.py"],
+        }])
+        store = FileContextStore(
+            str(parent_cards_dir), repo_root=str(tmp_path), auto_bootstrap=False,
+            reuse_nested_cards=False,
+        )
+        n = store.bootstrap(root=str(tmp_path), provider=parent_provider)
+        assert n == 1
+        parent_provider.answer.assert_called()
+        cards = [json.loads(p.read_text()) for p in _card_files(parent_cards_dir)]
+        assert cards[0]["id"] == "everything"
+        assert "imported_from" not in cards[0]["provenance"]
+
+    def test_orphaned_import_pruned_when_nested_card_disappears(self, tmp_path):
+        """A card previously imported from a nested store is removed once that store stops
+        offering it, so imports never drift from their source."""
+        child = self._make_child_repo(tmp_path)
+        (child / "mypackage" / "utils.py").write_text("def helper():\n    pass\n", encoding="utf-8")
+        cards_dir = self._bootstrap_child(child, topics=[
+            {"id": "models", "name": "Models", "keywords": ["models"], "summary": "models",
+             "files": ["mypackage/models.py"]},
+            {"id": "utils", "name": "Utils", "keywords": ["utils"], "summary": "utils",
+             "files": ["mypackage/utils.py"]},
+        ])
+
+        parent_cards_dir = tmp_path / "parent_cards"
+        store = FileContextStore(str(parent_cards_dir), repo_root=str(tmp_path), auto_bootstrap=False)
+        store.bootstrap(root=str(tmp_path))
+        ids_before = {json.loads(p.read_text())["id"] for p in _card_files(parent_cards_dir)}
+        assert any(cid.endswith("--utils") for cid in ids_before)
+        assert any(cid.endswith("--models") for cid in ids_before)
+
+        # The nested store stops offering the "utils" card (renamed/merged on its side).
+        (cards_dir / "utils.json").unlink()
+
+        store.bootstrap(root=str(tmp_path))
+        ids_after = {json.loads(p.read_text())["id"] for p in _card_files(parent_cards_dir)}
+        assert not any(cid.endswith("--utils") for cid in ids_after), (
+            "an orphaned import must be pruned once its source card disappears"
+        )
+        assert any(cid.endswith("--models") for cid in ids_after)
+
+    def test_grandchild_not_recursed_into_when_child_already_covers_it(self, tmp_path):
+        """A nested store is trusted transitively: once a directory is identified as a completed
+        nested root, its own subdirectories are not separately scanned for further nested stores.
+
+        Here "product" itself bootstraps by reusing "product/deep" (a grandchild corpus), so
+        "product" ends up with a doubly-namespaced imported card of its own. The outer (tmp_path)
+        store must import that card from "product" as ONE nested root, never additionally descend
+        into "product/deep" and import the same content again under a second, inconsistent path
+        rewrite.
+        """
+        grandchild = self._make_child_repo(tmp_path / "product", name="deep")
+        self._bootstrap_child(grandchild)
+
+        # "product" reuses "product/deep" via the same mechanism (no provider needed: it's a
+        # pure import), ending up with its own completed bootstrap that covers "deep/" too.
+        product = tmp_path / "product"
+        product_store = FileContextStore(
+            str(product / ".quest-context"), repo_root=str(product), auto_bootstrap=False,
+        )
+        assert product_store.bootstrap(root=str(product)) == 1
+
+        parent_cards_dir = tmp_path / "parent_cards"
+        store = FileContextStore(str(parent_cards_dir), repo_root=str(tmp_path), auto_bootstrap=False)
+        n = store.bootstrap(root=str(tmp_path))
+        assert n == 1, "the same file must be imported exactly once, not once per nesting level"
+        cards = [json.loads(p.read_text()) for p in _card_files(parent_cards_dir)]
+        assert cards[0]["provenance"]["imported_from"] == "product"
+        paths = {fe["path"] for fe in cards[0]["files"]}
+        assert paths == {"product/deep/mypackage/models.py"}
+
+
+# ---------------------------------------------------------------------------
 # Lazy auto-bootstrap: first assemble() seeds from an empty store
 # ---------------------------------------------------------------------------
 

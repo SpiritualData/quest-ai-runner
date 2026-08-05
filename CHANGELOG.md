@@ -7,6 +7,22 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **`FileContextStore.bootstrap()` reuses a nested corpus's own already-bootstrapped cards
+  instead of re-discovering them via the LLM.** When a directory under the walked corpus already
+  has its own completed bootstrap (a `.quest-context/bootstrap_meta.json`), its cards are
+  imported wholesale: file paths are rewritten to be relative to the wider corpus root, the card
+  id is namespaced by the nested root's path (so ids from unrelated sub-corpora never collide),
+  and the covered files are excluded from LLM topic discovery entirely. This is pure filesystem
+  reuse (zero LLM calls) and works even with no `provider` wired at all. A card previously
+  imported from a nested store that stops offering it (renamed/deleted/de-bootstrapped on the
+  nested side) is pruned on the next bootstrap so imports never drift from their source. A nested
+  store is trusted transitively: once a directory is identified as a completed nested root, its
+  own subdirectories are not separately scanned for further nested stores, so multi-level corpora
+  (e.g. a wide `~/hq`-rooted instance containing a narrower `product/`-rooted instance) reuse
+  cleanly without double-importing the same content under two namespaces. On by default; opt out
+  per store via the `reuse_nested_cards=False` constructor arg or env `QAR_REUSE_NESTED_CARDS=0`.
+  (`adapters/file_context_store.py`: `_discover_nested_card_dirs`, `_import_nested_cards`, wired
+  into `_bootstrap_inner`; `tests/test_context_assembler.py::TestNestedCardReuse`.)
 - **Anticipation engine (opt-in, off by default): the assistant learns recurring ask patterns
   (time-of-day/day-of-week + keyword profile per scope), predicts the likely next ask, and
   precomputes its context BEFORE the user asks.** `core/anticipation.py` is the shared learning

@@ -33,6 +33,21 @@ Env it reads:
   QAR_WAIT_TIMEOUT_SECONDS (optional, seconds)    — how long each long-poll GET asks the backend to
                                                    hold the connection open (default 25, backend caps
                                                    it at 30)
+  QAR_MAX_PARALLEL (optional)                    — max concurrent shallow LLM calls (context reads,
+                                                   sub-questions, deep subtasks) within a single
+                                                   gather/dispatch step (default 8). Each shallow call
+                                                   is its own `claude` CLI subprocess when using the
+                                                   keyless backend; lower this on a box that also runs
+                                                   other Claude Code sessions to avoid CPU contention
+                                                   pushing calls past their timeout.
+  QAR_REUSE_NESTED_CARDS (optional)              — "0"/"false"/"no" disables it (default: on). When
+                                                   on, ``FileContextStore.bootstrap()`` reuses any
+                                                   sub-corpus that already has its own completed
+                                                   bootstrap instead of re-running LLM topic discovery
+                                                   over the same files — e.g. a corpus root at ``~/hq``
+                                                   importing the cards a narrower QAR instance already
+                                                   bootstrapped at ``~/hq/.../product``, at zero extra
+                                                   LLM cost.
   QAR_MAX_MEMORY_PERCENT (optional)              — pause new task pickup when system memory usage
                                                    exceeds this percent; resume when it recovers
   QAR_MIN_FREE_MEMORY_MB (optional)              — pause when available memory drops below this MB
@@ -266,6 +281,8 @@ def _config_from_env() -> RunnerConfig:
         runner_label=os.getenv("QAR_RUNNER_LABEL") or None,
         env_id=os.getenv("QAR_ENV_ID") or None,
     )
+    if os.getenv("QAR_MAX_PARALLEL"):
+        cfg.orchestrator.max_parallel = int(os.environ["QAR_MAX_PARALLEL"])
     if os.getenv("QAR_POLL_INTERVAL"):
         cfg.poll_interval_seconds = float(os.environ["QAR_POLL_INTERVAL"])
 
