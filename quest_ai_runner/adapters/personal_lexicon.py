@@ -303,8 +303,10 @@ def build_personal_lexicon(
         if not idf or idf <= 0:
             continue
         score = (1.0 + math.log(occurrences)) * (1.0 + math.log(documents_with_term)) * idf
-        # Most-written form wins, so the hint carries the person's own capitalization; ties
-        # break on the lowercase form for a deterministic result.
+        # Most-written form wins, so the output carries the person's own capitalization. An exact
+        # tie breaks on the alphabetically first surface form, which puts the capitalized variant
+        # ahead of the lowercase one; what matters here is only that it is deterministic, since a
+        # stored lexicon gets diffed against its predecessor on every rebuild.
         variants = surfaces[key]
         surface = max(sorted(variants), key=lambda s: variants[s])
         ranked.append(LexiconTerm(term=surface, score=score,
