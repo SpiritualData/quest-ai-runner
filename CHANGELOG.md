@@ -7,6 +7,32 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Personal lexicon: rank the terms ONE person actually uses (their distinctive vocabulary), by
+  TF-DF-IDF over their own documents, with no model call at all.**
+  `adapters/personal_lexicon.py` scores every candidate term (word n-grams that neither start nor
+  end on a function word, so "law of attraction" survives whole and "of attraction" is never a
+  term) as `(1 + ln TF) * (1 + ln DF) * IDF`. Both counts are log-damped deliberately: undamped,
+  one long entry or one much-repeated ordinary word outranks the rare term that is the entire
+  point, so damping leaves IDF as the factor that decides the ranking and volume only breaks ties.
+  IDF comes from a `BackgroundFrequency`, and the two implementations answer the same question from
+  different directions: `LanguageBaseline` reads the bundled three-band English frequency list in
+  the new `adapters/english_word_bands.py` (a most-common-band word gets IDF 0, which collapses the
+  score, so ordinary English drops out with no stopword pass), while `CorpusBackground` asks whether
+  everyone else in the deployment writes the term too and abstains below `min_population` (25),
+  where the counts are too thin to mean anything. `CombinedBackground` takes the LOWEST opinion any
+  source will give, because each source is authoritative about its own disqualification and ignorant
+  of the other's: general English cannot know a deployment's house words, and a young population
+  cannot know English. An abstention is skipped, never read as agreement on zero.
+  `min_documents` defaults to 2 for a safety property, not tidiness: where this output feeds back
+  into its own input (a lexicon handed to the speech recognizer that dictated the documents), a
+  one-off mis-recognition is a plausible-looking rare term, and promoting it teaches the recognizer
+  to produce the same error again. Corroboration from a second, independent document is what breaks
+  that loop. Also included: the person's own dominant capitalization is what comes back (the casing
+  IS part of a spelling hint), a fully deterministic order including equal scores,
+  `drop_subsumed_terms` so a hard budget is not spent on "law", "attraction" AND "law of
+  attraction", and `terms_within_budget` for packing a ranked list into a downstream API's caps.
+  (`adapters/personal_lexicon.py`, `adapters/english_word_bands.py`; `docs/personal-lexicon.md`;
+  `tests/test_personal_lexicon.py`.)
 - **"Explain how I got this" (opt-in, off by default): a USER-FACING account of how a turn reached
   its answer, emitted as a new `EVENT_EXPLANATION` after the result and before `done`.**
   `core/answer_explanation.py` holds the whole feature: a `TurnTrace` assembled from data the loop

@@ -29,6 +29,9 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 - **[Answer explanation](answer-explanation.md)** — the user-facing "Explain how I got this" panel:
   why it is a second call after the answer, the model-free eligibility gate, and which half of the
   payload is a record rather than prose.
+- **[Personal lexicon](personal-lexicon.md)**: ranking one person's distinctive vocabulary by
+  TF-DF-IDF, the two background sources and why they are combined with a minimum, and the
+  `min_documents` safeguard that stops a mis-recognition feeding back into the recognizer.
 
 ## See also
 
