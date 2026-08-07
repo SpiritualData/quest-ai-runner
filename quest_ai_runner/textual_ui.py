@@ -1738,6 +1738,29 @@ class QuestAITerminal(App):
                     f"  [Alt+C] Context it used  ({count})",
                     style="dim",
                 ))
+            # "Explain how I got this" (see core/answer_explanation.py), when QAR_EXPLAIN_ANSWER is
+            # on and the turn passed the model-free eligibility gate. The terminal has no expandable
+            # panel to put the full six-section account behind, so this is deliberately just the
+            # trace-recorded summary line (source/read/action counts), the same "what did this turn
+            # actually touch" idea the Context panel above already shows, not the model-written
+            # prose sections (those are the chat surfaces' job).
+            explanation = getattr(final, "explanation", None)
+            if explanation:
+                used = explanation.get("used") or {}
+                bits: List[str] = []
+                n_sources = len(used.get("cards") or []) + len(used.get("sources") or [])
+                n_reads = len(used.get("reads") or [])
+                n_actions = len(used.get("actions") or [])
+                if n_sources:
+                    bits.append(f"{n_sources} source{'s' if n_sources != 1 else ''}")
+                if n_reads:
+                    bits.append(f"{n_reads} read{'s' if n_reads != 1 else ''}")
+                if n_actions:
+                    bits.append(f"{n_actions} action{'s' if n_actions != 1 else ''}")
+                if used.get("web"):
+                    bits.append("web search")
+                if bits:
+                    log.write(Text(f"  Explain how I got this: {', '.join(bits)}", style="dim"))
 
         log.write(Text(""))
         self._console.rule()

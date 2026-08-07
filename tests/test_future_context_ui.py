@@ -367,3 +367,81 @@ async def test_shallow_turn_without_context_cards_no_panel_load():
                          cancelled=False, error=None)
 
         assert app._future_ctx_panel._bullets == ""
+
+
+# ---------------------------------------------------------------------------
+# "Explain how I got this" terminal summary (QAR_EXPLAIN_ANSWER): a one-line
+# trace-recorded summary, never the model-written prose sections.
+# ---------------------------------------------------------------------------
+
+class _FakeFinalAnswerWithExplanation(_FakeFinalAnswer):
+    """A turn that produced an answer-explanation payload."""
+    explanation = {
+        "version": 1,
+        "understood": "You asked about pricing.",
+        "used": {
+            "cards": [{"title": "Pricing tiers", "adapter": "keyword"}],
+            "sources": [{"label": "docs", "adapter": "files", "item_count": 2}],
+            "reads": [{"kind": "read", "path": "pricing.md", "locator": ""}],
+            "actions": [],
+            "web": False,
+        },
+        "signals": {"exit_reason": "verified", "goal_met": True, "steps": 1},
+    }
+
+
+class _FakeConsoleForExplanation:
+    """Minimal console stub so _finish_turn's markdown()/rule() calls are no-ops."""
+
+    def markdown(self, text: str) -> None:
+        pass
+
+    def rule(self) -> None:
+        pass
+
+    def dim(self, text: str) -> None:
+        pass
+
+
+@pytest.mark.asyncio
+async def test_explanation_summary_line_shows_trace_counts():
+    """The terminal writes a one-line summary (counts only) when explain_answer produced a
+    payload, never the model-written prose (understood/approach/etc)."""
+    app = QuestAITerminal(_FakeSessionForFinishTurn())
+    async with app.run_test():
+        log = _RecordingLog()
+        app._tlog = log
+        app._console = _FakeConsoleForExplanation()
+        app._ctx.reset()
+        app._future_context = ""
+        app._answer_parts = []
+        app._auto_pass = 1
+
+        app._finish_turn("what are the pricing tiers?", _FakeFinalAnswerWithExplanation(), 1.0,
+                         cancelled=False, error=None)
+
+        body = "\n".join(log.lines)
+        assert "Explain how I got this:" in body
+        assert "2 sources" in body  # 1 card + 1 source
+        assert "1 read" in body
+        # The model-written prose never leaks into the terminal's one-line summary.
+        assert "You asked about pricing" not in body
+
+
+@pytest.mark.asyncio
+async def test_no_explanation_payload_no_summary_line():
+    """A turn with no explanation attribute (feature off, or ineligible turn) writes nothing."""
+    app = QuestAITerminal(_FakeSessionForFinishTurn())
+    async with app.run_test():
+        log = _RecordingLog()
+        app._tlog = log
+        app._console = _FakeConsoleForExplanation()
+        app._ctx.reset()
+        app._future_context = ""
+        app._answer_parts = []
+        app._auto_pass = 1
+
+        app._finish_turn("hi", _FakeFinalAnswer(), 0.2, cancelled=False, error=None)
+
+        body = "\n".join(log.lines)
+        assert "Explain how I got this:" not in body

@@ -59,6 +59,12 @@ All notable changes to this project are documented here. The format is based on
   `QAR_EXPLAIN_ANSWER=1` (`QAR_EXPLAIN_TIER` overrides the tier).
   (`core/answer_explanation.py`, `core/adapters.py`, `core/orchestrator.py`, `cli.py`;
   `tests/test_answer_explanation.py`.)
+- **The Textual terminal UI (`qar`/`qc`) now shows a one-line "Explain how I got this" summary**
+  when the feature is on and a turn produced a payload: source/read/action counts pulled from the
+  trace-recorded `used` section, in the same dim style as the existing `[Alt+C] Context it used`
+  hint. The terminal has no expandable surface to put the six-section prose account behind (that is
+  the chat surfaces' job), so this is deliberately just the record, not the model-written sections.
+  (`textual_ui.py`, `_finish_turn`.)
 - **`FileContextStore.bootstrap()` reuses a nested corpus's own already-bootstrapped cards
   instead of re-discovering them via the LLM.** When a directory under the walked corpus already
   has its own completed bootstrap (a `.quest-context/bootstrap_meta.json`), its cards are
