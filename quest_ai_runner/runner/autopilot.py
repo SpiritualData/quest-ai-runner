@@ -341,6 +341,33 @@ def resolve_persona(goal: Dict[str, Any], autopilot_cfg: Dict[str, Any], now: da
     return None
 
 
+def personas_on_duty(autopilot_cfg: Dict[str, Any], now: datetime) -> List[str]:
+    """Every rep_id in a quest's roster that applies TODAY, most specific first.
+
+    Day-restricted entries that name today come before unrestricted ones, matching
+    ``resolve_persona``'s precedence: an explicit "Bailey on Mondays" outranks a catch-all.
+
+    This is what lets an ATTENDED session speak as the same character that would work the quest
+    autonomously. Opening a chat inside a quest and getting a generic assistant, while its
+    autopilot runs as a named character with that character's accumulated corrections, makes the
+    two feel like unrelated systems when they are meant to be one.
+    """
+    personas = autopilot_cfg.get("personas") or []
+    today = _weekday_abbrev(now)
+    on_duty: List[str] = []
+    for restricted in (True, False):
+        for persona in personas:
+            days = persona.get("days")
+            if bool(days) is not restricted:
+                continue
+            if days and today not in days:
+                continue
+            rep_id = persona.get("rep_id")
+            if rep_id and str(rep_id) not in on_duty:
+                on_duty.append(str(rep_id))
+    return on_duty
+
+
 def batch_by_persona(goals: List[Dict[str, Any]], autopilot_cfg: Dict[str, Any], now: datetime,
                      fallback_resolver: Optional[Callable[[Dict[str, Any]], Optional[str]]] = None
                      ) -> List[Tuple[Optional[str], List[Dict[str, Any]]]]:
@@ -358,10 +385,11 @@ def batch_by_persona(goals: List[Dict[str, Any]], autopilot_cfg: Dict[str, Any],
 
 
 def _definition_of_done(goal: Dict[str, Any]) -> str:
-    name = (goal.get("name") or "this goal").strip()
+    """One short line. The goal's own ``criteria`` when it has any, since the human wrote those
+    for this goal specifically and they beat a generic restatement of the brief."""
+    criteria = (goal.get("criteria") or "").strip()
     deadline = (goal.get("deadline") or "").strip()
-    dod = (f'"{name}" is complete: the work matches the goal\'s description above and is ready '
-          "for a human to read as-is.")
+    dod = criteria or "the work matches the brief above and is ready to read as-is."
     if deadline:
         dod += f" Target: {deadline}."
     return dod
@@ -416,20 +444,23 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
     """
     parts: List[str] = []
     if persona:
-        parts.append(f"Act as {persona}. This quest's autopilot roster assigns this work to "
-                     f"{persona}, so carry it out in that persona.")
+        parts.append(f"Act as {persona}.")
     if quest_outcome:
         parts.append(f"Quest outcome: {quest_outcome}")
     if scope_label:
-        parts.append(f"You are responsible for this quest's {scope_label} scope. Everything below "
-                     f"is what that period contains.")
+        # Saying whose target this is matters. A weekly goal handed to a daily run reads as "do all
+        # of this today", which is both discouraging and wrong; the run's job is to advance it and
+        # report what is left.
+        parts.append(f"Scope: this quest's {scope_label}. What follows is that PERIOD's target, "
+                     f"not this single run's. Advance it as far as one focused session honestly "
+                     f"can, then say plainly what remains.")
     for goal in goals:
         name = (goal.get("name") or "(untitled goal)").strip()
         description = (goal.get("description") or "").strip()
         block = [f"Goal: {name}"]
         if description:
             block.append(f"Brief: {description}")
-        block.append(f"Definition of Done: {_definition_of_done(goal)}")
+        block.append(f"Done when: {_definition_of_done(goal)}")
         parts.append("\n".join(block))
     if adopted_tasks:
         block = ["Recurring AI tasks for this period, adopted into this run. Carry out each one "
@@ -442,6 +473,25 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
     if previous:
         parts.append(_summarize_previous(previous))
     return "\n\n".join(parts)
+
+
+def _batch_title(goals: List[Dict[str, Any]],
+                 adopted_tasks: Optional[List[Dict[str, Any]]] = None) -> Optional[str]:
+    """A short label for the task list: what this batch is ABOUT.
+
+    Without one the server derives a title from the first line of the text, which is the "Act as
+    ..." persona line, so every autopilot task in the list is titled after its persona instead of
+    its work. Named goals win; an adoption-only batch is titled after the task it took over.
+    """
+    names = [(g.get("name") or "").strip() for g in goals]
+    names = [n for n in names if n]
+    if not names and adopted_tasks:
+        first = str((adopted_tasks[0].get("title") or adopted_tasks[0].get("text") or "")).strip()
+        names = [first.splitlines()[0]] if first else []
+    if not names:
+        return None
+    title = names[0] if len(names) == 1 else f"{names[0]} (+{len(names) - 1} more)"
+    return title[:120]
 
 
 def propose_next_goal(quest: Dict[str, Any]) -> Tuple[str, str]:
@@ -539,6 +589,33 @@ class AutopilotPass:
         self._daily_budget = daily_budget if daily_budget and daily_budget > 0 else DEFAULT_TEAM_DAILY_BUDGET
         self._adopt_recurring_default = adopt_recurring_default
         self._now = now or (lambda: datetime.now(timezone.utc))
+        self._persona_names: Dict[str, str] = {}   # rep_id -> display name, resolved once per pass
+
+    def _persona_label(self, rep_id: Optional[str]) -> Optional[str]:
+        """A rep's human display name, falling back to the raw id.
+
+        "Act as rep_09d389aeb9ff" is what a task says when nobody looks up the name, and it is
+        unreadable to the human reviewing the task and useless to a consumer that resolves personas
+        by name. The id remains authoritative (it rides in ``assignee_rep_id``); this is purely for
+        the prose. Cached per pass, and any lookup failure degrades to the id rather than failing
+        the batch.
+        """
+        if not rep_id:
+            return None
+        rep_id = str(rep_id)
+        if rep_id in self._persona_names:
+            return self._persona_names[rep_id]
+        label = rep_id
+        getter = getattr(self._client, "get_ai_profile", None)
+        if callable(getter):
+            try:
+                profile = getter(rep_id, team_id=self._team_id or None) or {}
+                label = str(profile.get("display_name") or "").strip() or rep_id
+            except Exception:  # noqa: BLE001 -- a name is cosmetic; never fail a batch over it
+                log.info("autopilot: could not resolve a display name for %s", rep_id,
+                         exc_info=True)
+        self._persona_names[rep_id] = label
+        return label
 
     def _adopts_recurring(self, autopilot_cfg: Dict[str, Any]) -> bool:
         """Whether to adopt this quest's recurring tasks: the QUEST's own setting when it states
@@ -912,6 +989,7 @@ class AutopilotPass:
 
     def _create_autopilot_task(self, quest: Dict[str, Any], quest_id: str, text: str, mode: str,
                                persona: Optional[str] = None,
+                               title: Optional[str] = None,
                                force_suggested: bool = False) -> Optional[str]:
         """Create ONE autopilot-authored task and land it in the right status.
 
@@ -946,6 +1024,8 @@ class AutopilotPass:
             # Structural persona routing. It also rides in the text (some consumers resolve from
             # prose), but a field a resolver can read beats one it has to parse.
             kwargs["assignee_rep_id"] = persona
+        if title:
+            kwargs["title"] = title
         env_id = (quest.get("autopilot") or {}).get("env_id")
         if env_id:
             kwargs["env_id"] = env_id
@@ -960,12 +1040,14 @@ class AutopilotPass:
                            scope_label: Optional[str] = None,
                            adopted_tasks: Optional[List[Dict[str, Any]]] = None,
                            previous: Optional[Dict[str, Any]] = None) -> Optional[str]:
-        text = compose_batch_text(str(quest.get("outcome") or ""), goals, persona,
+        text = compose_batch_text(str(quest.get("outcome") or ""), goals,
+                                  self._persona_label(persona),
                                   scope_label=scope_label, adopted_tasks=adopted_tasks,
                                   previous=previous)
         try:
             return self._create_autopilot_task(
-                quest, quest_id, text, mode, persona=persona)
+                quest, quest_id, text, mode, persona=persona,
+                title=_batch_title(goals, adopted_tasks))
         except Exception as e:  # noqa: BLE001 -- surfaced to the caller's per-quest try/except
             log.error("autopilot: task creation failed for quest %s: %s", quest_id, e,
                       exc_info=True)

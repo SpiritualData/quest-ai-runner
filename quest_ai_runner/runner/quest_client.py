@@ -754,6 +754,7 @@ class QuestClient:
                     scheduled_date: Optional[str] = None,
                     scheduled_time: Optional[str] = None,
                     source: str = "chat",
+                    title: Optional[str] = None,
                     env_id: Optional[str] = None,
                     task_kind: Optional[str] = None,
                     status: Optional[str] = None,
@@ -820,6 +821,11 @@ class QuestClient:
             body["goal_id"] = goal_id
         if scheduled_at is not None:
             body["scheduled_at"] = scheduled_at
+        if title is not None:
+            # Without this the server derives a title from the first line of ``text``, which for an
+            # autopilot batch is its "Act as ..." persona line, so every task in the list ends up
+            # named after its persona rather than its work.
+            body["title"] = title
         if scheduled_date is not None:
             body["scheduled_date"] = scheduled_date
         if scheduled_time is not None:

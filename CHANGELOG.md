@@ -7,6 +7,18 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Autopilot tasks were titled after their persona and named it by raw id.** With no explicit
+  `title`, the server derives one from the first line of the text, which is the "Act as ..." line,
+  so every autopilot task in the list was named after its persona instead of its work. And with no
+  name lookup, that line read "Act as rep_09d389aeb9ff" and then restated the same id twice more.
+  Batches now carry a title taken from their goals, and the persona is named ONCE, by display name
+  (resolved via `get_ai_profile`, cached per pass, degrading to the id if the lookup fails). The
+  id remains authoritative in `assignee_rep_id`.
+- **A period's target read as one run's workload.** A weekly goal handed to a daily run said "do
+  this", which is both discouraging and wrong. The batch now states that what follows is the
+  PERIOD's target, asks the run to advance it as far as one session honestly can, and to say what
+  remains. The Definition-of-Done line also uses the goal's own `criteria` when it has any,
+  instead of restating the brief generically.
 - **A human-only day could shadow the week that held all the AI work.** `select_target_goals`
   stopped at the finest CURRENT period group even when the `ai_help` filter left it empty, so a
   quest with a human-only goal dated today and a weekly goal holding that week's actual AI work

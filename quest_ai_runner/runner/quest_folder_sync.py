@@ -194,6 +194,42 @@ def _write(path: Path, content: str) -> None:
         raise QuestFolderSyncError(f"could not write sync file {path}: {e}") from e
 
 
+def quest_for_path(quest_folder_map: Dict[str, str], path: Any = None) -> Optional[Tuple[str, str]]:
+    """The ``(quest_id, folder)`` whose mapped folder CONTAINS ``path`` (default: the cwd).
+
+    The reverse of the folder map, so a consumer can answer "which quest am I standing in?" and
+    make working inside a quest's folder mean working on that quest, with no id to type.
+
+    The DEEPEST mapped folder wins. Quest folders nest in practice (a story folder holding a
+    sub-project folder), and the enclosing quest would otherwise shadow the specific one, which is
+    exactly backwards: the more specific location is the better answer.
+
+    Returns None when the path is under no mapped folder. Never raises: an unresolvable path (a
+    deleted cwd, a permission error on a symlink) means "no quest here", not a crash in a chat
+    startup path.
+    """
+    if not quest_folder_map:
+        return None
+    try:
+        here = Path(path).resolve() if path is not None else Path.cwd().resolve()
+    except OSError:
+        return None
+    best: Optional[Tuple[str, str]] = None
+    best_depth = -1
+    for quest_id, folder in quest_folder_map.items():
+        if not folder:
+            continue
+        try:
+            root = Path(folder).resolve()
+        except OSError:
+            continue
+        if here == root or root in here.parents:
+            depth = len(root.parts)
+            if depth > best_depth:
+                best, best_depth = (str(quest_id), str(folder)), depth
+    return best
+
+
 # --- the simple public functions --------------------------------------------------
 
 def pull_quest_to_folder(client: Any, quest_id: str, folder: str,

@@ -660,7 +660,7 @@ def test_compose_batch_text_includes_outcome_goal_and_dod():
     assert "Quest outcome: Ship the launch" in text
     assert "Goal: Draft the plan" in text
     assert "Brief: write section 2" in text
-    assert "Definition of Done" in text
+    assert "Done when:" in text
     assert "2026-08-01" in text
 
 
@@ -708,7 +708,7 @@ def test_missing_goal_description_still_creates_the_task_without_a_brief():
     result = passer.run({"text": "pass"})
     assert len(result.created_task_ids) == 1
     assert "Brief:" not in client.created_tasks[0]["text"]
-    assert "Definition of Done" in client.created_tasks[0]["text"]
+    assert "Done when:" in client.created_tasks[0]["text"]
 
 
 def test_backpressure_matches_a_task_by_goal_id_because_tasks_have_no_quest_id():

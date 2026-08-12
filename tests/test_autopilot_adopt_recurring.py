@@ -309,3 +309,85 @@ def test_when_no_current_scope_has_ai_work_the_quest_goes_quiet_rather_than_grab
     goals, scope = select_target_goals(payload, NOW)
     assert goals == []
     assert scope == "day:2026-07-12"      # the finest scope that matched, for the report
+
+
+# --- readable tasks -------------------------------------------------------------------------------
+
+class _NamingClient(FakeAutopilotClient):
+    """Adds the rep-profile lookup the real client has, so a persona can be named."""
+
+    profiles = {"rep_09d3": {"display_name": "Bailey"}}
+    profile_error = None
+
+    def get_ai_profile(self, rep_id, *, team_id=None):
+        if self.profile_error:
+            raise self.profile_error
+        return self.profiles.get(rep_id)
+
+
+def test_the_persona_is_named_once_by_display_name_not_by_raw_rep_id():
+    """"Act as rep_09d389aeb9ff", repeated across the title and twice in the body, is what a task
+    says when nobody looks up the name. It is unreadable to the human reviewing it."""
+    q1 = _quest("q1", personas=[{"rep_id": "rep_09d3"}])
+    client = _NamingClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
+    _passer(client).run({"text": "pass"})
+    text = client.created_tasks[0]["text"]
+    assert "Act as Bailey." in text
+    assert "rep_09d3" not in text                     # the id stays in assignee_rep_id only
+    assert text.count("Act as") == 1                  # said once, not restated
+    assert client.created_tasks[0]["assignee_rep_id"] == "rep_09d3"
+
+
+def test_an_unresolvable_name_degrades_to_the_id_rather_than_failing():
+    q1 = _quest("q1", personas=[{"rep_id": "rep_unknown"}])
+    client = _NamingClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
+    client.profile_error = RuntimeError("reps endpoint down")
+    _passer(client).run({"text": "pass"})
+    assert "Act as rep_unknown." in client.created_tasks[0]["text"]
+
+
+def test_the_task_is_titled_after_the_work_not_the_persona():
+    """Without an explicit title the server derives one from the first line of the text, which is
+    the persona line, so every autopilot task in the list is named after its persona."""
+    q1 = _quest("q1", personas=[{"rep_id": "rep_09d3"}])
+    client = _NamingClient(
+        quests=[q1],
+        goals_by_quest={"q1": _goals_payload(("day", "2026-07-12",
+                                              [_goal("g1", name="Rewrite the ranking formula")]))})
+    _passer(client).run({"text": "pass"})
+    assert client.created_tasks[0]["title"] == "Rewrite the ranking formula"
+
+
+def test_a_multi_goal_batch_titles_after_the_first_and_counts_the_rest():
+    q1 = _quest("q1")
+    client = _NamingClient(
+        quests=[q1],
+        goals_by_quest={"q1": _goals_payload(("day", "2026-07-12",
+                                              [_goal("g1", name="First goal"),
+                                               _goal("g2", name="Second goal")]))})
+    _passer(client).run({"text": "pass"})
+    assert client.created_tasks[0]["title"] == "First goal (+1 more)"
+
+
+def test_the_period_target_is_not_presented_as_this_runs_workload():
+    """A weekly goal handed to a daily run reads as "do all of this today", which is both
+    discouraging and wrong: the run's job is to advance it and report what is left."""
+    q1 = _quest("q1")
+    client = _NamingClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("week", "2026_W28", [_goal("g1")]))})
+    _passer(client).run({"text": "pass"})
+    text = client.created_tasks[0]["text"]
+    assert "that PERIOD's target, not this single run's" in text
+    assert "say plainly what remains" in text
+
+
+def test_the_goals_own_criteria_are_the_definition_of_done():
+    q1 = _quest("q1")
+    goal = _goal("g1", name="A goal")
+    goal["criteria"] = "the ranking formula subsection is rewritten"
+    client = _NamingClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [goal]))})
+    _passer(client).run({"text": "pass"})
+    assert "Done when: the ranking formula subsection is rewritten" in client.created_tasks[0]["text"]
