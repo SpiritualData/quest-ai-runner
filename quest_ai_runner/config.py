@@ -234,6 +234,11 @@ class RunnerConfig:
     # Team-wide daily cap on autopilot-created tasks (batches + goal proposals each count as one
     # unit). Default 3, per the design's starting number.
     autopilot_daily_budget: int = 3
+    # Default for adopting a quest's own due recurring tasks into the pass's batch (see
+    # ``runner/autopilot.py``). A quest's OWN ``autopilot.adopt_recurring`` always wins; this is
+    # only consulted when the quest does not state one, which includes deployments whose backend
+    # predates that field. ``None`` means "no consumer opinion", i.e. off.
+    autopilot_adopt_recurring: Optional[bool] = None
     # The FALLBACK persona resolver (step 4 of the persona-routing chain, after a goal's own
     # ``assignee_rep_id`` and a day-matched/unrestricted quest ``autopilot.personas`` entry): a
     # consumer-supplied callable, given a goal dict, returning a rep_id or None. This is where a

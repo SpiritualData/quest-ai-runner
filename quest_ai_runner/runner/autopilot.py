@@ -492,12 +492,27 @@ class AutopilotPass:
     def __init__(self, client: Any, *, team_id: str = "",
                  persona_resolver: Optional[Callable[[Dict[str, Any]], Optional[str]]] = None,
                  daily_budget: int = DEFAULT_TEAM_DAILY_BUDGET,
+                 adopt_recurring_default: Optional[bool] = None,
                  now: Optional[Callable[[], datetime]] = None):
         self._client = client
         self._team_id = team_id or ""
         self._persona_resolver = persona_resolver
         self._daily_budget = daily_budget if daily_budget and daily_budget > 0 else DEFAULT_TEAM_DAILY_BUDGET
+        self._adopt_recurring_default = adopt_recurring_default
         self._now = now or (lambda: datetime.now(timezone.utc))
+
+    def _adopts_recurring(self, autopilot_cfg: Dict[str, Any]) -> bool:
+        """Whether to adopt this quest's recurring tasks: the QUEST's own setting when it states
+        one, otherwise the consumer's default.
+
+        The fallback is not just convenience. ``adopt_recurring`` is a newer field, so a backend
+        that predates it stores nothing and every quest would silently read as off, with no way for
+        a deployment to turn the behavior on at all until it upgrades.
+        """
+        stated = autopilot_cfg.get("adopt_recurring")
+        if stated is None:
+            return bool(self._adopt_recurring_default)
+        return _truthy(stated)
 
     # --- the pass --------------------------------------------------------------------------
 
@@ -546,7 +561,7 @@ class AutopilotPass:
         # Recurring tasks the user set up on this quest. Adopted ONLY when the quest opts in:
         # taking over a task someone scheduled themselves is a real change in who executes it.
         adopted = (self._due_recurring_tasks(quest_id)
-                   if _truthy(autopilot_cfg.get("adopt_recurring")) else [])
+                   if self._adopts_recurring(autopilot_cfg) else [])
         previous = self._previous_period_summary(quest_id, goals_payload, scope_label)
 
         produced = False

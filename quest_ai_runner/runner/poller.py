@@ -138,6 +138,7 @@ class Poller:
             team_id=config.team_id or "",
             persona_resolver=config.autopilot_persona_resolver,
             daily_budget=config.autopilot_daily_budget,
+            adopt_recurring_default=config.autopilot_adopt_recurring,
         )
         # Capabilities this runner can HONESTLY report, derived from the wired adapters
         # (corpus=FilesAdapter/corpus, code=deep-runner, web=deep-runner can browse via Claude

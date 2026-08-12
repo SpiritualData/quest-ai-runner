@@ -69,6 +69,27 @@ def test_opted_in_quest_folds_the_recurring_task_into_the_batch_and_closes_it():
     assert created["id"] in client.task_updates[0][1]["result"]
 
 
+def test_consumer_default_turns_adoption_on_when_the_quest_states_nothing():
+    """``adopt_recurring`` is a newer field, so a backend that predates it stores nothing and every
+    quest reads as off. Without a consumer-level default there would be no way to enable the
+    behavior at all until that backend ships."""
+    q1 = _quest("q1")                                    # quest says nothing
+    client = FakeAutopilotClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))},
+        tasks=[_recurring("r1")])
+    _passer(client, adopt_recurring_default=True).run({"text": "pass"})
+    assert client.task_updates[0][0] == "r1"
+
+
+def test_an_explicit_quest_setting_beats_the_consumer_default():
+    q1 = _quest("q1", adopt_recurring=False)             # the quest opted OUT explicitly
+    client = FakeAutopilotClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))},
+        tasks=[_recurring("r1")])
+    _passer(client, adopt_recurring_default=True).run({"text": "pass"})
+    assert client.task_updates == []
+
+
 def test_string_false_does_not_read_as_enabled():
     """A JSON round-trip can leave a boolean as a string; "false" must stay off."""
     q1 = _quest("q1", adopt_recurring="false")
