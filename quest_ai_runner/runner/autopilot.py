@@ -78,6 +78,23 @@ OPEN_TASK_STATUSES = {"queued", "in_progress", "needs_you", "suggested"}
 # happens to be current.
 _SCOPE_ORDER = ("day", "week", "month", "quarter", "year")
 
+# Task statuses that count as "this finished" when summarizing the previous period. ``needs_you``
+# is included on purpose: a task waiting on the human is one of the most useful things the next
+# pass can know, since it usually explains why the period produced nothing else.
+_FINISHED_TASK_STATUSES = {"done", "failed", "needs_you"}
+
+# Cap on how many previous-period tasks are described in a batch's text, newest kept. A busy quest
+# should not push its actual instructions out of the model's attention with old status lines.
+_MAX_PREVIOUS_TASKS = 8
+
+
+def _truthy(value: Any) -> bool:
+    """Whether a config value means yes, tolerating the string forms a JSON round-trip can leave
+    behind ("true"/"1"/"yes"). A stray "false" string must never read as enabled."""
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes", "on"}
+    return bool(value)
+
 
 # --- small, pure helpers (kept module-level and dependency-free for direct unit testing) --------
 
@@ -144,6 +161,66 @@ def _current_period_key(scope: str, now: datetime) -> Optional[str]:
     if scope == "year":
         return str(now.year)
     return None
+
+
+def previous_period_key(scope: str, now: datetime) -> Optional[str]:
+    """The period id immediately BEFORE the current one for ``scope``, in the backend's format.
+
+    Used to tell a pass what happened last time it was responsible for this quest, so a daily
+    pass opens with "here is what yesterday produced" instead of starting cold every morning.
+    Computed by stepping back into the previous period and re-deriving the key, rather than by
+    decrementing the key's digits, so week/quarter/year boundaries need no special cases.
+    """
+    if scope == "day":
+        return _current_period_key("day", now - timedelta(days=1))
+    if scope == "week":
+        return _current_period_key("week", now - timedelta(days=7))
+    if scope == "month":
+        first_of_month = now.replace(day=1)
+        return _current_period_key("month", first_of_month - timedelta(days=1))
+    if scope == "quarter":
+        first_month_of_quarter = ((now.month - 1) // 3) * 3 + 1
+        first_of_quarter = now.replace(month=first_month_of_quarter, day=1)
+        return _current_period_key("quarter", first_of_quarter - timedelta(days=1))
+    if scope == "year":
+        return str(now.year - 1)
+    return None
+
+
+def previous_period_bounds(scope: str, now: datetime) -> Optional[Tuple[datetime, datetime]]:
+    """UTC half-open bounds ``[start, end)`` of the period before the current one.
+
+    Derived from ``now`` rather than by parsing a period key back into dates: the key formats are
+    the backend's display contract, and re-parsing them here would be a second place to get week
+    and quarter boundaries wrong.
+    """
+    midnight = now.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    if scope == "day":
+        return midnight - timedelta(days=1), midnight
+    if scope == "week":
+        this_week = midnight - timedelta(days=midnight.weekday())  # Monday, per ISO
+        return this_week - timedelta(days=7), this_week
+    if scope == "month":
+        this_month = midnight.replace(day=1)
+        return (this_month - timedelta(days=1)).replace(day=1), this_month
+    if scope == "quarter":
+        this_quarter = midnight.replace(month=((midnight.month - 1) // 3) * 3 + 1, day=1)
+        previous = this_quarter - timedelta(days=1)
+        return previous.replace(month=((previous.month - 1) // 3) * 3 + 1, day=1), this_quarter
+    if scope == "year":
+        this_year = midnight.replace(month=1, day=1)
+        return this_year.replace(year=this_year.year - 1), this_year
+    return None
+
+
+def select_period_goals(goals_payload: Dict[str, Any], scope: str,
+                        period: str) -> List[Dict[str, Any]]:
+    """Every goal in one specific (scope, period) group, complete or not. ``[]`` if absent."""
+    for group in goals_payload.get("period_groups") or []:
+        if (str(group.get("time_scope", "")).strip().lower() == scope
+                and str(group.get("period", "")).strip() == period):
+            return list(group.get("goals") or [])
+    return []
 
 
 def _goal_ai_help(goal: Dict[str, Any]) -> bool:
@@ -255,18 +332,52 @@ def _definition_of_done(goal: Dict[str, Any]) -> str:
     return dod
 
 
-def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
-                       persona: Optional[str] = None) -> str:
-    """Quest outcome + each goal's name/description (the description IS the brief) + a per-goal
-    Definition of Done, per the design's task-composition rule.
+def _summarize_previous(previous: Dict[str, Any]) -> str:
+    """The "what happened last period" block, or a plain statement that nothing did.
 
-    ``persona``, when resolved, is named in the TEXT rather than in a structured field. The Quest
-    API's task-create route has no persona/rep field at all (its only routing field is
-    ``assignee_user_id``, which must be a real team member and so cannot carry a character rep id),
-    so a structured stamp would be silently dropped. Naming the persona in the request text is the
-    channel a consumer's resolver actually reads (e.g. the personal lane's LLM explicit-ask judge
-    resolves "Act as X" to that character's persona), which keeps the routing HONEST instead of
-    depending on a field the backend never stores.
+    Saying so explicitly matters: an absent section reads as "no information", while "no recorded
+    activity" is itself the signal that the previous period produced nothing and the plan may need
+    re-sequencing rather than continuing as written.
+    """
+    period = previous.get("period") or "the previous period"
+    lines = [f"What happened in the previous period ({period}):"]
+    done_goals = [g for g in previous.get("goals") or [] if g.get("completed")]
+    open_goals = [g for g in previous.get("goals") or [] if not g.get("completed")]
+    tasks = previous.get("tasks") or []
+    if done_goals:
+        lines.append("  Goals completed: "
+                     + "; ".join((g.get("name") or "?").strip() for g in done_goals))
+    if open_goals:
+        lines.append("  Goals left INCOMPLETE (carry them or re-sequence, do not silently drop "
+                     "them): " + "; ".join((g.get("name") or "?").strip() for g in open_goals))
+    for t in tasks:
+        title = (t.get("title") or t.get("text") or "").strip().splitlines()
+        label = (title[0] if title else "(untitled task)")[:90]
+        outcome = str(t.get("result") or "").strip().replace("\n", " ")
+        lines.append(f"  Task [{t.get('status')}] {label}"
+                     + (f" -> {outcome[:280]}" if outcome else ""))
+    if not (done_goals or open_goals or tasks):
+        lines.append("  No recorded activity. Treat the plan's schedule as untouched, and if that "
+                     "is because work slipped, say so rather than repeating the same instruction.")
+    return "\n".join(lines)
+
+
+def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
+                       persona: Optional[str] = None, *,
+                       scope_label: Optional[str] = None,
+                       adopted_tasks: Optional[List[Dict[str, Any]]] = None,
+                       previous: Optional[Dict[str, Any]] = None) -> str:
+    """The batch task's text: what period this run owns, the goals and AI tasks in it, and what
+    the previous period actually produced.
+
+    The last part is what keeps a recurring pass from starting cold every time. A daily pass that
+    cannot see yesterday's goals and task results has no way to notice that the plan slipped, so it
+    reissues the same instruction while the human falls further behind. Feeding the previous
+    period's goal completion and task outcomes in makes continuity the default.
+
+    ``persona``, when resolved, is named in the text AS WELL AS stamped structurally in
+    ``assignee_rep_id`` at creation. The structured field is authoritative; the prose is kept
+    because some consumers resolve the persona from the request text.
     """
     parts: List[str] = []
     if persona:
@@ -274,6 +385,9 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
                      f"{persona}, so carry it out in that persona.")
     if quest_outcome:
         parts.append(f"Quest outcome: {quest_outcome}")
+    if scope_label:
+        parts.append(f"You are responsible for this quest's {scope_label} scope. Everything below "
+                     f"is what that period contains.")
     for goal in goals:
         name = (goal.get("name") or "(untitled goal)").strip()
         description = (goal.get("description") or "").strip()
@@ -282,6 +396,16 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
             block.append(f"Brief: {description}")
         block.append(f"Definition of Done: {_definition_of_done(goal)}")
         parts.append("\n".join(block))
+    if adopted_tasks:
+        block = ["Recurring AI tasks for this period, adopted into this run. Carry out each one "
+                 "as part of this run; the original occurrences are closed and will NOT run "
+                 "separately, so anything you skip here simply does not happen:"]
+        for t in adopted_tasks:
+            text = str(t.get("text") or "").strip()
+            block.append(f"\n--- adopted task {t.get('id') or t.get('task_id')} ---\n{text}")
+        parts.append("\n".join(block))
+    if previous:
+        parts.append(_summarize_previous(previous))
     return "\n\n".join(parts)
 
 
@@ -419,11 +543,16 @@ class AutopilotPass:
         # handful at most, only for goals that survived the gates and the scope filter).
         target_goals = [self._with_description(quest_id, g) for g in target_goals]
 
+        # Recurring tasks the user set up on this quest. Adopted ONLY when the quest opts in:
+        # taking over a task someone scheduled themselves is a real change in who executes it.
+        adopted = (self._due_recurring_tasks(quest_id)
+                   if _truthy(autopilot_cfg.get("adopt_recurring")) else [])
+        previous = self._previous_period_summary(quest_id, goals_payload, scope_label)
+
         produced = False
-        if target_goals:
-            batches = batch_by_persona(target_goals, autopilot_cfg, self._now(),
-                                       self._persona_resolver)
-            for persona, goals in batches:
+        if target_goals or adopted:
+            batches = self._batches_with_adopted(target_goals, adopted, autopilot_cfg)
+            for persona, goals, tasks in batches:
                 if budget_used >= self._daily_budget:
                     self._skip(result, quest_id, "team daily budget reached mid-pass")
                     break
@@ -431,6 +560,7 @@ class AutopilotPass:
                     result.proposals.append({
                         "quest_id": quest_id, "kind": "work_batch", "persona": persona,
                         "goal_ids": [g.get("id") for g in goals], "scope": scope_label,
+                        "adopted_task_ids": [t.get("id") or t.get("task_id") for t in tasks],
                     })
                     produced = True
                     # A dry-run still SIMULATES budget consumption (one unit per batch that
@@ -438,11 +568,14 @@ class AutopilotPass:
                     # once the budget is exhausted -- exactly what a real pass would do.
                     budget_used += 1
                     continue
-                task_id = self._create_batch_task(quest, quest_id, persona, goals, mode)
+                task_id = self._create_batch_task(quest, quest_id, persona, goals, mode,
+                                                  scope_label=scope_label, adopted_tasks=tasks,
+                                                  previous=previous)
                 if task_id:
                     result.created_task_ids.append(task_id)
                     budget_used += 1
                     produced = True
+                    self._close_adopted(tasks, task_id, quest_id, result)
         elif planning == "plan_and_work":
             if budget_used < self._daily_budget:
                 self._handle_proposal(quest, quest_id, mode, dry_run, result)
@@ -524,6 +657,138 @@ class AutopilotPass:
         except Exception:  # noqa: BLE001 -- enrichment is best-effort, never fatal
             log.info("autopilot: could not fetch description for goal %s", goal_id, exc_info=True)
         return goal
+
+    # --- adopting the quest's own recurring tasks (opt-in per quest) --------------------------
+
+    def _due_recurring_tasks(self, quest_id: str) -> List[Dict[str, Any]]:
+        """This quest's queued recurring occurrences that are due now and are not autopilot's own.
+
+        The ``task_kind`` exclusion is not a nicety. Adopting the recurring PASS task would fold
+        the scanner into the very batch it is creating and then close it, killing the series that
+        drives autopilot at all; adopting autopilot's own work batches would let a pass swallow its
+        previous output. Neither is recoverable from inside a pass, so both are excluded here.
+        """
+        tasks = self._client.list_tasks(
+            team_id=self._team_id or None, goal_id=quest_id, status="queued") or []
+        today = self._now().date()
+        due: List[Dict[str, Any]] = []
+        for t in tasks:
+            if self._is_autopilot_authored(t) or t.get("task_kind") in (AUTOPILOT_PASS_KIND,
+                                                                        AUTOPILOT_WORK_KIND):
+                continue
+            if not (t.get("series_id") or t.get("recurrence")):
+                continue  # a one-off task the user queued; not ours to take over
+            scheduled = str(t.get("scheduled_date") or "").strip()
+            if scheduled:
+                parsed = _parse_dt(scheduled)
+                if parsed is not None and parsed.date() > today:
+                    continue  # scheduled for a later day
+            due.append(t)
+        return due
+
+    def _batches_with_adopted(self, goals: List[Dict[str, Any]],
+                              adopted: List[Dict[str, Any]],
+                              autopilot_cfg: Dict[str, Any]
+                              ) -> List[Tuple[Optional[str], List[Dict[str, Any]],
+                                              List[Dict[str, Any]]]]:
+        """Merge goal batches and adopted tasks into ONE batch per persona.
+
+        An adopted task's persona is its own ``assignee_rep_id`` when it has one (the user chose a
+        character for it), otherwise the persona the quest's roster resolves for today, so an
+        unassigned recurring task rides along with that persona's goal work instead of spawning a
+        second run for the same character.
+        """
+        now = self._now()
+        merged: Dict[Optional[str], Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]] = {}
+        order: List[Optional[str]] = []
+
+        def slot(persona: Optional[str]):
+            if persona not in merged:
+                merged[persona] = ([], [])
+                order.append(persona)
+            return merged[persona]
+
+        for persona, batch_goals in batch_by_persona(goals, autopilot_cfg, now,
+                                                     self._persona_resolver):
+            slot(persona)[0].extend(batch_goals)
+        for task in adopted:
+            persona = task.get("assignee_rep_id") or resolve_persona(
+                {}, autopilot_cfg, now, self._persona_resolver)
+            slot(str(persona) if persona else None)[1].append(task)
+        return [(persona, merged[persona][0], merged[persona][1]) for persona in order]
+
+    def _close_adopted(self, tasks: List[Dict[str, Any]], batch_task_id: str, quest_id: str,
+                       result: AutopilotResult) -> None:
+        """Close each adopted occurrence, pointing at the batch that took over its work.
+
+        Ordering is deliberate: this runs only AFTER the batch task was created successfully. If a
+        close fails, the occurrence stays queued and runs on its own later -- duplicated work, but
+        never LOST work, which is the correct direction to fail in. The reverse order would close
+        the occurrence and then discover the batch could not be created, and the user's recurring
+        task would simply have evaporated for the day.
+
+        Note this does mark work done before the batch has actually run. If the batch later fails,
+        it fails visibly as a failed task on the quest, and (for a daily series) the next
+        occurrence arrives tomorrow.
+        """
+        for t in tasks:
+            task_id = str(t.get("id") or t.get("task_id") or "")
+            if not task_id:
+                continue
+            try:
+                self._client.update_task(task_id, {
+                    "status": "done",
+                    "result": (f"Adopted by the autopilot pass and folded into task "
+                               f"{batch_task_id}, which carries out this task's instructions as "
+                               f"part of this period's batch for the quest."),
+                })
+            except Exception as e:  # noqa: BLE001 -- never fail a pass over bookkeeping
+                log.warning("autopilot: could not close adopted task %s (%s); it stays queued "
+                            "and will run on its own", task_id, e)
+                result.bookkeeping_warnings.append({
+                    "quest_id": quest_id,
+                    "detail": (f"adopted task {task_id} was folded into {batch_task_id} but could "
+                               f"not be closed ({type(e).__name__}), so it will ALSO run "
+                               f"separately: expect duplicated work, not missing work"),
+                })
+
+    def _previous_period_summary(self, quest_id: str, goals_payload: Dict[str, Any],
+                                 scope_label: str) -> Optional[Dict[str, Any]]:
+        """Goals and finished tasks from the period before this one, for run-to-run continuity.
+
+        Returns None for an unscoped quest (there is no previous period to speak of). Best-effort:
+        a failure to read tasks degrades to goals-only rather than losing the whole summary."""
+        scope = (scope_label or "").split(":", 1)[0]
+        if scope not in _SCOPE_ORDER:
+            return None
+        previous_key = previous_period_key(scope, self._now())
+        if not previous_key:
+            return None
+        summary: Dict[str, Any] = {
+            "period": f"{scope}:{previous_key}",
+            "goals": select_period_goals(goals_payload, scope, previous_key),
+            "tasks": [],
+        }
+        try:
+            tasks = self._client.list_tasks(
+                team_id=self._team_id or None, goal_id=quest_id) or []
+        except Exception:  # noqa: BLE001 -- goals-only is still a useful summary
+            log.info("autopilot: could not read prior tasks for quest %s", quest_id, exc_info=True)
+            return summary
+        bounds = previous_period_bounds(scope, self._now())
+        if bounds is None:
+            return summary
+        window_start, window_end = bounds
+        finished = []
+        for t in tasks:
+            if str(t.get("status", "")).strip().lower() not in _FINISHED_TASK_STATUSES:
+                continue
+            when = _parse_dt(t.get("worked_at") or t.get("updated_at") or t.get("created_at"))
+            if when is None or not (window_start <= when < window_end):
+                continue
+            finished.append(t)
+        summary["tasks"] = finished[-_MAX_PREVIOUS_TASKS:]
+        return summary
 
     def _gate_quest(self, quest: Dict[str, Any], quest_id: str) -> Optional[str]:
         """Per-quest gates, cheapest first. Returns a skip reason, or None if the quest passes."""
@@ -637,11 +902,13 @@ class AutopilotPass:
         return str(task_id)
 
     def _create_batch_task(self, quest: Dict[str, Any], quest_id: str, persona: Optional[str],
-                           goals: List[Dict[str, Any]], mode: str) -> Optional[str]:
-        # The persona rides in the TEXT, not a structured field: the Quest task-create route has
-        # no persona/rep field, so a structured stamp would be silently dropped (see
-        # compose_batch_text). It still decides the BATCHING (which goals share one task).
-        text = compose_batch_text(str(quest.get("outcome") or ""), goals, persona)
+                           goals: List[Dict[str, Any]], mode: str, *,
+                           scope_label: Optional[str] = None,
+                           adopted_tasks: Optional[List[Dict[str, Any]]] = None,
+                           previous: Optional[Dict[str, Any]] = None) -> Optional[str]:
+        text = compose_batch_text(str(quest.get("outcome") or ""), goals, persona,
+                                  scope_label=scope_label, adopted_tasks=adopted_tasks,
+                                  previous=previous)
         try:
             return self._create_autopilot_task(
                 quest, quest_id, text, mode, persona=persona)

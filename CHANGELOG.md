@@ -31,6 +31,23 @@ All notable changes to this project are documented here. The format is based on
   asserted at creation, so the window does not exist.
 
 ### Added
+- **Autopilot can ADOPT a quest's own recurring tasks** (opt-in per quest via
+  `autopilot.adopt_recurring`, off by default). When on, a pass folds that quest's due recurring
+  occurrences into the persona batch it is already creating and closes the originals, pointing each
+  at the batch that took it over. Without this, a quest with both autopilot and a daily recurring
+  task gets two unrelated deep runs a day that cannot see each other's work. Autopilot's own tasks
+  (the pass and its work batches) are never adopted: folding the pass into its own batch and
+  closing it would kill the series that drives autopilot at all. Adoption happens only AFTER the
+  batch was created successfully, so a failure duplicates work rather than losing it, and a failed
+  close is reported rather than passing silently.
+- **Batch tasks now carry their period's context and the previous period's outcome.**
+  `compose_batch_text` states which scope the run owns, lists the goals and adopted AI tasks in it,
+  and summarizes what the previous period actually produced: goals completed, goals left
+  incomplete, and finished task results. A daily pass that cannot see yesterday has no way to
+  notice the plan slipped, so it reissues the same instruction while the human falls further
+  behind. When the previous period produced nothing, the text says so explicitly rather than
+  omitting the section, since silence and "no information" read identically otherwise. New pure
+  helpers `previous_period_key`, `previous_period_bounds` and `select_period_goals`.
 - `QuestClient.create_task` gained the fields the Quest API already accepted but the client could
   not send: `status` (queued/suggested, asserted atomically at creation), `recurrence` (free text
   or a structured `{frequency, days?, time?, interval_days?}`), `scheduled_date`/`scheduled_time`,

@@ -58,6 +58,7 @@ class FakeAutopilotClient:
         self.autopilot_updates = []   # (quest_id, fields)
         self.open_decisions = {}      # quest_id -> bool
         self.goal_docs = {}           # goal_id -> full goal doc (with description)
+        self.update_task_error = None  # set to an exception to make update_task raise
         # When True, the fake behaves like a FIXED backend whose autopilot PATCH also accepts the
         # scanner's bookkeeping fields, so the verify path is proven in both worlds.
         self.accepts_bookkeeping = accepts_bookkeeping
@@ -122,6 +123,8 @@ class FakeAutopilotClient:
         return {"id": task_id}
 
     def update_task(self, task_id, fields):
+        if self.update_task_error:
+            raise self.update_task_error
         self.task_updates.append((task_id, dict(fields)))
         for t in self.created_tasks:
             if t["id"] == task_id:
@@ -139,7 +142,8 @@ class FakeAutopilotClient:
 
 
 def _quest(quest_id, *, mode="act", cadence="weekly", last_pass_at=None, planning="work_only",
-          env_id=None, personas=None, outcome="ship the thing", miss_streak=0):
+          env_id=None, personas=None, outcome="ship the thing", miss_streak=0,
+          adopt_recurring=None):
     autopilot = {"mode": mode, "cadence": cadence, "planning": planning,
                 "miss_streak": miss_streak}
     if last_pass_at is not None:
@@ -148,6 +152,8 @@ def _quest(quest_id, *, mode="act", cadence="weekly", last_pass_at=None, plannin
         autopilot["env_id"] = env_id
     if personas is not None:
         autopilot["personas"] = personas
+    if adopt_recurring is not None:
+        autopilot["adopt_recurring"] = adopt_recurring
     return {"quest_id": quest_id, "outcome": outcome, "autopilot": autopilot}
 
 
