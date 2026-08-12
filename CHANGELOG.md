@@ -6,7 +6,36 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Autopilot did nothing at all, because nobody ever created the task that does the work.**
+  Autopilot is implemented as a recurring assistant task (`task_kind: "autopilot"`) that the
+  executor routes to `AutopilotPass` — the design's deliberate choice, so the autonomy is visible,
+  pausable and auditable like any other task. But creating that task was left to "a consumer", and
+  no consumer ever did. Switching a quest to Suggest/Act saved the setting correctly and then
+  produced silence forever, with no error anywhere to explain why. `Poller._ensure_autopilot_pass`
+  now closes the loop from the runner side: any scan that finds an opted-in quest with no OPEN
+  pass task creates one (daily, at `RunnerConfig.autopilot_pass_time`). The steady state costs one
+  list call per scan — the per-quest opt-in read only happens when no pass task was found. Disable
+  with `autopilot_ensure_pass_task=False` where something else owns that lifecycle.
+- **Every autopilot work batch was created against the wrong id, so none of them could be
+  created.** A task's `goal_id` field holds a QUEST id (the API resolves it with `get_quest` and
+  404s anything else), but `_create_batch_task` passed the first target goal's own id from
+  `list_quest_goals` — a different document with a different id. Work batches now link to the
+  quest; which goals a batch covers is carried in its text, where `compose_batch_text` already put
+  it. This also repairs the backpressure gate, which looks tasks up by quest id and so could never
+  have seen autopilot's own output.
+- **A suggestion could execute before the human ever saw it.** Autopilot created every task
+  `queued` and PATCHed it down to `suggested` afterwards, because the create route had no `status`
+  field when that code was written. Between those two calls the runner's poll could claim and run
+  the task — precisely the approval that suggest mode exists to require. The status is now
+  asserted at creation, so the window does not exist.
+
 ### Added
+- `QuestClient.create_task` gained the fields the Quest API already accepted but the client could
+  not send: `status` (queued/suggested, asserted atomically at creation), `recurrence` (free text
+  or a structured `{frequency, days?, time?, interval_days?}`), `scheduled_date`/`scheduled_time`,
+  and `assignee_rep_id` — which lets autopilot carry the resolved persona STRUCTURALLY instead of
+  only naming it in prose for a consumer to parse back out.
 - **`QuestClient.create_goal` + `quest-ai-runner create-goal` CLI subcommand: create a real, typed
   Goal, not just an assistant task.** Until now the client had no goal-creation endpoint at all
   (`runner/autopilot.py`'s `_maybe_create_goal` degraded to a no-op, waiting for one to exist).

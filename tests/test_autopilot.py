@@ -37,11 +37,12 @@ class FakeAutopilotClient:
       * ``list_tasks`` filters ONLY on the server-side params the real route implements
         (status/goal_id/team_id); ``source``/``task_kind`` are applied client-side, and there is
         no ``quest_id`` param at all (a task's ``goal_id`` IS its quest link).
-      * ``create_task`` accepts NO ``status`` (always created queued) and no persona field;
-        ``suggested`` is reached by a follow-up ``update_task`` PATCH.
-      * ``update_quest_autopilot`` echoes back only the fields its schema ACCEPTS
-        (mode/planning/cadence/personas/env_id) -- ``last_pass_at``/``miss_streak`` are silently
-        dropped, exactly as the real endpoint does today.
+      * ``create_task`` accepts an initial ``status`` (queued/suggested ONLY) and a structural
+        ``assignee_rep_id``, and resolves ``goal_id`` as a QUEST id -- a per-goal id 404s.
+      * ``update_quest_autopilot`` echoes back only the fields its schema ACCEPTS. The default
+        here is the OLD schema (mode/planning/cadence/personas/env_id), which silently dropped
+        ``last_pass_at``/``miss_streak``; ``accepts_bookkeeping=True`` models the fixed one, so the
+        verify path is proven against both.
     """
 
     # Mirrors the real UpdateAutopilotRequest schema (app/api/endpoints/quests/autopilot.py).
@@ -101,9 +102,20 @@ class FakeAutopilotClient:
         return [{"id": "dec_1", "status": "open"}] if self.open_decisions.get(quest_id) else []
 
     def create_task(self, text, **kwargs):
-        assert "status" not in kwargs, "the real create route accepts no status field"
+        # Mirrors the CURRENT real create route: it accepts an initial ``status`` (queued or
+        # suggested only) and a structural ``assignee_rep_id``, but still has no ``quest_id``
+        # field (the quest link is ``goal_id``) and no bare ``rep_id``.
         assert "quest_id" not in kwargs, "the real create route has no quest_id field"
-        assert "rep_id" not in kwargs, "the real create route has no persona/rep field"
+        assert "rep_id" not in kwargs, "the persona field is named assignee_rep_id"
+        assert kwargs.get("status", "queued") in ("queued", "suggested"), \
+            "only queued/suggested may be asserted at creation"
+        # The API resolves a task's goal_id as a QUEST id and 404s anything else, so the fake
+        # holds the real route to that contract: a per-goal id here is a hard failure, not a
+        # silently-accepted row that later goes missing from every per-quest lookup.
+        goal_id = kwargs.get("goal_id")
+        if goal_id is not None:
+            assert goal_id in {str(q["quest_id"]) for q in self.quests}, (
+                f"goal_id {goal_id!r} is not a quest id -- the real route would 404")
         task_id = f"autotask_{len(self.created_tasks) + 1}"
         record = {"id": task_id, "text": text, "status": "queued", **kwargs}
         self.created_tasks.append(record)
@@ -456,38 +468,48 @@ def test_batch_of_two_different_persona_goals_creates_two_tasks():
 
 # --- suggest vs act status + env_id stamping -----------------------------------------------------
 
-def test_suggest_mode_lands_the_task_in_suggested_via_a_follow_up_patch():
-    """The create route has NO status field (every task is created queued), so suggest mode must
-    create-then-PATCH. Proving the PATCH is what makes the task non-runnable is the point: without
-    it, a suggestion the human never approved would sit queued and EXECUTE."""
+def test_suggest_mode_lands_the_task_suggested_atomically_at_creation():
+    """A suggestion must NEVER exist in a runnable state, not even briefly.
+
+    This used to be a create-then-PATCH: the task was created queued and demoted afterwards. In
+    between those two calls the runner's poll could claim and EXECUTE it, which is exactly the
+    human approval suggest mode exists to require. The status is asserted at creation now, so
+    there is no window and no follow-up PATCH."""
     q1 = _quest("q1", mode="suggest")
     goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
     client = FakeAutopilotClient(quests=[q1], goals_by_quest={"q1": goals_payload})
     passer = AutopilotPass(client, team_id="team1", now=_now)
     passer.run({"text": "pass"})
-    assert client.task_updates == [("autotask_1", {"status": "suggested"})]
     assert client.created_tasks[0]["status"] == "suggested"
+    assert client.task_updates == []                       # no demotion window to close
 
 
-def test_act_mode_leaves_the_task_queued_with_no_status_patch():
+def test_act_mode_creates_the_task_queued():
     q1 = _quest("q1", mode="act")
     goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
     client = FakeAutopilotClient(quests=[q1], goals_by_quest={"q1": goals_payload})
     passer = AutopilotPass(client, team_id="team1", now=_now)
     passer.run({"text": "pass"})
-    assert client.task_updates == []                       # nothing to demote: queued is correct
+    assert client.task_updates == []
     assert client.created_tasks[0]["status"] == "queued"
 
 
-def test_created_task_stamps_env_id_task_kind_and_the_primary_goal_as_its_quest_link():
-    q1 = _quest("q1", env_id="joshua-personal")
-    goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
+def test_created_task_links_to_the_QUEST_not_a_per_goal_id():
+    """A task's ``goal_id`` holds a QUEST id (the API resolves it with get_quest and 404s
+    anything else). Autopilot used to pass the first target goal's own id from
+    ``list_quest_goals`` -- a different document with a different id -- so every work-batch
+    creation failed outright, and any that survived would have been invisible to the
+    backpressure gate, which looks tasks up by quest id. Which goals a batch covers lives in
+    the task TEXT."""
+    q1 = _quest("q1", env_id="env-personal")
+    goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1", name="Draft chapter 2")]))
     client = FakeAutopilotClient(quests=[q1], goals_by_quest={"q1": goals_payload})
     passer = AutopilotPass(client, team_id="team1", now=_now)
     passer.run({"text": "pass"})
     created = client.created_tasks[0]
-    assert created["env_id"] == "joshua-personal"
-    assert created["goal_id"] == "g1"          # goal_id IS the task's quest/goal link
+    assert created["env_id"] == "env-personal"
+    assert created["goal_id"] == "q1"          # the QUEST, never the per-goal id
+    assert "Draft chapter 2" in created["text"]
     # The autopilot-authored marker is the PERSISTENT task_kind, and it must be the WORK kind,
     # never the pass kind (which the executor would route into another autopilot pass: a loop).
     assert created["task_kind"] == "autopilot_work"
@@ -495,6 +517,29 @@ def test_created_task_stamps_env_id_task_kind_and_the_primary_goal_as_its_quest_
     assert created["task_kind"] != AUTOPILOT_PASS_KIND
     # source must be a value the API's closed enum accepts, or the create 400s.
     assert created["source"] in ("chat", "reflection", "review")
+
+
+def test_resolved_persona_is_stamped_structurally_not_only_in_the_prose():
+    """The create route carries the persona in ``assignee_rep_id``. It still rides in the text
+    too (some consumers resolve from prose), but a resolver reading a field beats one parsing
+    a sentence."""
+    q1 = _quest("q1", personas=[{"rep_id": "rep_bailey", "days": ["Sun"]}])  # _now is a Sunday
+    goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest={"q1": goals_payload})
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+    passer.run({"text": "pass"})
+    created = client.created_tasks[0]
+    assert created["assignee_rep_id"] == "rep_bailey"
+    assert "Act as rep_bailey" in created["text"]
+
+
+def test_no_resolved_persona_sends_no_rep_field():
+    q1 = _quest("q1")
+    goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest={"q1": goals_payload})
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+    passer.run({"text": "pass"})
+    assert "assignee_rep_id" not in client.created_tasks[0]
 
 
 # --- planning: plan_and_work proposes a next goal when nothing is eligible ---------------------
@@ -508,10 +553,10 @@ def test_plan_and_work_proposes_next_goal_when_no_eligible_goal():
     assert len(result.created_task_ids) == 1
     created = client.created_tasks[0]
     assert created["text"].startswith("Proposed goal:")
-    # A proposal is ALWAYS surfaced for a human, even on an `act` quest -> demoted to suggested.
-    assert client.task_updates == [("autotask_1", {"status": "suggested"})]
+    # A proposal is ALWAYS surfaced for a human, even on an `act` quest -> created suggested.
     assert created["status"] == "suggested"
-    # With no real goal object created, the proposal still lands on the QUEST (goal_id = quest id).
+    assert client.task_updates == []
+    # The proposal lands on the QUEST (goal_id = quest id).
     assert created["goal_id"] == "q1"
 
 
@@ -845,9 +890,9 @@ def test_executor_routes_on_task_kind_even_after_a_claim_overwrote_the_handler()
     task_client = MockQuestClient([])
     ex = TaskExecutor(task_client, _brain(provider), autopilot_pass=passer)
 
-    # handler has been overwritten by the claim label ("joshua-personal"); task_kind survives.
+    # handler has been overwritten by the claim label ("env-personal"); task_kind survives.
     out = ex.execute({"id": "pass-3", "text": "autopilot pass",
-                      "task_kind": "autopilot", "handler": "joshua-personal"})
+                      "task_kind": "autopilot", "handler": "env-personal"})
     assert out.status == "done"
     assert provider.plan_calls == 0                    # never ran the normal deep path
     assert len(autopilot_client.created_tasks) == 1    # the pass really ran

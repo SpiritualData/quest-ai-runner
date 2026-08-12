@@ -53,14 +53,15 @@ AUTOPILOT_PASS_KIND = "autopilot"
 AUTOPILOT_WORK_KIND = "autopilot_work"
 
 # The ``source`` stamped on autopilot-created tasks. The Quest API validates source against a
-# CLOSED enum -- {"reflection", "chat", "review"} -- and 400s anything else (create_task raises,
-# by design). "autopilot" is NOT in that enum today, so sending it would make every single
-# autopilot task creation fail. The autopilot-authored marker is therefore ``task_kind``
-# (AUTOPILOT_WORK_KIND above), not ``source``, and source stays a valid value.
+# CLOSED enum and 400s anything else (create_task raises, by design). The enum has since gained
+# "autopilot", but "chat" is kept here because it is accepted by BOTH the current and older
+# backends, and the authoritative autopilot-authored marker is ``task_kind``
+# (AUTOPILOT_WORK_KIND above) rather than source. Deployments pinned to a current backend can
+# switch this to AUTOPILOT_SOURCE below for attribution; the gates below count either.
 AUTOPILOT_TASK_SOURCE = "chat"
 
-# A legacy/forward-compatible source value: if the backend's source enum ever gains "autopilot",
-# rows stamped that way still count toward the budget and backpressure gates below.
+# The dedicated source value on current backends. Rows stamped this way still count toward the
+# budget and backpressure gates below, so the two can coexist during a rollout.
 AUTOPILOT_LEGACY_SOURCE = "autopilot"
 
 # Cadence name -> minimum days between passes for a given quest. An unrecognized cadence string
@@ -70,7 +71,7 @@ _CADENCE_DAYS = {"daily": 1, "weekly": 7, "monthly": 30}
 
 # A previous autopilot task in any of these states is still "open" -- its quest is under
 # backpressure and gets no more autonomous work piled on until it resolves.
-_OPEN_TASK_STATUSES = {"queued", "in_progress", "needs_you", "suggested"}
+OPEN_TASK_STATUSES = {"queued", "in_progress", "needs_you", "suggested"}
 
 # Time-scope granularities recognized in a quest's ``list_quest_goals`` period grouping, checked
 # FINEST first (day) so "today" wins over a same-quarter month/quarter/year group that also
@@ -573,7 +574,7 @@ class AutopilotPass:
             team_id=self._team_id or None, goal_id=quest_id) or []
         return any(
             self._is_autopilot_authored(t)
-            and str(t.get("status", "")).strip().lower() in _OPEN_TASK_STATUSES
+            and str(t.get("status", "")).strip().lower() in OPEN_TASK_STATUSES
             for t in tasks
         )
 
@@ -591,31 +592,41 @@ class AutopilotPass:
     # --- side effects --------------------------------------------------------------------------
 
     def _create_autopilot_task(self, quest: Dict[str, Any], quest_id: str, text: str, mode: str,
-                               goal_id: Optional[str] = None,
+                               persona: Optional[str] = None,
                                force_suggested: bool = False) -> Optional[str]:
         """Create ONE autopilot-authored task and land it in the right status.
 
-        Two calls, because the Quest API's create route accepts NO ``status`` field (the backend
-        always creates a task queued). To land a task in ``"suggested"`` -- the whole point of
-        suggest mode, where the human must press Run before any deep agent spends a token -- we
-        create it and then PATCH the status. ``update_task`` RAISES on failure by design: a
-        proposal that silently stayed ``queued`` would EXECUTE without the approval that suggest
-        mode exists to require, so a failed demotion must never pass quietly. It surfaces to the
-        caller's per-quest try/except and is reported as that quest's error.
+        THE QUEST LINK IS ALWAYS ``quest_id``. A task's ``goal_id`` field holds a QUEST id -- the
+        Quest API resolves it with ``storage.get_quest(goal_id)`` and 404s anything else -- so a
+        per-goal id from ``list_quest_goals`` (a separate document with its own id) must never be
+        passed here. Doing so failed every work-batch creation outright, and any that had survived
+        would have been invisible to ``_has_backpressure``, which looks tasks up by quest id.
+        Which GOALS a task covers is carried in its text (see ``compose_batch_text``), not in this
+        field.
+
+        ``status`` is asserted AT CREATION rather than PATCHed afterwards. Creating a proposal
+        ``queued`` and demoting it in a second call leaves a window in which the runner's poll can
+        claim and EXECUTE it before the demotion lands -- exactly the approval that suggest mode
+        exists to require. One atomic create closes that window.
 
         The created task carries ``task_kind="autopilot_work"`` (NOT the pass's own
         ``"autopilot"`` kind, which the executor routes into another pass -- that would spawn an
-        infinite loop) and a source the API's closed enum actually accepts.
+        infinite loop) and names its persona structurally in ``assignee_rep_id``.
         """
+        # suggest mode (and every goal proposal, which is always a proposal for a human) must not
+        # be runnable until a human approves it.
+        needs_approval = force_suggested or mode != "act"
         kwargs: Dict[str, Any] = dict(
             team_id=self._team_id or None,
-            # A task's goal_id IS its quest link (the API resolves it as a quest id). For a work
-            # batch this is the primary (first) goal; for a goal proposal with no real goal object
-            # yet, it is the quest itself, so the proposal still lands on the quest.
-            goal_id=goal_id or quest_id,
+            goal_id=quest_id,
             source=AUTOPILOT_TASK_SOURCE,
             task_kind=AUTOPILOT_WORK_KIND,
+            status="suggested" if needs_approval else "queued",
         )
+        if persona:
+            # Structural persona routing. It also rides in the text (some consumers resolve from
+            # prose), but a field a resolver can read beats one it has to parse.
+            kwargs["assignee_rep_id"] = persona
         env_id = (quest.get("autopilot") or {}).get("env_id")
         if env_id:
             kwargs["env_id"] = env_id
@@ -623,10 +634,6 @@ class AutopilotPass:
         task_id = created.get("id") or created.get("task_id")
         if not task_id:
             return None
-        # suggest mode (and every goal proposal, which is always a proposal for a human) must not
-        # be runnable until a human approves it.
-        if force_suggested or mode != "act":
-            self._client.update_task(str(task_id), {"status": "suggested"})
         return str(task_id)
 
     def _create_batch_task(self, quest: Dict[str, Any], quest_id: str, persona: Optional[str],
@@ -637,7 +644,7 @@ class AutopilotPass:
         text = compose_batch_text(str(quest.get("outcome") or ""), goals, persona)
         try:
             return self._create_autopilot_task(
-                quest, quest_id, text, mode, goal_id=goals[0].get("id"))
+                quest, quest_id, text, mode, persona=persona)
         except Exception as e:  # noqa: BLE001 -- surfaced to the caller's per-quest try/except
             log.error("autopilot: task creation failed for quest %s: %s", quest_id, e,
                       exc_info=True)
@@ -671,11 +678,12 @@ class AutopilotPass:
             return
         created_goal_id = self._maybe_create_goal(quest_id, title, description, mode)
         task_text = f"Proposed goal: {title}\n\n{description}"
+        if created_goal_id:
+            task_text += f"\n\n(Created as goal {created_goal_id} on this quest.)"
         # A proposed goal is ALWAYS surfaced for a human to accept, even on an `act` quest: the
         # design keeps AI-created goals reviewable ("attributed and editable"), so force suggested.
         task_id = self._create_autopilot_task(
-            quest, quest_id, task_text, mode,
-            goal_id=created_goal_id, force_suggested=True)
+            quest, quest_id, task_text, mode, force_suggested=True)
         if task_id:
             result.created_task_ids.append(task_id)
 

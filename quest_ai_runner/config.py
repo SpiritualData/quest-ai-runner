@@ -218,10 +218,19 @@ class RunnerConfig:
     # by ``validate()`` (unknown value -> a problem).
     quest_folder_sync_direction: str = "pull"
 
-    # --- Autopilot (opt-in; the recurring "autopilot pass" task, see runner/autopilot.py and
-    # quest_autopilot_design.md). Both fields are inert unless a consumer creates a recurring
-    # task with ``handler: "autopilot"`` (the executor routes those to ``AutopilotPass`` instead
-    # of the normal deep-run path); nothing here changes behavior for any other task.
+    # --- Autopilot (opt-in per QUEST; see runner/autopilot.py and quest_autopilot_design.md).
+    # Autopilot runs as a recurring "autopilot pass" task carrying ``task_kind: "autopilot"``,
+    # which the executor routes to ``AutopilotPass`` instead of the normal deep-run path.
+    #
+    # Whether that pass task EXISTS is this runner's job (``Poller._ensure_autopilot_pass``).
+    # It used to be nobody's: a user could switch a quest to Suggest/Act, the setting saved
+    # correctly, and then nothing whatsoever happened, because no pass task had ever been created
+    # to do the scanning. The feature was inert by construction, and silently so. Now any scan
+    # that finds an opted-in quest with no open pass task creates one.
+    # Set False for a deployment where something else owns that lifecycle.
+    autopilot_ensure_pass_task: bool = True
+    # When this runner creates the pass task, the local clock time its daily occurrence fires at.
+    autopilot_pass_time: str = "07:00"
     # Team-wide daily cap on autopilot-created tasks (batches + goal proposals each count as one
     # unit). Default 3, per the design's starting number.
     autopilot_daily_budget: int = 3

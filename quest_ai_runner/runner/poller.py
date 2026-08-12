@@ -30,7 +30,7 @@ from typing import Any, Dict, List, Optional
 
 from ..config import RunnerConfig, build_orchestrator, derive_capabilities
 from ..resources import ResourceGuard, ResourceLimits
-from .autopilot import AutopilotPass
+from .autopilot import AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, AutopilotPass
 from .executor import TaskExecutor
 from .quest_client import QuestApiError, QuestClient, QuestDecisionSink, QuestNotConfigured
 
@@ -172,6 +172,10 @@ class Poller:
         # task pickup below — it's a light data sync, not new work, so it isn't gated by the
         # resource/token guards that protect against taking on MORE agentic work.
         self._sync_all_quest_folders()
+        # Autopilot's own producer: guarantee the recurring pass task exists whenever a quest is
+        # opted in. Like the folder sync above, this is light bookkeeping rather than agentic work,
+        # so it runs before the resource/token gates that hold back task PICKUP.
+        self._ensure_autopilot_pass()
         # Resource gate AFTER the heartbeat (the backend should still see the env as live) but
         # BEFORE discovery/claiming: an overloaded host takes on NO new work this scan. Skipping
         # is lossless — unclaimed tasks stay queued and fire on a later scan once resources
@@ -590,6 +594,74 @@ class Poller:
             return None
         folder = folder_map.get(str(qid))
         return (str(qid), folder) if folder else None
+
+    def _ensure_autopilot_pass(self) -> None:
+        """Make a quest's autopilot opt-in actually DO something, by guaranteeing the recurring
+        "Autopilot pass" task exists.
+
+        Autopilot is deliberately implemented as a task rather than a daemon (no cron, pausable
+        from the same UI, auditable in the same activity stream). The gap was that NOTHING created
+        that task: opting a quest into Suggest/Act saved the setting and produced silence forever.
+        This closes the loop from the runner side -- the lane that would execute the pass is the
+        one that ensures it exists.
+
+        Cost is one list call on a healthy scan. The expensive opt-in check (a state read per
+        team quest) runs ONLY when no open pass task was found, so the steady state stays cheap.
+
+        Best-effort throughout: any failure is logged and retried next scan. A missing pass task
+        is a degraded feature, never a reason to skip the ordinary task pickup that follows.
+        """
+        if not self.cfg.autopilot_ensure_pass_task:
+            return
+        if not self.client.configured or not self.cfg.team_id:
+            return
+        try:
+            existing = self.client.list_tasks(
+                team_id=self.cfg.team_id, task_kind=AUTOPILOT_PASS_KIND)
+            # A recurring series always has exactly one occurrence outstanding: the backend spawns
+            # the next one when the current reaches a terminal status. So "an open occurrence
+            # exists" is the correct liveness test for the whole series. Only if the series was
+            # cancelled or never created does nothing open remain -- and then we make one.
+            if any(str(t.get("status", "")).strip().lower() in OPEN_TASK_STATUSES
+                   for t in existing):
+                return
+            if not self._any_quest_on_autopilot():
+                return
+            created = self.client.create_task(
+                "Autopilot pass: scan this team's opted-in quests and make progress on their "
+                "current-scope goals.",
+                team_id=self.cfg.team_id,
+                source="chat",
+                task_kind=AUTOPILOT_PASS_KIND,
+                recurrence={"frequency": "daily", "time": self.cfg.autopilot_pass_time},
+                scheduled_time=self.cfg.autopilot_pass_time,
+                env_id=self.cfg.env_id or None,
+            ) or {}
+            log.info("autopilot: created the recurring pass task %s (daily at %s)",
+                     created.get("id") or created.get("task_id"), self.cfg.autopilot_pass_time)
+        except Exception as e:  # noqa: BLE001 -- never let this block the scan
+            log.warning("autopilot: could not ensure the recurring pass task (%s) — "
+                        "will retry next scan", e)
+
+    def _any_quest_on_autopilot(self) -> bool:
+        """Whether ANY of the team's quests is opted in (``autopilot.mode`` in suggest/act).
+
+        Mirrors ``AutopilotPass._eligible_quests``' two-read shape, and for the same reason: the
+        team quest LISTING does not carry the ``autopilot`` block, so the mode has to be read off
+        each quest's full state or every quest looks switched off.
+        """
+        quests = self.client.list_quests(team_id=self.cfg.team_id or None) or []
+        for row in quests:
+            quest_id = str(row.get("quest_id") or row.get("id") or "")
+            if not quest_id:
+                continue
+            try:
+                state = self.client.get_quest_autopilot(quest_id) or {}
+            except Exception:  # noqa: BLE001 -- one unreadable quest never decides the answer
+                continue
+            if str((state.get("autopilot") or {}).get("mode") or "off") in ("suggest", "act"):
+                return True
+        return False
 
     def _sync_all_quest_folders(self) -> None:
         """Best-effort: sync EVERY entry in ``cfg.quest_folder_map``, independent of whether a

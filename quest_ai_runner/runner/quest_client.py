@@ -751,9 +751,14 @@ class QuestClient:
                     team_id: Optional[str] = None,
                     goal_id: Optional[str] = None,
                     scheduled_at: Optional[str] = None,
+                    scheduled_date: Optional[str] = None,
+                    scheduled_time: Optional[str] = None,
                     source: str = "chat",
                     env_id: Optional[str] = None,
                     task_kind: Optional[str] = None,
+                    status: Optional[str] = None,
+                    recurrence: Optional[Any] = None,
+                    assignee_rep_id: Optional[str] = None,
                     card_ids: Optional[List[str]] = None) -> Dict[str, Any]:
         """POST a new queued AI task to /api/assistant-tasks.
 
@@ -783,10 +788,22 @@ class QuestClient:
         relevant context, either explicitly chosen by the caller or resolved from the task text
         via a card search. Omit or pass an empty list to send no cards, matching prior behavior.
 
-        NOTE: the create route accepts NO ``status`` field (the backend always creates the task
-        queued and fills status server-side) and no persona/rep field. A caller that needs a
-        different initial status (e.g. ``"suggested"``) must create the task and then PATCH it
-        via ``update_task``; see ``runner.autopilot``.
+        ``status`` lands the task in its initial state ATOMICALLY. Only ``"queued"`` (the default)
+        and ``"suggested"`` may be asserted at creation. Use ``"suggested"`` for anything a human
+        must approve before it runs: creating it queued and PATCHing it down afterwards leaves a
+        window in which the runner's poll can claim and EXECUTE the task before the demotion
+        lands, which is precisely the approval that suggest mode exists to require.
+
+        ``recurrence`` makes this the first occurrence of a repeating series (the backend stamps a
+        ``series_id`` and re-queues the next occurrence whenever one reaches a terminal status).
+        Either free text (``"daily"``) or a structured object
+        (``{"frequency": "daily", "time": "07:00"}``). Pair it with ``scheduled_date`` /
+        ``scheduled_time`` ('YYYY-MM-DD' / 'HH:MM') to fix when occurrences fire.
+
+        ``assignee_rep_id`` carries the PERSONA structurally (e.g. the rep id a quest's
+        ``autopilot.personas`` roster assigns to today). It does not change which lane executes the
+        task -- that is the quest owner / ``assignee_user_id`` -- it states which character voice
+        should carry it, so a consumer's resolver reads a field instead of parsing prose.
 
         Returns the created task dict (includes its ``id``).
 
@@ -803,10 +820,20 @@ class QuestClient:
             body["goal_id"] = goal_id
         if scheduled_at is not None:
             body["scheduled_at"] = scheduled_at
+        if scheduled_date is not None:
+            body["scheduled_date"] = scheduled_date
+        if scheduled_time is not None:
+            body["scheduled_time"] = scheduled_time
         if env_id is not None:
             body["env_id"] = env_id
         if task_kind is not None:
             body["task_kind"] = task_kind
+        if status is not None:
+            body["status"] = status
+        if recurrence is not None:
+            body["recurrence"] = recurrence
+        if assignee_rep_id is not None:
+            body["assignee_rep_id"] = assignee_rep_id
         if card_ids:
             body["card_ids"] = card_ids
         return self._request("POST", "/api/assistant-tasks", body=body) or {}
