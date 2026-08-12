@@ -221,21 +221,38 @@ def test_cadence_due_true_when_never_run():
     assert cadence_due({}, NOW) is True
 
 
-def test_cadence_due_false_within_weekly_window():
-    autopilot_cfg = {"cadence": "weekly", "last_pass_at": "2026-07-10T09:00:00Z"}  # 2 days ago
+def test_cadence_due_false_within_the_same_week():
+    autopilot_cfg = {"cadence": "weekly", "last_pass_at": "2026-07-10T09:00:00Z"}  # same ISO week
     assert cadence_due(autopilot_cfg, NOW) is False
 
 
-def test_cadence_due_true_after_weekly_window_elapses():
-    autopilot_cfg = {"cadence": "weekly", "last_pass_at": "2026-07-01T09:00:00Z"}  # 11 days ago
+def test_cadence_due_true_in_a_later_week():
+    autopilot_cfg = {"cadence": "weekly", "last_pass_at": "2026-07-01T09:00:00Z"}  # W27, NOW is W28
     assert cadence_due(autopilot_cfg, NOW) is True
 
 
-def test_cadence_due_daily_and_monthly_windows():
-    assert cadence_due({"cadence": "daily", "last_pass_at": "2026-07-11T09:00:00Z"}, NOW) is True
+def test_cadence_is_calendar_based_not_elapsed_time():
+    """"Daily" means "not yet today", NOT "24 hours have elapsed", and the difference loses days.
+
+    The pass task fires at a fixed wall-clock time. Under an elapsed-time reading, one late pass
+    (a backed-up queue, a restart, a manual run at noon) puts the next morning's pass inside the
+    24-hour window, so it skips, and a daily quest quietly becomes every-other-day. The real case
+    that surfaced this: a pass ran at 16:11 and the following 06:00 pass was gated out."""
+    late_yesterday = {"cadence": "daily", "last_pass_at": "2026-07-11T16:11:00Z"}
+    assert cadence_due(late_yesterday, NOW) is True        # 16.8 hours elapsed, but a NEW DAY
     assert cadence_due({"cadence": "daily", "last_pass_at": "2026-07-12T08:00:00Z"}, NOW) is False
-    assert cadence_due({"cadence": "monthly", "last_pass_at": "2026-06-20T09:00:00Z"}, NOW) is False
-    assert cadence_due({"cadence": "monthly", "last_pass_at": "2026-05-01T09:00:00Z"}, NOW) is True
+    # Monthly is likewise once per calendar month, not every 30 days.
+    assert cadence_due({"cadence": "monthly", "last_pass_at": "2026-06-20T09:00:00Z"}, NOW) is True
+    assert cadence_due({"cadence": "monthly", "last_pass_at": "2026-07-01T09:00:00Z"}, NOW) is False
+
+
+def test_cadence_across_a_year_boundary():
+    """Comparing (year, month) or the ISO (year, week) pair, never the bare month or week number,
+    which would read December as later than the following January and wedge the quest for a year."""
+    assert cadence_due({"cadence": "monthly", "last_pass_at": "2025-12-31T09:00:00Z"},
+                       datetime(2026, 1, 1, 9, 0, tzinfo=timezone.utc)) is True
+    assert cadence_due({"cadence": "weekly", "last_pass_at": "2025-12-29T09:00:00Z"},
+                       datetime(2026, 1, 5, 9, 0, tzinfo=timezone.utc)) is True
 
 
 def test_cadence_unparsable_timestamp_fails_open_to_due():

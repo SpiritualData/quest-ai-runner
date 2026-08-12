@@ -117,6 +117,13 @@ def _parse_dt(raw: Any) -> Optional[datetime]:
 def cadence_due(autopilot_cfg: Dict[str, Any], now: datetime) -> bool:
     """Whether a quest's cadence gate is DUE (True) or should skip this pass (False).
 
+    Compared as CALENDAR periods, not elapsed time: "daily" means a pass has not run yet TODAY,
+    not that 24 hours have elapsed. The elapsed-time reading silently loses days. The pass task
+    fires at a fixed wall-clock time, so if one pass runs late (a backed-up queue, a restart, a
+    manual run at noon), the next morning's pass is still inside the 24-hour window and skips
+    entirely -- and a "daily" quest quietly becomes every-other-day. Real case: a first pass ran at
+    16:11 and the following 06:00 pass would have been gated out.
+
     Never run before (no ``last_pass_at``) is always due. An unparsable timestamp fails OPEN to
     due -- a corrupt/missing stamp must never permanently wedge a quest as "not due yet".
     """
@@ -127,8 +134,15 @@ def cadence_due(autopilot_cfg: Dict[str, Any], now: datetime) -> bool:
     if parsed is None:
         return True
     cadence = str(autopilot_cfg.get("cadence") or "weekly").strip().lower()
-    days = _CADENCE_DAYS.get(cadence, _CADENCE_DAYS["weekly"])
-    return (now - parsed) >= timedelta(days=days)
+    if cadence not in _CADENCE_DAYS:
+        cadence = "weekly"
+    then = parsed.astimezone(timezone.utc)
+    here = now.astimezone(timezone.utc)
+    if cadence == "daily":
+        return then.date() < here.date()
+    if cadence == "weekly":
+        return then.isocalendar()[:2] < here.isocalendar()[:2]
+    return (then.year, then.month) < (here.year, here.month)
 
 
 def _current_period_key(scope: str, now: datetime) -> Optional[str]:
@@ -451,11 +465,15 @@ class AutopilotResult:
                 if p.get("kind") == "goal_proposal":
                     lines.append(f"  - Proposed goal on quest {p.get('quest_id')}: {p.get('title')}")
                 else:
-                    lines.append(
-                        f"  - Work batch on quest {p.get('quest_id')} "
-                        f"(persona={p.get('persona') or 'assistant'}, scope={p.get('scope')}): "
-                        f"goal(s) {p.get('goal_ids')}"
-                    )
+                    line = (f"  - Work batch on quest {p.get('quest_id')} "
+                            f"(persona={p.get('persona') or 'assistant'}, scope={p.get('scope')}): "
+                            f"goal(s) {p.get('goal_ids')}")
+                    # Adoption CLOSES the user's own recurring tasks, so a report that omitted it
+                    # would hide the most consequential thing the pass does.
+                    adopted = p.get("adopted_task_ids")
+                    if adopted:
+                        line += f", adopting and closing recurring task(s) {adopted}"
+                    lines.append(line)
         if self.skipped:
             lines.append(f"Skipped {len(self.skipped)} quest(s):")
             for s in self.skipped:

@@ -196,6 +196,9 @@ def test_dry_run_adopts_nothing():
     assert client.created_tasks == []
     assert client.task_updates == []
     assert result.proposals[0]["adopted_task_ids"] == ["r1"]
+    # and the report SAYS so: adoption closes the user's own tasks, so a summary that omitted it
+    # would hide the most consequential thing the pass does.
+    assert "adopting and closing recurring task(s) ['r1']" in result.summary_text()
 
 
 # --- previous-period context ---------------------------------------------------------------------

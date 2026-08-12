@@ -7,6 +7,13 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **A "daily" cadence silently became every-other-day.** `cadence_due` compared ELAPSED time
+  (24h/7d/30d) while the pass task fires at a fixed wall-clock time, so one late pass put the next
+  morning's pass inside the window and skipped it entirely. Found live: a first pass ran at 16:11
+  and the following 06:00 pass was gated out. Cadence is now compared as CALENDAR periods, which
+  is also what the words mean: daily = not yet today, weekly = not yet this ISO week, monthly =
+  not yet this calendar month. Week and month comparisons use the (year, week) and (year, month)
+  pairs, never the bare number, so December does not read as later than the following January.
 - **Autopilot did nothing at all, because nobody ever created the task that does the work.**
   Autopilot is implemented as a recurring assistant task (`task_kind: "autopilot"`) that the
   executor routes to `AutopilotPass` — the design's deliberate choice, so the autonomy is visible,
