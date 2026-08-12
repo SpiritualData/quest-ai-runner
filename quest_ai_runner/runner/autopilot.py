@@ -251,15 +251,30 @@ def select_target_goals(goals_payload: Dict[str, Any],
     """Pick this pass's target goals from a quest's ``list_quest_goals`` period grouping.
 
     Returns ``(goals, scope_label)``:
-      * a CURRENT period group exists (day beats week beats month beats quarter beats year) ->
-        ALL its incomplete + ``ai_help`` goals, ``scope_label`` like ``"day:2026-07-12"``. This is
-        deliberately ALL of them (not just one): the resolved 2026-07-12 scope question in the
-        design doc is "a pass works ALL incomplete AI-enabled goals in the quest's current scope".
+      * a CURRENT period group with eligible goals (day beats week beats month beats quarter beats
+        year) -> ALL its incomplete + ``ai_help`` goals, ``scope_label`` like ``"day:2026-07-12"``.
+        This is deliberately ALL of them (not just one): the resolved 2026-07-12 scope question in
+        the design doc is "a pass works ALL incomplete AI-enabled goals in the quest's current
+        scope".
       * no scope is current (an unscoped quest, or only "custom"-scoped goals) -> the SINGLE next
         incomplete + ``ai_help`` goal in the payload's own order, ``scope_label="unscoped"``.
       * nothing eligible either way -> ``([], "unscoped")``.
+
+    A current group that exists but yields NOTHING eligible does not stop the search: the next
+    COARSER CURRENT scope is tried. This matters more than it sounds. A quest can easily have a
+    human-only goal dated today (say "decide whether to email another committee member") sitting
+    above a weekly goal that is the actual AI work for that whole week. Stopping at the day group
+    would shadow the week, and autopilot would report nothing to do on precisely the days the user
+    had also planned something for themselves. A goal scoped to this week is genuinely in scope on
+    every day of it.
+
+    But if NO current scope yields anything, the quest goes quiet with the finest matching scope's
+    label, rather than falling through to the unscoped next-goal fallback. Having planned today (or
+    this week) and left no AI-enabled goal in it is a decision, and pulling in some unrelated future
+    goal would override it. The fallback exists for quests with no current scope at all.
     """
     groups = goals_payload.get("period_groups") or []
+    matched_label: Optional[str] = None
     for scope in _SCOPE_ORDER:
         key = _current_period_key(scope, now)
         for group in groups:
@@ -267,7 +282,13 @@ def select_target_goals(goals_payload: Dict[str, Any],
                 continue
             period = str(group.get("period", "")).strip()
             if period == key:
-                return _incomplete_ai_goals(group.get("goals") or []), f"{scope}:{key}"
+                eligible = _incomplete_ai_goals(group.get("goals") or [])
+                if eligible:
+                    return eligible, f"{scope}:{key}"
+                if matched_label is None:
+                    matched_label = f"{scope}:{key}"
+    if matched_label is not None:
+        return [], matched_label
     flattened: List[Dict[str, Any]] = []
     for group in groups:
         flattened.extend(group.get("goals") or [])

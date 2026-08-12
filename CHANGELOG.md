@@ -7,6 +7,13 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **A human-only day could shadow the week that held all the AI work.** `select_target_goals`
+  stopped at the finest CURRENT period group even when the `ai_help` filter left it empty, so a
+  quest with a human-only goal dated today and a weekly goal holding that week's actual AI work
+  reported nothing to do, on exactly the days the user had also planned something for themselves.
+  The search now continues to coarser CURRENT scopes. It still does NOT fall through past them to
+  the unscoped next-goal fallback: planning a period and leaving no AI-enabled goal in it is a
+  decision, and grabbing unrelated future work would override it.
 - **A "daily" cadence silently became every-other-day.** `cadence_due` compared ELAPSED time
   (24h/7d/30d) while the pass task fires at a fixed wall-clock time, so one late pass put the next
   morning's pass inside the window and skipped it entirely. Found live: a first pass ran at 16:11

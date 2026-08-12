@@ -257,3 +257,55 @@ def test_select_period_goals_returns_completed_goals_too():
     period needs them precisely BECAUSE they are done: that is the progress being reported."""
     payload = _goals_payload(("day", "2026-07-11", [_goal("g0", completed=True)]))
     assert len(select_period_goals(payload, "day", "2026-07-11")) == 1
+
+
+# --- scope fallthrough ----------------------------------------------------------------------------
+
+def test_a_human_only_day_does_not_shadow_the_week_that_holds_the_real_work():
+    """The finest CURRENT scope wins only when it actually yields eligible goals.
+
+    A quest can easily have a human-only goal dated today sitting above a weekly goal that is the
+    AI's work for the whole week. Stopping at the empty day group would make autopilot report
+    nothing to do on exactly the days the user had also planned something for themselves. Real
+    case: a day goal "Decide whether to contact another external committee member" (ai_help off)
+    on a Monday whose week held the live method-writing goal.
+    """
+    from quest_ai_runner.runner.autopilot import select_target_goals
+
+    payload = _goals_payload(
+        ("day", "2026-07-12", [_goal("human", name="A human-only errand", ai_help=False)]),
+        ("week", "2026_W28", [_goal("g1", name="The week's real work")]),
+    )
+    goals, scope = select_target_goals(payload, NOW)
+    assert [g["id"] for g in goals] == ["g1"]
+    assert scope == "week:2026_W28"
+
+
+def test_a_day_with_real_work_still_wins_over_the_week():
+    from quest_ai_runner.runner.autopilot import select_target_goals
+
+    payload = _goals_payload(
+        ("day", "2026-07-12", [_goal("today", name="Today's AI work")]),
+        ("week", "2026_W28", [_goal("g1", name="The week's work")]),
+    )
+    goals, scope = select_target_goals(payload, NOW)
+    assert [g["id"] for g in goals] == ["today"]
+    assert scope == "day:2026-07-12"
+
+
+def test_when_no_current_scope_has_ai_work_the_quest_goes_quiet_rather_than_grabbing_future_work():
+    """Falling through is only ever to a coarser CURRENT scope, never past all of them.
+
+    Having planned today and this week and left no AI-enabled goal in either is a decision. Pulling
+    in an unrelated later goal would override it, which is why the unscoped fallback is reserved for
+    quests that have no current scope at all."""
+    from quest_ai_runner.runner.autopilot import select_target_goals
+
+    payload = _goals_payload(
+        ("day", "2026-07-12", [_goal("h1", ai_help=False)]),
+        ("week", "2026_W28", [_goal("h2", ai_help=False)]),
+        ("custom", "whenever", [_goal("later", name="Next in line")]),
+    )
+    goals, scope = select_target_goals(payload, NOW)
+    assert goals == []
+    assert scope == "day:2026-07-12"      # the finest scope that matched, for the report
