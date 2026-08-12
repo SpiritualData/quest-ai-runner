@@ -25,6 +25,8 @@ Endpoints implemented (the contract from integration_library_design.md §3):
                GET  /api/quests/{quest_id}/state       (get_my_quest)
                GET  /api/quests/{quest_id}/notes       (list_quest_notes)
                POST /api/quests/{quest_id}/notes       (add_quest_note)
+  Goal (real, typed, period-scoped -- distinct from an assistant task):
+               POST /api/planning/goals                (create_goal)
 
 ``QuestDecisionSink`` wraps a QuestClient as a core ``EscalationSink`` so the brain can raise a
 confirm/decision and get back a ``decision_id`` to report on the task.
@@ -33,6 +35,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -42,6 +45,11 @@ from typing import Any, Dict, List, Optional
 from ..core.adapters import Escalation, EscalationSinkBase
 
 log = logging.getLogger("quest-ai-runner.quest_client")
+
+# Period formats accepted by quest-backend's app/utils/period_utils (day/week/month/quarter/year).
+_PERIOD_RE = re.compile(
+    r"^(?:\d{4}-\d{2}-\d{2}|\d{4}_W\d{2}|\d{4}_\d{2}|\d{4}_Q[1-4]|\d{4})$"
+)
 
 
 def _as_task_list(resp: Any) -> List[Dict[str, Any]]:
@@ -550,6 +558,68 @@ class QuestClient:
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("list_quest_goals failed for quest %s: %s", quest_id, e)
             return {}
+
+    # --- goal creation (a REAL typed Goal, distinct from create_task's AI work item) ----------
+
+    def create_goal(self, title: str, *,
+                    period: str,
+                    quest_id: Optional[str] = None,
+                    description: Optional[str] = None,
+                    criteria: Optional[str] = None,
+                    goal_type: Optional[str] = None,
+                    parent_goal_id: Optional[str] = None,
+                    target_value: Optional[float] = None,
+                    target_unit: Optional[str] = None,
+                    ai_help: Optional[bool] = None,
+                    assignee_rep_id: Optional[str] = None) -> Dict[str, Any]:
+        """POST a new Goal to /api/planning/goals.
+
+        This is the REAL, typed Goal object shown on a quest's plan (period-scoped, with a
+        deadline) -- NOT an assistant task (see ``create_task``, which enqueues AI work and has
+        no create_goal equivalent server-side until now). ``quest_id`` is optional: omit it for a
+        standalone goal on the caller's own account; a quest-linked goal shows up on that quest's
+        plan for every team member regardless of who created it, since the underlying endpoint
+        only checks the quest exists, not who owns it.
+
+        ``period`` is REQUIRED and must match one of five formats (validated client-side so a
+        typo fails fast with a clear message instead of a 400 from the API):
+          day     "YYYY-MM-DD"   e.g. "2026-08-18"
+          week    "YYYY_W##"     e.g. "2026_W34"
+          month   "YYYY_MM"      e.g. "2026_08"
+          quarter "YYYY_Q#"      e.g. "2026_Q3"
+          year    "YYYY"         e.g. "2026"
+        The deadline is auto-calculated server-side from the period (end of day/week/month/etc).
+
+        Returns the created Goal dict (camelCase fields: id, questId, title, period, deadline,
+        ...). Raises ``QuestApiError``/``QuestNotConfigured`` on failure rather than swallowing
+        it, same contract as ``create_task``: a caller that tells the user "goal added" must know
+        it actually was.
+        """
+        if not _PERIOD_RE.match(period):
+            raise QuestApiError(
+                f"Invalid period {period!r}: must be YYYY-MM-DD (day), YYYY_W## (week), "
+                f"YYYY_MM (month), YYYY_Q# (quarter), or YYYY (year)."
+            )
+        body: Dict[str, Any] = {"title": title, "period": period}
+        if quest_id is not None:
+            body["quest_id"] = quest_id
+        if description is not None:
+            body["description"] = description
+        if criteria is not None:
+            body["criteria"] = criteria
+        if goal_type is not None:
+            body["goal_type"] = goal_type
+        if parent_goal_id is not None:
+            body["parent_goal_id"] = parent_goal_id
+        if target_value is not None:
+            body["target_value"] = target_value
+        if target_unit is not None:
+            body["target_unit"] = target_unit
+        if ai_help is not None:
+            body["ai_help"] = ai_help
+        if assignee_rep_id is not None:
+            body["assignee_rep_id"] = assignee_rep_id
+        return self._request("POST", "/api/planning/goals", body=body) or {}
 
     def get_quest(self, quest_id: str, *, team_id: Optional[str] = None) -> Dict[str, Any]:
         """GET /api/teams/{team_id}/quests/{quest_id} — fetch a single quest by ID.

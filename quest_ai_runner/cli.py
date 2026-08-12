@@ -148,6 +148,7 @@ import json
 import logging
 import os
 import sys
+from datetime import date
 from pathlib import Path
 
 import shutil
@@ -584,6 +585,24 @@ def main(argv=None) -> int:
                         help="Do not auto-select context cards from the task text when no "
                              "--card is given.")
 
+    # --- create-goal subcommand: create a real, typed Goal (not an AI task -- see `send`) -----
+    goal_p = sub.add_parser("create-goal",
+                            help="create a real Quest goal (period-scoped, on a quest's plan) and print its id")
+    goal_p.add_argument("title", help="the goal's title")
+    goal_p.add_argument("--quest-id", default=None,
+                        help="attach to this quest, so it shows on the quest's plan for every "
+                             "team member (recommended); omit for a standalone goal on the "
+                             "caller's own account")
+    goal_p.add_argument("--period", default=None,
+                        help="YYYY-MM-DD (day) / YYYY_W## (week) / YYYY_MM (month) / YYYY_Q# "
+                             "(quarter) / YYYY (year); default: today")
+    goal_p.add_argument("--description", default=None, help="longer freeform description")
+    goal_p.add_argument("--criteria", default=None, help="completion criteria")
+    goal_p.add_argument("--goal-type", default=None, help="e.g. day_goal, week_goal")
+    goal_p.add_argument("--parent-goal-id", default=None, help="parent goal id, for a sub-goal")
+    goal_p.add_argument("--ai-help", action="store_true",
+                        help="mark this goal AI-assisted (Quest Autopilot may act on it)")
+
     # --- bootstrap subcommand: build/refresh the context card store ----------
     boot_p = sub.add_parser("bootstrap", help="build or refresh the context card store for the corpus")
     boot_p.add_argument("--corpus", default=None, metavar="PATH",
@@ -769,6 +788,43 @@ def main(argv=None) -> int:
             pass
         task_id = task.get("id") or task.get("task_id") or "?"
         print(f"Queued: {args.text[:80]}  ({task_id})")
+        return 0
+
+    # --- create-goal ------------------------------------------------------------
+    if args.command == "create-goal":
+        from .runner.quest_client import QuestClient, QuestApiError, QuestNotConfigured
+        base_url = os.getenv("QUEST_BASE_URL", "")
+        api_key = os.getenv("QUEST_API_KEY", "")
+        team_id = os.getenv("QUEST_TEAM_ID", "")
+        if not base_url or not api_key:
+            log.error("QUEST_BASE_URL and QUEST_API_KEY must be set")
+            return 1
+        client = QuestClient(base_url, api_key, team_id=team_id)
+        period = args.period or date.today().isoformat()
+        try:
+            goal = client.create_goal(
+                args.title,
+                period=period,
+                quest_id=args.quest_id,
+                description=args.description,
+                criteria=args.criteria,
+                goal_type=args.goal_type,
+                parent_goal_id=args.parent_goal_id,
+                ai_help=True if args.ai_help else None,
+            )
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.error("failed to create goal: %s", e)
+            print(f"Could not create the goal: {e}")
+            return 1
+        goal_id = goal.get("id")
+        if not goal_id:
+            # Never ack a goal that may not exist -- same contract as `send`.
+            log.error("goal creation returned no id: %s", goal)
+            print("Could not create the goal: the Quest API returned no goal id.")
+            return 1
+        where = f"on quest {args.quest_id}" if args.quest_id else "standalone (no quest)"
+        print(f"Goal created {where}: {args.title}  "
+              f"(period {period}, deadline {goal.get('deadline')}, id {goal_id})")
         return 0
 
     # --- sync-quest-folder ------------------------------------------------------

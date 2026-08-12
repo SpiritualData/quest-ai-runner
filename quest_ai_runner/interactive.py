@@ -1756,7 +1756,16 @@ class InteractiveSession:
         while True:
             try:
                 if _HAS_PROMPT_TOOLKIT:
-                    with patch_stdout():
+                    # raw=True: default patch_stdout() strips ANSI escape bytes from
+                    # anything written while the prompt is up (Vt100_Output.write()
+                    # replaces every \033 with a literal '?' -- see the Ctrl+C hint
+                    # comment below, which works around this the same way). Background
+                    # threads (bootstrap/context-assembly/retry logging via
+                    # _PanelAwareLogHandler) write dim/colored lines through this same
+                    # patched stdout while idle at the prompt, so without raw=True their
+                    # escape codes got mangled into the prompt line instead of appearing
+                    # as clean lines above a redrawn prompt.
+                    with patch_stdout(raw=True):
                         line = _read_line(session, "  ❯ ")
                 else:
                     line = _read_line(session, "  ❯ ")

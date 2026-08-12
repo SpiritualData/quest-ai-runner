@@ -166,7 +166,11 @@ def retry_transient(max_retries: int = 3, base_delay: float = 1.0) -> Callable:
                     delay = base_delay * (2 ** attempt)  # exponential: 1, 2, 4, 8, ...
                     jitter = random.uniform(0, delay * 0.1)  # ±10% jitter
                     total_delay = delay + jitter
-                    _log.info(
+                    # DEBUG, not INFO: a mid-flight retry succeeding is invisible/expected
+                    # noise to an end user (surfaced by the terminal UI's default INFO
+                    # console) -- only the final give-up (_log.error above) is something a
+                    # user needs to see. Still available via -v/--verbose.
+                    _log.debug(
                         f"{func.__name__} attempt {attempt + 1} failed ({type(exc).__name__}); "
                         f"retrying in {total_delay:.2f}s"
                     )

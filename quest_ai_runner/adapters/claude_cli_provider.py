@@ -35,6 +35,7 @@ import json
 import os
 import shutil
 import subprocess
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..core.adapters import ModelProviderBase
@@ -60,6 +61,15 @@ _FAMILY_ALIASES = ("opus", "sonnet", "haiku")
 # MultiProvider routes them by the "claude" prefix; cli_model() maps each back to the bare family
 # alias when the CLI is actually invoked, so the runner always gets the latest of that family.
 CLI_RUNNABLE_MODELS = ["claude-opus", "claude-sonnet", "claude-haiku"]
+
+# Standard per-user install locations the official Claude Code installer (and npm global
+# install with a user-level prefix) places the binary in. Checked as a fallback, in this
+# order, only when a bare "claude" isn't resolvable via PATH -- a process launched without
+# a login shell's full PATH (a systemd --user unit, a cron job, a service manager) commonly
+# has none of these directories on PATH even though `claude` works fine when the same user
+# types it interactively. Home-relative, not any one machine's real absolute path, so this
+# stays generic across consumers/deployments (repo hard rule #2).
+_FALLBACK_CLAUDE_LOCATIONS = ("~/.local/bin/claude", "~/.claude/local/claude")
 
 
 def cli_model(model: Optional[str]) -> Optional[str]:
@@ -249,7 +259,15 @@ class ClaudeCliProvider(ModelProviderBase):
         if os.path.sep not in binary:
             resolved = shutil.which(binary)
             if resolved:
-                binary = resolved
+                return resolved
+            # Not on PATH (e.g. a service-manager environment without the launching shell's
+            # rc-file PATH additions) -- try the standard per-user install locations before
+            # giving up, so subprocess.run doesn't fail with a bare FileNotFoundError when the
+            # binary is genuinely installed, just not on THIS process's PATH.
+            for candidate in _FALLBACK_CLAUDE_LOCATIONS:
+                path = Path(candidate).expanduser()
+                if path.is_file() and os.access(path, os.X_OK):
+                    return str(path)
         return binary
 
     @retry_transient(max_retries=3, base_delay=1.0)

@@ -169,6 +169,32 @@ GET /api/assistant-tasks?status=queued&due_before=<ISO-now>&env_id=<env>
 so a multi-environment team's runners each discover only their own pinned work (plus any unpinned
 task) -- the backend already scoped this; the client/poller just pass `env_id` through.
 
+### Create a goal (the real, typed kind — distinct from a task)
+
+```
+POST /api/planning/goals    { "title": "...", "period": "...", "quest_id": "..." (optional), ... }
+  -> { "id": "...", "questId": "...", "title": "...", "period": "...", "deadline": "...", ... }
+```
+A **task** (above) is a unit of AI work to run; a **goal** is a real, period-scoped item with a
+deadline that shows up on a quest's plan (or standalone, on the caller's own account, when
+`quest_id` is omitted). These are different objects with different endpoints — creating a task
+does not create a goal, and vice versa. `quest_id` is optional but preferred: a goal without one
+only shows up on the caller's own account, not on any quest's shared plan.
+
+`period` is REQUIRED and must be one of five formats (the deadline is derived from it
+server-side): `YYYY-MM-DD` (day), `YYYY_W##` (week, zero-padded), `YYYY_MM` (month, zero-padded),
+`YYYY_Q#` (quarter), `YYYY` (year). `QuestClient.create_goal` validates the format client-side
+before making the request, so a malformed period fails fast with a clear message instead of a
+round trip to get a 400.
+
+Optional fields: `description`, `criteria` (completion criteria), `goal_type`, `parent_goal_id`
+(for a sub-goal), `target_value` / `target_unit` (a measurable target), `ai_help` (bool),
+`assignee_rep_id`.
+
+Like `create_task`, `create_goal` raises `QuestApiError`/`QuestNotConfigured` on failure instead
+of swallowing it — a caller that acknowledges "goal added" must know it actually was. CLI:
+`quest-ai-runner create-goal "<title>" [--quest-id ID] [--period P] [--description ...] [...]`.
+
 ## Don't hand-roll HTTP
 
 Use `QuestClient` — it covers discover / claim / report / escalate / loop-close / whoami / heartbeat

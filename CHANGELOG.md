@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **`QuestClient.create_goal` + `quest-ai-runner create-goal` CLI subcommand: create a real, typed
+  Goal, not just an assistant task.** Until now the client had no goal-creation endpoint at all
+  (`runner/autopilot.py`'s `_maybe_create_goal` degraded to a no-op, waiting for one to exist).
+  `create_goal` POSTs to `/api/planning/goals` with a required `period` (validated client-side
+  against the five accepted formats — day/week/month/quarter/year — so a typo fails fast instead
+  of round-tripping to a 400) and an optional `quest_id` (goals attach to a quest's shared plan
+  when given, or the caller's own standalone account when omitted). Raises on failure rather than
+  swallowing it, same contract as `create_task`. See `docs/quest-api-contract.md`.
 - **Personal lexicon: rank the terms ONE person actually uses (their distinctive vocabulary), by
   TF-DF-IDF over their own documents, with no model call at all.**
   `adapters/personal_lexicon.py` scores every candidate term (word n-grams that neither start nor
