@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **`FileContextStore.bootstrap()` now also reuses an already-bootstrapped ANCESTOR corpus, the
+  mirror image of nested (descendant) reuse.** Nested reuse only ever looked DOWN into a corpus
+  root's descendants, so a narrower root (e.g. bootstrapping a subfolder several levels below an
+  already-indexed `~/hq`) could never see the wider corpus's index, since an ancestor is by
+  definition not inside `walk_root` — it re-ran full LLM topic discovery on content the wider
+  corpus had almost certainly already indexed. Bootstrap now also walks UP through parent
+  directories (bounded to 12 levels, stopping at the filesystem root either way) looking for the
+  nearest ancestor with its own completed `.quest-context/bootstrap_meta.json`. When found, its
+  cards are imported the same way as the descendant case, but FILTERED to the files that actually
+  fall under this narrower root: a card with no in-scope file is skipped, and a card with some
+  in-scope and some out-of-scope files is imported with its `files` list trimmed to just the
+  in-scope subset, so an ancestor card's out-of-scope files are never mistaken for "covered" here.
+  Same id-namespacing and `imported_from` provenance convention as the descendant case (here the
+  ancestor's path relative to `walk_root`, e.g. `".."` or `"../.."`), so orphaned ancestor imports
+  are pruned by the same existing logic when the ancestor stops offering them. Both directions can
+  contribute in the same bootstrap (an indexed ancestor above and an indexed descendant below).
+  Governed by the same `reuse_nested_cards`/`QAR_REUSE_NESTED_CARDS` flag as the descendant case;
+  no new flag. (`adapters/file_context_store.py`: `_discover_ancestor_card_dir`,
+  `_import_ancestor_cards`, wired into `_bootstrap_inner` alongside the existing descendant reuse;
+  `tests/test_context_assembler.py::TestAncestorCardReuse`.)
+
 ### Fixed
 - **Autopilot tasks were titled after their persona and named it by raw id.** With no explicit
   `title`, the server derives one from the first line of the text, which is the "Act as ..." line,
