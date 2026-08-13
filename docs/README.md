@@ -32,6 +32,11 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 - **[Personal lexicon](personal-lexicon.md)**: ranking one person's distinctive vocabulary by
   TF-DF-IDF, the two background sources and why they are combined with a minimum, and the
   `min_documents` safeguard that stops a mis-recognition feeding back into the recognizer.
+- **[Terminal UX prior art](terminal-ux-prior-art.md)** — how Aider, Crush, Codex CLI, Gemini CLI,
+  Claude Code, and others solve fixed-bottom input, streaming without scrollback corruption, log
+  routing, and mid-turn queuing; which Textual/prompt_toolkit primitives to use for each; and an
+  evaluation of what's forkable/vendorable versus reference-only (incl. the ACP protocol for
+  pluggable execution backends).
 
 ## See also
 
