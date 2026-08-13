@@ -148,6 +148,63 @@ All notable changes to this project are documented here. The format is based on
   field when that code was written. Between those two calls the runner's poll could claim and run
   the task — precisely the approval that suggest mode exists to require. The status is now
   asserted at creation, so the window does not exist.
+- **Internal per-stage bootstrap/scan logs (`context index: stage N — ...`, `BM25 context index:
+  building for the first time`, etc.) cluttered the chat transcript.** A June fix
+  (`InteractiveSession.__init__` raising `quest-ai-runner.context`'s logger level to WARNING before
+  `build_orchestrator()`) was removed in August when the ANSI terminal moved to a panel-aware log
+  handler for a DIFFERENT problem (cursor corruption, not noise), and Textual never had an
+  equivalent — `on_mount`'s `_RichLogHandler` routes every propagated record straight into the
+  visible scrollback. Restored as `_suppress_background_bootstrap_logs()`, shared by both UIs via
+  `InteractiveSession.__init__` (now covers `bm25_content_store`'s logger too, not just the context
+  one), gated off when the caller passes `-v`/`-vv` so an explicit verbose request still sees them.
+  The user-facing bootstrap summary (`notify()`/`_tell()` in `config.py`) is unaffected either way.
+  (`interactive.py`, `cli.py`, `textual_ui.py`; `tests/test_prompt_docked_bottom.py` and inline
+  behavior verified against a mounted `QuestAITerminal`.)
+- **The prompt input box could be pushed off-screen by tall panels above it.** No widget in
+  `QuestAITerminal`'s Textual layout was docked, so when the context/deep/deep-detail/future-context
+  panels grew (cards shown, an expanded deep-run detail), the whole stack could exceed the viewport
+  and shove the input box down, forcing the user to scroll the whole screen to find it. `#activity`
+  and `#prompt` are now wrapped in one `dock: bottom` container (`#bottom-bar`) so they stay pinned
+  to the bottom regardless of how tall the panels above grow, with `#transcript`'s `height: 1fr`
+  filling the remaining space. A single docked wrapper, not two independently-docked siblings: two
+  separate `dock: bottom` widgets alongside Textual's own bottom-docked `Footer` landed on the SAME
+  row as the footer instead of stacking above it (`Footer`'s own space reservation only correctly
+  accounted for one additional bottom-docked widget). (`textual_ui.py`;
+  `tests/test_prompt_docked_bottom.py`.)
+- **A session always started as generic "AI: Assistant" even when the corpus's own CLAUDE.md
+  clearly designated a specific named persona as the intended owner of the work**, so the model
+  would only reveal the right persona mid-answer, in prose, with the transcript header still saying
+  otherwise. `InteractiveSession` now auto-resolves a persona when the caller supplied NEITHER
+  `--rep`/`QAR_REP_NAME` NOR `--persona-file`/`QAR_REP_PERSONA_FILE` (a `rep_specified` /
+  `persona_specified` pair threaded from `cli.py`, not a string match against the literal
+  `"Assistant"` default, so `--rep Assistant` still counts as explicit): if `cfg.corpus_root` has
+  its own top-level `CLAUDE.md`, one "fast"-tier LLM call (via `MultiProvider`/`resolve_tier`, after
+  `build_orchestrator()`) asks whether it designates a named persona and, if so, a relative path to
+  a fuller persona file (read with the same containment check as `FilesAdapter`). No corpus root, no
+  CLAUDE.md, no provider, a timeout (12s), or unparseable output all fall back to today's exact
+  behavior, never raising and never blocking startup more than a few seconds. Domain-free: the
+  mechanism only reads whatever CLAUDE.md the consumer's own corpus happens to contain and asks a
+  generic question about it. (`interactive.py`: `_resolve_persona_from_corpus`,
+  `_read_persona_file_in_corpus`; `cli.py`, `textual_session.py`, `textual_ui.py` thread the new
+  flags through; `tests/test_persona_resolution.py`, `tests/test_cli_persona_explicit_flag.py`.)
+- **`GuidanceProvider.select()` could hang an entire turn indefinitely, UI-agnostic.** Unlike the
+  concurrent context-assembly fetch right above it (bounded by
+  `context_assembly_timeout_seconds()`), the turn-start guidance pre-selection called a
+  caller-supplied `select()` directly and synchronously with no timeout of its own — a
+  `dynamic_guidance_loader` hitting a stuck DB/network call, or a provider's own LLM filtering pass
+  inside `select()`, blocked the whole orchestrator turn loop in the SAME "Searching context…"
+  status the (actually-protected) context fetch already showed, indistinguishable from that fetch
+  stalling. Matches a live report of a session stuck on "Searching context…" with no further
+  progress. Now runs in a bounded `ThreadPoolExecutor` collected with the new
+  `guidance_selection_timeout_seconds()` (env `QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS`, default
+  5.0s); a timeout degrades to "no guidance this turn," matching the existing behavior for a
+  `select()` that raises. (`core/orchestrator.py`; `tests/test_guidance_selection_timeout.py`.)
+- **A "Sources:" header could print with nothing under it.** The Textual terminal's `EVENT_CONTEXT`
+  rendering gated the header on the outer `sources` list being non-empty, but gated each line
+  separately on that source's own `items` — a source with no file-level items (e.g. a recent/card
+  match) left a dangling header with an unrelated narration beat landing right after it, reading as
+  broken/missing content. The per-source lines are now built first and the header is only written
+  when at least one line has content. (`textual_ui.py`; `tests/test_context_sources_header.py`.)
 
 ### Added
 - **Autopilot can ADOPT a quest's own recurring tasks** (opt-in per quest via

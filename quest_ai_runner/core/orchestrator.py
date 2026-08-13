@@ -3157,6 +3157,29 @@ def context_assembly_timeout_seconds() -> float:
     return value if value > 0 else 5.0
 
 
+def guidance_selection_timeout_seconds() -> float:
+    """Wall-clock budget for the turn-start GuidanceProvider.select() call. Env
+    ``QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS`` (default 5.0, accepts a float); read fresh on every
+    call so it can be tuned without a restart.
+
+    ``GuidanceProvider.select()`` is a caller-supplied implementation (``core/adapters.py``'s
+    ``GuidanceProviderBase``); a consumer's ``dynamic_guidance_loader`` or its own LLM filtering
+    call inside ``select()`` can block on I/O with no timeout of its own. Called with no bound at
+    all, that hangs the ENTIRE turn indefinitely, in the SAME "Searching context…" status the
+    concurrent context-assembly fetch already shows — indistinguishable from that fetch stalling,
+    but not actually protected by its timeout (context assembly runs in its own background thread
+    collected with ``context_assembly_timeout_seconds()``; guidance selection was being called
+    directly, synchronously, in the main turn thread, un-timed). See the call site in ``run()``."""
+    raw = os.getenv("QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS")
+    if raw is None or not raw.strip():
+        return 5.0
+    try:
+        value = float(raw)
+    except ValueError:
+        return 5.0
+    return value if value > 0 else 5.0
+
+
 def verify_context_max_chars() -> int:
     """Character cap on the context layer handed to goal verification (``Orchestrator._verify_goal``).
 
@@ -7250,15 +7273,41 @@ class Orchestrator:
         # the same standards the planner was given (see _run_deep / _verify_goal).
         quality_standards: Optional[str] = None
         if self.guidance is not None:
+            # Bounded, like the concurrent context-assembly fetch above: select() is a
+            # caller-supplied GuidanceProvider implementation that may block on I/O (a
+            # dynamic_guidance_loader hitting a DB/network, or its own LLM filtering call)
+            # with no timeout of its own. Called directly with no bound, that hangs the whole
+            # turn indefinitely -- in the SAME "Searching context…" status the concurrent
+            # context-assembly fetch already shows, making it look identical to that fetch
+            # stalling even though it was never protected by that fetch's timeout.
+            _guidance_timeout = guidance_selection_timeout_seconds()
+            # Not a `with ThreadPoolExecutor(...)` block: its __exit__ calls shutdown(wait=True),
+            # which would block on the SAME hung call this is meant to bound. shutdown(wait=False)
+            # below lets a genuinely stuck select() keep running in the background (Python threads
+            # cannot be force-killed) without the timeout itself becoming just as blocking.
+            _guidance_pool = ThreadPoolExecutor(max_workers=1)
             try:
-                _cards = self.guidance.select(
+                _cards = _guidance_pool.submit(
+                    self.guidance.select,
                     user_message,
                     team_id=_ctx_meta.get("team_id") if _ctx_meta else None,
                     org_id=_ctx_meta.get("org_id") if _ctx_meta else None,
-                    limit=cfg.guidance_topk) or []
+                    limit=cfg.guidance_topk,
+                ).result(timeout=_guidance_timeout) or []
+            except FuturesTimeoutError:
+                log.warning(
+                    "Guidance selection timed out after %.1fs; this turn proceeds without "
+                    "guidance (QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS to adjust)",
+                    _guidance_timeout)
+                _cards = []
             except Exception as e:  # noqa: BLE001 -- a provider must never break the run
                 log.warning(f"Guidance selection failed: {type(e).__name__}: {e}", exc_info=True)
                 _cards = []
+            finally:
+                try:
+                    _guidance_pool.shutdown(wait=False)
+                except Exception:  # noqa: BLE001
+                    pass
             if _cards:
                 _blocks = ["--- APPLICABLE GUIDANCE ---"]
                 for _c in _cards:

@@ -690,6 +690,12 @@ def main(argv=None) -> int:
             for p in problems:
                 log.error("config error: %s", p)
             return 1
+        # Track whether the caller explicitly named a rep / persona file (env var or flag),
+        # as opposed to falling through to the "Assistant" default -- distinct from just
+        # checking the final rep_name string, since "--rep Assistant" must count as explicit
+        # too. Session-level auto-persona-resolution (interactive.py) only runs when NEITHER
+        # was explicitly given.
+        rep_specified = bool(args.rep or os.getenv("QAR_REP_NAME"))
         rep_name = args.rep or os.getenv("QAR_REP_NAME") or "Assistant"
         persona = None
         persona_path = args.persona_file or os.getenv("QAR_REP_PERSONA_FILE")
@@ -700,6 +706,7 @@ def main(argv=None) -> int:
             except OSError as e:
                 log.error("could not read persona file %r: %s", persona_path, e)
                 return 1
+        persona_specified = persona is not None
 
         # Try Textual UI first (smooth 120 FPS terminal), fall back to ANSI.
         # `textual` is a CORE dependency (see pyproject.toml) — it should always be
@@ -712,7 +719,9 @@ def main(argv=None) -> int:
             from .textual_session import is_textual_available, start_textual_interactive
             if is_textual_available():
                 log.debug("using Textual UI for chat session")
-                start_textual_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id, verbosity=args.verbose)
+                start_textual_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id,
+                                          verbosity=args.verbose, rep_specified=rep_specified,
+                                          persona_specified=persona_specified)
                 return 0
             log.warning(
                 "Textual UI unavailable (the 'textual' package failed to import) — falling back "
@@ -731,7 +740,9 @@ def main(argv=None) -> int:
 
         # Fallback to original ANSI-based interactive session
         from .interactive import start_interactive
-        start_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id)
+        start_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id,
+                          verbose=bool(args.verbose), rep_specified=rep_specified,
+                          persona_specified=persona_specified)
         return 0
 
     # --- send -----------------------------------------------------------------

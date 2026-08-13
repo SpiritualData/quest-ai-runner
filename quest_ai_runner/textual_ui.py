@@ -32,7 +32,7 @@ from typing import Callable, Dict, List, Optional, TYPE_CHECKING
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, VerticalScroll  # Horizontal kept for layout elsewhere if needed
+from textual.containers import Horizontal, Vertical, VerticalScroll  # Horizontal kept for layout elsewhere if needed
 from textual.geometry import Offset
 from textual.message import Message
 from textual.selection import Selection
@@ -855,6 +855,11 @@ class QuestAITerminal(App):
         height: auto;
     }
 
+    #bottom-bar {
+        dock: bottom;
+        height: auto;
+    }
+
     #activity {
         height: 1;
         padding: 0 1;
@@ -897,6 +902,8 @@ class QuestAITerminal(App):
         _rep_name: str = "Assistant",
         _persona: Optional[str] = None,
         _goal_id: Optional[str] = None,
+        _rep_specified: bool = True,
+        _persona_specified: bool = True,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -909,6 +916,8 @@ class QuestAITerminal(App):
         self._deferred_rep_name = _rep_name
         self._deferred_persona = _persona
         self._deferred_goal_id = _goal_id
+        self._deferred_rep_specified = _rep_specified
+        self._deferred_persona_specified = _persona_specified
 
         # Per-turn streaming state (reset by _begin_turn).
         self._turn_active = False
@@ -968,15 +977,23 @@ class QuestAITerminal(App):
         yield DeepActivity(id="deep")
         yield DeepDetailPanel(id="deep-detail")
         yield FutureContextPanel(id="future-context")
-        yield ActivityBar(id="activity")
-        yield PromptTextArea(
-            id="prompt",
-            soft_wrap=True,
-            tab_behavior="focus",
-            show_line_numbers=False,
-            compact=True,
-            placeholder="Ask anything…   Enter=send, Shift+Enter=newline   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)",
-        )
+        # ActivityBar + the prompt are wrapped in one docked container (rather than each
+        # docking to the Screen individually) so the input box always stays pinned to the
+        # bottom regardless of how tall the panels above grow. A single dock:bottom widget
+        # here, not two, avoids a layout quirk where a second independently-docked bottom
+        # sibling alongside Footer (also dock:bottom) lands on the same row as Footer instead
+        # of stacking above it -- Footer's own space reservation only correctly accounts for
+        # one additional bottom-docked widget.
+        with Vertical(id="bottom-bar"):
+            yield ActivityBar(id="activity")
+            yield PromptTextArea(
+                id="prompt",
+                soft_wrap=True,
+                tab_behavior="focus",
+                show_line_numbers=False,
+                compact=True,
+                placeholder="Ask anything…   Enter=send, Shift+Enter=newline   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)",
+            )
         yield Footer()
 
     def on_mount(self) -> None:
@@ -1044,6 +1061,9 @@ class QuestAITerminal(App):
                 persona=self._deferred_persona,
                 goal_id=self._deferred_goal_id,
                 _startup_notify=_live_notice,
+                verbose=self.verbosity >= 1,
+                rep_specified=self._deferred_rep_specified,
+                persona_specified=self._deferred_persona_specified,
             )
             _active[0] = False  # suppress any background-thread notices from here on
             self.call_from_thread(self._finish_startup, session)
@@ -1572,14 +1592,23 @@ class QuestAITerminal(App):
                     if extra > 0:
                         log.write(f"      [dim]… and {extra} more files[/dim]")
             if sources:
-                log.write("[dim]Sources:[/dim]")
+                # Build the per-source lines first and only write the "Sources:" header if at
+                # least one line actually has content. The header used to be gated on the OUTER
+                # `sources` list being non-empty while each line was separately gated on that
+                # source's own `items` -- a source with no file-level items (e.g. a recent/card
+                # match) left a dangling "Sources:" header with nothing under it.
+                source_lines = []
                 for src in sources:
                     label = src.get("label", src.get("adapter", "?"))
                     items = src.get("items") or []
                     if items:
                         istr = ", ".join(str(x).split("/")[-1] for x in items[:3])
                         more = f" (+{len(items) - 3} more)" if len(items) > 3 else ""
-                        log.write(f"  [dim]• {label}: {istr}{more}[/dim]")
+                        source_lines.append(f"  [dim]• {label}: {istr}{more}[/dim]")
+                if source_lines:
+                    log.write("[dim]Sources:[/dim]")
+                    for line in source_lines:
+                        log.write(line)
 
         elif t == ev["understanding"]:
             # Stage 1's resolved goal condition, surfaced the instant it's ready (well before
