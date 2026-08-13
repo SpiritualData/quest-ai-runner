@@ -158,8 +158,8 @@ All notable changes to this project are documented here. The format is based on
   `InteractiveSession.__init__` (now covers `bm25_content_store`'s logger too, not just the context
   one), gated off when the caller passes `-v`/`-vv` so an explicit verbose request still sees them.
   The user-facing bootstrap summary (`notify()`/`_tell()` in `config.py`) is unaffected either way.
-  (`interactive.py`, `cli.py`, `textual_ui.py`; `tests/test_prompt_docked_bottom.py` and inline
-  behavior verified against a mounted `QuestAITerminal`.)
+  (`interactive.py`, `cli.py`, `textual_ui.py`, `textual_session.py`;
+  `tests/test_bootstrap_log_suppression.py`.)
 - **The prompt input box could be pushed off-screen by tall panels above it.** No widget in
   `QuestAITerminal`'s Textual layout was docked, so when the context/deep/deep-detail/future-context
   panels grew (cards shown, an expanded deep-run detail), the whole stack could exceed the viewport
