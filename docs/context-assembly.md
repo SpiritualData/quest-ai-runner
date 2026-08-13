@@ -168,6 +168,43 @@ runner's `context_preamble`.
   Opus for review/quality/ambiguity/irreversible — **and escalate one tier on a failed verification
   rather than re-running identically.**
 
+### The sufficiency gate has a structural half too
+
+Prompt text is an instruction the model may simply not follow, and it did not: a real turn answered
+from a card item that held a short synthesized **summary** of a note whose full text was live
+fetchable, and spent its reply saying it had "only the note header" and asking the user whether it
+should go and get the rest. Two things had gone wrong, and only one of them was the model's fault. A
+summary and full content **rendered identically** in the context view, so nothing told it which was
+which; and nothing checked the plan it returned.
+
+Both are closed in `quest_ai_runner/core/sufficiency.py`, keyed on data the item declares about
+itself, never on words the model wrote (hard rule #3). A content item whose stored text is an
+abridged stand-in says so on its locator, and names the read spec that fetches the real thing:
+
+```json
+{"type": "note",
+ "locator": {"text": "<the short summary>",
+             "full_ref": {"query": {"kind": "goal_context", "goal_id": "...",
+                                    "include_notes": true}}}}
+```
+
+`full_ref` is an ordinary read spec (the same shape the planner emits in `reads`), so the brain can
+force exactly the fetch the item declares while knowing nothing about what kind of source it is.
+Then:
+
+- the rendered item carries an explicit `[abridged: N chars of SUMMARY, not the full text ...]`
+  marker naming the fetch (`NoteResolver`), and the context view gains an `ABRIDGED CONTEXT ITEMS`
+  notice listing them;
+- a plan that would terminate in `answer` while one of those fetches has **not run this turn** is
+  turned into one `read` step that runs it, and the loop re-plans with the full text in GATHERED
+  (`OrchestratorConfig.full_read_before_answer`, on by default). "Has it run" is judged against the
+  read specs that actually executed, the same way `core/guard.ExecutionRecord` judges an answer's
+  completion claims against what actually executed. It fires at most **once** per turn.
+
+Inert unless an item declares `full_ref`: no declaration means nothing to fetch, no notice, and a
+byte-identical turn. The card updater is instructed to attach `full_ref` whenever it writes a note
+that only summarizes something still fetchable.
+
 A third gate, `CARD_THREAD_GATE`, governs a different decision — not proceed-vs-explore or which
 model tier, but *which card a message belongs to*. It's injected alongside the two gates above and
 is documented on its own below because it is the one that determines whether a turn's context (and

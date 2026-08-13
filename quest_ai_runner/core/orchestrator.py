@@ -110,6 +110,11 @@ from .answer_explanation import (
 )
 from .model_registry import TIERS, ModelRegistry
 from .overseer import OverseerSignal, build_digest, oversee
+from .sufficiency import (
+    AbridgedTurnState,
+    collect_abridged_items,
+    render_abridged_notice,
+)
 from .prompt_layers import PromptLayers, compose_layers, language_instruction, turn_prompt_head
 from .recent_context import (
     GLOBAL_SCOPE_KEY,
@@ -866,6 +871,17 @@ class OrchestratorConfig:
     # default. ``max_remediations`` caps the execute-for-real re-runs (only when no action ran).
     verify_claims: bool = True
     max_remediations: int = 1
+    # STRUCTURAL SUFFICIENCY GATE (see core/sufficiency.py). The prose SUFFICIENCY gate in the
+    # planner prompt is an instruction the model may simply not follow: a real turn answered from a
+    # card item that held only a short synthesized SUMMARY of a note, and spent its reply telling
+    # the user it had "only the header" and asking whether to go and fetch the rest. When on, a plan
+    # that terminates in "answer" while a declared-ABRIDGED context item's ``full_ref`` read spec
+    # has NOT been executed this turn is turned into ONE "read" step that executes it, and the loop
+    # re-plans with the full text in GATHERED. Keyed entirely off structured data (the item's own
+    # declared fetch spec vs the read specs that actually ran), never off words in the model's
+    # output. INERT unless a content item declares ``full_ref``: with no declaration there is
+    # nothing to fetch, no notice is rendered, and the turn is byte-for-byte what it was.
+    full_read_before_answer: bool = True
     # GOAL-VERIFICATION JUDGE TIER. The tier ``_verify_goal`` (the met/not-met + claims-honesty
     # verdict) resolves its model from. This verdict is the run's risk gate: it decides done vs
     # needs_you/failed and whether a reply's completion claims are honest, so a wrong verdict either
@@ -1651,7 +1667,11 @@ CARD_UPDATE_TOOL: Dict[str, Any] = {
                                                       "query", "note"]},
                                     "locator": {"type": "object",
                                                 "description": "For collection: {name,id}. For "
-                                                               "note: {text}. For file: {path}."},
+                                                               "note: {text}, plus full_ref (the "
+                                                               "read spec that re-fetches the FULL "
+                                                               "source) whenever the note only "
+                                                               "summarizes something fetchable. "
+                                                               "For file: {path}."},
                                     "why": {"type": "string"},
                                 },
                                 "required": ["type"],
@@ -1704,6 +1724,12 @@ Rules:
     "add" is empty when the future-context names collections or files.
   - PREFER references over copied text. Use a "note" ({{"locator": {{"text": "..."}}}}) ONLY for a
     durable fact with nothing external to point at.
+  - A note that only SUMMARIZES something still fetchable MUST carry the fetch alongside it:
+    {{"type": "note", "locator": {{"text": "<the summary>", "full_ref": <the read spec that returns
+    the FULL source>}}}}. The read spec is the same shape a read step uses (e.g.
+    {{"query": {{"kind": "...", "id": "..."}}}} or {{"rel_path": "..."}}). Without it a later turn
+    cannot tell your summary from the whole source and will answer out of the summary; with it, the
+    full text is pulled first. Never write a summary of a fetchable source with no full_ref.
   - Group related references onto ONE topical card. Set its "name"/"description" so it is easy to
     find later.
   - To UPDATE an existing card, reuse its exact card_id from CURRENT CARDS below; for something new,
@@ -7031,6 +7057,9 @@ class Orchestrator:
             # message alone (see ``_derive_goal_condition``; fails safe to the raw ``user_message``,
             # never raises). This adds one LLM round trip to every turn that reaches here (a real
             # cost/latency change from before, when this branch did nothing); see CHANGELOG.md.
+            # Announced, for the same reason the verification pass below is: it is a real model
+            # round trip that runs before any context is even fetched, and it used to be silent.
+            emit.status("Working out what you're asking for…")
             goal_condition, retrieval_constraints = self._derive_goal_condition(user_message, now=now)
             if restates_meaningfully(goal_condition, user_message) or retrieval_constraints:
                 _event_data: Dict[str, Any] = {"goal_condition": goal_condition, "internal": True}
@@ -7365,6 +7394,26 @@ class Orchestrator:
             except Exception:  # noqa: BLE001 -- recent-context merge must never break the run
                 _recent_entries = []
         _merged_card_meta = _card_meta + _recent_entries
+
+        # --- STRUCTURAL SUFFICIENCY GATE: which of this turn's context is only a SUMMARY ---------
+        # A content item whose locator declares ``full_ref`` is saying, structurally, "the text
+        # stored on the card is an abridged stand-in, the real source is fetched with THIS read
+        # spec". Two things ride on that (see core/sufficiency.py): the planner is TOLD which items
+        # are summaries and how to open them (they render identically to full content otherwise, so
+        # it had no way to know), and the loop refuses to let an "answer" terminate while one of
+        # those fetches has not run. Empty and inert for every item that declares nothing.
+        abridged_state = AbridgedTurnState()
+        if cfg.full_read_before_answer:
+            try:
+                abridged_state.items = collect_abridged_items(_merged_card_meta)
+                _abridged_notice = render_abridged_notice(abridged_state.items)
+                if _abridged_notice:
+                    context_view = (context_view + "\n\n" + _abridged_notice if context_view
+                                    else _abridged_notice)
+            except Exception:  # noqa: BLE001 -- the gate must never break a turn
+                log.debug("abridged-item collection failed; the turn continues without the gate",
+                          exc_info=True)
+                abridged_state = AbridgedTurnState()
 
         # --- PER-IDEA THREADING: the cheap PRIOR, then the planner decides --------------------
         # The candidate set is the cards this turn's HYBRID RETRIEVAL already scored (keyword/IDF
@@ -7858,6 +7907,33 @@ class Orchestrator:
                         _clarify_question_text(plan) or brainstorm_clarify_question)
                 plan.action = "answer"
 
+            # --- STRUCTURAL SUFFICIENCY GATE: never answer ABOUT a summary you never opened ------
+            # The prose SUFFICIENCY gate in the planner prompt asks the model to check, before
+            # answering, that it has READ (not merely located) what it is about to answer from.
+            # Nothing enforced it, and a real turn answered from a card item holding a short
+            # synthesized SUMMARY of a note, spending its reply saying it had "only the header" and
+            # asking whether it should go and fetch the rest. This is that check, made structural:
+            # the item itself declared (at capture time) that its stored text is abridged and named
+            # the read spec that fetches the full source, so "was the full text actually pulled?" is
+            # a fact about which read specs RAN this turn, not a reading of anything the model said
+            # (hard rule #3). Fires at most ONCE per turn: it closes that hole, it does not give the
+            # loop a new way to spin. Inert when no item declares a fetch spec.
+            if plan and plan.action == "answer" and cfg.full_read_before_answer:
+                try:
+                    _to_fetch = abridged_state.should_force_read()
+                except Exception:  # noqa: BLE001 -- the gate must never break the loop
+                    _to_fetch = []
+                if _to_fetch:
+                    abridged_state.forced = True
+                    _forced_reads = [dict(it.fetch) for it in _to_fetch[: cfg.max_reads_per_step]]
+                    log.info(
+                        "Sufficiency gate: the plan would answer from %d abridged context item(s) "
+                        "whose full text was never fetched; forcing a read step first (%s).",
+                        len(_forced_reads), ", ".join(it.label for it in _to_fetch)[:200])
+                    plan.action = "read"
+                    plan.reads = _forced_reads
+                    emit.status("Pulling the full text before answering…")
+
             # Safety gate: if planner chose "read" for many consecutive steps, force a terminal action
             if plan and plan.action == "read":
                 consecutive_reads += 1
@@ -7943,6 +8019,11 @@ class Orchestrator:
                         emit.status("Searching…" if any(r.get("grep") for r in plan.reads) else "Reading…")
                     new_obs = self._do_reads(plan.reads, guidance_selected_ids, card_context)
                     gathered.extend(new_obs)
+                    # The turn's REAL record of what was fetched, for the sufficiency gate above:
+                    # these specs actually executed, whoever chose them (the planner on its own, or
+                    # the gate). Recorded here, at the one place reads run, so the gate can never be
+                    # satisfied by a plan that merely mentioned a fetch.
+                    abridged_state.record_reads(plan.reads)
                     _sources: List[str] = []
                     for _o in new_obs:
                         if not isinstance(_o, dict):
@@ -8527,6 +8608,13 @@ class Orchestrator:
                 _remediations = 0
                 _attempt = 1
                 while _attempt < _max:  # at most _max-1 regenerations after the first answer
+                    # SAY that this is happening. The verdict runs at ``verify_tier`` (the strongest
+                    # model) over the same context the answer saw, so it is one of the longest waits
+                    # in a turn, it sits AFTER the answer is already written, and nothing announced
+                    # it: the reader saw "Answering…" and then silence until the whole turn landed.
+                    # Only the outcome lines were ever emitted, and only once it was over.
+                    if emit is not None:
+                        emit.status("Checking the answer against the goal…")
                     verdict, verify_error = self._verify_goal(
                         overall_goal, user_message, text,
                         rep_preamble=rep_preamble,

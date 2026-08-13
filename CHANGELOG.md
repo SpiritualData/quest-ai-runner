@@ -7,6 +7,39 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **The sufficiency gate now has a STRUCTURAL half, not just prompt text.** `SUFFICIENCY_GATE` tells
+  the planner to issue another "read" when it has not READ the material it is about to answer from,
+  and nothing enforced it. A real turn proved the cost: the assembled context surfaced a card whose
+  content was a short synthesized SUMMARY of a note whose full text was live fetchable, and the
+  planner answered at step 0 anyway, spending the reply telling the user it had "only the note
+  header" and asking whether it should go and get the rest. Two things were wrong and only one was
+  the model's: a summary and full content rendered IDENTICALLY, so it had no signal, and no check
+  ever looked at the plan it returned. New `core/sufficiency.py` closes both, keyed entirely on
+  structured data (an item's own declared fetch spec versus the read specs that actually ran), never
+  on words in the model's output. A content item whose stored text is abridged declares it on its
+  locator and names the read spec that fetches the real source (`{"text": "...", "full_ref":
+  {"query": {...}}}`); the rendered item then carries an explicit `[abridged: N chars of SUMMARY ...]`
+  marker naming that fetch, the context view gains an `ABRIDGED CONTEXT ITEMS` notice, and a plan
+  that would terminate in "answer" while one of those fetches has not run this turn becomes ONE
+  "read" step that runs it, after which the loop re-plans with the full text in GATHERED. Fires at
+  most once per turn, and is INERT for any item that declares nothing (no notice, no gate,
+  byte-identical prompts), so no existing deployment changes until its cards carry `full_ref`. The
+  card updater is now instructed to attach one whenever it writes a note that only summarizes
+  something still fetchable. Governed by `OrchestratorConfig.full_read_before_answer` (default on).
+  (`core/sufficiency.py`, `core/orchestrator.py`, `adapters/reference_resolver.py::NoteResolver`,
+  `docs/context-assembly.md`; `tests/test_sufficiency_gate.py`.)
+- **The provider round trips behind a reported "1 step" are now pinned by a test.** A turn the UI
+  called "1 step" took 83 seconds against fully prebuilt context, and the step count explained none
+  of it: "steps" counts PLANNER LOOP iterations, while the simplest possible turn makes FOUR
+  sequential model calls, all on the critical path. In order: the goal-condition derivation (cheap
+  tier), the planner (planner tier), the answer (answer tier), and goal verification (`verify_tier`,
+  the STRONGEST model, over the same context the answer saw and only after the answer is already
+  written). No call is duplicated, neither the planner nor the answer sends its context twice
+  (`_plan` and `_grounded_answer` each build both a flattened and a layered form, and only one
+  reaches the provider), and provider retries fire only on transient 429/503/timeout errors. The
+  time is four real generations. `tests/test_turn_call_budget.py` locks the count, the
+  no-double-payload property, and the verifier's single tier fallback, so the budget cannot grow
+  silently again.
 - **A quest-linked folder now has ONE canonical "what to do next", instead of every reader
   reconstructing its own.** A person working in a quest's folder had no artifact that answered
   "what is next here": an attended session rebuilt the answer turn by turn from whatever context
