@@ -701,15 +701,33 @@ def main(argv=None) -> int:
                 log.error("could not read persona file %r: %s", persona_path, e)
                 return 1
 
-        # Try Textual UI first (smooth 120 FPS terminal), fall back to ANSI
+        # Try Textual UI first (smooth 120 FPS terminal), fall back to ANSI.
+        # `textual` is a CORE dependency (see pyproject.toml) — it should always be
+        # importable from a correctly installed/synced environment. Falling back is a
+        # real degradation (the ANSI renderer is missing docking, clean log routing,
+        # etc.), so this is surfaced as a visible WARNING, not a silent debug line, so
+        # a stale/incomplete environment (e.g. an editable install never re-synced
+        # after `textual` was added to dependencies) doesn't go unnoticed.
         try:
             from .textual_session import is_textual_available, start_textual_interactive
             if is_textual_available():
                 log.debug("using Textual UI for chat session")
                 start_textual_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id, verbosity=args.verbose)
                 return 0
+            log.warning(
+                "Textual UI unavailable (the 'textual' package failed to import) — falling back "
+                "to the older ANSI terminal renderer. This environment is missing a core "
+                "dependency; run `pip install --upgrade -e .` (or `pip install --upgrade "
+                "quest-ai-runner`) to install it and get the improved interface."
+            )
         except Exception as e:
-            log.debug("Textual UI failed, falling back to ANSI: %s", e)
+            log.warning(
+                "Textual UI failed to start (%s) — falling back to the older ANSI terminal "
+                "renderer. Run `pip install --upgrade -e .` (or `pip install --upgrade "
+                "quest-ai-runner`) to refresh dependencies; if the problem persists, please "
+                "file an issue.",
+                e,
+            )
 
         # Fallback to original ANSI-based interactive session
         from .interactive import start_interactive
