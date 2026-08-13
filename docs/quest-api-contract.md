@@ -195,6 +195,63 @@ Like `create_task`, `create_goal` raises `QuestApiError`/`QuestNotConfigured` on
 of swallowing it — a caller that acknowledges "goal added" must know it actually was. CLI:
 `quest-ai-runner create-goal "<title>" [--quest-id ID] [--period P] [--description ...] [...]`.
 
+### Read the person's own reflections
+
+```
+GET /api/daily-plan/today[?date=YYYY-MM-DD]     (get_daily_reflection)
+  -> { "has_plan": true, "plan_id": "...", "date": "YYYY-MM-DD",
+       "yesterday_review": "...", "today_plan": "...", "goals_created": 3 }
+
+GET /api/period-review/{week|month|quarter|year}/current[?use_previous=true&timezone=...]
+  -> { "stats": {...}, "review": { "has_review": true, "reflection_past": "...",
+                                   "reflection_future": "...", ... } }        (get_period_reflection)
+```
+
+Both are **user-scoped**: they authenticate as the caller and take no team id and no quest id.
+`yesterday_review` is what the person wrote about how the previous day went (they write it while
+planning the day named in `date`); `reflection_past` / `reflection_future` are the same two
+questions asked of a whole period. `get_period_reflection` returns the `review` block only — the
+`stats` half of the response is a separate, much larger concern, and this method exists to read what
+the *person* wrote. A missing entry (`has_plan: false`) or an unsubmitted review (`has_review:
+false`) is an ordinary state, not an error: both methods return `{}` or the bare flag rather than
+raising, because "they have not written one" is a true and useful answer.
+
+`runner/reflections.py` composes both into one `ReflectionContext`:
+
+```python
+from quest_ai_runner.runner.reflections import collect_reflections
+
+ctx = collect_reflections(client, periods=("week", "month"))
+ctx.as_text()      # a labeled, dated block for a prompt or a task's text
+ctx.one_line()     # one condensed line, for an artifact that holds a single note
+```
+
+It takes today's daily entry, or walks back a couple of days when today's is not written yet (the
+morning case), then the first period in `periods` with a submitted, non-empty review, retrying the
+*previous* period when no current one has been submitted. Nothing there presumes which period type
+matters — the caller passes the order. Every read is best-effort: a client without these methods, a
+404, or a transport failure all degrade to an empty context.
+
+Two consumers use it, and neither could see a reflection before:
+
+- **The attended chat**, via `QuestRetrievalAdapter`'s new `reflection_context` query kind —
+  `query({"kind": "reflection_context", "periods": ["week", "month"], "include_daily": true,
+  "use_previous": false})`, advertised to the planner as `get_reflection_context` in
+  `list_operations` / `describe_operation` exactly like `goal_context`. All spec fields are
+  optional and no ids are needed. When nothing is on record it returns `kind="query"` with a plain
+  statement to that effect, **not** `kind="error"` — an error reads as "this lookup is broken" and
+  sends the planner back to asking the person to paste text it just verified does not exist. This
+  is the gap it closes: asked to choose work "based on my daily reflection", the assistant had no
+  action that could go and read one, so the best it could do was say so and ask for a paste.
+- **Autopilot** (`runner/autopilot.py`): each pass reads the reflection once (user-scoped, so it is
+  cached for the pass rather than re-read per quest) and `compose_batch_text` carries it into every
+  batch it creates, with the period order derived from the quest's own scope (a month-scoped quest
+  asks for the month review first). `next_steps_from_pass` puts one condensed line in the artifact's
+  `note` slot, as context for the list rather than a step on it. Everything else in a batch is
+  derived from rows the system recorded; the reflection is the one input the person wrote, so it is
+  what breaks ties about which eligible goal actually matters. A client without the reflection
+  methods composes exactly the batch it composed before.
+
 ## Don't hand-roll HTTP
 
 Use `QuestClient` — it covers discover / claim / report / escalate / loop-close / whoami / heartbeat

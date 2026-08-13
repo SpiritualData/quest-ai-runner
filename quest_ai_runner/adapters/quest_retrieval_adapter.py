@@ -22,6 +22,7 @@ from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.core.adapters import Observation, RetrievalAdapter
 from quest_ai_runner.runner.quest_client import QuestClient
+from quest_ai_runner.runner.reflections import DEFAULT_PERIODS, collect_reflections
 
 
 class QuestRetrievalAdapter(RetrievalAdapter):
@@ -29,6 +30,8 @@ class QuestRetrievalAdapter(RetrievalAdapter):
 
     This adapter:
     - Fetches goal/quest metadata and notes
+    - Reads the person's own reflections (daily review + period review), which are user-scoped
+      and need no ids
     - Searches related goals and tasks
     - Supports cross-environment context discovery
     - Conditionally queries only when goal_id/quest_id is present
@@ -73,6 +76,7 @@ class QuestRetrievalAdapter(RetrievalAdapter):
         Supports:
         - goal_context: fetch goal metadata, notes, related goals (requires goal_id + quest_id)
         - quest_context: fetch quest metadata and goals (requires quest_id)
+        - reflection_context: fetch the person's own latest daily + period reflections (no ids)
         - task_history: fetch task details and history (future)
         - cross_env_search: search related goals/tasks across envs (future)
 
@@ -96,6 +100,8 @@ class QuestRetrievalAdapter(RetrievalAdapter):
                 return self._query_goal_context(spec)
             elif kind == "quest_context":
                 return self._query_quest_context(spec)
+            elif kind == "reflection_context":
+                return self._query_reflection_context(spec)
             elif kind == "task_history":
                 return self._query_task_history(spec)
             elif kind == "cross_env_search":
@@ -191,6 +197,47 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             kind="query",
             text=text,
             rel_path=f"quest://{quest_id}",
+        )
+
+    def _query_reflection_context(self, spec: Dict[str, Any]) -> Observation:
+        """Fetch the person's own latest reflections: daily review plus one period review.
+
+        Needs no goal_id or quest_id — reflections live on the USER. This exists because a planner
+        asked to work "based on my daily reflection" previously had no action that could go and get
+        one, so the best it could do was say it did not have the text and ask the person to paste
+        it. Now it can read it.
+
+        An absence is reported as a normal result, not an error: "the person has not written one"
+        is a true, useful answer, and returning kind="error" would read as "this lookup is broken"
+        and push the planner back into asking the human for text it just verified does not exist.
+        """
+        periods = spec.get("periods") or spec.get("period") or DEFAULT_PERIODS
+        if isinstance(periods, str):
+            periods = [periods]
+        include_daily = spec.get("include_daily", True)
+        use_previous = bool(spec.get("use_previous", False))
+
+        ctx = collect_reflections(
+            self.client,
+            include_daily=bool(include_daily),
+            periods=list(periods),
+            use_previous=use_previous,
+        )
+        if not ctx.has_any():
+            checked = ", ".join(ctx.checked_periods) or "no period"
+            return Observation(
+                kind="query",
+                locator="reflection_context",
+                rel_path="quest://reflections",
+                text=("No reflection is recorded on Quest right now. Checked the daily plan"
+                      f"{' (skipped)' if not include_daily else ''} and the {checked} review; "
+                      "the person has not submitted one. Do not invent what it might have said."),
+            )
+        return Observation(
+            kind="query",
+            locator="reflection_context",
+            rel_path="quest://reflections",
+            text=ctx.as_text(),
         )
 
     def _query_task_history(self, spec: Dict[str, Any]) -> Observation:
@@ -310,8 +357,12 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             "get_goal_context: Fetch goal metadata and notes from Quest",
             "query_quest: Query a specific quest for goals and metadata",
             "discover_goals: List goals available in a quest",
+            "get_reflection_context: Fetch the person's own latest reflections from Quest (their "
+            "daily review of how yesterday went, and their week/month review). Needs no ids. Use "
+            "this whenever a request refers to their reflection, their review, how their day or "
+            "week went, or what they said they want to focus on",
         ]
-        return Observation(kind="query", text="\n".join(lines))
+        return Observation(kind="query", locator="list_operations", text="\n".join(lines))
 
     def describe_operation(self, name: str) -> Observation:
         """DISCOVERY: full signature and usage for an operation."""
@@ -319,6 +370,17 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             "get_goal_context": "Fetch goal metadata, notes, and deadline from Quest. Usage: query({kind: 'goal_context', goal_id: '...', quest_id: '...', include_notes: true})",
             "query_quest": "Query a specific quest for metadata and status. Usage: query({kind: 'goal_context', quest_id: '...'})",
             "discover_goals": "List goals within a quest. Usage: list_sources() to discover available quests, then query() with goal_id from context.",
+            "get_reflection_context": (
+                "Fetch what the person themselves last wrote about their own work: the daily "
+                "plan's review of how the previous day went (and what they planned for the day), "
+                "plus the most recent submitted period review's 'how did it go' and 'what to "
+                "focus on next'. USER-scoped, so no goal_id or quest_id is needed or accepted. "
+                "Usage: query({kind: 'reflection_context', periods: ['week', 'month'], "
+                "include_daily: true, use_previous: false}). All fields optional; periods may be "
+                "any of week/month/quarter/year, tried in the order given, first submitted review "
+                "wins. When nothing is on record it returns a plain statement to that effect, not "
+                "an error, so read it before telling the person you cannot see their reflection."
+            ),
         }
         desc = ops.get(name)
         if desc:

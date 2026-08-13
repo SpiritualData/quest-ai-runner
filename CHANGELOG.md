@@ -7,6 +7,41 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **QAR can now read the person's own reflections, so "pick something based on my daily reflection"
+  is a lookup instead of an apology.** Observed live: asked exactly that, an attended session
+  replied that it did not have the reflection in front of it and asked the person to paste it. The
+  model was right on both counts — it needed the text and it refused to invent it — but no action
+  existed that could go and get it, and `grep -rn reflection quest_ai_runner/` found nothing. Quest
+  had been storing the answers all along, in two user-scoped endpoints nothing here called:
+  `GET /api/daily-plan/today` (`yesterday_review`, the person's own account of how the previous day
+  went, plus what they planned for the day) and `GET /api/period-review/{period}/current`
+  (`reflection_past` / `reflection_future` for a week, month, quarter, or year). Both are now
+  `QuestClient.get_daily_reflection` / `get_period_reflection`, and `runner/reflections.py`
+  composes them into one dated, labeled `ReflectionContext`. It takes today's daily entry or walks
+  back a couple of days when today's is not written yet (the morning case, which is precisely when
+  a background pass would otherwise look blind at a person who reflects every day), then the first
+  requested period with a submitted, non-empty review, falling back to the *previous* period since
+  early in a week the newest thing the person wrote is last week's review. Which period matters is
+  the caller's call, never assumed. An unwritten reflection is a normal state everywhere in this
+  path: no submitted review, a client that predates these methods, or a dead endpoint all degrade
+  to an empty context rather than an error.
+  (`docs/quest-api-contract.md`; `tests/test_reflections.py`.)
+- **Both surfaces that decide what to work on now see it.** The attended chat gets a
+  `reflection_context` query kind on `QuestRetrievalAdapter`, advertised to the planner as
+  `get_reflection_context` in `list_operations`/`describe_operation` the same way `goal_context` is,
+  needing no goal or quest id. When nothing is on record it answers `kind="query"` with a plain
+  statement to that effect rather than `kind="error"` — an error reads as "this lookup is broken"
+  and pushes the planner straight back into asking the human for text it has just verified does not
+  exist. Autopilot reads the reflection once per pass (user-scoped, so caching it per pass rather
+  than per quest is one pair of reads instead of N), derives the period order from the quest's own
+  scope, and `compose_batch_text` carries it into every batch, framed as the lens to read the goals
+  through and with an instruction to say so plainly if it contradicts the plan. `next_steps_from_pass`
+  puts one condensed line in the artifact's `note` slot, as context for the list rather than a step
+  on it. This is what the batch text was missing: every other input to it is derived from rows the
+  system recorded, so a person could write "the writing goal keeps slipping, protect two mornings"
+  in Quest and the next pass would compose its brief as if they had said nothing.
+  (`tests/test_autopilot_reflection.py`, including the compatibility case: a client without the
+  reflection methods composes exactly the batch it composed before.)
 - **A deep run can now be steered WHILE it is running, through a second, opt-in `DeepRunner`.**
   `SubprocessGoalRunner` shells out to `claude -p`: one prompt in, one blob out, nothing can reach
   the worker once it has started. So a user message that arrived mid-run could only be folded in at

@@ -32,6 +32,10 @@ Endpoints implemented (the contract from integration_library_design.md §3):
                place, so a REFRESHING artifact belongs in an entry, not in a note.
   Goal (real, typed, period-scoped -- distinct from an assistant task):
                POST /api/planning/goals                (create_goal)
+  Reflections (the person's own words; USER-scoped, no team or quest id):
+               GET  /api/daily-plan/today              (get_daily_reflection)
+               GET  /api/period-review/{period}/current (get_period_reflection)
+               Composed into one context block by ``runner.reflections``.
 
 ``QuestDecisionSink`` wraps a QuestClient as a core ``EscalationSink`` so the brain can raise a
 confirm/decision and get back a ``decision_id`` to report on the task.
@@ -805,6 +809,76 @@ class QuestClient:
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("update_context_entry failed for quest %s entry %s: %s",
                         quest_id, entry_id, e)
+            return {}
+
+    # --- the person's own reflections (USER-scoped; no team_id, no quest_id) -------------------
+    # Quest asks a person two standing questions and keeps their answers verbatim: the daily plan's
+    # "how did yesterday go" review, and each period review's "how did this period go" / "what to
+    # focus on next". Both endpoints are authenticated as the CALLER and scoped to that user, so
+    # neither takes (nor accepts) a team or quest id. Reading them is how anything here can answer
+    # "what should I work on" from what the person actually wrote instead of guessing from task
+    # rows. See ``runner.reflections`` for the helper that composes both into one context block.
+
+    PERIOD_REVIEW_PERIODS = ("week", "month", "quarter", "year")
+
+    def get_daily_reflection(self, *, date: Optional[str] = None) -> Dict[str, Any]:
+        """GET /api/daily-plan/today[?date=YYYY-MM-DD] — one day's daily-plan entry.
+
+        Returns ``{has_plan, plan_id, date, yesterday_review, today_plan, goals_created}``.
+        ``yesterday_review`` is the person's reflection on how the day BEFORE ``date`` went (they
+        write it while planning ``date``); ``today_plan`` is what they said they would do on
+        ``date`` itself.
+
+        Omitting ``date`` means today in the USER's own timezone, resolved server-side — which is
+        why the no-date call is the right default and an explicit date is only for walking back to
+        an earlier day. ``has_plan: False`` with both texts ``None`` simply means they have not
+        filled that day in; it is an ordinary state, not a failure. Returns {} on any error.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", "/api/daily-plan/today",
+                                 params={"date": date} if date else None) or {}
+            return resp if isinstance(resp, dict) else {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("get_daily_reflection failed (date=%s): %s", date, e)
+            return {}
+
+    def get_period_reflection(self, period: str = "week", *, use_previous: bool = False,
+                              tz: Optional[str] = None) -> Dict[str, Any]:
+        """GET /api/period-review/{period}/current — one period review's REVIEW block.
+
+        ``period`` is one of ``PERIOD_REVIEW_PERIODS`` (week/month/quarter/year). There is no
+        "day" here: the daily equivalent is ``get_daily_reflection`` above, a different endpoint
+        with a different shape. An unknown period is rejected client-side (returns {}) rather than
+        spent on a 422. ``use_previous=True`` asks for the period BEFORE the current one, which is
+        what you want early in a period, before this one has been reviewed. ``tz`` is an IANA zone
+        name deciding where the period boundaries fall; the server defaults to UTC.
+
+        Returns the response's ``review`` block: ``{has_review, review_id, status,
+        reflection_past, reflection_future, ai_suggestions, suggestions_accepted}``.
+        ``has_review: False`` means the person has not submitted that review yet — expected, not an
+        error, and the reflection fields are ``None``. The response's ``stats`` block (completions
+        and time distribution) is deliberately dropped: this method exists to read what the PERSON
+        wrote, and the stats are a separate, much larger concern. Returns {} on any error.
+        """
+        period = str(period or "").strip().lower()
+        if period not in self.PERIOD_REVIEW_PERIODS:
+            log.warning("get_period_reflection: unknown period %r (expected one of %s)",
+                        period, ", ".join(self.PERIOD_REVIEW_PERIODS))
+            return {}
+        try:
+            self._require()
+            params: Dict[str, Any] = {}
+            if use_previous:
+                params["use_previous"] = "true"
+            if tz:
+                params["timezone"] = tz
+            resp = self._request("GET", f"/api/period-review/{period}/current",
+                                 params=params or None) or {}
+            review = resp.get("review") if isinstance(resp, dict) else None
+            return review if isinstance(review, dict) else {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("get_period_reflection failed for period %s: %s", period, e)
             return {}
 
     # --- task creation (enqueue a new AI task) --------------------------------
