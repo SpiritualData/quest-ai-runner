@@ -8,11 +8,17 @@ from pathlib import Path
 import pytest
 
 from quest_ai_runner.runner.quest_folder_sync import (
+    NEXT_STEPS_ENTRY_NAME,
+    NEXT_STEPS_NOTE_MARKER,
+    NextSteps,
     QuestFolderSyncError,
+    publish_next_steps,
     pull_quest_to_folder,
     push_folder_to_quest,
+    read_next_steps,
     render_sync_file,
     sync_quest_folder,
+    write_next_steps,
 )
 
 QUEST_ID = "quest_c18a9d1409ff"
@@ -263,6 +269,159 @@ def test_sync_quest_folder_unknown_direction_raises():
             sync_quest_folder(client, QUEST_ID, d, direction="sideways")
 
 
+# --- the canonical next-steps artifact ---------------------------------------------
+
+class MockContextEntryClient(MockQuestFolderClient):
+    """Adds the context-entry surface (list/create/update), which unlike notes can be REPLACED."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.entries = []          # [{id, name, content}]
+        self.creates = []          # names created
+        self.updates = []          # (entry_id, content)
+        self.list_error = None
+
+    def list_context_entries(self, quest_id):
+        if self.list_error:
+            raise self.list_error
+        return [{"id": e["id"], "name": e["name"]} for e in self.entries]
+
+    def create_context_entry(self, quest_id, name, content):
+        entry = {"id": f"entry_{len(self.entries) + 1}", "name": name, "content": content}
+        self.entries.append(entry)
+        self.creates.append(name)
+        return dict(entry)
+
+    def update_context_entry(self, quest_id, entry_id, *, name=None, content=None):
+        for e in self.entries:
+            if e["id"] == entry_id:
+                if content is not None:
+                    e["content"] = content
+                if name is not None:
+                    e["name"] = name
+                self.updates.append((entry_id, content))
+                return dict(e)
+        return {}
+
+
+def _steps(*items, updated="2026-08-12", carrying_over=()):
+    return NextSteps(steps=list(items), carrying_over=list(carrying_over),
+                     source="the autopilot pass", scope="day:2026-08-12", updated=updated)
+
+
+def test_next_steps_block_round_trips_and_is_idempotent(tmp_path):
+    write_next_steps(str(tmp_path), QUEST_ID, _steps("Draft chapter 2", "Email the committee"))
+    once = Path(tmp_path, "QUEST_SYNC.md").read_text()
+    write_next_steps(str(tmp_path), QUEST_ID, _steps("Draft chapter 2", "Email the committee"))
+    twice = Path(tmp_path, "QUEST_SYNC.md").read_text()
+    assert once == twice                                    # same conclusion -> byte-identical file
+    body = read_next_steps(str(tmp_path))
+    assert "1. Draft chapter 2" in body and "2. Email the committee" in body
+
+
+def test_a_refresh_replaces_the_artifact_instead_of_appending(tmp_path):
+    """The whole point: ONE current answer, never an accumulating log."""
+    write_next_steps(str(tmp_path), QUEST_ID, _steps("Old step"))
+    write_next_steps(str(tmp_path), QUEST_ID, _steps("New step"))
+    content = Path(tmp_path, "QUEST_SYNC.md").read_text()
+    assert "New step" in content
+    assert "Old step" not in content
+    assert content.count("QAR:MANAGED:next_steps START") == 1
+
+
+def test_next_steps_never_touches_human_owned_content(tmp_path):
+    client = MockQuestFolderClient()
+    pull_quest_to_folder(client, QUEST_ID, str(tmp_path))
+    path = Path(tmp_path, "QUEST_SYNC.md")
+    path.write_text(path.read_text().replace(
+        "## Notes to push to Quest",
+        "## Notes to push to Quest\n- a finding I queued myself",
+    ) + "\n## My own section\n\nHand-written prose.\n")
+    write_next_steps(str(tmp_path), QUEST_ID, _steps("Do the next thing"))
+    content = path.read_text()
+    assert "a finding I queued myself" in content
+    assert "Hand-written prose." in content
+    assert "100 paying clients" in content                  # the goal block survived too
+    # And a later pull must not disturb the next-steps block either.
+    pull_quest_to_folder(client, QUEST_ID, str(tmp_path))
+    assert "Do the next thing" in path.read_text()
+
+
+def test_next_steps_bullets_are_not_mistaken_for_notes_to_push(tmp_path):
+    """The carry-over bullets sit in a managed block. If the push parser walked into them they
+    would be posted to Quest as notes on every push, which is silent note spam from a file the
+    runner wrote itself."""
+    client = MockQuestFolderClient()
+    pull_quest_to_folder(client, QUEST_ID, str(tmp_path))
+    write_next_steps(str(tmp_path), QUEST_ID,
+                     _steps("Do the next thing", carrying_over=["Unfinished from last week"]))
+    push_folder_to_quest(client, QUEST_ID, str(tmp_path))
+    assert client.add_note_calls == []
+
+
+def test_read_next_steps_is_none_when_there_is_no_artifact(tmp_path):
+    assert read_next_steps(str(tmp_path)) is None           # no file at all
+    Path(tmp_path, "QUEST_SYNC.md").write_text("# Just my own notes\n")
+    assert read_next_steps(str(tmp_path)) is None           # a file, but no managed block
+
+
+def test_publish_upserts_one_context_entry_rather_than_spamming(tmp_path):
+    """Quest notes are append-only, so a refreshing artifact lives in a context ENTRY, which can be
+    replaced in place. Refreshing three times must leave exactly one object on the quest."""
+    client = MockContextEntryClient()
+    for step in ("Step one", "Step two", "Step three"):
+        res = publish_next_steps(client, QUEST_ID, str(tmp_path), _steps(step))
+    assert client.creates == [NEXT_STEPS_ENTRY_NAME]        # created ONCE
+    assert len(client.entries) == 1
+    assert len(client.updates) == 2                          # then replaced in place
+    assert "Step three" in client.entries[0]["content"]
+    assert "Step one" not in client.entries[0]["content"]
+    assert client.add_note_calls == []                       # and never as a note
+    assert res.quest_target == "context_entry" and res.created is False
+    assert res.quest_ref == client.entries[0]["id"]
+
+
+def test_publish_leaves_an_unrelated_entry_alone(tmp_path):
+    client = MockContextEntryClient()
+    client.entries.append({"id": "entry_x", "name": "Literature review", "content": "keep me"})
+    publish_next_steps(client, QUEST_ID, str(tmp_path), _steps("Step one"))
+    assert client.updates == []                              # the human's entry was not touched
+    assert client.entries[0]["content"] == "keep me"
+    assert client.creates == [NEXT_STEPS_ENTRY_NAME]
+
+
+def test_publish_writes_nothing_to_quest_when_the_entry_listing_fails(tmp_path):
+    """A blind create on a quest that already has the entry is exactly the duplication this design
+    exists to avoid, so a failed READ must not become a write. The local file still lands."""
+    client = MockContextEntryClient()
+    client.list_error = RuntimeError("entries endpoint down")
+    res = publish_next_steps(client, QUEST_ID, str(tmp_path), _steps("Step one"))
+    assert client.creates == [] and client.updates == [] and client.add_note_calls == []
+    assert res.quest_target == "none" and "could not read" in res.detail
+    assert "Step one" in Path(tmp_path, "QUEST_SYNC.md").read_text()
+
+
+def test_publish_falls_back_to_a_marked_note_only_without_context_entry_support(tmp_path):
+    """An older/limited client still gets the artifact onto the quest, marked so a consumer can
+    find the latest one. This appends by nature: notes have no update route."""
+    client = MockQuestFolderClient()                          # notes only
+    res = publish_next_steps(client, QUEST_ID, str(tmp_path), _steps("Step one"))
+    assert len(client.add_note_calls) == 1
+    assert client.add_note_calls[0][1].startswith(NEXT_STEPS_NOTE_MARKER)
+    assert res.quest_target == "note"
+    assert "accumulate" in res.detail                         # the tradeoff is stated, not hidden
+
+
+def test_publish_survives_a_quest_side_failure_with_the_local_file_intact(tmp_path):
+    class BoomClient(MockContextEntryClient):
+        def create_context_entry(self, quest_id, name, content):
+            raise RuntimeError("boom")
+
+    res = publish_next_steps(BoomClient(), QUEST_ID, str(tmp_path), _steps("Step one"))
+    assert res.quest_target == "none" and "failed" in res.detail
+    assert "Step one" in Path(tmp_path, "QUEST_SYNC.md").read_text()
+
+
 # --- QuestClient account-wide quest endpoint shaping (no network) ------------------
 
 def test_quest_client_account_quest_endpoints_shape_requests():
@@ -285,6 +444,29 @@ def test_quest_client_account_quest_endpoints_shape_requests():
     assert calls[1] == ("GET", f"/api/quests/{QUEST_ID}/state", None, None)
     assert calls[2] == ("GET", f"/api/quests/{QUEST_ID}/notes", None, None)
     assert calls[3] == ("POST", f"/api/quests/{QUEST_ID}/notes", None, {"text": "a note"})
+
+
+def test_quest_client_context_entry_endpoints_shape_requests():
+    from quest_ai_runner.runner.quest_client import QuestClient
+
+    calls = []
+
+    class CapturingClient(QuestClient):
+        def _request(self, method, path, *, params=None, body=None):
+            calls.append((method, path, params, body))
+            return [] if method == "GET" else {"id": "entry_1"}
+
+    c = CapturingClient("http://x", "qsk_test")
+    c.list_context_entries(QUEST_ID)
+    c.create_context_entry(QUEST_ID, "Next steps", "1. do the thing")
+    c.update_context_entry(QUEST_ID, "entry_1", content="1. do the other thing")
+
+    assert calls[0] == ("GET", f"/api/quests/{QUEST_ID}/context-entries", None, None)
+    assert calls[1] == ("POST", f"/api/quests/{QUEST_ID}/context-entries", None,
+                        {"name": "Next steps", "content": "1. do the thing"})
+    # PUT, not POST: replacing the one entry is what keeps a refreshing artifact from piling up.
+    assert calls[2] == ("PUT", f"/api/quests/{QUEST_ID}/context-entries/entry_1", None,
+                        {"content": "1. do the other thing"})
 
 
 # --- poller integration: opt-in pull-before-run / push-after-run hooks -------------

@@ -967,3 +967,149 @@ def test_executor_ordinary_handler_value_is_not_routed_to_autopilot():
     out = ex.execute({"id": "t1", "text": "say hi", "handler": "alex"})
     assert out.status == "done"
     assert client.reports[0][1] == "done"
+
+
+# --- the quest's canonical next-steps artifact --------------------------------------------------
+#
+# One answer to "what is next for this quest", written by whoever last refreshed it and read by
+# everyone else. Before this, a pass and an attended session each reconstructed their own from
+# whatever context happened to surface, and neither could tell it had drifted from the other.
+
+class _ContextEntryClient(FakeAutopilotClient):
+    """Adds the quest context-entry surface (the one Quest object that can be REPLACED in place)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.entries = []
+        self.notes = []
+
+    def list_context_entries(self, quest_id):
+        return [{"id": e["id"], "name": e["name"]} for e in self.entries]
+
+    def create_context_entry(self, quest_id, name, content):
+        entry = {"id": f"entry_{len(self.entries) + 1}", "name": name, "content": content}
+        self.entries.append(entry)
+        return dict(entry)
+
+    def update_context_entry(self, quest_id, entry_id, *, name=None, content=None):
+        for e in self.entries:
+            if e["id"] == entry_id:
+                if content is not None:
+                    e["content"] = content
+                return dict(e)
+        return {}
+
+    def add_quest_note(self, quest_id, text):
+        self.notes.append((quest_id, text))
+        return [{"note_id": "note_1", "text": text}]
+
+
+def test_a_pass_writes_its_conclusion_as_the_quests_next_steps(tmp_path):
+    from quest_ai_runner.runner.quest_folder_sync import NEXT_STEPS_ENTRY_NAME, read_next_steps
+
+    client = _ContextEntryClient(
+        quests=[_quest("q1")],
+        goals_by_quest={"q1": _goals_payload(
+            ("day", "2026-07-12", [_goal("g1", name="Draft chapter 2", deadline="2026-07-20")]))})
+    result = AutopilotPass(client, team_id="team1", now=_now,
+                           quest_folder_map={"q1": str(tmp_path)}).run({"text": "pass"})
+    body = read_next_steps(str(tmp_path))
+    assert "Draft chapter 2 (target 2026-07-20)" in body
+    assert result.next_steps_refreshed == [
+        {"quest_id": "q1", "path": str(tmp_path / "QUEST_SYNC.md"),
+         "quest_target": "context_entry"}]
+    # And on Quest as ONE upserted entry, not another timestamped note.
+    assert [e["name"] for e in client.entries] == [NEXT_STEPS_ENTRY_NAME]
+    assert client.notes == []
+
+
+def test_a_second_pass_replaces_the_artifact_instead_of_adding_another(tmp_path):
+    client = _ContextEntryClient(
+        quests=[_quest("q1", cadence="daily")],
+        goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1", name="First")]))})
+    passer = AutopilotPass(client, team_id="team1", now=_now,
+                           quest_folder_map={"q1": str(tmp_path)})
+    passer.run({"text": "pass"})
+    client.tasks = []            # clear backpressure so the next pass runs
+    client.goals_by_quest["q1"] = _goals_payload(
+        ("day", "2026-07-12", [_goal("g2", name="Second")]))
+    passer.run({"text": "pass"})
+    content = (tmp_path / "QUEST_SYNC.md").read_text()
+    assert "Second" in content and "First" not in content
+    assert len(client.entries) == 1
+    assert "Second" in client.entries[0]["content"]
+
+
+def test_the_batch_reads_the_standing_artifact_as_the_plan_of_record(tmp_path):
+    """An attended session may have refreshed it since the last pass, so the pass must work from
+    the same answer rather than its own reconstruction."""
+    from quest_ai_runner.runner.quest_folder_sync import NextSteps, write_next_steps
+
+    write_next_steps(str(tmp_path), "q1", NextSteps(
+        steps=["Send the revised draft to the reader who is waiting on it"],
+        source="an attended session", updated="2026-07-11"))
+    client = _ContextEntryClient(
+        quests=[_quest("q1")],
+        goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
+    AutopilotPass(client, team_id="team1", now=_now,
+                  quest_folder_map={"q1": str(tmp_path)}).run({"text": "pass"})
+    text = client.created_tasks[0]["text"]
+    assert "Send the revised draft to the reader who is waiting on it" in text
+    assert "an attended session" in text
+    assert "plan of record" in text
+
+
+def test_a_quest_with_no_mapped_folder_is_untouched(tmp_path):
+    client = _ContextEntryClient(
+        quests=[_quest("q1")],
+        goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
+    result = AutopilotPass(client, team_id="team1", now=_now,
+                           quest_folder_map={"other_quest": str(tmp_path)}).run({"text": "pass"})
+    assert len(result.created_task_ids) == 1                  # the pass itself is unaffected
+    assert result.next_steps_refreshed == []
+    assert client.entries == []
+    assert not (tmp_path / "QUEST_SYNC.md").exists()
+
+
+def test_a_dry_run_does_not_touch_the_artifact(tmp_path):
+    client = _ContextEntryClient(
+        quests=[_quest("q1")],
+        goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
+    AutopilotPass(client, team_id="team1", now=_now,
+                  quest_folder_map={"q1": str(tmp_path)}).run({"text": "dry-run pass"})
+    assert not (tmp_path / "QUEST_SYNC.md").exists()
+    assert client.entries == []
+
+
+def test_a_pass_that_produced_nothing_leaves_the_existing_artifact_alone(tmp_path):
+    """Overwriting a considered answer with "nothing eligible today" on a day the quest is quiet
+    would make the artifact less trustworthy than the guesswork it replaces."""
+    from quest_ai_runner.runner.quest_folder_sync import (NextSteps, read_next_steps,
+                                                          write_next_steps)
+
+    write_next_steps(str(tmp_path), "q1", NextSteps(steps=["The considered answer"]))
+    client = _ContextEntryClient(
+        quests=[_quest("q1")],
+        goals_by_quest={"q1": _goals_payload(
+            ("day", "2026-07-12", [_goal("g1", completed=True)]))})    # nothing eligible
+    result = AutopilotPass(client, team_id="team1", now=_now,
+                           quest_folder_map={"q1": str(tmp_path)}).run({"text": "pass"})
+    assert result.created_task_ids == []
+    assert "The considered answer" in read_next_steps(str(tmp_path))
+    assert result.next_steps_refreshed == []
+
+
+def test_a_failed_artifact_refresh_warns_loudly_and_never_fails_the_pass(tmp_path):
+    class _BoomClient(_ContextEntryClient):
+        def list_context_entries(self, quest_id):
+            raise RuntimeError("entries endpoint down")
+
+    client = _BoomClient(
+        quests=[_quest("q1")],
+        goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
+    result = AutopilotPass(client, team_id="team1", now=_now,
+                           quest_folder_map={"q1": str(tmp_path)}).run({"text": "pass"})
+    assert len(result.created_task_ids) == 1                  # the work still landed
+    assert (tmp_path / "QUEST_SYNC.md").exists()               # and so did the local artifact
+    assert any("next-steps artifact" in w["detail"] for w in result.bookkeeping_warnings)
+    assert "next-steps artifact" in result.summary_text()

@@ -139,6 +139,9 @@ class Poller:
             persona_resolver=config.autopilot_persona_resolver,
             daily_budget=config.autopilot_daily_budget,
             adopt_recurring_default=config.autopilot_adopt_recurring,
+            # Same map the folder sync uses, so a quest whose folder is already synced also gets
+            # its canonical next-steps artifact read and refreshed by each pass.
+            quest_folder_map=config.quest_folder_map,
         )
         # Capabilities this runner can HONESTLY report, derived from the wired adapters
         # (corpus=FilesAdapter/corpus, code=deep-runner, web=deep-runner can browse via Claude

@@ -17,6 +17,12 @@ normal deep-run path). Each pass:
      goal instead of a work task.
   6. Updates the quest's ``autopilot.last_pass_at`` (and ``miss_streak`` when nothing was
      produced) via the quest update route.
+  7. For a quest with a mapped local folder (``quest_folder_map``), REFRESHES that quest's
+     canonical next-steps artifact (``quest_folder_sync.publish_next_steps``) with the conclusion
+     the pass just reached, and READS the existing artifact into the batch text first. That closes
+     a real gap: the pass and an attended session both have to answer "what is next for this
+     quest", and before this they answered it separately, from different material, with no way to
+     notice they had drifted apart.
 
 A DRY RUN (the pass task's own text contains "dry-run") reports what WOULD be created and creates
 nothing: no tasks, no goals, no bookkeeping writes.
@@ -31,6 +37,8 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
+
+from .quest_folder_sync import NextSteps, publish_next_steps, read_next_steps
 
 log = logging.getLogger("quest-ai-runner.autopilot")
 
@@ -425,10 +433,42 @@ def _summarize_previous(previous: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def next_steps_from_pass(goals: List[Dict[str, Any]],
+                         adopted_tasks: Optional[List[Dict[str, Any]]] = None, *,
+                         scope_label: str = "", updated: str = "",
+                         previous: Optional[Dict[str, Any]] = None) -> NextSteps:
+    """The pass's own conclusion about what comes next, as the canonical artifact.
+
+    Deterministic and LLM-free, like ``propose_next_goal``: the pass has already done the selecting
+    (current scope, ai_help, incomplete, persona batching), so the artifact is a restatement of that
+    decision, not a second opinion about it. Asking a model to re-derive it here would spend a call
+    to produce a DIFFERENT answer from the one the pass just acted on, which is the exact drift this
+    artifact exists to remove.
+
+    One line per target goal (its deadline included, since "next" and "by when" are the same
+    question), then one per adopted recurring task, then the previous period's unfinished goals as
+    carry-over.
+    """
+    steps: List[str] = []
+    for goal in goals:
+        name = (goal.get("name") or "(untitled goal)").strip()
+        deadline = (goal.get("deadline") or "").strip()
+        steps.append(f"{name}{f' (target {deadline})' if deadline else ''}")
+    for task in adopted_tasks or []:
+        label = str(task.get("title") or task.get("text") or "").strip().splitlines()
+        if label:
+            steps.append(f"{label[0][:120]} (recurring)")
+    carrying = [(g.get("name") or "?").strip()
+                for g in ((previous or {}).get("goals") or []) if not g.get("completed")]
+    return NextSteps(steps=steps, carrying_over=carrying, source="the autopilot pass",
+                     scope=scope_label or "", updated=updated or "")
+
+
 def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
                        persona: Optional[str] = None, *,
                        scope_label: Optional[str] = None,
                        adopted_tasks: Optional[List[Dict[str, Any]]] = None,
+                       next_steps: Optional[str] = None,
                        previous: Optional[Dict[str, Any]] = None) -> str:
     """The batch task's text: what period this run owns, the goals and AI tasks in it, and what
     the previous period actually produced.
@@ -470,6 +510,15 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
             text = str(t.get("text") or "").strip()
             block.append(f"\n--- adopted task {t.get('id') or t.get('task_id')} ---\n{text}")
         parts.append("\n".join(block))
+    if next_steps:
+        # The quest folder's canonical next-steps artifact, which an attended session may have
+        # refreshed more recently than any pass. Naming it as the standing answer is the point: two
+        # sources for "what is next" is how a background run and the person working the quest end up
+        # pulling in different directions without either noticing.
+        parts.append("The quest folder's standing next-steps artifact (QUEST_SYNC.md), which an "
+                     "attended session may have refreshed since the last pass. Treat it as the "
+                     "current plan of record, and if the work has moved past it, say so:\n"
+                     + next_steps)
     if previous:
         parts.append(_summarize_previous(previous))
     return "\n\n".join(parts)
@@ -522,6 +571,8 @@ class AutopilotResult:
     # memory, which silently degrades the NEXT pass (a last_pass_at that never sticks means the
     # cadence gate can never fire). Surfaced in the reported summary so it can never pass silently.
     bookkeeping_warnings: List[Dict[str, Any]] = field(default_factory=list)  # {quest_id, detail}
+    # Quests whose canonical next-steps artifact this pass rewrote: {quest_id, path, quest_target}.
+    next_steps_refreshed: List[Dict[str, Any]] = field(default_factory=list)
 
     def summary_text(self) -> str:
         lines: List[str] = []
@@ -545,6 +596,12 @@ class AutopilotResult:
                     if adopted:
                         line += f", adopting and closing recurring task(s) {adopted}"
                     lines.append(line)
+        if self.next_steps_refreshed:
+            lines.append(f"Refreshed the next-steps artifact on {len(self.next_steps_refreshed)} "
+                         f"quest(s):")
+            for n in self.next_steps_refreshed:
+                lines.append(f"  - {n.get('quest_id')}: {n.get('path')} "
+                             f"(on Quest: {n.get('quest_target')})")
         if self.skipped:
             lines.append(f"Skipped {len(self.skipped)} quest(s):")
             for s in self.skipped:
@@ -576,18 +633,28 @@ class AutopilotPass:
 
     ``persona_resolver`` is the consumer-injected fallback (step 4 of ``resolve_persona``) -- e.g.
     the personal lane's card-vote resolver. Given a goal dict, returns a rep_id or ``None``.
+
+    ``quest_folder_map`` (``{quest_id: folder}``, from ``RunnerConfig``) opts a quest into the
+    canonical next-steps artifact: the pass reads the folder's standing answer into the batch it
+    creates, and writes its own conclusion back over it (locally and on Quest). Without a map the
+    pass behaves exactly as before.
     """
 
     def __init__(self, client: Any, *, team_id: str = "",
                  persona_resolver: Optional[Callable[[Dict[str, Any]], Optional[str]]] = None,
                  daily_budget: int = DEFAULT_TEAM_DAILY_BUDGET,
                  adopt_recurring_default: Optional[bool] = None,
+                 quest_folder_map: Optional[Dict[str, str]] = None,
                  now: Optional[Callable[[], datetime]] = None):
         self._client = client
         self._team_id = team_id or ""
         self._persona_resolver = persona_resolver
         self._daily_budget = daily_budget if daily_budget and daily_budget > 0 else DEFAULT_TEAM_DAILY_BUDGET
         self._adopt_recurring_default = adopt_recurring_default
+        # ``{quest_id: folder}`` (RunnerConfig.quest_folder_map). A quest with a folder gets the
+        # next-steps artifact read and refreshed; one without is unaffected.
+        self._quest_folder_map: Dict[str, str] = {
+            str(k): str(v) for k, v in (quest_folder_map or {}).items() if v}
         self._now = now or (lambda: datetime.now(timezone.utc))
         self._persona_names: Dict[str, str] = {}   # rep_id -> display name, resolved once per pass
 
@@ -679,6 +746,10 @@ class AutopilotPass:
         adopted = (self._due_recurring_tasks(quest_id)
                    if self._adopts_recurring(autopilot_cfg) else [])
         previous = self._previous_period_summary(quest_id, goals_payload, scope_label)
+        # The standing artifact, read BEFORE this pass overwrites it: whatever the last refresh
+        # concluded (possibly an attended session's, more recent than any pass) rides into the
+        # batch as the plan of record.
+        standing_next_steps = self._read_next_steps(quest_id)
 
         produced = False
         if target_goals or adopted:
@@ -701,12 +772,16 @@ class AutopilotPass:
                     continue
                 task_id = self._create_batch_task(quest, quest_id, persona, goals, mode,
                                                   scope_label=scope_label, adopted_tasks=tasks,
+                                                  next_steps=standing_next_steps,
                                                   previous=previous)
                 if task_id:
                     result.created_task_ids.append(task_id)
                     budget_used += 1
                     produced = True
                     self._close_adopted(tasks, task_id, quest_id, result)
+            if produced and not dry_run:
+                self._refresh_next_steps(quest_id, target_goals, adopted, scope_label, previous,
+                                         result)
         elif planning == "plan_and_work":
             if budget_used < self._daily_budget:
                 self._handle_proposal(quest, quest_id, mode, dry_run, result)
@@ -883,6 +958,61 @@ class AutopilotPass:
                                f"separately: expect duplicated work, not missing work"),
                 })
 
+    # --- the quest's canonical next-steps artifact --------------------------------------------
+
+    def _read_next_steps(self, quest_id: str) -> Optional[str]:
+        """The standing next-steps artifact in this quest's mapped folder, or None.
+
+        Best-effort in both directions: a quest with no mapped folder simply has no artifact, and an
+        unreadable file must not stop the pass, because a missing plan-of-record degrades the batch
+        text rather than invalidating it.
+        """
+        folder = self._quest_folder_map.get(str(quest_id))
+        if not folder:
+            return None
+        try:
+            return read_next_steps(folder)
+        except Exception:  # noqa: BLE001 -- reading the artifact is never worth failing a pass
+            log.info("autopilot: could not read next steps for quest %s", quest_id, exc_info=True)
+            return None
+
+    def _refresh_next_steps(self, quest_id: str, goals: List[Dict[str, Any]],
+                            adopted: List[Dict[str, Any]], scope_label: str,
+                            previous: Optional[Dict[str, Any]],
+                            result: AutopilotResult) -> None:
+        """Write this pass's conclusion as the quest's canonical next steps (folder + Quest).
+
+        Only called when the pass actually PRODUCED work, and never on a dry run. A pass that found
+        nothing eligible must leave the artifact alone: overwriting a considered answer with "no
+        current target" on the day a quest happens to be gated or quiet would make the artifact less
+        trustworthy than the guesswork it replaces.
+        """
+        folder = self._quest_folder_map.get(str(quest_id))
+        if not folder:
+            return
+        updated = self._now().astimezone(timezone.utc).strftime("%Y-%m-%d")
+        next_steps = next_steps_from_pass(goals, adopted, scope_label=scope_label,
+                                          updated=updated, previous=previous)
+        try:
+            published = publish_next_steps(self._client, quest_id, folder, next_steps)
+        except Exception as e:  # noqa: BLE001 -- the artifact must never fail an otherwise-good pass
+            log.warning("autopilot: could not refresh next steps for quest %s", quest_id,
+                        exc_info=True)
+            result.bookkeeping_warnings.append(
+                {"quest_id": quest_id,
+                 "detail": f"the next-steps artifact was not refreshed ({type(e).__name__}: {e})"})
+            return
+        result.next_steps_refreshed.append({
+            "quest_id": quest_id, "path": published.sync_path,
+            "quest_target": published.quest_target,
+        })
+        if published.detail:
+            # The local file is current either way; what did not happen is the Quest-side write, and
+            # a silently local-only artifact is how the two views drift apart again.
+            result.bookkeeping_warnings.append(
+                {"quest_id": quest_id,
+                 "detail": f"next-steps artifact written locally, but on Quest: {published.detail}"})
+
     def _previous_period_summary(self, quest_id: str, goals_payload: Dict[str, Any],
                                  scope_label: str) -> Optional[Dict[str, Any]]:
         """Goals and finished tasks from the period before this one, for run-to-run continuity.
@@ -1039,11 +1169,12 @@ class AutopilotPass:
                            goals: List[Dict[str, Any]], mode: str, *,
                            scope_label: Optional[str] = None,
                            adopted_tasks: Optional[List[Dict[str, Any]]] = None,
+                           next_steps: Optional[str] = None,
                            previous: Optional[Dict[str, Any]] = None) -> Optional[str]:
         text = compose_batch_text(str(quest.get("outcome") or ""), goals,
                                   self._persona_label(persona),
                                   scope_label=scope_label, adopted_tasks=adopted_tasks,
-                                  previous=previous)
+                                  next_steps=next_steps, previous=previous)
         try:
             return self._create_autopilot_task(
                 quest, quest_id, text, mode, persona=persona,

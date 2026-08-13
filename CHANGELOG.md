@@ -7,6 +7,44 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **A quest-linked folder now has ONE canonical "what to do next", instead of every reader
+  reconstructing its own.** A person working in a quest's folder had no artifact that answered
+  "what is next here": an attended session rebuilt the answer turn by turn from whatever context
+  cards happened to surface, and the autopilot pass reasoned out its own answer independently, so
+  the background view and the human's view could drift apart with nothing to notice it. There is
+  now a third managed section in `QUEST_SYNC.md`, `<!-- QAR:MANAGED:next_steps -->`, holding the
+  current recommended next action(s). It is a REPLACE, never a log: each refresh regenerates the
+  block in place, so the folder always carries exactly one current answer, and re-publishing the
+  same conclusion leaves the file byte-identical. Human-owned content elsewhere in the file is
+  untouched, as with the existing managed blocks, and the block's own carry-over bullets sit inside
+  the markers so the "Notes to push to Quest" parser never mistakes them for notes to post.
+  (`runner/quest_folder_sync.py`: `NextSteps`, `render_next_steps`, `write_next_steps`,
+  `read_next_steps`, `publish_next_steps`.)
+- **That artifact syncs to Quest as an UPSERT, not a new note per refresh.** Quest's notes API is
+  add + list only (there is no PATCH or DELETE on a note), so a refreshing artifact cannot live in
+  a note without leaving a year of near-identical entries behind it. Quest **context entries** can
+  be replaced in place, so the artifact is published as a single context entry matched by its fixed
+  name (`NEXT_STEPS_ENTRY_NAME`), created once and PUT over on every later refresh. If the entry
+  LISTING fails, nothing is written to Quest that round rather than blind-creating a duplicate; the
+  local file is still correct and the next refresh retries. A client with no context-entry support
+  at all falls back to appending a `[next-steps]`-marked note, and says in its result that this
+  path accumulates. (`runner/quest_client.py`: `list_context_entries`, `create_context_entry`,
+  `update_context_entry`.)
+- **The autopilot pass both reads and writes it, so the two views cannot diverge.** For a quest with
+  a mapped folder (`RunnerConfig.quest_folder_map`, now passed through to `AutopilotPass`), each
+  pass reads the standing artifact into the batch text as the plan of record (an attended session
+  may have refreshed it more recently than any pass), and then writes its own conclusion back over
+  it, locally and on Quest. The written conclusion is deterministic, derived from the goals the pass
+  already selected plus the recurring tasks it adopted and the previous period's unfinished goals:
+  the pass has already decided what to work on, and asking a model to re-derive it here would spend
+  a call to produce a different answer from the one it just acted on. Only a pass that actually
+  produced work refreshes the artifact, and a dry run never touches it: overwriting a considered
+  answer with "nothing eligible today" on a day the quest is gated or quiet would make the artifact
+  less trustworthy than the guesswork it replaces. A Quest-side failure is reported in the pass
+  summary as a bookkeeping warning and never fails the pass. (`runner/autopilot.py`:
+  `next_steps_from_pass`, `AutopilotPass._read_next_steps` / `_refresh_next_steps`,
+  `AutopilotResult.next_steps_refreshed`; `tests/test_autopilot.py`,
+  `tests/test_quest_folder_sync.py`.)
 - **`FileContextStore.bootstrap()` now also reuses an already-bootstrapped ANCESTOR corpus, the
   mirror image of nested (descendant) reuse.** Nested reuse only ever looked DOWN into a corpus
   root's descendants, so a narrower root (e.g. bootstrapping a subfolder several levels below an

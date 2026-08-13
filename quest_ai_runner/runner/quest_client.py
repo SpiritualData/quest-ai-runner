@@ -25,6 +25,11 @@ Endpoints implemented (the contract from integration_library_design.md §3):
                GET  /api/quests/{quest_id}/state       (get_my_quest)
                GET  /api/quests/{quest_id}/notes       (list_quest_notes)
                POST /api/quests/{quest_id}/notes       (add_quest_note)
+               GET  /api/quests/{quest_id}/context-entries            (list_context_entries)
+               POST /api/quests/{quest_id}/context-entries            (create_context_entry)
+               PUT  /api/quests/{quest_id}/context-entries/{entry_id} (update_context_entry)
+               Notes are append-only (no PATCH/DELETE exists); context entries can be replaced in
+               place, so a REFRESHING artifact belongs in an entry, not in a note.
   Goal (real, typed, period-scoped -- distinct from an assistant task):
                POST /api/planning/goals                (create_goal)
 
@@ -744,6 +749,63 @@ class QuestClient:
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("add_quest_note failed for quest %s: %s", quest_id, e)
             return []
+
+    # --- quest context entries (the quest's own documents; UPDATABLE, unlike notes) ------------
+
+    def list_context_entries(self, quest_id: str) -> List[Dict[str, Any]]:
+        """GET /api/quests/{quest_id}/context-entries — this quest's context documents.
+
+        Each item is a preview dict (``id``, ``name``, ``char_count``, ``tags``, ``created_at``).
+        These are the quest's own attached documents, distinct from its notes in the one way that
+        matters for a refreshing artifact: an entry can be REPLACED in place (see
+        ``update_context_entry``), while a note can only ever be appended. Returns [] on failure.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", f"/api/quests/{quest_id}/context-entries") or []
+            return resp if isinstance(resp, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_context_entries failed for quest %s: %s", quest_id, e)
+            return []
+
+    def create_context_entry(self, quest_id: str, name: str, content: str) -> Dict[str, Any]:
+        """POST /api/quests/{quest_id}/context-entries — add one named context document.
+
+        The server creates the quest's context collection on first use, so no setup call is needed.
+        Empty ``content`` is rejected server-side (422). Returns {} on failure.
+        """
+        try:
+            self._require()
+            resp = self._request("POST", f"/api/quests/{quest_id}/context-entries",
+                                 body={"name": name, "content": content}) or {}
+            return resp if isinstance(resp, dict) else {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("create_context_entry failed for quest %s: %s", quest_id, e)
+            return {}
+
+    def update_context_entry(self, quest_id: str, entry_id: str, *,
+                             name: Optional[str] = None,
+                             content: Optional[str] = None) -> Dict[str, Any]:
+        """PUT /api/quests/{quest_id}/context-entries/{entry_id} — replace an entry's name/content.
+
+        This is what makes an upsert possible: re-publishing a document that refreshes (a quest's
+        current next steps, say) replaces the one entry instead of piling up a new object per
+        refresh. Only the fields given are changed. Returns {} on failure.
+        """
+        body: Dict[str, Any] = {}
+        if name is not None:
+            body["name"] = name
+        if content is not None:
+            body["content"] = content
+        try:
+            self._require()
+            resp = self._request(
+                "PUT", f"/api/quests/{quest_id}/context-entries/{entry_id}", body=body) or {}
+            return resp if isinstance(resp, dict) else {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("update_context_entry failed for quest %s entry %s: %s",
+                        quest_id, entry_id, e)
+            return {}
 
     # --- task creation (enqueue a new AI task) --------------------------------
 
