@@ -59,9 +59,19 @@ These satisfy the core interfaces; a consumer wires the ones it needs into a Run
                                 into ``RunnerConfig.reference_resolvers`` so a QAR resolves
                                 Quest refs through the hub instead of leaving them unresolved.
 
+  * AcpDeepRunner            — OPT-IN alternative DeepRunner: drives Claude over the Agent Client
+                                Protocol (a live JSON-RPC session with the Node
+                                ``claude-agent-acp`` agent) instead of a one-shot ``claude -p``
+                                subprocess, which is what makes MID-TURN STEERING possible — a
+                                message queued while the deep turn is running is injected into that
+                                turn, not held until the next attempt. Purely additive:
+                                ``SubprocessGoalRunner`` remains the default. Needs the optional
+                                [acp] extra plus Node >= 22. See docs/acp-deep-runner.md.
+
 The DeepRunner reference (SubprocessGoalRunner) lives in core.goal_runner; the EscalationSink
 reference (the Quest team decision-request) lives in runner.quest_client.
 """
+from .acp_deep_runner import AcpConfig, AcpDeepRunner
 from .anthropic_provider import AnthropicProvider
 from .quest_context_adapter import QuestContextAdapter, build_quest_resolvers
 from .cached_db_adapter import CachedDbAdapter
@@ -159,6 +169,8 @@ except ImportError:
     QdrantCardVectorStore = None  # type: ignore[assignment,misc]
 
 __all__ = [
+    "AcpConfig",
+    "AcpDeepRunner",
     "FilesAdapter",
     "CachedDbAdapter",
     "ClaudeConversationsAdapter",

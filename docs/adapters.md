@@ -74,6 +74,13 @@ exit code 0 = goal met, non-zero = limit/error. Working dir, binary, model, cont
 tool gating are all config (`SubprocessConfig`). Plug in a different agent by implementing this one
 method.
 
+A second implementation ships alongside it: **[`AcpDeepRunner`](acp-deep-runner.md)** runs the same
+contract over the Agent Client Protocol — a live session with the Claude ACP agent rather than a
+one-shot subprocess — which is what makes MID-TURN STEERING possible (a message queued while the
+deep turn is running is injected into that turn, not held until the next attempt). It is opt-in and
+purely additive: `SubprocessGoalRunner` is unchanged and remains the default, and selecting the
+other one is just `RunnerConfig.deep_runner`. It needs the `[acp]` extra and Node >= 22.
+
 **Escalating from inside a deep run.** A spawned worker can itself hit a human-only step mid-run
 (an unapproved outward send, an irreversible commitment). If the consumer's context preamble gives
 the worker an escalation mechanism (e.g. "create a decision-request via X"), the worker reports the

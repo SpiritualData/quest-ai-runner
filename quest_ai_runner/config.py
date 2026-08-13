@@ -71,6 +71,12 @@ class RunnerConfig:
     model_fallback: Optional[dict] = None            # override tier->model mapping (e.g. {"haiku": "gpt-4o", "sonnet": "claude-4"})
     model_providers: Optional[dict] = None           # multi-provider support: dict of name -> ModelProvider (e.g. {"anthropic": AnthropicProvider(), "gemini": GeminiProvider()})
     model_provider_overrides: Optional[dict] = None  # per-tier provider routing (e.g. {"best": "anthropic", "fast": "gemini"})
+    # The deep worker. ``core.goal_runner.SubprocessGoalRunner`` (Claude Code headless via
+    # ``claude -p``) is the reference and the default choice. ``adapters.AcpDeepRunner`` is an
+    # opt-in alternative that runs the same contract over the Agent Client Protocol, which buys
+    # MID-TURN STEERING (a message queued while the deep turn runs is injected into that turn
+    # instead of waiting for the next attempt); it needs the [acp] extra and Node >= 22. Selecting
+    # one is just this field — see docs/acp-deep-runner.md.
     deep_runner: Optional[DeepRunner] = None         # SubprocessGoalRunner or another worker
     # Named deep-runner registry. When non-empty and a ``deep_runner_classifier`` is
     # also provided, the orchestrator calls the classifier to SELECT which runner handles

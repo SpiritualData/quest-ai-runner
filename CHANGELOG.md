@@ -7,6 +7,58 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **A deep run can now be steered WHILE it is running, through a second, opt-in `DeepRunner`.**
+  `SubprocessGoalRunner` shells out to `claude -p`: one prompt in, one blob out, nothing can reach
+  the worker once it has started. So a user message that arrived mid-run could only be folded in at
+  the NEXT goal-loop attempt, which is the first moment the orchestrator gets control back — the
+  person watching a twenty-minute run go the wrong way had no way to say so. New
+  `adapters/acp_deep_runner.py` (`AcpDeepRunner` + `AcpConfig`) runs the SAME contract over the
+  Agent Client Protocol instead: a live JSON-RPC session with the Node `claude-agent-acp` agent
+  (which wraps Anthropic's Claude Agent SDK), whose steering extension injects a message into the
+  turn currently in flight, pre-empting the generation and slotting in between a multi-step turn's
+  tool calls. Both routes in are wired to machinery QAR already has: an `InputInbox` (`core/inbox.py`
+  — the same inbox the orchestrator drains between attempts) polled while the turn is live, and a
+  public `steer()` any thread can call. A message that arrives after the turn settled is pushed BACK
+  to the queue for the next attempt rather than dropped, and the channel latches closed so a
+  returned message is never re-offered on the next poll tick. This is **purely additive**:
+  `SubprocessGoalRunner` is untouched and remains the default, both satisfy `DeepRunner` with the
+  same signature, and selecting the other one is just `RunnerConfig.deep_runner`.
+  (`docs/acp-deep-runner.md`; `tests/test_acp_deep_runner.py`.)
+- **That runner reuses QAR's existing vocabularies rather than inventing parallel ones.** The ACP
+  `session/update` stream is translated into the `EVENT_EXEC` ticks a `claude -p` deep run already
+  emits — same event type, same `run_id`, same one-line texture (`$ pytest -q`, `Read: docs/x.md`,
+  `[thinking] …`) — so every existing consumer renders it unchanged. One trap is pinned by a test:
+  a tool finishing must NOT use the phase strings `core/guard.py` treats as terminal, or one
+  completed `Read` would mark the whole subgoal succeeded; tool lifecycle uses
+  `tool_result`/`tool_error` and only the run's own final tick is terminal. Permission requests are
+  answered from the SAME config surface the subprocess runner uses (`disallowed_tools` beats
+  auto-approval, a pinned `allowed_tools` fails CLOSED on a tool the payload cannot identify,
+  `skip_permissions` auto-approves), and when a human is genuinely needed the ask becomes a real
+  `EscalationSink` decision-request and the run returns `DeepResult(met=False, decision_id=…)` —
+  the same `needs_you` contract the `QAR-ESCALATED:` marker gives today, which still works too. The
+  tool being asked about is read from the structured `_meta.claudeCode.toolName` field, never from
+  the agent-composed title (hard rule #3).
+- **The Node the ACP agent runs under is config, and a too-old one fails loudly before anything
+  spawns.** `claude-agent-acp` requires Node >= 22 and a box's ambient `node` frequently is not
+  (and often cannot be upgraded, because other tooling depends on it). So the binary is resolved
+  from `AcpConfig.node_path`, then `QAR_ACP_NODE_PATH`, then `PATH`, probed with `node --version`
+  up front, and a version below the floor returns a `DeepResult` naming the version found, where it
+  was found, and the knob to set — instead of dying inside the child with an engine warning. An npm
+  bin shim is resolved through its symlink to the `.js` entry and launched as `<node> <entry>`,
+  because the shim's shebang would otherwise pick up whichever `node` is first on `PATH`. The agent
+  program resolves the same way (`AcpConfig.agent_command`, then `QAR_ACP_AGENT_COMMAND`, then
+  `PATH`). Session lifecycle is deliberately one process + one session per `run_goal` call, exactly
+  the lifetime a `claude -p` spawn gets: the goal loop never signals "this subgoal is finished", so
+  a longer-lived session would have no defined moment to close and would leak a Node process per
+  retry.
+- **`agent-client-protocol` as a new optional `[acp]` extra.** Imported lazily inside the single
+  connection seam, so importing `quest_ai_runner.adapters` never requires it and a deployment that
+  does not use ACP pays nothing. It is not part of `[all]`, since the other half of this integration
+  is an npm package pip cannot install. `tests/test_acp_deep_runner.py` runs fully offline against a
+  scripted fake connection — no package import, no process, no auth, no network — and covers the
+  interface contract, the event translation, the permission mapping, a mid-run steering injection
+  actually reaching the session, and graceful degradation on a missing package, a missing binary, a
+  too-old Node, a failed handshake, and a blown timeout.
 - **The sufficiency gate now has a STRUCTURAL half, not just prompt text.** `SUFFICIENCY_GATE` tells
   the planner to issue another "read" when it has not READ the material it is about to answer from,
   and nothing enforced it. A real turn proved the cost: the assembled context surfaced a card whose

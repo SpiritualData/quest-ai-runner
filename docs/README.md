@@ -13,6 +13,10 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
   backend, corpus, and persona via `RunnerConfig`.
 - **[Implementing adapters](adapters.md)** — the four interfaces (`RetrievalAdapter`,
   `ModelProvider`, `DeepRunner`, `EscalationSink`) and how to build your own.
+- **[The ACP deep runner](acp-deep-runner.md)** — the opt-in `DeepRunner` that drives Claude over
+  the Agent Client Protocol instead of a one-shot `claude -p`, so a message queued mid-run reaches
+  the turn already in progress. How to wire it, the Node >= 22 requirement, and why the default
+  path is unchanged.
 - **[Deployment](deployment.md)** — run the poller under cron or systemd.
 - **[Corpus playbooks](corpus-playbooks.md)** — distill a corpus's history into playbook files the
   shallow loop (context cards) and Claude Code deep runs both pick up automatically.
