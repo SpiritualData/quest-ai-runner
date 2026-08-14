@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **A deep run that dies before printing its final envelope now reports what it ACTUALLY did,
+  read from its own session record.** Observed live: a run read half a dozen files, wrote and ran
+  a sanity-check script, wrote a design doc, edited three files and drafted an email, then failed
+  — and the whole human-readable result was "The worker exited 1 with no error output. … Read the
+  run output below for what it actually did", with nothing below it. The cause is that everything
+  a human reads on a failure was derived from ONE source: the worker's final `--output-format
+  json` envelope on stdout. A worker killed, crashed or reaped mid-flight never gets to print that
+  envelope, so `out` is empty, so the `if tail:` branch that attaches "Last output:" never fires,
+  and the message carries nothing — the exact failure mode where knowing what the run did matters
+  most. A complete record existed the whole time: the Claude Code session JSONL under
+  `.claude/projects/`, bound deterministically by the `--session-id` this runner itself generates,
+  which the live monitor thread was already tailing line by line. Both blind-spot paths (`exit
+  != 0` with no stderr, and the exit-0-with-empty-output no-op net) now fall back to the tail of
+  that same file when the worker's own output is empty or too thin to diagnose anything from.
+  Two deliberate reuse decisions: the file is located through the monitor's own
+  `_find_claude_project_dir` + session-id match, so there is exactly one definition of "where this
+  run's session file is"; and each record is rendered by the monitor's own `_format_message_text`,
+  so the end-of-run summary reads like the live progress stream (`- Read: <file>`, `- $ <command>`,
+  `- <assistant text>`) instead of being a second, divergent parser for the same format. The block
+  is framed as an observation, never a diagnosis ("its own session record shows it last did (most
+  recent last): …"), keeping the rule that this message states recorded facts and does not assert a
+  cause the code cannot know; the one place that DID assert one — "the goal did not actually run"
+  on an exit-0 empty run — now softens to "cannot be confirmed to have run" only when the record
+  contradicts it, and is otherwise unchanged. Because this runs synchronously on the failure path
+  it is bounded and silent: at most the last 256KB of the file is read, at most 12 actions and 1500
+  characters are rendered, malformed or truncated records are skipped individually (a file cut off
+  mid-write still yields every complete record before it), and a missing, unreadable or
+  unparseable record simply falls back to today's bare message. It never raises, and never engages
+  on a run that produced real output of its own.
+  (`core/goal_runner.py`; `tests/test_deep_failure_session_diagnostics.py`.)
+
 ### Added
 - **An autopilot pass now sees what the person has CAPTURED since it last ran, not only the rows
   the system recorded.** Quest gives every person an "Insights" collection: quick capture for the

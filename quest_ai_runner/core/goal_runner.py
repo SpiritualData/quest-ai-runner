@@ -693,6 +693,146 @@ def _monitor_claude_session(
         _log.warning("claude session monitor failed: %s", e)
 
 
+# --- End-of-run diagnostics read from the run's OWN session record ----------------------------
+#
+# A deep run can do a large amount of real work (reads, writes, edits, commands) and then die
+# BEFORE it ever prints its final ``--output-format json`` envelope: killed, OOM'd, crashed, or
+# stuck in a loop until something reaped it. stdout is then empty, so the failure the human reads
+# used to carry NOTHING about what the run did — even though a complete record of it exists on
+# disk, in the very session JSONL the live monitor thread above was already tailing.
+#
+# These helpers read the TAIL of that same file at the end of a failed run. Two deliberate reuse
+# decisions:
+#   * the file is located through the SAME ``_find_claude_project_dir`` + ``--session-id`` match
+#     the monitor uses, so there is exactly ONE definition of "where this run's session file is";
+#   * each record is rendered by the SAME ``_format_message_text`` the monitor uses for live
+#     progress, so the end-of-run summary reads like the progress stream instead of being a second,
+#     divergent parser for the same format.
+#
+# This runs SYNCHRONOUSLY on the failure path, so it is bounded (reads at most the last
+# ``SESSION_TAIL_MAX_BYTES``) and silent (never raises; any problem just yields "", and the caller
+# falls back to the bare message). It reports only what the record SHOWS — it never asserts a cause.
+
+SESSION_TAIL_MAX_BYTES = 256_000   # only the last chunk of a possibly huge session file is read
+SESSION_TAIL_MAX_ACTIONS = 12      # how many recent actions/messages to surface
+SESSION_TAIL_MAX_CHARS = 1500      # cap on the rendered block, matching the stdout tail cap
+# At or below this length the worker's final output carries no real diagnostic value (a bare "ok",
+# a stray newline), so the session record is worth appending even though stdout wasn't empty.
+SESSION_TAIL_THIN_OUTPUT_CHARS = 40
+
+
+def resolve_session_file(working_dir: Optional[str], session_id: Optional[str]) -> Optional[Path]:
+    """The session JSONL file for ``session_id``, or None if it can't be located.
+
+    Uses ``_find_claude_project_dir`` — the monitor thread's own resolution — on purpose: two
+    independent implementations of "find the session file" would drift apart. Never raises.
+    """
+    if not session_id:
+        return None
+    try:
+        project_dir = _find_claude_project_dir(working_dir)
+        if project_dir is None:
+            return None
+        matches = list(project_dir.rglob(f"{session_id}.jsonl"))
+    except Exception as e:  # noqa: BLE001 — diagnostics must never become a new failure mode
+        _log.debug("could not resolve session file for %s: %s", session_id, e)
+        return None
+    return matches[0] if matches else None
+
+
+def read_session_activity_tail(
+    working_dir: Optional[str],
+    session_id: Optional[str],
+    *,
+    max_actions: int = SESSION_TAIL_MAX_ACTIONS,
+    max_bytes: int = SESSION_TAIL_MAX_BYTES,
+    max_chars: int = SESSION_TAIL_MAX_CHARS,
+) -> str:
+    """The last few human-readable actions from this run's session record, most recent last.
+
+    Returns a bullet list ("- Read: <file>", "- $ <command>", "- <assistant text>") or "" when the
+    file is missing, unreadable, or holds nothing renderable. Malformed/truncated lines are skipped
+    individually — a session file cut off mid-write still yields every complete record before it.
+    """
+    path = resolve_session_file(working_dir, session_id)
+    if path is None:
+        return ""
+    start = 0
+    try:
+        size = path.stat().st_size
+        start = max(0, size - max_bytes)
+        with open(path, "rb") as f:
+            if start:
+                f.seek(start)
+            blob = f.read(max_bytes)
+    except Exception as e:  # noqa: BLE001 — deleted, permissions, unreadable: no diagnostics, no crash
+        _log.debug("could not read session file %s: %s", path, e)
+        return ""
+
+    lines = blob.decode("utf-8", errors="replace").splitlines()
+    if start and lines:
+        lines = lines[1:]  # the first line is a partial record, we seeked into the middle of it
+    actions: List[str] = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            msg = json.loads(line)
+        except Exception:  # noqa: BLE001 — a truncated/mid-write record; the rest is still usable
+            continue
+        if not isinstance(msg, dict):
+            continue
+        # Same filter as the live monitor: assistant turns are the actual work (tool_result records
+        # arrive as ``user`` entries and are noise).
+        if msg.get("type") not in ("assistant", "message"):
+            continue
+        try:
+            rendered = _format_message_text(msg)
+        except Exception:  # noqa: BLE001 — an unexpected record shape shouldn't lose the others
+            continue
+        if rendered and rendered.strip():
+            actions.append(rendered.strip())
+
+    if not actions:
+        return ""
+    block = "\n".join(f"- {a}" for a in actions[-max_actions:])
+    if len(block) > max_chars:
+        block = block[-max_chars:]  # keep the MOST RECENT end, that's the diagnostic part
+    return block
+
+
+def describe_session_activity(
+    working_dir: Optional[str],
+    session_id: Optional[str],
+    *,
+    worker_output: str = "",
+) -> str:
+    """A ready-to-append "what this run actually did" block, or "" when nothing is readable.
+
+    Deliberately phrased as an observation of the record ("its session record shows it last did"),
+    never as a diagnosis: the record proves what happened, not why the run failed.
+    """
+    block = read_session_activity_tail(working_dir, session_id)
+    if not block:
+        return ""
+    lead = (
+        "The worker produced no final output, but its own session record shows it last did"
+        if not (worker_output or "").strip()
+        else "Its own session record shows it last did"
+    )
+    return f"{lead} (most recent last):\n{block}"
+
+
+def worker_output_is_thin(output: Optional[str]) -> bool:
+    """Whether the worker's final output is too small to diagnose anything from.
+
+    Empty is the main case (the worker died before printing its envelope); a couple of words is the
+    same situation in practice, so both earn the session-record fallback.
+    """
+    return len((output or "").strip()) <= SESSION_TAIL_THIN_OUTPUT_CHARS
+
+
 class SubprocessGoalRunner(DeepRunner):
     """Reference DeepRunner: spawn Claude Code headless with ``/goal`` + ``--max-turns``.
 
@@ -885,6 +1025,17 @@ class SubprocessGoalRunner(DeepRunner):
             # failure with a clear message instead of a hollow "met" that shows "Completed" but did
             # nothing. (A pure chit-chat run has an empty ``goal`` and is exempt.)
             if goal.strip() and not out.strip():
+                # Before settling for that diagnosis, check the run's OWN session record: if it
+                # shows real work, "never actually ran the goal" would be a false assertion, so
+                # report what the record shows instead and leave -p as one named possibility.
+                activity = describe_session_activity(effective_working_dir, session_id,
+                                                     worker_output=out)
+                if activity:
+                    return DeepResult(
+                        met=False, output=out, tokens=tokens, cost_usd=cost,
+                        error="worker exited cleanly but produced NO output, so the goal cannot be "
+                              "confirmed to have run (one common cause: the worker did not run "
+                              "headless, e.g. Claude Code needs -p).\n\n" + activity)
                 return DeepResult(
                     met=False, output=out, tokens=tokens, cost_usd=cost,
                     error="worker exited cleanly but produced NO output, so the goal did not "
@@ -902,4 +1053,13 @@ class SubprocessGoalRunner(DeepRunner):
                    "itself errored. Read the run output below for what it actually did.")
             if tail:
                 err = f"{err}\n\nLast output:\n{tail[-1500:]}"
+            # A worker killed/crashed BEFORE printing its final JSON envelope leaves ``tail`` empty
+            # (or trivially short), so the message above would carry nothing about a run that may
+            # have read, written and executed plenty. Its session record did capture all of that —
+            # surface the tail of it. Absent/unreadable record: the bare message stands, as today.
+            if worker_output_is_thin(tail):
+                activity = describe_session_activity(effective_working_dir, session_id,
+                                                     worker_output=tail)
+                if activity:
+                    err = f"{err}\n\n{activity}"
         return DeepResult(met=False, output=out, error=err, tokens=tokens, cost_usd=cost)
