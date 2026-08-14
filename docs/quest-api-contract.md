@@ -22,8 +22,20 @@ key authenticates as. Keep each lane on its own key/owner so lanes stay isolated
 ```
 GET /api/assistant-tasks?status=queued&due_before=<ISO-now>
 ```
-Returns queued tasks whose `due` time has arrived. A future `due` is simply not returned yet — this
-is how scheduling works without separate plumbing.
+Returns queued tasks whose `due` DATE has arrived — a superset, not an exact answer. The backend
+compares only the date portion of `due_before` against `scheduled_date` and never reads
+`scheduled_time`, so a task set for 06:30 is returned from the instant that calendar date begins in
+UTC. West of UTC that is the previous afternoon (17:00 in US/Pacific), which is how a daily 06:30
+brief came to run the evening before, dated for the wrong day, burning the occurrence its real slot
+needed.
+
+The runner closes that gap on its side: `Poller._due_now_locally` narrows the returned set to what
+the LOCAL wall clock says has actually arrived (missing `scheduled_time` means midnight, an
+unscheduled task is always due), and holding one back is lossless because it stays `queued` for a
+later scan. **So do not read a returned task as "due now"** — it is due today, and the hour is the
+runner's to enforce. Sending a local-time `due_before` instead would not fix it either: the
+comparison would still drop the clock. The task document carries no timezone of its own, so a
+runner in a different tz than the schedule's author remains a real limitation.
 
 #### The task document the runner reads
 

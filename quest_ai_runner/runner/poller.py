@@ -48,6 +48,50 @@ def _task_signature(task: Dict[str, Any]) -> str:
     return f"{tid}:{task.get('status', 'queued')}:{marker}"
 
 
+def _due_now_locally(tasks: List[Dict[str, Any]],
+                     now: Optional[datetime] = None) -> tuple[List[Dict[str, Any]],
+                                                              List[Dict[str, Any]]]:
+    """Split discovered tasks into (due, not-yet-due) by LOCAL wall clock.
+
+    Discovery asks the backend for `due_before=<ISO now, UTC>`, but the backend compares only the
+    DATE portion of that timestamp against `scheduled_date` and never looks at `scheduled_time`
+    (see quest-backend `assistant_task_storage.list_tasks`). Its answer is therefore a SUPERSET:
+    correct to the day, silent about the hour. West of UTC that superset opens early -- a task set
+    for 06:30 becomes "due" the moment UTC midnight passes, which is 17:00 the PREVIOUS afternoon
+    in US/Pacific. A daily morning brief then runs the evening before, is written against the wrong
+    day, and burns the occurrence its real slot needed. (Seen 2026-08-12/13 on the personal lane:
+    a 06:30 brief ran at 17:17 the day before, twice.)
+
+    So narrow the superset here, where the runner knows the wall clock the schedule was written
+    against. A task is due once local `scheduled_date` + `scheduled_time` has arrived; a missing
+    time means midnight, and an unscheduled task ("do it now", the chat-delegated case) is always
+    due. Holding one back is lossless: it stays `queued` and surfaces on a later scan.
+
+    Timezone: the runner's own local time, which is the tz a person authoring "06:30" means. The
+    task model carries no tz of its own, so a runner in a different tz than the schedule's author
+    is a real (pre-existing) limitation, not one this filter introduces.
+    """
+    now = now or datetime.now()
+    due: List[Dict[str, Any]] = []
+    deferred: List[Dict[str, Any]] = []
+    for task in tasks:
+        date = str(task.get("scheduled_date") or "").strip()
+        if not date:
+            due.append(task)
+            continue
+        clock = str(task.get("scheduled_time") or "00:00").strip()[:5]
+        try:
+            scheduled = datetime.strptime(f"{date} {clock}", "%Y-%m-%d %H:%M")
+        except ValueError:
+            # An unparseable schedule must never strand a task: fall back to the backend's answer.
+            log.warning("task %s has an unreadable schedule (%r %r) — treating it as due",
+                        task.get("task_id") or task.get("id"), date, clock)
+            due.append(task)
+            continue
+        (due if scheduled <= now else deferred).append(task)
+    return due, deferred
+
+
 class StateStore:
     """JSON-backed signature store (watchdog_state.json generalized; pluggable backend)."""
 
@@ -208,6 +252,14 @@ class Poller:
         except (QuestApiError, QuestNotConfigured) as e:
             log.info("discovery unavailable (%s) — will retry next scan", e)
             return []
+
+        # The backend's due filter is date-granular, so it hands back tomorrow-morning's work as
+        # soon as UTC rolls over. Keep only what the LOCAL clock says has actually arrived.
+        due, deferred = _due_now_locally(due)
+        if deferred:
+            log.info("holding %d task(s) until their local scheduled time: %s", len(deferred),
+                     ", ".join(f"{t.get('task_id') or t.get('id')}@{t.get('scheduled_date')} "
+                               f"{t.get('scheduled_time') or '00:00'}" for t in deferred))
 
         fresh = [t for t in due if not self.state.seen(_task_signature(t))]
         if not fresh:
