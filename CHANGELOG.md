@@ -7,6 +7,19 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **`BM25ContentStore` found nothing, always, even for a query matching a term that exists
+  verbatim in exactly one file.** `_search_one`'s hit filter was `isinstance(score, float) and
+  score > 0`, but `bm25s`'s score matrix is `numpy.float32` -- which, unlike `numpy.float64`, is
+  NOT a subclass of Python's builtin `float` -- so the `isinstance` check was silently false for
+  every real hit and the arm returned zero results unconditionally. Caught by re-running this
+  repo's own offline suite instead of trusting a stale "pre-existing failure" label: 10 of
+  `tests/test_bm25_content.py`'s tests were failing before this fix, all downstream of the same
+  line. Dropped the `isinstance` guard (`quest_ai_runner/adapters/bm25_content_store.py`); a
+  malformed/non-numeric score still degrades safely via the method's existing catch-all. Also
+  fixed the adjacent import-guard test, which asserted the constructor raises `ImportError` when
+  `bm25s` is absent by popping it from `sys.modules` -- a no-op simulation whenever `bm25s` is
+  genuinely installed, since Python just re-imports it fresh; now sets it to `None` in
+  `sys.modules`, which is what actually forces the next `import bm25s` to raise.
 - **`FastEditRunner`'s whole-file rewrite path could pad a file with an extra blank line on
   every redundant retry, and its success report was too terse for the goal-verification judge to
   actually confirm, which is what made a retry redundant in the first place.** Found by a 10-case

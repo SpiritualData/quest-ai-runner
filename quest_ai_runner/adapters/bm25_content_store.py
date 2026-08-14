@@ -451,10 +451,13 @@ class BM25ContentStore(ContextAssemblerBase):
                 corpus=self._file_paths,
                 k=min(self._top_k, len(self._file_paths)),
             )
-            # results shape: (n_queries, k), scores shape: (n_queries, k)
+            # results shape: (n_queries, k), scores shape: (n_queries, k). ``scores`` are
+            # numpy.float32 (bm25s's score matrix dtype), never Python ``float`` -- an
+            # ``isinstance(score, float)`` guard here silently discarded every real hit,
+            # since numpy.float32 (unlike numpy.float64) is not a ``float`` subclass.
             hits: List[Tuple[str, float]] = []
             for path, score in zip(results[0], scores[0]):
-                if isinstance(score, float) and score > 0:
+                if score > 0:
                     hits.append((str(path), float(score)))
             return hits
         except Exception:  # noqa: BLE001
