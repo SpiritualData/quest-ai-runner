@@ -634,6 +634,7 @@ class Poller:
             created = self.client.create_task(
                 "Autopilot pass: scan this team's opted-in quests and make progress on their "
                 "current-scope goals.",
+                title="Autopilot pass",
                 team_id=self.cfg.team_id,
                 source="chat",
                 task_kind=AUTOPILOT_PASS_KIND,

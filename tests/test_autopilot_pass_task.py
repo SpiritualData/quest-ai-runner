@@ -68,6 +68,10 @@ def test_creates_a_recurring_pass_task_when_a_quest_is_opted_in_and_none_exists(
     assert len(client.created) == 1
     created = client.created[0]
     assert created["task_kind"] == "autopilot"          # the PASS kind: routed to AutopilotPass
+    # A human-readable title, distinct from the technical instruction text: without one, the
+    # frontend falls back to deriving a title FROM that text and truncates it into unreadable
+    # noise ("Autopilot pass: scan this team's opted-in quests and make..."). See taskTitle.ts.
+    assert created["title"] == "Autopilot pass"
     assert created["recurrence"] == {"frequency": "daily", "time": "07:00"}
     assert created["scheduled_time"] == "07:00"
     assert created["team_id"] == "team1"
