@@ -120,6 +120,36 @@ def test_whole_file_never_touches_a_file_it_was_not_given(corpus, tmp_path):
     assert "not one of the files provided" in res.output
 
 
+def test_whole_file_trailing_newline_drift_does_not_defeat_the_no_op_check(corpus, tmp_path):
+    """A model that returns the SAME content plus stray trailing blank lines (a real, observed
+    failure mode on cheaper models even though the system prompt says to preserve the trailing
+    newline) must still be treated as a no-op: no write, no backup, nothing for a goal-loop retry
+    to compound into a padded file."""
+    drifted = SHORT_DOC + "\n\n\n"  # identical content, extra blank lines at the end
+    runner, _, _ = make_runner(corpus, tmp_path, [f"docs/notes.md\n```\n{drifted}```\n"])
+
+    res = runner.run_goal(goal="Update docs/notes.md so the status reads active", brief="")
+
+    assert res.met is False
+    assert (corpus / "docs" / "notes.md").read_text() == SHORT_DOC
+    backups = tmp_path / "backups"
+    assert not backups.exists() or not list(backups.iterdir())
+
+
+def test_whole_file_success_report_includes_a_diff(corpus, tmp_path):
+    """The goal-verification judge only ever sees ``res.output`` -- a bare "Edited notes.md"
+    gives it nothing to confirm a change against, which is what let genuinely-successful edits
+    get judged not-met and retried. The success report must carry real evidence of the change."""
+    new_doc = SHORT_DOC.replace("paused pending review", "active")
+    runner, _, _ = make_runner(corpus, tmp_path, [f"docs/notes.md\n```\n{new_doc}```\n"])
+
+    res = runner.run_goal(goal="Update docs/notes.md so the status reads active", brief="")
+
+    assert res.met is True
+    assert "-Status: paused pending review." in res.output
+    assert "+Status: active." in res.output
+
+
 # --- SEARCH/REPLACE -----------------------------------------------------------------------------
 
 def test_search_replace_exact_match_applies(corpus, tmp_path):

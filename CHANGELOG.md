@@ -7,6 +7,29 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **`FastEditRunner`'s whole-file rewrite path could pad a file with an extra blank line on
+  every redundant retry, and its success report was too terse for the goal-verification judge to
+  actually confirm, which is what made a retry redundant in the first place.** Found by a 10-case
+  real end-to-end battery (real model calls, real files, no mocks): a request already fully
+  satisfied by the file's existing content (a false-premise typo "fix," or a retry against a file
+  the first attempt already corrected) still came back as a "changed" file, because the model does
+  not reliably reproduce the exact original trailing newline even when told to preserve it, and the
+  no-op check compared for byte-exact equality. Each spurious "edit" was then reported to the goal
+  loop as just `"Edited notes.md in 0.8s..."` -- no evidence of what actually changed -- so the
+  verifier judge, with nothing to confirm against, unreliably called genuine successes not-met and
+  triggered another attempt, which padded the file with another blank line. For a non-idempotent
+  request ("append a line") the same evidence gap let a real duplicate land, not just whitespace.
+  Fixed three ways in `quest_ai_runner/adapters/fast_edit_runner.py`: (1) a whole-file rewrite's
+  trailing newline is now re-normalized to match the ORIGINAL file's own convention before the
+  no-op comparison, so drift the model introduces can't defeat that check or accumulate across
+  retries; (2) the success report now includes a short unified diff per edited file, giving the
+  verifier real evidence instead of a bare mechanical summary (this is what actually closed the
+  gap -- a real 10-case end-to-end battery against a deliberately weak/cheap verify-tier model,
+  including a genuinely non-idempotent "append a line" request, went from repeatedly duplicating
+  content across goal-loop retries to landing correctly on the first attempt once the verifier had
+  something to confirm against); (3) both wire-format system prompts gained an explicit "check
+  whether this is already done before you act" rule as defense in depth.
+  (`tests/test_fast_edit_runner.py`, `tests/test_fast_edit_ladder.py`.)
 - **The fast answer loop's read budget was too tight for an ordinary few-file request, so a turn
   could give up mid-cascade and answer with a false "I wasn't able to pull X" instead of ever
   reaching the planner's next read step.** `DEFAULT_MAX_ELAPSED_SECONDS`/`DEFAULT_MAX_GATHERED_CHARS`

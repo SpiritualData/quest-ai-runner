@@ -50,6 +50,7 @@ WIRE FORMAT — chosen by file size, not by cleverness
 """
 from __future__ import annotations
 
+import difflib
 import logging
 import re
 import time
@@ -107,6 +108,7 @@ Rules:
 - Emit the file's ENTIRE content. Never skip, omit or elide any part of it, and never write "... existing content ..." or a comment standing in for content. Anything you leave out will be deleted from the file.
 - Preserve the file's existing style, indentation, and trailing newline.
 - Only include a file you are actually changing. If no file needs to change, reply with the single word NO_EDIT and nothing else.
+- Check FIRST whether the content already satisfies the goal (a previous attempt may already have applied it, or the file may already have been correct). If so, that file needs no change: do not re-apply, duplicate, or repeat anything already present, even if the goal still asks for it.
 - Do not explain, apologize, or add commentary before or after the blocks."""
 
 SEARCH_REPLACE_SYSTEM = """You are a precise file editor. You make the smallest change that fully satisfies the request, and you change nothing else.
@@ -130,6 +132,7 @@ Rules:
 - Keep each SEARCH section as short as it can be while still matching only one place in the file. Include just enough surrounding lines to make it unique.
 - Each block changes the FIRST match only. Use several blocks for several changes.
 - To append to a file, leave the SEARCH section empty.
+- Check FIRST whether the content already satisfies the goal (a previous attempt may already have applied it). If the change you would make is already present, that file needs no change: do not duplicate or repeat it.
 - If no file needs to change, reply with the single word NO_EDIT and nothing else.
 - Do not explain, apologize, or add commentary before or after the blocks."""
 
@@ -139,6 +142,42 @@ Rules:
 # forbids inferring a decision from wording the model chose, not honouring a format it was told to
 # emit.) Either way the consequence is the same and safe: no edit, met=False, escalate.
 NO_EDIT_SENTINEL = "NO_EDIT"
+
+
+def _normalize_trailing_newline(new_content: str, original_content: str) -> str:
+    """Re-apply the ORIGINAL file's trailing-newline convention to a whole-file rewrite.
+
+    The system prompt tells the model to preserve the file's existing trailing newline, but
+    small/cheap models routinely drift by a blank line or two regardless. Trusting the model's
+    own trailing whitespace means a request that is already fully satisfied can still come back
+    looking like a "different" rewrite purely from that drift, which defeats the no-op check in
+    ``apply_response`` and, on a goal-loop retry against an already-correct file, pads the file
+    with another stray blank line every time.
+    """
+    stripped_new = new_content.rstrip("\n")
+    trailing = original_content[len(original_content.rstrip("\n")):]
+    return stripped_new + trailing
+
+
+def _diff_snippet(path: str, before: str, after: str, *, max_lines: int = 40) -> str:
+    """A short unified diff: evidence a goal-verification judge can actually confirm.
+
+    Without this, a successful edit's report was just "Edited notes.md" -- no evidence of what
+    changed. A judge asked to verify a goal against that alone has nothing to confirm and, with
+    a weaker model, unreliably calls it not-met, sending a genuinely-finished edit back through
+    the goal loop for another attempt. For a non-idempotent request ("append a line") that
+    retry does not no-op, it repeats the append -- so the report being evidence-poor was not just
+    a wasted call, it was a data-corruption risk. Bounded in size: this rides in an LLM prompt.
+    """
+    diff_lines = list(difflib.unified_diff(
+        before.splitlines(keepends=True), after.splitlines(keepends=True),
+        fromfile=path, tofile=path, n=1,
+    ))
+    if not diff_lines:
+        return ""
+    if len(diff_lines) > max_lines:
+        diff_lines = diff_lines[:max_lines] + [f"... ({len(diff_lines) - max_lines} more lines)\n"]
+    return "".join(diff_lines)
 
 
 @dataclass
@@ -272,17 +311,19 @@ class FastEditRunner(DeepRunnerBase):
     # --- apply ---------------------------------------------------------------
 
     def apply_response(self, response: str, targets: List[Tuple[str, str]], fmt: str
-                       ) -> Tuple[List[str], List[str]]:
-        """Apply the model's reply. Returns ``(edited_paths, failures)``.
+                       ) -> Tuple[List[str], List[str], Dict[str, str]]:
+        """Apply the model's reply. Returns ``(edited_paths, failures, diffs)``.
 
         A failure is a human/model-readable diagnostic; the file it refers to is UNCHANGED. The
         two failure shapes that matter are a SEARCH block that matched nothing (Aider's
         ``SearchReplaceNoExactMatch`` report, including the nearest actual lines and whether the
         replacement is already present) and an edit naming a file outside the candidate set.
+        ``diffs`` holds a short unified diff per actually-written path -- see ``_diff_snippet``.
         """
         allowed = {path: content for path, content in targets}
         edited: List[str] = []
         failures: List[str] = []
+        diffs: Dict[str, str] = {}
 
         if fmt == "whole":
             blocks = list(find_whole_file_blocks(response, DEFAULT_FENCE, list(allowed)))
@@ -295,14 +336,17 @@ class FastEditRunner(DeepRunnerBase):
                     failures.append(f"Refused an edit to {path!r}: it is not one of the files "
                                     f"provided for this edit.")
                     continue
-                if new_content == allowed[path]:
+                original = allowed[path]
+                new_content = _normalize_trailing_newline(new_content, original)
+                if new_content == original:
                     continue  # a no-op rewrite is not a failure and not an edit
                 result = self.writer.write_file(path, new_content)
                 if result.ok:
                     edited.append(path)
+                    diffs[path] = _diff_snippet(path, original, new_content)
                 else:
                     failures.append(f"Write to {path!r} was refused: {result.error}")
-            return edited, failures
+            return edited, failures, diffs
 
         try:
             blocks = list(find_original_update_blocks(response, DEFAULT_FENCE, list(allowed)))
@@ -346,9 +390,10 @@ class FastEditRunner(DeepRunnerBase):
             result = self.writer.write_file(path, new_content)
             if result.ok:
                 edited.append(path)
+                diffs[path] = _diff_snippet(path, allowed[path], new_content)
             else:
                 failures.append(f"Write to {path!r} was refused: {result.error}")
-        return edited, failures
+        return edited, failures, diffs
 
     @staticmethod
     def no_match_report(path: str, before: str, after: str, content: str) -> str:
@@ -411,6 +456,7 @@ class FastEditRunner(DeepRunnerBase):
             tokens = 0
             failures: List[str] = []
             edited: List[str] = []
+            diffs: Dict[str, str] = {}
 
             for attempt in range(self.config.max_retries + 1):
                 prompt = self.build_prompt(goal=goal, brief=brief,
@@ -443,7 +489,7 @@ class FastEditRunner(DeepRunnerBase):
                         error="fast edit: model reported no change was needed", tokens=tokens)
 
                 tick(PHASE_APPLYING, "Applying the edit…", attempt=attempt + 1)
-                edited, failures = self.apply_response(response, targets, fmt)
+                edited, failures, diffs = self.apply_response(response, targets, fmt)
                 if edited and not failures:
                     break
                 if attempt < self.config.max_retries:
@@ -456,8 +502,15 @@ class FastEditRunner(DeepRunnerBase):
             elapsed = time.time() - started
             if edited and not failures:
                 tick(PHASE_DONE, f"Edited {', '.join(edited)}", files=edited)
+                # The goal-verification judge only ever sees this ``output`` string, never the
+                # file itself -- a bare "Edited notes.md" gives it nothing to confirm a change
+                # against, which is exactly what let a genuinely-successful edit get judged
+                # not-met and retried (see CHANGELOG). The diff is the evidence.
+                evidence = "\n\n".join(f"--- diff for {p} ---\n{diffs[p]}"
+                                       for p in edited if diffs.get(p))
                 summary = ("Edited " + ", ".join(edited) + f" in {elapsed:.1f}s "
-                           "(one direct model call, no agent spawned).")
+                           "(one direct model call, no agent spawned)."
+                           + (f"\n\n{evidence}" if evidence else ""))
                 return DeepResult(
                     met=True, output=summary, tokens=tokens,
                     future_context="- Files changed by this run: " + ", ".join(edited))
