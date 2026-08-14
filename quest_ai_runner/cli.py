@@ -558,6 +558,10 @@ def main(argv=None) -> int:
 
     # --- chat subcommand: interactive attended session ------------------------
     chat_p = sub.add_parser("chat", help="start an interactive session with the brain")
+    chat_p.add_argument("rep_positional", nargs="?", default=None, metavar="REP",
+                        help="shorthand for --rep NAME (e.g. `qar wadona`); if a "
+                             "<corpus_root>/<name>/CLAUDE.md file exists it is also loaded as "
+                             "the persona, same as --persona-file")
     chat_p.add_argument("--rep", default=None, metavar="NAME",
                         help="AI representative display name shown in the session "
                              "(default: QAR_REP_NAME env var, else 'AI')")
@@ -693,8 +697,9 @@ def main(argv=None) -> int:
         # checking the final rep_name string, since "--rep Assistant" must count as explicit
         # too. Session-level auto-persona-resolution (interactive_session.py) only runs when
         # NEITHER was explicitly given.
-        rep_specified = bool(args.rep or os.getenv("QAR_REP_NAME"))
-        rep_name = args.rep or os.getenv("QAR_REP_NAME") or "Assistant"
+        rep_positional = getattr(args, "rep_positional", None)
+        rep_specified = bool(args.rep or rep_positional or os.getenv("QAR_REP_NAME"))
+        rep_name = args.rep or rep_positional or os.getenv("QAR_REP_NAME") or "Assistant"
         persona = None
         persona_path = args.persona_file or os.getenv("QAR_REP_PERSONA_FILE")
         if persona_path:
@@ -704,6 +709,16 @@ def main(argv=None) -> int:
             except OSError as e:
                 log.error("could not read persona file %r: %s", persona_path, e)
                 return 1
+        elif rep_positional and cfg.corpus_root:
+            # `qar <name>` shorthand: look for a <name>/CLAUDE.md directly under the corpus
+            # root (the character-folder convention) and load it as the persona, same as
+            # passing --persona-file explicitly. Silent no-op if there is no such folder --
+            # the session still runs, just with only the display name set.
+            from .interactive_session import _read_persona_file_in_corpus
+            persona = _read_persona_file_in_corpus(cfg.corpus_root, f"{rep_positional}/CLAUDE.md")
+            if persona is None:
+                persona = _read_persona_file_in_corpus(
+                    cfg.corpus_root, f"{rep_positional.lower()}/CLAUDE.md")
         persona_specified = persona is not None
 
         # The Textual UI is the only chat UI. `textual` is a CORE dependency (see

@@ -141,10 +141,14 @@ NO_DEEP_EXECUTOR_TEXT = (
     "wired, or pass RunnerConfig.deep_runner explicitly, then ask again."
 )
 
-# Defaults (all overridable via OrchestratorConfig).
+# Defaults (all overridable via OrchestratorConfig). The elapsed/chars budget bounds the WHOLE
+# read cascade for a turn (every grep + read this turn shares it), not a single read: a 60s/60000
+# char cap left a simple "check these 3 named files" request no room left after one broad grep,
+# so the turn gave up mid-cascade and reported a false "couldn't check X" instead of ever reaching
+# the planner's next read step. Widened so a normal few-file lookup completes within budget.
 DEFAULT_MAX_STEPS = 15
-DEFAULT_MAX_ELAPSED_SECONDS = 60.0
-DEFAULT_MAX_GATHERED_CHARS = 60000
+DEFAULT_MAX_ELAPSED_SECONDS = 90.0
+DEFAULT_MAX_GATHERED_CHARS = 150000
 DEFAULT_MAX_READS_PER_STEP = 8
 DEFAULT_MAX_PARALLEL = 8
 DEFAULT_MAX_SUBQUESTIONS = 4

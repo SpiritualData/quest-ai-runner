@@ -7,6 +7,24 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **The fast answer loop's read budget was too tight for an ordinary few-file request, so a turn
+  could give up mid-cascade and answer with a false "I wasn't able to pull X" instead of ever
+  reaching the planner's next read step.** `DEFAULT_MAX_ELAPSED_SECONDS`/`DEFAULT_MAX_GATHERED_CHARS`
+  (60s / 60,000 chars) bound the WHOLE read cascade for a turn, shared across every grep and read
+  issued this turn, not per-read. A single broad grep earlier in the same turn could exhaust the
+  budget before the planner ever got a re-plan cycle to request specific named files, at which
+  point the loop wraps up with a `partial=True` best-effort answer whose grounding explicitly tells
+  the model to "say plainly it needs to dig further" -- honest about the gap, but the gap itself was
+  an artifact of an undersized budget, not a real retrieval failure. Widened to 90s / 150,000 chars
+  (`quest_ai_runner/core/orchestrator.py`).
+- **`qar <name>` (documented as the preferred way to open a persona chat, e.g. `qar wadona`) did
+  not actually work: the `chat` subcommand's argparser had no positional argument at all, only
+  `--rep`, so it failed with an "unrecognized arguments" error.** Added an optional positional `rep`
+  argument as shorthand for `--rep NAME`; an explicit `--rep` still wins if both are given. When no
+  `--persona-file` is given either, it also looks for `<corpus_root>/<name>/CLAUDE.md` (the
+  character-folder convention) and loads it as the persona automatically, with no LLM call, same
+  effect as passing `--persona-file` explicitly. Falls back to just setting the display name if no
+  matching folder exists. (`tests/test_cli_chat_rep_positional.py`.)
 - **A family-bucket label can no longer reach `claude --model`, which made deep runs fail
   identically on every retry.** Live: six consecutive attempts, each ending in the binary's own
   "There's an issue with the selected model (claude-sonnet). It may not exist or you may not have
