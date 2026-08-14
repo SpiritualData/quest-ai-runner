@@ -745,16 +745,26 @@ class QuestClient:
             log.warning("list_quest_notes failed for quest %s: %s", quest_id, e)
             return []
 
-    def add_quest_note(self, quest_id: str, text: str) -> List[Dict[str, Any]]:
+    def add_quest_note(self, quest_id: str, text: str,
+                       *, author_label: Optional[str] = None) -> List[Dict[str, Any]]:
         """POST /api/quests/{quest_id}/notes — append a note; returns the updated notes list.
 
         Attribution is derived server-side from the caller: an API-key caller (this client) is
         recorded ``author_kind: "ai"``. Returns [] on failure.
+
+        ``author_label`` names the PERSONA that wrote it ("Bailey"), for a quest several personas
+        work. The backend honors it only for API-key callers and falls back to a plain "AI
+        assistant", so it can never be used to post as the person: the one name an AI note must not
+        carry is the account owner's, since that is what made a run's own summaries indistinguishable
+        from the person's replies.
         """
         try:
             self._require()
+            body: Dict[str, Any] = {"text": text}
+            if author_label and str(author_label).strip():
+                body["author_label"] = str(author_label).strip()[:60]
             resp = self._request(
-                "POST", f"/api/quests/{quest_id}/notes", body={"text": text}) or []
+                "POST", f"/api/quests/{quest_id}/notes", body=body) or []
             return resp if isinstance(resp, list) else []
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("add_quest_note failed for quest %s: %s", quest_id, e)

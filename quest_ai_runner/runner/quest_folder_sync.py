@@ -151,7 +151,17 @@ def _render_notes_block(notes: List[Dict[str, Any]]) -> str:
         nid = note.get("note_id") or note.get("id")
         prefix = f"<!-- id:{nid} --> " if nid else ""
         created = str(note.get("created_at") or "")[:10]
-        author = note.get("author_name") or note.get("author_kind") or ""
+        # author_name alone is misleading: a note an AI run posted carries the ACCOUNT OWNER's
+        # display name (the API key is theirs), so every note in this file read as if the person
+        # had written it, including the dozen an AI wrote. Since this file is what both the person
+        # and the next run read to see what has already been said, the kind has to win when the two
+        # disagree. Unknown kind stays as the bare name rather than being guessed either way.
+        kind = str(note.get("author_kind") or "").lower()
+        name = str(note.get("author_name") or "").strip()
+        if kind == "ai":
+            author = f"{name}, AI" if name and name.lower() != "ai assistant" else "AI"
+        else:
+            author = name or kind
         tag = " ".join(f"[{p}]" if p == created else f"({p})" for p in (created, author) if p)
         lines.append(f"- {prefix}{tag + ' ' if tag else ''}{text}")
     return "\n".join(lines)

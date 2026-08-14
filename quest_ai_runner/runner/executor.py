@@ -36,6 +36,85 @@ log = logging.getLogger("quest-ai-runner.executor")
 # every check would waste calls for no benefit.
 CANCEL_CHECK_INTERVAL_SECONDS = 15.0
 
+# How many of a goal's most recent notes ride along as run context, and how many of the PERSON's
+# own notes are guaranteed a place among them (see ``render_goal_notes``).
+NOTE_CONTEXT_LIMIT = 8
+PERSON_NOTE_FLOOR = 3
+
+# Stated to any run that can see the person's own words, because the reply loop only closes if
+# both halves hold: the run has to answer what they said, and it has to leave the thing they can
+# answer NEXT time where they will find it.
+#
+# The second half is the one that silently fails. A run that mails a brief, writes a file or posts
+# elsewhere leaves Quest holding a DESCRIPTION of the work ("sent the brief, id 951f6..."), so the
+# person opens their quest to reply and there is nothing there to reply to -- the content they
+# actually read lives in their inbox. Quest is where they answer, so Quest gets the real copy.
+REPLY_LOOP_CONTRACT = (
+    "Closing the loop with the person: if any of the notes or captures above are theirs, open your "
+    "result by saying what you did about them, so they can tell their reply landed. And when you "
+    "produce something for them to READ (a brief, a summary, a document, an email), put its full "
+    "text in your result, not a description of it -- Quest is where they see and answer your work, "
+    "so anything you send or write elsewhere is a copy of what belongs there."
+)
+
+
+def render_goal_notes(notes: Optional[List[Dict[str, Any]]]) -> str:
+    """Render a goal's recent notes for a run, saying WHO wrote each one.
+
+    This is the reply channel. A person reads what a run produced, answers on the goal ("did the
+    reading, skipped the writing, do X instead"), and the next run has to act on that. Two things
+    broke it, and both are fixed here:
+
+    1. **Attribution was dropped.** Notes went into the prompt as a flat bullet list, so a run could
+       not tell the person's instructions from its OWN previous output. On a goal where the runner
+       writes a note every day, that means a run reads a dozen of its own summaries, cannot see
+       which one line came from the human, and treats a correction as just more of its own prior
+       reasoning. Each note now carries its author and date, and human notes are marked as the
+       person's own words, which is the whole point of a reply.
+
+    2. **The person's note fell out of the window.** A plain "most recent N" cut is dominated by AI
+       notes precisely on the goals that run often, so yesterday's human correction ages out while
+       five machine summaries stay. The most recent ``PERSON_NOTE_FLOOR`` human-authored notes are
+       therefore kept regardless of where they land in the ordering.
+
+    Authorship comes from the backend's ``author_kind`` (``"user"`` for a signed-in human,
+    ``"ai"`` for an API-key caller). A note with no ``author_kind`` at all is left unlabeled rather
+    than guessed at: an older backend, or a note predating attribution, must not be asserted to be
+    the person's instruction.
+    """
+    rows = [n for n in (notes or []) if (n or {}).get("text")]
+    if not rows:
+        return ""
+
+    def is_person(note: Dict[str, Any]) -> bool:
+        return str(note.get("author_kind") or "").lower() == "user"
+
+    kept = rows[-NOTE_CONTEXT_LIMIT:]
+    if len(rows) > len(kept):
+        floored = [n for n in rows if is_person(n)][-PERSON_NOTE_FLOOR:]
+        missing = [n for n in floored if n not in kept]
+        if missing:
+            # Oldest-to-newest overall, so the run still reads them in chronological order.
+            kept = [n for n in rows if n in missing or n in kept]
+
+    lines = []
+    for note in kept:
+        kind = str(note.get("author_kind") or "").lower()
+        name = str(note.get("author_name") or "").strip()
+        if kind == "user":
+            who = f"{name}, the person" if name else "the person"
+        elif kind == "ai":
+            who = f"{name} (AI)" if name and name.lower() != "ai assistant" else "AI"
+        else:
+            who = name or "unattributed"
+        when = str(note.get("created_at") or "")[:10]
+        stamp = f"[{when}] " if when else ""
+        lines.append(f"  • {stamp}({who}) {note['text']}")
+
+    header = ("Goal notes, oldest first. Notes marked \"the person\" are the goal owner's own "
+              "words: treat them as instructions that override anything an AI note claims.")
+    return f"{header}\n" + "\n".join(lines)
+
 # Same throttle, same reasoning, for the ``pending_inputs`` callable built by
 # ``_build_pending_inputs``: a human typing a mid-task steering message is rare and not
 # latency-sensitive down to the second, so claiming on every internal loop boundary would hammer
@@ -561,21 +640,59 @@ class TaskExecutor:
                 except Exception:  # noqa: BLE001
                     pass  # API unavailable or error; continue with what we have
 
-            # Fetch recent goal notes for context
-            list_notes = getattr(self._client, "list_goal_notes", None)
-            if callable(list_notes):
-                try:
-                    notes = list_notes(goal_id, quest_id=quest_id, limit=5)
-                    if notes:
-                        notes_text = "\n".join(
-                            f"  • {n.get('text', '')}" for n in notes if n.get("text")
-                        )
-                        if notes_text:
-                            parts.append(f"Goal notes:\n{notes_text}")
-                except Exception:  # noqa: BLE001
-                    pass  # API unavailable or error; continue with what we have
+        # The notes on the QUEST are the person's reply channel, so they are fetched whenever there
+        # is a quest — with or without a goal on the task.
+        if quest_id:
+            notes_text = render_goal_notes(self._fetch_person_notes(quest_id, goal_id))
+            if notes_text:
+                parts.append(notes_text)
+
+            # What the person captured on their phone and has not acted on yet. Autopilot passes
+            # already read these; an ordinary scheduled run did not, so the same capture steered a
+            # pass and was invisible to the daily task working the very quest it was about.
+            insights_text = self._fetch_person_captures()
+            if insights_text:
+                parts.append(insights_text)
+
+            if notes_text or insights_text:
+                parts.append(REPLY_LOOP_CONTRACT)
 
         return "\n".join(parts) if parts else ""  # Return combined conversation + quest/goal context
+
+    def _fetch_person_notes(self, quest_id: str, goal_id: Optional[str]) -> List[Dict[str, Any]]:
+        """The quest's notes, which is where a person answers their AI.
+
+        ``list_quest_notes`` (GET /api/quests/{id}/notes) is the collection that actually holds
+        them: it is what the Quest app writes, what ``quest_folder_sync`` mirrors, and what an
+        owner adds a note to. ``list_goal_notes`` is tried only as a fallback for a backend that
+        implements the per-goal route -- the reference backend does not, so asking it first (as
+        this did) returned a 404 and left every run with NO notes at all while the person's replies
+        sat unread on the quest.
+        """
+        list_quest_notes = getattr(self._client, "list_quest_notes", None)
+        if callable(list_quest_notes):
+            try:
+                notes = list(list_quest_notes(quest_id) or [])
+                if notes:
+                    return notes
+            except Exception:  # noqa: BLE001
+                pass  # API unavailable or error; fall through to the per-goal route
+        list_goal_notes = getattr(self._client, "list_goal_notes", None)
+        if goal_id and callable(list_goal_notes):
+            try:
+                return list(list_goal_notes(goal_id, quest_id=quest_id,
+                                            limit=NOTE_CONTEXT_LIMIT) or [])
+            except Exception:  # noqa: BLE001
+                pass  # API unavailable or error; continue with what we have
+        return []
+
+    def _fetch_person_captures(self) -> str:
+        """The person's recent unacted captures, rendered, or "" when there are none."""
+        try:
+            from .insights import collect_unacted_insights
+            return collect_unacted_insights(self._client).as_text()
+        except Exception:  # noqa: BLE001
+            return ""  # never let a context extra break a run
 
     # --- result -> Quest callback -------------------------------------------
 
