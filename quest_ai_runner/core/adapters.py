@@ -87,6 +87,16 @@ EVENT_UNDERSTANDING = "understanding"  # Step 1 produced a goal condition (the r
 EVENT_CONTEXT = "context"      # context assembled for this turn: cards selected + sources.
                                # Fired when a ContextAssembler is wired and produces card_metadata.
                                # Carries ``data`` with card_metadata list and sources (ALWAYS surfaces).
+EVENT_INTENT = "intent"        # an announcement that work is ABOUT TO START ("Executing: <goal>").
+                               # NOT a result and never a stand-in for one: it fires BEFORE the
+                               # work runs, so at the moment it is emitted nothing has happened yet.
+                               # It exists as its own type precisely because it used to be emitted
+                               # as EVENT_RESULT, and both chat UIs (which fall back to the last
+                               # result text when a deep turn produces no output of its own) then
+                               # showed "Executing: <goal>" as the turn's ANSWER — reading as a
+                               # completion report for work that never ran. A consumer must render
+                               # this as an in-progress announcement, never as the turn's outcome.
+                               # ALWAYS surfaces (in SURFACING_EVENTS).
 EVENT_RESULT = "result"        # the final answer / deep output (ALWAYS surfaces)
 EVENT_DECISION = "decision"    # a confirm / human decision-request was raised (ALWAYS surfaces)
 EVENT_MILESTONE = "milestone"  # an explicit, real milestone worth surfacing (ALWAYS surfaces)
@@ -130,7 +140,7 @@ EVENT_CARD_THREAD = "card_thread"  # this turn's TOPIC assignment: which context
 
 # The event types a BACKGROUND (MilestoneSink) run forwards. Everything else is dropped as
 # intermediate chatter. Encoded ONCE here so every consumer inherits the same policy.
-SURFACING_EVENTS = frozenset({EVENT_UNDERSTANDING, EVENT_CONTEXT, EVENT_RESULT, EVENT_DECISION, EVENT_MILESTONE, EVENT_DONE, EVENT_TOKENS, EVENT_OVERSEER, EVENT_MODE_SIGNAL, EVENT_CARD_THREAD, EVENT_EXPLANATION})
+SURFACING_EVENTS = frozenset({EVENT_UNDERSTANDING, EVENT_CONTEXT, EVENT_INTENT, EVENT_RESULT, EVENT_DECISION, EVENT_MILESTONE, EVENT_DONE, EVENT_TOKENS, EVENT_OVERSEER, EVENT_MODE_SIGNAL, EVENT_CARD_THREAD, EVENT_EXPLANATION})
 
 
 # ---------------------------------------------------------------------------

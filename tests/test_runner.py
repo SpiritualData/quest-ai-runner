@@ -1170,8 +1170,9 @@ def test_poller_heartbeat_reports_web_false_when_subprocess_tools_pinned_without
 
 
 def test_poller_heartbeat_reports_web_false_via_files_adapter_no_deep_runner():
-    """A real FilesAdapter satisfies corpus; with NO deep_runner there's nothing that can browse,
-    so code AND web are False. Proves derivation reads the actual wiring, not a hardcoded claim."""
+    """A real FilesAdapter satisfies corpus; with deep execution explicitly DISABLED there's
+    nothing that can browse, so code AND web are False. Proves derivation reads the actual wiring,
+    not a hardcoded claim."""
     import tempfile
     from quest_ai_runner.adapters import FilesAdapter
 
@@ -1182,6 +1183,10 @@ def test_poller_heartbeat_reports_web_false_via_files_adapter_no_deep_runner():
         cfg = RunnerConfig(
             quest_base_url="http://x", quest_api_key="qsk_test", team_id="team1",
             retrieval=FilesAdapter(d), model_provider=provider,
+            # deep_runner=None is the EXPLICIT disable of the tri-state. Leaving the field unset
+            # would mean "auto-build the default SubprocessGoalRunner", which on a machine with
+            # Claude Code installed reports code=True and web=True, honestly.
+            deep_runner=None,
         )
         poller = Poller(cfg, state_path=None, client=client)
         poller.run_once()

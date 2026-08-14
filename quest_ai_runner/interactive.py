@@ -792,13 +792,13 @@ class _TurnRenderer:
         if self._ev is None:
             from .core.adapters import (
                 EVENT_CONTEXT, EVENT_STATUS, EVENT_PLAN, EVENT_READ, EVENT_REPLAN,
-                EVENT_PARTIAL, EVENT_EXEC, EVENT_RESULT, EVENT_DECISION,
+                EVENT_PARTIAL, EVENT_EXEC, EVENT_INTENT, EVENT_RESULT, EVENT_DECISION,
                 EVENT_MILESTONE, EVENT_DONE, EVENT_UNDERSTANDING,
             )
             self._ev = dict(
                 context=EVENT_CONTEXT, status=EVENT_STATUS, plan=EVENT_PLAN, read=EVENT_READ,
                 replan=EVENT_REPLAN, partial=EVENT_PARTIAL, exec=EVENT_EXEC,
-                result=EVENT_RESULT, decision=EVENT_DECISION,
+                intent=EVENT_INTENT, result=EVENT_RESULT, decision=EVENT_DECISION,
                 milestone=EVENT_MILESTONE, done=EVENT_DONE,
                 understanding=EVENT_UNDERSTANDING,
             )
@@ -1086,6 +1086,19 @@ class _TurnRenderer:
                 if c._rich:    c._rich.print(f"\n  [cyan]◆[/] {text}", highlight=False)
                 elif c._color: c.line(f"\n  {_a(_CYAN, '◆')} {text}")
                 else:          c.line(f"\n  ◆ {text}")
+            self._panel.start()
+        elif t == ev["intent"]:
+            # An announcement that work is ABOUT to start ("Executing: <goal>"). Rendered as a
+            # progress line with its own marker, NEVER as the AI's answer bubble: at this moment
+            # nothing has run yet. It used to arrive typed as a result and got printed here as the
+            # turn's markdown reply, so a turn that then executed nothing left "Executing: <goal>"
+            # standing as if it were the outcome.
+            self._panel.stop()
+            if text:
+                c = self._c
+                if c._rich:    c._rich.print(f"\n  [cyan]▸[/] {text}", highlight=False)
+                elif c._color: c.line(f"\n  {_a(_CYAN, '▸')} {text}")
+                else:          c.line(f"\n  ▸ {text}")
             self._panel.start()
         elif t == ev["result"]:
             if not self._partial_started and text:
@@ -1813,9 +1826,10 @@ class InteractiveSession:
                 goals = final.goals or []
                 # A deep turn that actually executed has at least one DeepResult that either met
                 # its goal or produced output (its text/milestones were already streamed live).
-                # ``OrchestratorResult`` never sets ``.text`` for kind="deep", so checking ``.text``
-                # alone always looked unexecuted and wrongly showed the "use /execute" hint (and
-                # crashed on a renderer-only helper). Key off the deep results instead.
+                # Whether ``.text`` is set says nothing about that: it is empty on an executed deep
+                # turn (the output streamed) and NON-empty on the no-executor turn (it carries the
+                # honest "nothing ran" explanation). Key off the deep results, which is the only
+                # thing that records what actually happened.
                 executed = any(
                     getattr(d, "met", False) or (getattr(d, "output", "") or "").strip()
                     for d in (final.deep_results or [])
@@ -1832,9 +1846,13 @@ class InteractiveSession:
                     self._console.line("")
 
                     # If deep_runner is configured, execute automatically (don't ask)
-                    # Otherwise skip (no executor available)
+                    # Otherwise say plainly that nothing ran. The result's own text is what gets
+                    # shown: it is the turn's real answer in that case, and showing it here is what
+                    # keeps the transcript honest even though no answer bubble was produced.
                     if self._cfg.deep_runner:
                         self._run_turn("Execute it. No more planning, just code it and apply changes now.")
+                    elif (final.text or "").strip():
+                        self._console.markdown(final.text.strip())
                     else:
                         self._console.dim("  (No deep executor configured; cannot auto-execute)")
 
@@ -1845,7 +1863,15 @@ class InteractiveSession:
                 goals = final.goals or []
                 all_met = bool(deep_results) and all(d.met for d in deep_results)
                 goal_str = ("; ".join(goals))[:300] if goals else ""
-                prefix = "Completed" if all_met else "Attempted"
+                # THREE outcomes, not two. With no deep results at all, nothing was even attempted
+                # (no executor wired), and recording "Attempted: <goal>" put a false claim into the
+                # session history the NEXT turn reads back as context.
+                if all_met:
+                    prefix = "Completed"
+                elif deep_results:
+                    prefix = "Attempted"
+                else:
+                    prefix = "Planned but NOT executed (no deep executor configured)"
                 self._last_assistant = (f"{prefix}: {goal_str}" if goal_str else f"{prefix}.")
             else:
                 # Use streamed text as fallback: what was displayed may differ from final.text

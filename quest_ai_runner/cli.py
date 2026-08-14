@@ -9,8 +9,10 @@ Env it reads:
   QAR_CORPUS_ROOT                                — file root for the FilesAdapter (grounding);
                                                    also the default for QAR_DEEP_WORKING_DIR
   QAR_DEEP_WORKING_DIR (optional)               — working dir for the subprocess deep-runner;
-                                                   defaults to QAR_CORPUS_ROOT when unset
-  QAR_CLAUDE_PATH (optional)                     — the worker binary (default: claude on PATH)
+                                                   defaults to QAR_CORPUS_ROOT, then the cwd
+  QAR_CLAUDE_PATH (optional)                     — the worker binary (default: claude on PATH).
+                                                   The deep runner is wired AUTOMATICALLY from
+                                                   these two vars; nothing to configure in code.
   QAR_ANSWER_TIMEOUT (optional, seconds)         — per-call cap for the claude_cli planner/answer
                                                    backend (default 180; raise for large corpora)
   QAR_PLANNER_TIER (optional)                    — model tier for the planner step that picks
@@ -156,7 +158,6 @@ import shutil
 from .adapters import AnthropicProvider, ClaudeCliProvider, ClaudeConversationsAdapter, CompositeRetrievalAdapter, FilesAdapter, GeminiProvider, OpenAIProvider, WebSearchAdapter
 from .config import RunnerConfig
 from .core.adapters import ModelProvider
-from .core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 from .pricing import estimate_bootstrap_cost, get_provider_and_model
 from .runner.poller import Poller
 
@@ -266,14 +267,12 @@ def _config_from_env() -> RunnerConfig:
             else:
                 retrieval = adapter
 
-    # QAR_DEEP_WORKING_DIR defaults to QAR_CORPUS_ROOT so only one env var is needed.
-    deep_dir = os.getenv("QAR_DEEP_WORKING_DIR") or corpus
-    deep_runner = None
-    if deep_dir:
-        deep_runner = SubprocessGoalRunner(SubprocessConfig(
-            working_dir=deep_dir,
-            claude_path=os.getenv("QAR_CLAUDE_PATH", "claude"),
-        ))
+    # The deep runner is NOT wired here any more: leaving RunnerConfig.deep_runner unset means
+    # "auto", and config.resolve_deep_runner builds the same SubprocessGoalRunner from the same
+    # env vars (QAR_DEEP_WORKING_DIR, falling back to corpus_root and then cwd; QAR_CLAUDE_PATH).
+    # Building it here as well would only fork the logic — and the old `deep_runner = None` for a
+    # corpus-less run read as "execution deliberately disabled", so `qar chat` with no corpus
+    # configured could never execute anything.
     # Allow model tier overrides via env vars: QAR_MODEL_FAST, QAR_MODEL_BALANCED, QAR_MODEL_QUALITY, QAR_MODEL_BEST
     model_fallback = {}
     for tier in ("fast", "balanced", "quality", "best"):
@@ -288,7 +287,6 @@ def _config_from_env() -> RunnerConfig:
         retrieval=retrieval,
         model_provider=_model_provider_from_env(),
         model_fallback=model_fallback or None,
-        deep_runner=deep_runner,
         corpus_root=corpus,
         runner_label=os.getenv("QAR_RUNNER_LABEL") or None,
         env_id=os.getenv("QAR_ENV_ID") or None,

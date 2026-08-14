@@ -39,6 +39,11 @@ def _cfg(provider):
         model_provider=provider,
         model_fallback={"balanced": "gemini-3.5-flash"},
         escalation=StubEscalation(),
+        # Explicitly DISABLED, not merely unset: these tests are about the PROVIDER's web
+        # capability, and a deep runner is the other thing that can make web=True (Claude Code
+        # ships WebSearch/WebFetch). Leaving the field unset now means "auto-build the default
+        # runner", which would make web=True for a reason this file is not testing.
+        deep_runner=None,
     )
 
 

@@ -46,6 +46,7 @@ from .adapters import (
     EVENT_DONE,
     EVENT_EXEC,
     EVENT_EXPLANATION,
+    EVENT_INTENT,
     EVENT_MILESTONE,
     EVENT_MODE_SIGNAL,
     EVENT_OVERSEER,
@@ -127,6 +128,18 @@ from .recent_context import (
 )
 
 log = logging.getLogger("quest-ai-runner.orchestrator")
+
+# What a deep turn says when there is NO execution capability wired at all. This is the turn's real
+# answer in that case: the request was understood and broken into goals, and then nothing ran. It
+# is a module constant so every renderer and every test names the same sentence rather than each
+# inventing (or omitting) its own, and so the honest wording lives on the result instead of in one
+# UI's side note. Kept short and free of em dashes, per the copy conventions the UIs follow.
+NO_DEEP_EXECUTOR_TEXT = (
+    "I did not execute this. No deep executor is configured for this session, so the work was "
+    "planned but nothing actually ran: no files were changed and no commands were executed. "
+    "Install Claude Code (or set QAR_CLAUDE_PATH to its binary) so the default executor can be "
+    "wired, or pass RunnerConfig.deep_runner explicitly, then ask again."
+)
 
 # Defaults (all overridable via OrchestratorConfig).
 DEFAULT_MAX_STEPS = 15
@@ -5288,8 +5301,15 @@ class Orchestrator:
             if exec_record is not None:
                 for g in goals:
                     exec_record.facts.append(ExecutionFact(goal=g))
+            # CARRY THE EXPLANATION ON THE RESULT ITSELF. This used to return with ``text=None``,
+            # which left every caller to invent its own account of what happened — and both chat
+            # UIs, having nothing to show, fell back to the interim "Executing: <goal>" line and
+            # presented it as the answer. The result now states plainly that nothing ran and what
+            # to do about it, so the honest wording travels with the result to every consumer
+            # (chat UIs, the poll lane's task report, a backend relaying it) instead of being
+            # re-derived, or lost, at each one.
             return OrchestratorResult(kind="deep", goals=goals, rationale=plan.rationale,
-                                      deep_results=[])
+                                      deep_results=[], text=NO_DEEP_EXECUTOR_TEXT)
 
         # HIERARCHICAL GOAL: the overall user-level goal this turn pursues. When the work fans out
         # into parallel subgoals, each subgoal process must be told the HIGHER goal it serves, so it
@@ -8221,10 +8241,23 @@ class Orchestrator:
             return finish(res)
 
         if final == "deep":
-            # Show goal condition before executing
-            goal_text = plan.goal or f"Complete: {user_message[:100]}"
-            emit.emit(ProgressEvent(type=EVENT_RESULT, text=f"Executing: {goal_text}"))
-            emit.status("Running now…")
+            # Announce the goal condition before executing — but ONLY when something can actually
+            # execute it. Two things were wrong here and both produced the same live failure (a
+            # turn whose final bubble read "Executing: <goal>" although nothing had run, no file
+            # was touched, and a dim side note said "No deep executor configured"):
+            #   1. the announcement fired unconditionally, including on runs with no execution
+            #      capability at all, where _run_deep below returns immediately having done nothing;
+            #   2. it was typed EVENT_RESULT, the type that carries a turn's actual outcome, so
+            #      both chat UIs' "fall back to the last result text" path picked this interim
+            #      sentence up and presented it as the answer.
+            # It is now gated on real capability and typed EVENT_INTENT, which no renderer may use
+            # as a turn's outcome. The gate mirrors _run_deep's own (``_has_deep_execution_capability``
+            # covers the single default runner AND the named registry), so the announcement fires
+            # exactly when the work is genuinely about to be attempted.
+            if self._has_deep_execution_capability():
+                goal_text = plan.goal or f"Complete: {user_message[:100]}"
+                emit.emit(ProgressEvent(type=EVENT_INTENT, text=f"Executing: {goal_text}"))
+                emit.status("Running now…")
             res = self._run_deep(plan, user_message, self._answer_model(plan, "opus", hint=model_hint),
                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                                  gathered=gathered, quality_standards=quality_standards,
@@ -8487,16 +8520,20 @@ class Orchestrator:
                     deep_brief=(should_defer_deep.get("brief") or user_message)[:2000],
                     rationale=should_defer_deep.get("rationale") or "follow-up work from answer phase",
                 )
-                # Show goal condition before executing
-                if emit is not None:
-                    _followup_verb = "Queueing" if _queued_mode else "Executing"
-                    emit.emit(ProgressEvent(type=EVENT_RESULT,
-                                            text=f"{_followup_verb} follow-up: {deferred_plan.goal}"))
                 deep_model = self._answer_model(deferred_plan, "opus", hint=model_hint)
                 # Queued deployments pin deferred work to the registered queue runner (reserved
                 # key), so the classifier can never re-route it to an inline runner.
                 _deferred_runner = (self.deep_runners.get(DEFERRED_RUNNER_KEY)
                                     if _queued_mode else None)
+                # Announce the follow-up goal before executing it — same rules as the main deep
+                # branch above: EVENT_INTENT (an announcement of intent, never usable as a turn's
+                # outcome), and only when something can actually run it. The gate mirrors
+                # _run_deep's exactly: a pinned ``runner_override`` IS the capability.
+                if emit is not None and (_deferred_runner is not None
+                                         or self._has_deep_execution_capability()):
+                    _followup_verb = "Queueing" if _queued_mode else "Executing"
+                    emit.emit(ProgressEvent(type=EVENT_INTENT,
+                                            text=f"{_followup_verb} follow-up: {deferred_plan.goal}"))
                 deep_res = self._run_deep(deferred_plan, user_message, deep_model,
                                          emit=emit, rep_preamble=rep_preamble,
                                          exec_record=exec_record, gathered=gathered,

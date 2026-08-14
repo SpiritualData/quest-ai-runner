@@ -26,6 +26,9 @@ def build_config() -> RunnerConfig:
         # --- adapters (you choose which) ---
         retrieval=FilesAdapter(corpus) if corpus else None,
         model_provider=AnthropicProvider(),
+        # OPTIONAL. Leaving deep_runner out entirely gets you this same runner, built from
+        # QAR_DEEP_WORKING_DIR/corpus_root + QAR_CLAUDE_PATH. Set it only to change something,
+        # e.g. the context preamble below. See "Deep execution is on by default".
         deep_runner=SubprocessGoalRunner(SubprocessConfig(
             working_dir=corpus,
             context_preamble="You are executing a task for <your team>. Ground on the corpus; "
@@ -46,7 +49,7 @@ def build_config() -> RunnerConfig:
 | `runner_label` | human-readable tag sent on the team-environment heartbeat |
 | `retrieval` | a `RetrievalAdapter` — how the brain gathers grounding |
 | `model_provider` | a `ModelProvider` — the LLM (plan/answer/list_models) |
-| `deep_runner` | a `DeepRunner` — runs deep, goal-driven work |
+| `deep_runner` | a `DeepRunner` — runs deep, goal-driven work. **On by default**: leave it unset and one is built for you (see below); pass `None` to turn execution off |
 | `escalation` | an `EscalationSink` — where confirm/decision requests go (defaults from the Quest client) |
 | `corpus_root` | the org's files/skills root (generic, optional) |
 | `rep_sync_resolver` | OPT-IN: map a task to `(user_id, skill_dir)` to run it AS that AI rep (off by default) |
@@ -54,6 +57,36 @@ def build_config() -> RunnerConfig:
 | `default_assignee_user_id` | who human-only decisions route to by default |
 | `orchestrator`, `poll_interval_seconds`, `poll_lookahead_minutes`, `max_concurrent_tasks` | tuning |
 | `extra` | a free-form dict for your own needs |
+
+## Deep execution is on by default
+
+`deep_runner` is tri-state, exactly like `context_assembler`. Doing nothing gives you a working
+executor, because a consumer that simply did not know it had to wire one should not silently lose
+every request for real work:
+
+| What you pass | What you get |
+|---|---|
+| **nothing** (leave the field out) | a `SubprocessGoalRunner` is built for you, pointed at `claude` on PATH. If Claude Code isn't installed, you get a loud warning and no runner (never a broken one, never an exception) |
+| an **instance** | exactly that runner: `AcpDeepRunner`, your own queue worker, a test double |
+| **`None`** | deep execution off, deliberately and silently |
+
+The auto-built runner reads the same environment every other deep-runner knob in this repo reads,
+so there is one set of switches and not two:
+
+| Env var | Effect on the default runner |
+|---|---|
+| `QAR_DEEP_WORKING_DIR` | the subprocess cwd. Falls back to `corpus_root`, then the process cwd |
+| `QAR_CLAUDE_PATH` | the worker binary (default `claude`, looked up on PATH) |
+| `QAR_DEEP_TIMEOUT_SECONDS` | wall-clock cap per deep run (default 1 hour) |
+| `QAR_DEEP_MODELS` | the goal loop's escalation ladder (lives on `OrchestratorConfig`) |
+
+Resolution happens in `config.resolve_deep_runner`, which `build_orchestrator` calls and then
+**writes back onto your config**: after `build_orchestrator(cfg)`, `cfg.deep_runner` is always a
+real runner or a real `None`, so consumer code can test it directly.
+
+Pass an instance when you need to change something about the worker (a `context_preamble`, tool
+gating, a non-default working dir, a different agent entirely). Pass `None` when your deployment
+genuinely must not execute, e.g. a read-only chat surface.
 
 ## Validate before you run
 

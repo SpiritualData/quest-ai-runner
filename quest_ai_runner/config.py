@@ -43,6 +43,15 @@ from .resources import ResourceLimits
 # (use that one). Lets context handling be ON BY DEFAULT while staying overridable and disableable.
 _AUTO_CONTEXT = object()
 
+# Sentinel default for RunnerConfig.deep_runner: "build the default SubprocessGoalRunner (Claude
+# Code)". Exactly the ``_AUTO_CONTEXT`` tri-state, for exactly the same reason: execution is core
+# to running well, so leaving the field unset must mean "give me the working default", not "run
+# with no executor at all". Before this existed the field defaulted to ``None``, which made
+# "the consumer never wired one" indistinguishable from "the consumer deliberately disabled
+# execution" — so a consumer that simply forgot silently lost every deep/execution turn (the turn
+# still announced work, then nothing ran).
+_AUTO_DEEP_RUNNER = object()
+
 # Per-attachment size cap for chat/file uploads and panel context-docs. Large by design so any
 # reasonable document or image is accepted; anything over this is rejected by the multimodal
 # handler (``core.attachments.prepare_attachments``) with a clear note rather than processed.
@@ -71,13 +80,19 @@ class RunnerConfig:
     model_fallback: Optional[dict] = None            # override tier->model mapping (e.g. {"haiku": "gpt-4o", "sonnet": "claude-4"})
     model_providers: Optional[dict] = None           # multi-provider support: dict of name -> ModelProvider (e.g. {"anthropic": AnthropicProvider(), "gemini": GeminiProvider()})
     model_provider_overrides: Optional[dict] = None  # per-tier provider routing (e.g. {"best": "anthropic", "fast": "gemini"})
-    # The deep worker. ``core.goal_runner.SubprocessGoalRunner`` (Claude Code headless via
-    # ``claude -p``) is the reference and the default choice. ``adapters.AcpDeepRunner`` is an
-    # opt-in alternative that runs the same contract over the Agent Client Protocol, which buys
-    # MID-TURN STEERING (a message queued while the deep turn runs is injected into that turn
-    # instead of waiting for the next attempt); it needs the [acp] extra and Node >= 22. Selecting
-    # one is just this field — see docs/acp-deep-runner.md.
-    deep_runner: Optional[DeepRunner] = None         # SubprocessGoalRunner or another worker
+    # The deep worker — ON BY DEFAULT. ``core.goal_runner.SubprocessGoalRunner`` (Claude Code
+    # headless via ``claude -p``) is the reference, and a consumer that leaves this unset gets one
+    # wired automatically by ``build_orchestrator`` (see ``resolve_deep_runner``), pointed at
+    # ``claude`` on PATH. ``adapters.AcpDeepRunner`` is an opt-in alternative that runs the same
+    # contract over the Agent Client Protocol, which buys MID-TURN STEERING (a message queued while
+    # the deep turn runs is injected into that turn instead of waiting for the next attempt); it
+    # needs the [acp] extra and Node >= 22. Selecting one is just this field — see
+    # docs/acp-deep-runner.md.
+    #   * leave UNSET (the _AUTO sentinel) → the default SubprocessGoalRunner is built and used
+    #     (or, if ``claude`` isn't on PATH, a loud warning and no runner);
+    #   * pass an INSTANCE → that runner is used (AcpDeepRunner, a queue worker, a fake in tests);
+    #   * pass ``None`` explicitly → deep execution is DISABLED, silently and deliberately.
+    deep_runner: Any = _AUTO_DEEP_RUNNER             # SubprocessGoalRunner or another worker
     # Named deep-runner registry. When non-empty and a ``deep_runner_classifier`` is
     # also provided, the orchestrator calls the classifier to SELECT which runner handles
     # each deep goal, rather than always using the single ``deep_runner``. The consumer
@@ -324,8 +339,11 @@ def derive_capabilities(cfg: RunnerConfig) -> Dict[str, bool]:
         if not corpus and cfg.corpus_root:
             corpus = True
 
-    # code: a deep goal-runner (SubprocessGoalRunner is the reference) is wired.
-    deep = cfg.deep_runner
+    # code: a deep goal-runner (SubprocessGoalRunner is the reference) is wired. Resolve the
+    # tri-state first (``warn=False``: this is a capability PROBE — the wiring path in
+    # build_orchestrator owns the one loud warning), so an unset field reports the capability the
+    # auto-built default actually provides rather than the sentinel object.
+    deep = resolve_deep_runner(cfg, warn=False)
     code = deep is not None
 
     # web: the deep-runner browses via Claude Code's WebSearch/WebFetch (reads off the actual
@@ -694,6 +712,73 @@ def _build_qdrant_card_repo_from_env(cards_dir: str) -> tuple:
         _log.warning("context index: QAR_CARDS_BACKEND=qdrant repo build failed; falling back to "
                      "the file backend", exc_info=True)
         return (None, None)
+
+
+def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
+    """Resolve the deep (execution) worker from config — ON BY DEFAULT.
+
+    Tri-state on ``cfg.deep_runner``, mirroring ``resolve_context_assembler``:
+      * ``_AUTO_DEEP_RUNNER`` (the field default, i.e. the consumer left it unset) → build the
+        default ``SubprocessGoalRunner`` (Claude Code headless) so execution works out of the box.
+      * an INSTANCE → use it as-is (``AcpDeepRunner``, a queue worker, a test double, …).
+      * ``None`` → deep execution is explicitly DISABLED. No warning: that is a deliberate choice.
+
+    The auto-built runner reuses EXACTLY the env vars the rest of the repo already documents for
+    the deep worker, so there is one set of knobs, not two:
+      * ``QAR_DEEP_WORKING_DIR`` → the subprocess cwd, falling back to ``cfg.corpus_root`` and then
+        the process cwd (same precedence the CLI has always used).
+      * ``QAR_CLAUDE_PATH`` → the worker binary (default ``claude``, looked up on PATH).
+      * ``QAR_DEEP_TIMEOUT_SECONDS`` → applied inside the runner itself
+        (``goal_runner.resolve_deep_timeout_seconds``); nothing to pass here.
+      * ``QAR_DEEP_MODELS`` → the goal loop's model ladder, which lives on ``OrchestratorConfig``,
+        not on the runner.
+
+    Degrades gracefully and NEVER raises. If the worker binary is not on PATH we return ``None``
+    (no runner) after logging a loud warning: building a runner that would fail on every spawn
+    would be worse than reporting honestly that execution is unavailable. ``warn=False`` silences
+    that warning for callers that are only probing capability (``derive_capabilities``) rather than
+    actually wiring the brain.
+    """
+    chosen = getattr(cfg, "deep_runner", None)
+    if chosen is not _AUTO_DEEP_RUNNER:
+        return chosen  # an explicit instance, or None to disable
+    try:
+        import shutil
+
+        from .core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+
+        claude_path = os.getenv("QAR_CLAUDE_PATH", "claude") or "claude"
+        # A bare name has to be findable on PATH; an explicit path has to exist and be executable.
+        if os.path.sep in claude_path:
+            found = claude_path if os.access(claude_path, os.X_OK) else None
+        else:
+            found = shutil.which(claude_path)
+        if not found:
+            if warn:
+                _log.warning(
+                    "deep runner: no %r binary found on PATH, so DEEP/EXECUTION work is "
+                    "UNAVAILABLE for this process (requests that need real work will be planned "
+                    "but not carried out). Install Claude Code, set QAR_CLAUDE_PATH to the "
+                    "binary, or wire RunnerConfig.deep_runner explicitly. Pass "
+                    "deep_runner=None to disable execution deliberately and silence this.",
+                    claude_path,
+                )
+            return None
+        working_dir = (os.getenv("QAR_DEEP_WORKING_DIR")
+                       or cfg.corpus_root
+                       or os.getcwd())
+        runner = SubprocessGoalRunner(SubprocessConfig(
+            working_dir=working_dir,
+            claude_path=claude_path,
+        ))
+        _log.info("deep runner: using the default SubprocessGoalRunner (%s, cwd=%s)",
+                  found, working_dir)
+        return runner
+    except Exception:  # noqa: BLE001 — a failed default must never stop the runner from starting
+        if warn:
+            _log.warning("deep runner: building the default SubprocessGoalRunner failed; deep/"
+                         "execution work will be unavailable for this process", exc_info=True)
+        return None
 
 
 def resolve_context_assembler(
@@ -1281,6 +1366,11 @@ def build_orchestrator(
     input_inbox = getattr(cfg, "input_inbox", None) or InMemoryInbox()
 
     context_assembler = resolve_context_assembler(cfg, notify=notify)
+    # Resolve the deep worker's tri-state and WRITE IT BACK onto the config (the same in-place
+    # style as the MultiProvider wrap above). Consumers and the chat UIs read ``cfg.deep_runner``
+    # directly to decide whether execution is available, so the sentinel must never survive past
+    # here — after build_orchestrator, that field is always a real runner or a real None.
+    cfg.deep_runner = resolve_deep_runner(cfg)
     return Orchestrator(
         retrieval=get_retrieval_adapter(cfg),
         provider=cfg.model_provider,

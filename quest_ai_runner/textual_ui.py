@@ -1409,13 +1409,14 @@ class QuestAITerminal(App):
         if self._ev is None:
             from .core.adapters import (
                 EVENT_CONTEXT, EVENT_STATUS, EVENT_PLAN, EVENT_READ, EVENT_REPLAN,
-                EVENT_PARTIAL, EVENT_EXEC, EVENT_RESULT, EVENT_DECISION,
+                EVENT_PARTIAL, EVENT_EXEC, EVENT_INTENT, EVENT_RESULT, EVENT_DECISION,
                 EVENT_MILESTONE, EVENT_DONE, EVENT_UNDERSTANDING,
             )
             self._ev = dict(
                 context=EVENT_CONTEXT, status=EVENT_STATUS, plan=EVENT_PLAN,
                 read=EVENT_READ, replan=EVENT_REPLAN, partial=EVENT_PARTIAL,
-                exec=EVENT_EXEC, result=EVENT_RESULT, decision=EVENT_DECISION,
+                exec=EVENT_EXEC, intent=EVENT_INTENT, result=EVENT_RESULT,
+                decision=EVENT_DECISION,
                 milestone=EVENT_MILESTONE, done=EVENT_DONE,
                 understanding=EVENT_UNDERSTANDING,
             )
@@ -1666,6 +1667,16 @@ class QuestAITerminal(App):
                 log.write(f"  [green bold]✓[/green bold]  {label}")
                 log.write(Text(""))
 
+        elif t == ev["intent"]:
+            # "Executing: <goal>" — an announcement that work is about to start. Written straight
+            # to the transcript as a progress line and DELIBERATELY kept out of _answer_parts:
+            # _finish_turn falls back to _answer_parts when a deep turn flushed nothing, so an
+            # interim announcement landing in there came back out as the turn's final answer,
+            # reading as a completion report for work that never ran.
+            if text:
+                log.write(Text(""))
+                log.write(f"  [cyan]▸[/cyan]  {text}")
+
         elif t == ev["result"]:
             # Non-streamed answers arrive here; streamed ones are in _answer_parts.
             if not self._partial_started and text:
@@ -1725,6 +1736,13 @@ class QuestAITerminal(App):
             # the entire result body under a second "{rep} (AI): Executing: ..." bubble (2026-07-26
             # bug report). Only fall back to the generic answer bubble when nothing was actually
             # flushed to scrollback this turn (e.g. a deep run that captured no output at all).
+            #
+            # The _answer_parts fallback is REAL result text only. The "Executing: <goal>"
+            # announcement no longer arrives as a result event (it is EVENT_INTENT now and never
+            # enters _answer_parts), because when a deep turn flushed nothing this fallback was
+            # showing that interim sentence as the turn's answer: a completion report for work
+            # that had not run. When nothing ran because no executor is wired, ``final.text``
+            # carries the honest explanation and is what gets shown instead.
             if final.kind == "deep" and self._deep_flushed:
                 answer = None
             else:
@@ -1742,7 +1760,15 @@ class QuestAITerminal(App):
                 goals = final.goals or []
                 all_met = bool(deep_results) and all(d.met for d in deep_results)
                 goal_str = ("; ".join(goals))[:300] if goals else ""
-                prefix = "Completed" if all_met else "Attempted"
+                # THREE outcomes, not two. With no deep results at all, nothing was even attempted
+                # (no executor wired), and recording "Attempted: <goal>" put a false claim into the
+                # session history the NEXT turn reads back as context.
+                if all_met:
+                    prefix = "Completed"
+                elif deep_results:
+                    prefix = "Attempted"
+                else:
+                    prefix = "Planned but NOT executed (no deep executor configured)"
                 s._last_assistant = (f"{prefix}: {goal_str}" if goal_str else f"{prefix}.")
             else:
                 # Use _answer_parts as fallback: what was displayed may differ from final.text
@@ -1836,7 +1862,11 @@ class QuestAITerminal(App):
         if executed:
             return False
         if not getattr(self.sess._cfg, "deep_runner", None):
-            if not run:
+            # No executor at all. Say so only when the result does not already explain itself:
+            # a kind="deep" result from an unwired session now carries the explanation as its own
+            # text (shown as the turn's answer just below), and repeating it as a dim side note
+            # would just say the same thing twice.
+            if not run and not (getattr(final, "text", "") or "").strip():
                 self._console.dim("  (No deep executor configured; cannot auto-execute)")
             return False
         if not run and not getattr(self, "_deep_plan_shown", False):

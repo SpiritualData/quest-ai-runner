@@ -74,6 +74,13 @@ exit code 0 = goal met, non-zero = limit/error. Working dir, binary, model, cont
 tool gating are all config (`SubprocessConfig`). Plug in a different agent by implementing this one
 method.
 
+**This is the only adapter that is wired for you.** `RunnerConfig.deep_runner` is tri-state:
+leave it unset and `config.resolve_deep_runner` builds the `SubprocessGoalRunner` above from
+`QAR_DEEP_WORKING_DIR`/`corpus_root` + `QAR_CLAUDE_PATH`; pass an instance to use your own; pass
+`None` to disable execution deliberately. If `claude` isn't on PATH the resolution warns loudly and
+leaves you with no runner rather than a runner that would fail on every spawn. See
+[writing-a-consumer.md](writing-a-consumer.md#deep-execution-is-on-by-default).
+
 A second implementation ships alongside it: **[`AcpDeepRunner`](acp-deep-runner.md)** runs the same
 contract over the Agent Client Protocol — a live session with the Claude ACP agent rather than a
 one-shot subprocess — which is what makes MID-TURN STEERING possible (a message queued while the

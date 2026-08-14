@@ -6,6 +6,31 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **Deep execution is now ON BY DEFAULT: a consumer that does nothing gets Claude Code.**
+  `RunnerConfig.deep_runner` defaulted to `None`, and nothing anywhere resolved it, so every
+  consumer had to know to construct a `SubprocessGoalRunner` itself or lose deep/execution work
+  entirely. Worse, `None` meant two incompatible things at once — "I never wired one" and "I
+  deliberately want no execution" — which are indistinguishable to the library, so the forgetful
+  case got the silent-disable behaviour. That is exactly how the false "Executing: …" report above
+  reached a live user: the request routed to deep, and deep had nothing to route to. The field now
+  carries the same tri-state `context_assembler` has had all along: leave it unset (the
+  `_AUTO_DEEP_RUNNER` sentinel) and `config.resolve_deep_runner` builds a `SubprocessGoalRunner`
+  pointed at `claude` on PATH; pass an instance to use your own (`AcpDeepRunner`, a queue worker,
+  a test double); pass `None` to disable execution deliberately, which stays disabled and warns
+  about nothing. The auto-built runner reads the environment the rest of the repo already documents
+  for the deep worker (`QAR_DEEP_WORKING_DIR` falling back to `corpus_root` then the cwd,
+  `QAR_CLAUDE_PATH`, with `QAR_DEEP_TIMEOUT_SECONDS` applied inside the runner), so this adds no
+  new knobs. If Claude Code is not on PATH the resolution degrades the way everything else in this
+  repo degrades: one loud warning naming the binary it looked for, what is now unavailable, and the
+  three ways to fix it, then no runner — never a runner that would fail on every spawn, and never
+  an exception. `build_orchestrator` resolves and **writes the result back onto the config**, so
+  after it runs `cfg.deep_runner` is always a real runner or a real `None`; the chat UIs and
+  `derive_capabilities` read that field directly, and the sentinel must never reach them.
+  The CLI no longer builds the runner itself — it was duplicating this logic, and its
+  `deep_runner = None` for a corpus-less run meant `qar chat` outside a corpus could never execute
+  anything. (`tests/test_deep_runner_default.py`; `docs/writing-a-consumer.md`, `docs/adapters.md`.)
+
 ### Added
 - **QAR can now read the person's own reflections, so "pick something based on my daily reflection"
   is a lookup instead of an apology.** Observed live: asked exactly that, an attended session
@@ -187,6 +212,30 @@ All notable changes to this project are documented here. The format is based on
   `tests/test_context_assembler.py::TestAncestorCardReuse`.)
 
 ### Fixed
+- **A turn that executed nothing reported itself as work in progress.** Confirmed live: a user
+  asked for a documentation file to be updated, and the final answer bubble of the turn read
+  `Executing: CLAUDE.md's Current situation reflects that committee follow-up is paused until the
+  in-person intensive with Dr. Mitchell.` Nothing had run. No deep executor was configured, no file
+  was touched, and the only signal was a dim side note above it reading "(No deep executor
+  configured; cannot auto-execute)" — easy to miss under a sentence that reads like a completion
+  report. Three defects lined up to produce it, and all three are fixed at their own level rather
+  than papered over in the renderer. **(1)** The orchestrator announced `Executing: <goal>` the
+  instant the planner chose to execute, BEFORE checking whether anything could execute; it now
+  fires only when `_has_deep_execution_capability()` holds, which is the same gate `_run_deep`
+  itself applies one line later. **(2)** That announcement was typed `EVENT_RESULT`, the type that
+  carries a turn's actual outcome. Both chat UIs fall back to the last result text when a deep turn
+  flushes no output of its own (a deliberate mechanism, added for the 2026-07-26 duplicate-output
+  fix), so an interim "I am starting" sentence came straight back out as the turn's answer. It is
+  now its own type, `EVENT_INTENT`: an announcement of intent, in `SURFACING_EVENTS` so every sink
+  still sees it, and documented as never usable as a turn's outcome. Both UIs render it as a
+  progress line and keep it out of the answer-fallback pot. **(3)** `_run_deep`'s no-executor
+  return carried `text=None`, which is why the UIs had nothing honest to show in the first place;
+  it now carries `NO_DEEP_EXECUTOR_TEXT`, which states plainly that nothing ran, that no files were
+  changed, and what to configure. The same wording therefore reaches every consumer, not just the
+  one UI that had a side note for it. Both UIs also stopped recording `Attempted: <goal>` in the
+  session history for a turn with no deep results at all — nothing was attempted, and that line is
+  read back as context by the next turn.
+  (`tests/test_no_deep_executor_honesty.py`.)
 - **Autopilot tasks were titled after their persona and named it by raw id.** With no explicit
   `title`, the server derives one from the first line of the text, which is the "Act as ..." line,
   so every autopilot task in the list was named after its persona instead of its work. And with no

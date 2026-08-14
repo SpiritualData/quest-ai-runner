@@ -466,8 +466,11 @@ async def test_deep_turn_answer_not_duplicated_after_flush():
         app._deep.add_run("r1", goal)
         app._deep.set_final_output("r1", output)
         app._deep.set_run_status("r1", "done")
-        # Mirrors what the live event handlers populate for a deep turn: the "Executing: {goal}"
-        # header emitted before the run, plus the terminal EVENT_RESULT's full deep-output text.
+        # Mirrors what the live event handlers populate for a deep turn: the terminal
+        # EVENT_RESULT's full deep-output text. (The "Executing: {goal}" header that used to land
+        # here too is EVENT_INTENT now and deliberately never enters _answer_parts -- see
+        # tests/test_no_deep_executor_honesty.py. It is kept in this fixture anyway: the
+        # anti-duplication rule this test pins must hold for whatever _answer_parts contains.)
         app._answer_parts = [f"Executing: {goal}", output]
         app._auto_pass = 1
 
