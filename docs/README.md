@@ -43,9 +43,10 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
   `min_documents` safeguard that stops a mis-recognition feeding back into the recognizer.
 - **[Terminal UX prior art](terminal-ux-prior-art.md)** — how Aider, Crush, Codex CLI, Gemini CLI,
   Claude Code, and others solve fixed-bottom input, streaming without scrollback corruption, log
-  routing, and mid-turn queuing; which Textual/prompt_toolkit primitives to use for each; and an
-  evaluation of what's forkable/vendorable versus reference-only (incl. the ACP protocol for
-  pluggable execution backends).
+  routing, and mid-turn queuing; which Textual primitives to use for each; and an evaluation of
+  what's forkable/vendorable versus reference-only (incl. the ACP protocol for pluggable execution
+  backends). Its `prompt_toolkit`/ANSI passages are prior art only: that renderer has since been
+  removed and Textual is the one chat UI.
 
 ## See also
 

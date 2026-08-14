@@ -20,20 +20,19 @@ def _valid_cfg() -> RunnerConfig:
 
 
 def _run_chat(argv, monkeypatch):
-    """Drive cli.main() down the chat path and capture what start_interactive (ANSI fallback,
-    forced by making the Textual UI report unavailable) was called with."""
+    """Drive cli.main() down the chat path and capture what start_textual_interactive
+    (the only chat UI) was called with."""
     monkeypatch.setattr(cli, "_config_from_env", _valid_cfg)
 
     import quest_ai_runner.textual_session as textual_session
-    monkeypatch.setattr(textual_session, "is_textual_available", lambda: False)
+    monkeypatch.setattr(textual_session, "is_textual_available", lambda: True)
 
     calls = []
 
-    def _fake_start_interactive(cfg, **kwargs):
+    def _fake_start_textual(cfg, **kwargs):
         calls.append(kwargs)
 
-    import quest_ai_runner.interactive as interactive_mod
-    monkeypatch.setattr(interactive_mod, "start_interactive", _fake_start_interactive)
+    monkeypatch.setattr(textual_session, "start_textual_interactive", _fake_start_textual)
 
     rc = cli.main(argv)
     assert rc == 0

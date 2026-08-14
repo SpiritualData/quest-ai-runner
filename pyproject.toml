@@ -26,10 +26,9 @@ classifiers = [
 ]
 
 # The CORE brain + the RUNNER are stdlib-only (urllib for the Quest client).
-# TUI dependencies are now core (Textual is the recommended interface).
+# TUI dependencies are core: Textual is the ONLY chat UI, with no fallback renderer.
 # Model providers (anthropic, gemini) and vector stores (qdrant, bm25) remain optional.
 dependencies = [
-    "prompt_toolkit>=3.0",
     "rich>=13.0",
     "textual>=0.40.0",
     "PyYAML>=6.0",
@@ -53,7 +52,7 @@ google = ["google-auth>=2.0"]
 # plain-text reads need no extra dependency. Pair with [google] for the service-account token
 # provider if reading a Google Workspace's Drive.
 drive = ["pypdf>=4.0"]
-# All production providers (TUI is now core, not optional)
+# All production providers (the TUI is core, not optional)
 all = [
     "anthropic>=0.40",
     "google-genai>=2.0",

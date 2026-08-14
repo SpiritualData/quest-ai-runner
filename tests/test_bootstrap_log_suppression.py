@@ -1,21 +1,19 @@
 """Internal per-stage bootstrap/scan logs (`quest-ai-runner.context`, `bm25_content_store`) must
-not land in the chat transcript by default, in either UI.
+not land in the chat transcript by default.
 
 Regression: a June fix (commit 6e422ab) raised `quest-ai-runner.context`'s logger to WARNING
 inside `InteractiveSession.__init__`, before `build_orchestrator()` spawns the background bootstrap
-thread. It was deleted wholesale in August when the ANSI terminal grew a panel-aware log handler
-for a DIFFERENT problem (log lines corrupting the spinner's cursor math), leaving the ANSI path
-with no level-based suppression at all (root stays at whatever cli.py's `logging.basicConfig()`
-set, INFO by default) and Textual's own on_mount-based verbosity handling as the only defense
-there. Restored as `_suppress_background_bootstrap_logs()`, called from `InteractiveSession.__init__`
-(shared by both UIs) before `build_orchestrator()`, so it holds regardless of which UI/entry point
-constructs the session.
+thread. It was deleted wholesale in August while reworking log routing for the (since-removed) ANSI
+terminal, leaving level-based suppression to Textual's own on_mount verbosity handling as the only
+defense. Restored as `_suppress_background_bootstrap_logs()`, called from
+`InteractiveSession.__init__` before `build_orchestrator()`, so it holds regardless of which entry
+point constructs the session.
 """
 from __future__ import annotations
 
 import logging
 
-from quest_ai_runner.interactive import (
+from quest_ai_runner.interactive_session import (
     _BACKGROUND_BOOTSTRAP_LOGGER_NAMES,
     _suppress_background_bootstrap_logs,
 )

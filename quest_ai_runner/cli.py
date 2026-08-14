@@ -691,8 +691,8 @@ def main(argv=None) -> int:
         # Track whether the caller explicitly named a rep / persona file (env var or flag),
         # as opposed to falling through to the "Assistant" default -- distinct from just
         # checking the final rep_name string, since "--rep Assistant" must count as explicit
-        # too. Session-level auto-persona-resolution (interactive.py) only runs when NEITHER
-        # was explicitly given.
+        # too. Session-level auto-persona-resolution (interactive_session.py) only runs when
+        # NEITHER was explicitly given.
         rep_specified = bool(args.rep or os.getenv("QAR_REP_NAME"))
         rep_name = args.rep or os.getenv("QAR_REP_NAME") or "Assistant"
         persona = None
@@ -706,41 +706,24 @@ def main(argv=None) -> int:
                 return 1
         persona_specified = persona is not None
 
-        # Try Textual UI first (smooth 120 FPS terminal), fall back to ANSI.
-        # `textual` is a CORE dependency (see pyproject.toml) — it should always be
-        # importable from a correctly installed/synced environment. Falling back is a
-        # real degradation (the ANSI renderer is missing docking, clean log routing,
-        # etc.), so this is surfaced as a visible WARNING, not a silent debug line, so
-        # a stale/incomplete environment (e.g. an editable install never re-synced
-        # after `textual` was added to dependencies) doesn't go unnoticed.
-        try:
-            from .textual_session import is_textual_available, start_textual_interactive
-            if is_textual_available():
-                log.debug("using Textual UI for chat session")
-                start_textual_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id,
-                                          verbosity=args.verbose, rep_specified=rep_specified,
-                                          persona_specified=persona_specified)
-                return 0
-            log.warning(
-                "Textual UI unavailable (the 'textual' package failed to import) — falling back "
-                "to the older ANSI terminal renderer. This environment is missing a core "
-                "dependency; run `pip install --upgrade -e .` (or `pip install --upgrade "
-                "quest-ai-runner`) to install it and get the improved interface."
+        # The Textual UI is the only chat UI. `textual` is a CORE dependency (see
+        # pyproject.toml), so it should always import from a correctly installed
+        # environment; there is no second renderer to degrade to. If it does not
+        # import, the install is incomplete (e.g. an editable install never re-synced
+        # after `textual` was added to dependencies) — say exactly that and how to fix
+        # it, rather than dying on a raw ImportError traceback.
+        from .textual_session import is_textual_available, start_textual_interactive
+        if not is_textual_available():
+            log.error(
+                "Textual UI unavailable: the 'textual' package failed to import. It is a "
+                "required dependency of quest-ai-runner and there is no fallback chat UI. "
+                "Run `pip install --upgrade -e .` (from a source checkout) or `pip install "
+                "--upgrade quest-ai-runner` to install it, then try `quest-ai-runner chat` again."
             )
-        except Exception as e:
-            log.warning(
-                "Textual UI failed to start (%s) — falling back to the older ANSI terminal "
-                "renderer. Run `pip install --upgrade -e .` (or `pip install --upgrade "
-                "quest-ai-runner`) to refresh dependencies; if the problem persists, please "
-                "file an issue.",
-                e,
-            )
-
-        # Fallback to original ANSI-based interactive session
-        from .interactive import start_interactive
-        start_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id,
-                          verbose=bool(args.verbose), rep_specified=rep_specified,
-                          persona_specified=persona_specified)
+            return 1
+        start_textual_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id,
+                                  verbosity=args.verbose, rep_specified=rep_specified,
+                                  persona_specified=persona_specified)
         return 0
 
     # --- send -----------------------------------------------------------------

@@ -17,8 +17,8 @@ Three separate defects lined up to produce it, and this file pins all three:
    ``EVENT_INTENT``.
 2. ``_run_deep`` returned its no-executor result with ``text=None``, so the honest explanation
    existed only as one UI's side note. It now carries ``NO_DEEP_EXECUTOR_TEXT``.
-3. Both chat UIs fall back to the last result text when a deep turn flushes no output of its own,
-   so they picked the interim announcement back up and showed it as the answer.
+3. The chat UI falls back to the last result text when a deep turn flushes no output of its own,
+   so it picked the interim announcement back up and showed it as the answer.
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ from quest_ai_runner.core.orchestrator import (
     Orchestrator,
     OrchestratorConfig,
 )
-from quest_ai_runner.interactive import _DeepRunTracker
+from quest_ai_runner.interactive_session import _DeepRunTracker
 from quest_ai_runner.textual_ui import QuestAITerminal
 from tests.conftest import StubDeepRunner, StubEscalation, StubProvider, StubRetrieval
 
@@ -186,6 +186,9 @@ class _FakeSessionForFinishTurn:
     def _write_session_file(self) -> None:
         pass
 
+    def _maybe_refresh_next_steps(self, final) -> None:
+        """No-op stand-in for the real session's next-steps write-back."""
+
 
 def _make_terminal() -> tuple[QuestAITerminal, _RecordingLog, _FakeConsole]:
     app = QuestAITerminal(_FakeSessionForFinishTurn())
@@ -245,55 +248,3 @@ async def test_textual_no_executor_turn_shows_the_honest_text_not_the_announceme
         # The session history the NEXT turn reads back must not claim an attempt either.
         assert "Attempted" not in app.sess._last_assistant
         assert "NOT executed" in app.sess._last_assistant
-
-
-# ---------------------------------------------------------------------------
-# 3. The plain (ANSI) interactive UI
-# ---------------------------------------------------------------------------
-
-def _make_renderer():
-    from quest_ai_runner.interactive import _Console, _ContextPanel, _TurnRenderer
-    console = _Console()
-    console._rich = None
-    console._color = False
-    lines: List[str] = []
-    markdown_calls: List[str] = []
-    console.line = lambda s="": lines.append(s)          # type: ignore[assignment]
-    console.write = lambda s: lines.append(s)            # type: ignore[assignment]
-
-    def _markdown(s: str) -> None:
-        markdown_calls.append(s)
-        lines.append(s)
-
-    console.markdown = _markdown                          # type: ignore[assignment]
-    panel = _ContextPanel(console)
-    renderer = _TurnRenderer(console, panel, "Tester")
-    return renderer, lines, markdown_calls
-
-
-def test_interactive_types_map_includes_intent():
-    renderer, _lines, _md = _make_renderer()
-    assert renderer._types().get("intent") == EVENT_INTENT
-
-
-def test_interactive_intent_is_a_progress_line_not_an_answer_bubble():
-    renderer, lines, markdown_calls = _make_renderer()
-    goal = "Update CLAUDE.md's Current situation section"
-
-    renderer.render({"type": EVENT_INTENT, "text": f"Executing: {goal}"})
-
-    # It shows, so the user still sees what is about to happen...
-    assert any(f"Executing: {goal}" in ln for ln in lines)
-    # ...but not through the answer path (markdown + the "Tester (AI):" label), which is what
-    # made it read as the turn's reply.
-    assert markdown_calls == []
-    assert not any("Tester (AI):" in ln for ln in lines)
-    assert renderer._ai_label_printed is False
-
-
-def test_interactive_result_still_renders_as_the_answer():
-    """The result path is untouched: a real answer still goes through markdown + the AI label."""
-    renderer, lines, markdown_calls = _make_renderer()
-    renderer.render({"type": EVENT_RESULT, "text": "Here is the real answer."})
-    assert markdown_calls == ["Here is the real answer."]
-    assert any("Tester (AI):" in ln for ln in lines)

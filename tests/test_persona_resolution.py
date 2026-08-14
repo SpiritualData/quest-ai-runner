@@ -13,7 +13,7 @@ import json
 import time
 from types import SimpleNamespace
 
-from quest_ai_runner.interactive import (
+from quest_ai_runner.interactive_session import (
     _read_persona_file_in_corpus,
     _resolve_persona_from_corpus,
 )
@@ -139,7 +139,7 @@ def test_provider_error_returns_none_not_raises(tmp_path):
 
 
 def test_slow_provider_call_times_out_and_returns_none(tmp_path, monkeypatch):
-    import quest_ai_runner.interactive as interactive_mod
+    import quest_ai_runner.interactive_session as interactive_mod
     monkeypatch.setattr(interactive_mod, "_PERSONA_RESOLUTION_TIMEOUT_SECONDS", 0.05)
     (tmp_path / "CLAUDE.md").write_text("# Corpus\nSome text.")
     provider = _FakeProvider(response='{"name": "River", "persona_file": null}', delay=1.0)

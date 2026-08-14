@@ -2,6 +2,13 @@
 
 Research date: 2026-08-12. Scope: terminal/CLI UX only (not agent logic) of open-source AI coding/tasking harnesses, plus the framework primitives that implement the patterns.
 
+> **Superseded in part (2026-08-14):** this research was written while QAR still shipped two chat
+> UIs, and its `prompt_toolkit`/ANSI sections weigh what to do about the second one. That question
+> is now settled: the ANSI renderer was **removed**, and Textual is the only chat UI. Read the
+> `prompt_toolkit`/ANSI-path passages below as recorded prior art, not as guidance for current
+> work. Everything about the Textual side, and about how the other harnesses solve P1-P5, still
+> applies.
+
 QAR problems this is aimed at:
 - **P1** input box not reliably pinned to the bottom as content scrolls
 - **P2** background log/diagnostic noise leaking into the visible transcript

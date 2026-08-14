@@ -1,15 +1,11 @@
-"""Tests for EVENT_UNDERSTANDING rendering in both terminal UIs.
+"""Tests for EVENT_UNDERSTANDING rendering in the terminal UI.
 
 The orchestrator emits EVENT_UNDERSTANDING right after Stage 1 (user input understanding)
 resolves the goal condition, well before the planner loop or answer generation runs, so a
 user needs to see "Understood as: ..." as its own clearly-distinct line the instant it
 arrives, not blended into a plan/status line or mistaken for a blocking EVENT_DECISION
-question. Covers:
-
-1. textual_ui.QuestAITerminal._handle_event() renders it via a distinct glyph/style,
-   separate from the yellow EVENT_DECISION marker.
-2. interactive._TurnRenderer._types() and .render() do the same for the plain-terminal path
-   (rich / color / plain-ANSI fallbacks all covered).
+question. Covers textual_ui.QuestAITerminal._handle_event() rendering it via a distinct
+glyph/style, separate from the yellow EVENT_DECISION marker.
 """
 
 from __future__ import annotations
@@ -17,7 +13,7 @@ from __future__ import annotations
 from typing import List
 
 from quest_ai_runner.core.adapters import EVENT_DECISION, EVENT_UNDERSTANDING
-from quest_ai_runner.interactive import _DeepRunTracker
+from quest_ai_runner.interactive_session import _DeepRunTracker
 from quest_ai_runner.textual_ui import QuestAITerminal
 
 
@@ -79,46 +75,3 @@ def test_understanding_event_empty_text_writes_nothing():
     event = {"type": EVENT_UNDERSTANDING, "text": ""}
     app._handle_event(event)
     assert log.lines == []
-
-
-# ---------------------------------------------------------------------------
-# interactive._TurnRenderer
-# ---------------------------------------------------------------------------
-
-def _make_renderer():
-    from quest_ai_runner.interactive import _Console, _ContextPanel, _TurnRenderer
-    console = _Console()
-    console._rich = None
-    console._color = False
-    lines: List[str] = []
-    console.line = lambda s="": lines.append(s)  # type: ignore[assignment]
-    console.write = lambda s: lines.append(s)  # type: ignore[assignment]
-    console.markdown = lambda s: lines.append(s)  # type: ignore[assignment]
-    panel = _ContextPanel(console)
-    renderer = _TurnRenderer(console, panel, "Tester")
-    return renderer, lines
-
-
-def test_turn_renderer_types_includes_understanding():
-    renderer, _lines = _make_renderer()
-    types = renderer._types()
-    assert types.get("understanding") == EVENT_UNDERSTANDING
-
-
-def test_turn_renderer_renders_understanding_event_plain():
-    renderer, lines = _make_renderer()
-    event = {"type": EVENT_UNDERSTANDING, "text": "Understood as: rename the helper"}
-    renderer.render(event)
-    assert any("Understood as: rename the helper" in ln for ln in lines), (
-        f"understanding text should be rendered; got lines: {lines}"
-    )
-    assert any("◆" in ln for ln in lines), f"expected diamond glyph in lines: {lines}"
-
-
-def test_turn_renderer_understanding_distinct_from_decision():
-    renderer, lines = _make_renderer()
-    renderer.render({"type": EVENT_UNDERSTANDING, "text": "Understood as: X"})
-    renderer.render({"type": EVENT_DECISION, "text": "Proceed with X?"})
-    body = "\n".join(lines)
-    assert "◆ Understood as: X" in body
-    assert "? Proceed with X?" in body

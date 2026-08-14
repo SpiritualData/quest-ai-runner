@@ -617,7 +617,7 @@ class TestDailyUsageStatus:
 
     def _make_session_stub(self):
         """A bare object carrying just enough for _daily_usage_status to run unbound."""
-        from quest_ai_runner.interactive import InteractiveSession
+        from quest_ai_runner.interactive_session import InteractiveSession
         return InteractiveSession.__new__(InteractiveSession)
 
     def test_no_usage_file_returns_none(self, tmp_path, monkeypatch):
@@ -669,52 +669,6 @@ class TestDailyUsageStatus:
 
 
 # ---------------------------------------------------------------------------
-# Dead milestone branch fix: _display("milestone", ...) not the nonexistent "markup"
-# ---------------------------------------------------------------------------
-
-class TestMilestoneDisplayBranch:
-    """_TurnRenderer's EVENT_MILESTONE handler must route through a branch _display() handles."""
-
-    def _make_renderer(self):
-        from quest_ai_runner.interactive import _Console, _ContextPanel, _TurnRenderer
-        console = _Console()
-        console._rich = None
-        console._color = False
-        lines: List[str] = []
-        console.line = lambda s="": lines.append(s)  # type: ignore[assignment]
-        console.write = lambda s: lines.append(s)  # type: ignore[assignment]
-        console.markdown = lambda s: lines.append(s)  # type: ignore[assignment]
-        panel = _ContextPanel(console)
-        renderer = _TurnRenderer(console, panel, "Tester")
-        return renderer, lines
-
-    def test_milestone_event_renders_text(self):
-        """A milestone event with text produces visible output (not silently dropped)."""
-        renderer, lines = self._make_renderer()
-        from quest_ai_runner.core.adapters import EVENT_MILESTONE
-        event = {"type": EVENT_MILESTONE, "text": "Finished updating the file.", "data": {}}
-        renderer.render(event)
-        assert any("Finished updating the file." in ln for ln in lines), (
-            f"milestone text should be rendered; got lines: {lines}"
-        )
-
-    def test_display_milestone_kind_is_handled(self):
-        """_display('milestone', ...) exercises a real branch (not a silent no-op)."""
-        from quest_ai_runner.interactive import _Console, _ContextPanel, _TurnRenderer
-        console = _Console()
-        console._rich = None
-        console._color = False
-        lines: List[str] = []
-        console.line = lambda s="": lines.append(s)  # type: ignore[assignment]
-        console.write = lambda s: lines.append(s)  # type: ignore[assignment]
-        console.markdown = lambda s: lines.append(f"[markdown]{s}")  # type: ignore[assignment]
-        panel = _ContextPanel(console)
-        renderer = _TurnRenderer(console, panel, "Tester")
-        renderer._display("milestone", "some completion text")
-        assert any("some completion text" in ln for ln in lines)
-
-
-# ---------------------------------------------------------------------------
 # Help pointers to the companion CLI commands (search-context, bootstrap --dry-run)
 # ---------------------------------------------------------------------------
 
@@ -722,14 +676,14 @@ class TestHelpPointers:
     """The in-session /help text points at search-context and bootstrap --dry-run."""
 
     def test_help_mentions_search_context(self):
-        from quest_ai_runner.interactive import _HELP
+        from quest_ai_runner.interactive_session import _HELP
         assert "search-context" in _HELP
 
     def test_help_mentions_bootstrap_dry_run(self):
-        from quest_ai_runner.interactive import _HELP
+        from quest_ai_runner.interactive_session import _HELP
         assert "bootstrap --dry-run" in _HELP
 
     def test_help_has_no_em_dash(self):
         """Brand rule: no em dashes in user-facing copy, including the new help lines."""
-        from quest_ai_runner.interactive import _HELP
+        from quest_ai_runner.interactive_session import _HELP
         assert "—" not in _HELP

@@ -1132,8 +1132,8 @@ class _CapturingSink:
 
 def test_instant_ack_emits_narration_flagged_partial():
     """The instant-ack / narration beat must be emitted as EVENT_PARTIAL tagged
-    data={'narration': True}. The terminal UIs (interactive.py, textual_ui.py) gate on that flag to
-    render it as a dim "thinking out loud" line; if the flag is missing or renamed they misroute the
+    data={'narration': True}. The terminal UI (textual_ui.py) gates on that flag to
+    render it as a dim "thinking out loud" line; if the flag is missing or renamed it misroutes the
     beat into the streamed-answer buffer and the immediate response never shows. Regression for the
     narration/ack key mismatch.
     """

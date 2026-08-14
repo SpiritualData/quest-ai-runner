@@ -200,6 +200,51 @@ All notable changes to this project are documented here. The format is based on
   also why an LLM-emits-a-unified-diff design was rejected: every standalone diff library for
   Python anchors on line numbers models are unreliable about.
 
+### Removed
+- **BREAKING: the ANSI / `prompt_toolkit` chat renderer is gone. Textual is now the one and only
+  chat UI, with no fallback.** `quest-ai-runner chat` used to try Textual and, on any import or
+  startup failure, quietly drop into a second, independently-maintained terminal renderer built on
+  raw ANSI cursor math (`_ContextPanel`'s spinner/source panel), a raw-stdin `termios` ESC watcher,
+  a `prompt_toolkit` REPL, and its own turn renderer and footer. That fallback stopped earning its
+  keep: `textual` has been a CORE dependency (not an extra) since it landed, so the fallback could
+  only ever fire on a broken or unsynced install; and every UI feature since — prompt docking, clean
+  log routing, in-app selection and OSC-52 copy, the multi-deep dashboard, the mid-turn decision
+  prompt — had to be either written twice or silently left missing on the ANSI path. This project
+  has decided to maintain one chat UI well rather than two unevenly, so the whole ANSI rendering
+  implementation was deleted rather than deprecated.
+
+  What this means in practice:
+  - `quest_ai_runner.interactive` no longer exists. The shared session brain it contained —
+    `InteractiveSession` (orchestrator construction, persona auto-resolution, bootstrap-log
+    suppression, session save/load and history, `/status`/`/tasks` bookkeeping, the model-tier menu
+    data, the Quest client) plus `_Console`, `_DeepRunTracker`, `_HELP`, `_BANNER` and
+    `_SLASH_COMMANDS` — moved unchanged to **`quest_ai_runner.interactive_session`**. It sits at the
+    top level, beside `textual_ui.py` and `textual_session.py`, rather than in `core/`, because it
+    wires concrete config and adapters and so belongs on the same layer as the other entry points;
+    `core/` stays adapter-agnostic. Update any import of `quest_ai_runner.interactive` to
+    `quest_ai_runner.interactive_session`.
+  - `start_interactive()` is gone. `textual_session.start_textual_interactive()` is the only entry
+    point for an attended session.
+  - Deleted outright: `_ContextPanel`, `_PanelAwareLogHandler`, `_EscWatcher`, `_TurnRenderer`, the
+    `PromptSession` REPL and its slash completer/history, and `InteractiveSession`'s ANSI-only
+    members (`_run_turn`, `_print_turn_footer`, `_print_header`, `run`, and the five
+    `prompt_toolkit`-driven pickers `_cmd_models_menu`, `_pick_from_list`, `_cmd_goal`,
+    `_cmd_quests`, `_cmd_reps` — the Textual UI has had its own native versions of all of these).
+    One latent bug goes with them: `InteractiveSession.__init__` cleared the root logger's handlers
+    and installed `_PanelAwareLogHandler`, and since Textual builds the session in a background
+    worker AFTER `on_mount`, that clobbered the `RichLog` handler Textual had just installed.
+  - `prompt_toolkit` is dropped from `dependencies` in `pyproject.toml`; nothing else in the
+    package used it. `rich` and `textual` stay core.
+  - When `textual` genuinely cannot be imported, `chat` no longer degrades or dies on a raw
+    traceback: it logs one actionable error naming the missing package and the `pip install
+    --upgrade` that fixes it, and exits non-zero. That message is the whole safety net now, so it is
+    tested (`tests/test_cli_chat_requires_textual.py`).
+  - Tests that covered the deleted renderer went with it (`tests/test_spinner_panel_overwrite.py`,
+    and the `_TurnRenderer` halves of `test_ux_features.py`, `test_understanding_event_ui.py` and
+    `test_no_deep_executor_honesty.py`); their historical bug-fix value stays in git history and in
+    the entries above. Every test of the SHARED session logic was kept and repointed at the new
+    module.
+
 ### Changed
 - **The deep runner is resolved as an ORDERED LADDER, so escalating by runner needs no new logic.**
   `_run_deep`'s goal loop already ran an attempt, verified it against the written done-standard,

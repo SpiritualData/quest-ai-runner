@@ -131,7 +131,7 @@ def test_build_session_worker_proceeds_when_provider_available(monkeypatch):
     )
     # Stub out InteractiveSession construction so this stays offline/fast.
     monkeypatch.setattr(
-        "quest_ai_runner.interactive.InteractiveSession",
+        "quest_ai_runner.interactive_session.InteractiveSession",
         lambda *a, **k: _FakeSession(),
     )
 

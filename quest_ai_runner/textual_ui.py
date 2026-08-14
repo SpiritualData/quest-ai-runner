@@ -1,24 +1,25 @@
 """Textual-based interactive terminal UI for Quest AI Runner.
 
-A full multi-turn REPL over the orchestrator brain, rebuilt on Textual so the
-display stays calm and flicker-free (no manual cursor math, no spinner thread).
-It carries the same feature set as the ANSI ``interactive.py`` session — every
-slash command, the live context panel, ESC-to-cancel, the per-turn footer,
-session save/load, model-tier selection, and the quest/goal pickers — but with a
-Claude-Code-like layout: a scrolling transcript on top, a live activity strip
-that updates in place while the AI works, and a prompt at the bottom.
+The one supported chat UI: a full multi-turn REPL over the orchestrator brain,
+built on Textual so the display stays calm and flicker-free (no manual cursor
+math, no spinner thread). Every slash command, the live activity strip,
+ESC-to-cancel, the per-turn footer, session save/load, model-tier selection, and
+the quest/goal pickers live here, in a Claude-Code-like layout: a scrolling
+transcript on top, a live activity strip that updates in place while the AI
+works, and a prompt docked at the bottom.
 
 Design note: the heavy lifting (building the orchestrator, loading/persisting
-session state, the non-interactive command handlers, the model-tier menu data,
-the Quest client) lives in :class:`~quest_ai_runner.interactive.InteractiveSession`.
-This module reuses that object as its state + logic backend, swapping the
-session's stdout ``_Console`` for a ``RichLog``-backed adapter so those handlers
-render into the Textual transcript without change. The turn streaming, context
-panel, cancellation, footer, and the three interactive pickers (``/models``,
-``/reps``, ``/quests``) are implemented here in Textual-native terms.
+session state, the non-rendering command handlers, the model-tier menu data, the
+Quest client) lives in
+:class:`~quest_ai_runner.interactive_session.InteractiveSession`. This module
+reuses that object as its state + logic backend, swapping the session's stdout
+``_Console`` for a ``RichLog``-backed adapter so those handlers render into the
+Textual transcript without change. The turn streaming, activity strip,
+cancellation, footer, and the three interactive pickers (``/models``, ``/reps``,
+``/quests``) are implemented here in Textual-native terms.
 
-Install the [tui] extra:
-    pip install quest-ai-runner[tui]
+``textual`` is a core dependency of this package; there is no alternative
+renderer to fall back to.
 """
 from __future__ import annotations
 
@@ -46,7 +47,7 @@ from rich.text import Text
 import logging
 
 from .adapters.retry_utils import format_provider_error
-from .interactive import (
+from .interactive_session import (
     InteractiveSession,
     _BANNER,
     _DeepRunTracker,
@@ -1044,7 +1045,7 @@ class QuestAITerminal(App):
                 self.call_from_thread(self._startup_failed, RuntimeError(missing))
                 return
 
-            from .interactive import InteractiveSession
+            from .interactive_session import InteractiveSession
 
             # Use a flag so we can stop forwarding notices the moment the session
             # is returned — background threads (e.g. the bootstrap indexer) fire
@@ -1831,7 +1832,7 @@ class QuestAITerminal(App):
             inp.placeholder = "Ask anything…   Enter=send   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)"
         inp.focus()
 
-        # Auto-execute a planned-but-unexecuted deep turn (matches interactive.py).
+        # Auto-execute a planned-but-unexecuted deep turn.
         if not cancelled and error is None and final is not None:
             if self._maybe_handle_deep_plan(final, run=True):
                 next_pass = self._auto_pass + 1
