@@ -16,10 +16,11 @@ normal deep-run path). Each pass:
      act mode), or -- when planning allows and nothing is eligible -- proposes the quest's next
      goal instead of a work task. The batch text carries the person's OWN latest reflection
      (``runner.reflections``: the daily plan's review of yesterday, plus the newest submitted
-     period review), read once per pass since reflections are user-scoped rather than per quest.
-     Everything else in that text is derived from rows the system recorded; the reflection is the
-     one part the person wrote, so it is what breaks ties about which eligible goal actually
-     matters today.
+     period review) and the insights they have CAPTURED but not yet acted on since this quest's
+     last pass (``runner.insights``, with the person's own category tags shown beside each one).
+     Both are read once per pass, since both are user-scoped rather than per quest. Everything
+     else in that text is derived from rows the system recorded; those two are the parts the
+     person wrote, so they are what break ties about which eligible goal actually matters today.
   6. Updates the quest's ``autopilot.last_pass_at`` (and ``miss_streak`` when nothing was
      produced) via the quest update route.
   7. For a quest with a mapped local folder (``quest_folder_map``), REFRESHES that quest's
@@ -43,6 +44,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from .insights import InsightsContext, collect_unacted_insights
 from .quest_folder_sync import NextSteps, publish_next_steps, read_next_steps
 from .reflections import DEFAULT_PERIODS, ReflectionContext, collect_reflections
 
@@ -443,7 +445,8 @@ def next_steps_from_pass(goals: List[Dict[str, Any]],
                          adopted_tasks: Optional[List[Dict[str, Any]]] = None, *,
                          scope_label: str = "", updated: str = "",
                          previous: Optional[Dict[str, Any]] = None,
-                         reflection_note: str = "") -> NextSteps:
+                         reflection_note: str = "",
+                         insights_note: str = "") -> NextSteps:
     """The pass's own conclusion about what comes next, as the canonical artifact.
 
     Deterministic and LLM-free, like ``propose_next_goal``: the pass has already done the selecting
@@ -456,10 +459,13 @@ def next_steps_from_pass(goals: List[Dict[str, Any]],
     question), then one per adopted recurring task, then the previous period's unfinished goals as
     carry-over.
 
-    ``reflection_note`` is one condensed line from the person's own latest reflection, carried into
-    the artifact's ``note`` slot. It is context for the list, never a step: the reflection explains
-    WHY these are the next steps, and a reader who disagrees with the list can see what it was
-    written against instead of guessing.
+    ``reflection_note`` is one condensed line from the person's own latest reflection, and
+    ``insights_note`` one from their newest unacted capture; both are carried into the artifact's
+    ``note`` slot. They are context for the list, never steps: they explain WHY these are the next
+    steps, and a reader who disagrees with the list can see what it was written against instead of
+    guessing. An insight is explicitly NOT promoted to a step here — the person captured it, they
+    did not commit to it, and quietly turning a note-to-self into a planned action is how an
+    artifact stops being trustworthy.
     """
     steps: List[str] = []
     for goal in goals:
@@ -472,9 +478,10 @@ def next_steps_from_pass(goals: List[Dict[str, Any]],
             steps.append(f"{label[0][:120]} (recurring)")
     carrying = [(g.get("name") or "?").strip()
                 for g in ((previous or {}).get("goals") or []) if not g.get("completed")]
+    note = "\n".join(n for n in ((reflection_note or "").strip(),
+                                 (insights_note or "").strip()) if n)
     return NextSteps(steps=steps, carrying_over=carrying, source="the autopilot pass",
-                     scope=scope_label or "", updated=updated or "",
-                     note=(reflection_note or "").strip())
+                     scope=scope_label or "", updated=updated or "", note=note)
 
 
 def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
@@ -483,7 +490,8 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
                        adopted_tasks: Optional[List[Dict[str, Any]]] = None,
                        next_steps: Optional[str] = None,
                        previous: Optional[Dict[str, Any]] = None,
-                       reflection: Optional[str] = None) -> str:
+                       reflection: Optional[str] = None,
+                       insights: Optional[str] = None) -> str:
     """The batch task's text: what period this run owns, the goals and AI tasks in it, what the
     person themselves last said about the work, and what the previous period actually produced.
 
@@ -492,10 +500,17 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
     reissues the same instruction while the human falls further behind. Feeding the previous
     period's goal completion and task outcomes in makes continuity the default.
 
-    ``reflection`` is the person's own latest daily/period reflection (``runner.reflections``),
-    which is the only input here written BY them rather than derived from rows. Everything else
-    describes what the system recorded; the reflection says what the person made of it, so it is
-    what should break ties about which of several eligible goals actually matters this run.
+    ``reflection`` is the person's own latest daily/period reflection (``runner.reflections``), and
+    ``insights`` the captures they have made and not yet acted on since the last pass
+    (``runner.insights``). Those two are the only inputs here written BY them rather than derived
+    from rows: everything else describes what the system recorded, while these say what the person
+    made of it and what occurred to them in between, so they are what should break ties about which
+    of several eligible goals actually matters this run.
+
+    The insights block carries each capture's own category tags and asks the READER to judge which
+    apply to this quest. That is deliberate: matching a tag against a quest or goal name in code
+    would be a fixed string rule that silently drops every insight whose wording it did not
+    anticipate, which is exactly what this repository's hard rule #3 forbids.
 
     ``persona``, when resolved, is named in the text AS WELL AS stamped structurally in
     ``assignee_rep_id`` at creation. The structured field is authoritative; the prose is kept
@@ -546,6 +561,12 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
         parts.append(reflection + "\n\nLet that steer which of the above matters most in this run, "
                      "and what tone to take. If it contradicts the plan above, say so plainly in "
                      "your result rather than quietly following one or the other.")
+    if insights:
+        # Alongside the reflection, for the same reason and with the same framing: it is the
+        # person's own material, and it is here to be judged rather than obeyed. The block already
+        # carries the "decide which of these apply" instruction, since that judgment belongs to the
+        # reader and never to a tag match in this code.
+        parts.append(insights)
     if previous:
         parts.append(_summarize_previous(previous))
     return "\n\n".join(parts)
@@ -656,9 +677,10 @@ class AutopilotPass:
     ``client`` is a ``QuestClient`` (or any object with the same methods this class calls:
     ``list_quests``, ``get_quest_autopilot``, ``list_quest_goals``, ``get_goal``, ``list_tasks``,
     ``list_open_decisions_for_quest``, ``create_task``, ``update_task``,
-    ``update_quest_autopilot``, and optionally ``create_goal``, ``get_daily_reflection`` and
-    ``get_period_reflection`` -- a client missing the optional ones simply composes a batch without
-    that material, exactly as before they existed).
+    ``update_quest_autopilot``, and optionally ``create_goal``, ``get_daily_reflection``,
+    ``get_period_reflection``, ``get_insights_collection`` and ``list_collection_entries`` -- a
+    client missing the optional ones simply composes a batch without that material, exactly as
+    before they existed).
 
     ``persona_resolver`` is the consumer-injected fallback (step 4 of ``resolve_persona``) -- e.g.
     the personal lane's card-vote resolver. Given a goal dict, returns a rep_id or ``None``.
@@ -690,6 +712,11 @@ class AutopilotPass:
         # re-fetch the identical text. Cached per requested period order, for the pass's lifetime
         # only -- a long-lived cache would be a stale one the moment the person writes a review.
         self._reflection_cache: Dict[Tuple[str, ...], ReflectionContext] = {}
+        # Insights are USER-scoped too, so the pass reads them ONCE, over the widest window it
+        # could need, and each quest narrows that one result to its own ``last_pass_at`` in memory.
+        # ``None`` means "not read yet" (an empty context is a legitimate result and must not be
+        # mistaken for a cache miss).
+        self._insights_cache: Optional[InsightsContext] = None
 
     def _persona_label(self, rep_id: Optional[str]) -> Optional[str]:
         """A rep's human display name, falling back to the raw id.
@@ -750,6 +777,30 @@ class AutopilotPass:
                 log.info("autopilot: no reflection on record (checked %s)",
                          ", ".join(cached.checked_periods) or "no period")
         return cached
+
+    def _insights(self, autopilot_cfg: Dict[str, Any]) -> InsightsContext:
+        """The person's unacted captures since THIS quest's last pass.
+
+        Read once per pass (insights are user-scoped, so re-reading them per quest would be the
+        same entries at N times the cost), then narrowed per quest against the ``last_pass_at``
+        this pass is about to overwrite. That field already exists for exactly this question -- it
+        is the pass's own record of when it last looked at this quest -- so "what has the person
+        captured since I last ran" needs no separate freshness tracker, and cannot drift out of
+        step with the cadence gate that reads the same stamp.
+
+        A quest that has never had a pass (no ``last_pass_at``, or an unparsable one) sees the
+        whole default window rather than nothing: on a first run, everything recent IS new.
+
+        Best-effort by construction (``collect_unacted_insights`` never raises and returns an empty
+        context for a client with no insights methods), so a backend or client without these
+        endpoints composes exactly the batch text it composed before.
+        """
+        if self._insights_cache is None:
+            self._insights_cache = collect_unacted_insights(self._client, now=self._now())
+            found = len(self._insights_cache.insights)
+            log.info("autopilot: read %d unacted insight(s) from the last %d days",
+                     found, self._insights_cache.window_days)
+        return self._insights_cache.narrow_to(_parse_dt(autopilot_cfg.get("last_pass_at")))
 
     def _adopts_recurring(self, autopilot_cfg: Dict[str, Any]) -> bool:
         """Whether to adopt this quest's recurring tasks: the QUEST's own setting when it states
@@ -821,6 +872,10 @@ class AutopilotPass:
         # pass, so this is at most one extra pair of reads per pass, not per quest.
         reflections = self._reflections(scope_label)
         reflection_text = reflections.as_text() or None
+        # What they have captured and not yet acted on since this quest's own last pass. Same
+        # user-scoped read, cached for the pass; the per-quest cutoff is applied in memory.
+        insights = self._insights(autopilot_cfg)
+        insights_text = insights.as_text() or None
 
         produced = False
         if target_goals or adopted:
@@ -845,7 +900,8 @@ class AutopilotPass:
                                                   scope_label=scope_label, adopted_tasks=tasks,
                                                   next_steps=standing_next_steps,
                                                   previous=previous,
-                                                  reflection=reflection_text)
+                                                  reflection=reflection_text,
+                                                  insights=insights_text)
                 if task_id:
                     result.created_task_ids.append(task_id)
                     budget_used += 1
@@ -853,7 +909,8 @@ class AutopilotPass:
                     self._close_adopted(tasks, task_id, quest_id, result)
             if produced and not dry_run:
                 self._refresh_next_steps(quest_id, target_goals, adopted, scope_label, previous,
-                                         result, reflection_note=reflections.one_line())
+                                         result, reflection_note=reflections.one_line(),
+                                         insights_note=insights.one_line())
         elif planning == "plan_and_work":
             if budget_used < self._daily_budget:
                 self._handle_proposal(quest, quest_id, mode, dry_run, result)
@@ -1052,7 +1109,8 @@ class AutopilotPass:
                             adopted: List[Dict[str, Any]], scope_label: str,
                             previous: Optional[Dict[str, Any]],
                             result: AutopilotResult, *,
-                            reflection_note: str = "") -> None:
+                            reflection_note: str = "",
+                            insights_note: str = "") -> None:
         """Write this pass's conclusion as the quest's canonical next steps (folder + Quest).
 
         Only called when the pass actually PRODUCED work, and never on a dry run. A pass that found
@@ -1066,7 +1124,8 @@ class AutopilotPass:
         updated = self._now().astimezone(timezone.utc).strftime("%Y-%m-%d")
         next_steps = next_steps_from_pass(goals, adopted, scope_label=scope_label,
                                           updated=updated, previous=previous,
-                                          reflection_note=reflection_note)
+                                          reflection_note=reflection_note,
+                                          insights_note=insights_note)
         try:
             published = publish_next_steps(self._client, quest_id, folder, next_steps)
         except Exception as e:  # noqa: BLE001 -- the artifact must never fail an otherwise-good pass
@@ -1245,12 +1304,13 @@ class AutopilotPass:
                            adopted_tasks: Optional[List[Dict[str, Any]]] = None,
                            next_steps: Optional[str] = None,
                            previous: Optional[Dict[str, Any]] = None,
-                           reflection: Optional[str] = None) -> Optional[str]:
+                           reflection: Optional[str] = None,
+                           insights: Optional[str] = None) -> Optional[str]:
         text = compose_batch_text(str(quest.get("outcome") or ""), goals,
                                   self._persona_label(persona),
                                   scope_label=scope_label, adopted_tasks=adopted_tasks,
                                   next_steps=next_steps, previous=previous,
-                                  reflection=reflection)
+                                  reflection=reflection, insights=insights)
         try:
             return self._create_autopilot_task(
                 quest, quest_id, text, mode, persona=persona,

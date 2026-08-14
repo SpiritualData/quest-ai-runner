@@ -36,6 +36,12 @@ Endpoints implemented (the contract from integration_library_design.md §3):
                GET  /api/daily-plan/today              (get_daily_reflection)
                GET  /api/period-review/{period}/current (get_period_reflection)
                Composed into one context block by ``runner.reflections``.
+  Insights (the person's own captures; USER-scoped, no team or quest id):
+               GET   /api/data/insights/collection             (get_insights_collection)
+               GET   /api/data/collections/{id}/entries        (list_collection_entries)
+               PATCH /api/data/insights/mark-acted-on          (mark_insight_acted_on)
+               The entries route has NO server-side date or field filter; ``runner.insights``
+               applies the "recent and not yet acted on" selection client-side.
 
 ``QuestDecisionSink`` wraps a QuestClient as a core ``EscalationSink`` so the brain can raise a
 confirm/decision and get back a ``decision_id`` to report on the task.
@@ -880,6 +886,82 @@ class QuestClient:
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("get_period_reflection failed for period %s: %s", period, e)
             return {}
+
+    # --- the person's captured insights (USER-scoped; no team_id, no quest_id) ------------------
+    # Quest auto-creates one "Insights" collection per person: quick capture for the idea that
+    # arrives away from any goal, with the free-text category tags they chose, an ``acted_on``
+    # checkbox, and a description of what was done. It is the one place in Quest holding something
+    # the person recorded that has NOT been turned into a goal or task yet. See ``runner.insights``
+    # for the helper that composes recent unacted captures into one context block.
+
+    def get_insights_collection(self) -> Dict[str, Any]:
+        """GET /api/data/insights/collection — the caller's Insights collection.
+
+        Returns the collection dict (``id``, ``name``, ``customFields``, …), the same shape as
+        ``GET /api/data/collections/{id}``. The route CREATES the collection when the person does
+        not have one yet, so an empty result means a failed read rather than "no insights feature"
+        — but the ``id`` is all a reader needs, and the entries live behind
+        ``list_collection_entries``. Returns {} on any error.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", "/api/data/insights/collection") or {}
+            return resp if isinstance(resp, dict) else {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("get_insights_collection failed: %s", e)
+            return {}
+
+    def list_collection_entries(self, collection_id: str, *, page: int = 0,
+                                limit: int = 50) -> Dict[str, Any]:
+        """GET /api/data/collections/{collection_id}/entries — one page of a collection's entries.
+
+        Generic across every collection type, not insights-specific. Returns
+        ``{"items": [...], "pagination": {total, page, limit, total_pages, has_next, has_prev}}``,
+        newest first (the route sorts by ``created_at`` descending). Each item carries
+        ``fieldValues`` keyed by the collection's own field ids, plus ``createdAt``.
+
+        There is NO server-side filter on this route — not by date, not by field value — so any
+        "recent" or "unacted" selection is the caller's to apply client-side. Returns {} on any
+        error.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", f"/api/data/collections/{collection_id}/entries",
+                                 params={"page": page, "limit": limit}) or {}
+            return resp if isinstance(resp, dict) else {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_collection_entries failed for collection %s (page %s): %s",
+                        collection_id, page, e)
+            return {}
+
+    def mark_insight_acted_on(self, entry_id: str, collection_id: str,
+                              action_taken_description: str = "") -> bool:
+        """PATCH /api/data/insights/mark-acted-on — tick one insight's ``acted_on`` box.
+
+        ``action_taken_description`` fills the entry's "Action Taken" field, and is what the person
+        sees next to the tick when they review their captures. Write it as a statement of what
+        actually exists now ("created the goal 'Draft chapter two'"), not what was intended.
+
+        Returns True only when the write succeeded. This is a WRITE on the person's own data with a
+        visible consequence — a ticked insight drops out of every unacted list, including the one
+        their weekly review is built from — so a failure is logged and reported rather than
+        swallowed, and a caller must not treat "I asked" as "it is done". By the same token, do not
+        call this for work that was merely QUEUED: an insight marked acted on because a task was
+        created, where that task is then never approved or fails, has been silently removed from
+        the person's list without anything having happened.
+        """
+        if not (entry_id and collection_id):
+            log.warning("mark_insight_acted_on needs both entry_id and collection_id")
+            return False
+        try:
+            self._require()
+            self._request("PATCH", "/api/data/insights/mark-acted-on",
+                          body={"entry_id": entry_id, "collection_id": collection_id,
+                                "action_taken_description": action_taken_description or ""})
+            return True
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("mark_insight_acted_on failed for entry %s: %s", entry_id, e)
+            return False
 
     # --- task creation (enqueue a new AI task) --------------------------------
 

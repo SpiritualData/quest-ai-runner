@@ -252,6 +252,78 @@ Two consumers use it, and neither could see a reflection before:
   what breaks ties about which eligible goal actually matters. A client without the reflection
   methods composes exactly the batch it composed before.
 
+### Read the person's own insights
+
+```
+GET   /api/data/insights/collection              (get_insights_collection)
+  -> { "id": "...", "name": "Insights", "customFields": [...] }        (created on first call)
+
+GET   /api/data/collections/{collection_id}/entries?page=0&limit=50    (list_collection_entries)
+  -> { "items": [ { "id": "...", "createdAt": "...",
+                    "fieldValues": { "insight": "...", "categories": ["health"],
+                                     "acted_on": false, "action_taken": "" } } ],
+       "pagination": { "total": N, "page": 0, "has_next": false, ... } }
+
+PATCH /api/data/insights/mark-acted-on           (mark_insight_acted_on)
+  body { "entry_id": "...", "collection_id": "...", "action_taken_description": "..." }
+```
+
+Quest auto-creates one **Insights** collection per person: quick capture for the idea that arrives
+away from any goal, with the free-text **category tags** they chose (`categories`), an `acted_on`
+checkbox, and an `action_taken` description. It is the only place in Quest holding something the
+person recorded that has **not** yet become a goal or a task, which is exactly why a background
+pass that never reads it composes its brief as if the capture never happened.
+
+Three facts about the wire shape, each one a place an assumed contract would fail quietly:
+
+- The entries route is **generic and unfiltered**. There is no server-side date filter and no
+  field filter, so "recent" and "not yet acted on" are both the caller's to apply client-side —
+  the same client-side selection quest-backend does for itself in `_get_recent_unacted_insights`.
+- Items come back **newest first** (`created_at` descending), which is what lets paging stop at the
+  first entry past the cutoff instead of walking a person's whole history.
+- The envelope is **camelCase** (`fieldValues`, `createdAt`) while the keys *inside* `fieldValues`
+  are the collection's own field ids (`insight`, `categories`, `acted_on`, `action_taken`). An
+  in-process caller sees snake_case instead, so `runner/insights.py` reads both.
+
+`runner/insights.py` composes them into one `InsightsContext`:
+
+```python
+from quest_ai_runner.runner.insights import collect_unacted_insights
+
+ctx = collect_unacted_insights(client, since=last_pass_at)   # or no `since`, for the window
+ctx.as_text()                 # a dated, tagged block for a prompt
+ctx.one_line()                # one condensed line, for an artifact that holds a single note
+ctx.narrow_to(cutoff)         # the same fetch, re-cut to a different "since"
+```
+
+It skips anything ticked `acted_on`, bounds the result by the later of `since` and
+`now - days_cap` (default 14 days), caps the list, and clips each entry. Every read is best-effort:
+a client without these methods, a 404, or a transport failure all degrade to an empty context.
+
+**The category tags are context for the reader, never a filter in this code.** Nothing compares a
+tag to a quest name, a goal title, or any other string. Each insight is rendered with its tags as
+the person typed them and the block ends by saying plainly that the tags are their labels for their
+own thinking rather than a routing rule, so the model composing the run decides what applies — the
+same judgment it already makes about goals and reflections. A hardcoded tag match is a fixed string
+rule that silently drops every wording it did not anticipate ("dissertation" vs. "thesis" vs. no
+tag at all), which is what hard rule #3 in `CLAUDE.md` forbids.
+
+**Autopilot** (`runner/autopilot.py`) reads them once per pass (user-scoped, like reflections) over
+the widest window it could need, then narrows that one result per quest against that quest's own
+`autopilot.last_pass_at` — the same stamp the cadence gate reads, so "what has the person captured
+since I last ran" needs no separate freshness tracker that could drift out of step with it. A quest
+with no `last_pass_at` sees the whole window, because on a first pass everything recent is new.
+`next_steps_from_pass` puts one condensed line in the artifact's `note` slot; an insight is never
+promoted to a *step*, since the person captured it rather than committing to it.
+
+**On `mark_insight_acted_on`:** the method exists and is the documented way to close the loop, but
+the autopilot pass deliberately does **not** call it. A pass creates a task, it does not do the
+work — so ticking the box at pass time would claim an action that has not happened, and since a
+ticked insight drops out of every unacted list (including the one the person's weekly review is
+built from), an insight marked acted-on for a task that is then never approved, or that fails, has
+been silently removed from their list with nothing to show for it. Call it from a surface that
+knows the work actually landed, and write the description as a statement of what exists now.
+
 ## Don't hand-roll HTTP
 
 Use `QuestClient` — it covers discover / claim / report / escalate / loop-close / whoami / heartbeat

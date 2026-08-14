@@ -7,6 +7,50 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **An autopilot pass now sees what the person has CAPTURED since it last ran, not only the rows
+  the system recorded.** Quest gives every person an "Insights" collection: quick capture for the
+  realization that arrives away from any goal ("mornings are the only time the writing happens"),
+  carrying the free-text **category tags** they chose, an `acted_on` checkbox, and what was done
+  about it. It is the one place in Quest holding something a person wrote down that has not become
+  a goal or a task yet, and `grep -rn insight quest_ai_runner/` found nothing: a capture made on
+  Tuesday sat untouched while every pass since composed its brief as if it had never been written.
+  Adds `QuestClient.get_insights_collection` / `list_collection_entries` / `mark_insight_acted_on`
+  and `runner/insights.py`, which composes recent unacted captures into one dated, tagged
+  `InsightsContext`. The entries route is generic and has **no** server-side filter — not by date,
+  not by field — so both halves of the selection are applied client-side, mirroring quest-backend's
+  own `_get_recent_unacted_insights`: skip anything ticked `acted_on`, bound by the later of the
+  caller's cutoff and a 14-day window, cap and clip the rest. Newest-first ordering lets paging stop
+  at the first entry past the cutoff instead of walking a person's whole history. Both timestamp
+  shapes the same field arrives in are handled (an ISO string over HTTP, a real `datetime` in
+  process), and an offset-bearing timestamp is *converted* rather than stamped, since reading
+  `23:30-07:00` as UTC moves a late-evening capture across a midnight cutoff. A client without the
+  methods, a 404, or a transport failure all degrade to an empty context.
+  (`docs/quest-api-contract.md`; `tests/test_insights.py`.)
+- **The category tags reach the model as context, and are never matched against anything in code.**
+  Each insight is rendered with the tags exactly as the person typed them, and the block closes by
+  saying plainly that they are the person's labels for their own thinking rather than a routing
+  rule: one tagged for something else can still matter here, one whose tag looks like a match can
+  be irrelevant, decide and pass over the rest without comment. That judgment belongs to the model
+  already weighing goals, next steps, and reflections for this quest. The alternative — comparing a
+  tag against a quest or goal name — is a fixed string rule that silently drops every wording it did
+  not anticipate ("dissertation" vs. "thesis" vs. no tag at all), which is exactly what hard rule #3
+  forbids. `compose_batch_text` carries the block beside the reflection, for the same reason and
+  with the same framing; `next_steps_from_pass` puts one condensed line in the artifact's `note`
+  slot but never promotes an insight to a *step*, because the person captured it rather than
+  committing to it. The freshness cutoff is the quest's own `autopilot.last_pass_at` — the same
+  stamp the cadence gate reads, so "since the last time it ran" cannot drift out of step with when
+  it actually ran, and no second tracker exists to go stale. Insights are user-scoped, so a pass
+  reads them ONCE over the widest window it could need and re-cuts that result per quest in memory
+  (`InsightsContext.narrow_to`); a quest with no `last_pass_at` sees the whole window, since on a
+  first pass everything recent is new. A client without the insight methods composes exactly the
+  batch it composed before. (`tests/test_autopilot_insights.py`.)
+- **`mark_insight_acted_on` exists, and autopilot deliberately does not call it.** A pass creates a
+  task; it does not do the work. Ticking the box at pass time would claim an action that has not
+  happened, and a ticked insight drops out of every unacted list — including the one the person's
+  weekly review is built from — so an insight marked acted-on for a task that is then never approved
+  or that fails has been silently removed from their own list with nothing to show for it. The
+  method is there for a surface that knows the work actually landed, reports failure rather than
+  swallowing it, and is documented with that boundary in `docs/quest-api-contract.md`.
 - **A bounded file edit can now be landed in ONE model call instead of spawning a full agent, and
   with it quest-ai-runner gains its first write capability, off by default.** Until now the only
   way this library could change a file was to escalate to a deep run: `SubprocessGoalRunner`
