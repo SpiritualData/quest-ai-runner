@@ -17,6 +17,11 @@ Now the failure paths fall back to the tail of that file, rendered through the m
 degrades to today's bare message when the record is missing or unreadable, survives a
 truncated/garbage file, and never touches a run that produced real output of its own.
 
+Also covers the adjacent failure in the same spawn: the ``--model`` argument. A run can fail
+identically on every retry because the model it was launched with was never invokable in the first
+place (a family-bucket label like ``claude-sonnet``), which is the other half of "a deep run that
+failed and could not say why".
+
 Fully offline: ``subprocess.Popen`` is intercepted, ``Path.home`` is redirected into tmp_path, no
 monitor thread is started (``emit`` is None), and no ``claude`` binary is ever spawned.
 """
@@ -273,6 +278,71 @@ def test_unreadable_session_file_never_raises(session_dir):
         assert read_session_activity_tail(str(session_dir.parents[2]), "locked") == ""
     finally:
         path.chmod(0o644)
+
+
+# --- the --model argument the worker is actually spawned with ----------------------------------
+#
+# Adjacent failure in the same construction, seen live: the deep run failed 6+ times in a row with
+# Claude Code's own "There's an issue with the selected model (claude-sonnet). It may not exist or
+# you may not have access to it." ``claude-sonnet`` is a family-BUCKET LABEL (what
+# ClaudeCliProvider advertises so tier bucketing works on a CLI-only lane), not an invokable id --
+# but the spawn gated only on ``_is_claude_model``, a syntactic check the label passes.
+
+def spawn_model_arg(monkeypatch, model):
+    """The ``--model`` value the runner actually spawns with (None when the flag is omitted)."""
+    captured = {}
+
+    class MockPopen:
+        stdin = None
+        returncode = 0
+
+        def communicate(self, input=None, timeout=None):
+            return (b"done", b"")
+
+    def fake_popen(cmd, **kw):
+        captured["cmd"] = cmd
+        return MockPopen()
+
+    monkeypatch.setattr(_sp, "Popen", fake_popen)
+    runner = SubprocessGoalRunner(SubprocessConfig(working_dir="/w", claude_path="/usr/bin/claude"))
+    runner.run_goal(goal="g", brief="b", model=model, max_turns=2)
+    cmd = captured["cmd"]
+    return cmd[cmd.index("--model") + 1] if "--model" in cmd else None
+
+
+@pytest.mark.parametrize("bucket_label,expected", [
+    ("claude-sonnet", "sonnet"),
+    ("claude-opus", "opus"),
+    ("claude-haiku", "haiku"),
+])
+def test_bucket_label_models_are_translated_before_reaching_the_cli(monkeypatch, bucket_label,
+                                                                   expected):
+    """A bucket label must NEVER reach the binary raw — it errors identically on every retry."""
+    assert spawn_model_arg(monkeypatch, bucket_label) == expected
+
+
+def test_pinned_and_alias_claude_ids_still_reach_the_cli(monkeypatch):
+    assert spawn_model_arg(monkeypatch, "claude-opus-4-8") == "opus"
+    assert spawn_model_arg(monkeypatch, "sonnet") == "sonnet"
+    assert spawn_model_arg(monkeypatch, "us.anthropic.claude-x-1") == "us.anthropic.claude-x-1"
+
+
+def test_non_claude_models_still_omit_the_flag(monkeypatch):
+    """Unchanged behaviour: the worker only runs Claude, so a foreign id means no --model at all."""
+    assert spawn_model_arg(monkeypatch, "gemini-3.5-flash") is None
+    assert spawn_model_arg(monkeypatch, "gpt-4o") is None
+    assert spawn_model_arg(monkeypatch, None) is None
+
+
+def test_cli_safe_model_matches_the_adapter_translator():
+    """The deep path must use the SAME translator the shallow plan/answer path uses, not a second
+    copy of the rules that can drift from it."""
+    from quest_ai_runner.adapters.claude_cli_provider import cli_model
+    from quest_ai_runner.core.goal_runner import cli_safe_model
+
+    for m in ("claude-sonnet", "claude-opus-4-8", "haiku", "us.anthropic.claude-x-1",
+              "gemini-3.5-flash", "", None):
+        assert cli_safe_model(m) == cli_model(m)
 
 
 def test_worker_output_is_thin():

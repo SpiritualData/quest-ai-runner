@@ -7,6 +7,47 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **A family-bucket label can no longer reach `claude --model`, which made deep runs fail
+  identically on every retry.** Live: six consecutive attempts, each ending in the binary's own
+  "There's an issue with the selected model (claude-sonnet). It may not exist or you may not have
+  access to it", and then a "deep task complete" for work that never ran. `claude-sonnet` is not a
+  model id: it is a family-BUCKET LABEL from `ClaudeCliProvider.CLI_RUNNABLE_MODELS`, which exists
+  so `ModelRegistry.bucket_top` can bucket tiers on a CLI-only deployment that has no live model
+  list. The spawn gated on `_is_claude_model`, which asks a purely SYNTACTIC question ("is this
+  string Claude-shaped?") — the label passes it, so it was forwarded raw. The translator for
+  exactly this already lived beside the labels it invents (`claude_cli_provider.cli_model`: family
+  → the bare alias the CLI accepts, non-Claude → `None`, other Claude ids unchanged) and the
+  shallow plan/answer path has used it since it was introduced; the deep path was simply missed.
+  `SubprocessGoalRunner` now routes `--model` through it via `core.goal_runner.cli_safe_model`
+  (lazily imported, so `core` still doesn't depend on `adapters` at import time, and degrading to
+  the old syntactic gate if the adapter is absent). Two consequences worth knowing: a non-Claude id
+  still omits `--model` entirely, exactly as before; and a dated id now invokes as its family alias
+  (`claude-opus-4-8` → `opus`, i.e. latest of family), which is the same translation every shallow
+  call has always used. (`tests/test_deep_failure_session_diagnostics.py`, `tests/test_runner.py`.)
+- **The deep-model ladder now has a second rung on a CLI-only deployment, so "escalate on a
+  not-met goal" escalates.** `fallback_deep_ladder` extended the ladder only when the fallback
+  model was NOT Claude-runnable, on the reasoning that a Claude deployment had already chosen its
+  deep model. But "Claude-shaped" and "a distinct rung worth escalating to" are different
+  questions, and a CLI-only lane resolves its tiers to bucket labels — so the guard saw Claude,
+  returned a length-1 ladder, and the goal loop's attempt-N indexing re-ran the identical model on
+  every attempt. That is the other half of the six identical failures above: the escalation
+  mechanism ran exactly as designed, with nothing to escalate to. The extension is now attempted
+  for every fallback, and rungs are deduped by what the worker would ACTUALLY invoke
+  (`cli_safe_model`), so `claude-sonnet`, `sonnet` and `claude-sonnet-4-6` count as one rung rather
+  than three lookalike steps that would re-run the same model — a stronger tier is added only when
+  it is genuinely a different model. Pins (an explicit per-task model request, a guidance model
+  preference) still return a single-model ladder before this is reached, and the existing
+  "escalation unavailable" WARNING still fires when nothing distinct can be found.
+  (`tests/test_deep_escalation_ladder.py`.)
+- **The terminal record shows a repeated failure once, with a count, instead of the same sentence
+  six times.** A goal loop's retries report under the same `run_id`, so a failure identical on
+  every attempt filled the run's scrollback record with the same line repeatedly and pushed
+  everything else the run said out of the capped narration tail. `_summarize_exec_lines` now
+  collapses CONSECUTIVE identical narration lines into one, tagged "(repeated N times)". Only
+  consecutive ones: the same line said again after something else happened is a real second
+  occurrence, not noise. Tool actions were already rolled into the counts line and are unaffected,
+  and an interleaved tool or thinking line does not split a run of identical messages (neither is
+  narration). (`tests/test_deep_output_ui.py`.)
 - **A deep run that dies before printing its final envelope now reports what it ACTUALLY did,
   read from its own session record.** Observed live: a run read half a dozen files, wrote and ran
   a sanity-check script, wrote a design doc, edited three files and drafted an email, then failed

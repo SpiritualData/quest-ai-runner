@@ -109,6 +109,40 @@ def test_deep_models_warns_when_no_claude_id_available_anywhere(caplog):
     assert "QAR_DEEP_MODELS" in warnings[0].getMessage()
 
 
+def test_deep_models_extends_a_bucket_label_ladder_on_a_cli_only_deployment(caplog):
+    """A CLI-only lane advertises family BUCKET LABELS, so its tiers resolve to "claude-sonnet" /
+    "claude-opus". The ladder used to stop at one rung whenever the fallback was Claude-shaped,
+    which is how a live run retried the SAME model six times: the escalation mechanism ran with
+    nothing to escalate to. Claude-shaped is not the same question as "a distinct rung"."""
+    from quest_ai_runner.adapters.claude_cli_provider import CLI_RUNNABLE_MODELS
+
+    provider = StubProvider(decisions=[], models=CLI_RUNNABLE_MODELS)
+    orch = _orch(provider, config=OrchestratorConfig())
+    with caplog.at_level(logging.INFO, logger=ORCH_LOGGER):
+        ladder = orch._deep_models(None, None, "claude-sonnet")
+
+    assert len(ladder) > 1, "a CLI-only deployment must still have somewhere to escalate to"
+    assert ladder[0] == "claude-sonnet"
+    assert any("opus" in (m or "") for m in ladder[1:]), f"expected a stronger rung, got {ladder}"
+    assert not any(r.levelno >= logging.WARNING for r in caplog.records)
+
+
+def test_fallback_deep_ladder_dedupes_rungs_by_what_the_worker_would_invoke():
+    """"claude-sonnet", "sonnet" and "claude-sonnet-4-6" are ONE rung: they all invoke as
+    ``--model sonnet``. Adding them as separate rungs would look like escalation and re-run the
+    identical model."""
+    provider = StubProvider(decisions=[])
+    registry = ModelRegistry(provider, fallback={
+        "quality": "claude-sonnet-4-6",   # same rung as the fallback below
+        "best": "claude-opus-4-8",        # a genuinely different one
+    })
+    orch = _orch(provider, registry=registry, config=OrchestratorConfig())
+
+    ladder = orch.fallback_deep_ladder("claude-sonnet")
+
+    assert ladder == ["claude-sonnet", "claude-opus-4-8"]
+
+
 def test_deep_models_pinned_single_model_does_not_warn(caplog):
     # A PIN (explicit request or guidance pref) is an intentional single-model choice, not an
     # escalation failure -- must not trigger the "escalation unavailable" warning.

@@ -4797,10 +4797,11 @@ class Orchestrator:
         escalation). Otherwise (3) the configured ``deep_model_ladder`` (the consumer's explicit
         ladder, e.g. from ``QAR_DEEP_MODELS`` -- REAL Claude ids/aliases, weak -> strong), else
         (4) a ladder built from the single ``fallback`` model the orchestrator was given, EXTENDED
-        with any Claude-runnable id found by resolving the "quality"/"best" tiers (so a Gemini/
-        OpenAI deployment whose tier config still names a Claude id for its strong tier -- e.g.
-        ``QAR_MODEL_BEST=claude-opus-4-8`` -- gets a real escalation step instead of a silently
-        inert length-1 ladder; see ``fallback_deep_ladder``). Always returns a non-empty list.
+        with any genuinely DIFFERENT Claude-runnable id found by resolving the "quality"/"best"
+        tiers (so a deployment whose tier config names a stronger Claude model -- e.g.
+        ``QAR_MODEL_BEST=claude-opus-4-8``, or a CLI-only lane's ``claude-opus`` bucket -- gets a
+        real escalation step instead of a silently inert length-1 ladder; see
+        ``fallback_deep_ladder``). Always returns a non-empty list.
         Logs (INFO) the resolved ladder once per deep run, and WARNS when a NON-pinned resolution
         still comes out length <= 1 (escalation unavailable), so a deployment can see and fix it."""
         from .goal_runner import _is_claude_model  # worker-runnable check (deep worker is Claude Code)
@@ -4829,26 +4830,44 @@ class Orchestrator:
     def fallback_deep_ladder(self, fallback: Optional[str]) -> List[Optional[str]]:
         """Build the deep-worker ladder when no explicit ``deep_model_ladder`` is configured.
 
-        Starts from the single ``fallback`` model the orchestrator was already given. If that model
-        is NOT Claude-runnable (a Gemini/OpenAI deployment, so the deep worker -- Claude Code --
-        could never actually use it as ``--model``), try to EXTEND the ladder with a real escalation
-        step by resolving the "quality" then "best" tiers through the registry: on many deployments
-        these still name a genuine Claude id (either the library's own last-known default, or an
-        explicit operator override like ``QAR_MODEL_BEST=claude-opus-4-8`` -- see
-        HANDS_FREE_QUEST_AI_DESIGN.md section 2, point 4 for why this matters), so this is what makes
-        "goal not met -> stronger model" do something even when the deployment's PRIMARY model is not
-        Claude. Never raises; always returns a non-empty list (falls back to ``[fallback]`` alone,
-        even if that is not Claude-runnable, so a caller always has something to try)."""
-        from .goal_runner import _is_claude_model  # worker-runnable check
+        Starts from the single ``fallback`` model the orchestrator was already given, then tries to
+        EXTEND it with a real escalation step by resolving the "quality" then "best" tiers through
+        the registry: on many deployments these name a genuine Claude id (the library's own
+        last-known default, or an explicit operator override like ``QAR_MODEL_BEST=claude-opus-4-8``
+        -- see HANDS_FREE_QUEST_AI_DESIGN.md section 2, point 4), which is what makes "goal not met
+        -> stronger model" do something at all.
+
+        The extension is attempted for EVERY fallback, not only a non-Claude one. It used to be
+        skipped whenever the fallback was already Claude-shaped, on the reasoning that such a
+        deployment had picked its deep model -- but "Claude-shaped" and "a distinct rung worth
+        escalating to" are different questions. A CLI-only deployment resolves its tiers to family
+        BUCKET LABELS (``claude-sonnet``), so the guard saw Claude, stopped at one rung, and the
+        goal loop's attempt-N indexing re-ran the identical model on every retry: the escalation
+        mechanism ran, with nothing to escalate to. Rungs are deduped by what the worker would
+        ACTUALLY invoke (``cli_safe_model``: ``claude-sonnet``, ``sonnet`` and ``claude-sonnet-4-6``
+        are one rung, not three), so this adds a step only when it is a genuinely different model.
+
+        Never raises; always returns a non-empty list (falls back to ``[fallback]`` alone, even if
+        that is not Claude-runnable, so a caller always has something to try)."""
+        from .goal_runner import _is_claude_model, cli_safe_model  # worker-runnable check + translation
+
+        def rung_key(m: Optional[str]) -> str:
+            """What this id resolves to at invoke time — the identity a ladder rung really has."""
+            try:
+                return (cli_safe_model(m) or m or "").strip().lower()
+            except Exception:  # noqa: BLE001 — an untranslatable id is just its own rung
+                return (m or "").strip().lower()
+
         ladder: List[str] = [fallback] if fallback else []
-        if not fallback or not _is_claude_model(fallback):
-            for tier in ("quality", "best"):
-                try:
-                    resolved = self.registry.resolve_tier(tier)
-                except Exception:  # noqa: BLE001 — an unresolvable tier is just skipped
-                    continue
-                if resolved and _is_claude_model(resolved) and resolved not in ladder:
-                    ladder.append(resolved)
+        seen = {rung_key(m) for m in ladder}
+        for tier in ("quality", "best"):
+            try:
+                resolved = self.registry.resolve_tier(tier)
+            except Exception:  # noqa: BLE001 — an unresolvable tier is just skipped
+                continue
+            if resolved and _is_claude_model(resolved) and rung_key(resolved) not in seen:
+                ladder.append(resolved)
+                seen.add(rung_key(resolved))
         return ladder or [fallback]
 
     @staticmethod

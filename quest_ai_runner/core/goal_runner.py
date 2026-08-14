@@ -115,6 +115,33 @@ def _is_claude_model(model: str) -> bool:
     return any(m == alias or m.startswith(alias) for alias in ("opus", "sonnet", "haiku"))
 
 
+def cli_safe_model(model: Optional[str]) -> Optional[str]:
+    """The value to actually pass as ``claude --model``, or None to pass nothing.
+
+    ``_is_claude_model`` answers a purely SYNTACTIC question ("is this string Claude-shaped?"),
+    which is not the same as "is this a model id the CLI can invoke". A tier can resolve to a
+    FAMILY-BUCKET LABEL — ``claude-sonnet``, from ``ClaudeCliProvider.CLI_RUNNABLE_MODELS``, which
+    exists so ``ModelRegistry.bucket_top`` can bucket tiers on a CLI-only deployment with no live
+    model list. That label is Claude-shaped but is NOT invokable: passing it through made the real
+    binary answer "There's an issue with the selected model (claude-sonnet). It may not exist or
+    you may not have access to it", identically on every retry, so the whole deep run was inert.
+
+    The translator for exactly this already exists next to the labels it invents
+    (``claude_cli_provider.cli_model``: family → the bare alias the CLI accepts, non-Claude → None,
+    other Claude ids unchanged); the shallow plan/answer path has used it since it was added, and
+    this deep path was simply missed. Imported lazily — ``core`` must not depend on ``adapters`` at
+    import time — and degrades to the old syntactic gate if the adapter is unavailable.
+    """
+    try:
+        from ..adapters.claude_cli_provider import cli_model
+    except Exception:  # noqa: BLE001 — adapter unavailable: fall back to the syntactic gate
+        return model if _is_claude_model(model or "") else None
+    try:
+        return cli_model(model)
+    except Exception:  # noqa: BLE001 — a translator failure must never break the spawn
+        return model if _is_claude_model(model or "") else None
+
+
 def _run_goal_accepts_context_preamble(runner: Any) -> bool:
     """Whether a DeepRunner's ``run_goal`` accepts a ``context_preamble`` keyword (or **kwargs).
 
@@ -907,8 +934,14 @@ class SubprocessGoalRunner(DeepRunner):
         # the selected model ... it may not exist or you may not have access") and the deep run does
         # nothing. So pass --model ONLY when it is a Claude model; otherwise omit it and let the
         # worker use its own configured default.
-        if model and _is_claude_model(model):
-            cmd += ["--model", model]
+        # ...and it must be a model the CLI can actually INVOKE, not merely one that looks like a
+        # Claude id: a family-bucket label ("claude-sonnet") passes the syntactic check but makes
+        # the binary error out on every attempt. cli_safe_model() translates (label -> alias) and
+        # returns None for anything the worker can't run, which lands on the same "omit --model,
+        # let the worker use its default" behaviour as before.
+        cli_arg = cli_safe_model(model)
+        if cli_arg:
+            cmd += ["--model", cli_arg]
         elif model:
             _log.debug("deep worker is Claude Code; ignoring non-Claude model %r, using its default",
                        model)

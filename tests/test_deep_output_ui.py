@@ -502,6 +502,27 @@ def test_summarize_exec_lines_counts_and_narration():
     assert narration == ["I planned the change."]  # thinking is dropped, tool ops are not narration
 
 
+def test_summarize_exec_lines_collapses_consecutive_identical_narration():
+    """A retry loop that fails the SAME way every attempt reports the same line over and over
+    (live: a model the worker could not run, six times). Show it once, and say it repeated —
+    otherwise it crowds out everything else the run said."""
+    err = "There's an issue with the selected model. It may not exist."
+    summary, narration = QuestAITerminal._summarize_exec_lines([
+        "Starting.", err, "Read: /a", err, "[thinking] hmm", err, "Done trying.",
+    ])
+    assert summary == "1 read"
+    # The repeats are consecutive as NARRATION (a tool line and a thinking line between them are
+    # not narration and must not split the run of identical messages).
+    assert narration == ["Starting.", f"{err} (repeated 3 times)", "Done trying."]
+
+
+def test_summarize_exec_lines_keeps_non_consecutive_repeats():
+    """Only CONSECUTIVE repeats collapse: the same line said again after something else happened
+    is a real second occurrence, not noise."""
+    _, narration = QuestAITerminal._summarize_exec_lines(["Trying.", "Waiting.", "Trying."])
+    assert narration == ["Trying.", "Waiting.", "Trying."]
+
+
 # --- expanded detail panel: full history + scroll follow -------------------
 
 @pytest.mark.asyncio

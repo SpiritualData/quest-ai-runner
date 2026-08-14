@@ -2056,9 +2056,16 @@ class QuestAITerminal(App):
         (a wall the user doesn't want), we roll the mechanical tool actions up into a single counts
         line ("12 reads · 3 edits · 2 commands") and return the worker's own narration separately so
         a run with no structured result can still show what it was doing in its own words.
+
+        CONSECUTIVE IDENTICAL narration lines collapse into one, tagged with how many times it
+        repeated. A goal loop that retries the same subgoal re-reports under the same run_id, so a
+        failure that is identical every attempt (e.g. a model the worker cannot run, which errors
+        the same way six times) otherwise fills the record with the same sentence six times and
+        crowds out everything else the run said. Show the real thing once, and say it repeated.
         """
         reads = writes = cmds = searches = tools = 0
         narration: List[str] = []
+        repeats: List[int] = []
         for ln in lines:
             s = ln.strip()
             if not s:
@@ -2075,8 +2082,11 @@ class QuestAITerminal(App):
                 tools += 1
             elif s.startswith("[thinking]"):
                 continue  # internal reasoning — not part of the "what it did" summary
+            elif narration and narration[-1] == s:
+                repeats[-1] += 1  # the same line again: count it, don't print it again
             else:
                 narration.append(s)
+                repeats.append(1)
 
         def _plural(n: int, one: str, many: str) -> str:
             return f"{n} {one if n == 1 else many}"
@@ -2092,7 +2102,9 @@ class QuestAITerminal(App):
             parts.append(_plural(searches, "search", "searches"))
         if tools:
             parts.append(_plural(tools, "tool call", "tool calls"))
-        return " · ".join(parts), narration
+        narrated = [n if c == 1 else f"{n} (repeated {c} times)"
+                    for n, c in zip(narration, repeats)]
+        return " · ".join(parts), narrated
 
     def _flush_deep_run(self, run_id: str) -> None:
         """Write one deep run's record into the scrollback transcript, once.
