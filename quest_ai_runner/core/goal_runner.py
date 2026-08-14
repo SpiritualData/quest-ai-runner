@@ -200,12 +200,15 @@ def extract_escalation_id(output: str) -> Optional[str]:
 
 
 def _parse_worker_output(raw: str) -> tuple:
-    """Parse Claude Code's ``--output-format json`` envelope into (result_text, tokens, cost, is_error).
+    """Parse Claude Code's ``--output-format json`` envelope into
+    (result_text, tokens, cost, is_error, subtype).
 
     Returns the final result text, the total tokens (input+output) the worker reported, the cost in
-    USD, and whether the worker flagged an error. Falls back to (raw, 0, 0.0, False) when the output
-    is not the expected JSON (e.g. a plain-text worker), so a non-Claude-Code DeepRunner still works.
-    Never raises."""
+    USD, whether the worker flagged an error, and the envelope's ``subtype`` — the worker's own
+    statement of HOW it ended (``success``, ``error_max_turns``, ...), which is the difference
+    between diagnosing a failure and guessing at it. Falls back to (raw, 0, 0.0, False, "") when
+    the output is not the expected JSON (e.g. a plain-text worker), so a non-Claude-Code DeepRunner
+    still works. Never raises."""
     text = raw or ""
     try:
         data = json.loads(raw)
@@ -216,10 +219,10 @@ def _parse_worker_output(raw: str) -> tuple:
             if isinstance(usage, dict):
                 tokens = int(usage.get("input_tokens") or 0) + int(usage.get("output_tokens") or 0)
             cost = float(data.get("total_cost_usd") or 0.0)
-            return text, tokens, cost, bool(data.get("is_error"))
+            return text, tokens, cost, bool(data.get("is_error")), str(data.get("subtype") or "")
     except Exception:  # noqa: BLE001 — any parse issue falls back to raw text, no usage
         pass
-    return text, 0, 0.0, False
+    return text, 0, 0.0, False, ""
 
 
 def compose_goal_prompt(goal: str, brief: str, *, preamble: str = "") -> str:
@@ -1041,7 +1044,7 @@ class SubprocessGoalRunner(DeepRunner):
         # reported token usage / cost out of the JSON envelope. ``out`` becomes the human-readable
         # result; ``tokens``/``cost`` feed the goal loop's overall token budget. If parsing fails
         # (older worker, plain text), fall back to treating stdout as the result with no usage.
-        out, tokens, cost, json_is_error = _parse_worker_output(raw)
+        out, tokens, cost, json_is_error, subtype = _parse_worker_output(raw)
 
         # The escalation-marker contract: the worker raised a human decision mid-run and printed
         # ``QAR-ESCALATED: <decision_id>``. That overrides met-vs-limit — the run is PAUSED on a
@@ -1081,9 +1084,21 @@ class SubprocessGoalRunner(DeepRunner):
             # a human reads on a failed task, so it sent every diagnosis down the wrong path. The
             # worker's own output IS carried on this result, so point the reader at it.
             tail = (out or "").strip()
-            err = (f"The worker exited {proc.returncode} with no error output. The goal was not "
-                   "confirmed met. Common causes: the turn or token budget ran out, or the worker "
-                   "itself errored. Read the run output below for what it actually did.")
+            if subtype == "error_max_turns":
+                # The envelope SAYS how it ended, so say that instead of listing "common causes".
+                # This is not a crash: the worker ran out of room mid-flight, so its work may be
+                # complete, partially done, or barely started, and only the output below tells you
+                # which. (Live case: a daily brief whose last acts were sending the mail and
+                # writing its goal note, reported as a bare failure because the turn budget ended
+                # one beat later. Raise the lane's ``deep_max_turns`` if that keeps happening.)
+                err = (f"The worker used its entire {int(turns)}-turn budget without declaring the "
+                       "goal met, so the goal is UNCONFIRMED rather than failed. Whatever it "
+                       "finished before the budget ran out still happened; read the run output "
+                       "below to see how far it got.")
+            else:
+                err = (f"The worker exited {proc.returncode} with no error output. The goal was not "
+                       "confirmed met. Common causes: the turn or token budget ran out, or the "
+                       "worker itself errored. Read the run output below for what it actually did.")
             if tail:
                 err = f"{err}\n\nLast output:\n{tail[-1500:]}"
             # A worker killed/crashed BEFORE printing its final JSON envelope leaves ``tail`` empty
