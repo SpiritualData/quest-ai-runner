@@ -141,6 +141,54 @@ def test_cap_falls_back_to_best_effort_answer():
     assert res.steps == 3
 
 
+def test_undersized_chars_budget_drops_a_planned_read_before_it_runs():
+    # Reproduces the real-world bug: a planner working through a 3-file "is this still current"
+    # style check (progress.md, feedback.md, today_tasks.md) that trips an undersized gathered-chars
+    # cap AFTER the 2nd read. The budget check runs only after each read completes, so the read that
+    # actually crosses the cap still lands -- but the 3rd file's read is never even ATTEMPTED, since
+    # the loop breaks before the planner gets a re-plan step to ask for it. This is the old
+    # DEFAULT_MAX_GATHERED_CHARS (60000) shape: two ~35000-char files already exceed it.
+    provider = StubProvider(decisions=[
+        {"action": "read", "reads": [{"rel_path": "progress.md"}], "rationale": "check progress"},
+        {"action": "read", "reads": [{"rel_path": "feedback.md"}], "rationale": "check feedback"},
+        {"action": "read", "reads": [{"rel_path": "today_tasks.md"}], "rationale": "check today"},
+        {"action": "answer", "rationale": "answer with all three"},
+    ])
+    retrieval = StubRetrieval({
+        "progress.md": "P" * 35000,
+        "feedback.md": "F" * 35000,
+        "today_tasks.md": "T" * 35000,
+    })
+    res = _orch(provider, retrieval, config=OrchestratorConfig(max_gathered_chars=60000)).run(
+        "is this still current?")
+    assert res.kind == "answer"
+    assert res.partial is True
+    assert res.exit_reason == "read_budget"
+    # The bug: today_tasks.md was never even read, let alone answered from.
+    assert retrieval.read_calls == ["progress.md", "feedback.md"]
+
+
+def test_default_chars_budget_now_fits_the_same_three_file_lookup():
+    # Same scenario, shipped default (150000): the loop no longer drops the 3rd file, and the
+    # planner's own "answer" decision is honored instead of the read-budget fallback.
+    provider = StubProvider(decisions=[
+        {"action": "read", "reads": [{"rel_path": "progress.md"}], "rationale": "check progress"},
+        {"action": "read", "reads": [{"rel_path": "feedback.md"}], "rationale": "check feedback"},
+        {"action": "read", "reads": [{"rel_path": "today_tasks.md"}], "rationale": "check today"},
+        {"action": "answer", "rationale": "answer with all three"},
+    ])
+    retrieval = StubRetrieval({
+        "progress.md": "P" * 35000,
+        "feedback.md": "F" * 35000,
+        "today_tasks.md": "T" * 35000,
+    })
+    res = _orch(provider, retrieval, config=OrchestratorConfig()).run("is this still current?")
+    assert res.kind == "answer"
+    assert res.partial is not True
+    assert res.exit_reason != "read_budget"
+    assert retrieval.read_calls == ["progress.md", "feedback.md", "today_tasks.md"]
+
+
 class _EmptyRetrieval:
     """A retrieval adapter whose reads/greps yield NOTHING (no observation at all), so a
     capped loop with no usable gather escalates to a deep run."""
