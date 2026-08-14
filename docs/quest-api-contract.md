@@ -336,6 +336,52 @@ built from), an insight marked acted-on for a task that is then never approved, 
 been silently removed from their list with nothing to show for it. Call it from a surface that
 knows the work actually landed, and write the description as a statement of what exists now.
 
+### The quest folder's standing next steps (a context-entry upsert)
+
+```
+GET   /api/quests/{quest_id}/context-entries          (list_context_entries)
+POST  /api/quests/{quest_id}/context-entries          (create_context_entry)
+PUT   /api/quests/{quest_id}/context-entries/{id}     (update_context_entry)
+```
+
+A quest-linked folder carries ONE canonical "what to do next here": the `QAR:MANAGED:next_steps`
+block in its `QUEST_SYNC.md` (`runner/quest_folder_sync.py`). It is a REPLACE, never a log, on both
+sides. Locally the block is regenerated in place; on Quest it is a single **context entry** matched
+by its fixed name (`NEXT_STEPS_ENTRY_NAME`), created once and PUT over afterwards, because the notes
+API is add + list only and a daily refresh living in notes would leave a year of near-identical
+rows. A failed entry LISTING writes nothing that round rather than blind-creating a duplicate; a
+client with no context-entry support falls back to a `[next-steps]`-marked note and says so.
+
+**Both readers write it, which is what keeps them from drifting apart:**
+
+- **Autopilot** (`runner/autopilot.py`) feeds the standing artifact into each pass's batch as the
+  plan of record, then writes its own conclusion back. Only a pass that produced work refreshes it;
+  a dry run and a quiet/gated pass leave it alone.
+- **The attended chat** (`runner/session_next_steps.py`) reads it once at session start and threads
+  it into every turn's `rep_preamble`, labelled as the current authoritative answer rather than one
+  retrieved file among many, so "what should I do next" starts from the artifact instead of being
+  re-derived. A turn writes back only when it ran real work and left some of it unfinished (a
+  completed `kind="deep"` turn with at least one `DeepResult` and at least one goal not finished);
+  a turn that finished everything knows what it completed but not what comes next, so it leaves the
+  considered answer in place for the next pass rather than replacing it with an empty block.
+
+```python
+from quest_ai_runner.runner.session_next_steps import (
+    load_standing_next_steps, render_standing_next_steps, refresh_from_turn,
+)
+
+standing = load_standing_next_steps(cfg)                    # local read; None = nothing to add
+preamble = render_standing_next_steps(standing)             # labelled block, every turn
+refresh_from_turn(client, standing, goals=..., deep_results=...)   # None = nothing written
+```
+
+Which quest a folder belongs to is resolved from `RunnerConfig.quest_folder_map` first (via
+`quest_for_path`, which also returns the mapped ROOT when the session starts in a subfolder), and
+otherwise from the `quest_id` the sync file already stamps in its frontmatter
+(`quest_id_in_folder`), so a folder that was ever pulled needs no configuration to be written back
+to. Every step degrades to today's behavior: no folder, no artifact, no quest id, no client, or a
+failed write all leave the session exactly as it was.
+
 ## Don't hand-roll HTTP
 
 Use `QuestClient` — it covers discover / claim / report / escalate / loop-close / whoami / heartbeat

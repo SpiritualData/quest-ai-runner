@@ -1779,6 +1779,10 @@ class QuestAITerminal(App):
             s._session_history.append((user_text, s._last_assistant))
             s._write_session_file()
             s._turn_count += 1
+            # A turn that executed work and left some unfinished refreshes the quest folder's
+            # standing next-steps artifact. The session owns the decision and the write (shared by
+            # every UI); this is only the call site for "a turn just completed".
+            s._maybe_refresh_next_steps(final)
             log.write(Text(""))
             self._write_footer(final, elapsed)
             # If the deep run flagged the context it used, load the panel and show a

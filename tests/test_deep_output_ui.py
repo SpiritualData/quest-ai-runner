@@ -440,6 +440,9 @@ class _FakeSessionForFinishTurn:
     def _write_session_file(self) -> None:
         pass
 
+    def _maybe_refresh_next_steps(self, final) -> None:
+        """No-op stand-in for the real session's next-steps write-back."""
+
 
 @pytest.mark.asyncio
 async def test_deep_turn_answer_not_duplicated_after_flush():

@@ -90,6 +90,7 @@ _TO_PUSH_PLACEHOLDER = (
 )
 
 _FRONTMATTER_RE = re.compile(r"^---\n.*?\n---\n?", re.DOTALL)
+_FRONTMATTER_QUEST_ID_RE = re.compile(r"^quest_id:\s*(\S+)\s*$", re.MULTILINE)
 # A synced-or-unsynced bullet: "- <!-- id:note_1 --> text" or plain "- text".
 _BULLET_RE = re.compile(r"^-\s*(?:<!--\s*id:(?P<id>[^\s>]+)\s*-->\s*)?(?P<text>.*)$")
 
@@ -352,6 +353,27 @@ def read_next_steps(folder: str, *, filename: str = SYNC_FILE_NAME) -> Optional[
     text = _read_existing(_sync_path(folder, filename))
     body = extract_between(text, _NEXT_STEPS_START, _NEXT_STEPS_END)
     return body.strip() if body and body.strip() else None
+
+
+def quest_id_in_folder(folder: str, *, filename: str = SYNC_FILE_NAME) -> Optional[str]:
+    """The quest id this folder's sync file declares in its own frontmatter, or None.
+
+    Every writer here stamps it at creation (``_ensure_frontmatter``), so any folder that was ever
+    pulled or given a next-steps artifact already says which quest it belongs to. That makes it the
+    natural SECOND answer to "which quest is this folder?" for a consumer with no configured
+    ``quest_folder_map`` — an attended chat session, typically, where nobody set up an env map.
+
+    The map stays the first answer where it exists (see :func:`quest_for_path`): it is the
+    deployment's own statement about the mapping, while this is whatever the last writer stamped.
+    """
+    text = _read_existing(_sync_path(folder, filename))
+    if not text:
+        return None
+    frontmatter = _FRONTMATTER_RE.match(text)
+    if not frontmatter:
+        return None
+    found = _FRONTMATTER_QUEST_ID_RE.search(frontmatter.group(0))
+    return found.group(1).strip() if found else None
 
 
 def _publish_to_quest(client: Any, quest_id: str, body: str) -> Tuple[str, str, bool, str]:

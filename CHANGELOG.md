@@ -80,6 +80,50 @@ All notable changes to this project are documented here. The format is based on
   (`core/goal_runner.py`; `tests/test_deep_failure_session_diagnostics.py`.)
 
 ### Added
+- **An attended chat session standing in a quest's folder now OPENS already holding that folder's
+  standing next-steps answer, instead of re-deriving one when asked.** The
+  `QAR:MANAGED:next_steps` block in `QUEST_SYNC.md` was built as the one canonical "what to do next
+  here", and the autopilot pass has read it and refreshed it since it landed; the attended half was
+  deliberately left unwired at the time, because doing it would have meant editing files another
+  process had open. So a person opened a fresh `qar chat` in exactly that folder, asked what to do
+  next, and watched the AI work it out from scratch from goals, notes and files. The artifact was
+  never excluded from indexing, so retrieval COULD surface it, but only by competing with every
+  other file in the corpus on relevance, which is not what a standing answer is for. New
+  `runner/session_next_steps.py` closes it: `InteractiveSession.__init__` (the session brain every
+  chat entry point constructs) reads the block once, and `_effective_preamble()` threads it into
+  every turn's `rep_preamble` alongside the persona, so it reaches the planner, the answer and the
+  deep preamble structurally rather than when retrieval happens to score it. It is labelled where it
+  lands: named as the current authoritative answer, told apart from a search result, with an
+  instruction to START from it and say where it came from, and to say plainly if the work has moved
+  past it. The freshness stamp travels inside the block itself (`render_next_steps` writes
+  "Refreshed <date>, by <source>" as its first line), so the label cannot contradict it. Pure local
+  file read, no Quest call, nothing that can block startup, and a very long hand-edited block is
+  capped before it taxes every turn. (`tests/test_session_next_steps.py`.)
+- **A turn that ran real work and left some of it unfinished now writes that back as the quest's
+  standing next steps.** Deliberately narrow, on autopilot's own precedent that only a productive
+  pass refreshes the artifact: the trigger is a completed (not cancelled, not errored) `kind="deep"`
+  turn that produced at least one `DeepResult` and did not finish every goal. Everything else leaves
+  the artifact alone, including small talk, an ordinary answer, a clarifying question, and a deep
+  plan that never executed. A turn that finished ALL its goals also leaves it alone: it knows what
+  it completed but not what comes after, deciding that is a planning judgment this refuses to spend
+  a model call on, and replacing a considered answer with an empty block would leave the folder
+  worse off than the stale one it overwrote. A DEFERRED result counts as unfinished, since queued
+  out of band is not done. Per-goal attribution happens only when goals and results line up; a
+  sequential-group deep run records results without a matching goal entry, so a partially finished
+  unalignable turn keeps every goal listed rather than guessing which result belonged to which goal.
+  The conclusion is deterministic and LLM-free, like `next_steps_from_pass`, and goes out through
+  the existing `publish_next_steps` (local file first, then the Quest-side upsert). Nothing here can
+  fail a turn: no folder, no artifact, no quest id, no Quest client, or a failed write all leave the
+  session behaving exactly as before. (`runner/session_next_steps.py`: `next_steps_from_turn`,
+  `refresh_from_turn`.)
+- **A quest folder can now say which quest it belongs to without any configuration.**
+  `quest_folder_sync.quest_id_in_folder` reads the `quest_id` its sync file already stamps in
+  frontmatter. `RunnerConfig.quest_folder_map` remains the FIRST answer wherever it is set (it is
+  the deployment's own statement, and `quest_for_path` also returns the mapped root, which is where
+  the artifact lives when a session starts in a subfolder) — but the map is opt-in env config a chat
+  user need not have set up, and the fallback is what lets the read and the write-back resolve in a
+  folder that was ever pulled. Only the frontmatter counts: a `quest_id:` line elsewhere in the file
+  is prose, not the mapping.
 - **An autopilot pass now sees what the person has CAPTURED since it last ran, not only the rows
   the system recorded.** Quest gives every person an "Insights" collection: quick capture for the
   realization that arrives away from any goal ("mornings are the only time the writing happens"),

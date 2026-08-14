@@ -778,6 +778,21 @@ class InteractiveSession:
                     self._rep_name = resolved_name
                 if resolved_persona:
                     self._persona = resolved_persona
+        # The standing next-steps artifact of the quest folder this session is standing in
+        # (QUEST_SYNC.md's QAR:MANAGED:next_steps block). Read ONCE, here in the constructor every
+        # UI shares, and threaded into every turn by _effective_preamble(): a session opened in a
+        # quest's folder should already hold that folder's answer to "what do I do next here"
+        # instead of re-deriving one when asked, which is what happened while retrieval was the
+        # only way the artifact could surface. A pure local file read, no Quest call, nothing that
+        # can block startup; None (no folder, no file, no block) is exactly today's behavior.
+        self._standing_next_steps = None
+        try:
+            from .runner.session_next_steps import load_standing_next_steps
+            self._standing_next_steps = load_standing_next_steps(cfg)
+        except Exception:  # noqa: BLE001 — must never break session startup
+            self._standing_next_steps = None
+        if self._standing_next_steps is not None:
+            notify_and_log("Standing next steps for this quest loaded from QUEST_SYNC.md.")
         # Turn history for /tasks and /status commands
         self._turns: List[dict] = []  # [{user, model, tokens_in, tokens_out, elapsed, timestamp}]
         # TurnContextStore is wired automatically by resolve_context_assembler in config.py,
@@ -827,13 +842,63 @@ class InteractiveSession:
             pass
 
     def _effective_preamble(self) -> Optional[str]:
-        """Combine the system prompt and persona into the rep_preamble passed to the orchestrator."""
+        """Combine the system prompt, persona and standing next steps into the rep_preamble passed
+        to the orchestrator.
+
+        This is where the quest folder's standing next-steps artifact becomes structural rather
+        than retrievable. rep_preamble reaches the planner, the answer and the deep preamble on
+        every turn, so an answer to "what should I do next here" can no longer depend on the
+        artifact happening to out-score the rest of the corpus in a card search. It goes LAST, after
+        the persona: the rep's identity is what the judge's truncated lens most needs to keep.
+        """
         parts = []
         if self._system:
             parts.append(self._system)
         if self._persona:
             parts.append(self._persona)
+        standing = getattr(self, "_standing_next_steps", None)
+        if standing is not None:
+            try:
+                from .runner.session_next_steps import render_standing_next_steps
+                block = render_standing_next_steps(standing)
+            except Exception:  # noqa: BLE001 — never cost a turn its persona over this
+                block = ""
+            if block:
+                parts.append(block)
         return "\n\n".join(parts) if parts else None
+
+    def _maybe_refresh_next_steps(self, final) -> None:
+        """Write this turn's conclusion back as the quest's standing next steps, when it earns it.
+
+        Called once per completed turn from the UI's turn-completion path, and deliberately thin:
+        every judgment about WHETHER a turn warrants a refresh, and what the refreshed artifact
+        says, lives in ``runner/session_next_steps.next_steps_from_turn`` — the half no UI owns, so
+        the trigger cannot drift between them. Conservative by design: only a turn that actually
+        executed work and left some of it unfinished replaces the standing answer.
+
+        Never raises, and never reports a write that did not happen: ``refresh_from_turn`` returns
+        None for every declined or failed case.
+        """
+        standing = getattr(self, "_standing_next_steps", None)
+        if standing is None or final is None:
+            return
+        try:
+            from .runner.session_next_steps import refresh_from_turn
+            result = refresh_from_turn(
+                self._quest_client(), standing,
+                kind=getattr(final, "kind", "") or "",
+                goals=list(getattr(final, "goals", None) or []),
+                deep_results=list(getattr(final, "deep_results", None) or []),
+            )
+        except Exception:  # noqa: BLE001 — the artifact must never fail an otherwise-good turn
+            return
+        if result is None:
+            return
+        self._console.dim(f"  Standing next steps refreshed: {result.sync_path}")
+        if result.detail:
+            # The local file is current either way; what may not have happened is the Quest-side
+            # write, and a silently local-only artifact is how the two views drift apart again.
+            self._console.dim(f"  On Quest: {result.detail}")
 
     # -- New command handlers --------------------------------------------------
 

@@ -331,6 +331,9 @@ class _FakeSessionForFinishTurn:
     def _write_session_file(self) -> None:
         pass
 
+    def _maybe_refresh_next_steps(self, final) -> None:
+        """No-op stand-in for the real session's next-steps write-back."""
+
 
 @pytest.mark.asyncio
 async def test_shallow_turn_with_context_cards_shows_alt_c_hint():
