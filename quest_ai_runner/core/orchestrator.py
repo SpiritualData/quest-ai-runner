@@ -3677,6 +3677,7 @@ class Orchestrator:
         provider: ModelProvider,
         registry: ModelRegistry,
         deep_runner: Optional[DeepRunner] = None,
+        deep_runner_ladder: Optional[List[Any]] = None,
         deep_runners: Optional[Dict[str, Any]] = None,
         deep_runner_classifier: Optional[Any] = None,
         escalation: Optional[EscalationSink] = None,
@@ -3695,6 +3696,20 @@ class Orchestrator:
         self.provider = provider
         self.registry = registry
         self.deep_runner = deep_runner
+        # THE DEEP-RUNNER LADDER: the ordered runners ONE goal may be tried with, cheapest rung
+        # first. It defaults to exactly ``[deep_runner]`` (or ``[]`` when nothing is wired), which
+        # is today's behaviour byte for byte: one rung, resolved once per task, used for every
+        # attempt.
+        #
+        # A consumer that opts into fast in-process editing (see config.resolve_deep_runner_ladder)
+        # gets ``[FastEditRunner, SubprocessGoalRunner]``, and NO new escalation logic is needed to
+        # exploit it: the goal loop below already runs an attempt, verifies it against the written
+        # done-standard, and retries on failure. The ladder is simply indexed by attempt number the
+        # same way the MODEL ladder already is, so attempt 1 runs the cheap rung and a rung that
+        # fails verification hands the next attempt to the next rung.
+        self.deep_runner_ladder: List[Any] = (
+            list(deep_runner_ladder) if deep_runner_ladder
+            else ([deep_runner] if deep_runner is not None else []))
         # Named deep-runner registry + classifier (both optional). When both are set, the
         # classifier selects a runner key for each goal. Falls back to deep_runner on any
         # failure or missing key. All existing behaviour is unchanged when either is absent.
@@ -5238,7 +5253,7 @@ class Orchestrator:
         runner configured" and silently skipped execution/remediation. This is the one place that
         answers "can we run deep work at all", used by every such gate.
         """
-        return self.deep_runner is not None or bool(
+        return self.deep_runner is not None or bool(self.deep_runner_ladder) or bool(
             self.deep_runners and self.deep_runner_classifier is not None)
 
     def _has_deferred_queue_capability(self) -> bool:
@@ -5366,12 +5381,17 @@ class Orchestrator:
                 # named an orchestrator step and read as leaked machinery in the live status pill.
                 emit.status(f"Working on: {goal[:60]}")
 
-            # Resolve which runner handles THIS goal ONCE per task (not per retry — the
+            # Resolve which runner(s) handle THIS goal ONCE per task (not per retry — the
             # classifier's inputs (user_message/goal/brief) don't change across retries of the
-            # same task): if named runners + a classifier are registered, the classifier picks a
-            # key; otherwise the single default ``deep_runner``. Falls back to ``deep_runner`` on
-            # any classifier failure or an unknown key.
-            active_runner = runner_override if runner_override is not None else self.deep_runner
+            # same task). The result is the LADDER for this goal, cheapest rung first, indexed by
+            # attempt in the loop below.
+            #
+            # Only the DEFAULT path can be multi-rung. A pinned ``runner_override`` and a
+            # classifier-selected named runner are both deliberate routing decisions about where
+            # this goal belongs, so each collapses to a one-rung ladder: silently prepending a
+            # cheaper rung would override a choice the caller/consumer already made.
+            runner_ladder: List[Any] = ([runner_override] if runner_override is not None
+                                        else list(self.deep_runner_ladder))
             if (runner_override is None and self.deep_runners
                     and self.deep_runner_classifier is not None):
                 try:
@@ -5388,7 +5408,7 @@ class Orchestrator:
                             f"using default runner"
                         )
                     elif key in self.deep_runners:
-                        active_runner = self.deep_runners[key]
+                        runner_ladder = [self.deep_runners[key]]
                         log.debug(f"deep_runner_classifier selected runner {key!r}")
                     else:
                         log.warning(
@@ -5398,6 +5418,17 @@ class Orchestrator:
                 except Exception as e:  # noqa: BLE001 — classifier failure must never block a run
                     log.warning(f"deep_runner_classifier failed ({e}); using default runner")
 
+            if not runner_ladder:
+                runner_ladder = [None]  # nothing wired: _do_run reports that honestly, as before
+            # The TERMINAL rung — the runner that has the last word on this goal, and the one whose
+            # channel the brief's FUTURE-CONTEXT ask is written for. With the default one-rung
+            # ladder this IS the resolved runner, so nothing changes for any existing consumer. On
+            # a multi-rung ladder it is the right choice of the two: the cheap first rung fills
+            # ``future_context`` from what it knows structurally (see FastEditRunner) rather than
+            # from an instruction in its brief, while the terminal rung is a prose worker that does
+            # need to be asked.
+            terminal_runner = runner_ladder[-1]
+
             # FUTURE-CONTEXT ask, routed by the RESOLVED runner's channel. When the async card updater
             # is active, EVERY runner is asked for future context (a code generator knows the most
             # reusable facts of all: the entities, ids, and schema it touched), but a strict-format
@@ -5406,35 +5437,46 @@ class Orchestrator:
             if card_update_active:
                 brief = brief + (
                     DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION
-                    if _future_context_channel(active_runner) == FUTURE_CONTEXT_VIA_FIELD
+                    if _future_context_channel(terminal_runner) == FUTURE_CONTEXT_VIA_FIELD
                     else DEEP_FUTURE_CONTEXT_INSTRUCTION
                 )
 
-            # Pass the live emitter to the runner ONLY if its run_goal accepts an ``emit`` kwarg
-            # (or **kwargs). Decided by signature inspection — never by a try/except TypeError,
-            # which could re-invoke a runner that already ran a side effect (e.g. a data
-            # mutation). Checked against the ACTUAL runner resolved above — not ``self.deep_runner``,
-            # which is None when the named-runner registry is the wiring style, so this must NOT be
-            # computed against it (that silently dropped exec streaming for every named-registry
-            # consumer). We also TEE the emitter so EVENT_EXEC phase ticks are recorded into
-            # ``exec_record`` (per-subtask) for the broken-promise guard, while still streaming to
-            # the live sink.
-            wants_emit = (emit is not None and active_runner is not None
-                         and _run_goal_accepts_emit(active_runner))
-            wants_run_id = active_runner is not None and _run_goal_accepts_run_id(active_runner)
-            # A per-task ``rep_preamble`` (e.g. an AI rep's pulled persona) and the brain's specific
-            # ``gathered`` reads are both forwarded to the deep run as a combined ``context_preamble``,
-            # ONLY to a runner whose ``run_goal`` accepts that kwarg (older signatures are untouched).
-            # We check capability regardless of whether rep_preamble or gathered are set — either alone
-            # is enough to build a useful context_preamble for the deep runner.
-            wants_preamble = (active_runner is not None
-                              and _run_goal_accepts_context_preamble(active_runner))
-            # A per-task working-directory override (e.g. a quest's synced folder), forwarded ONLY
-            # to a runner whose run_goal accepts that kwarg (older signatures are untouched). See
-            # quest_autopilot_design.md's execution-environment section: "one quest, one folder,
-            # one env" -- the deep agent starts where that quest's real work lives.
-            wants_working_dir = (active_runner is not None
-                                 and _run_goal_accepts_working_dir(active_runner))
+            # WHICH OPTIONAL KWARGS a rung accepts. Every one of these is passed to a runner ONLY
+            # if its ``run_goal`` accepts it (directly or via **kwargs), so older signatures keep
+            # working. Decided by signature inspection — never by a try/except TypeError, which
+            # could re-invoke a runner that already ran a side effect (e.g. a data mutation).
+            #
+            # Computed PER RUNNER (cached by identity), because the ladder's rungs are different
+            # objects with different signatures: a probe of one rung says nothing about another.
+            # It must also never be computed against ``self.deep_runner``, which is None when the
+            # named-runner registry is the wiring style (that once silently dropped exec streaming
+            # for every named-registry consumer).
+            #   emit        — the live EXECUTION-lifecycle stream. We TEE it so EVENT_EXEC phase
+            #                 ticks are recorded into ``exec_record`` (per-subtask) for the
+            #                 broken-promise guard, while still streaming to the live sink.
+            #   run_id      — the stable id for this subgoal's whole retry sequence.
+            #   preamble    — a per-task ``rep_preamble`` (e.g. an AI rep's pulled persona) plus the
+            #                 brain's own ``gathered`` reads, combined. Probed regardless of whether
+            #                 either is set: either alone is enough to build a useful preamble.
+            #   working_dir — a per-task working-directory override (e.g. a quest's synced folder).
+            #                 See quest_autopilot_design.md's execution-environment section: "one
+            #                 quest, one folder, one env" -- the worker starts where that quest's
+            #                 real work lives.
+            runner_caps: Dict[int, Dict[str, bool]] = {}
+
+            def caps_for(runner: Any) -> Dict[str, bool]:
+                if runner is None:
+                    return {"emit": False, "run_id": False, "preamble": False, "working_dir": False}
+                cached = runner_caps.get(id(runner))
+                if cached is None:
+                    cached = {
+                        "emit": emit is not None and _run_goal_accepts_emit(runner),
+                        "run_id": _run_goal_accepts_run_id(runner),
+                        "preamble": _run_goal_accepts_context_preamble(runner),
+                        "working_dir": _run_goal_accepts_working_dir(runner),
+                    }
+                    runner_caps[id(runner)] = cached
+                return cached
 
             def _emit_one(ev: ProgressEvent) -> None:
                 # TEE: classify any EVENT_EXEC phase into the fact, then forward to the live sink.
@@ -5460,26 +5502,30 @@ class Orchestrator:
                             fact.failed = True
                 except Exception:  # noqa: BLE001 — recording must never break the run
                     pass
-                if wants_emit and emit is not None:
+                # No ``wants_emit`` guard needed here: this callback is handed to a runner ONLY
+                # when that rung's caps say it accepts ``emit``, which already requires a sink.
+                if emit is not None:
                     log.debug(f"emitting exec event: {getattr(ev, 'type', '?')}: "
                              f"{(getattr(ev, 'text', '') or '')[:80]}")
                     emit.emit(ev)
 
-            def _do_run(current_brief: str, run_model: Optional[str]) -> DeepResult:
+            def _do_run(current_brief: str, run_model: Optional[str],
+                        active_runner: Any) -> DeepResult:
+                caps = caps_for(active_runner)
                 try:
                     if active_runner is None:
                         return DeepResult(met=False, error="no deep runner configured")
                     kwargs = dict(goal=goal, brief=current_brief, model=run_model,
                                   max_turns=self.cfg.deep_max_turns)
-                    if wants_emit:
+                    if caps["emit"]:
                         kwargs["emit"] = _emit_one
-                    if wants_run_id:
+                    if caps["run_id"]:
                         # task_uuid is generated ONCE per subgoal (before the retry loop below), so
                         # every attempt -- even one that spawns a brand-new subprocess/session --
                         # reports under the same id. Without this, a consumer's dashboard would show
                         # each retry as a new, duplicate deep-run entry for one ongoing subgoal.
                         kwargs["run_id"] = task_uuid
-                    if wants_preamble:
+                    if caps["preamble"]:
                         preamble_parts = []
                         if rep_preamble:
                             preamble_parts.append(rep_preamble)
@@ -5506,10 +5552,12 @@ class Orchestrator:
                             preamble_parts.extend(extra_context)
                         if preamble_parts:
                             kwargs["context_preamble"] = "\n\n".join(preamble_parts)
-                    if wants_working_dir and working_dir_override:
+                    if caps["working_dir"] and working_dir_override:
                         kwargs["working_dir"] = working_dir_override
-                    # active_runner was already resolved once per task, above (not re-resolved per
-                    # retry — the classifier's inputs don't change across retries of the same task).
+                    # The runner LADDER was resolved once per task, above (not re-resolved per
+                    # retry — the classifier's inputs don't change across retries of the same
+                    # task); which rung of it runs THIS attempt is decided by the loop below and
+                    # passed in.
                     # THE SEAM: every DeepResult, from every runner, is normalized here — the
                     # FUTURE-CONTEXT bullets are moved out of ``output`` into ``future_context``, so
                     # the payload handed to the goal verifier, the emit paths, and the consumer can
@@ -5527,7 +5575,10 @@ class Orchestrator:
             # self-check inside the worker), the brain steers each retry, and the model auto-escalates.
             base_brief = brief
             current_brief = brief
-            max_iters = max(1, self.cfg.deep_goal_max_iterations)
+            # At least one attempt PER RUNG, so a ladder can always reach its terminal runner even
+            # if a consumer configured a very small iteration cap. With the default one-rung ladder
+            # this is exactly ``max(1, deep_goal_max_iterations)``, unchanged.
+            max_iters = max(max(1, self.cfg.deep_goal_max_iterations), len(runner_ladder))
             budget = self.cfg.deep_goal_token_budget
             # The model ladder for THIS turn: an explicit per-task / guidance model pins it (no
             # escalation); otherwise fast -> strong, starting at the fast tier by default.
@@ -5542,6 +5593,13 @@ class Orchestrator:
                 if cancel_check is not None and cancel_check():
                     break
                 run_model = deep_models[min(tier_idx, len(deep_models) - 1)]
+                # WHICH RUNNER runs this attempt: the ladder indexed by attempt, cheapest rung
+                # first, with the terminal rung repeating for every further attempt — the same
+                # ``min(idx, len - 1)`` shape the model ladder uses one line above. With the
+                # default one-rung ladder this is the single resolved runner on every attempt.
+                rung_idx = min(attempt - 1, len(runner_ladder) - 1)
+                active_runner = runner_ladder[rung_idx]
+                has_more_rungs = rung_idx < len(runner_ladder) - 1
                 if emit is not None and attempt > 1:
                     emit.status("Goal not met yet, retrying"
                                 + (f" with {run_model}" if run_model else "") + "…")
@@ -5549,7 +5607,7 @@ class Orchestrator:
                 # (the first attempt or a retry) acts on the latest input, not a stale request.
                 _new = self._drain_pending(pending_inputs)
                 run_brief = current_brief if not _new else (current_brief + "\n\n" + _new)
-                res = _do_run(run_brief, run_model)
+                res = _do_run(run_brief, run_model, active_runner)
                 tokens_used += max(0, getattr(res, "tokens", 0) or 0)
                 # ASYNC HAND-OFF: the runner queued the real run to finish out-of-band (its
                 # ``output`` is a "task #N launched"-style sentinel, not work product). Re-verifying
@@ -5560,8 +5618,21 @@ class Orchestrator:
                     break
                 # A human-decision escalation, or a hard failure with NO output (binary missing,
                 # timeout, silent no-op), is terminal — do not verify or iterate.
+                #
+                # …unless there is a further RUNG to fall through to. That rule was written when a
+                # goal only ever had one runner, so "this runner produced nothing" and "nothing
+                # more can be tried" were the same statement. On a ladder they are not: a cheap
+                # first rung that declines the goal or fails outright is precisely the case the
+                # next rung exists for, and stopping here would strand the work. There is nothing
+                # to verify (no output), so we go straight to the next attempt, which the indexing
+                # above hands to the next runner.
                 if res.decision_id or (res.error and not (res.output or "").strip()):
-                    break
+                    if res.decision_id or not has_more_rungs:
+                        break
+                    if emit is not None:
+                        emit.status("That did not produce anything; escalating to the full "
+                                    "deep runner…")
+                    continue
                 # Verify the done-standard ourselves, applying the quality standards (guidance) and
                 # the rep persona. verdict is None => verification could not run (LLM outage, no
                 # verify tier, parse failure) => this run is UNVERIFIED, and must NEVER be reported

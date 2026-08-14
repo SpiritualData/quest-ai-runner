@@ -463,6 +463,56 @@ class DeepRunner(Protocol):
         is really one ongoing subgoal. Passed ONLY to runners whose ``run_goal`` accepts it."""
 
 
+@dataclass
+class WriteResult:
+    """The outcome of ONE attempted file write through a ``FileWriter``.
+
+    Deliberately a value, never an exception: a refused or failed write is an ordinary, expected
+    outcome here (a path outside the root, a credential file, a read-only disk), and the caller's
+    correct response is to report it and escalate, not to unwind. ``ok=False`` always means the
+    file on disk is UNCHANGED.
+    """
+    ok: bool
+    rel_path: str                          # the path as the caller named it (for reporting)
+    error: Optional[str] = None            # why it was refused/failed; None on success
+    bytes_written: int = 0
+    created: bool = False                  # True = the file did not exist before this write
+    backup_path: Optional[str] = None      # where the PREVIOUS content was saved, if anywhere
+
+
+@runtime_checkable
+class FileWriter(Protocol):
+    """WRITE side of the corpus boundary — the only way anything in this library changes a file.
+
+    This is a separate interface from ``RetrievalAdapter`` on purpose. Retrieval is a read
+    capability and every reference implementation of it is strictly read-only; writing is a
+    different capability with a different blast radius, so it gets its own interface rather than
+    being bolted onto the read one. A consumer that wires no ``FileWriter`` has, by construction,
+    no code path in this library that can modify its files.
+
+    IT IS OPT-IN. Nothing constructs one automatically: the consumer has to build a writer and
+    hand it over (``RunnerConfig.file_writer``), which is the act of granting write access. The
+    reference implementation is ``adapters.files_writer.FilesWriter``.
+
+    An implementation MUST:
+      * confine every path to its configured root, resolving symlinks and ``..`` BEFORE the
+        containment test (``adapters.files_adapter.resolve_in_tree`` is the shared implementation);
+      * refuse credential-ish files exactly as the read side does;
+      * never raise — every refusal and every I/O failure comes back as ``WriteResult(ok=False)``.
+    """
+
+    def read_file(self, rel_path: str) -> Optional[str]:
+        """Return the file's full text, or None if it is missing/unreadable/out of bounds.
+
+        Present on the WRITER (rather than reusing a RetrievalAdapter read) because an edit has to
+        be computed against the exact bytes the write will replace, resolved through the same
+        boundary that will accept or refuse the write.
+        """
+
+    def write_file(self, rel_path: str, content: str) -> WriteResult:
+        """Replace ``rel_path``'s entire content with ``content``. Never raises."""
+
+
 @runtime_checkable
 class EscalationSink(Protocol):
     """Raise a human-only confirm/decision and return its id."""
@@ -967,6 +1017,16 @@ class ModelProviderBase(abc.ABC):
 
     def web_search(self, query: str, *, model: str, max_results: int = 5) -> Dict[str, Any]:
         raise NotImplementedError("web search not supported by this provider")
+
+
+class FileWriterBase(abc.ABC):
+    """Nominal ABC parallel to the ``FileWriter`` Protocol (same pattern as the other adapters)."""
+
+    @abc.abstractmethod
+    def read_file(self, rel_path: str) -> Optional[str]: ...
+
+    @abc.abstractmethod
+    def write_file(self, rel_path: str, content: str) -> WriteResult: ...
 
 
 class DeepRunnerBase(abc.ABC):

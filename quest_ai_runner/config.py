@@ -22,6 +22,7 @@ from .core.adapters import (
     ContextAssembler,
     DeepRunner,
     EscalationSink,
+    FileWriter,
     GuidanceProvider,
     ModelProvider,
     RetrievalAdapter,
@@ -93,6 +94,16 @@ class RunnerConfig:
     #   * pass an INSTANCE → that runner is used (AcpDeepRunner, a queue worker, a fake in tests);
     #   * pass ``None`` explicitly → deep execution is DISABLED, silently and deliberately.
     deep_runner: Any = _AUTO_DEEP_RUNNER             # SubprocessGoalRunner or another worker
+    # WRITE ACCESS TO THE CONSUMER'S FILES — OFF BY DEFAULT, and the only switch that grants it.
+    # Left None (the default), nothing in this library can modify a file: every reference
+    # RetrievalAdapter is read-only, and a deep run can only change files by going through the
+    # deep worker's own subprocess sandbox. Wiring a ``FileWriter`` here (the reference
+    # implementation is ``adapters.files_writer.FilesWriter``) is the deliberate act of granting
+    # write access, and it does exactly one thing: it puts an in-process ``FastEditRunner`` at the
+    # front of the deep-runner ladder, so a bounded edit can be landed in one model call instead of
+    # spawning a full agent, escalating to the normal deep worker whenever that is not enough.
+    # See docs/fast-edit-runner.md for the containment/backup guarantees and the opt-in model.
+    file_writer: Optional[FileWriter] = None
     # Named deep-runner registry. When non-empty and a ``deep_runner_classifier`` is
     # also provided, the orchestrator calls the classifier to SELECT which runner handles
     # each deep goal, rather than always using the single ``deep_runner``. The consumer
@@ -339,12 +350,13 @@ def derive_capabilities(cfg: RunnerConfig) -> Dict[str, bool]:
         if not corpus and cfg.corpus_root:
             corpus = True
 
-    # code: a deep goal-runner (SubprocessGoalRunner is the reference) is wired. Resolve the
-    # tri-state first (``warn=False``: this is a capability PROBE — the wiring path in
-    # build_orchestrator owns the one loud warning), so an unset field reports the capability the
-    # auto-built default actually provides rather than the sentinel object.
+    # code: some execution path is wired. Resolve the tri-state first (``warn=False``: this is a
+    # capability PROBE — the wiring path in build_orchestrator owns the one loud warning), so an
+    # unset field reports the capability the auto-built default actually provides rather than the
+    # sentinel object. The LADDER is what is probed, not just the single deep runner: a consumer
+    # that wired only a file_writer (fast edits, no Claude Code) really can execute.
     deep = resolve_deep_runner(cfg, warn=False)
-    code = deep is not None
+    code = bool(resolve_deep_runner_ladder(cfg, warn=False))
 
     # web: the deep-runner browses via Claude Code's WebSearch/WebFetch (reads off the actual
     # tool gating), OR a WebSearchAdapter is wired into the retrieval stack (shallow web search
@@ -779,6 +791,64 @@ def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
             _log.warning("deep runner: building the default SubprocessGoalRunner failed; deep/"
                          "execution work will be unavailable for this process", exc_info=True)
         return None
+
+
+def resolve_fast_edit_runner(cfg: RunnerConfig):
+    """Build the in-process fast editor, or return None. OFF unless a ``file_writer`` is wired.
+
+    This is the whole opt-in gate for quest-ai-runner's write capability, and it is deliberately a
+    single condition with no env-var escape hatch and no "auto" tri-state: a consumer either handed
+    the library a ``FileWriter`` or it did not. Nothing here can talk itself into write access.
+
+    Returns None (silently — an absent writer is the normal case, not a misconfiguration) when no
+    writer is wired, and also when there is no model provider to make the one call with. Never
+    raises: a failure to build the optional cheap rung must never cost a consumer its runner.
+    """
+    writer = getattr(cfg, "file_writer", None)
+    if writer is None or cfg.model_provider is None:
+        return None
+    try:
+        from .adapters.fast_edit_runner import FastEditRunner
+
+        # ``cfg.model_provider`` is the MultiProvider-wrapped provider by the time this is called
+        # from build_orchestrator (the wrap happens in place, earlier in that function), so the
+        # model id this runner resolves routes to whichever backend owns it.
+        return FastEditRunner(
+            provider=cfg.model_provider,
+            writer=writer,
+            registry=ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None),
+        )
+    except Exception:  # noqa: BLE001
+        _log.warning("fast edit: could not build the FastEditRunner; deep work will use the "
+                     "full deep runner only", exc_info=True)
+        return None
+
+
+def resolve_deep_runner_ladder(cfg: RunnerConfig, *, warn: bool = True) -> List[Any]:
+    """The ORDERED runners one deep goal may be tried with, cheapest rung first.
+
+    Today this is at most two rungs:
+
+      1. ``FastEditRunner`` — present ONLY when the consumer wired a ``file_writer``. One model
+         call, applied in process, against files already in the turn's context.
+      2. the resolved ``deep_runner`` — the full worker (``SubprocessGoalRunner`` by default).
+
+    A consumer that changed nothing gets ``[SubprocessGoalRunner]``: a one-rung ladder, which the
+    goal loop treats exactly as it treated a single runner before ladders existed. That equivalence
+    is the point — this is additive, never a silent change to what already ships.
+
+    Both rungs may be absent (no writer, and no worker because ``claude`` is not installed or
+    execution was explicitly disabled), in which case this returns ``[]`` and the orchestrator
+    reports honestly that nothing can execute.
+    """
+    ladder: List[Any] = []
+    fast = resolve_fast_edit_runner(cfg)
+    if fast is not None:
+        ladder.append(fast)
+    deep = resolve_deep_runner(cfg, warn=warn)
+    if deep is not None:
+        ladder.append(deep)
+    return ladder
 
 
 def resolve_context_assembler(
@@ -1371,11 +1441,18 @@ def build_orchestrator(
     # directly to decide whether execution is available, so the sentinel must never survive past
     # here — after build_orchestrator, that field is always a real runner or a real None.
     cfg.deep_runner = resolve_deep_runner(cfg)
+    # The LADDER the goal loop indexes by attempt. Built from the already-resolved ``deep_runner``
+    # plus, only if the consumer wired a ``file_writer``, the in-process fast editor in front of
+    # it. ``cfg.deep_runner`` stays exactly what it was — a single runner — because consumers and
+    # the chat UIs read that field to decide whether execution is available; the ladder is the
+    # orchestrator's business, not a redefinition of the config field.
+    deep_runner_ladder = resolve_deep_runner_ladder(cfg, warn=False)
     return Orchestrator(
         retrieval=get_retrieval_adapter(cfg),
         provider=cfg.model_provider,
         registry=build_registry(cfg),
         deep_runner=cfg.deep_runner,
+        deep_runner_ladder=deep_runner_ladder,
         deep_runners=cfg.deep_runners,
         deep_runner_classifier=cfg.deep_runner_classifier,
         escalation=cfg.escalation,

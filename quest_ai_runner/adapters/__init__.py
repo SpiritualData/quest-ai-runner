@@ -2,6 +2,16 @@
 
 These satisfy the core interfaces; a consumer wires the ones it needs into a RunnerConfig:
   * FilesAdapter              — RetrievalAdapter over a configured file root (quest-docs + corpus).
+  * FilesWriter               — FileWriter: the OPT-IN write side of that same root. Confines every
+                                path with the SAME resolver FilesAdapter reads through, refuses
+                                credential-ish files, and backs up what it replaces. Constructing
+                                one is how a consumer grants this library write access; nothing
+                                builds it implicitly.
+  * FastEditRunner            — DeepRunner that lands a bounded file edit in ONE model call
+                                (whole-file rewrite for short files, SEARCH/REPLACE above a line
+                                threshold) instead of spawning a full agent. Needs a FileWriter.
+                                Wired as the first rung of the deep-runner ladder when
+                                RunnerConfig.file_writer is set; see docs/fast-edit-runner.md.
   * CachedDbAdapter           — RetrievalAdapter: live DB reads via a short-TTL cache (no file sync).
   * ClaudeConversationsAdapter — RetrievalAdapter over Claude Code session transcripts (local directory).
   * GoogleChatAdapter         — RetrievalAdapter over Google Chat spaces/threads/messages (read +
@@ -100,7 +110,9 @@ from .card_repository import (
     card_embed_text,
 )
 from .file_context_store import FileContextStore
+from .fast_edit_runner import FastEditConfig, FastEditRunner
 from .files_adapter import FilesAdapter
+from .files_writer import FilesWriter
 from .guidance_card_manager import GuidanceCard, GuidanceCardManager
 from .hybrid_context_assembler import HybridContextAssembler
 from .quest_guidance_loader import QuestGuidanceLoader
@@ -172,6 +184,9 @@ __all__ = [
     "AcpConfig",
     "AcpDeepRunner",
     "FilesAdapter",
+    "FilesWriter",
+    "FastEditRunner",
+    "FastEditConfig",
     "CachedDbAdapter",
     "ClaudeConversationsAdapter",
     "GoogleChatAdapter",

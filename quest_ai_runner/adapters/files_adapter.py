@@ -4,6 +4,11 @@ The hard read boundary is whatever root the CONSUMER passes — there is NO path
 to ground on indexed files (an org's docs + corpus). Strictly read-only; everything is
 hard-scoped inside the root,
 skips secret-ish / binary / oversize files, and never shells out (pure ``re`` + ``os.walk``).
+
+The containment check itself lives here as the module-level ``resolve_in_tree``, and it is SHARED:
+the opt-in write side (``adapters.files_writer.FilesWriter``) resolves through this same function
+rather than reimplementing the boundary. See its docstring for the contract and why each step of it
+is load-bearing.
 """
 from __future__ import annotations
 
@@ -29,6 +34,50 @@ def _is_secretish(name: str) -> bool:
     return any(h in low for h in _SECRET_HINTS)
 
 
+def resolve_in_tree(root: Path, rel_or_abs: str) -> Optional[Path]:
+    """THE containment check: resolve ``rel_or_abs`` and return it only if it is inside ``root``.
+
+    This is the single implementation of quest-ai-runner's filesystem boundary, shared by the
+    READ side (``FilesAdapter``) and the WRITE side (``adapters.files_writer.FilesWriter``). It is
+    deliberately one function rather than one per adapter: two independent implementations of a
+    security boundary is itself the risk, because they drift and only one of them gets the fix.
+
+    How it holds, and why each step is load-bearing:
+
+      * A relative path is joined onto ``root``; an absolute path is taken as given. Either way it
+        is then ``Path.resolve()``d, which BOTH normalizes ``..`` components AND follows symlinks,
+        so the path checked below is the real destination on disk, not the name used to reach it.
+      * ``resolved.relative_to(self.root)`` raises ``ValueError`` unless the resolved path is at or
+        under the root. That exception, not a string comparison, is the check — no ``startswith``
+        on paths (``/corpus-evil`` starts with ``/corpus``), no manual ``..`` stripping.
+      * ``_is_secretish`` then refuses credential-ish names (``.env*``, ``*.key``, ``*.pem``,
+        anything containing "secret"/"credential"/"password") even when they ARE inside the root.
+        Reads have always refused those; a write path must refuse them for the same reason.
+
+    Verified behaviour (see ``tests/test_file_write_containment.py``): a traversal
+    (``../../../etc/passwd``) is rejected; a symlinked directory pointing outside the root is
+    rejected, because resolution follows the link before the containment test; an absolute path
+    outside the root is rejected; an absolute path INSIDE the root is allowed; and a target that
+    does not exist yet is ALLOWED, which matters because that is the ordinary case for creating a
+    file (``Path.resolve()`` on a nonexistent path is non-strict and still normalizes).
+
+    Returns the resolved absolute path, or None if it is not allowed. Never raises.
+    """
+    raw = (rel_or_abs or "").strip()
+    if not raw:
+        return None
+    p = Path(raw)
+    candidate = p if p.is_absolute() else (root / p)
+    try:
+        resolved = candidate.resolve()
+        resolved.relative_to(root)
+    except (ValueError, OSError):
+        return None
+    if _is_secretish(resolved.name):
+        return None
+    return resolved
+
+
 class FilesAdapter(RetrievalAdapterBase):
     def __init__(self, root: str, *, default_read_max_bytes: int = 20000,
                  default_grep_max_hits: int = 40, grep_max_file_bytes: int = 256 * 1024):
@@ -41,19 +90,9 @@ class FilesAdapter(RetrievalAdapterBase):
     # --- scope helpers -------------------------------------------------------
 
     def _resolve_in_tree(self, rel_or_abs: str) -> Optional[Path]:
-        raw = (rel_or_abs or "").strip()
-        if not raw:
-            return None
-        p = Path(raw)
-        candidate = p if p.is_absolute() else (self.root / p)
-        try:
-            resolved = candidate.resolve()
-            resolved.relative_to(self.root)
-        except (ValueError, OSError):
-            return None
-        if _is_secretish(resolved.name):
-            return None
-        return resolved
+        # Delegates to the module-level ``resolve_in_tree`` — the ONE containment implementation,
+        # shared with the write side. See its docstring for the contract this relies on.
+        return resolve_in_tree(self.root, rel_or_abs)
 
     def _rel(self, path: Path) -> str:
         try:

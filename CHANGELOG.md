@@ -6,7 +6,102 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **A bounded file edit can now be landed in ONE model call instead of spawning a full agent, and
+  with it quest-ai-runner gains its first write capability, off by default.** Until now the only
+  way this library could change a file was to escalate to a deep run: `SubprocessGoalRunner`
+  spawning `claude -p`, up to `--max-turns 30`, with an hour-long timeout. That is the right tool
+  for open-ended work and an absurd one for "fix the stale status line in that doc". The real
+  defect was not cost, it was waste by construction: by the time the brain decides to execute it
+  has ALREADY assembled the relevant context (cards, targeted reads, the conversation slice), and
+  spawning a fresh agent throws all of it away and pays a second time for it to be rediscovered.
+  Against a one-line edit that is roughly 6-10x the wall clock (a handful of sequential turns plus
+  agent startup, versus one round trip) and about 10x the tokens.
+
+  `adapters.FastEditRunner` is a `DeepRunner` that takes the other path: hand the model the context
+  QAR already has plus the current content of the candidate files, ask for the edit in one
+  `provider.answer()` call through `MultiProvider`, apply it in process, return. The wire format is
+  chosen by file size rather than by cleverness — at or below 400 lines the model returns the
+  file's COMPLETE new content, whose apply step is a `write_text` and therefore cannot fail to
+  apply, and above that it emits SEARCH/REPLACE blocks. The blocks are matched by CONTENT, never by
+  line number: exact match, then a uniform-indent-drift match (the mistake models actually make),
+  then explicit `...` elision. A block that matches nothing leaves the file untouched and produces
+  a precise diagnostic (which lines are really there, and whether the replacement is already
+  present), which feeds ONE in-process retry; past that, escalating is cheaper than arguing. If
+  several blocks target one file and any fails, the whole file is abandoned unwritten, because a
+  partially applied chain is the one outcome worse than no edit at all.
+
+  **The write boundary is the part that got the care, not the LLM plumbing.** `adapters.FilesWriter`
+  is the only component in this library that writes into a consumer's corpus (everything else that
+  opens a file for writing writes QAR's own state). Its containment runs through
+  `files_adapter.resolve_in_tree` — deliberately the SAME function the read adapter resolves
+  through, extracted rather than copied, because two independent implementations of one security
+  boundary is itself the risk: they drift, and only one of them gets the fix. It resolves before it
+  tests, so `..` is normalized AND symlinks are followed first, and containment is
+  `resolved.relative_to(root)` catching `ValueError`, never a string comparison. A traversal, a
+  symlinked directory or file escaping the root, and an absolute path outside the root are all
+  refused with the outside file provably untouched; an absolute path INSIDE the root and a target
+  that does not exist yet (the ordinary create case) are allowed. Writes refuse credential-ish
+  files (`.env*`, `*.key`, `*.pem`, anything named like a secret) exactly as reads already did.
+  Before an existing file is replaced its content is copied to a backup, and a backup that was
+  asked for and could not be written REFUSES the overwrite rather than proceeding, since proceeding
+  silently converts a recoverable edit into a destructive one. Backups live outside the corpus
+  (`~/.quest-ai-runner/file-backups`, or `QAR_FILE_BACKUP_DIR`) so they are neither indexed as
+  content nor left as untracked files in the consumer's own version control. They are NOT left to
+  git: this library cannot know that a given corpus root is under version control at all, and a
+  synced quest folder or a Drive mirror frequently is not. Every refusal is a
+  `WriteResult(ok=False)`, never an exception, and `ok=False` always means the file is unchanged.
+
+  The runner may only touch files that were ALREADY in the turn's context: candidate paths are read
+  out of the goal/brief/preamble, resolved through the writer's boundary, and must exist — and that
+  candidate set is enforced again as an allow-list at apply time, so the model cannot widen its own
+  blast radius. The text scan only NOMINATES; the filesystem decides. With no candidate it spends
+  no model call at all and returns not-met, so the failure direction is toward the more capable
+  path rather than toward acting.
+
+  **Off by default, and one switch turns it on.** `RunnerConfig.file_writer` (default `None`) is
+  the only way write access is granted: no env var, no auto tri-state. Left unset, no object in the
+  wired brain can modify a file, `resolve_deep_runner_ladder` returns a one-rung ladder holding
+  exactly the runner the consumer already had, and behaviour is byte-for-byte what shipped before.
+  `cfg.deep_runner` deliberately keeps meaning what it meant (a single runner — consumers and both
+  chat UIs read it to decide whether execution is available); the ladder is the orchestrator's
+  business. New: `core.adapters.FileWriter`/`FileWriterBase`/`WriteResult`,
+  `config.resolve_fast_edit_runner`, `config.resolve_deep_runner_ladder`,
+  `Orchestrator(deep_runner_ladder=...)`. (`docs/fast-edit-runner.md`, linked from `docs/README.md`
+  and `docs/adapters.md`; `tests/test_file_write_containment.py`,
+  `tests/test_fast_edit_runner.py`, `tests/test_fast_edit_ladder.py`.)
+
+  The SEARCH/REPLACE parser and matcher are a MODIFIED copy of Aider's
+  `editblock_coder.py`/`wholefile_coder.py` (Apache-2.0, commit `5dc9490b`), vendored into
+  `quest_ai_runner/vendor/` with the modifications listed in that file's header per Apache-2.0
+  §4(b) and attribution recorded in `NOTICE`. Vendored rather than depended on because Aider never
+  published that layer as a package, and vendored rather than reimplemented because nearly every
+  line of it absorbs a specific way real models get the format wrong (markers matched with
+  `{5,9}`-repeat regexes because models miscount `<` and `=`; the filename recovered by walking
+  back three lines through fences because models put it in the wrong place). Aider's own ablation
+  measured a 9x increase in editing errors when content-anchored matching was removed, which is
+  also why an LLM-emits-a-unified-diff design was rejected: every standalone diff library for
+  Python anchors on line numbers models are unreliable about.
+
 ### Changed
+- **The deep runner is resolved as an ORDERED LADDER, so escalating by runner needs no new logic.**
+  `_run_deep`'s goal loop already ran an attempt, verified it against the written done-standard,
+  and retried on failure — but it escalated only by MODEL. The runner was resolved once per task
+  into a single `active_runner`. It now resolves a list, and the attempt loop indexes it with the
+  same `min(index, len - 1)` shape the model ladder already used, so attempt 1 runs the cheapest
+  rung and a rung that fails verification hands the next attempt to the next one. A one-rung ladder
+  (every consumer that changed nothing) behaves exactly as a single runner did. Two consequences
+  fell out of it: the optional-kwarg probes (`emit` / `run_id` / `context_preamble` /
+  `working_dir`) are now computed PER RUNNER and cached by identity, since the rungs are different
+  objects with different signatures and a probe of one says nothing about another; and the rule
+  "a hard failure with no output is terminal" now applies only when there is no further rung — it
+  was written when a goal had one runner, so "this runner produced nothing" and "nothing more can
+  be tried" were the same statement, and on a ladder a first rung that declines is precisely the
+  case the next rung exists for. A pinned `runner_override` and a classifier-selected named runner
+  each collapse the ladder to one rung, because both are deliberate routing decisions that
+  prefixing would override. `_has_deep_execution_capability` and `derive_capabilities`'s `code`
+  flag now probe the ladder, so a consumer with a writer but no Claude Code correctly reports that
+  it can execute. (`tests/test_fast_edit_ladder.py`.)
 - **Deep execution is now ON BY DEFAULT: a consumer that does nothing gets Claude Code.**
   `RunnerConfig.deep_runner` defaulted to `None`, and nothing anywhere resolved it, so every
   consumer had to know to construct a `SubprocessGoalRunner` itself or lose deep/execution work

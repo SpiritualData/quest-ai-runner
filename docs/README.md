@@ -17,6 +17,11 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
   the Agent Client Protocol instead of a one-shot `claude -p`, so a message queued mid-run reaches
   the turn already in progress. How to wire it, the Node >= 22 requirement, and why the default
   path is unchanged.
+- **[The fast edit runner](fast-edit-runner.md)** — the opt-in `DeepRunner` that lands a bounded
+  file edit in one model call instead of spawning a full agent, and with it quest-ai-runner's
+  first write capability: how the opt-in works, what the write boundary guarantees (containment,
+  secret refusal, backups), when it escalates to the full deep runner, and the vendored
+  SEARCH/REPLACE matcher's attribution.
 - **[Deployment](deployment.md)** — run the poller under cron or systemd.
 - **[Corpus playbooks](corpus-playbooks.md)** — distill a corpus's history into playbook files the
   shallow loop (context cards) and Claude Code deep runs both pick up automatically.

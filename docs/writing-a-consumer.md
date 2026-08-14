@@ -50,6 +50,7 @@ def build_config() -> RunnerConfig:
 | `retrieval` | a `RetrievalAdapter` — how the brain gathers grounding |
 | `model_provider` | a `ModelProvider` — the LLM (plan/answer/list_models) |
 | `deep_runner` | a `DeepRunner` — runs deep, goal-driven work. **On by default**: leave it unset and one is built for you (see below); pass `None` to turn execution off |
+| `file_writer` | OPT-IN, `None` by default: a `FileWriter` (e.g. `FilesWriter(root)`). The **only** switch that grants this library write access to your files; setting it puts the one-call `FastEditRunner` in front of the deep runner. See [fast-edit-runner.md](fast-edit-runner.md) |
 | `escalation` | an `EscalationSink` — where confirm/decision requests go (defaults from the Quest client) |
 | `corpus_root` | the org's files/skills root (generic, optional) |
 | `rep_sync_resolver` | OPT-IN: map a task to `(user_id, skill_dir)` to run it AS that AI rep (off by default) |
@@ -87,6 +88,24 @@ real runner or a real `None`, so consumer code can test it directly.
 Pass an instance when you need to change something about the worker (a `context_preamble`, tool
 gating, a non-default working dir, a different agent entirely). Pass `None` when your deployment
 genuinely must not execute, e.g. a read-only chat surface.
+
+### Fast in-process edits (opt-in, and the only way to grant write access)
+
+Deep execution is not the only rung. Wire a `FileWriter` and the deep runner is resolved as an
+ordered ladder — a one-call in-process editor first, the full worker behind it — so a small file
+edit costs one round trip instead of an agent spawn, and escalates to the full worker whenever the
+goal loop's verification is not satisfied:
+
+```python
+from quest_ai_runner.adapters import FilesWriter
+
+cfg = RunnerConfig(..., corpus_root=root, file_writer=FilesWriter(root))
+```
+
+Leave `file_writer` unset (the default) and nothing in this library can modify a file: the ladder
+is one rung holding exactly the runner you already had, and behaviour is unchanged. What the
+writer confines, refuses and backs up is documented in
+[the fast edit runner](fast-edit-runner.md).
 
 ## Validate before you run
 
