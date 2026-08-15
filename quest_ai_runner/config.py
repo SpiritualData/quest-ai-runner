@@ -35,6 +35,11 @@ from .adapters.file_context_store import (
     _TFDFIDF_VERSION,
     _read_bootstrap_meta,
 )
+# MCPServerSpec is a plain dataclass with no dependency on .core or .config, so this top-level
+# import (needed for the RunnerConfig.mcp_servers field type) carries no circular-import risk,
+# same discipline as the file_context_store import above. It does NOT require the optional [mcp]
+# package -- mcp_client.py only imports that lazily, inside its own connection seam.
+from .adapters.mcp_client import MCPServerSpec
 from .core.model_registry import ModelRegistry
 from .core.orchestrator import Orchestrator, OrchestratorConfig
 from .resources import ResourceLimits
@@ -77,6 +82,13 @@ class RunnerConfig:
 
     # --- adapters (consumer chooses which) ---
     retrieval: Optional[RetrievalAdapter] = None     # FilesAdapter / CachedDbAdapter / a composite
+    # Generic MCP (Model Context Protocol) servers to fold into the retrieval stack -- READ-ONLY
+    # foundation phase (see adapters/mcp_client.py + adapters/mcp_retrieval_adapter.py). Each spec
+    # becomes its own namespaced MCPRetrievalAdapter, folded into cfg.retrieval via
+    # CompositeRetrievalAdapter by build_orchestrator -- the same fold-in mechanism the native web
+    # search adapter uses, not a parallel one. Needs the optional [mcp] extra only if this list is
+    # non-empty; an empty list (the default) touches nothing MCP-related.
+    mcp_servers: List[MCPServerSpec] = field(default_factory=list)
     model_provider: Optional[ModelProvider] = None   # AnthropicProvider or another
     model_fallback: Optional[dict] = None            # override tier->model mapping (e.g. {"haiku": "gpt-4o", "sonnet": "claude-4"})
     model_providers: Optional[dict] = None           # multi-provider support: dict of name -> ModelProvider (e.g. {"anthropic": AnthropicProvider(), "gemini": GeminiProvider()})
@@ -1400,6 +1412,31 @@ def build_orchestrator(
                     _log.info("Native web search enabled (%s, model=%s)", type(provider).__name__, web_model)
         except Exception as e:  # noqa: BLE001 — web search is optional; never break the build
             _log.debug("native web search not wired: %s", e)
+
+    # Generic MCP (Model Context Protocol) servers -- fold each configured MCPServerSpec into the
+    # retrieval stack as its own namespaced MCPRetrievalAdapter (read-only foundation phase; see
+    # adapters/mcp_client.py + adapters/mcp_retrieval_adapter.py). Same fold-into-composite pattern
+    # as the native web-search wiring just above, not a parallel mechanism.
+    if cfg.mcp_servers:
+        try:
+            from .adapters.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
+            from .adapters.mcp_retrieval_adapter import MCPRetrievalAdapter as _MCPRA
+
+            mcp_adapters = [
+                _MCPRA(alias=spec.alias, spec=spec, allowed_tools=spec.allowed_tools)
+                for spec in cfg.mcp_servers
+            ]
+            if cfg.retrieval is None:
+                cfg.retrieval = mcp_adapters[0] if len(mcp_adapters) == 1 else _CRA(mcp_adapters)
+            elif isinstance(cfg.retrieval, _CRA):
+                cfg.retrieval = _CRA(
+                    list(cfg.retrieval.adapters) + mcp_adapters, max_workers=cfg.retrieval.max_workers,
+                )
+            else:
+                cfg.retrieval = _CRA([cfg.retrieval, *mcp_adapters])
+            _log.info("MCP servers wired into retrieval: %s", [s.alias for s in cfg.mcp_servers])
+        except Exception as e:  # noqa: BLE001 — MCP wiring is optional; never break the build
+            _log.debug("mcp servers not wired: %s", e)
 
     # Auto-enable guidance provider if not configured
     guidance = cfg.guidance_provider

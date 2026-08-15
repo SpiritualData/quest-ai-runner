@@ -339,6 +339,14 @@ class SubprocessConfig:
     #   * disallowed_tools=[...] → pass --disallowed-tools; listing a web tool turns web OFF.
     allowed_tools: Optional[List[str]] = None
     disallowed_tools: Optional[List[str]] = None
+    # Path to an MCP server config file/JSON string passed straight through as ``claude
+    # --mcp-config <path>`` (confirmed present in the installed ``claude`` CLI's --help; loads MCP
+    # servers from JSON files or strings, space-separated -- this field passes exactly one). None
+    # (the default) omits the flag entirely, i.e. today's behavior: whatever MCP servers the
+    # worker's own ambient config already provides. This does NOT imply ``--strict-mcp-config``
+    # (which restricts the worker to ONLY these servers, ignoring its ambient config) -- that is a
+    # separate, stricter policy left for a consumer to opt into explicitly if a later phase wires it.
+    mcp_config_path: Optional[str] = None
 
     def web_enabled(self) -> bool:
         """Whether the spawned worker can BROWSE the live web (WebSearch/WebFetch reachable).
@@ -931,6 +939,8 @@ class SubprocessGoalRunner(DeepRunner):
             cmd += ["--allowed-tools", ",".join(self.cfg.allowed_tools)]
         if self.cfg.disallowed_tools:
             cmd += ["--disallowed-tools", ",".join(self.cfg.disallowed_tools)]
+        if self.cfg.mcp_config_path:
+            cmd += ["--mcp-config", self.cfg.mcp_config_path]
         # The worker is Claude Code, which ONLY runs Claude models. The orchestrator resolves the
         # model from the consumer's tier config, which in a Gemini/OpenAI deployment is a NON-Claude
         # id (e.g. "gemini-3.5-flash"). Passing that as --model makes Claude Code error ("issue with

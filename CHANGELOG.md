@@ -134,6 +134,33 @@ All notable changes to this project are documented here. The format is based on
   (`core/goal_runner.py`; `tests/test_deep_failure_session_diagnostics.py`.)
 
 ### Added
+- **Generic MCP (Model Context Protocol) client support -- Phase 1, read-only foundation.** New
+  optional `[mcp]` extra (pinned `mcp==2.0.0`, the current PyPI release at the time this was built,
+  reflecting the protocol's July 2026 revision) adds two pieces, both offline-safe to import (the
+  `mcp` package is imported lazily inside a single connection seam, exactly like
+  `AcpDeepRunner`/`agent-client-protocol`, so `quest_ai_runner.adapters` never requires it):
+  `adapters/mcp_client.py`'s `MCPClient` is a raw protocol client (stdio subprocess or streamable
+  HTTP transport, injected bearer auth via the same `TokenProvider` pattern as
+  `GoogleChatAdapter`) that connects/discovers/lists tools+resources/calls a tool/reads a resource
+  and NEVER raises -- every failure (missing extra, dead process, protocol/timeout error) comes
+  back as a value. `adapters/mcp_retrieval_adapter.py`'s `MCPRetrievalAdapter` maps that onto the
+  standard `RetrievalAdapter` discovery quartet (`list_sources`/`describe_source` from
+  `resources/list`, `list_operations`/`describe_operation` from `tools/list` with the tool's own
+  schema rendered as text, `read_section` from `resources/read`, `query({"tool", "args"})` from
+  `tools/call` gated by an explicit `allowed_tools` allowlist -- a tool call outside it is refused
+  before `MCPClient.call_tool` is ever reached; `grep` is honestly unsupported, no MCP analogue).
+  Every surfaced name is namespaced by a configured `alias` (e.g. `issues:search`) so multiple MCP
+  servers coexist in a `CompositeRetrievalAdapter` without collision. New
+  `RunnerConfig.mcp_servers: List[MCPServerSpec]` folds each spec into the retrieval stack the same
+  way the native web-search adapter is folded in inside `build_orchestrator()`. Also threaded MCP
+  server config through to the deep-run layer: `SubprocessConfig.mcp_config_path` passes `claude -p
+  --mcp-config <path>` through when set (confirmed against the installed `claude` CLI's own
+  `--help`); `AcpConfig.mcp_servers` replaces a previously hardcoded empty list passed to the ACP
+  agent's `session/new`. Scope is deliberately read-only foundation only -- a write-capable MCP
+  adapter and a live-messaging-channel lane are separate, later work.
+  (`adapters/mcp_client.py`, `adapters/mcp_retrieval_adapter.py`, `config.py`, `core/goal_runner.py`,
+  `adapters/acp_deep_runner.py`; `tests/test_mcp_client.py`, `tests/test_mcp_retrieval_adapter.py`,
+  `tests/test_deep_runner_mcp_passthrough.py`.)
 - **An attended chat session standing in a quest's folder now OPENS already holding that folder's
   standing next-steps answer, instead of re-deriving one when asked.** The
   `QAR:MANAGED:next_steps` block in `QUEST_SYNC.md` was built as the one canonical "what to do next

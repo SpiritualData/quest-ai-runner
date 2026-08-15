@@ -319,6 +319,11 @@ class AcpConfig:
     permission_mode: Optional[str] = None             # an agent session mode id, e.g. "bypassPermissions"
     effort: Optional[str] = None                      # agent effort level, e.g. "high"
     timeout_seconds: Optional[float] = None           # wall-clock cap; None -> the shared floor
+    # MCP servers made available to the agent's session (the ACP ``session/new`` ``mcpServers``
+    # param), in whatever shape the ACP agent's own wire format expects (a list of server config
+    # dicts). Empty by default -- was previously hardcoded to ``[]`` in ``_drive_turn`` with no way
+    # for a consumer to configure it; passing this through is purely additive.
+    mcp_servers: List[Dict[str, Any]] = field(default_factory=list)
 
     # --- the human fork -------------------------------------------------------------------
     # An EscalationSink. Used ONLY when skip_permissions is False and the agent asks for a
@@ -1077,7 +1082,7 @@ class AcpDeepRunner(DeepRunnerBase):
         if not run.steering_supported:
             _log.info("acp agent does not advertise steering; mid-run injection is unavailable")
 
-        session = await conn.new_session(cwd=working_dir, mcp_servers=[])
+        session = await conn.new_session(cwd=working_dir, mcp_servers=self.cfg.mcp_servers)
         run.session_id = field_of(session, "session_id", "sessionId")
         if not run.session_id:
             return DeepResult(met=False,

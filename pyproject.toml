@@ -44,6 +44,13 @@ bm25 = ["bm25s>=0.2"]
 # none of this. The Python side is this package; the agent side is the separate Node program
 # `@agentclientprotocol/claude-agent-acp` (npm, requires Node >= 22), which pip cannot install.
 acp = ["agent-client-protocol>=0.12"]
+# MCPClient / MCPRetrievalAdapter: a generic MCP (Model Context Protocol) client (stdio subprocess
+# or streamable HTTP transport). Pinned to 2.0.0 exactly -- the version this module was built and
+# tested against (the current PyPI release as of Aug 2026, reflecting the protocol's July 2026
+# revision); see the version comment at the top of adapters/mcp_client.py. The adapter itself
+# imports this lazily inside its own connection seam, so importing quest_ai_runner.adapters never
+# requires it -- install this extra only when a consumer actually wires an MCP server.
+mcp = ["mcp==2.0.0"]
 # GoogleChatAdapter's service_account_token_provider (domain-wide delegation for a Google
 # Workspace). The adapter itself is stdlib-only; only this token provider needs google-auth.
 google = ["google-auth>=2.0"]
@@ -61,6 +68,7 @@ all = [
     "qdrant-client>=1.7",
     "fastembed>=0.3",
     "bm25s>=0.2",
+    "mcp==2.0.0",
 ]
 dev = ["pytest>=7.0", "pytest-asyncio>=0.23"]
 

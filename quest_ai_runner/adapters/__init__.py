@@ -77,11 +77,23 @@ These satisfy the core interfaces; a consumer wires the ones it needs into a Run
                                 turn, not held until the next attempt. Purely additive:
                                 ``SubprocessGoalRunner`` remains the default. Needs the optional
                                 [acp] extra plus Node >= 22. See docs/acp-deep-runner.md.
+  * MCPClient / MCPServerSpec — raw MCP (Model Context Protocol) protocol client (stdio subprocess
+                                or streamable HTTP transport), zero QAR semantics: connect/discover/
+                                list tools+resources/call a tool/read a resource. Needs the optional
+                                [mcp] extra; imported lazily inside its own connection seam, exactly
+                                like AcpDeepRunner, so it never requires the package to be installed.
+  * MCPRetrievalAdapter      — RetrievalAdapter over ONE MCP server, mapping the discovery quartet
+                                onto MCP's own resources/list + tools/list, gating tools/call behind
+                                an explicit allowlist, and namespacing every surfaced name with a
+                                configured alias so multiple MCP servers never collide inside a
+                                CompositeRetrievalAdapter. Read-only foundation phase.
 
 The DeepRunner reference (SubprocessGoalRunner) lives in core.goal_runner; the EscalationSink
 reference (the Quest team decision-request) lives in runner.quest_client.
 """
 from .acp_deep_runner import AcpConfig, AcpDeepRunner
+from .mcp_client import MCPClient, MCPDiscovery, MCPResourceResult, MCPServerSpec, MCPToolResult
+from .mcp_retrieval_adapter import MCPRetrievalAdapter
 from .anthropic_provider import AnthropicProvider
 from .quest_context_adapter import QuestContextAdapter, build_quest_resolvers
 from .cached_db_adapter import CachedDbAdapter
@@ -183,6 +195,12 @@ except ImportError:
 __all__ = [
     "AcpConfig",
     "AcpDeepRunner",
+    "MCPClient",
+    "MCPServerSpec",
+    "MCPDiscovery",
+    "MCPToolResult",
+    "MCPResourceResult",
+    "MCPRetrievalAdapter",
     "FilesAdapter",
     "FilesWriter",
     "FastEditRunner",
