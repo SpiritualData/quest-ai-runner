@@ -11,7 +11,7 @@ only display path there.
 
 from __future__ import annotations
 
-from quest_ai_runner.interactive import _make_startup_notifier
+from quest_ai_runner.interactive_session import _make_startup_notifier
 
 
 class _FakeConsole:

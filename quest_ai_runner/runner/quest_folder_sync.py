@@ -38,12 +38,17 @@ Managed-section format (inside the sync file)::
 own bullets — is the file owner's. ``push`` reads ONLY that section: any bullet without an
 ``<!-- id:... -->`` marker is posted as a new Quest note, then rewritten in place with the id it
 was assigned, so re-running push is idempotent (already-synced bullets are left alone).
+
+A THIRD managed block, ``QAR:MANAGED:next_steps``, holds the quest's canonical "what to do next"
+(see :func:`publish_next_steps`). Unlike the notes block it is a REPLACE, never a log: it is
+regenerated in place on every refresh, so the folder always holds exactly one current answer that
+an attended session and the background autopilot both read instead of each reconstructing its own.
 """
 from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -57,6 +62,24 @@ _GOAL_START = "<!-- QAR:MANAGED:goal START -->"
 _GOAL_END = "<!-- QAR:MANAGED:goal END -->"
 _NOTES_START = "<!-- QAR:MANAGED:notes START -->"
 _NOTES_END = "<!-- QAR:MANAGED:notes END -->"
+_NEXT_STEPS_START = "<!-- QAR:MANAGED:next_steps START -->"
+_NEXT_STEPS_END = "<!-- QAR:MANAGED:next_steps END -->"
+
+# The Quest-side home of the next-steps artifact: a quest CONTEXT ENTRY carrying this exact name.
+# Matching on the name is what makes the write an UPSERT (find it, PUT over it) instead of another
+# row. Changing this string orphans whatever is already published under the old one, so treat it as
+# part of the on-disk/on-server contract.
+NEXT_STEPS_ENTRY_NAME = "Next steps (kept current by the runner)"
+
+# The fallback marker, used ONLY when the client cannot do context entries at all (see
+# ``_publish_to_quest``). Quest NOTES are append-only by API contract, so this prefix is the most a
+# fallback can offer: a consumer can at least find every next-steps note and take the newest.
+NEXT_STEPS_NOTE_MARKER = "[next-steps]"
+
+# What we are willing to send to Quest in one artifact. The notes route caps text at 5000 chars
+# server-side (a longer note is a 422, i.e. the refresh silently stops landing), and a next-steps
+# artifact that needs more than this is not a next-steps artifact any more.
+NEXT_STEPS_MAX_CHARS = 4000
 
 _TO_PUSH_HEADING = "## Notes to push to Quest"
 _TO_PUSH_PLACEHOLDER = (
@@ -67,6 +90,7 @@ _TO_PUSH_PLACEHOLDER = (
 )
 
 _FRONTMATTER_RE = re.compile(r"^---\n.*?\n---\n?", re.DOTALL)
+_FRONTMATTER_QUEST_ID_RE = re.compile(r"^quest_id:\s*(\S+)\s*$", re.MULTILINE)
 # A synced-or-unsynced bullet: "- <!-- id:note_1 --> text" or plain "- text".
 _BULLET_RE = re.compile(r"^-\s*(?:<!--\s*id:(?P<id>[^\s>]+)\s*-->\s*)?(?P<text>.*)$")
 
@@ -127,7 +151,17 @@ def _render_notes_block(notes: List[Dict[str, Any]]) -> str:
         nid = note.get("note_id") or note.get("id")
         prefix = f"<!-- id:{nid} --> " if nid else ""
         created = str(note.get("created_at") or "")[:10]
-        author = note.get("author_name") or note.get("author_kind") or ""
+        # author_name alone is misleading: a note an AI run posted carries the ACCOUNT OWNER's
+        # display name (the API key is theirs), so every note in this file read as if the person
+        # had written it, including the dozen an AI wrote. Since this file is what both the person
+        # and the next run read to see what has already been said, the kind has to win when the two
+        # disagree. Unknown kind stays as the bare name rather than being guessed either way.
+        kind = str(note.get("author_kind") or "").lower()
+        name = str(note.get("author_name") or "").strip()
+        if kind == "ai":
+            author = f"{name}, AI" if name and name.lower() != "ai assistant" else "AI"
+        else:
+            author = name or kind
         tag = " ".join(f"[{p}]" if p == created else f"({p})" for p in (created, author) if p)
         lines.append(f"- {prefix}{tag + ' ' if tag else ''}{text}")
     return "\n".join(lines)
@@ -192,6 +226,247 @@ def _write(path: Path, content: str) -> None:
         path.write_text(content, encoding="utf-8")
     except OSError as e:  # pragma: no cover - filesystem edge
         raise QuestFolderSyncError(f"could not write sync file {path}: {e}") from e
+
+
+def quest_for_path(quest_folder_map: Dict[str, str], path: Any = None) -> Optional[Tuple[str, str]]:
+    """The ``(quest_id, folder)`` whose mapped folder CONTAINS ``path`` (default: the cwd).
+
+    The reverse of the folder map, so a consumer can answer "which quest am I standing in?" and
+    make working inside a quest's folder mean working on that quest, with no id to type.
+
+    The DEEPEST mapped folder wins. Quest folders nest in practice (a story folder holding a
+    sub-project folder), and the enclosing quest would otherwise shadow the specific one, which is
+    exactly backwards: the more specific location is the better answer.
+
+    Returns None when the path is under no mapped folder. Never raises: an unresolvable path (a
+    deleted cwd, a permission error on a symlink) means "no quest here", not a crash in a chat
+    startup path.
+    """
+    if not quest_folder_map:
+        return None
+    try:
+        here = Path(path).resolve() if path is not None else Path.cwd().resolve()
+    except OSError:
+        return None
+    best: Optional[Tuple[str, str]] = None
+    best_depth = -1
+    for quest_id, folder in quest_folder_map.items():
+        if not folder:
+            continue
+        try:
+            root = Path(folder).resolve()
+        except OSError:
+            continue
+        if here == root or root in here.parents:
+            depth = len(root.parts)
+            if depth > best_depth:
+                best, best_depth = (str(quest_id), str(folder)), depth
+    return best
+
+
+# --- the canonical "next steps" artifact ------------------------------------------
+
+@dataclass
+class NextSteps:
+    """The current recommended next action(s) for one quest: ONE answer, not a history.
+
+    Deliberately small and flat. Everything here is written by whoever refreshed it (the autopilot
+    pass, an attended session), and everything is optional except the steps themselves, so a caller
+    that only knows "here are the next two things" can still publish a useful artifact.
+
+    ``updated`` is passed IN rather than stamped here so a refresh is a pure function of its inputs:
+    the same conclusion re-published produces a byte-identical file, and the tests can prove that
+    without freezing the clock.
+    """
+    steps: List[str] = field(default_factory=list)
+    # Work the previous period did not finish. Kept separate from ``steps`` because "still open from
+    # last week" and "do this next" call for different decisions: the first may need re-sequencing
+    # or dropping, and folding it into the list silently turns a slip into a plan.
+    carrying_over: List[str] = field(default_factory=list)
+    source: str = ""          # who refreshed it, e.g. "the autopilot pass"
+    scope: str = ""           # the period this was written for, e.g. "day:2026-08-12"
+    updated: str = ""         # an ISO date/timestamp string, supplied by the caller
+    note: str = ""            # one optional line of context above the list
+
+    def is_empty(self) -> bool:
+        return not (self.steps or self.carrying_over or self.note)
+
+
+@dataclass
+class NextStepsResult:
+    """What one :func:`publish_next_steps` call did, local side and Quest side."""
+    quest_id: str
+    sync_path: str
+    # Where it landed on Quest: "context_entry" (a real upsert), "note" (append-only fallback), or
+    # "none" (nothing was written there this refresh -- ``detail`` says why).
+    quest_target: str = "none"
+    quest_ref: str = ""       # the entry/note id, when the target gave us one
+    created: bool = False     # True when the Quest-side object was created rather than replaced
+    detail: str = ""
+
+
+def render_next_steps(next_steps: NextSteps) -> str:
+    """The artifact's body: a short, ordered list a human can read in five seconds.
+
+    Numbered, because "next" implies an order and a bulleted set does not. The header line says
+    when it was refreshed and by whom, since a next-steps artifact with no freshness stamp is
+    exactly the stale guess this replaces.
+    """
+    lines = ["## Next steps"]
+    stamp = ", ".join(p for p in (
+        f"Refreshed {next_steps.updated}" if next_steps.updated else "",
+        f"by {next_steps.source}" if next_steps.source else "",
+        f"for {next_steps.scope}" if next_steps.scope else "",
+    ) if p)
+    if stamp:
+        lines += ["", f"_{stamp}. This block is replaced on every refresh, so it is the current "
+                      f"answer rather than a log._"]
+    if next_steps.note:
+        lines += ["", next_steps.note.strip()]
+    if next_steps.steps:
+        lines.append("")
+        for i, step in enumerate(next_steps.steps, start=1):
+            lines.append(f"{i}. {' '.join(str(step).strip().splitlines())}")
+    if next_steps.carrying_over:
+        lines += ["", "Carrying over, not finished in the previous period:"]
+        for item in next_steps.carrying_over:
+            lines.append(f"- {' '.join(str(item).strip().splitlines())}")
+    if next_steps.is_empty():
+        lines += ["", "_(nothing recorded yet)_"]
+    return "\n".join(lines)
+
+
+def write_next_steps(folder: str, quest_id: str, next_steps: NextSteps, *,
+                     filename: str = SYNC_FILE_NAME) -> Path:
+    """Replace the ``next_steps`` managed block in the folder's sync file. Returns its path.
+
+    Creates the file (with frontmatter) when the folder has none yet, so a quest whose folder was
+    never pulled still gets an artifact. Only the managed block is touched: every other line,
+    including the human's own prose and the "Notes to push to Quest" section, is preserved exactly.
+    """
+    path = _sync_path(folder, filename)
+    existing = _read_existing(path)
+    out = _ensure_frontmatter(existing, quest_id)
+    out = replace_between(out, _NEXT_STEPS_START, _NEXT_STEPS_END, render_next_steps(next_steps))
+    if out != existing:
+        _write(path, out)
+    return path
+
+
+def read_next_steps(folder: str, *, filename: str = SYNC_FILE_NAME) -> Optional[str]:
+    """The current next-steps block's body text, or None when the folder has no artifact yet.
+
+    Returned as TEXT, not a parsed :class:`NextSteps`: whoever refreshed it last may have been a
+    human editing the block by hand, and re-parsing their prose back into fields would quietly drop
+    whatever did not fit the shape. The consumer of this is a model prompt, which wants the prose.
+    """
+    text = _read_existing(_sync_path(folder, filename))
+    body = extract_between(text, _NEXT_STEPS_START, _NEXT_STEPS_END)
+    return body.strip() if body and body.strip() else None
+
+
+def quest_id_in_folder(folder: str, *, filename: str = SYNC_FILE_NAME) -> Optional[str]:
+    """The quest id this folder's sync file declares in its own frontmatter, or None.
+
+    Every writer here stamps it at creation (``_ensure_frontmatter``), so any folder that was ever
+    pulled or given a next-steps artifact already says which quest it belongs to. That makes it the
+    natural SECOND answer to "which quest is this folder?" for a consumer with no configured
+    ``quest_folder_map`` — an attended chat session, typically, where nobody set up an env map.
+
+    The map stays the first answer where it exists (see :func:`quest_for_path`): it is the
+    deployment's own statement about the mapping, while this is whatever the last writer stamped.
+    """
+    text = _read_existing(_sync_path(folder, filename))
+    if not text:
+        return None
+    frontmatter = _FRONTMATTER_RE.match(text)
+    if not frontmatter:
+        return None
+    found = _FRONTMATTER_QUEST_ID_RE.search(frontmatter.group(0))
+    return found.group(1).strip() if found else None
+
+
+def _publish_to_quest(client: Any, quest_id: str, body: str) -> Tuple[str, str, bool, str]:
+    """Put ``body`` on the quest itself as ONE artifact. Returns (target, ref, created, detail).
+
+    Quest's notes API is add + list only (there is no PATCH or DELETE on a note), so notes cannot
+    hold a refreshing artifact: a daily refresh would leave a year of near-identical notes. Quest
+    context entries CAN (POST/PUT/DELETE, and they are visible in the quest's own UI and fed to the
+    brain as quest context), so the artifact lives there, upserted by its fixed name.
+
+    Failure behavior is deliberately asymmetric. If the entry LISTING fails we write nothing at all
+    rather than falling back to a blind create, because a blind create on a quest that already has
+    the entry is precisely the note-spam this design exists to avoid; the local file is still
+    current, and the next refresh retries. Only a client with no context-entry support at all falls
+    back to a marker-prefixed note.
+    """
+    lister = getattr(client, "list_context_entries", None)
+    creator = getattr(client, "create_context_entry", None)
+    updater = getattr(client, "update_context_entry", None)
+    if not (callable(lister) and callable(creator) and callable(updater)):
+        adder = getattr(client, "add_quest_note", None)
+        if not callable(adder):
+            return "none", "", False, "this client can write neither context entries nor notes"
+        notes = adder(quest_id, f"{NEXT_STEPS_NOTE_MARKER} {body}") or []
+        if not notes:
+            # ``add_quest_note`` returns [] on API failure, so an empty list is not "no notes", it
+            # is "this did not land". Reporting it as published would hide a Quest side that has
+            # silently stopped receiving refreshes.
+            return "none", "", False, "the fallback note did not come back from the notes API"
+        ref = str(notes[-1].get("note_id") or notes[-1].get("id") or "")
+        return "note", ref, True, (
+            "this client has no context-entry support, so the artifact was APPENDED as a "
+            f"{NEXT_STEPS_NOTE_MARKER}-marked note; Quest notes cannot be updated, so repeated "
+            "refreshes accumulate")
+    try:
+        entries = lister(quest_id) or []
+    except Exception as e:  # noqa: BLE001 -- a failed read must not become a duplicating write
+        return "none", "", False, (f"could not read this quest's context entries "
+                                   f"({type(e).__name__}), so nothing was written to Quest this "
+                                   f"refresh; the local file is still current")
+    existing_id = next(
+        (str(e.get("id")) for e in entries
+         if str(e.get("name") or "").strip() == NEXT_STEPS_ENTRY_NAME and e.get("id")),
+        None,
+    )
+    if existing_id:
+        updated = updater(quest_id, existing_id, content=body) or {}
+        if not updated.get("id"):
+            return "none", existing_id, False, "the context-entry update did not come back"
+        return "context_entry", existing_id, False, ""
+    created = creator(quest_id, NEXT_STEPS_ENTRY_NAME, body) or {}
+    ref = str(created.get("id") or "")
+    if not ref:
+        return "none", "", False, "the context-entry create did not come back with an id"
+    return "context_entry", ref, True, ""
+
+
+def publish_next_steps(client: Any, quest_id: str, folder: str, next_steps: NextSteps, *,
+                       filename: str = SYNC_FILE_NAME) -> NextStepsResult:
+    """Make ``next_steps`` the quest's current answer, locally AND on Quest, in one call.
+
+    This is the single write path for the artifact, so the folder and the quest can never disagree
+    about what comes next. The local file is written FIRST and unconditionally: it is the copy the
+    person actually works next to, and a Quest outage must not cost them the answer.
+
+    The Quest write never raises. A quest whose Quest-side write failed still has a correct local
+    artifact and a ``detail`` saying what happened, and the next refresh tries again.
+    """
+    path = write_next_steps(folder, quest_id, next_steps, filename=filename)
+    result = NextStepsResult(quest_id=quest_id, sync_path=str(path))
+    body = render_next_steps(next_steps)
+    if len(body) > NEXT_STEPS_MAX_CHARS:
+        body = body[:NEXT_STEPS_MAX_CHARS].rstrip() + "\n\n(truncated; see the folder's sync file)"
+    try:
+        target, ref, created, detail = _publish_to_quest(client, quest_id, body)
+    except Exception as e:  # noqa: BLE001 -- publishing is best-effort by contract
+        log.warning("could not publish next steps for quest %s to Quest", quest_id, exc_info=True)
+        result.detail = f"the Quest write failed ({type(e).__name__}: {e})"
+        return result
+    result.quest_target, result.quest_ref, result.created, result.detail = target, ref, created, detail
+    log.info("next steps for quest %s -> %s (quest target: %s %s)",
+             quest_id, path, target, ref or "-")
+    return result
 
 
 # --- the simple public functions --------------------------------------------------

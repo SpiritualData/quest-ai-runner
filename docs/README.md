@@ -13,6 +13,15 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
   backend, corpus, and persona via `RunnerConfig`.
 - **[Implementing adapters](adapters.md)** — the four interfaces (`RetrievalAdapter`,
   `ModelProvider`, `DeepRunner`, `EscalationSink`) and how to build your own.
+- **[The ACP deep runner](acp-deep-runner.md)** — the opt-in `DeepRunner` that drives Claude over
+  the Agent Client Protocol instead of a one-shot `claude -p`, so a message queued mid-run reaches
+  the turn already in progress. How to wire it, the Node >= 22 requirement, and why the default
+  path is unchanged.
+- **[The fast edit runner](fast-edit-runner.md)** — the opt-in `DeepRunner` that lands a bounded
+  file edit in one model call instead of spawning a full agent, and with it quest-ai-runner's
+  first write capability: how the opt-in works, what the write boundary guarantees (containment,
+  secret refusal, backups), when it escalates to the full deep runner, and the vendored
+  SEARCH/REPLACE matcher's attribution.
 - **[Deployment](deployment.md)** — run the poller under cron or systemd.
 - **[Corpus playbooks](corpus-playbooks.md)** — distill a corpus's history into playbook files the
   shallow loop (context cards) and Claude Code deep runs both pick up automatically.
@@ -32,6 +41,12 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 - **[Personal lexicon](personal-lexicon.md)**: ranking one person's distinctive vocabulary by
   TF-DF-IDF, the two background sources and why they are combined with a minimum, and the
   `min_documents` safeguard that stops a mis-recognition feeding back into the recognizer.
+- **[Terminal UX prior art](terminal-ux-prior-art.md)** — how Aider, Crush, Codex CLI, Gemini CLI,
+  Claude Code, and others solve fixed-bottom input, streaming without scrollback corruption, log
+  routing, and mid-turn queuing; which Textual primitives to use for each; and an evaluation of
+  what's forkable/vendorable versus reference-only (incl. the ACP protocol for pluggable execution
+  backends). Its `prompt_toolkit`/ANSI passages are prior art only: that renderer has since been
+  removed and Textual is the one chat UI.
 
 ## See also
 

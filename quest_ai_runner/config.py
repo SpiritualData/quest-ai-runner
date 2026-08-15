@@ -22,6 +22,7 @@ from .core.adapters import (
     ContextAssembler,
     DeepRunner,
     EscalationSink,
+    FileWriter,
     GuidanceProvider,
     ModelProvider,
     RetrievalAdapter,
@@ -34,6 +35,11 @@ from .adapters.file_context_store import (
     _TFDFIDF_VERSION,
     _read_bootstrap_meta,
 )
+# MCPServerSpec is a plain dataclass with no dependency on .core or .config, so this top-level
+# import (needed for the RunnerConfig.mcp_servers field type) carries no circular-import risk,
+# same discipline as the file_context_store import above. It does NOT require the optional [mcp]
+# package -- mcp_client.py only imports that lazily, inside its own connection seam.
+from .adapters.mcp_client import MCPServerSpec
 from .core.model_registry import ModelRegistry
 from .core.orchestrator import Orchestrator, OrchestratorConfig
 from .resources import ResourceLimits
@@ -42,6 +48,15 @@ from .resources import ResourceLimits
 # Distinct from None (which means context handling is explicitly disabled) and from an instance
 # (use that one). Lets context handling be ON BY DEFAULT while staying overridable and disableable.
 _AUTO_CONTEXT = object()
+
+# Sentinel default for RunnerConfig.deep_runner: "build the default SubprocessGoalRunner (Claude
+# Code)". Exactly the ``_AUTO_CONTEXT`` tri-state, for exactly the same reason: execution is core
+# to running well, so leaving the field unset must mean "give me the working default", not "run
+# with no executor at all". Before this existed the field defaulted to ``None``, which made
+# "the consumer never wired one" indistinguishable from "the consumer deliberately disabled
+# execution" — so a consumer that simply forgot silently lost every deep/execution turn (the turn
+# still announced work, then nothing ran).
+_AUTO_DEEP_RUNNER = object()
 
 # Per-attachment size cap for chat/file uploads and panel context-docs. Large by design so any
 # reasonable document or image is accepted; anything over this is rejected by the multimodal
@@ -67,11 +82,40 @@ class RunnerConfig:
 
     # --- adapters (consumer chooses which) ---
     retrieval: Optional[RetrievalAdapter] = None     # FilesAdapter / CachedDbAdapter / a composite
+    # Generic MCP (Model Context Protocol) servers to fold into the retrieval stack -- READ-ONLY
+    # foundation phase (see adapters/mcp_client.py + adapters/mcp_retrieval_adapter.py). Each spec
+    # becomes its own namespaced MCPRetrievalAdapter, folded into cfg.retrieval via
+    # CompositeRetrievalAdapter by build_orchestrator -- the same fold-in mechanism the native web
+    # search adapter uses, not a parallel one. Needs the optional [mcp] extra only if this list is
+    # non-empty; an empty list (the default) touches nothing MCP-related.
+    mcp_servers: List[MCPServerSpec] = field(default_factory=list)
     model_provider: Optional[ModelProvider] = None   # AnthropicProvider or another
     model_fallback: Optional[dict] = None            # override tier->model mapping (e.g. {"haiku": "gpt-4o", "sonnet": "claude-4"})
     model_providers: Optional[dict] = None           # multi-provider support: dict of name -> ModelProvider (e.g. {"anthropic": AnthropicProvider(), "gemini": GeminiProvider()})
     model_provider_overrides: Optional[dict] = None  # per-tier provider routing (e.g. {"best": "anthropic", "fast": "gemini"})
-    deep_runner: Optional[DeepRunner] = None         # SubprocessGoalRunner or another worker
+    # The deep worker — ON BY DEFAULT. ``core.goal_runner.SubprocessGoalRunner`` (Claude Code
+    # headless via ``claude -p``) is the reference, and a consumer that leaves this unset gets one
+    # wired automatically by ``build_orchestrator`` (see ``resolve_deep_runner``), pointed at
+    # ``claude`` on PATH. ``adapters.AcpDeepRunner`` is an opt-in alternative that runs the same
+    # contract over the Agent Client Protocol, which buys MID-TURN STEERING (a message queued while
+    # the deep turn runs is injected into that turn instead of waiting for the next attempt); it
+    # needs the [acp] extra and Node >= 22. Selecting one is just this field — see
+    # docs/acp-deep-runner.md.
+    #   * leave UNSET (the _AUTO sentinel) → the default SubprocessGoalRunner is built and used
+    #     (or, if ``claude`` isn't on PATH, a loud warning and no runner);
+    #   * pass an INSTANCE → that runner is used (AcpDeepRunner, a queue worker, a fake in tests);
+    #   * pass ``None`` explicitly → deep execution is DISABLED, silently and deliberately.
+    deep_runner: Any = _AUTO_DEEP_RUNNER             # SubprocessGoalRunner or another worker
+    # WRITE ACCESS TO THE CONSUMER'S FILES — OFF BY DEFAULT, and the only switch that grants it.
+    # Left None (the default), nothing in this library can modify a file: every reference
+    # RetrievalAdapter is read-only, and a deep run can only change files by going through the
+    # deep worker's own subprocess sandbox. Wiring a ``FileWriter`` here (the reference
+    # implementation is ``adapters.files_writer.FilesWriter``) is the deliberate act of granting
+    # write access, and it does exactly one thing: it puts an in-process ``FastEditRunner`` at the
+    # front of the deep-runner ladder, so a bounded edit can be landed in one model call instead of
+    # spawning a full agent, escalating to the normal deep worker whenever that is not enough.
+    # See docs/fast-edit-runner.md for the containment/backup guarantees and the opt-in model.
+    file_writer: Optional[FileWriter] = None
     # Named deep-runner registry. When non-empty and a ``deep_runner_classifier`` is
     # also provided, the orchestrator calls the classifier to SELECT which runner handles
     # each deep goal, rather than always using the single ``deep_runner``. The consumer
@@ -134,6 +178,34 @@ class RunnerConfig:
     # session files; a host can plug a Mongo-backed one behind the same Protocol. Left None → Step 1
     # is a no-op (self-contained inputs add ZERO latency), exactly today's behavior.
     conversation_store: Optional[Any] = None
+
+    # --- LIVE CHANNEL lane (opt-in; see runner/channel_runner.py) ---------------------------
+    # A live, two-way messaging channel (e.g. ``adapters.openclaw_channel.OpenClawChannel``) QAR
+    # can hold a real-time conversation over -- a phone chat app, a Slack channel, etc. This is a
+    # SEPARATE process/entry point (the ``channel`` CLI subcommand) from the task poller: a chat
+    # message has no Quest task id to claim/PATCH, so it is never folded into ``poller.py``'s loop
+    # or ``TaskExecutor``. None (default) = the lane does not run.
+    channel_transport: Optional[Any] = None
+    # Sender ids (the TRANSPORT's own ``InboundMessage.sender_id``, e.g. a channel user id) this
+    # runner will act on. EMPTY (the default) means DENY ALL -- fail closed. This is a plain
+    # membership test against operator config, never a decision based on anything a model wrote
+    # (hard rule #3). An operator MUST explicitly list every sender allowed to reach the brain.
+    channel_allowed_senders: List[str] = field(default_factory=list)
+    # Seconds after a turn starts before ChannelSink sends one "still working on it" ack, if
+    # nothing terminal has gone out yet. <= 0 disables the ack.
+    channel_ack_after_seconds: float = 15.0
+    # Minimum seconds between two milestone-progress sends within the SAME turn (throttling, not a
+    # hard cap -- a turn with no milestones sends none at all).
+    channel_progress_min_seconds: float = 20.0
+    # Outer wall-clock safety net per turn, checked between ``run_stream`` events. <= 0 disables
+    # it (the orchestrator's/deep-runner's own internal timeouts are still in effect either way --
+    # this is an ADDITIONAL bound specific to the channel lane, not a replacement for them).
+    channel_turn_timeout_seconds: float = 900.0
+    # Dedup state file for the channel lane's ``StateStore`` (keyed on "<channel>:<message_id>").
+    # None = in-memory only (no persistence across restarts) -- unlike the poller's state path,
+    # which defaults to a file, this defaults to None because a consumer wiring a channel in tests
+    # or a short-lived process should not have to think about a stray state file.
+    channel_state_path: Optional[str] = None
 
     # --- the org's skills/corpus path (for orgs); generic, optional ---
     corpus_root: Optional[str] = None
@@ -218,13 +290,27 @@ class RunnerConfig:
     # by ``validate()`` (unknown value -> a problem).
     quest_folder_sync_direction: str = "pull"
 
-    # --- Autopilot (opt-in; the recurring "autopilot pass" task, see runner/autopilot.py and
-    # quest_autopilot_design.md). Both fields are inert unless a consumer creates a recurring
-    # task with ``handler: "autopilot"`` (the executor routes those to ``AutopilotPass`` instead
-    # of the normal deep-run path); nothing here changes behavior for any other task.
+    # --- Autopilot (opt-in per QUEST; see runner/autopilot.py and quest_autopilot_design.md).
+    # Autopilot runs as a recurring "autopilot pass" task carrying ``task_kind: "autopilot"``,
+    # which the executor routes to ``AutopilotPass`` instead of the normal deep-run path.
+    #
+    # Whether that pass task EXISTS is this runner's job (``Poller._ensure_autopilot_pass``).
+    # It used to be nobody's: a user could switch a quest to Suggest/Act, the setting saved
+    # correctly, and then nothing whatsoever happened, because no pass task had ever been created
+    # to do the scanning. The feature was inert by construction, and silently so. Now any scan
+    # that finds an opted-in quest with no open pass task creates one.
+    # Set False for a deployment where something else owns that lifecycle.
+    autopilot_ensure_pass_task: bool = True
+    # When this runner creates the pass task, the local clock time its daily occurrence fires at.
+    autopilot_pass_time: str = "07:00"
     # Team-wide daily cap on autopilot-created tasks (batches + goal proposals each count as one
     # unit). Default 3, per the design's starting number.
     autopilot_daily_budget: int = 3
+    # Default for adopting a quest's own due recurring tasks into the pass's batch (see
+    # ``runner/autopilot.py``). A quest's OWN ``autopilot.adopt_recurring`` always wins; this is
+    # only consulted when the quest does not state one, which includes deployments whose backend
+    # predates that field. ``None`` means "no consumer opinion", i.e. off.
+    autopilot_adopt_recurring: Optional[bool] = None
     # The FALLBACK persona resolver (step 4 of the persona-routing chain, after a goal's own
     # ``assignee_rep_id`` and a day-matched/unrestricted quest ``autopilot.personas`` entry): a
     # consumer-supplied callable, given a goal dict, returning a rep_id or None. This is where a
@@ -304,9 +390,13 @@ def derive_capabilities(cfg: RunnerConfig) -> Dict[str, bool]:
         if not corpus and cfg.corpus_root:
             corpus = True
 
-    # code: a deep goal-runner (SubprocessGoalRunner is the reference) is wired.
-    deep = cfg.deep_runner
-    code = deep is not None
+    # code: some execution path is wired. Resolve the tri-state first (``warn=False``: this is a
+    # capability PROBE — the wiring path in build_orchestrator owns the one loud warning), so an
+    # unset field reports the capability the auto-built default actually provides rather than the
+    # sentinel object. The LADDER is what is probed, not just the single deep runner: a consumer
+    # that wired only a file_writer (fast edits, no Claude Code) really can execute.
+    deep = resolve_deep_runner(cfg, warn=False)
+    code = bool(resolve_deep_runner_ladder(cfg, warn=False))
 
     # web: the deep-runner browses via Claude Code's WebSearch/WebFetch (reads off the actual
     # tool gating), OR a WebSearchAdapter is wired into the retrieval stack (shallow web search
@@ -674,6 +764,175 @@ def _build_qdrant_card_repo_from_env(cards_dir: str) -> tuple:
         _log.warning("context index: QAR_CARDS_BACKEND=qdrant repo build failed; falling back to "
                      "the file backend", exc_info=True)
         return (None, None)
+
+
+def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
+    """Resolve the deep (execution) worker from config — ON BY DEFAULT.
+
+    Tri-state on ``cfg.deep_runner``, mirroring ``resolve_context_assembler``:
+      * ``_AUTO_DEEP_RUNNER`` (the field default, i.e. the consumer left it unset) → build the
+        default ``SubprocessGoalRunner`` (Claude Code headless) so execution works out of the box.
+      * an INSTANCE → use it as-is (``AcpDeepRunner``, a queue worker, a test double, …).
+      * ``None`` → deep execution is explicitly DISABLED. No warning: that is a deliberate choice.
+
+    The auto-built runner reuses EXACTLY the env vars the rest of the repo already documents for
+    the deep worker, so there is one set of knobs, not two:
+      * ``QAR_DEEP_WORKING_DIR`` → the subprocess cwd, falling back to ``cfg.corpus_root`` and then
+        the process cwd (same precedence the CLI has always used).
+      * ``QAR_CLAUDE_PATH`` → the worker binary (default ``claude``, looked up on PATH).
+      * ``QAR_DEEP_TIMEOUT_SECONDS`` → applied inside the runner itself
+        (``goal_runner.resolve_deep_timeout_seconds``); nothing to pass here.
+      * ``QAR_DEEP_MODELS`` → the goal loop's model ladder, which lives on ``OrchestratorConfig``,
+        not on the runner.
+
+    Degrades gracefully and NEVER raises. If the worker binary is not on PATH we return ``None``
+    (no runner) after logging a loud warning: building a runner that would fail on every spawn
+    would be worse than reporting honestly that execution is unavailable. ``warn=False`` silences
+    that warning for callers that are only probing capability (``derive_capabilities``) rather than
+    actually wiring the brain.
+    """
+    chosen = getattr(cfg, "deep_runner", None)
+    if chosen is not _AUTO_DEEP_RUNNER:
+        return chosen  # an explicit instance, or None to disable
+    try:
+        import shutil
+
+        from .core.goal_runner import SubprocessConfig, SubprocessGoalRunner
+
+        claude_path = os.getenv("QAR_CLAUDE_PATH", "claude") or "claude"
+        # A bare name has to be findable on PATH; an explicit path has to exist and be executable.
+        if os.path.sep in claude_path:
+            found = claude_path if os.access(claude_path, os.X_OK) else None
+        else:
+            found = shutil.which(claude_path)
+        if not found:
+            if warn:
+                _log.warning(
+                    "deep runner: no %r binary found on PATH, so DEEP/EXECUTION work is "
+                    "UNAVAILABLE for this process (requests that need real work will be planned "
+                    "but not carried out). Install Claude Code, set QAR_CLAUDE_PATH to the "
+                    "binary, or wire RunnerConfig.deep_runner explicitly. Pass "
+                    "deep_runner=None to disable execution deliberately and silence this.",
+                    claude_path,
+                )
+            return None
+        working_dir = (os.getenv("QAR_DEEP_WORKING_DIR")
+                       or cfg.corpus_root
+                       or os.getcwd())
+        runner = SubprocessGoalRunner(SubprocessConfig(
+            working_dir=working_dir,
+            claude_path=claude_path,
+        ))
+        _log.info("deep runner: using the default SubprocessGoalRunner (%s, cwd=%s)",
+                  found, working_dir)
+        return runner
+    except Exception:  # noqa: BLE001 — a failed default must never stop the runner from starting
+        if warn:
+            _log.warning("deep runner: building the default SubprocessGoalRunner failed; deep/"
+                         "execution work will be unavailable for this process", exc_info=True)
+        return None
+
+
+def resolve_fast_edit_runner(cfg: RunnerConfig):
+    """Build the in-process fast editor, or return None. OFF unless a ``file_writer`` is wired.
+
+    This is the whole opt-in gate for quest-ai-runner's write capability, and it is deliberately a
+    single condition with no env-var escape hatch and no "auto" tri-state: a consumer either handed
+    the library a ``FileWriter`` or it did not. Nothing here can talk itself into write access.
+
+    Returns None (silently — an absent writer is the normal case, not a misconfiguration) when no
+    writer is wired, and also when there is no model provider to make the one call with. Never
+    raises: a failure to build the optional cheap rung must never cost a consumer its runner.
+    """
+    writer = getattr(cfg, "file_writer", None)
+    if writer is None or cfg.model_provider is None:
+        return None
+    try:
+        from .adapters.fast_edit_runner import FastEditRunner
+
+        # ``cfg.model_provider`` is the MultiProvider-wrapped provider by the time this is called
+        # from build_orchestrator (the wrap happens in place, earlier in that function), so the
+        # model id this runner resolves routes to whichever backend owns it.
+        return FastEditRunner(
+            provider=cfg.model_provider,
+            writer=writer,
+            registry=ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None),
+        )
+    except Exception:  # noqa: BLE001
+        _log.warning("fast edit: could not build the FastEditRunner; deep work will use the "
+                     "full deep runner only", exc_info=True)
+        return None
+
+
+def resolve_mcp_write_runners(cfg: RunnerConfig) -> List[Any]:
+    """Build one ``MCPOperationRunner`` per configured ``MCPServerSpec`` that has non-empty
+    ``writable_tools``, or ``[]``. OFF unless a spec's ``writable_tools`` is wired.
+
+    Same opt-in shape as ``resolve_fast_edit_runner``: a single condition, no env-var escape
+    hatch, no "auto" tri-state. ``RunnerConfig.mcp_servers`` already carries connection specs for
+    the read-only ``MCPRetrievalAdapter`` side (Phase 1); a spec's ``writable_tools`` is a
+    SEPARATE, additional allowlist a consumer sets explicitly to also grant writes through that
+    same server -- being read-allowlisted (``allowed_tools``) grants nothing here. Each qualifying
+    spec becomes its own namespaced ``MCPWriteAdapter`` wrapped in its own ``MCPOperationRunner``,
+    the same "one spec, its own adapter" pattern the read side uses.
+
+    Returns ``[]`` (silently -- no writable spec is the normal case) when ``mcp_servers`` is empty,
+    no spec has ``writable_tools``, or there is no model provider to make the one call with. Never
+    raises: a failure to build an optional cheap rung must never cost a consumer its runner.
+    """
+    if not cfg.mcp_servers or cfg.model_provider is None:
+        return []
+    runners: List[Any] = []
+    try:
+        from .adapters.mcp_write_adapter import MCPWriteAdapter
+        from .adapters.mcp_write_runner import MCPOperationRunner
+
+        registry = ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None)
+        for spec in cfg.mcp_servers:
+            if not getattr(spec, "writable_tools", None):
+                continue
+            writer = MCPWriteAdapter(alias=spec.alias, spec=spec, writable_tools=spec.writable_tools)
+            runners.append(MCPOperationRunner(
+                provider=cfg.model_provider, writer=writer, registry=registry,
+            ))
+        if runners:
+            _log.info("MCP write runners wired for: %s",
+                      [s.alias for s in cfg.mcp_servers if getattr(s, "writable_tools", None)])
+    except Exception:  # noqa: BLE001
+        _log.warning("mcp write: could not build MCPOperationRunner(s); deep work will use the "
+                     "remaining ladder only", exc_info=True)
+    return runners
+
+
+def resolve_deep_runner_ladder(cfg: RunnerConfig, *, warn: bool = True) -> List[Any]:
+    """The ORDERED runners one deep goal may be tried with, cheapest rung first.
+
+    Today this is at most three groups of rungs:
+
+      1. ``FastEditRunner`` — present ONLY when the consumer wired a ``file_writer``. One model
+         call, applied in process, against files already in the turn's context.
+      2. one ``MCPOperationRunner`` per ``MCPServerSpec`` with non-empty ``writable_tools`` —
+         present ONLY when a consumer configured a write allowlist for that server. One model
+         call, executed in process through that server's own ``MCPWriteAdapter``.
+      3. the resolved ``deep_runner`` — the full worker (``SubprocessGoalRunner`` by default).
+
+    A consumer that changed nothing gets ``[SubprocessGoalRunner]``: a one-rung ladder, which the
+    goal loop treats exactly as it treated a single runner before ladders existed. That equivalence
+    is the point — this is additive, never a silent change to what already ships.
+
+    All the cheap rungs may be absent (no writer, no writable MCP spec, and no worker because
+    ``claude`` is not installed or execution was explicitly disabled), in which case this returns
+    ``[]`` and the orchestrator reports honestly that nothing can execute.
+    """
+    ladder: List[Any] = []
+    fast = resolve_fast_edit_runner(cfg)
+    if fast is not None:
+        ladder.append(fast)
+    ladder.extend(resolve_mcp_write_runners(cfg))
+    deep = resolve_deep_runner(cfg, warn=warn)
+    if deep is not None:
+        ladder.append(deep)
+    return ladder
 
 
 def resolve_context_assembler(
@@ -1226,6 +1485,31 @@ def build_orchestrator(
         except Exception as e:  # noqa: BLE001 — web search is optional; never break the build
             _log.debug("native web search not wired: %s", e)
 
+    # Generic MCP (Model Context Protocol) servers -- fold each configured MCPServerSpec into the
+    # retrieval stack as its own namespaced MCPRetrievalAdapter (read-only foundation phase; see
+    # adapters/mcp_client.py + adapters/mcp_retrieval_adapter.py). Same fold-into-composite pattern
+    # as the native web-search wiring just above, not a parallel mechanism.
+    if cfg.mcp_servers:
+        try:
+            from .adapters.composite_retrieval_adapter import CompositeRetrievalAdapter as _CRA
+            from .adapters.mcp_retrieval_adapter import MCPRetrievalAdapter as _MCPRA
+
+            mcp_adapters = [
+                _MCPRA(alias=spec.alias, spec=spec, allowed_tools=spec.allowed_tools)
+                for spec in cfg.mcp_servers
+            ]
+            if cfg.retrieval is None:
+                cfg.retrieval = mcp_adapters[0] if len(mcp_adapters) == 1 else _CRA(mcp_adapters)
+            elif isinstance(cfg.retrieval, _CRA):
+                cfg.retrieval = _CRA(
+                    list(cfg.retrieval.adapters) + mcp_adapters, max_workers=cfg.retrieval.max_workers,
+                )
+            else:
+                cfg.retrieval = _CRA([cfg.retrieval, *mcp_adapters])
+            _log.info("MCP servers wired into retrieval: %s", [s.alias for s in cfg.mcp_servers])
+        except Exception as e:  # noqa: BLE001 — MCP wiring is optional; never break the build
+            _log.debug("mcp servers not wired: %s", e)
+
     # Auto-enable guidance provider if not configured
     guidance = cfg.guidance_provider
     if guidance is None:
@@ -1261,11 +1545,23 @@ def build_orchestrator(
     input_inbox = getattr(cfg, "input_inbox", None) or InMemoryInbox()
 
     context_assembler = resolve_context_assembler(cfg, notify=notify)
+    # Resolve the deep worker's tri-state and WRITE IT BACK onto the config (the same in-place
+    # style as the MultiProvider wrap above). Consumers and the chat UIs read ``cfg.deep_runner``
+    # directly to decide whether execution is available, so the sentinel must never survive past
+    # here — after build_orchestrator, that field is always a real runner or a real None.
+    cfg.deep_runner = resolve_deep_runner(cfg)
+    # The LADDER the goal loop indexes by attempt. Built from the already-resolved ``deep_runner``
+    # plus, only if the consumer wired a ``file_writer``, the in-process fast editor in front of
+    # it. ``cfg.deep_runner`` stays exactly what it was — a single runner — because consumers and
+    # the chat UIs read that field to decide whether execution is available; the ladder is the
+    # orchestrator's business, not a redefinition of the config field.
+    deep_runner_ladder = resolve_deep_runner_ladder(cfg, warn=False)
     return Orchestrator(
         retrieval=get_retrieval_adapter(cfg),
         provider=cfg.model_provider,
         registry=build_registry(cfg),
         deep_runner=cfg.deep_runner,
+        deep_runner_ladder=deep_runner_ladder,
         deep_runners=cfg.deep_runners,
         deep_runner_classifier=cfg.deep_runner_classifier,
         escalation=cfg.escalation,

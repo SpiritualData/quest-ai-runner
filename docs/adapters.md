@@ -10,6 +10,7 @@ can satisfy them structurally (just match the methods) or subclass the provided 
 | `RetrievalAdapter` | GATHER — read/grep/query your source of truth | `FilesAdapter`, `CachedDbAdapter` |
 | `ModelProvider` | the LLM — plan / answer / list models | `AnthropicProvider` |
 | `DeepRunner` | run a bounded, goal-driven autonomous task | `SubprocessGoalRunner` |
+| `FileWriter` (optional) | write a file inside a confined root, with backups | `FilesWriter` |
 | `EscalationSink` | raise a human-only confirm/decision | `QuestDecisionSink` |
 
 ## RetrievalAdapter
@@ -73,6 +74,29 @@ The reference `SubprocessGoalRunner` spawns Claude Code headless with `/goal <go
 exit code 0 = goal met, non-zero = limit/error. Working dir, binary, model, context preamble, and
 tool gating are all config (`SubprocessConfig`). Plug in a different agent by implementing this one
 method.
+
+**This is the only adapter that is wired for you.** `RunnerConfig.deep_runner` is tri-state:
+leave it unset and `config.resolve_deep_runner` builds the `SubprocessGoalRunner` above from
+`QAR_DEEP_WORKING_DIR`/`corpus_root` + `QAR_CLAUDE_PATH`; pass an instance to use your own; pass
+`None` to disable execution deliberately. If `claude` isn't on PATH the resolution warns loudly and
+leaves you with no runner rather than a runner that would fail on every spawn. See
+[writing-a-consumer.md](writing-a-consumer.md#deep-execution-is-on-by-default).
+
+A second implementation ships alongside it: **[`AcpDeepRunner`](acp-deep-runner.md)** runs the same
+contract over the Agent Client Protocol — a live session with the Claude ACP agent rather than a
+one-shot subprocess — which is what makes MID-TURN STEERING possible (a message queued while the
+deep turn is running is injected into that turn, not held until the next attempt). It is opt-in and
+purely additive: `SubprocessGoalRunner` is unchanged and remains the default, and selecting the
+other one is just `RunnerConfig.deep_runner`. It needs the `[acp]` extra and Node >= 22.
+
+A third implementation is the **[`FastEditRunner`](fast-edit-runner.md)**, which does not spawn
+anything: it lands a bounded file edit in ONE model call, applied in process through a `FileWriter`
+(whole-file rewrite for short files, SEARCH/REPLACE above a line threshold). It is off by default
+and appears only when you wire `RunnerConfig.file_writer`, which is also the only way anything in
+this library gains write access to your files. When it is wired the deep runner is resolved as an
+ORDERED LADDER — `[FastEditRunner, SubprocessGoalRunner]` — indexed by attempt, so a fast edit that
+fails the goal loop's existing verification escalates to the full worker with no new control flow.
+A consumer that wires no writer gets a one-rung ladder and unchanged behaviour.
 
 **Escalating from inside a deep run.** A spawned worker can itself hit a human-only step mid-run
 (an unapproved outward send, an irreversible commitment). If the consumer's context preamble gives

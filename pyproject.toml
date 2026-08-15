@@ -26,10 +26,9 @@ classifiers = [
 ]
 
 # The CORE brain + the RUNNER are stdlib-only (urllib for the Quest client).
-# TUI dependencies are now core (Textual is the recommended interface).
+# TUI dependencies are core: Textual is the ONLY chat UI, with no fallback renderer.
 # Model providers (anthropic, gemini) and vector stores (qdrant, bm25) remain optional.
 dependencies = [
-    "prompt_toolkit>=3.0",
     "rich>=13.0",
     "textual>=0.40.0",
     "PyYAML>=6.0",
@@ -40,6 +39,18 @@ anthropic = ["anthropic>=0.40"]
 gemini = ["google-genai>=2.0"]
 qdrant = ["qdrant-client>=1.7", "fastembed>=0.3"]
 bm25 = ["bm25s>=0.2"]
+# AcpDeepRunner: the opt-in DeepRunner that drives Claude over the Agent Client Protocol instead
+# of a one-shot `claude -p` subprocess (see docs/acp-deep-runner.md). The default deep runner needs
+# none of this. The Python side is this package; the agent side is the separate Node program
+# `@agentclientprotocol/claude-agent-acp` (npm, requires Node >= 22), which pip cannot install.
+acp = ["agent-client-protocol>=0.12"]
+# MCPClient / MCPRetrievalAdapter: a generic MCP (Model Context Protocol) client (stdio subprocess
+# or streamable HTTP transport). Pinned to 2.0.0 exactly -- the version this module was built and
+# tested against (the current PyPI release as of Aug 2026, reflecting the protocol's July 2026
+# revision); see the version comment at the top of adapters/mcp_client.py. The adapter itself
+# imports this lazily inside its own connection seam, so importing quest_ai_runner.adapters never
+# requires it -- install this extra only when a consumer actually wires an MCP server.
+mcp = ["mcp==2.0.0"]
 # GoogleChatAdapter's service_account_token_provider (domain-wide delegation for a Google
 # Workspace). The adapter itself is stdlib-only; only this token provider needs google-auth.
 google = ["google-auth>=2.0"]
@@ -48,7 +59,7 @@ google = ["google-auth>=2.0"]
 # plain-text reads need no extra dependency. Pair with [google] for the service-account token
 # provider if reading a Google Workspace's Drive.
 drive = ["pypdf>=4.0"]
-# All production providers (TUI is now core, not optional)
+# All production providers (the TUI is core, not optional)
 all = [
     "anthropic>=0.40",
     "google-genai>=2.0",
@@ -57,6 +68,7 @@ all = [
     "qdrant-client>=1.7",
     "fastembed>=0.3",
     "bm25s>=0.2",
+    "mcp==2.0.0",
 ]
 dev = ["pytest>=7.0", "pytest-asyncio>=0.23"]
 

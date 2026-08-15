@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from quest_ai_runner.interactive import _DeepRunTracker
+from quest_ai_runner.interactive_session import _DeepRunTracker
 from quest_ai_runner.textual_ui import FutureContextPanel, QuestAITerminal, _build_future_context_text
 
 
@@ -330,6 +330,9 @@ class _FakeSessionForFinishTurn:
 
     def _write_session_file(self) -> None:
         pass
+
+    def _maybe_refresh_next_steps(self, final) -> None:
+        """No-op stand-in for the real session's next-steps write-back."""
 
 
 @pytest.mark.asyncio

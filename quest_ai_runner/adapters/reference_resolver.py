@@ -24,6 +24,7 @@ collection, or path specifics live here.
 """
 from __future__ import annotations
 
+import json
 from typing import Any, Callable, Dict, Optional, Protocol, runtime_checkable
 
 # Item ``type`` values understood by the card content model. ``note`` and ``file`` have built-in
@@ -91,15 +92,57 @@ class NoteResolver:
 
     A note is LLM-authored synthesized text held ON the card; it has no external source, so
     "resolving" it just returns the stored text. Never raises.
+
+    ABRIDGED NOTES: a note that is a SUMMARY of a larger, still-fetchable source may say so on its
+    locator, and name the read spec that pulls the real thing::
+
+        {"text": "<the short summary>",
+         "full_ref": {"query": {"kind": "goal_context", "goal_id": "..."}}}
+
+    A summary used to render exactly like full content, so a reader (model or human) had no way to
+    tell one from the other, and a real turn answered from the summary and then told the user it
+    only had the header. When the declaration is present the rendered text carries an explicit
+    marker saying so and naming the fetch (same convention as the verify-context truncation note),
+    and the structural gate in ``core/sufficiency.py`` forces that fetch before an answer. A note
+    with no declaration renders byte-for-byte as before.
     """
 
     def resolve(self, locator: Dict[str, Any], *, max_chars: int = 2000) -> str:
         try:
-            text = str((locator or {}).get("text") or "")
-            if len(text) > max_chars:
-                text = text[: max_chars - 1].rstrip() + "…"
-            return text
+            loc = locator or {}
+            text = str(loc.get("text") or "")
+            marker = self.abridged_marker(loc, len(text))
+            # The MARKER must survive the cap, not the summary: a trimmed warning is a warning the
+            # reader never gets. It is dropped only in the degenerate case where it alone would
+            # overrun the whole budget (the caller re-trims anything over ``max_chars``).
+            if len(marker) >= max_chars:
+                marker = ""
+            budget = max(0, max_chars - len(marker))
+            if len(text) > budget:
+                text = text[: max(0, budget - 1)].rstrip() + "…"
+            return text + marker
         except Exception:  # noqa: BLE001
+            return ""
+
+    @staticmethod
+    def abridged_marker(locator: Dict[str, Any], chars: int) -> str:
+        """The "this is a summary, fetch it with X" marker for a note that declared itself abridged.
+
+        Returns "" when the locator declares nothing, which is every note written before this
+        existed, so their rendering is unchanged. Never raises.
+        """
+        try:
+            loc = locator or {}
+            ref = loc.get("full_ref")
+            if not isinstance(ref, dict) or not ref:
+                return " [abridged: this is a stored summary, not the full text]" if loc.get(
+                    "abridged") else ""
+            spec = json.dumps(ref, sort_keys=True, default=str)
+            if len(spec) > 400:
+                spec = spec[:399] + "…"
+            return (f"\n[abridged: {chars} chars of SUMMARY, not the full text. Read the source "
+                    f"first with this read spec: {spec}]")
+        except Exception:  # noqa: BLE001 -- a marker must never raise
             return ""
 
 

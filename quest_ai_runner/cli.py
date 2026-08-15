@@ -9,8 +9,10 @@ Env it reads:
   QAR_CORPUS_ROOT                                — file root for the FilesAdapter (grounding);
                                                    also the default for QAR_DEEP_WORKING_DIR
   QAR_DEEP_WORKING_DIR (optional)               — working dir for the subprocess deep-runner;
-                                                   defaults to QAR_CORPUS_ROOT when unset
-  QAR_CLAUDE_PATH (optional)                     — the worker binary (default: claude on PATH)
+                                                   defaults to QAR_CORPUS_ROOT, then the cwd
+  QAR_CLAUDE_PATH (optional)                     — the worker binary (default: claude on PATH).
+                                                   The deep runner is wired AUTOMATICALLY from
+                                                   these two vars; nothing to configure in code.
   QAR_ANSWER_TIMEOUT (optional, seconds)         — per-call cap for the claude_cli planner/answer
                                                    backend (default 180; raise for large corpora)
   QAR_PLANNER_TIER (optional)                    — model tier for the planner step that picks
@@ -131,6 +133,34 @@ Env it reads:
   QAR_QUEST_FOLDER_SYNC_DIRECTION (optional)  — "pull" (default), "push", or "both" for the map
                                                    above. See RunnerConfig.quest_folder_sync_direction.
 
+channel-specific env vars (all optional; read by the `channel` subcommand only, see
+docs/live-channels.md for the full picture including the OpenClaw operator checklist):
+  QAR_CHANNEL_PROVIDER (optional)              — "openclaw" wires an OpenClawChannel from the vars
+                                                   below. Unset (default) = no channel transport;
+                                                   `channel` then logs an error and exits.
+  QAR_OPENCLAW_TOKEN_FILE                      — REQUIRED for the openclaw provider: path to the
+                                                   Gateway token file (never the token itself; see
+                                                   adapters/openclaw_channel.py). Passed to the
+                                                   subprocess as `--token-file <path>`.
+  QAR_OPENCLAW_COMMAND (optional)              — the openclaw binary (default: "openclaw" on PATH).
+  QAR_OPENCLAW_ARGS (optional)                 — extra args appended after "mcp serve", space-
+                                                   separated.
+  QAR_OPENCLAW_CWD (optional)                  — working dir for the spawned subprocess.
+  QAR_OPENCLAW_CALL_TIMEOUT (optional, seconds) — per-call timeout for tools other than
+                                                   events_wait (default 30).
+  QAR_CHANNEL_NAME (optional)                  — the channel's own name / dedup-key prefix
+                                                   (default "openclaw").
+  QAR_CHANNEL_ALLOWED_SENDERS (optional)       — comma-separated sender ids this runner will act
+                                                   on. EMPTY/unset = DENY ALL (fail closed) — see
+                                                   RunnerConfig.channel_allowed_senders.
+  QAR_CHANNEL_ACK_AFTER_SECONDS (optional)     — see RunnerConfig.channel_ack_after_seconds
+                                                   (default 15).
+  QAR_CHANNEL_PROGRESS_MIN_SECONDS (optional)  — see RunnerConfig.channel_progress_min_seconds
+                                                   (default 20).
+  QAR_CHANNEL_TURN_TIMEOUT_SECONDS (optional)  — see RunnerConfig.channel_turn_timeout_seconds
+                                                   (default 900).
+  QAR_CHANNEL_STATE_PATH (optional)            — dedup state file (default: in-memory only).
+
 chat-specific env vars (all optional):
   QAR_REP_NAME (optional)                        — display name for the AI representative shown in
                                                    the interactive session (e.g. "Alex's AI").
@@ -154,10 +184,11 @@ from pathlib import Path
 import shutil
 
 from .adapters import AnthropicProvider, ClaudeCliProvider, ClaudeConversationsAdapter, CompositeRetrievalAdapter, FilesAdapter, GeminiProvider, OpenAIProvider, WebSearchAdapter
+from .adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
 from .config import RunnerConfig
 from .core.adapters import ModelProvider
-from .core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 from .pricing import estimate_bootstrap_cost, get_provider_and_model
+from .runner.channel_runner import ChannelRunner
 from .runner.poller import Poller
 
 
@@ -223,6 +254,49 @@ def _web_search_adapter_from_env():
     return WebSearchAdapter(api_key=api_key, max_results=max_results)
 
 
+def _channel_transport_from_env():
+    """Build the `channel` subcommand's ``ChannelTransport`` from env, or None.
+
+    Only "openclaw" is a built-in provider today (the reference bridge). A consumer that wants a
+    different ``ChannelTransport`` builds ``RunnerConfig`` itself and sets ``channel_transport``
+    directly instead of going through this env-driven CLI path — see ``core.adapters.ChannelTransport``.
+    """
+    provider = (os.getenv("QAR_CHANNEL_PROVIDER") or "").strip().lower()
+    if not provider:
+        return None
+    if provider != "openclaw":
+        raise ValueError(f"Unknown QAR_CHANNEL_PROVIDER: {provider!r}. Only 'openclaw' is built in.")
+    token_file = (os.getenv("QAR_OPENCLAW_TOKEN_FILE") or "").strip()
+    args_env = (os.getenv("QAR_OPENCLAW_ARGS") or "").strip()
+    cfg = OpenClawChannelConfig(
+        token_file=token_file,
+        command=os.getenv("QAR_OPENCLAW_COMMAND", "openclaw"),
+        args=(["mcp", "serve"] + args_env.split()) if args_env else ["mcp", "serve"],
+        cwd=os.getenv("QAR_OPENCLAW_CWD") or None,
+        call_timeout_s=float(os.getenv("QAR_OPENCLAW_CALL_TIMEOUT", "30")),
+        channel=os.getenv("QAR_CHANNEL_NAME", "openclaw"),
+    )
+    return OpenClawChannel(cfg)
+
+
+def _apply_channel_env(cfg: RunnerConfig) -> None:
+    """Fold the channel-specific env vars (see the module docstring) into an existing RunnerConfig,
+    in place. Separate from ``_config_from_env`` so the ordinary `poll`/`chat` paths never pay for
+    (or accidentally pick up) channel config they didn't ask for."""
+    cfg.channel_transport = _channel_transport_from_env()
+    senders = (os.getenv("QAR_CHANNEL_ALLOWED_SENDERS") or "").strip()
+    if senders:
+        cfg.channel_allowed_senders = [s.strip() for s in senders.split(",") if s.strip()]
+    if os.getenv("QAR_CHANNEL_ACK_AFTER_SECONDS"):
+        cfg.channel_ack_after_seconds = float(os.environ["QAR_CHANNEL_ACK_AFTER_SECONDS"])
+    if os.getenv("QAR_CHANNEL_PROGRESS_MIN_SECONDS"):
+        cfg.channel_progress_min_seconds = float(os.environ["QAR_CHANNEL_PROGRESS_MIN_SECONDS"])
+    if os.getenv("QAR_CHANNEL_TURN_TIMEOUT_SECONDS"):
+        cfg.channel_turn_timeout_seconds = float(os.environ["QAR_CHANNEL_TURN_TIMEOUT_SECONDS"])
+    if os.getenv("QAR_CHANNEL_STATE_PATH"):
+        cfg.channel_state_path = os.environ["QAR_CHANNEL_STATE_PATH"]
+
+
 def _config_from_env() -> RunnerConfig:
     corpus = os.getenv("QAR_CORPUS_ROOT")
     retrieval = FilesAdapter(corpus) if corpus else None
@@ -266,14 +340,12 @@ def _config_from_env() -> RunnerConfig:
             else:
                 retrieval = adapter
 
-    # QAR_DEEP_WORKING_DIR defaults to QAR_CORPUS_ROOT so only one env var is needed.
-    deep_dir = os.getenv("QAR_DEEP_WORKING_DIR") or corpus
-    deep_runner = None
-    if deep_dir:
-        deep_runner = SubprocessGoalRunner(SubprocessConfig(
-            working_dir=deep_dir,
-            claude_path=os.getenv("QAR_CLAUDE_PATH", "claude"),
-        ))
+    # The deep runner is NOT wired here any more: leaving RunnerConfig.deep_runner unset means
+    # "auto", and config.resolve_deep_runner builds the same SubprocessGoalRunner from the same
+    # env vars (QAR_DEEP_WORKING_DIR, falling back to corpus_root and then cwd; QAR_CLAUDE_PATH).
+    # Building it here as well would only fork the logic — and the old `deep_runner = None` for a
+    # corpus-less run read as "execution deliberately disabled", so `qar chat` with no corpus
+    # configured could never execute anything.
     # Allow model tier overrides via env vars: QAR_MODEL_FAST, QAR_MODEL_BALANCED, QAR_MODEL_QUALITY, QAR_MODEL_BEST
     model_fallback = {}
     for tier in ("fast", "balanced", "quality", "best"):
@@ -288,7 +360,6 @@ def _config_from_env() -> RunnerConfig:
         retrieval=retrieval,
         model_provider=_model_provider_from_env(),
         model_fallback=model_fallback or None,
-        deep_runner=deep_runner,
         corpus_root=corpus,
         runner_label=os.getenv("QAR_RUNNER_LABEL") or None,
         env_id=os.getenv("QAR_ENV_ID") or None,
@@ -560,6 +631,10 @@ def main(argv=None) -> int:
 
     # --- chat subcommand: interactive attended session ------------------------
     chat_p = sub.add_parser("chat", help="start an interactive session with the brain")
+    chat_p.add_argument("rep_positional", nargs="?", default=None, metavar="REP",
+                        help="shorthand for --rep NAME (e.g. `qar wadona`); if a "
+                             "<corpus_root>/<name>/CLAUDE.md file exists it is also loaded as "
+                             "the persona, same as --persona-file")
     chat_p.add_argument("--rep", default=None, metavar="NAME",
                         help="AI representative display name shown in the session "
                              "(default: QAR_REP_NAME env var, else 'AI')")
@@ -651,6 +726,14 @@ def main(argv=None) -> int:
     poll_p.add_argument("--once", action="store_true", help="one scan then exit (cron mode)")
     poll_p.add_argument("--check", action="store_true", help="validate config + key, then exit")
 
+    # --- channel subcommand: hold a live, two-way conversation over a messaging channel -------
+    channel_p = sub.add_parser(
+        "channel", help="drive a live ChannelTransport (e.g. OpenClaw) as a real-time chat lane")
+    channel_p.add_argument("--once", action="store_true",
+                           help="one receive+dispatch pass then exit (mainly for testing)")
+    channel_p.add_argument("--check", action="store_true",
+                           help="validate the channel config (provider, allowed senders), then exit")
+
     # Legacy: flags directly on the root command (no subcommand given) stay working; also
     # documented on `poll` above. Kept visible (not argparse.SUPPRESS) so `-h` shows them.
     parser.add_argument("--once", action="store_true",
@@ -690,7 +773,14 @@ def main(argv=None) -> int:
             for p in problems:
                 log.error("config error: %s", p)
             return 1
-        rep_name = args.rep or os.getenv("QAR_REP_NAME") or "Assistant"
+        # Track whether the caller explicitly named a rep / persona file (env var or flag),
+        # as opposed to falling through to the "Assistant" default -- distinct from just
+        # checking the final rep_name string, since "--rep Assistant" must count as explicit
+        # too. Session-level auto-persona-resolution (interactive_session.py) only runs when
+        # NEITHER was explicitly given.
+        rep_positional = getattr(args, "rep_positional", None)
+        rep_specified = bool(args.rep or rep_positional or os.getenv("QAR_REP_NAME"))
+        rep_name = args.rep or rep_positional or os.getenv("QAR_REP_NAME") or "Assistant"
         persona = None
         persona_path = args.persona_file or os.getenv("QAR_REP_PERSONA_FILE")
         if persona_path:
@@ -700,20 +790,36 @@ def main(argv=None) -> int:
             except OSError as e:
                 log.error("could not read persona file %r: %s", persona_path, e)
                 return 1
+        elif rep_positional and cfg.corpus_root:
+            # `qar <name>` shorthand: look for a <name>/CLAUDE.md directly under the corpus
+            # root (the character-folder convention) and load it as the persona, same as
+            # passing --persona-file explicitly. Silent no-op if there is no such folder --
+            # the session still runs, just with only the display name set.
+            from .interactive_session import _read_persona_file_in_corpus
+            persona = _read_persona_file_in_corpus(cfg.corpus_root, f"{rep_positional}/CLAUDE.md")
+            if persona is None:
+                persona = _read_persona_file_in_corpus(
+                    cfg.corpus_root, f"{rep_positional.lower()}/CLAUDE.md")
+        persona_specified = persona is not None
 
-        # Try Textual UI first (smooth 120 FPS terminal), fall back to ANSI
-        try:
-            from .textual_session import is_textual_available, start_textual_interactive
-            if is_textual_available():
-                log.debug("using Textual UI for chat session")
-                start_textual_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id, verbosity=args.verbose)
-                return 0
-        except Exception as e:
-            log.debug("Textual UI failed, falling back to ANSI: %s", e)
-
-        # Fallback to original ANSI-based interactive session
-        from .interactive import start_interactive
-        start_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id)
+        # The Textual UI is the only chat UI. `textual` is a CORE dependency (see
+        # pyproject.toml), so it should always import from a correctly installed
+        # environment; there is no second renderer to degrade to. If it does not
+        # import, the install is incomplete (e.g. an editable install never re-synced
+        # after `textual` was added to dependencies) — say exactly that and how to fix
+        # it, rather than dying on a raw ImportError traceback.
+        from .textual_session import is_textual_available, start_textual_interactive
+        if not is_textual_available():
+            log.error(
+                "Textual UI unavailable: the 'textual' package failed to import. It is a "
+                "required dependency of quest-ai-runner and there is no fallback chat UI. "
+                "Run `pip install --upgrade -e .` (from a source checkout) or `pip install "
+                "--upgrade quest-ai-runner` to install it, then try `quest-ai-runner chat` again."
+            )
+            return 1
+        start_textual_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id,
+                                  verbosity=args.verbose, rep_specified=rep_specified,
+                                  persona_specified=persona_specified)
         return 0
 
     # --- send -----------------------------------------------------------------
@@ -1111,6 +1217,42 @@ def main(argv=None) -> int:
                     print(f"  {f}")
                 if len(all_items) > 8:
                     print(f"  ... +{len(all_items) - 8} more")
+        return 0
+
+    # --- channel: drive a live, two-way ChannelTransport ----------------------
+    if args.command == "channel":
+        cfg = _config_from_env()
+        try:
+            _apply_channel_env(cfg)
+        except ValueError as e:
+            log.error("channel config error: %s", e)
+            return 1
+        # A channel is a conversational lane like `chat`: Quest credentials and a retrieval
+        # adapter are optional (no corpus = no grounding, but the turn still runs).
+        _skip = {"quest", "retrieval adapter", "team_id"}
+        problems = [p for p in cfg.validate() if not any(kw in p for kw in _skip)]
+        if problems:
+            for p in problems:
+                log.error("config error: %s", p)
+            return 1
+        if cfg.channel_transport is None:
+            log.error("no channel transport configured — set QAR_CHANNEL_PROVIDER=openclaw and "
+                     "QAR_OPENCLAW_TOKEN_FILE (see docs/live-channels.md)")
+            return 1
+        if not cfg.channel_allowed_senders:
+            log.warning("QAR_CHANNEL_ALLOWED_SENDERS is empty — every sender will be REJECTED "
+                       "(fail closed). This is very likely not what you want; set it to the "
+                       "sender id(s) allowed to reach this runner.")
+        runner = ChannelRunner(cfg)
+        if getattr(args, "check", False):
+            log.info("channel config OK: transport=%s allowed_senders=%d",
+                     cfg.channel_transport.channel, len(cfg.channel_allowed_senders))
+            return 0
+        if getattr(args, "once", False):
+            dispatched = runner.run_once()
+            log.info("channel: dispatched %d message(s)", dispatched)
+            return 0
+        runner.run_forever()
         return 0
 
     # --- poll (default when no subcommand given) ------------------------------

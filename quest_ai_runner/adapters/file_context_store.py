@@ -91,6 +91,12 @@ _TFDFIDF_VERSION = 1  # stored as "tfdfidf_v" in each file entry within a card
 # Name of the meta file written to cards_dir after a successful bootstrap.
 _BOOTSTRAP_META_FILE = "bootstrap_meta.json"
 
+# Sane bound on how many parent directories ``_discover_ancestor_card_dir`` will walk up looking
+# for an already-indexed ancestor corpus, so a pathological mount (e.g. a very deep or looping
+# filesystem namespace) can't make the upward walk hang. 12 comfortably covers any realistic
+# corpus nesting depth.
+_MAX_ANCESTOR_WALK_LEVELS = 12
+
 
 def _run_parallel(callables: List, max_workers: int) -> List:
     """Run callables in parallel with daemon threads; return results in input order.
@@ -1671,13 +1677,15 @@ class FileContextStore(ContextAssemblerBase):
         - ``files``    -- every file the topic references, fingerprinted (sha256/mtime/git_sha).
         - ``provenance.created_by_task`` == "bootstrap".
 
-        Before any LLM work, sub-corpora that already have their OWN completed bootstrap are
-        reused wholesale (see ``reuse_nested_cards`` on the constructor) — their cards are imported
-        with rewritten paths and a namespaced id, and their files are excluded from LLM discovery.
-        This makes a wider corpus root's bootstrap free for any subtree a narrower, already-indexed
-        QAR instance covers.
+        Before any LLM work, corpora that already have their OWN completed bootstrap are reused
+        wholesale in BOTH directions (see ``reuse_nested_cards`` on the constructor): descendant
+        sub-corpora (this root is the wider one) and ancestor corpora (this root is the narrower
+        one, nested inside an already-indexed wider tree) are both discovered, and their cards are
+        imported with rewritten paths and a namespaced id, excluding their files from LLM
+        discovery. This makes a corpus root's bootstrap free for any subtree already covered by an
+        indexed QAR instance either above or below it.
 
-        Without a ``provider`` this is a NO-OP returning 0 UNLESS nested-store reuse produced
+        Without a ``provider`` this is a NO-OP returning 0 UNLESS reuse (either direction) produced
         cards: topic cards for genuinely new content require semantic understanding, so those
         accumulate via ``record()`` instead, but reused cards need no LLM at all.
 
@@ -1849,6 +1857,96 @@ class FileContextStore(ContextAssemblerBase):
                 continue
         return imported
 
+    def _discover_ancestor_card_dir(self, walk_root: Path) -> Optional[Path]:
+        """Find the nearest ANCESTOR of ``walk_root`` that already has its own completed bootstrap.
+
+        Mirror image of ``_discover_nested_card_dirs``: that one walks DOWN into ``walk_root``'s
+        descendants; this one walks UP through its parents. Covers the case where THIS store's
+        corpus root is a narrower subfolder of an already-indexed wider corpus (e.g. bootstrapping
+        a dissertation folder several levels below ``~/hq`` when ``~/hq`` itself already has a
+        completed ``.quest-context`` covering it) -- without this, a narrower root can never see an
+        ancestor's index, since an ancestor is by definition not inside ``walk_root``.
+
+        Walks up from ``walk_root``'s parent, checking each ancestor for
+        ``<ancestor>/.quest-context/bootstrap_meta.json``, and returns the FIRST (nearest) match --
+        trusting it transitively, same as the downward case trusts a nested match to have already
+        reused whatever is beneath IT. Bounded by ``_MAX_ANCESTOR_WALK_LEVELS`` and stops at the
+        filesystem root either way. Never raises; returns ``None`` on any failure or no match.
+        """
+        try:
+            current = walk_root.resolve().parent
+            for _ in range(_MAX_ANCESTOR_WALK_LEVELS):
+                if (current / ".quest-context" / _BOOTSTRAP_META_FILE).is_file():
+                    return current
+                parent = current.parent
+                if parent == current:  # reached filesystem root
+                    break
+                current = parent
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+
+    def _import_ancestor_cards(self, ancestor_root: Path, walk_root: Path) -> List[Dict[str, Any]]:
+        """Reuse an ANCESTOR corpus's already-bootstrapped cards, filtered down to ``walk_root``.
+
+        Mirror image of ``_import_nested_cards`` for the upward direction. An ancestor's cards can
+        reference files anywhere across its much wider tree, most of which are irrelevant to this
+        narrower root, so a card is only imported when at least one of its files falls under
+        ``walk_root`` -- and when imported, its ``files`` list is TRIMMED to just that in-scope
+        subset (paths rewritten from ancestor-root-relative to walk-root-relative, the reverse
+        rewrite direction from the nested/downward case) so a file the ancestor's card references
+        outside this narrower corpus is never treated as "covered" here.
+
+        ``imported_from`` is the ancestor's path relative to ``walk_root`` (e.g. ``".."`` or
+        ``"../.."``), so it round-trips through the same provenance/pruning logic in
+        ``_bootstrap_inner`` that the downward case already uses. Never raises; returns [] on any
+        failure.
+        """
+        try:
+            walk_root_resolved = walk_root.resolve()
+            ancestor_resolved = ancestor_root.resolve()
+            depth = len(walk_root_resolved.relative_to(ancestor_resolved).parts)
+            if depth < 1:
+                return []
+        except Exception:  # noqa: BLE001
+            return []
+        imported_from = "/".join([".."] * depth)
+        id_prefix = _path_slug(imported_from)
+        try:
+            ancestor_cards = FilesystemCardRepository(str(ancestor_root / ".quest-context")).load_all()
+        except Exception:  # noqa: BLE001
+            return []
+        imported: List[Dict[str, Any]] = []
+        for card in ancestor_cards.values():
+            try:
+                files: List[str] = []
+                for fe in card.get("files", []):
+                    if not isinstance(fe, dict) or not fe.get("path"):
+                        continue
+                    try:
+                        abs_path = (ancestor_root / fe["path"]).resolve()
+                        rel = abs_path.relative_to(walk_root_resolved)
+                    except ValueError:
+                        continue  # this file is outside walk_root; drop it, keep the rest of the card
+                    files.append(rel.as_posix())
+                if not files:
+                    continue
+                cid = str(card.get("id") or "")
+                if not cid:
+                    continue
+                imported.append({
+                    "id": f"{id_prefix}--{cid}"[:200],
+                    "name": card.get("name", ""),
+                    "keywords": card.get("keywords", []),
+                    "summary": card.get("summary", ""),
+                    "description": card.get("description") or card.get("summary", ""),
+                    "files": files,
+                    "imported_from": imported_from,
+                })
+            except Exception:  # noqa: BLE001
+                continue
+        return imported
+
     def _bootstrap_inner(
         self,
         root: Optional[str] = None,
@@ -1941,10 +2039,19 @@ class FileContextStore(ContextAssemblerBase):
                 for ic in self._import_nested_cards(nested_root, walk_root):
                     imported_cards.append(ic)
                     imported_covered.update(ic.get("files", []))
+            # Mirror image: also look UPWARD for an already-indexed ANCESTOR corpus (this root is
+            # the narrower one, e.g. bootstrapping a subfolder of an already-indexed wide corpus).
+            # Both directions can contribute at once (an indexed ancestor above AND an indexed
+            # descendant below), so this is not an elif.
+            ancestor_root = self._discover_ancestor_card_dir(walk_root)
+            if ancestor_root is not None:
+                for ic in self._import_ancestor_cards(ancestor_root, walk_root):
+                    imported_cards.append(ic)
+                    imported_covered.update(ic.get("files", []))
             if imported_cards:
                 _log.info(
-                    "context index: reusing %d card(s) from %d nested corpus root(s), covering "
-                    "%d file(s) with zero LLM calls",
+                    "context index: reusing %d card(s) from %d corpus root(s) (nested and/or "
+                    "ancestor), covering %d file(s) with zero LLM calls",
                     len(imported_cards),
                     len({ic["imported_from"] for ic in imported_cards}),
                     len(imported_covered),

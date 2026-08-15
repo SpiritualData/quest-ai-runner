@@ -16,6 +16,25 @@ from quest_ai_runner.core.adapters import (
 
 
 @pytest.fixture(autouse=True)
+def deep_runner_default_is_inert_in_tests(monkeypatch):
+    """The auto-built default deep runner must never resolve to a REAL worker during the suite.
+
+    ``RunnerConfig.deep_runner`` left unset means "build the default SubprocessGoalRunner pointed
+    at ``claude`` on PATH" (see ``config.resolve_deep_runner``). That is the right product default
+    and the wrong test default twice over: the suite must be offline and hermetic (a turn routed to
+    deep would otherwise SPAWN Claude Code for real), and its results must not depend on whether
+    the developer's machine happens to have Claude Code installed.
+
+    Pointing ``QAR_CLAUDE_PATH`` at a binary that cannot exist makes the resolution take its
+    documented graceful-degradation branch (warn, no runner) uniformly everywhere. Tests that care
+    about the resolution itself override this with their own ``monkeypatch.setenv`` /
+    ``shutil.which`` patching (see ``tests/test_deep_runner_default.py``), which is applied after
+    this fixture and therefore wins.
+    """
+    monkeypatch.setenv("QAR_CLAUDE_PATH", "qar-test-no-such-claude-binary")
+
+
+@pytest.fixture(autouse=True)
 def no_background_index_survives_a_test():
     """No context-index thread may outlive the test that started it.
 

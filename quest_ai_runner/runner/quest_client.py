@@ -25,8 +25,23 @@ Endpoints implemented (the contract from integration_library_design.md §3):
                GET  /api/quests/{quest_id}/state       (get_my_quest)
                GET  /api/quests/{quest_id}/notes       (list_quest_notes)
                POST /api/quests/{quest_id}/notes       (add_quest_note)
+               GET  /api/quests/{quest_id}/context-entries            (list_context_entries)
+               POST /api/quests/{quest_id}/context-entries            (create_context_entry)
+               PUT  /api/quests/{quest_id}/context-entries/{entry_id} (update_context_entry)
+               Notes are append-only (no PATCH/DELETE exists); context entries can be replaced in
+               place, so a REFRESHING artifact belongs in an entry, not in a note.
   Goal (real, typed, period-scoped -- distinct from an assistant task):
                POST /api/planning/goals                (create_goal)
+  Reflections (the person's own words; USER-scoped, no team or quest id):
+               GET  /api/daily-plan/today              (get_daily_reflection)
+               GET  /api/period-review/{period}/current (get_period_reflection)
+               Composed into one context block by ``runner.reflections``.
+  Insights (the person's own captures; USER-scoped, no team or quest id):
+               GET   /api/data/insights/collection             (get_insights_collection)
+               GET   /api/data/collections/{id}/entries        (list_collection_entries)
+               PATCH /api/data/insights/mark-acted-on          (mark_insight_acted_on)
+               The entries route has NO server-side date or field filter; ``runner.insights``
+               applies the "recent and not yet acted on" selection client-side.
 
 ``QuestDecisionSink`` wraps a QuestClient as a core ``EscalationSink`` so the brain can raise a
 confirm/decision and get back a ``decision_id`` to report on the task.
@@ -730,20 +745,259 @@ class QuestClient:
             log.warning("list_quest_notes failed for quest %s: %s", quest_id, e)
             return []
 
-    def add_quest_note(self, quest_id: str, text: str) -> List[Dict[str, Any]]:
+    def add_quest_note(self, quest_id: str, text: str,
+                       *, author_label: Optional[str] = None) -> List[Dict[str, Any]]:
         """POST /api/quests/{quest_id}/notes — append a note; returns the updated notes list.
 
         Attribution is derived server-side from the caller: an API-key caller (this client) is
         recorded ``author_kind: "ai"``. Returns [] on failure.
+
+        ``author_label`` names the PERSONA that wrote it ("Bailey"), for a quest several personas
+        work. The backend honors it only for API-key callers and falls back to a plain "AI
+        assistant", so it can never be used to post as the person: the one name an AI note must not
+        carry is the account owner's, since that is what made a run's own summaries indistinguishable
+        from the person's replies.
         """
         try:
             self._require()
+            body: Dict[str, Any] = {"text": text}
+            if author_label and str(author_label).strip():
+                body["author_label"] = str(author_label).strip()[:60]
             resp = self._request(
-                "POST", f"/api/quests/{quest_id}/notes", body={"text": text}) or []
+                "POST", f"/api/quests/{quest_id}/notes", body=body) or []
             return resp if isinstance(resp, list) else []
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("add_quest_note failed for quest %s: %s", quest_id, e)
             return []
+
+    def send_quest_email(self, quest_id: str, *, subject: str, body: str,
+                         rep_id: Optional[str] = None,
+                         task_id: Optional[str] = None) -> Dict[str, Any]:
+        """POST /api/quests/{quest_id}/email — mail this quest's people, as the persona that wrote it.
+
+        THE way a run sends mail. Not a local mail script: going through Quest is what gives the
+        message the quest's own Reply-To (so an answer comes back as a note on the quest rather
+        than into a void), the account's unsubscribe handling, a record, and a signature naming the
+        persona instead of a generic assistant.
+
+        There is no recipient argument, deliberately. The audience is the quest's own settings, so
+        a run decides what to say and when, never who receives a quest's contents. Requires the
+        person to have enabled email on the quest (which is also what mints the reply address);
+        without it the backend answers 400 and nothing is sent.
+
+        RAISES on failure rather than returning a falsy value: a run that believes it has told
+        someone something, when it has not, will go on to act as though the message landed.
+        """
+        self._require()
+        body_payload: Dict[str, Any] = {"subject": subject, "body": body}
+        if rep_id:
+            body_payload["rep_id"] = rep_id
+        if task_id:
+            body_payload["task_id"] = task_id
+        return self._request("POST", f"/api/quests/{quest_id}/email", body=body_payload) or {}
+
+    # --- quest context entries (the quest's own documents; UPDATABLE, unlike notes) ------------
+
+    def list_context_entries(self, quest_id: str) -> List[Dict[str, Any]]:
+        """GET /api/quests/{quest_id}/context-entries — this quest's context documents.
+
+        Each item is a preview dict (``id``, ``name``, ``char_count``, ``tags``, ``created_at``).
+        These are the quest's own attached documents, distinct from its notes in the one way that
+        matters for a refreshing artifact: an entry can be REPLACED in place (see
+        ``update_context_entry``), while a note can only ever be appended. Returns [] on failure.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", f"/api/quests/{quest_id}/context-entries") or []
+            return resp if isinstance(resp, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_context_entries failed for quest %s: %s", quest_id, e)
+            return []
+
+    def create_context_entry(self, quest_id: str, name: str, content: str) -> Dict[str, Any]:
+        """POST /api/quests/{quest_id}/context-entries — add one named context document.
+
+        The server creates the quest's context collection on first use, so no setup call is needed.
+        Empty ``content`` is rejected server-side (422). Returns {} on failure.
+        """
+        try:
+            self._require()
+            resp = self._request("POST", f"/api/quests/{quest_id}/context-entries",
+                                 body={"name": name, "content": content}) or {}
+            return resp if isinstance(resp, dict) else {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("create_context_entry failed for quest %s: %s", quest_id, e)
+            return {}
+
+    def update_context_entry(self, quest_id: str, entry_id: str, *,
+                             name: Optional[str] = None,
+                             content: Optional[str] = None) -> Dict[str, Any]:
+        """PUT /api/quests/{quest_id}/context-entries/{entry_id} — replace an entry's name/content.
+
+        This is what makes an upsert possible: re-publishing a document that refreshes (a quest's
+        current next steps, say) replaces the one entry instead of piling up a new object per
+        refresh. Only the fields given are changed. Returns {} on failure.
+        """
+        body: Dict[str, Any] = {}
+        if name is not None:
+            body["name"] = name
+        if content is not None:
+            body["content"] = content
+        try:
+            self._require()
+            resp = self._request(
+                "PUT", f"/api/quests/{quest_id}/context-entries/{entry_id}", body=body) or {}
+            return resp if isinstance(resp, dict) else {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("update_context_entry failed for quest %s entry %s: %s",
+                        quest_id, entry_id, e)
+            return {}
+
+    # --- the person's own reflections (USER-scoped; no team_id, no quest_id) -------------------
+    # Quest asks a person two standing questions and keeps their answers verbatim: the daily plan's
+    # "how did yesterday go" review, and each period review's "how did this period go" / "what to
+    # focus on next". Both endpoints are authenticated as the CALLER and scoped to that user, so
+    # neither takes (nor accepts) a team or quest id. Reading them is how anything here can answer
+    # "what should I work on" from what the person actually wrote instead of guessing from task
+    # rows. See ``runner.reflections`` for the helper that composes both into one context block.
+
+    PERIOD_REVIEW_PERIODS = ("week", "month", "quarter", "year")
+
+    def get_daily_reflection(self, *, date: Optional[str] = None) -> Dict[str, Any]:
+        """GET /api/daily-plan/today[?date=YYYY-MM-DD] — one day's daily-plan entry.
+
+        Returns ``{has_plan, plan_id, date, yesterday_review, today_plan, goals_created}``.
+        ``yesterday_review`` is the person's reflection on how the day BEFORE ``date`` went (they
+        write it while planning ``date``); ``today_plan`` is what they said they would do on
+        ``date`` itself.
+
+        Omitting ``date`` means today in the USER's own timezone, resolved server-side — which is
+        why the no-date call is the right default and an explicit date is only for walking back to
+        an earlier day. ``has_plan: False`` with both texts ``None`` simply means they have not
+        filled that day in; it is an ordinary state, not a failure. Returns {} on any error.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", "/api/daily-plan/today",
+                                 params={"date": date} if date else None) or {}
+            return resp if isinstance(resp, dict) else {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("get_daily_reflection failed (date=%s): %s", date, e)
+            return {}
+
+    def get_period_reflection(self, period: str = "week", *, use_previous: bool = False,
+                              tz: Optional[str] = None) -> Dict[str, Any]:
+        """GET /api/period-review/{period}/current — one period review's REVIEW block.
+
+        ``period`` is one of ``PERIOD_REVIEW_PERIODS`` (week/month/quarter/year). There is no
+        "day" here: the daily equivalent is ``get_daily_reflection`` above, a different endpoint
+        with a different shape. An unknown period is rejected client-side (returns {}) rather than
+        spent on a 422. ``use_previous=True`` asks for the period BEFORE the current one, which is
+        what you want early in a period, before this one has been reviewed. ``tz`` is an IANA zone
+        name deciding where the period boundaries fall; the server defaults to UTC.
+
+        Returns the response's ``review`` block: ``{has_review, review_id, status,
+        reflection_past, reflection_future, ai_suggestions, suggestions_accepted}``.
+        ``has_review: False`` means the person has not submitted that review yet — expected, not an
+        error, and the reflection fields are ``None``. The response's ``stats`` block (completions
+        and time distribution) is deliberately dropped: this method exists to read what the PERSON
+        wrote, and the stats are a separate, much larger concern. Returns {} on any error.
+        """
+        period = str(period or "").strip().lower()
+        if period not in self.PERIOD_REVIEW_PERIODS:
+            log.warning("get_period_reflection: unknown period %r (expected one of %s)",
+                        period, ", ".join(self.PERIOD_REVIEW_PERIODS))
+            return {}
+        try:
+            self._require()
+            params: Dict[str, Any] = {}
+            if use_previous:
+                params["use_previous"] = "true"
+            if tz:
+                params["timezone"] = tz
+            resp = self._request("GET", f"/api/period-review/{period}/current",
+                                 params=params or None) or {}
+            review = resp.get("review") if isinstance(resp, dict) else None
+            return review if isinstance(review, dict) else {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("get_period_reflection failed for period %s: %s", period, e)
+            return {}
+
+    # --- the person's captured insights (USER-scoped; no team_id, no quest_id) ------------------
+    # Quest auto-creates one "Insights" collection per person: quick capture for the idea that
+    # arrives away from any goal, with the free-text category tags they chose, an ``acted_on``
+    # checkbox, and a description of what was done. It is the one place in Quest holding something
+    # the person recorded that has NOT been turned into a goal or task yet. See ``runner.insights``
+    # for the helper that composes recent unacted captures into one context block.
+
+    def get_insights_collection(self) -> Dict[str, Any]:
+        """GET /api/data/insights/collection — the caller's Insights collection.
+
+        Returns the collection dict (``id``, ``name``, ``customFields``, …), the same shape as
+        ``GET /api/data/collections/{id}``. The route CREATES the collection when the person does
+        not have one yet, so an empty result means a failed read rather than "no insights feature"
+        — but the ``id`` is all a reader needs, and the entries live behind
+        ``list_collection_entries``. Returns {} on any error.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", "/api/data/insights/collection") or {}
+            return resp if isinstance(resp, dict) else {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("get_insights_collection failed: %s", e)
+            return {}
+
+    def list_collection_entries(self, collection_id: str, *, page: int = 0,
+                                limit: int = 50) -> Dict[str, Any]:
+        """GET /api/data/collections/{collection_id}/entries — one page of a collection's entries.
+
+        Generic across every collection type, not insights-specific. Returns
+        ``{"items": [...], "pagination": {total, page, limit, total_pages, has_next, has_prev}}``,
+        newest first (the route sorts by ``created_at`` descending). Each item carries
+        ``fieldValues`` keyed by the collection's own field ids, plus ``createdAt``.
+
+        There is NO server-side filter on this route — not by date, not by field value — so any
+        "recent" or "unacted" selection is the caller's to apply client-side. Returns {} on any
+        error.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", f"/api/data/collections/{collection_id}/entries",
+                                 params={"page": page, "limit": limit}) or {}
+            return resp if isinstance(resp, dict) else {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_collection_entries failed for collection %s (page %s): %s",
+                        collection_id, page, e)
+            return {}
+
+    def mark_insight_acted_on(self, entry_id: str, collection_id: str,
+                              action_taken_description: str = "") -> bool:
+        """PATCH /api/data/insights/mark-acted-on — tick one insight's ``acted_on`` box.
+
+        ``action_taken_description`` fills the entry's "Action Taken" field, and is what the person
+        sees next to the tick when they review their captures. Write it as a statement of what
+        actually exists now ("created the goal 'Draft chapter two'"), not what was intended.
+
+        Returns True only when the write succeeded. This is a WRITE on the person's own data with a
+        visible consequence — a ticked insight drops out of every unacted list, including the one
+        their weekly review is built from — so a failure is logged and reported rather than
+        swallowed, and a caller must not treat "I asked" as "it is done". By the same token, do not
+        call this for work that was merely QUEUED: an insight marked acted on because a task was
+        created, where that task is then never approved or fails, has been silently removed from
+        the person's list without anything having happened.
+        """
+        if not (entry_id and collection_id):
+            log.warning("mark_insight_acted_on needs both entry_id and collection_id")
+            return False
+        try:
+            self._require()
+            self._request("PATCH", "/api/data/insights/mark-acted-on",
+                          body={"entry_id": entry_id, "collection_id": collection_id,
+                                "action_taken_description": action_taken_description or ""})
+            return True
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("mark_insight_acted_on failed for entry %s: %s", entry_id, e)
+            return False
 
     # --- task creation (enqueue a new AI task) --------------------------------
 
@@ -751,9 +1005,15 @@ class QuestClient:
                     team_id: Optional[str] = None,
                     goal_id: Optional[str] = None,
                     scheduled_at: Optional[str] = None,
+                    scheduled_date: Optional[str] = None,
+                    scheduled_time: Optional[str] = None,
                     source: str = "chat",
+                    title: Optional[str] = None,
                     env_id: Optional[str] = None,
                     task_kind: Optional[str] = None,
+                    status: Optional[str] = None,
+                    recurrence: Optional[Any] = None,
+                    assignee_rep_id: Optional[str] = None,
                     card_ids: Optional[List[str]] = None) -> Dict[str, Any]:
         """POST a new queued AI task to /api/assistant-tasks.
 
@@ -783,10 +1043,22 @@ class QuestClient:
         relevant context, either explicitly chosen by the caller or resolved from the task text
         via a card search. Omit or pass an empty list to send no cards, matching prior behavior.
 
-        NOTE: the create route accepts NO ``status`` field (the backend always creates the task
-        queued and fills status server-side) and no persona/rep field. A caller that needs a
-        different initial status (e.g. ``"suggested"``) must create the task and then PATCH it
-        via ``update_task``; see ``runner.autopilot``.
+        ``status`` lands the task in its initial state ATOMICALLY. Only ``"queued"`` (the default)
+        and ``"suggested"`` may be asserted at creation. Use ``"suggested"`` for anything a human
+        must approve before it runs: creating it queued and PATCHing it down afterwards leaves a
+        window in which the runner's poll can claim and EXECUTE the task before the demotion
+        lands, which is precisely the approval that suggest mode exists to require.
+
+        ``recurrence`` makes this the first occurrence of a repeating series (the backend stamps a
+        ``series_id`` and re-queues the next occurrence whenever one reaches a terminal status).
+        Either free text (``"daily"``) or a structured object
+        (``{"frequency": "daily", "time": "07:00"}``). Pair it with ``scheduled_date`` /
+        ``scheduled_time`` ('YYYY-MM-DD' / 'HH:MM') to fix when occurrences fire.
+
+        ``assignee_rep_id`` carries the PERSONA structurally (e.g. the rep id a quest's
+        ``autopilot.personas`` roster assigns to today). It does not change which lane executes the
+        task -- that is the quest owner / ``assignee_user_id`` -- it states which character voice
+        should carry it, so a consumer's resolver reads a field instead of parsing prose.
 
         Returns the created task dict (includes its ``id``).
 
@@ -803,10 +1075,25 @@ class QuestClient:
             body["goal_id"] = goal_id
         if scheduled_at is not None:
             body["scheduled_at"] = scheduled_at
+        if title is not None:
+            # Without this the server derives a title from the first line of ``text``, which for an
+            # autopilot batch is its "Act as ..." persona line, so every task in the list ends up
+            # named after its persona rather than its work.
+            body["title"] = title
+        if scheduled_date is not None:
+            body["scheduled_date"] = scheduled_date
+        if scheduled_time is not None:
+            body["scheduled_time"] = scheduled_time
         if env_id is not None:
             body["env_id"] = env_id
         if task_kind is not None:
             body["task_kind"] = task_kind
+        if status is not None:
+            body["status"] = status
+        if recurrence is not None:
+            body["recurrence"] = recurrence
+        if assignee_rep_id is not None:
+            body["assignee_rep_id"] = assignee_rep_id
         if card_ids:
             body["card_ids"] = card_ids
         return self._request("POST", "/api/assistant-tasks", body=body) or {}

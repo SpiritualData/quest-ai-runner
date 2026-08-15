@@ -22,8 +22,20 @@ key authenticates as. Keep each lane on its own key/owner so lanes stay isolated
 ```
 GET /api/assistant-tasks?status=queued&due_before=<ISO-now>
 ```
-Returns queued tasks whose `due` time has arrived. A future `due` is simply not returned yet — this
-is how scheduling works without separate plumbing.
+Returns queued tasks whose `due` DATE has arrived — a superset, not an exact answer. The backend
+compares only the date portion of `due_before` against `scheduled_date` and never reads
+`scheduled_time`, so a task set for 06:30 is returned from the instant that calendar date begins in
+UTC. West of UTC that is the previous afternoon (17:00 in US/Pacific), which is how a daily 06:30
+brief came to run the evening before, dated for the wrong day, burning the occurrence its real slot
+needed.
+
+The runner closes that gap on its side: `Poller._due_now_locally` narrows the returned set to what
+the LOCAL wall clock says has actually arrived (missing `scheduled_time` means midnight, an
+unscheduled task is always due), and holding one back is lossless because it stays `queued` for a
+later scan. **So do not read a returned task as "due now"** — it is due today, and the hour is the
+runner's to enforce. Sending a local-time `due_before` instead would not fix it either: the
+comparison would still drop the clock. The task document carries no timezone of its own, so a
+runner in a different tz than the schedule's author remains a real limitation.
 
 #### The task document the runner reads
 
@@ -194,6 +206,181 @@ Optional fields: `description`, `criteria` (completion criteria), `goal_type`, `
 Like `create_task`, `create_goal` raises `QuestApiError`/`QuestNotConfigured` on failure instead
 of swallowing it — a caller that acknowledges "goal added" must know it actually was. CLI:
 `quest-ai-runner create-goal "<title>" [--quest-id ID] [--period P] [--description ...] [...]`.
+
+### Read the person's own reflections
+
+```
+GET /api/daily-plan/today[?date=YYYY-MM-DD]     (get_daily_reflection)
+  -> { "has_plan": true, "plan_id": "...", "date": "YYYY-MM-DD",
+       "yesterday_review": "...", "today_plan": "...", "goals_created": 3 }
+
+GET /api/period-review/{week|month|quarter|year}/current[?use_previous=true&timezone=...]
+  -> { "stats": {...}, "review": { "has_review": true, "reflection_past": "...",
+                                   "reflection_future": "...", ... } }        (get_period_reflection)
+```
+
+Both are **user-scoped**: they authenticate as the caller and take no team id and no quest id.
+`yesterday_review` is what the person wrote about how the previous day went (they write it while
+planning the day named in `date`); `reflection_past` / `reflection_future` are the same two
+questions asked of a whole period. `get_period_reflection` returns the `review` block only — the
+`stats` half of the response is a separate, much larger concern, and this method exists to read what
+the *person* wrote. A missing entry (`has_plan: false`) or an unsubmitted review (`has_review:
+false`) is an ordinary state, not an error: both methods return `{}` or the bare flag rather than
+raising, because "they have not written one" is a true and useful answer.
+
+`runner/reflections.py` composes both into one `ReflectionContext`:
+
+```python
+from quest_ai_runner.runner.reflections import collect_reflections
+
+ctx = collect_reflections(client, periods=("week", "month"))
+ctx.as_text()      # a labeled, dated block for a prompt or a task's text
+ctx.one_line()     # one condensed line, for an artifact that holds a single note
+```
+
+It takes today's daily entry, or walks back a couple of days when today's is not written yet (the
+morning case), then the first period in `periods` with a submitted, non-empty review, retrying the
+*previous* period when no current one has been submitted. Nothing there presumes which period type
+matters — the caller passes the order. Every read is best-effort: a client without these methods, a
+404, or a transport failure all degrade to an empty context.
+
+Two consumers use it, and neither could see a reflection before:
+
+- **The attended chat**, via `QuestRetrievalAdapter`'s new `reflection_context` query kind —
+  `query({"kind": "reflection_context", "periods": ["week", "month"], "include_daily": true,
+  "use_previous": false})`, advertised to the planner as `get_reflection_context` in
+  `list_operations` / `describe_operation` exactly like `goal_context`. All spec fields are
+  optional and no ids are needed. When nothing is on record it returns `kind="query"` with a plain
+  statement to that effect, **not** `kind="error"` — an error reads as "this lookup is broken" and
+  sends the planner back to asking the person to paste text it just verified does not exist. This
+  is the gap it closes: asked to choose work "based on my daily reflection", the assistant had no
+  action that could go and read one, so the best it could do was say so and ask for a paste.
+- **Autopilot** (`runner/autopilot.py`): each pass reads the reflection once (user-scoped, so it is
+  cached for the pass rather than re-read per quest) and `compose_batch_text` carries it into every
+  batch it creates, with the period order derived from the quest's own scope (a month-scoped quest
+  asks for the month review first). `next_steps_from_pass` puts one condensed line in the artifact's
+  `note` slot, as context for the list rather than a step on it. Everything else in a batch is
+  derived from rows the system recorded; the reflection is the one input the person wrote, so it is
+  what breaks ties about which eligible goal actually matters. A client without the reflection
+  methods composes exactly the batch it composed before.
+
+### Read the person's own insights
+
+```
+GET   /api/data/insights/collection              (get_insights_collection)
+  -> { "id": "...", "name": "Insights", "customFields": [...] }        (created on first call)
+
+GET   /api/data/collections/{collection_id}/entries?page=0&limit=50    (list_collection_entries)
+  -> { "items": [ { "id": "...", "createdAt": "...",
+                    "fieldValues": { "insight": "...", "categories": ["health"],
+                                     "acted_on": false, "action_taken": "" } } ],
+       "pagination": { "total": N, "page": 0, "has_next": false, ... } }
+
+PATCH /api/data/insights/mark-acted-on           (mark_insight_acted_on)
+  body { "entry_id": "...", "collection_id": "...", "action_taken_description": "..." }
+```
+
+Quest auto-creates one **Insights** collection per person: quick capture for the idea that arrives
+away from any goal, with the free-text **category tags** they chose (`categories`), an `acted_on`
+checkbox, and an `action_taken` description. It is the only place in Quest holding something the
+person recorded that has **not** yet become a goal or a task, which is exactly why a background
+pass that never reads it composes its brief as if the capture never happened.
+
+Three facts about the wire shape, each one a place an assumed contract would fail quietly:
+
+- The entries route is **generic and unfiltered**. There is no server-side date filter and no
+  field filter, so "recent" and "not yet acted on" are both the caller's to apply client-side —
+  the same client-side selection quest-backend does for itself in `_get_recent_unacted_insights`.
+- Items come back **newest first** (`created_at` descending), which is what lets paging stop at the
+  first entry past the cutoff instead of walking a person's whole history.
+- The envelope is **camelCase** (`fieldValues`, `createdAt`) while the keys *inside* `fieldValues`
+  are the collection's own field ids (`insight`, `categories`, `acted_on`, `action_taken`). An
+  in-process caller sees snake_case instead, so `runner/insights.py` reads both.
+
+`runner/insights.py` composes them into one `InsightsContext`:
+
+```python
+from quest_ai_runner.runner.insights import collect_unacted_insights
+
+ctx = collect_unacted_insights(client, since=last_pass_at)   # or no `since`, for the window
+ctx.as_text()                 # a dated, tagged block for a prompt
+ctx.one_line()                # one condensed line, for an artifact that holds a single note
+ctx.narrow_to(cutoff)         # the same fetch, re-cut to a different "since"
+```
+
+It skips anything ticked `acted_on`, bounds the result by the later of `since` and
+`now - days_cap` (default 14 days), caps the list, and clips each entry. Every read is best-effort:
+a client without these methods, a 404, or a transport failure all degrade to an empty context.
+
+**The category tags are context for the reader, never a filter in this code.** Nothing compares a
+tag to a quest name, a goal title, or any other string. Each insight is rendered with its tags as
+the person typed them and the block ends by saying plainly that the tags are their labels for their
+own thinking rather than a routing rule, so the model composing the run decides what applies — the
+same judgment it already makes about goals and reflections. A hardcoded tag match is a fixed string
+rule that silently drops every wording it did not anticipate ("dissertation" vs. "thesis" vs. no
+tag at all), which is what hard rule #3 in `CLAUDE.md` forbids.
+
+**Autopilot** (`runner/autopilot.py`) reads them once per pass (user-scoped, like reflections) over
+the widest window it could need, then narrows that one result per quest against that quest's own
+`autopilot.last_pass_at` — the same stamp the cadence gate reads, so "what has the person captured
+since I last ran" needs no separate freshness tracker that could drift out of step with it. A quest
+with no `last_pass_at` sees the whole window, because on a first pass everything recent is new.
+`next_steps_from_pass` puts one condensed line in the artifact's `note` slot; an insight is never
+promoted to a *step*, since the person captured it rather than committing to it.
+
+**On `mark_insight_acted_on`:** the method exists and is the documented way to close the loop, but
+the autopilot pass deliberately does **not** call it. A pass creates a task, it does not do the
+work — so ticking the box at pass time would claim an action that has not happened, and since a
+ticked insight drops out of every unacted list (including the one the person's weekly review is
+built from), an insight marked acted-on for a task that is then never approved, or that fails, has
+been silently removed from their list with nothing to show for it. Call it from a surface that
+knows the work actually landed, and write the description as a statement of what exists now.
+
+### The quest folder's standing next steps (a context-entry upsert)
+
+```
+GET   /api/quests/{quest_id}/context-entries          (list_context_entries)
+POST  /api/quests/{quest_id}/context-entries          (create_context_entry)
+PUT   /api/quests/{quest_id}/context-entries/{id}     (update_context_entry)
+```
+
+A quest-linked folder carries ONE canonical "what to do next here": the `QAR:MANAGED:next_steps`
+block in its `QUEST_SYNC.md` (`runner/quest_folder_sync.py`). It is a REPLACE, never a log, on both
+sides. Locally the block is regenerated in place; on Quest it is a single **context entry** matched
+by its fixed name (`NEXT_STEPS_ENTRY_NAME`), created once and PUT over afterwards, because the notes
+API is add + list only and a daily refresh living in notes would leave a year of near-identical
+rows. A failed entry LISTING writes nothing that round rather than blind-creating a duplicate; a
+client with no context-entry support falls back to a `[next-steps]`-marked note and says so.
+
+**Both readers write it, which is what keeps them from drifting apart:**
+
+- **Autopilot** (`runner/autopilot.py`) feeds the standing artifact into each pass's batch as the
+  plan of record, then writes its own conclusion back. Only a pass that produced work refreshes it;
+  a dry run and a quiet/gated pass leave it alone.
+- **The attended chat** (`runner/session_next_steps.py`) reads it once at session start and threads
+  it into every turn's `rep_preamble`, labelled as the current authoritative answer rather than one
+  retrieved file among many, so "what should I do next" starts from the artifact instead of being
+  re-derived. A turn writes back only when it ran real work and left some of it unfinished (a
+  completed `kind="deep"` turn with at least one `DeepResult` and at least one goal not finished);
+  a turn that finished everything knows what it completed but not what comes next, so it leaves the
+  considered answer in place for the next pass rather than replacing it with an empty block.
+
+```python
+from quest_ai_runner.runner.session_next_steps import (
+    load_standing_next_steps, render_standing_next_steps, refresh_from_turn,
+)
+
+standing = load_standing_next_steps(cfg)                    # local read; None = nothing to add
+preamble = render_standing_next_steps(standing)             # labelled block, every turn
+refresh_from_turn(client, standing, goals=..., deep_results=...)   # None = nothing written
+```
+
+Which quest a folder belongs to is resolved from `RunnerConfig.quest_folder_map` first (via
+`quest_for_path`, which also returns the mapped ROOT when the session starts in a subfolder), and
+otherwise from the `quest_id` the sync file already stamps in its frontmatter
+(`quest_id_in_folder`), so a folder that was ever pulled needs no configuration to be written back
+to. Every step degrades to today's behavior: no folder, no artifact, no quest id, no client, or a
+failed write all leave the session exactly as it was.
 
 ## Don't hand-roll HTTP
 

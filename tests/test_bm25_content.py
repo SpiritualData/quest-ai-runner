@@ -100,24 +100,24 @@ class TestImportGuard:
         import quest_ai_runner.adapters  # noqa: F401  -- must not raise
 
     def test_constructor_raises_import_error_without_bm25s(self, tmp_path, monkeypatch):
-        """Constructor raises ImportError with hint when bm25s is not importable."""
+        """Constructor raises ImportError with hint when bm25s is not importable.
+
+        Merely popping ``bm25s`` from ``sys.modules`` does not simulate absence when the
+        package is genuinely installed (as it is wherever the ``[bm25]`` extra is present
+        for the rest of this file's tests): Python just re-imports it fresh from
+        site-packages on the next ``import bm25s``, and the constructor succeeds instead
+        of raising. Setting the module to ``None`` in ``sys.modules`` is what actually
+        forces ``import bm25s`` to raise ``ImportError`` regardless of what is installed
+        (documented CPython import-system behavior), which is the case this test needs.
+        """
         import sys
-        # Simulate bm25s being absent by temporarily hiding it.
-        original = sys.modules.pop("bm25s", None)
-        # Also force the bm25_content_store module to re-import bm25s.
-        bm25_mod = sys.modules.pop(
-            "quest_ai_runner.adapters.bm25_content_store", None
-        )
-        try:
-            from quest_ai_runner.adapters.bm25_content_store import BM25ContentStore
-            with pytest.raises(ImportError, match="quest-ai-runner\\[bm25\\]"):
-                BM25ContentStore(root=str(tmp_path))
-        finally:
-            # Restore originals so other tests are unaffected.
-            if original is not None:
-                sys.modules["bm25s"] = original
-            if bm25_mod is not None:
-                sys.modules["quest_ai_runner.adapters.bm25_content_store"] = bm25_mod
+        monkeypatch.setitem(sys.modules, "bm25s", None)
+        monkeypatch.delitem(sys.modules, "quest_ai_runner.adapters.bm25_content_store",
+                            raising=False)
+
+        from quest_ai_runner.adapters.bm25_content_store import BM25ContentStore
+        with pytest.raises(ImportError, match="quest-ai-runner\\[bm25\\]"):
+            BM25ContentStore(root=str(tmp_path))
 
 
 # ---------------------------------------------------------------------------

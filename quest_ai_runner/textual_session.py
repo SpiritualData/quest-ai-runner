@@ -4,8 +4,8 @@ Usage:
     from quest_ai_runner.textual_session import start_textual_interactive
     start_textual_interactive(config, rep_name="My AI")
 
-This is the Textual replacement for ``interactive.start_interactive()``. It
-builds a real :class:`~quest_ai_runner.interactive.InteractiveSession` (which
+This is the only entry point for an attended chat session. It builds a real
+:class:`~quest_ai_runner.interactive_session.InteractiveSession` (which
 constructs the orchestrator, restores persisted chat state, and prepares the
 model-tier menu), then drives it through the Textual UI in
 :class:`~quest_ai_runner.textual_ui.QuestAITerminal`. All session logic and
@@ -26,6 +26,8 @@ def start_textual_interactive(
     persona: Optional[str] = None,
     goal_id: Optional[str] = None,
     verbosity: int = 0,
+    rep_specified: bool = True,
+    persona_specified: bool = True,
 ) -> None:
     """Launch the Textual UI immediately, build the InteractiveSession in a background worker."""
     from .textual_ui import QuestAITerminal
@@ -52,6 +54,8 @@ def start_textual_interactive(
             _rep_name=rep_name,
             _persona=persona,
             _goal_id=goal_id,
+            _rep_specified=rep_specified,
+            _persona_specified=persona_specified,
         ).run(mouse=True)
     except KeyboardInterrupt:
         # Ctrl+C pressed — exit cleanly without traceback
@@ -59,7 +63,8 @@ def start_textual_interactive(
 
 
 def is_textual_available() -> bool:
-    """True if Textual can be imported (the [tui] extra is installed)."""
+    """True if Textual can be imported. It is a core dependency, so a False here
+    means a broken or incompletely synced install, not an opted-out extra."""
     try:
         import textual  # noqa: F401
         return True

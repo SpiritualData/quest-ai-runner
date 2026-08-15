@@ -19,9 +19,7 @@ Run modes (like the watchdog): ``run_once()`` for cron, ``run_forever()`` for a 
 """
 from __future__ import annotations
 
-import json
 import logging
-import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -30,9 +28,15 @@ from typing import Any, Dict, List, Optional
 
 from ..config import RunnerConfig, build_orchestrator, derive_capabilities
 from ..resources import ResourceGuard, ResourceLimits
-from .autopilot import AutopilotPass
+from .autopilot import AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, AutopilotPass
 from .executor import TaskExecutor
 from .quest_client import QuestApiError, QuestClient, QuestDecisionSink, QuestNotConfigured
+# StateStore lives in its own module (runner/state_store.py) so the channel-runner lane can reuse
+# the SAME dedup mechanism without duplicating it. Re-exported here (not just imported for local
+# use) so `from quest_ai_runner.runner.poller import StateStore` keeps working unchanged.
+from .state_store import StateStore
+
+__all__ = ["Poller", "StateStore"]
 
 log = logging.getLogger("quest-ai-runner.poller")
 
@@ -48,55 +52,48 @@ def _task_signature(task: Dict[str, Any]) -> str:
     return f"{tid}:{task.get('status', 'queued')}:{marker}"
 
 
-class StateStore:
-    """JSON-backed signature store (watchdog_state.json generalized; pluggable backend)."""
+def _due_now_locally(tasks: List[Dict[str, Any]],
+                     now: Optional[datetime] = None) -> tuple[List[Dict[str, Any]],
+                                                              List[Dict[str, Any]]]:
+    """Split discovered tasks into (due, not-yet-due) by LOCAL wall clock.
 
-    def __init__(self, path: Optional[str]):
-        self._path = Path(path) if path else None
-        # Insertion-ordered set of handled signatures (dict keys preserve insertion order; values
-        # are unused). This lets the save-time cap evict the OLDEST entries first instead of an
-        # arbitrary subset (a plain ``set`` has no defined iteration order).
-        self._handled: Dict[str, None] = {}
-        self._lock = threading.Lock()
-        self._load()
+    Discovery asks the backend for `due_before=<ISO now, UTC>`, but the backend compares only the
+    DATE portion of that timestamp against `scheduled_date` and never looks at `scheduled_time`
+    (see quest-backend `assistant_task_storage.list_tasks`). Its answer is therefore a SUPERSET:
+    correct to the day, silent about the hour. West of UTC that superset opens early -- a task set
+    for 06:30 becomes "due" the moment UTC midnight passes, which is 17:00 the PREVIOUS afternoon
+    in US/Pacific. A daily morning brief then runs the evening before, is written against the wrong
+    day, and burns the occurrence its real slot needed. (Seen 2026-08-12/13 on the personal lane:
+    a 06:30 brief ran at 17:17 the day before, twice.)
 
-    def _load(self):
-        if self._path and self._path.exists():
-            try:
-                data = json.loads(self._path.read_text())
-                # Backward compatible: an existing file's "handled" list becomes the dict's keys,
-                # in the same (oldest-first) order they were written.
-                self._handled = dict.fromkeys(data.get("handled", []))
-            except (json.JSONDecodeError, OSError):
-                log.warning("state file corrupt/unreadable; starting fresh")
+    So narrow the superset here, where the runner knows the wall clock the schedule was written
+    against. A task is due once local `scheduled_date` + `scheduled_time` has arrived; a missing
+    time means midnight, and an unscheduled task ("do it now", the chat-delegated case) is always
+    due. Holding one back is lossless: it stays `queued` and surfaces on a later scan.
 
-    def _save(self):
-        if not self._path:
-            return
+    Timezone: the runner's own local time, which is the tz a person authoring "06:30" means. The
+    task model carries no tz of its own, so a runner in a different tz than the schedule's author
+    is a real (pre-existing) limitation, not one this filter introduces.
+    """
+    now = now or datetime.now()
+    due: List[Dict[str, Any]] = []
+    deferred: List[Dict[str, Any]] = []
+    for task in tasks:
+        date = str(task.get("scheduled_date") or "").strip()
+        if not date:
+            due.append(task)
+            continue
+        clock = str(task.get("scheduled_time") or "00:00").strip()[:5]
         try:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            # Cap the stored set so it can't grow unbounded over a long-running service. Dict keys
-            # preserve insertion order, so this drops the OLDEST entries first (not an arbitrary
-            # subset), keeping the most-recently-marked 5000 signatures.
-            recent = list(self._handled)[-5000:]
-            payload = json.dumps({"handled": recent}, indent=2)
-            # Atomic write: write to a temp file in the same directory, then os.replace() so a
-            # crash/interruption mid-write can never leave a corrupt/partial state file — the
-            # replace is a single filesystem operation.
-            tmp_path = self._path.with_suffix(self._path.suffix + ".tmp")
-            tmp_path.write_text(payload)
-            os.replace(tmp_path, self._path)
-        except OSError as e:
-            log.warning("could not persist state: %s", e)
-
-    def seen(self, sig: str) -> bool:
-        with self._lock:
-            return sig in self._handled
-
-    def mark(self, sig: str):
-        with self._lock:
-            self._handled[sig] = None
-            self._save()
+            scheduled = datetime.strptime(f"{date} {clock}", "%Y-%m-%d %H:%M")
+        except ValueError:
+            # An unparseable schedule must never strand a task: fall back to the backend's answer.
+            log.warning("task %s has an unreadable schedule (%r %r) — treating it as due",
+                        task.get("task_id") or task.get("id"), date, clock)
+            due.append(task)
+            continue
+        (due if scheduled <= now else deferred).append(task)
+    return due, deferred
 
 
 class Poller:
@@ -138,6 +135,10 @@ class Poller:
             team_id=config.team_id or "",
             persona_resolver=config.autopilot_persona_resolver,
             daily_budget=config.autopilot_daily_budget,
+            adopt_recurring_default=config.autopilot_adopt_recurring,
+            # Same map the folder sync uses, so a quest whose folder is already synced also gets
+            # its canonical next-steps artifact read and refreshed by each pass.
+            quest_folder_map=config.quest_folder_map,
         )
         # Capabilities this runner can HONESTLY report, derived from the wired adapters
         # (corpus=FilesAdapter/corpus, code=deep-runner, web=deep-runner can browse via Claude
@@ -172,6 +173,10 @@ class Poller:
         # task pickup below — it's a light data sync, not new work, so it isn't gated by the
         # resource/token guards that protect against taking on MORE agentic work.
         self._sync_all_quest_folders()
+        # Autopilot's own producer: guarantee the recurring pass task exists whenever a quest is
+        # opted in. Like the folder sync above, this is light bookkeeping rather than agentic work,
+        # so it runs before the resource/token gates that hold back task PICKUP.
+        self._ensure_autopilot_pass()
         # Resource gate AFTER the heartbeat (the backend should still see the env as live) but
         # BEFORE discovery/claiming: an overloaded host takes on NO new work this scan. Skipping
         # is lossless — unclaimed tasks stay queued and fire on a later scan once resources
@@ -200,6 +205,14 @@ class Poller:
         except (QuestApiError, QuestNotConfigured) as e:
             log.info("discovery unavailable (%s) — will retry next scan", e)
             return []
+
+        # The backend's due filter is date-granular, so it hands back tomorrow-morning's work as
+        # soon as UTC rolls over. Keep only what the LOCAL clock says has actually arrived.
+        due, deferred = _due_now_locally(due)
+        if deferred:
+            log.info("holding %d task(s) until their local scheduled time: %s", len(deferred),
+                     ", ".join(f"{t.get('task_id') or t.get('id')}@{t.get('scheduled_date')} "
+                               f"{t.get('scheduled_time') or '00:00'}" for t in deferred))
 
         fresh = [t for t in due if not self.state.seen(_task_signature(t))]
         if not fresh:
@@ -590,6 +603,75 @@ class Poller:
             return None
         folder = folder_map.get(str(qid))
         return (str(qid), folder) if folder else None
+
+    def _ensure_autopilot_pass(self) -> None:
+        """Make a quest's autopilot opt-in actually DO something, by guaranteeing the recurring
+        "Autopilot pass" task exists.
+
+        Autopilot is deliberately implemented as a task rather than a daemon (no cron, pausable
+        from the same UI, auditable in the same activity stream). The gap was that NOTHING created
+        that task: opting a quest into Suggest/Act saved the setting and produced silence forever.
+        This closes the loop from the runner side -- the lane that would execute the pass is the
+        one that ensures it exists.
+
+        Cost is one list call on a healthy scan. The expensive opt-in check (a state read per
+        team quest) runs ONLY when no open pass task was found, so the steady state stays cheap.
+
+        Best-effort throughout: any failure is logged and retried next scan. A missing pass task
+        is a degraded feature, never a reason to skip the ordinary task pickup that follows.
+        """
+        if not self.cfg.autopilot_ensure_pass_task:
+            return
+        if not self.client.configured or not self.cfg.team_id:
+            return
+        try:
+            existing = self.client.list_tasks(
+                team_id=self.cfg.team_id, task_kind=AUTOPILOT_PASS_KIND)
+            # A recurring series always has exactly one occurrence outstanding: the backend spawns
+            # the next one when the current reaches a terminal status. So "an open occurrence
+            # exists" is the correct liveness test for the whole series. Only if the series was
+            # cancelled or never created does nothing open remain -- and then we make one.
+            if any(str(t.get("status", "")).strip().lower() in OPEN_TASK_STATUSES
+                   for t in existing):
+                return
+            if not self._any_quest_on_autopilot():
+                return
+            created = self.client.create_task(
+                "Autopilot pass: scan this team's opted-in quests and make progress on their "
+                "current-scope goals.",
+                title="Autopilot pass",
+                team_id=self.cfg.team_id,
+                source="chat",
+                task_kind=AUTOPILOT_PASS_KIND,
+                recurrence={"frequency": "daily", "time": self.cfg.autopilot_pass_time},
+                scheduled_time=self.cfg.autopilot_pass_time,
+                env_id=self.cfg.env_id or None,
+            ) or {}
+            log.info("autopilot: created the recurring pass task %s (daily at %s)",
+                     created.get("id") or created.get("task_id"), self.cfg.autopilot_pass_time)
+        except Exception as e:  # noqa: BLE001 -- never let this block the scan
+            log.warning("autopilot: could not ensure the recurring pass task (%s) — "
+                        "will retry next scan", e)
+
+    def _any_quest_on_autopilot(self) -> bool:
+        """Whether ANY of the team's quests is opted in (``autopilot.mode`` in suggest/act).
+
+        Mirrors ``AutopilotPass._eligible_quests``' two-read shape, and for the same reason: the
+        team quest LISTING does not carry the ``autopilot`` block, so the mode has to be read off
+        each quest's full state or every quest looks switched off.
+        """
+        quests = self.client.list_quests(team_id=self.cfg.team_id or None) or []
+        for row in quests:
+            quest_id = str(row.get("quest_id") or row.get("id") or "")
+            if not quest_id:
+                continue
+            try:
+                state = self.client.get_quest_autopilot(quest_id) or {}
+            except Exception:  # noqa: BLE001 -- one unreadable quest never decides the answer
+                continue
+            if str((state.get("autopilot") or {}).get("mode") or "off") in ("suggest", "act"):
+                return True
+        return False
 
     def _sync_all_quest_folders(self) -> None:
         """Best-effort: sync EVERY entry in ``cfg.quest_folder_map``, independent of whether a

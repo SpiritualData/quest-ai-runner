@@ -46,6 +46,7 @@ from .adapters import (
     EVENT_DONE,
     EVENT_EXEC,
     EVENT_EXPLANATION,
+    EVENT_INTENT,
     EVENT_MILESTONE,
     EVENT_MODE_SIGNAL,
     EVENT_OVERSEER,
@@ -110,6 +111,11 @@ from .answer_explanation import (
 )
 from .model_registry import TIERS, ModelRegistry
 from .overseer import OverseerSignal, build_digest, oversee
+from .sufficiency import (
+    AbridgedTurnState,
+    collect_abridged_items,
+    render_abridged_notice,
+)
 from .prompt_layers import PromptLayers, compose_layers, language_instruction, turn_prompt_head
 from .recent_context import (
     GLOBAL_SCOPE_KEY,
@@ -123,10 +129,26 @@ from .recent_context import (
 
 log = logging.getLogger("quest-ai-runner.orchestrator")
 
-# Defaults (all overridable via OrchestratorConfig).
+# What a deep turn says when there is NO execution capability wired at all. This is the turn's real
+# answer in that case: the request was understood and broken into goals, and then nothing ran. It
+# is a module constant so every renderer and every test names the same sentence rather than each
+# inventing (or omitting) its own, and so the honest wording lives on the result instead of in one
+# UI's side note. Kept short and free of em dashes, per the copy conventions the UIs follow.
+NO_DEEP_EXECUTOR_TEXT = (
+    "I did not execute this. No deep executor is configured for this session, so the work was "
+    "planned but nothing actually ran: no files were changed and no commands were executed. "
+    "Install Claude Code (or set QAR_CLAUDE_PATH to its binary) so the default executor can be "
+    "wired, or pass RunnerConfig.deep_runner explicitly, then ask again."
+)
+
+# Defaults (all overridable via OrchestratorConfig). The elapsed/chars budget bounds the WHOLE
+# read cascade for a turn (every grep + read this turn shares it), not a single read: a 60s/60000
+# char cap left a simple "check these 3 named files" request no room left after one broad grep,
+# so the turn gave up mid-cascade and reported a false "couldn't check X" instead of ever reaching
+# the planner's next read step. Widened so a normal few-file lookup completes within budget.
 DEFAULT_MAX_STEPS = 15
-DEFAULT_MAX_ELAPSED_SECONDS = 60.0
-DEFAULT_MAX_GATHERED_CHARS = 60000
+DEFAULT_MAX_ELAPSED_SECONDS = 90.0
+DEFAULT_MAX_GATHERED_CHARS = 150000
 DEFAULT_MAX_READS_PER_STEP = 8
 DEFAULT_MAX_PARALLEL = 8
 DEFAULT_MAX_SUBQUESTIONS = 4
@@ -866,6 +888,17 @@ class OrchestratorConfig:
     # default. ``max_remediations`` caps the execute-for-real re-runs (only when no action ran).
     verify_claims: bool = True
     max_remediations: int = 1
+    # STRUCTURAL SUFFICIENCY GATE (see core/sufficiency.py). The prose SUFFICIENCY gate in the
+    # planner prompt is an instruction the model may simply not follow: a real turn answered from a
+    # card item that held only a short synthesized SUMMARY of a note, and spent its reply telling
+    # the user it had "only the header" and asking whether to go and fetch the rest. When on, a plan
+    # that terminates in "answer" while a declared-ABRIDGED context item's ``full_ref`` read spec
+    # has NOT been executed this turn is turned into ONE "read" step that executes it, and the loop
+    # re-plans with the full text in GATHERED. Keyed entirely off structured data (the item's own
+    # declared fetch spec vs the read specs that actually ran), never off words in the model's
+    # output. INERT unless a content item declares ``full_ref``: with no declaration there is
+    # nothing to fetch, no notice is rendered, and the turn is byte-for-byte what it was.
+    full_read_before_answer: bool = True
     # GOAL-VERIFICATION JUDGE TIER. The tier ``_verify_goal`` (the met/not-met + claims-honesty
     # verdict) resolves its model from. This verdict is the run's risk gate: it decides done vs
     # needs_you/failed and whether a reply's completion claims are honest, so a wrong verdict either
@@ -1651,7 +1684,11 @@ CARD_UPDATE_TOOL: Dict[str, Any] = {
                                                       "query", "note"]},
                                     "locator": {"type": "object",
                                                 "description": "For collection: {name,id}. For "
-                                                               "note: {text}. For file: {path}."},
+                                                               "note: {text}, plus full_ref (the "
+                                                               "read spec that re-fetches the FULL "
+                                                               "source) whenever the note only "
+                                                               "summarizes something fetchable. "
+                                                               "For file: {path}."},
                                     "why": {"type": "string"},
                                 },
                                 "required": ["type"],
@@ -1704,6 +1741,12 @@ Rules:
     "add" is empty when the future-context names collections or files.
   - PREFER references over copied text. Use a "note" ({{"locator": {{"text": "..."}}}}) ONLY for a
     durable fact with nothing external to point at.
+  - A note that only SUMMARIZES something still fetchable MUST carry the fetch alongside it:
+    {{"type": "note", "locator": {{"text": "<the summary>", "full_ref": <the read spec that returns
+    the FULL source>}}}}. The read spec is the same shape a read step uses (e.g.
+    {{"query": {{"kind": "...", "id": "..."}}}} or {{"rel_path": "..."}}). Without it a later turn
+    cannot tell your summary from the whole source and will answer out of the summary; with it, the
+    full text is pulled first. Never write a summary of a fetchable source with no full_ref.
   - Group related references onto ONE topical card. Set its "name"/"description" so it is easy to
     find later.
   - To UPDATE an existing card, reuse its exact card_id from CURRENT CARDS below; for something new,
@@ -3131,6 +3174,29 @@ def context_assembly_timeout_seconds() -> float:
     return value if value > 0 else 5.0
 
 
+def guidance_selection_timeout_seconds() -> float:
+    """Wall-clock budget for the turn-start GuidanceProvider.select() call. Env
+    ``QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS`` (default 5.0, accepts a float); read fresh on every
+    call so it can be tuned without a restart.
+
+    ``GuidanceProvider.select()`` is a caller-supplied implementation (``core/adapters.py``'s
+    ``GuidanceProviderBase``); a consumer's ``dynamic_guidance_loader`` or its own LLM filtering
+    call inside ``select()`` can block on I/O with no timeout of its own. Called with no bound at
+    all, that hangs the ENTIRE turn indefinitely, in the SAME "Searching context…" status the
+    concurrent context-assembly fetch already shows — indistinguishable from that fetch stalling,
+    but not actually protected by its timeout (context assembly runs in its own background thread
+    collected with ``context_assembly_timeout_seconds()``; guidance selection was being called
+    directly, synchronously, in the main turn thread, un-timed). See the call site in ``run()``."""
+    raw = os.getenv("QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS")
+    if raw is None or not raw.strip():
+        return 5.0
+    try:
+        value = float(raw)
+    except ValueError:
+        return 5.0
+    return value if value > 0 else 5.0
+
+
 def verify_context_max_chars() -> int:
     """Character cap on the context layer handed to goal verification (``Orchestrator._verify_goal``).
 
@@ -3615,6 +3681,7 @@ class Orchestrator:
         provider: ModelProvider,
         registry: ModelRegistry,
         deep_runner: Optional[DeepRunner] = None,
+        deep_runner_ladder: Optional[List[Any]] = None,
         deep_runners: Optional[Dict[str, Any]] = None,
         deep_runner_classifier: Optional[Any] = None,
         escalation: Optional[EscalationSink] = None,
@@ -3633,6 +3700,20 @@ class Orchestrator:
         self.provider = provider
         self.registry = registry
         self.deep_runner = deep_runner
+        # THE DEEP-RUNNER LADDER: the ordered runners ONE goal may be tried with, cheapest rung
+        # first. It defaults to exactly ``[deep_runner]`` (or ``[]`` when nothing is wired), which
+        # is today's behaviour byte for byte: one rung, resolved once per task, used for every
+        # attempt.
+        #
+        # A consumer that opts into fast in-process editing (see config.resolve_deep_runner_ladder)
+        # gets ``[FastEditRunner, SubprocessGoalRunner]``, and NO new escalation logic is needed to
+        # exploit it: the goal loop below already runs an attempt, verifies it against the written
+        # done-standard, and retries on failure. The ladder is simply indexed by attempt number the
+        # same way the MODEL ladder already is, so attempt 1 runs the cheap rung and a rung that
+        # fails verification hands the next attempt to the next rung.
+        self.deep_runner_ladder: List[Any] = (
+            list(deep_runner_ladder) if deep_runner_ladder
+            else ([deep_runner] if deep_runner is not None else []))
         # Named deep-runner registry + classifier (both optional). When both are set, the
         # classifier selects a runner key for each goal. Falls back to deep_runner on any
         # failure or missing key. All existing behaviour is unchanged when either is absent.
@@ -4720,10 +4801,11 @@ class Orchestrator:
         escalation). Otherwise (3) the configured ``deep_model_ladder`` (the consumer's explicit
         ladder, e.g. from ``QAR_DEEP_MODELS`` -- REAL Claude ids/aliases, weak -> strong), else
         (4) a ladder built from the single ``fallback`` model the orchestrator was given, EXTENDED
-        with any Claude-runnable id found by resolving the "quality"/"best" tiers (so a Gemini/
-        OpenAI deployment whose tier config still names a Claude id for its strong tier -- e.g.
-        ``QAR_MODEL_BEST=claude-opus-4-8`` -- gets a real escalation step instead of a silently
-        inert length-1 ladder; see ``fallback_deep_ladder``). Always returns a non-empty list.
+        with any genuinely DIFFERENT Claude-runnable id found by resolving the "quality"/"best"
+        tiers (so a deployment whose tier config names a stronger Claude model -- e.g.
+        ``QAR_MODEL_BEST=claude-opus-4-8``, or a CLI-only lane's ``claude-opus`` bucket -- gets a
+        real escalation step instead of a silently inert length-1 ladder; see
+        ``fallback_deep_ladder``). Always returns a non-empty list.
         Logs (INFO) the resolved ladder once per deep run, and WARNS when a NON-pinned resolution
         still comes out length <= 1 (escalation unavailable), so a deployment can see and fix it."""
         from .goal_runner import _is_claude_model  # worker-runnable check (deep worker is Claude Code)
@@ -4752,26 +4834,44 @@ class Orchestrator:
     def fallback_deep_ladder(self, fallback: Optional[str]) -> List[Optional[str]]:
         """Build the deep-worker ladder when no explicit ``deep_model_ladder`` is configured.
 
-        Starts from the single ``fallback`` model the orchestrator was already given. If that model
-        is NOT Claude-runnable (a Gemini/OpenAI deployment, so the deep worker -- Claude Code --
-        could never actually use it as ``--model``), try to EXTEND the ladder with a real escalation
-        step by resolving the "quality" then "best" tiers through the registry: on many deployments
-        these still name a genuine Claude id (either the library's own last-known default, or an
-        explicit operator override like ``QAR_MODEL_BEST=claude-opus-4-8`` -- see
-        HANDS_FREE_QUEST_AI_DESIGN.md section 2, point 4 for why this matters), so this is what makes
-        "goal not met -> stronger model" do something even when the deployment's PRIMARY model is not
-        Claude. Never raises; always returns a non-empty list (falls back to ``[fallback]`` alone,
-        even if that is not Claude-runnable, so a caller always has something to try)."""
-        from .goal_runner import _is_claude_model  # worker-runnable check
+        Starts from the single ``fallback`` model the orchestrator was already given, then tries to
+        EXTEND it with a real escalation step by resolving the "quality" then "best" tiers through
+        the registry: on many deployments these name a genuine Claude id (the library's own
+        last-known default, or an explicit operator override like ``QAR_MODEL_BEST=claude-opus-4-8``
+        -- see HANDS_FREE_QUEST_AI_DESIGN.md section 2, point 4), which is what makes "goal not met
+        -> stronger model" do something at all.
+
+        The extension is attempted for EVERY fallback, not only a non-Claude one. It used to be
+        skipped whenever the fallback was already Claude-shaped, on the reasoning that such a
+        deployment had picked its deep model -- but "Claude-shaped" and "a distinct rung worth
+        escalating to" are different questions. A CLI-only deployment resolves its tiers to family
+        BUCKET LABELS (``claude-sonnet``), so the guard saw Claude, stopped at one rung, and the
+        goal loop's attempt-N indexing re-ran the identical model on every retry: the escalation
+        mechanism ran, with nothing to escalate to. Rungs are deduped by what the worker would
+        ACTUALLY invoke (``cli_safe_model``: ``claude-sonnet``, ``sonnet`` and ``claude-sonnet-4-6``
+        are one rung, not three), so this adds a step only when it is a genuinely different model.
+
+        Never raises; always returns a non-empty list (falls back to ``[fallback]`` alone, even if
+        that is not Claude-runnable, so a caller always has something to try)."""
+        from .goal_runner import _is_claude_model, cli_safe_model  # worker-runnable check + translation
+
+        def rung_key(m: Optional[str]) -> str:
+            """What this id resolves to at invoke time — the identity a ladder rung really has."""
+            try:
+                return (cli_safe_model(m) or m or "").strip().lower()
+            except Exception:  # noqa: BLE001 — an untranslatable id is just its own rung
+                return (m or "").strip().lower()
+
         ladder: List[str] = [fallback] if fallback else []
-        if not fallback or not _is_claude_model(fallback):
-            for tier in ("quality", "best"):
-                try:
-                    resolved = self.registry.resolve_tier(tier)
-                except Exception:  # noqa: BLE001 — an unresolvable tier is just skipped
-                    continue
-                if resolved and _is_claude_model(resolved) and resolved not in ladder:
-                    ladder.append(resolved)
+        seen = {rung_key(m) for m in ladder}
+        for tier in ("quality", "best"):
+            try:
+                resolved = self.registry.resolve_tier(tier)
+            except Exception:  # noqa: BLE001 — an unresolvable tier is just skipped
+                continue
+            if resolved and _is_claude_model(resolved) and rung_key(resolved) not in seen:
+                ladder.append(resolved)
+                seen.add(rung_key(resolved))
         return ladder or [fallback]
 
     @staticmethod
@@ -5176,7 +5276,7 @@ class Orchestrator:
         runner configured" and silently skipped execution/remediation. This is the one place that
         answers "can we run deep work at all", used by every such gate.
         """
-        return self.deep_runner is not None or bool(
+        return self.deep_runner is not None or bool(self.deep_runner_ladder) or bool(
             self.deep_runners and self.deep_runner_classifier is not None)
 
     def _has_deferred_queue_capability(self) -> bool:
@@ -5239,8 +5339,15 @@ class Orchestrator:
             if exec_record is not None:
                 for g in goals:
                     exec_record.facts.append(ExecutionFact(goal=g))
+            # CARRY THE EXPLANATION ON THE RESULT ITSELF. This used to return with ``text=None``,
+            # which left every caller to invent its own account of what happened — and both chat
+            # UIs, having nothing to show, fell back to the interim "Executing: <goal>" line and
+            # presented it as the answer. The result now states plainly that nothing ran and what
+            # to do about it, so the honest wording travels with the result to every consumer
+            # (chat UIs, the poll lane's task report, a backend relaying it) instead of being
+            # re-derived, or lost, at each one.
             return OrchestratorResult(kind="deep", goals=goals, rationale=plan.rationale,
-                                      deep_results=[])
+                                      deep_results=[], text=NO_DEEP_EXECUTOR_TEXT)
 
         # HIERARCHICAL GOAL: the overall user-level goal this turn pursues. When the work fans out
         # into parallel subgoals, each subgoal process must be told the HIGHER goal it serves, so it
@@ -5297,12 +5404,17 @@ class Orchestrator:
                 # named an orchestrator step and read as leaked machinery in the live status pill.
                 emit.status(f"Working on: {goal[:60]}")
 
-            # Resolve which runner handles THIS goal ONCE per task (not per retry — the
+            # Resolve which runner(s) handle THIS goal ONCE per task (not per retry — the
             # classifier's inputs (user_message/goal/brief) don't change across retries of the
-            # same task): if named runners + a classifier are registered, the classifier picks a
-            # key; otherwise the single default ``deep_runner``. Falls back to ``deep_runner`` on
-            # any classifier failure or an unknown key.
-            active_runner = runner_override if runner_override is not None else self.deep_runner
+            # same task). The result is the LADDER for this goal, cheapest rung first, indexed by
+            # attempt in the loop below.
+            #
+            # Only the DEFAULT path can be multi-rung. A pinned ``runner_override`` and a
+            # classifier-selected named runner are both deliberate routing decisions about where
+            # this goal belongs, so each collapses to a one-rung ladder: silently prepending a
+            # cheaper rung would override a choice the caller/consumer already made.
+            runner_ladder: List[Any] = ([runner_override] if runner_override is not None
+                                        else list(self.deep_runner_ladder))
             if (runner_override is None and self.deep_runners
                     and self.deep_runner_classifier is not None):
                 try:
@@ -5319,7 +5431,7 @@ class Orchestrator:
                             f"using default runner"
                         )
                     elif key in self.deep_runners:
-                        active_runner = self.deep_runners[key]
+                        runner_ladder = [self.deep_runners[key]]
                         log.debug(f"deep_runner_classifier selected runner {key!r}")
                     else:
                         log.warning(
@@ -5329,6 +5441,17 @@ class Orchestrator:
                 except Exception as e:  # noqa: BLE001 — classifier failure must never block a run
                     log.warning(f"deep_runner_classifier failed ({e}); using default runner")
 
+            if not runner_ladder:
+                runner_ladder = [None]  # nothing wired: _do_run reports that honestly, as before
+            # The TERMINAL rung — the runner that has the last word on this goal, and the one whose
+            # channel the brief's FUTURE-CONTEXT ask is written for. With the default one-rung
+            # ladder this IS the resolved runner, so nothing changes for any existing consumer. On
+            # a multi-rung ladder it is the right choice of the two: the cheap first rung fills
+            # ``future_context`` from what it knows structurally (see FastEditRunner) rather than
+            # from an instruction in its brief, while the terminal rung is a prose worker that does
+            # need to be asked.
+            terminal_runner = runner_ladder[-1]
+
             # FUTURE-CONTEXT ask, routed by the RESOLVED runner's channel. When the async card updater
             # is active, EVERY runner is asked for future context (a code generator knows the most
             # reusable facts of all: the entities, ids, and schema it touched), but a strict-format
@@ -5337,35 +5460,46 @@ class Orchestrator:
             if card_update_active:
                 brief = brief + (
                     DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION
-                    if _future_context_channel(active_runner) == FUTURE_CONTEXT_VIA_FIELD
+                    if _future_context_channel(terminal_runner) == FUTURE_CONTEXT_VIA_FIELD
                     else DEEP_FUTURE_CONTEXT_INSTRUCTION
                 )
 
-            # Pass the live emitter to the runner ONLY if its run_goal accepts an ``emit`` kwarg
-            # (or **kwargs). Decided by signature inspection — never by a try/except TypeError,
-            # which could re-invoke a runner that already ran a side effect (e.g. a data
-            # mutation). Checked against the ACTUAL runner resolved above — not ``self.deep_runner``,
-            # which is None when the named-runner registry is the wiring style, so this must NOT be
-            # computed against it (that silently dropped exec streaming for every named-registry
-            # consumer). We also TEE the emitter so EVENT_EXEC phase ticks are recorded into
-            # ``exec_record`` (per-subtask) for the broken-promise guard, while still streaming to
-            # the live sink.
-            wants_emit = (emit is not None and active_runner is not None
-                         and _run_goal_accepts_emit(active_runner))
-            wants_run_id = active_runner is not None and _run_goal_accepts_run_id(active_runner)
-            # A per-task ``rep_preamble`` (e.g. an AI rep's pulled persona) and the brain's specific
-            # ``gathered`` reads are both forwarded to the deep run as a combined ``context_preamble``,
-            # ONLY to a runner whose ``run_goal`` accepts that kwarg (older signatures are untouched).
-            # We check capability regardless of whether rep_preamble or gathered are set — either alone
-            # is enough to build a useful context_preamble for the deep runner.
-            wants_preamble = (active_runner is not None
-                              and _run_goal_accepts_context_preamble(active_runner))
-            # A per-task working-directory override (e.g. a quest's synced folder), forwarded ONLY
-            # to a runner whose run_goal accepts that kwarg (older signatures are untouched). See
-            # quest_autopilot_design.md's execution-environment section: "one quest, one folder,
-            # one env" -- the deep agent starts where that quest's real work lives.
-            wants_working_dir = (active_runner is not None
-                                 and _run_goal_accepts_working_dir(active_runner))
+            # WHICH OPTIONAL KWARGS a rung accepts. Every one of these is passed to a runner ONLY
+            # if its ``run_goal`` accepts it (directly or via **kwargs), so older signatures keep
+            # working. Decided by signature inspection — never by a try/except TypeError, which
+            # could re-invoke a runner that already ran a side effect (e.g. a data mutation).
+            #
+            # Computed PER RUNNER (cached by identity), because the ladder's rungs are different
+            # objects with different signatures: a probe of one rung says nothing about another.
+            # It must also never be computed against ``self.deep_runner``, which is None when the
+            # named-runner registry is the wiring style (that once silently dropped exec streaming
+            # for every named-registry consumer).
+            #   emit        — the live EXECUTION-lifecycle stream. We TEE it so EVENT_EXEC phase
+            #                 ticks are recorded into ``exec_record`` (per-subtask) for the
+            #                 broken-promise guard, while still streaming to the live sink.
+            #   run_id      — the stable id for this subgoal's whole retry sequence.
+            #   preamble    — a per-task ``rep_preamble`` (e.g. an AI rep's pulled persona) plus the
+            #                 brain's own ``gathered`` reads, combined. Probed regardless of whether
+            #                 either is set: either alone is enough to build a useful preamble.
+            #   working_dir — a per-task working-directory override (e.g. a quest's synced folder).
+            #                 See quest_autopilot_design.md's execution-environment section: "one
+            #                 quest, one folder, one env" -- the worker starts where that quest's
+            #                 real work lives.
+            runner_caps: Dict[int, Dict[str, bool]] = {}
+
+            def caps_for(runner: Any) -> Dict[str, bool]:
+                if runner is None:
+                    return {"emit": False, "run_id": False, "preamble": False, "working_dir": False}
+                cached = runner_caps.get(id(runner))
+                if cached is None:
+                    cached = {
+                        "emit": emit is not None and _run_goal_accepts_emit(runner),
+                        "run_id": _run_goal_accepts_run_id(runner),
+                        "preamble": _run_goal_accepts_context_preamble(runner),
+                        "working_dir": _run_goal_accepts_working_dir(runner),
+                    }
+                    runner_caps[id(runner)] = cached
+                return cached
 
             def _emit_one(ev: ProgressEvent) -> None:
                 # TEE: classify any EVENT_EXEC phase into the fact, then forward to the live sink.
@@ -5391,26 +5525,30 @@ class Orchestrator:
                             fact.failed = True
                 except Exception:  # noqa: BLE001 — recording must never break the run
                     pass
-                if wants_emit and emit is not None:
+                # No ``wants_emit`` guard needed here: this callback is handed to a runner ONLY
+                # when that rung's caps say it accepts ``emit``, which already requires a sink.
+                if emit is not None:
                     log.debug(f"emitting exec event: {getattr(ev, 'type', '?')}: "
                              f"{(getattr(ev, 'text', '') or '')[:80]}")
                     emit.emit(ev)
 
-            def _do_run(current_brief: str, run_model: Optional[str]) -> DeepResult:
+            def _do_run(current_brief: str, run_model: Optional[str],
+                        active_runner: Any) -> DeepResult:
+                caps = caps_for(active_runner)
                 try:
                     if active_runner is None:
                         return DeepResult(met=False, error="no deep runner configured")
                     kwargs = dict(goal=goal, brief=current_brief, model=run_model,
                                   max_turns=self.cfg.deep_max_turns)
-                    if wants_emit:
+                    if caps["emit"]:
                         kwargs["emit"] = _emit_one
-                    if wants_run_id:
+                    if caps["run_id"]:
                         # task_uuid is generated ONCE per subgoal (before the retry loop below), so
                         # every attempt -- even one that spawns a brand-new subprocess/session --
                         # reports under the same id. Without this, a consumer's dashboard would show
                         # each retry as a new, duplicate deep-run entry for one ongoing subgoal.
                         kwargs["run_id"] = task_uuid
-                    if wants_preamble:
+                    if caps["preamble"]:
                         preamble_parts = []
                         if rep_preamble:
                             preamble_parts.append(rep_preamble)
@@ -5437,10 +5575,12 @@ class Orchestrator:
                             preamble_parts.extend(extra_context)
                         if preamble_parts:
                             kwargs["context_preamble"] = "\n\n".join(preamble_parts)
-                    if wants_working_dir and working_dir_override:
+                    if caps["working_dir"] and working_dir_override:
                         kwargs["working_dir"] = working_dir_override
-                    # active_runner was already resolved once per task, above (not re-resolved per
-                    # retry — the classifier's inputs don't change across retries of the same task).
+                    # The runner LADDER was resolved once per task, above (not re-resolved per
+                    # retry — the classifier's inputs don't change across retries of the same
+                    # task); which rung of it runs THIS attempt is decided by the loop below and
+                    # passed in.
                     # THE SEAM: every DeepResult, from every runner, is normalized here — the
                     # FUTURE-CONTEXT bullets are moved out of ``output`` into ``future_context``, so
                     # the payload handed to the goal verifier, the emit paths, and the consumer can
@@ -5458,7 +5598,10 @@ class Orchestrator:
             # self-check inside the worker), the brain steers each retry, and the model auto-escalates.
             base_brief = brief
             current_brief = brief
-            max_iters = max(1, self.cfg.deep_goal_max_iterations)
+            # At least one attempt PER RUNG, so a ladder can always reach its terminal runner even
+            # if a consumer configured a very small iteration cap. With the default one-rung ladder
+            # this is exactly ``max(1, deep_goal_max_iterations)``, unchanged.
+            max_iters = max(max(1, self.cfg.deep_goal_max_iterations), len(runner_ladder))
             budget = self.cfg.deep_goal_token_budget
             # The model ladder for THIS turn: an explicit per-task / guidance model pins it (no
             # escalation); otherwise fast -> strong, starting at the fast tier by default.
@@ -5473,6 +5616,13 @@ class Orchestrator:
                 if cancel_check is not None and cancel_check():
                     break
                 run_model = deep_models[min(tier_idx, len(deep_models) - 1)]
+                # WHICH RUNNER runs this attempt: the ladder indexed by attempt, cheapest rung
+                # first, with the terminal rung repeating for every further attempt — the same
+                # ``min(idx, len - 1)`` shape the model ladder uses one line above. With the
+                # default one-rung ladder this is the single resolved runner on every attempt.
+                rung_idx = min(attempt - 1, len(runner_ladder) - 1)
+                active_runner = runner_ladder[rung_idx]
+                has_more_rungs = rung_idx < len(runner_ladder) - 1
                 if emit is not None and attempt > 1:
                     emit.status("Goal not met yet, retrying"
                                 + (f" with {run_model}" if run_model else "") + "…")
@@ -5480,7 +5630,7 @@ class Orchestrator:
                 # (the first attempt or a retry) acts on the latest input, not a stale request.
                 _new = self._drain_pending(pending_inputs)
                 run_brief = current_brief if not _new else (current_brief + "\n\n" + _new)
-                res = _do_run(run_brief, run_model)
+                res = _do_run(run_brief, run_model, active_runner)
                 tokens_used += max(0, getattr(res, "tokens", 0) or 0)
                 # ASYNC HAND-OFF: the runner queued the real run to finish out-of-band (its
                 # ``output`` is a "task #N launched"-style sentinel, not work product). Re-verifying
@@ -5491,8 +5641,21 @@ class Orchestrator:
                     break
                 # A human-decision escalation, or a hard failure with NO output (binary missing,
                 # timeout, silent no-op), is terminal — do not verify or iterate.
+                #
+                # …unless there is a further RUNG to fall through to. That rule was written when a
+                # goal only ever had one runner, so "this runner produced nothing" and "nothing
+                # more can be tried" were the same statement. On a ladder they are not: a cheap
+                # first rung that declines the goal or fails outright is precisely the case the
+                # next rung exists for, and stopping here would strand the work. There is nothing
+                # to verify (no output), so we go straight to the next attempt, which the indexing
+                # above hands to the next runner.
                 if res.decision_id or (res.error and not (res.output or "").strip()):
-                    break
+                    if res.decision_id or not has_more_rungs:
+                        break
+                    if emit is not None:
+                        emit.status("That did not produce anything; escalating to the full "
+                                    "deep runner…")
+                    continue
                 # Verify the done-standard ourselves, applying the quality standards (guidance) and
                 # the rep persona. verdict is None => verification could not run (LLM outage, no
                 # verify tier, parse failure) => this run is UNVERIFIED, and must NEVER be reported
@@ -7031,6 +7194,9 @@ class Orchestrator:
             # message alone (see ``_derive_goal_condition``; fails safe to the raw ``user_message``,
             # never raises). This adds one LLM round trip to every turn that reaches here (a real
             # cost/latency change from before, when this branch did nothing); see CHANGELOG.md.
+            # Announced, for the same reason the verification pass below is: it is a real model
+            # round trip that runs before any context is even fetched, and it used to be silent.
+            emit.status("Working out what you're asking for…")
             goal_condition, retrieval_constraints = self._derive_goal_condition(user_message, now=now)
             if restates_meaningfully(goal_condition, user_message) or retrieval_constraints:
                 _event_data: Dict[str, Any] = {"goal_condition": goal_condition, "internal": True}
@@ -7221,15 +7387,41 @@ class Orchestrator:
         # the same standards the planner was given (see _run_deep / _verify_goal).
         quality_standards: Optional[str] = None
         if self.guidance is not None:
+            # Bounded, like the concurrent context-assembly fetch above: select() is a
+            # caller-supplied GuidanceProvider implementation that may block on I/O (a
+            # dynamic_guidance_loader hitting a DB/network, or its own LLM filtering call)
+            # with no timeout of its own. Called directly with no bound, that hangs the whole
+            # turn indefinitely -- in the SAME "Searching context…" status the concurrent
+            # context-assembly fetch already shows, making it look identical to that fetch
+            # stalling even though it was never protected by that fetch's timeout.
+            _guidance_timeout = guidance_selection_timeout_seconds()
+            # Not a `with ThreadPoolExecutor(...)` block: its __exit__ calls shutdown(wait=True),
+            # which would block on the SAME hung call this is meant to bound. shutdown(wait=False)
+            # below lets a genuinely stuck select() keep running in the background (Python threads
+            # cannot be force-killed) without the timeout itself becoming just as blocking.
+            _guidance_pool = ThreadPoolExecutor(max_workers=1)
             try:
-                _cards = self.guidance.select(
+                _cards = _guidance_pool.submit(
+                    self.guidance.select,
                     user_message,
                     team_id=_ctx_meta.get("team_id") if _ctx_meta else None,
                     org_id=_ctx_meta.get("org_id") if _ctx_meta else None,
-                    limit=cfg.guidance_topk) or []
+                    limit=cfg.guidance_topk,
+                ).result(timeout=_guidance_timeout) or []
+            except FuturesTimeoutError:
+                log.warning(
+                    "Guidance selection timed out after %.1fs; this turn proceeds without "
+                    "guidance (QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS to adjust)",
+                    _guidance_timeout)
+                _cards = []
             except Exception as e:  # noqa: BLE001 -- a provider must never break the run
                 log.warning(f"Guidance selection failed: {type(e).__name__}: {e}", exc_info=True)
                 _cards = []
+            finally:
+                try:
+                    _guidance_pool.shutdown(wait=False)
+                except Exception:  # noqa: BLE001
+                    pass
             if _cards:
                 _blocks = ["--- APPLICABLE GUIDANCE ---"]
                 for _c in _cards:
@@ -7365,6 +7557,26 @@ class Orchestrator:
             except Exception:  # noqa: BLE001 -- recent-context merge must never break the run
                 _recent_entries = []
         _merged_card_meta = _card_meta + _recent_entries
+
+        # --- STRUCTURAL SUFFICIENCY GATE: which of this turn's context is only a SUMMARY ---------
+        # A content item whose locator declares ``full_ref`` is saying, structurally, "the text
+        # stored on the card is an abridged stand-in, the real source is fetched with THIS read
+        # spec". Two things ride on that (see core/sufficiency.py): the planner is TOLD which items
+        # are summaries and how to open them (they render identically to full content otherwise, so
+        # it had no way to know), and the loop refuses to let an "answer" terminate while one of
+        # those fetches has not run. Empty and inert for every item that declares nothing.
+        abridged_state = AbridgedTurnState()
+        if cfg.full_read_before_answer:
+            try:
+                abridged_state.items = collect_abridged_items(_merged_card_meta)
+                _abridged_notice = render_abridged_notice(abridged_state.items)
+                if _abridged_notice:
+                    context_view = (context_view + "\n\n" + _abridged_notice if context_view
+                                    else _abridged_notice)
+            except Exception:  # noqa: BLE001 -- the gate must never break a turn
+                log.debug("abridged-item collection failed; the turn continues without the gate",
+                          exc_info=True)
+                abridged_state = AbridgedTurnState()
 
         # --- PER-IDEA THREADING: the cheap PRIOR, then the planner decides --------------------
         # The candidate set is the cards this turn's HYBRID RETRIEVAL already scored (keyword/IDF
@@ -7858,6 +8070,33 @@ class Orchestrator:
                         _clarify_question_text(plan) or brainstorm_clarify_question)
                 plan.action = "answer"
 
+            # --- STRUCTURAL SUFFICIENCY GATE: never answer ABOUT a summary you never opened ------
+            # The prose SUFFICIENCY gate in the planner prompt asks the model to check, before
+            # answering, that it has READ (not merely located) what it is about to answer from.
+            # Nothing enforced it, and a real turn answered from a card item holding a short
+            # synthesized SUMMARY of a note, spending its reply saying it had "only the header" and
+            # asking whether it should go and fetch the rest. This is that check, made structural:
+            # the item itself declared (at capture time) that its stored text is abridged and named
+            # the read spec that fetches the full source, so "was the full text actually pulled?" is
+            # a fact about which read specs RAN this turn, not a reading of anything the model said
+            # (hard rule #3). Fires at most ONCE per turn: it closes that hole, it does not give the
+            # loop a new way to spin. Inert when no item declares a fetch spec.
+            if plan and plan.action == "answer" and cfg.full_read_before_answer:
+                try:
+                    _to_fetch = abridged_state.should_force_read()
+                except Exception:  # noqa: BLE001 -- the gate must never break the loop
+                    _to_fetch = []
+                if _to_fetch:
+                    abridged_state.forced = True
+                    _forced_reads = [dict(it.fetch) for it in _to_fetch[: cfg.max_reads_per_step]]
+                    log.info(
+                        "Sufficiency gate: the plan would answer from %d abridged context item(s) "
+                        "whose full text was never fetched; forcing a read step first (%s).",
+                        len(_forced_reads), ", ".join(it.label for it in _to_fetch)[:200])
+                    plan.action = "read"
+                    plan.reads = _forced_reads
+                    emit.status("Pulling the full text before answering…")
+
             # Safety gate: if planner chose "read" for many consecutive steps, force a terminal action
             if plan and plan.action == "read":
                 consecutive_reads += 1
@@ -7943,6 +8182,11 @@ class Orchestrator:
                         emit.status("Searching…" if any(r.get("grep") for r in plan.reads) else "Reading…")
                     new_obs = self._do_reads(plan.reads, guidance_selected_ids, card_context)
                     gathered.extend(new_obs)
+                    # The turn's REAL record of what was fetched, for the sufficiency gate above:
+                    # these specs actually executed, whoever chose them (the planner on its own, or
+                    # the gate). Recorded here, at the one place reads run, so the gate can never be
+                    # satisfied by a plan that merely mentioned a fetch.
+                    abridged_state.record_reads(plan.reads)
                     _sources: List[str] = []
                     for _o in new_obs:
                         if not isinstance(_o, dict):
@@ -8091,10 +8335,23 @@ class Orchestrator:
             return finish(res)
 
         if final == "deep":
-            # Show goal condition before executing
-            goal_text = plan.goal or f"Complete: {user_message[:100]}"
-            emit.emit(ProgressEvent(type=EVENT_RESULT, text=f"Executing: {goal_text}"))
-            emit.status("Running now…")
+            # Announce the goal condition before executing — but ONLY when something can actually
+            # execute it. Two things were wrong here and both produced the same live failure (a
+            # turn whose final bubble read "Executing: <goal>" although nothing had run, no file
+            # was touched, and a dim side note said "No deep executor configured"):
+            #   1. the announcement fired unconditionally, including on runs with no execution
+            #      capability at all, where _run_deep below returns immediately having done nothing;
+            #   2. it was typed EVENT_RESULT, the type that carries a turn's actual outcome, so
+            #      both chat UIs' "fall back to the last result text" path picked this interim
+            #      sentence up and presented it as the answer.
+            # It is now gated on real capability and typed EVENT_INTENT, which no renderer may use
+            # as a turn's outcome. The gate mirrors _run_deep's own (``_has_deep_execution_capability``
+            # covers the single default runner AND the named registry), so the announcement fires
+            # exactly when the work is genuinely about to be attempted.
+            if self._has_deep_execution_capability():
+                goal_text = plan.goal or f"Complete: {user_message[:100]}"
+                emit.emit(ProgressEvent(type=EVENT_INTENT, text=f"Executing: {goal_text}"))
+                emit.status("Running now…")
             res = self._run_deep(plan, user_message, self._answer_model(plan, "opus", hint=model_hint),
                                  emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
                                  gathered=gathered, quality_standards=quality_standards,
@@ -8357,16 +8614,20 @@ class Orchestrator:
                     deep_brief=(should_defer_deep.get("brief") or user_message)[:2000],
                     rationale=should_defer_deep.get("rationale") or "follow-up work from answer phase",
                 )
-                # Show goal condition before executing
-                if emit is not None:
-                    _followup_verb = "Queueing" if _queued_mode else "Executing"
-                    emit.emit(ProgressEvent(type=EVENT_RESULT,
-                                            text=f"{_followup_verb} follow-up: {deferred_plan.goal}"))
                 deep_model = self._answer_model(deferred_plan, "opus", hint=model_hint)
                 # Queued deployments pin deferred work to the registered queue runner (reserved
                 # key), so the classifier can never re-route it to an inline runner.
                 _deferred_runner = (self.deep_runners.get(DEFERRED_RUNNER_KEY)
                                     if _queued_mode else None)
+                # Announce the follow-up goal before executing it — same rules as the main deep
+                # branch above: EVENT_INTENT (an announcement of intent, never usable as a turn's
+                # outcome), and only when something can actually run it. The gate mirrors
+                # _run_deep's exactly: a pinned ``runner_override`` IS the capability.
+                if emit is not None and (_deferred_runner is not None
+                                         or self._has_deep_execution_capability()):
+                    _followup_verb = "Queueing" if _queued_mode else "Executing"
+                    emit.emit(ProgressEvent(type=EVENT_INTENT,
+                                            text=f"{_followup_verb} follow-up: {deferred_plan.goal}"))
                 deep_res = self._run_deep(deferred_plan, user_message, deep_model,
                                          emit=emit, rep_preamble=rep_preamble,
                                          exec_record=exec_record, gathered=gathered,
@@ -8527,6 +8788,13 @@ class Orchestrator:
                 _remediations = 0
                 _attempt = 1
                 while _attempt < _max:  # at most _max-1 regenerations after the first answer
+                    # SAY that this is happening. The verdict runs at ``verify_tier`` (the strongest
+                    # model) over the same context the answer saw, so it is one of the longest waits
+                    # in a turn, it sits AFTER the answer is already written, and nothing announced
+                    # it: the reader saw "Answering…" and then silence until the whole turn landed.
+                    # Only the outcome lines were ever emitted, and only once it was over.
+                    if emit is not None:
+                        emit.status("Checking the answer against the goal…")
                     verdict, verify_error = self._verify_goal(
                         overall_goal, user_message, text,
                         rep_preamble=rep_preamble,

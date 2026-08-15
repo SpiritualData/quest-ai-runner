@@ -1,24 +1,25 @@
 """Textual-based interactive terminal UI for Quest AI Runner.
 
-A full multi-turn REPL over the orchestrator brain, rebuilt on Textual so the
-display stays calm and flicker-free (no manual cursor math, no spinner thread).
-It carries the same feature set as the ANSI ``interactive.py`` session — every
-slash command, the live context panel, ESC-to-cancel, the per-turn footer,
-session save/load, model-tier selection, and the quest/goal pickers — but with a
-Claude-Code-like layout: a scrolling transcript on top, a live activity strip
-that updates in place while the AI works, and a prompt at the bottom.
+The one supported chat UI: a full multi-turn REPL over the orchestrator brain,
+built on Textual so the display stays calm and flicker-free (no manual cursor
+math, no spinner thread). Every slash command, the live activity strip,
+ESC-to-cancel, the per-turn footer, session save/load, model-tier selection, and
+the quest/goal pickers live here, in a Claude-Code-like layout: a scrolling
+transcript on top, a live activity strip that updates in place while the AI
+works, and a prompt docked at the bottom.
 
 Design note: the heavy lifting (building the orchestrator, loading/persisting
-session state, the non-interactive command handlers, the model-tier menu data,
-the Quest client) lives in :class:`~quest_ai_runner.interactive.InteractiveSession`.
-This module reuses that object as its state + logic backend, swapping the
-session's stdout ``_Console`` for a ``RichLog``-backed adapter so those handlers
-render into the Textual transcript without change. The turn streaming, context
-panel, cancellation, footer, and the three interactive pickers (``/models``,
-``/reps``, ``/quests``) are implemented here in Textual-native terms.
+session state, the non-rendering command handlers, the model-tier menu data, the
+Quest client) lives in
+:class:`~quest_ai_runner.interactive_session.InteractiveSession`. This module
+reuses that object as its state + logic backend, swapping the session's stdout
+``_Console`` for a ``RichLog``-backed adapter so those handlers render into the
+Textual transcript without change. The turn streaming, activity strip,
+cancellation, footer, and the three interactive pickers (``/models``, ``/reps``,
+``/quests``) are implemented here in Textual-native terms.
 
-Install the [tui] extra:
-    pip install quest-ai-runner[tui]
+``textual`` is a core dependency of this package; there is no alternative
+renderer to fall back to.
 """
 from __future__ import annotations
 
@@ -32,7 +33,7 @@ from typing import Callable, Dict, List, Optional, TYPE_CHECKING
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal, VerticalScroll  # Horizontal kept for layout elsewhere if needed
+from textual.containers import Horizontal, Vertical, VerticalScroll  # Horizontal kept for layout elsewhere if needed
 from textual.geometry import Offset
 from textual.message import Message
 from textual.selection import Selection
@@ -46,7 +47,7 @@ from rich.text import Text
 import logging
 
 from .adapters.retry_utils import format_provider_error
-from .interactive import (
+from .interactive_session import (
     InteractiveSession,
     _BANNER,
     _DeepRunTracker,
@@ -855,6 +856,11 @@ class QuestAITerminal(App):
         height: auto;
     }
 
+    #bottom-bar {
+        dock: bottom;
+        height: auto;
+    }
+
     #activity {
         height: 1;
         padding: 0 1;
@@ -897,6 +903,8 @@ class QuestAITerminal(App):
         _rep_name: str = "Assistant",
         _persona: Optional[str] = None,
         _goal_id: Optional[str] = None,
+        _rep_specified: bool = True,
+        _persona_specified: bool = True,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -909,6 +917,8 @@ class QuestAITerminal(App):
         self._deferred_rep_name = _rep_name
         self._deferred_persona = _persona
         self._deferred_goal_id = _goal_id
+        self._deferred_rep_specified = _rep_specified
+        self._deferred_persona_specified = _persona_specified
 
         # Per-turn streaming state (reset by _begin_turn).
         self._turn_active = False
@@ -968,15 +978,23 @@ class QuestAITerminal(App):
         yield DeepActivity(id="deep")
         yield DeepDetailPanel(id="deep-detail")
         yield FutureContextPanel(id="future-context")
-        yield ActivityBar(id="activity")
-        yield PromptTextArea(
-            id="prompt",
-            soft_wrap=True,
-            tab_behavior="focus",
-            show_line_numbers=False,
-            compact=True,
-            placeholder="Ask anything…   Enter=send, Shift+Enter=newline   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)",
-        )
+        # ActivityBar + the prompt are wrapped in one docked container (rather than each
+        # docking to the Screen individually) so the input box always stays pinned to the
+        # bottom regardless of how tall the panels above grow. A single dock:bottom widget
+        # here, not two, avoids a layout quirk where a second independently-docked bottom
+        # sibling alongside Footer (also dock:bottom) lands on the same row as Footer instead
+        # of stacking above it -- Footer's own space reservation only correctly accounts for
+        # one additional bottom-docked widget.
+        with Vertical(id="bottom-bar"):
+            yield ActivityBar(id="activity")
+            yield PromptTextArea(
+                id="prompt",
+                soft_wrap=True,
+                tab_behavior="focus",
+                show_line_numbers=False,
+                compact=True,
+                placeholder="Ask anything…   Enter=send, Shift+Enter=newline   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)",
+            )
         yield Footer()
 
     def on_mount(self) -> None:
@@ -1027,7 +1045,7 @@ class QuestAITerminal(App):
                 self.call_from_thread(self._startup_failed, RuntimeError(missing))
                 return
 
-            from .interactive import InteractiveSession
+            from .interactive_session import InteractiveSession
 
             # Use a flag so we can stop forwarding notices the moment the session
             # is returned — background threads (e.g. the bootstrap indexer) fire
@@ -1044,6 +1062,9 @@ class QuestAITerminal(App):
                 persona=self._deferred_persona,
                 goal_id=self._deferred_goal_id,
                 _startup_notify=_live_notice,
+                verbose=self.verbosity >= 1,
+                rep_specified=self._deferred_rep_specified,
+                persona_specified=self._deferred_persona_specified,
             )
             _active[0] = False  # suppress any background-thread notices from here on
             self.call_from_thread(self._finish_startup, session)
@@ -1389,13 +1410,14 @@ class QuestAITerminal(App):
         if self._ev is None:
             from .core.adapters import (
                 EVENT_CONTEXT, EVENT_STATUS, EVENT_PLAN, EVENT_READ, EVENT_REPLAN,
-                EVENT_PARTIAL, EVENT_EXEC, EVENT_RESULT, EVENT_DECISION,
+                EVENT_PARTIAL, EVENT_EXEC, EVENT_INTENT, EVENT_RESULT, EVENT_DECISION,
                 EVENT_MILESTONE, EVENT_DONE, EVENT_UNDERSTANDING,
             )
             self._ev = dict(
                 context=EVENT_CONTEXT, status=EVENT_STATUS, plan=EVENT_PLAN,
                 read=EVENT_READ, replan=EVENT_REPLAN, partial=EVENT_PARTIAL,
-                exec=EVENT_EXEC, result=EVENT_RESULT, decision=EVENT_DECISION,
+                exec=EVENT_EXEC, intent=EVENT_INTENT, result=EVENT_RESULT,
+                decision=EVENT_DECISION,
                 milestone=EVENT_MILESTONE, done=EVENT_DONE,
                 understanding=EVENT_UNDERSTANDING,
             )
@@ -1572,14 +1594,23 @@ class QuestAITerminal(App):
                     if extra > 0:
                         log.write(f"      [dim]… and {extra} more files[/dim]")
             if sources:
-                log.write("[dim]Sources:[/dim]")
+                # Build the per-source lines first and only write the "Sources:" header if at
+                # least one line actually has content. The header used to be gated on the OUTER
+                # `sources` list being non-empty while each line was separately gated on that
+                # source's own `items` -- a source with no file-level items (e.g. a recent/card
+                # match) left a dangling "Sources:" header with nothing under it.
+                source_lines = []
                 for src in sources:
                     label = src.get("label", src.get("adapter", "?"))
                     items = src.get("items") or []
                     if items:
                         istr = ", ".join(str(x).split("/")[-1] for x in items[:3])
                         more = f" (+{len(items) - 3} more)" if len(items) > 3 else ""
-                        log.write(f"  [dim]• {label}: {istr}{more}[/dim]")
+                        source_lines.append(f"  [dim]• {label}: {istr}{more}[/dim]")
+                if source_lines:
+                    log.write("[dim]Sources:[/dim]")
+                    for line in source_lines:
+                        log.write(line)
 
         elif t == ev["understanding"]:
             # Stage 1's resolved goal condition, surfaced the instant it's ready (well before
@@ -1636,6 +1667,16 @@ class QuestAITerminal(App):
                 log.write(Text(""))
                 log.write(f"  [green bold]✓[/green bold]  {label}")
                 log.write(Text(""))
+
+        elif t == ev["intent"]:
+            # "Executing: <goal>" — an announcement that work is about to start. Written straight
+            # to the transcript as a progress line and DELIBERATELY kept out of _answer_parts:
+            # _finish_turn falls back to _answer_parts when a deep turn flushed nothing, so an
+            # interim announcement landing in there came back out as the turn's final answer,
+            # reading as a completion report for work that never ran.
+            if text:
+                log.write(Text(""))
+                log.write(f"  [cyan]▸[/cyan]  {text}")
 
         elif t == ev["result"]:
             # Non-streamed answers arrive here; streamed ones are in _answer_parts.
@@ -1696,6 +1737,13 @@ class QuestAITerminal(App):
             # the entire result body under a second "{rep} (AI): Executing: ..." bubble (2026-07-26
             # bug report). Only fall back to the generic answer bubble when nothing was actually
             # flushed to scrollback this turn (e.g. a deep run that captured no output at all).
+            #
+            # The _answer_parts fallback is REAL result text only. The "Executing: <goal>"
+            # announcement no longer arrives as a result event (it is EVENT_INTENT now and never
+            # enters _answer_parts), because when a deep turn flushed nothing this fallback was
+            # showing that interim sentence as the turn's answer: a completion report for work
+            # that had not run. When nothing ran because no executor is wired, ``final.text``
+            # carries the honest explanation and is what gets shown instead.
             if final.kind == "deep" and self._deep_flushed:
                 answer = None
             else:
@@ -1713,7 +1761,15 @@ class QuestAITerminal(App):
                 goals = final.goals or []
                 all_met = bool(deep_results) and all(d.met for d in deep_results)
                 goal_str = ("; ".join(goals))[:300] if goals else ""
-                prefix = "Completed" if all_met else "Attempted"
+                # THREE outcomes, not two. With no deep results at all, nothing was even attempted
+                # (no executor wired), and recording "Attempted: <goal>" put a false claim into the
+                # session history the NEXT turn reads back as context.
+                if all_met:
+                    prefix = "Completed"
+                elif deep_results:
+                    prefix = "Attempted"
+                else:
+                    prefix = "Planned but NOT executed (no deep executor configured)"
                 s._last_assistant = (f"{prefix}: {goal_str}" if goal_str else f"{prefix}.")
             else:
                 # Use _answer_parts as fallback: what was displayed may differ from final.text
@@ -1723,6 +1779,10 @@ class QuestAITerminal(App):
             s._session_history.append((user_text, s._last_assistant))
             s._write_session_file()
             s._turn_count += 1
+            # A turn that executed work and left some unfinished refreshes the quest folder's
+            # standing next-steps artifact. The session owns the decision and the write (shared by
+            # every UI); this is only the call site for "a turn just completed".
+            s._maybe_refresh_next_steps(final)
             log.write(Text(""))
             self._write_footer(final, elapsed)
             # If the deep run flagged the context it used, load the panel and show a
@@ -1776,7 +1836,7 @@ class QuestAITerminal(App):
             inp.placeholder = "Ask anything…   Enter=send   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)"
         inp.focus()
 
-        # Auto-execute a planned-but-unexecuted deep turn (matches interactive.py).
+        # Auto-execute a planned-but-unexecuted deep turn.
         if not cancelled and error is None and final is not None:
             if self._maybe_handle_deep_plan(final, run=True):
                 next_pass = self._auto_pass + 1
@@ -1807,7 +1867,11 @@ class QuestAITerminal(App):
         if executed:
             return False
         if not getattr(self.sess._cfg, "deep_runner", None):
-            if not run:
+            # No executor at all. Say so only when the result does not already explain itself:
+            # a kind="deep" result from an unwired session now carries the explanation as its own
+            # text (shown as the turn's answer just below), and repeating it as a dim side note
+            # would just say the same thing twice.
+            if not run and not (getattr(final, "text", "") or "").strip():
                 self._console.dim("  (No deep executor configured; cannot auto-execute)")
             return False
         if not run and not getattr(self, "_deep_plan_shown", False):
@@ -1997,9 +2061,16 @@ class QuestAITerminal(App):
         (a wall the user doesn't want), we roll the mechanical tool actions up into a single counts
         line ("12 reads · 3 edits · 2 commands") and return the worker's own narration separately so
         a run with no structured result can still show what it was doing in its own words.
+
+        CONSECUTIVE IDENTICAL narration lines collapse into one, tagged with how many times it
+        repeated. A goal loop that retries the same subgoal re-reports under the same run_id, so a
+        failure that is identical every attempt (e.g. a model the worker cannot run, which errors
+        the same way six times) otherwise fills the record with the same sentence six times and
+        crowds out everything else the run said. Show the real thing once, and say it repeated.
         """
         reads = writes = cmds = searches = tools = 0
         narration: List[str] = []
+        repeats: List[int] = []
         for ln in lines:
             s = ln.strip()
             if not s:
@@ -2016,8 +2087,11 @@ class QuestAITerminal(App):
                 tools += 1
             elif s.startswith("[thinking]"):
                 continue  # internal reasoning — not part of the "what it did" summary
+            elif narration and narration[-1] == s:
+                repeats[-1] += 1  # the same line again: count it, don't print it again
             else:
                 narration.append(s)
+                repeats.append(1)
 
         def _plural(n: int, one: str, many: str) -> str:
             return f"{n} {one if n == 1 else many}"
@@ -2033,7 +2107,9 @@ class QuestAITerminal(App):
             parts.append(_plural(searches, "search", "searches"))
         if tools:
             parts.append(_plural(tools, "tool call", "tool calls"))
-        return " · ".join(parts), narration
+        narrated = [n if c == 1 else f"{n} (repeated {c} times)"
+                    for n, c in zip(narration, repeats)]
+        return " · ".join(parts), narrated
 
     def _flush_deep_run(self, run_id: str) -> None:
         """Write one deep run's record into the scrollback transcript, once.

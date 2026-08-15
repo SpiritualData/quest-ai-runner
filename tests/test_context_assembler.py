@@ -1185,6 +1185,172 @@ class TestNestedCardReuse:
         assert paths == {"product/deep/mypackage/models.py"}
 
 
+class TestAncestorCardReuse:
+    """Mirror image of TestNestedCardReuse: reuse an already-indexed ANCESTOR corpus when THIS
+    store's root is the narrower one (e.g. bootstrapping a subfolder of an already-indexed wide
+    corpus, such as a dissertation folder under an already-indexed ``~/hq``)."""
+
+    def _bootstrap_ancestor(self, ancestor: Path, topics: List[Dict[str, Any]]) -> Path:
+        cards_dir = ancestor / ".quest-context"
+        store = FileContextStore(str(cards_dir), repo_root=str(ancestor), auto_bootstrap=False)
+        n = store.bootstrap(root=str(ancestor), provider=_topic_provider(topics))
+        assert n == len(topics)
+        return cards_dir
+
+    def test_ancestor_cards_imported_with_rewritten_paths_and_namespaced_id(self, tmp_path):
+        """A narrower corpus root discovers an already-indexed ANCESTOR above it and reuses its
+        relevant cards wholesale, with zero LLM calls."""
+        ancestor = tmp_path / "hq"
+        diss = ancestor / "stories" / "phd" / "dissertation"
+        diss.mkdir(parents=True)
+        (diss / "chapter1.py").write_text("def thesis():\n    pass\n", encoding="utf-8")
+        self._bootstrap_ancestor(ancestor, topics=[{
+            "id": "dissertation",
+            "name": "Dissertation",
+            "keywords": ["thesis"],
+            "summary": "The dissertation chapters.",
+            "files": ["stories/phd/dissertation/chapter1.py"],
+        }])
+
+        narrow_cards_dir = tmp_path / "narrow_cards"
+        store = FileContextStore(str(narrow_cards_dir), repo_root=str(diss), auto_bootstrap=False)
+        n = store.bootstrap(root=str(diss))  # no provider at all: pure reuse must still work
+        assert n == 1
+
+        cards = [json.loads(p.read_text()) for p in _card_files(narrow_cards_dir)]
+        assert len(cards) == 1
+        imported = cards[0]
+        assert imported["id"].endswith("--dissertation")
+        assert imported["provenance"].get("imported_from") == "../../.."
+        paths = {fe["path"] for fe in imported["files"]}
+        assert paths == {"chapter1.py"}
+
+    def test_only_in_scope_files_imported_and_covered(self, tmp_path):
+        """An ancestor card whose files span both inside and outside this narrower root is
+        trimmed to only the in-scope files, and a card with NO file inside this narrower root is
+        dropped entirely -- an ancestor card must never make out-of-scope files look covered."""
+        ancestor = tmp_path / "hq"
+        diss = ancestor / "stories" / "phd" / "dissertation"
+        other = ancestor / "stories" / "other"
+        diss.mkdir(parents=True)
+        other.mkdir(parents=True)
+        (diss / "chapter1.py").write_text("def thesis():\n    pass\n", encoding="utf-8")
+        (other / "note.py").write_text("def note():\n    pass\n", encoding="utf-8")
+        self._bootstrap_ancestor(ancestor, topics=[
+            {
+                "id": "mixed",
+                "name": "Mixed",
+                "keywords": ["thesis", "note"],
+                "summary": "Spans both areas.",
+                "files": [
+                    "stories/phd/dissertation/chapter1.py",
+                    "stories/other/note.py",
+                ],
+            },
+            {
+                "id": "unrelated",
+                "name": "Unrelated",
+                "keywords": ["note"],
+                "summary": "Entirely outside the narrower root.",
+                "files": ["stories/other/note.py"],
+            },
+        ])
+
+        narrow_cards_dir = tmp_path / "narrow_cards"
+        store = FileContextStore(str(narrow_cards_dir), repo_root=str(diss), auto_bootstrap=False)
+        n = store.bootstrap(root=str(diss))
+        assert n == 1, "only the card with an in-scope file should be imported"
+
+        cards = [json.loads(p.read_text()) for p in _card_files(narrow_cards_dir)]
+        assert len(cards) == 1
+        imported = cards[0]
+        assert imported["id"].endswith("--mixed")
+        paths = {fe["path"] for fe in imported["files"]}
+        assert paths == {"chapter1.py"}, "the out-of-scope file must be trimmed off the card"
+
+    def test_no_new_content_means_zero_llm_calls(self, tmp_path):
+        """When every file under the narrower root is covered by an ancestor import, bootstrap()
+        must not call the LLM at all, even when a provider is wired."""
+        ancestor = tmp_path / "hq"
+        diss = ancestor / "stories" / "phd" / "dissertation"
+        diss.mkdir(parents=True)
+        (diss / "chapter1.py").write_text("def thesis():\n    pass\n", encoding="utf-8")
+        self._bootstrap_ancestor(ancestor, topics=[{
+            "id": "dissertation", "name": "Dissertation", "keywords": ["thesis"],
+            "summary": "ch1", "files": ["stories/phd/dissertation/chapter1.py"],
+        }])
+
+        narrow_cards_dir = tmp_path / "narrow_cards"
+        narrow_provider = _topic_provider([])
+        store = FileContextStore(str(narrow_cards_dir), repo_root=str(diss), auto_bootstrap=False)
+        n = store.bootstrap(root=str(diss), provider=narrow_provider)
+        assert n == 1
+        narrow_provider.answer.assert_not_called()
+
+    def test_reuse_can_be_disabled(self, tmp_path):
+        """reuse_nested_cards=False also opts out of the ancestor direction: ancestor content is
+        rediscovered through the LLM like any other file, with no import/namespacing."""
+        ancestor = tmp_path / "hq"
+        diss = ancestor / "stories" / "phd" / "dissertation"
+        diss.mkdir(parents=True)
+        (diss / "chapter1.py").write_text("def thesis():\n    pass\n", encoding="utf-8")
+        self._bootstrap_ancestor(ancestor, topics=[{
+            "id": "dissertation", "name": "Dissertation", "keywords": ["thesis"],
+            "summary": "ch1", "files": ["stories/phd/dissertation/chapter1.py"],
+        }])
+
+        narrow_cards_dir = tmp_path / "narrow_cards"
+        narrow_provider = _topic_provider([{
+            "id": "everything",
+            "name": "Everything",
+            "keywords": ["thesis"],
+            "summary": "All files.",
+            "files": ["chapter1.py"],
+        }])
+        store = FileContextStore(
+            str(narrow_cards_dir), repo_root=str(diss), auto_bootstrap=False,
+            reuse_nested_cards=False,
+        )
+        n = store.bootstrap(root=str(diss), provider=narrow_provider)
+        assert n == 1
+        narrow_provider.answer.assert_called()
+        cards = [json.loads(p.read_text()) for p in _card_files(narrow_cards_dir)]
+        assert cards[0]["id"] == "everything"
+        assert "imported_from" not in cards[0]["provenance"]
+
+    def test_orphaned_ancestor_import_pruned_when_ancestor_card_disappears(self, tmp_path):
+        """A card previously imported from an ancestor store is removed once that store stops
+        offering it, so imports never drift from their source."""
+        ancestor = tmp_path / "hq"
+        diss = ancestor / "stories" / "phd" / "dissertation"
+        diss.mkdir(parents=True)
+        (diss / "chapter1.py").write_text("def thesis():\n    pass\n", encoding="utf-8")
+        (diss / "chapter2.py").write_text("def more():\n    pass\n", encoding="utf-8")
+        ancestor_cards_dir = self._bootstrap_ancestor(ancestor, topics=[
+            {"id": "chapter1", "name": "Chapter 1", "keywords": ["thesis"], "summary": "ch1",
+             "files": ["stories/phd/dissertation/chapter1.py"]},
+            {"id": "chapter2", "name": "Chapter 2", "keywords": ["more"], "summary": "ch2",
+             "files": ["stories/phd/dissertation/chapter2.py"]},
+        ])
+
+        narrow_cards_dir = tmp_path / "narrow_cards"
+        store = FileContextStore(str(narrow_cards_dir), repo_root=str(diss), auto_bootstrap=False)
+        store.bootstrap(root=str(diss))
+        ids_before = {json.loads(p.read_text())["id"] for p in _card_files(narrow_cards_dir)}
+        assert any(cid.endswith("--chapter1") for cid in ids_before)
+        assert any(cid.endswith("--chapter2") for cid in ids_before)
+
+        # The ancestor store stops offering the "chapter2" card (renamed/merged on its side).
+        (ancestor_cards_dir / "chapter2.json").unlink()
+
+        store.bootstrap(root=str(diss))
+        ids_after = {json.loads(p.read_text())["id"] for p in _card_files(narrow_cards_dir)}
+        assert not any(cid.endswith("--chapter2") for cid in ids_after), (
+            "an orphaned ancestor import must be pruned once its source card disappears"
+        )
+        assert any(cid.endswith("--chapter1") for cid in ids_after)
+
+
 # ---------------------------------------------------------------------------
 # Lazy auto-bootstrap: first assemble() seeds from an empty store
 # ---------------------------------------------------------------------------

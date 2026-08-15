@@ -37,11 +37,12 @@ class FakeAutopilotClient:
       * ``list_tasks`` filters ONLY on the server-side params the real route implements
         (status/goal_id/team_id); ``source``/``task_kind`` are applied client-side, and there is
         no ``quest_id`` param at all (a task's ``goal_id`` IS its quest link).
-      * ``create_task`` accepts NO ``status`` (always created queued) and no persona field;
-        ``suggested`` is reached by a follow-up ``update_task`` PATCH.
-      * ``update_quest_autopilot`` echoes back only the fields its schema ACCEPTS
-        (mode/planning/cadence/personas/env_id) -- ``last_pass_at``/``miss_streak`` are silently
-        dropped, exactly as the real endpoint does today.
+      * ``create_task`` accepts an initial ``status`` (queued/suggested ONLY) and a structural
+        ``assignee_rep_id``, and resolves ``goal_id`` as a QUEST id -- a per-goal id 404s.
+      * ``update_quest_autopilot`` echoes back only the fields its schema ACCEPTS. The default
+        here is the OLD schema (mode/planning/cadence/personas/env_id), which silently dropped
+        ``last_pass_at``/``miss_streak``; ``accepts_bookkeeping=True`` models the fixed one, so the
+        verify path is proven against both.
     """
 
     # Mirrors the real UpdateAutopilotRequest schema (app/api/endpoints/quests/autopilot.py).
@@ -57,6 +58,7 @@ class FakeAutopilotClient:
         self.autopilot_updates = []   # (quest_id, fields)
         self.open_decisions = {}      # quest_id -> bool
         self.goal_docs = {}           # goal_id -> full goal doc (with description)
+        self.update_task_error = None  # set to an exception to make update_task raise
         # When True, the fake behaves like a FIXED backend whose autopilot PATCH also accepts the
         # scanner's bookkeeping fields, so the verify path is proven in both worlds.
         self.accepts_bookkeeping = accepts_bookkeeping
@@ -101,15 +103,28 @@ class FakeAutopilotClient:
         return [{"id": "dec_1", "status": "open"}] if self.open_decisions.get(quest_id) else []
 
     def create_task(self, text, **kwargs):
-        assert "status" not in kwargs, "the real create route accepts no status field"
+        # Mirrors the CURRENT real create route: it accepts an initial ``status`` (queued or
+        # suggested only) and a structural ``assignee_rep_id``, but still has no ``quest_id``
+        # field (the quest link is ``goal_id``) and no bare ``rep_id``.
         assert "quest_id" not in kwargs, "the real create route has no quest_id field"
-        assert "rep_id" not in kwargs, "the real create route has no persona/rep field"
+        assert "rep_id" not in kwargs, "the persona field is named assignee_rep_id"
+        assert kwargs.get("status", "queued") in ("queued", "suggested"), \
+            "only queued/suggested may be asserted at creation"
+        # The API resolves a task's goal_id as a QUEST id and 404s anything else, so the fake
+        # holds the real route to that contract: a per-goal id here is a hard failure, not a
+        # silently-accepted row that later goes missing from every per-quest lookup.
+        goal_id = kwargs.get("goal_id")
+        if goal_id is not None:
+            assert goal_id in {str(q["quest_id"]) for q in self.quests}, (
+                f"goal_id {goal_id!r} is not a quest id -- the real route would 404")
         task_id = f"autotask_{len(self.created_tasks) + 1}"
         record = {"id": task_id, "text": text, "status": "queued", **kwargs}
         self.created_tasks.append(record)
         return {"id": task_id}
 
     def update_task(self, task_id, fields):
+        if self.update_task_error:
+            raise self.update_task_error
         self.task_updates.append((task_id, dict(fields)))
         for t in self.created_tasks:
             if t["id"] == task_id:
@@ -127,7 +142,8 @@ class FakeAutopilotClient:
 
 
 def _quest(quest_id, *, mode="act", cadence="weekly", last_pass_at=None, planning="work_only",
-          env_id=None, personas=None, outcome="ship the thing", miss_streak=0):
+          env_id=None, personas=None, outcome="ship the thing", miss_streak=0,
+          adopt_recurring=None):
     autopilot = {"mode": mode, "cadence": cadence, "planning": planning,
                 "miss_streak": miss_streak}
     if last_pass_at is not None:
@@ -136,6 +152,8 @@ def _quest(quest_id, *, mode="act", cadence="weekly", last_pass_at=None, plannin
         autopilot["env_id"] = env_id
     if personas is not None:
         autopilot["personas"] = personas
+    if adopt_recurring is not None:
+        autopilot["adopt_recurring"] = adopt_recurring
     return {"quest_id": quest_id, "outcome": outcome, "autopilot": autopilot}
 
 
@@ -203,21 +221,38 @@ def test_cadence_due_true_when_never_run():
     assert cadence_due({}, NOW) is True
 
 
-def test_cadence_due_false_within_weekly_window():
-    autopilot_cfg = {"cadence": "weekly", "last_pass_at": "2026-07-10T09:00:00Z"}  # 2 days ago
+def test_cadence_due_false_within_the_same_week():
+    autopilot_cfg = {"cadence": "weekly", "last_pass_at": "2026-07-10T09:00:00Z"}  # same ISO week
     assert cadence_due(autopilot_cfg, NOW) is False
 
 
-def test_cadence_due_true_after_weekly_window_elapses():
-    autopilot_cfg = {"cadence": "weekly", "last_pass_at": "2026-07-01T09:00:00Z"}  # 11 days ago
+def test_cadence_due_true_in_a_later_week():
+    autopilot_cfg = {"cadence": "weekly", "last_pass_at": "2026-07-01T09:00:00Z"}  # W27, NOW is W28
     assert cadence_due(autopilot_cfg, NOW) is True
 
 
-def test_cadence_due_daily_and_monthly_windows():
-    assert cadence_due({"cadence": "daily", "last_pass_at": "2026-07-11T09:00:00Z"}, NOW) is True
+def test_cadence_is_calendar_based_not_elapsed_time():
+    """"Daily" means "not yet today", NOT "24 hours have elapsed", and the difference loses days.
+
+    The pass task fires at a fixed wall-clock time. Under an elapsed-time reading, one late pass
+    (a backed-up queue, a restart, a manual run at noon) puts the next morning's pass inside the
+    24-hour window, so it skips, and a daily quest quietly becomes every-other-day. The real case
+    that surfaced this: a pass ran at 16:11 and the following 06:00 pass was gated out."""
+    late_yesterday = {"cadence": "daily", "last_pass_at": "2026-07-11T16:11:00Z"}
+    assert cadence_due(late_yesterday, NOW) is True        # 16.8 hours elapsed, but a NEW DAY
     assert cadence_due({"cadence": "daily", "last_pass_at": "2026-07-12T08:00:00Z"}, NOW) is False
-    assert cadence_due({"cadence": "monthly", "last_pass_at": "2026-06-20T09:00:00Z"}, NOW) is False
-    assert cadence_due({"cadence": "monthly", "last_pass_at": "2026-05-01T09:00:00Z"}, NOW) is True
+    # Monthly is likewise once per calendar month, not every 30 days.
+    assert cadence_due({"cadence": "monthly", "last_pass_at": "2026-06-20T09:00:00Z"}, NOW) is True
+    assert cadence_due({"cadence": "monthly", "last_pass_at": "2026-07-01T09:00:00Z"}, NOW) is False
+
+
+def test_cadence_across_a_year_boundary():
+    """Comparing (year, month) or the ISO (year, week) pair, never the bare month or week number,
+    which would read December as later than the following January and wedge the quest for a year."""
+    assert cadence_due({"cadence": "monthly", "last_pass_at": "2025-12-31T09:00:00Z"},
+                       datetime(2026, 1, 1, 9, 0, tzinfo=timezone.utc)) is True
+    assert cadence_due({"cadence": "weekly", "last_pass_at": "2025-12-29T09:00:00Z"},
+                       datetime(2026, 1, 5, 9, 0, tzinfo=timezone.utc)) is True
 
 
 def test_cadence_unparsable_timestamp_fails_open_to_due():
@@ -456,38 +491,48 @@ def test_batch_of_two_different_persona_goals_creates_two_tasks():
 
 # --- suggest vs act status + env_id stamping -----------------------------------------------------
 
-def test_suggest_mode_lands_the_task_in_suggested_via_a_follow_up_patch():
-    """The create route has NO status field (every task is created queued), so suggest mode must
-    create-then-PATCH. Proving the PATCH is what makes the task non-runnable is the point: without
-    it, a suggestion the human never approved would sit queued and EXECUTE."""
+def test_suggest_mode_lands_the_task_suggested_atomically_at_creation():
+    """A suggestion must NEVER exist in a runnable state, not even briefly.
+
+    This used to be a create-then-PATCH: the task was created queued and demoted afterwards. In
+    between those two calls the runner's poll could claim and EXECUTE it, which is exactly the
+    human approval suggest mode exists to require. The status is asserted at creation now, so
+    there is no window and no follow-up PATCH."""
     q1 = _quest("q1", mode="suggest")
     goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
     client = FakeAutopilotClient(quests=[q1], goals_by_quest={"q1": goals_payload})
     passer = AutopilotPass(client, team_id="team1", now=_now)
     passer.run({"text": "pass"})
-    assert client.task_updates == [("autotask_1", {"status": "suggested"})]
     assert client.created_tasks[0]["status"] == "suggested"
+    assert client.task_updates == []                       # no demotion window to close
 
 
-def test_act_mode_leaves_the_task_queued_with_no_status_patch():
+def test_act_mode_creates_the_task_queued():
     q1 = _quest("q1", mode="act")
     goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
     client = FakeAutopilotClient(quests=[q1], goals_by_quest={"q1": goals_payload})
     passer = AutopilotPass(client, team_id="team1", now=_now)
     passer.run({"text": "pass"})
-    assert client.task_updates == []                       # nothing to demote: queued is correct
+    assert client.task_updates == []
     assert client.created_tasks[0]["status"] == "queued"
 
 
-def test_created_task_stamps_env_id_task_kind_and_the_primary_goal_as_its_quest_link():
-    q1 = _quest("q1", env_id="joshua-personal")
-    goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
+def test_created_task_links_to_the_QUEST_not_a_per_goal_id():
+    """A task's ``goal_id`` holds a QUEST id (the API resolves it with get_quest and 404s
+    anything else). Autopilot used to pass the first target goal's own id from
+    ``list_quest_goals`` -- a different document with a different id -- so every work-batch
+    creation failed outright, and any that survived would have been invisible to the
+    backpressure gate, which looks tasks up by quest id. Which goals a batch covers lives in
+    the task TEXT."""
+    q1 = _quest("q1", env_id="env-personal")
+    goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1", name="Draft chapter 2")]))
     client = FakeAutopilotClient(quests=[q1], goals_by_quest={"q1": goals_payload})
     passer = AutopilotPass(client, team_id="team1", now=_now)
     passer.run({"text": "pass"})
     created = client.created_tasks[0]
-    assert created["env_id"] == "joshua-personal"
-    assert created["goal_id"] == "g1"          # goal_id IS the task's quest/goal link
+    assert created["env_id"] == "env-personal"
+    assert created["goal_id"] == "q1"          # the QUEST, never the per-goal id
+    assert "Draft chapter 2" in created["text"]
     # The autopilot-authored marker is the PERSISTENT task_kind, and it must be the WORK kind,
     # never the pass kind (which the executor would route into another autopilot pass: a loop).
     assert created["task_kind"] == "autopilot_work"
@@ -495,6 +540,29 @@ def test_created_task_stamps_env_id_task_kind_and_the_primary_goal_as_its_quest_
     assert created["task_kind"] != AUTOPILOT_PASS_KIND
     # source must be a value the API's closed enum accepts, or the create 400s.
     assert created["source"] in ("chat", "reflection", "review")
+
+
+def test_resolved_persona_is_stamped_structurally_not_only_in_the_prose():
+    """The create route carries the persona in ``assignee_rep_id``. It still rides in the text
+    too (some consumers resolve from prose), but a resolver reading a field beats one parsing
+    a sentence."""
+    q1 = _quest("q1", personas=[{"rep_id": "rep_bailey", "days": ["Sun"]}])  # _now is a Sunday
+    goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest={"q1": goals_payload})
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+    passer.run({"text": "pass"})
+    created = client.created_tasks[0]
+    assert created["assignee_rep_id"] == "rep_bailey"
+    assert "Act as rep_bailey" in created["text"]
+
+
+def test_no_resolved_persona_sends_no_rep_field():
+    q1 = _quest("q1")
+    goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest={"q1": goals_payload})
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+    passer.run({"text": "pass"})
+    assert "assignee_rep_id" not in client.created_tasks[0]
 
 
 # --- planning: plan_and_work proposes a next goal when nothing is eligible ---------------------
@@ -508,10 +576,10 @@ def test_plan_and_work_proposes_next_goal_when_no_eligible_goal():
     assert len(result.created_task_ids) == 1
     created = client.created_tasks[0]
     assert created["text"].startswith("Proposed goal:")
-    # A proposal is ALWAYS surfaced for a human, even on an `act` quest -> demoted to suggested.
-    assert client.task_updates == [("autotask_1", {"status": "suggested"})]
+    # A proposal is ALWAYS surfaced for a human, even on an `act` quest -> created suggested.
     assert created["status"] == "suggested"
-    # With no real goal object created, the proposal still lands on the QUEST (goal_id = quest id).
+    assert client.task_updates == []
+    # The proposal lands on the QUEST (goal_id = quest id).
     assert created["goal_id"] == "q1"
 
 
@@ -592,7 +660,7 @@ def test_compose_batch_text_includes_outcome_goal_and_dod():
     assert "Quest outcome: Ship the launch" in text
     assert "Goal: Draft the plan" in text
     assert "Brief: write section 2" in text
-    assert "Definition of Done" in text
+    assert "Done when:" in text
     assert "2026-08-01" in text
 
 
@@ -640,7 +708,7 @@ def test_missing_goal_description_still_creates_the_task_without_a_brief():
     result = passer.run({"text": "pass"})
     assert len(result.created_task_ids) == 1
     assert "Brief:" not in client.created_tasks[0]["text"]
-    assert "Definition of Done" in client.created_tasks[0]["text"]
+    assert "Done when:" in client.created_tasks[0]["text"]
 
 
 def test_backpressure_matches_a_task_by_goal_id_because_tasks_have_no_quest_id():
@@ -845,9 +913,9 @@ def test_executor_routes_on_task_kind_even_after_a_claim_overwrote_the_handler()
     task_client = MockQuestClient([])
     ex = TaskExecutor(task_client, _brain(provider), autopilot_pass=passer)
 
-    # handler has been overwritten by the claim label ("joshua-personal"); task_kind survives.
+    # handler has been overwritten by the claim label ("env-personal"); task_kind survives.
     out = ex.execute({"id": "pass-3", "text": "autopilot pass",
-                      "task_kind": "autopilot", "handler": "joshua-personal"})
+                      "task_kind": "autopilot", "handler": "env-personal"})
     assert out.status == "done"
     assert provider.plan_calls == 0                    # never ran the normal deep path
     assert len(autopilot_client.created_tasks) == 1    # the pass really ran
@@ -899,3 +967,149 @@ def test_executor_ordinary_handler_value_is_not_routed_to_autopilot():
     out = ex.execute({"id": "t1", "text": "say hi", "handler": "alex"})
     assert out.status == "done"
     assert client.reports[0][1] == "done"
+
+
+# --- the quest's canonical next-steps artifact --------------------------------------------------
+#
+# One answer to "what is next for this quest", written by whoever last refreshed it and read by
+# everyone else. Before this, a pass and an attended session each reconstructed their own from
+# whatever context happened to surface, and neither could tell it had drifted from the other.
+
+class _ContextEntryClient(FakeAutopilotClient):
+    """Adds the quest context-entry surface (the one Quest object that can be REPLACED in place)."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.entries = []
+        self.notes = []
+
+    def list_context_entries(self, quest_id):
+        return [{"id": e["id"], "name": e["name"]} for e in self.entries]
+
+    def create_context_entry(self, quest_id, name, content):
+        entry = {"id": f"entry_{len(self.entries) + 1}", "name": name, "content": content}
+        self.entries.append(entry)
+        return dict(entry)
+
+    def update_context_entry(self, quest_id, entry_id, *, name=None, content=None):
+        for e in self.entries:
+            if e["id"] == entry_id:
+                if content is not None:
+                    e["content"] = content
+                return dict(e)
+        return {}
+
+    def add_quest_note(self, quest_id, text):
+        self.notes.append((quest_id, text))
+        return [{"note_id": "note_1", "text": text}]
+
+
+def test_a_pass_writes_its_conclusion_as_the_quests_next_steps(tmp_path):
+    from quest_ai_runner.runner.quest_folder_sync import NEXT_STEPS_ENTRY_NAME, read_next_steps
+
+    client = _ContextEntryClient(
+        quests=[_quest("q1")],
+        goals_by_quest={"q1": _goals_payload(
+            ("day", "2026-07-12", [_goal("g1", name="Draft chapter 2", deadline="2026-07-20")]))})
+    result = AutopilotPass(client, team_id="team1", now=_now,
+                           quest_folder_map={"q1": str(tmp_path)}).run({"text": "pass"})
+    body = read_next_steps(str(tmp_path))
+    assert "Draft chapter 2 (target 2026-07-20)" in body
+    assert result.next_steps_refreshed == [
+        {"quest_id": "q1", "path": str(tmp_path / "QUEST_SYNC.md"),
+         "quest_target": "context_entry"}]
+    # And on Quest as ONE upserted entry, not another timestamped note.
+    assert [e["name"] for e in client.entries] == [NEXT_STEPS_ENTRY_NAME]
+    assert client.notes == []
+
+
+def test_a_second_pass_replaces_the_artifact_instead_of_adding_another(tmp_path):
+    client = _ContextEntryClient(
+        quests=[_quest("q1", cadence="daily")],
+        goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1", name="First")]))})
+    passer = AutopilotPass(client, team_id="team1", now=_now,
+                           quest_folder_map={"q1": str(tmp_path)})
+    passer.run({"text": "pass"})
+    client.tasks = []            # clear backpressure so the next pass runs
+    client.goals_by_quest["q1"] = _goals_payload(
+        ("day", "2026-07-12", [_goal("g2", name="Second")]))
+    passer.run({"text": "pass"})
+    content = (tmp_path / "QUEST_SYNC.md").read_text()
+    assert "Second" in content and "First" not in content
+    assert len(client.entries) == 1
+    assert "Second" in client.entries[0]["content"]
+
+
+def test_the_batch_reads_the_standing_artifact_as_the_plan_of_record(tmp_path):
+    """An attended session may have refreshed it since the last pass, so the pass must work from
+    the same answer rather than its own reconstruction."""
+    from quest_ai_runner.runner.quest_folder_sync import NextSteps, write_next_steps
+
+    write_next_steps(str(tmp_path), "q1", NextSteps(
+        steps=["Send the revised draft to the reader who is waiting on it"],
+        source="an attended session", updated="2026-07-11"))
+    client = _ContextEntryClient(
+        quests=[_quest("q1")],
+        goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
+    AutopilotPass(client, team_id="team1", now=_now,
+                  quest_folder_map={"q1": str(tmp_path)}).run({"text": "pass"})
+    text = client.created_tasks[0]["text"]
+    assert "Send the revised draft to the reader who is waiting on it" in text
+    assert "an attended session" in text
+    assert "plan of record" in text
+
+
+def test_a_quest_with_no_mapped_folder_is_untouched(tmp_path):
+    client = _ContextEntryClient(
+        quests=[_quest("q1")],
+        goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
+    result = AutopilotPass(client, team_id="team1", now=_now,
+                           quest_folder_map={"other_quest": str(tmp_path)}).run({"text": "pass"})
+    assert len(result.created_task_ids) == 1                  # the pass itself is unaffected
+    assert result.next_steps_refreshed == []
+    assert client.entries == []
+    assert not (tmp_path / "QUEST_SYNC.md").exists()
+
+
+def test_a_dry_run_does_not_touch_the_artifact(tmp_path):
+    client = _ContextEntryClient(
+        quests=[_quest("q1")],
+        goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
+    AutopilotPass(client, team_id="team1", now=_now,
+                  quest_folder_map={"q1": str(tmp_path)}).run({"text": "dry-run pass"})
+    assert not (tmp_path / "QUEST_SYNC.md").exists()
+    assert client.entries == []
+
+
+def test_a_pass_that_produced_nothing_leaves_the_existing_artifact_alone(tmp_path):
+    """Overwriting a considered answer with "nothing eligible today" on a day the quest is quiet
+    would make the artifact less trustworthy than the guesswork it replaces."""
+    from quest_ai_runner.runner.quest_folder_sync import (NextSteps, read_next_steps,
+                                                          write_next_steps)
+
+    write_next_steps(str(tmp_path), "q1", NextSteps(steps=["The considered answer"]))
+    client = _ContextEntryClient(
+        quests=[_quest("q1")],
+        goals_by_quest={"q1": _goals_payload(
+            ("day", "2026-07-12", [_goal("g1", completed=True)]))})    # nothing eligible
+    result = AutopilotPass(client, team_id="team1", now=_now,
+                           quest_folder_map={"q1": str(tmp_path)}).run({"text": "pass"})
+    assert result.created_task_ids == []
+    assert "The considered answer" in read_next_steps(str(tmp_path))
+    assert result.next_steps_refreshed == []
+
+
+def test_a_failed_artifact_refresh_warns_loudly_and_never_fails_the_pass(tmp_path):
+    class _BoomClient(_ContextEntryClient):
+        def list_context_entries(self, quest_id):
+            raise RuntimeError("entries endpoint down")
+
+    client = _BoomClient(
+        quests=[_quest("q1")],
+        goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
+    result = AutopilotPass(client, team_id="team1", now=_now,
+                           quest_folder_map={"q1": str(tmp_path)}).run({"text": "pass"})
+    assert len(result.created_task_ids) == 1                  # the work still landed
+    assert (tmp_path / "QUEST_SYNC.md").exists()               # and so did the local artifact
+    assert any("next-steps artifact" in w["detail"] for w in result.bookkeeping_warnings)
+    assert "next-steps artifact" in result.summary_text()

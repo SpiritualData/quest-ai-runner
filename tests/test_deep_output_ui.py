@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from quest_ai_runner.interactive import _DeepRunTracker
+from quest_ai_runner.interactive_session import _DeepRunTracker
 from quest_ai_runner.textual_ui import QuestAITerminal, DeepDetailPanel
 
 
@@ -440,6 +440,9 @@ class _FakeSessionForFinishTurn:
     def _write_session_file(self) -> None:
         pass
 
+    def _maybe_refresh_next_steps(self, final) -> None:
+        """No-op stand-in for the real session's next-steps write-back."""
+
 
 @pytest.mark.asyncio
 async def test_deep_turn_answer_not_duplicated_after_flush():
@@ -466,8 +469,11 @@ async def test_deep_turn_answer_not_duplicated_after_flush():
         app._deep.add_run("r1", goal)
         app._deep.set_final_output("r1", output)
         app._deep.set_run_status("r1", "done")
-        # Mirrors what the live event handlers populate for a deep turn: the "Executing: {goal}"
-        # header emitted before the run, plus the terminal EVENT_RESULT's full deep-output text.
+        # Mirrors what the live event handlers populate for a deep turn: the terminal
+        # EVENT_RESULT's full deep-output text. (The "Executing: {goal}" header that used to land
+        # here too is EVENT_INTENT now and deliberately never enters _answer_parts -- see
+        # tests/test_no_deep_executor_honesty.py. It is kept in this fixture anyway: the
+        # anti-duplication rule this test pins must hold for whatever _answer_parts contains.)
         app._answer_parts = [f"Executing: {goal}", output]
         app._auto_pass = 1
 
@@ -497,6 +503,27 @@ def test_summarize_exec_lines_counts_and_narration():
     ])
     assert summary == "2 reads · 1 edit · 1 command · 1 search · 1 tool call"
     assert narration == ["I planned the change."]  # thinking is dropped, tool ops are not narration
+
+
+def test_summarize_exec_lines_collapses_consecutive_identical_narration():
+    """A retry loop that fails the SAME way every attempt reports the same line over and over
+    (live: a model the worker could not run, six times). Show it once, and say it repeated —
+    otherwise it crowds out everything else the run said."""
+    err = "There's an issue with the selected model. It may not exist."
+    summary, narration = QuestAITerminal._summarize_exec_lines([
+        "Starting.", err, "Read: /a", err, "[thinking] hmm", err, "Done trying.",
+    ])
+    assert summary == "1 read"
+    # The repeats are consecutive as NARRATION (a tool line and a thinking line between them are
+    # not narration and must not split the run of identical messages).
+    assert narration == ["Starting.", f"{err} (repeated 3 times)", "Done trying."]
+
+
+def test_summarize_exec_lines_keeps_non_consecutive_repeats():
+    """Only CONSECUTIVE repeats collapse: the same line said again after something else happened
+    is a real second occurrence, not noise."""
+    _, narration = QuestAITerminal._summarize_exec_lines(["Trying.", "Waiting.", "Trying."])
+    assert narration == ["Trying.", "Waiting.", "Trying."]
 
 
 # --- expanded detail panel: full history + scroll follow -------------------

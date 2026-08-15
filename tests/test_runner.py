@@ -753,7 +753,10 @@ def test_subprocess_runner_passes_tool_flags_and_runs_web_goal(monkeypatch):
 def test_subprocess_runner_drops_non_claude_model(monkeypatch):
     """The Claude Code worker only runs Claude models. A non-Claude tier model (e.g. a Gemini id
     from the consumer's config) must NOT be passed as --model, or Claude Code errors and does
-    nothing. A Claude model is passed through."""
+    nothing. A Claude model IS passed, translated through the CLI translator the shallow
+    plan/answer path already uses (``cli_model``), so a family id becomes the CLI's family alias
+    (latest of family) and a bucket LABEL can never reach the binary raw. See
+    tests/test_deep_failure_session_diagnostics.py for the label case."""
     import subprocess as _sp
     from quest_ai_runner.core.goal_runner import SubprocessConfig, SubprocessGoalRunner
 
@@ -777,7 +780,8 @@ def test_subprocess_runner_drops_non_claude_model(monkeypatch):
 
     captured.clear()
     runner.run_goal(goal="g", brief="b", model="claude-opus-4-8", max_turns=2)
-    assert "--model" in captured["cmd"] and "claude-opus-4-8" in captured["cmd"]
+    cmd = captured["cmd"]
+    assert "--model" in cmd and cmd[cmd.index("--model") + 1] == "opus"
 
 
 def test_subprocess_runner_treats_empty_output_as_not_met(monkeypatch):
@@ -1170,8 +1174,9 @@ def test_poller_heartbeat_reports_web_false_when_subprocess_tools_pinned_without
 
 
 def test_poller_heartbeat_reports_web_false_via_files_adapter_no_deep_runner():
-    """A real FilesAdapter satisfies corpus; with NO deep_runner there's nothing that can browse,
-    so code AND web are False. Proves derivation reads the actual wiring, not a hardcoded claim."""
+    """A real FilesAdapter satisfies corpus; with deep execution explicitly DISABLED there's
+    nothing that can browse, so code AND web are False. Proves derivation reads the actual wiring,
+    not a hardcoded claim."""
     import tempfile
     from quest_ai_runner.adapters import FilesAdapter
 
@@ -1182,6 +1187,10 @@ def test_poller_heartbeat_reports_web_false_via_files_adapter_no_deep_runner():
         cfg = RunnerConfig(
             quest_base_url="http://x", quest_api_key="qsk_test", team_id="team1",
             retrieval=FilesAdapter(d), model_provider=provider,
+            # deep_runner=None is the EXPLICIT disable of the tri-state. Leaving the field unset
+            # would mean "auto-build the default SubprocessGoalRunner", which on a machine with
+            # Claude Code installed reports code=True and web=True, honestly.
+            deep_runner=None,
         )
         poller = Poller(cfg, state_path=None, client=client)
         poller.run_once()
