@@ -133,6 +133,34 @@ Env it reads:
   QAR_QUEST_FOLDER_SYNC_DIRECTION (optional)  — "pull" (default), "push", or "both" for the map
                                                    above. See RunnerConfig.quest_folder_sync_direction.
 
+channel-specific env vars (all optional; read by the `channel` subcommand only, see
+docs/live-channels.md for the full picture including the OpenClaw operator checklist):
+  QAR_CHANNEL_PROVIDER (optional)              — "openclaw" wires an OpenClawChannel from the vars
+                                                   below. Unset (default) = no channel transport;
+                                                   `channel` then logs an error and exits.
+  QAR_OPENCLAW_TOKEN_FILE                      — REQUIRED for the openclaw provider: path to the
+                                                   Gateway token file (never the token itself; see
+                                                   adapters/openclaw_channel.py). Passed to the
+                                                   subprocess as `--token-file <path>`.
+  QAR_OPENCLAW_COMMAND (optional)              — the openclaw binary (default: "openclaw" on PATH).
+  QAR_OPENCLAW_ARGS (optional)                 — extra args appended after "mcp serve", space-
+                                                   separated.
+  QAR_OPENCLAW_CWD (optional)                  — working dir for the spawned subprocess.
+  QAR_OPENCLAW_CALL_TIMEOUT (optional, seconds) — per-call timeout for tools other than
+                                                   events_wait (default 30).
+  QAR_CHANNEL_NAME (optional)                  — the channel's own name / dedup-key prefix
+                                                   (default "openclaw").
+  QAR_CHANNEL_ALLOWED_SENDERS (optional)       — comma-separated sender ids this runner will act
+                                                   on. EMPTY/unset = DENY ALL (fail closed) — see
+                                                   RunnerConfig.channel_allowed_senders.
+  QAR_CHANNEL_ACK_AFTER_SECONDS (optional)     — see RunnerConfig.channel_ack_after_seconds
+                                                   (default 15).
+  QAR_CHANNEL_PROGRESS_MIN_SECONDS (optional)  — see RunnerConfig.channel_progress_min_seconds
+                                                   (default 20).
+  QAR_CHANNEL_TURN_TIMEOUT_SECONDS (optional)  — see RunnerConfig.channel_turn_timeout_seconds
+                                                   (default 900).
+  QAR_CHANNEL_STATE_PATH (optional)            — dedup state file (default: in-memory only).
+
 chat-specific env vars (all optional):
   QAR_REP_NAME (optional)                        — display name for the AI representative shown in
                                                    the interactive session (e.g. "Alex's AI").
@@ -156,9 +184,11 @@ from pathlib import Path
 import shutil
 
 from .adapters import AnthropicProvider, ClaudeCliProvider, ClaudeConversationsAdapter, CompositeRetrievalAdapter, FilesAdapter, GeminiProvider, OpenAIProvider, WebSearchAdapter
+from .adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
 from .config import RunnerConfig
 from .core.adapters import ModelProvider
 from .pricing import estimate_bootstrap_cost, get_provider_and_model
+from .runner.channel_runner import ChannelRunner
 from .runner.poller import Poller
 
 
@@ -222,6 +252,49 @@ def _web_search_adapter_from_env():
     except ValueError:
         pass
     return WebSearchAdapter(api_key=api_key, max_results=max_results)
+
+
+def _channel_transport_from_env():
+    """Build the `channel` subcommand's ``ChannelTransport`` from env, or None.
+
+    Only "openclaw" is a built-in provider today (the reference bridge). A consumer that wants a
+    different ``ChannelTransport`` builds ``RunnerConfig`` itself and sets ``channel_transport``
+    directly instead of going through this env-driven CLI path — see ``core.adapters.ChannelTransport``.
+    """
+    provider = (os.getenv("QAR_CHANNEL_PROVIDER") or "").strip().lower()
+    if not provider:
+        return None
+    if provider != "openclaw":
+        raise ValueError(f"Unknown QAR_CHANNEL_PROVIDER: {provider!r}. Only 'openclaw' is built in.")
+    token_file = (os.getenv("QAR_OPENCLAW_TOKEN_FILE") or "").strip()
+    args_env = (os.getenv("QAR_OPENCLAW_ARGS") or "").strip()
+    cfg = OpenClawChannelConfig(
+        token_file=token_file,
+        command=os.getenv("QAR_OPENCLAW_COMMAND", "openclaw"),
+        args=(["mcp", "serve"] + args_env.split()) if args_env else ["mcp", "serve"],
+        cwd=os.getenv("QAR_OPENCLAW_CWD") or None,
+        call_timeout_s=float(os.getenv("QAR_OPENCLAW_CALL_TIMEOUT", "30")),
+        channel=os.getenv("QAR_CHANNEL_NAME", "openclaw"),
+    )
+    return OpenClawChannel(cfg)
+
+
+def _apply_channel_env(cfg: RunnerConfig) -> None:
+    """Fold the channel-specific env vars (see the module docstring) into an existing RunnerConfig,
+    in place. Separate from ``_config_from_env`` so the ordinary `poll`/`chat` paths never pay for
+    (or accidentally pick up) channel config they didn't ask for."""
+    cfg.channel_transport = _channel_transport_from_env()
+    senders = (os.getenv("QAR_CHANNEL_ALLOWED_SENDERS") or "").strip()
+    if senders:
+        cfg.channel_allowed_senders = [s.strip() for s in senders.split(",") if s.strip()]
+    if os.getenv("QAR_CHANNEL_ACK_AFTER_SECONDS"):
+        cfg.channel_ack_after_seconds = float(os.environ["QAR_CHANNEL_ACK_AFTER_SECONDS"])
+    if os.getenv("QAR_CHANNEL_PROGRESS_MIN_SECONDS"):
+        cfg.channel_progress_min_seconds = float(os.environ["QAR_CHANNEL_PROGRESS_MIN_SECONDS"])
+    if os.getenv("QAR_CHANNEL_TURN_TIMEOUT_SECONDS"):
+        cfg.channel_turn_timeout_seconds = float(os.environ["QAR_CHANNEL_TURN_TIMEOUT_SECONDS"])
+    if os.getenv("QAR_CHANNEL_STATE_PATH"):
+        cfg.channel_state_path = os.environ["QAR_CHANNEL_STATE_PATH"]
 
 
 def _config_from_env() -> RunnerConfig:
@@ -652,6 +725,14 @@ def main(argv=None) -> int:
     poll_p = sub.add_parser("poll", help="poll Quest for due tasks and run them")
     poll_p.add_argument("--once", action="store_true", help="one scan then exit (cron mode)")
     poll_p.add_argument("--check", action="store_true", help="validate config + key, then exit")
+
+    # --- channel subcommand: hold a live, two-way conversation over a messaging channel -------
+    channel_p = sub.add_parser(
+        "channel", help="drive a live ChannelTransport (e.g. OpenClaw) as a real-time chat lane")
+    channel_p.add_argument("--once", action="store_true",
+                           help="one receive+dispatch pass then exit (mainly for testing)")
+    channel_p.add_argument("--check", action="store_true",
+                           help="validate the channel config (provider, allowed senders), then exit")
 
     # Legacy: flags directly on the root command (no subcommand given) stay working; also
     # documented on `poll` above. Kept visible (not argparse.SUPPRESS) so `-h` shows them.
@@ -1136,6 +1217,42 @@ def main(argv=None) -> int:
                     print(f"  {f}")
                 if len(all_items) > 8:
                     print(f"  ... +{len(all_items) - 8} more")
+        return 0
+
+    # --- channel: drive a live, two-way ChannelTransport ----------------------
+    if args.command == "channel":
+        cfg = _config_from_env()
+        try:
+            _apply_channel_env(cfg)
+        except ValueError as e:
+            log.error("channel config error: %s", e)
+            return 1
+        # A channel is a conversational lane like `chat`: Quest credentials and a retrieval
+        # adapter are optional (no corpus = no grounding, but the turn still runs).
+        _skip = {"quest", "retrieval adapter", "team_id"}
+        problems = [p for p in cfg.validate() if not any(kw in p for kw in _skip)]
+        if problems:
+            for p in problems:
+                log.error("config error: %s", p)
+            return 1
+        if cfg.channel_transport is None:
+            log.error("no channel transport configured — set QAR_CHANNEL_PROVIDER=openclaw and "
+                     "QAR_OPENCLAW_TOKEN_FILE (see docs/live-channels.md)")
+            return 1
+        if not cfg.channel_allowed_senders:
+            log.warning("QAR_CHANNEL_ALLOWED_SENDERS is empty — every sender will be REJECTED "
+                       "(fail closed). This is very likely not what you want; set it to the "
+                       "sender id(s) allowed to reach this runner.")
+        runner = ChannelRunner(cfg)
+        if getattr(args, "check", False):
+            log.info("channel config OK: transport=%s allowed_senders=%d",
+                     cfg.channel_transport.channel, len(cfg.channel_allowed_senders))
+            return 0
+        if getattr(args, "once", False):
+            dispatched = runner.run_once()
+            log.info("channel: dispatched %d message(s)", dispatched)
+            return 0
+        runner.run_forever()
         return 0
 
     # --- poll (default when no subcommand given) ------------------------------

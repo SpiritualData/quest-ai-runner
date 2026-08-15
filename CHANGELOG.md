@@ -134,6 +134,49 @@ All notable changes to this project are documented here. The format is based on
   (`core/goal_runner.py`; `tests/test_deep_failure_session_diagnostics.py`.)
 
 ### Added
+- **Live, two-way messaging channels -- a hub-to-hub bridge to OpenClaw over MCP.** QAR could only
+  run queued Quest tasks (`poller.py`) or an interactive terminal session (`interactive_session.py`)
+  -- nothing let it hold a real-time conversation over a phone chat app. New generic
+  `core.adapters.ChannelTransport` interface (Protocol + `ChannelTransportBase` ABC, value objects
+  `InboundMessage`/`InboundBatch`/`OutboundReply`/`SendResult` -- same "never raises, every failure
+  is a returned value" contract as every other adapter role) plus `runner/channel_runner.py`'s
+  `ChannelRunner`, the loop that drives one: receive a batch, AUTHORIZE each message against an
+  explicit `RunnerConfig.channel_allowed_senders` allowlist (EMPTY = DENY ALL, fail closed -- a
+  plain membership test against operator config, never a decision based on model-generated text,
+  per this repo's hard rule #3), DEDUP via `runner/state_store.py`'s `StateStore` (extracted out of
+  `poller.py`, mechanically, so both lanes share one dedup mechanism -- see
+  `tests/test_state_store_extraction.py`), run at most one orchestrator turn per `chat_ref` at a
+  time (a message arriving mid-turn folds into the running turn via `core.inbox.InputInbox` instead
+  of starting a second one), and guarantee EXACTLY ONE terminal reply per turn -- answer,
+  decision-relay, or a plain error message, even when the orchestrator itself raises
+  (`runner/channel_session.py`'s `ChannelSink`, which also throttles milestone/progress sends, fires
+  one "still working" ack on a long turn, and reuses `interactive_session.ChatSessionStore` per chat
+  so anaphora resolution ("ok do it") works the same way it does in the terminal). Reference
+  transport: `adapters/openclaw_channel.py`'s `OpenClawChannel` wraps the Phase-1 `MCPClient`
+  (spawns `openclaw mcp serve --token-file <path>`, auth injected as a token FILE PATH, never a
+  hardcoded token) to talk to [OpenClaw](https://github.com/openclaw/openclaw) (MIT) -- one bridge
+  against OpenClaw's confirmed MCP tool surface (`events_wait`/`messages_send`/`attachments_fetch`)
+  means every channel OpenClaw has configured (WhatsApp/Telegram/Discord/Slack/Google Chat/Signal)
+  becomes a live QAR channel with no new QAR code; a new channel is OpenClaw-side config. This
+  bridge structurally never calls OpenClaw's `permissions_respond` (approvals are QAR/Quest's job,
+  never the gateway's -- pinned by `tests/test_openclaw_channel.py::
+  test_bridge_never_calls_permissions_respond`), and a raised `EVENT_DECISION` is relayed to the
+  chat as a message, never auto-resolved from a channel reply (a separate trust decision, out of
+  scope here). New `channel` CLI subcommand (`quest-ai-runner channel [--once|--check]`), its own
+  process/entry point -- NOT folded into `poller.py`'s loop or `TaskExecutor`, since a chat message
+  has no Quest task id to claim/PATCH. `docs/live-channels.md` documents the non-negotiable OpenClaw
+  lockdown checklist (version pin >= v2026.1.29 fixing CVE-2026-25253, no skills/plugins/cron/
+  browser-automation, no agent/model configured in OpenClaw at all, Gateway bound to localhost only,
+  OpenClaw never holding `QUEST_API_KEY`/model keys/corpus access) an operator must verify before
+  connecting this bridge to a real Gateway. **Proven against fakes only** (no live OpenClaw
+  instance was available at authoring time; the exact `events_wait`/`messages_send`/
+  `attachments_fetch` payload shapes are documented assumptions, tolerant-parsed, see
+  "Unverified assumptions" in `docs/live-channels.md`) -- a live end-to-end run needs a real
+  channel bot token only a human operator can create.
+  (`core/adapters.py`, `adapters/openclaw_channel.py`, `runner/channel_runner.py`,
+  `runner/channel_session.py`, `runner/state_store.py`, `config.py`, `cli.py`;
+  `tests/test_openclaw_channel.py`, `tests/test_channel_runner.py`,
+  `tests/test_state_store_extraction.py`; `docs/live-channels.md`.)
 - **Generic MCP (Model Context Protocol) client support -- Phase 1, read-only foundation.** New
   optional `[mcp]` extra (pinned `mcp==2.0.0`, the current PyPI release at the time this was built,
   reflecting the protocol's July 2026 revision) adds two pieces, both offline-safe to import (the

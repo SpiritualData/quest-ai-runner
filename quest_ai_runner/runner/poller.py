@@ -19,9 +19,7 @@ Run modes (like the watchdog): ``run_once()`` for cron, ``run_forever()`` for a 
 """
 from __future__ import annotations
 
-import json
 import logging
-import os
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
@@ -33,6 +31,12 @@ from ..resources import ResourceGuard, ResourceLimits
 from .autopilot import AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, AutopilotPass
 from .executor import TaskExecutor
 from .quest_client import QuestApiError, QuestClient, QuestDecisionSink, QuestNotConfigured
+# StateStore lives in its own module (runner/state_store.py) so the channel-runner lane can reuse
+# the SAME dedup mechanism without duplicating it. Re-exported here (not just imported for local
+# use) so `from quest_ai_runner.runner.poller import StateStore` keeps working unchanged.
+from .state_store import StateStore
+
+__all__ = ["Poller", "StateStore"]
 
 log = logging.getLogger("quest-ai-runner.poller")
 
@@ -90,57 +94,6 @@ def _due_now_locally(tasks: List[Dict[str, Any]],
             continue
         (due if scheduled <= now else deferred).append(task)
     return due, deferred
-
-
-class StateStore:
-    """JSON-backed signature store (watchdog_state.json generalized; pluggable backend)."""
-
-    def __init__(self, path: Optional[str]):
-        self._path = Path(path) if path else None
-        # Insertion-ordered set of handled signatures (dict keys preserve insertion order; values
-        # are unused). This lets the save-time cap evict the OLDEST entries first instead of an
-        # arbitrary subset (a plain ``set`` has no defined iteration order).
-        self._handled: Dict[str, None] = {}
-        self._lock = threading.Lock()
-        self._load()
-
-    def _load(self):
-        if self._path and self._path.exists():
-            try:
-                data = json.loads(self._path.read_text())
-                # Backward compatible: an existing file's "handled" list becomes the dict's keys,
-                # in the same (oldest-first) order they were written.
-                self._handled = dict.fromkeys(data.get("handled", []))
-            except (json.JSONDecodeError, OSError):
-                log.warning("state file corrupt/unreadable; starting fresh")
-
-    def _save(self):
-        if not self._path:
-            return
-        try:
-            self._path.parent.mkdir(parents=True, exist_ok=True)
-            # Cap the stored set so it can't grow unbounded over a long-running service. Dict keys
-            # preserve insertion order, so this drops the OLDEST entries first (not an arbitrary
-            # subset), keeping the most-recently-marked 5000 signatures.
-            recent = list(self._handled)[-5000:]
-            payload = json.dumps({"handled": recent}, indent=2)
-            # Atomic write: write to a temp file in the same directory, then os.replace() so a
-            # crash/interruption mid-write can never leave a corrupt/partial state file — the
-            # replace is a single filesystem operation.
-            tmp_path = self._path.with_suffix(self._path.suffix + ".tmp")
-            tmp_path.write_text(payload)
-            os.replace(tmp_path, self._path)
-        except OSError as e:
-            log.warning("could not persist state: %s", e)
-
-    def seen(self, sig: str) -> bool:
-        with self._lock:
-            return sig in self._handled
-
-    def mark(self, sig: str):
-        with self._lock:
-            self._handled[sig] = None
-            self._save()
 
 
 class Poller:
