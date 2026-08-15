@@ -174,3 +174,50 @@ def test_context_survives_a_client_with_neither_route():
         pass
 
     assert _executor(Bare())._build_context_view(goal_id="g1", quest_id="q1") == ""
+
+
+# --- the email contract ---------------------------------------------------------
+
+class EmailQuestClient(NotesClient):
+    """A client whose quest reports whether email is switched on."""
+
+    def __init__(self, *, email_enabled: bool, **kw):
+        super().__init__(**kw)
+        self._email_enabled = email_enabled
+
+    def get_quest(self, quest_id, **kw):
+        return {"quest_id": quest_id, "autopilot": {"email": {"enabled": self._email_enabled}}}
+
+
+def test_a_run_on_an_email_quest_is_told_not_to_mail_by_hand():
+    """Delivery is automatic once the result is recorded, so a hand-rolled send is a duplicate --
+    and one that carries no reply address, which is the whole point of routing mail through Quest."""
+    client = EmailQuestClient(email_enabled=True, quest_notes=[])
+    view = _executor(client)._build_context_view(goal_id="g1", quest_id="q1", rep_id="bailey")
+
+    assert "Email for this quest is ON" in view
+    assert "do NOT send mail yourself" in view
+    assert "send_quest_email --quest q1" in view
+    assert "--rep bailey" in view              # signs as the persona that did the work
+    assert "never" in view and "the audience" in view   # it picks the words, not the recipients
+
+
+def test_a_quest_without_email_is_told_nothing_about_it():
+    client = EmailQuestClient(email_enabled=False, quest_notes=[])
+    view = _executor(client)._build_context_view(goal_id="g1", quest_id="q1")
+
+    assert "send_quest_email" not in view
+
+
+def test_the_command_still_works_without_a_persona():
+    client = EmailQuestClient(email_enabled=True, quest_notes=[])
+    view = _executor(client)._build_context_view(goal_id="g1", quest_id="q1")
+
+    assert "send_quest_email --quest q1" in view
+    assert "--rep" not in view
+
+
+def test_a_client_that_cannot_report_quest_settings_never_breaks_the_run():
+    view = _executor(NotesClient(quest_notes=[]))._build_context_view(goal_id="g1", quest_id="q1")
+
+    assert "send_quest_email" not in view

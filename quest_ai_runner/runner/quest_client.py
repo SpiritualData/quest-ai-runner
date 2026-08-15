@@ -770,6 +770,32 @@ class QuestClient:
             log.warning("add_quest_note failed for quest %s: %s", quest_id, e)
             return []
 
+    def send_quest_email(self, quest_id: str, *, subject: str, body: str,
+                         rep_id: Optional[str] = None,
+                         task_id: Optional[str] = None) -> Dict[str, Any]:
+        """POST /api/quests/{quest_id}/email — mail this quest's people, as the persona that wrote it.
+
+        THE way a run sends mail. Not a local mail script: going through Quest is what gives the
+        message the quest's own Reply-To (so an answer comes back as a note on the quest rather
+        than into a void), the account's unsubscribe handling, a record, and a signature naming the
+        persona instead of a generic assistant.
+
+        There is no recipient argument, deliberately. The audience is the quest's own settings, so
+        a run decides what to say and when, never who receives a quest's contents. Requires the
+        person to have enabled email on the quest (which is also what mints the reply address);
+        without it the backend answers 400 and nothing is sent.
+
+        RAISES on failure rather than returning a falsy value: a run that believes it has told
+        someone something, when it has not, will go on to act as though the message landed.
+        """
+        self._require()
+        body_payload: Dict[str, Any] = {"subject": subject, "body": body}
+        if rep_id:
+            body_payload["rep_id"] = rep_id
+        if task_id:
+            body_payload["task_id"] = task_id
+        return self._request("POST", f"/api/quests/{quest_id}/email", body=body_payload) or {}
+
     # --- quest context entries (the quest's own documents; UPDATABLE, unlike notes) ------------
 
     def list_context_entries(self, quest_id: str) -> List[Dict[str, Any]]:

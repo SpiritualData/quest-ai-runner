@@ -41,6 +41,28 @@ CANCEL_CHECK_INTERVAL_SECONDS = 15.0
 NOTE_CONTEXT_LIMIT = 8
 PERSON_NOTE_FLOOR = 3
 
+def email_contract(quest_id: str, rep_id: Optional[str] = None) -> str:
+    """Told to a run whose quest has email switched on.
+
+    Two failures this heads off. A run that mails through a local script sends something Quest
+    never saw: no per-quest Reply-To, so the person's answer goes nowhere; no unsubscribe handling;
+    no record; and a signature naming a generic assistant rather than the persona that did the
+    work. And with delivery now automatic, a run that ALSO mails by hand sends the person the same
+    thing twice.
+    """
+    rep = f" --rep {rep_id}" if rep_id else ""
+    return (
+        "Email for this quest is ON. What you put in your result is mailed to its people "
+        "automatically, so do NOT send mail yourself with a local mail script -- that mail would "
+        "carry no reply address, and the person would receive your work twice. If you need to send "
+        "something at a particular moment instead of at the end, run:\n"
+        f"  python -m quest_ai_runner.tools.send_quest_email --quest {quest_id} "
+        f"--subject \"<subject>\" --body-file <path>{rep}\n"
+        "Recipients come from the quest's own settings: you choose the words and the moment, never "
+        "the audience."
+    )
+
+
 # Stated to any run that can see the person's own words, because the reply loop only closes if
 # both halves hold: the run has to answer what they said, and it has to leave the thing they can
 # answer NEXT time where they will find it.
@@ -428,7 +450,8 @@ class TaskExecutor:
         # Fetch goal + quest context + conversation history from Quest API if available, and build
         # a context_view for the orchestrator so the deep agent knows what goal/quest it's working on
         # and the prior conversation that led to the task.
-        context_view = self._build_context_view(goal_id, quest_id, conv_id)
+        context_view = self._build_context_view(
+            goal_id, quest_id, conv_id, rep_id=task.get("assignee_rep_id"))
 
         # Route all orchestrator events (except raw streaming partials) to the task's live progress
         # stream so the task-detail SSE shows step-by-step what the AI is doing (plan, read, replan,
@@ -567,7 +590,8 @@ class TaskExecutor:
             self._safe(lambda: post(conv_id, content, kind=kind, task_id=task_id, **extra))
 
     def _build_context_view(self, goal_id: Optional[str], quest_id: Optional[str],
-                            conv_id: Optional[str] = None) -> str:
+                            conv_id: Optional[str] = None,
+                            rep_id: Optional[str] = None) -> str:
         """Fetch goal + quest metadata + notes + conversation history from the Quest API.
 
         The context_view is passed to the orchestrator so the deep agent knows what goal/quest
@@ -602,6 +626,7 @@ class TaskExecutor:
             return "\n".join(parts) if parts else ""
         # Fetch quest metadata if available
         if quest_id:
+            self._append_email_contract(parts, quest_id, rep_id)
             get_quest = getattr(self._client, "get_quest", None)
             if callable(get_quest):
                 try:
@@ -658,6 +683,20 @@ class TaskExecutor:
                 parts.append(REPLY_LOOP_CONTRACT)
 
         return "\n".join(parts) if parts else ""  # Return combined conversation + quest/goal context
+
+    def _append_email_contract(self, parts: List[str], quest_id: str,
+                               rep_id: Optional[str] = None) -> None:
+        """Add the email contract when (and only when) this quest actually mails its work."""
+        get_quest = getattr(self._client, "get_quest", None)
+        if not callable(get_quest):
+            return
+        try:
+            quest = get_quest(quest_id) or {}
+            settings = ((quest.get("autopilot") or {}).get("email") or {})
+            if settings.get("enabled"):
+                parts.append(email_contract(quest_id, rep_id))
+        except Exception:  # noqa: BLE001 — never let a context extra break a run
+            pass
 
     def _fetch_person_notes(self, quest_id: str, goal_id: Optional[str]) -> List[Dict[str, Any]]:
         """The quest's notes, which is where a person answers their AI.
