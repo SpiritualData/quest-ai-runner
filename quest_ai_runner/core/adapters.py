@@ -465,19 +465,33 @@ class DeepRunner(Protocol):
 
 @dataclass
 class WriteResult:
-    """The outcome of ONE attempted file write through a ``FileWriter``.
+    """The outcome of ONE attempted write through a ``FileWriter`` or an ``OperationWriter``.
 
     Deliberately a value, never an exception: a refused or failed write is an ordinary, expected
-    outcome here (a path outside the root, a credential file, a read-only disk), and the caller's
-    correct response is to report it and escalate, not to unwind. ``ok=False`` always means the
-    file on disk is UNCHANGED.
+    outcome here (a path outside the root, a credential file, a read-only disk, an operation not
+    on a write allowlist), and the caller's correct response is to report it and escalate, not to
+    unwind. ``ok=False`` always means nothing changed: for a ``FileWriter`` the file on disk is
+    UNCHANGED; for an ``OperationWriter`` the mutation was never attempted (a refusal) or the
+    attempt failed (nothing on the far end changed).
+
+    Shared by both write interfaces on purpose rather than each inventing its own result shape:
+    ``rel_path`` doubles as "the path" for a file write and "the aliased operation name" for an
+    ``OperationWriter`` call (e.g. ``"issues:create"``) -- both are just "the target, as the
+    caller named it, for reporting". ``bytes_written``/``created``/``backup_path`` are FILE-write
+    specific and left at their defaults (0/False/None) by an ``OperationWriter``, which instead
+    fills ``detail`` with whatever adapter-specific payload it has (an MCP write's tool name and
+    args, for auditability of what was -- or would have been -- executed).
     """
     ok: bool
-    rel_path: str                          # the path as the caller named it (for reporting)
+    rel_path: str                          # the path (FileWriter) or aliased operation name
+                                            # (OperationWriter) as the caller named it, for reporting
     error: Optional[str] = None            # why it was refused/failed; None on success
     bytes_written: int = 0
     created: bool = False                  # True = the file did not exist before this write
     backup_path: Optional[str] = None      # where the PREVIOUS content was saved, if anywhere
+    detail: Optional[Dict[str, Any]] = None  # adapter-specific auditability payload (e.g. an
+                                            # OperationWriter's {"tool": ..., "args": ...}); None
+                                            # for a plain FileWriter result.
 
 
 @runtime_checkable
@@ -511,6 +525,52 @@ class FileWriter(Protocol):
 
     def write_file(self, rel_path: str, content: str) -> WriteResult:
         """Replace ``rel_path``'s entire content with ``content``. Never raises."""
+
+
+@runtime_checkable
+class OperationWriter(Protocol):
+    """WRITE side for a NAMED, SCHEMA-DESCRIBED mutating operation -- the general form of
+    ``FileWriter`` for write capabilities broader than "replace a file's content" (send a
+    message, create an issue, delete a row, ...). An MCP write tool is the motivating case, but
+    nothing here is MCP-specific: any capability that mutates something outside a plain file is a
+    NAMED operation with a schema, not a path+content pair, and belongs behind this interface
+    instead of a special case inside the brain.
+
+    Reuses ``WriteResult``'s value-not-exception contract rather than inventing a parallel result
+    shape: ``ok=False`` always means nothing changed, ``error`` explains why, and ``detail``
+    carries whatever adapter-specific auditability payload a caller needs (for an MCP operation,
+    ``{"tool": ..., "args": ...}``) since a mutation here does not have a "path" the way a file
+    write does.
+
+    IT IS OPT-IN, same as ``FileWriter``: nothing constructs one automatically, and a consumer
+    that wires none has, by construction, no code path in this library that can execute a
+    mutating operation. The reference implementation is ``adapters.mcp_write_adapter.MCPWriteAdapter``.
+
+    An implementation MUST:
+      * refuse an operation not on its own write allowlist WITHOUT touching the network/backend at
+        all (mirrors ``FileWriter``'s containment refusal, and mirrors ``RetrievalAdapter``'s own
+        read-side allowlist refusal -- but a WRITE allowlist is its own, separate list: being
+        allowlisted for READ grants nothing here);
+      * never raise -- every refusal and every execution failure comes back as
+        ``WriteResult(ok=False)``;
+      * record which operation name and args were (or would have been) executed in
+        ``WriteResult.detail``, for auditability, whether the call succeeded, failed, or was
+        refused.
+    """
+
+    def list_writable_operations(self) -> List[Dict[str, Any]]:
+        """``[{"name", "description", "input_schema"}, ...]`` for operations this instance may
+        execute (i.e. exactly its own write allowlist, schema-described). Best-effort discovery
+        for a caller building a prompt or a UI; an implementation that cannot introspect its own
+        catalog returns ``[]``. Never raises.
+        """
+
+    def write_operation(self, name: str, args: Dict[str, Any]) -> WriteResult:
+        """Execute ONE named mutating operation with ``args``. Never raises.
+
+        Must refuse (``WriteResult(ok=False)``, no network/backend call) any ``name`` not on this
+        instance's own write allowlist.
+        """
 
 
 @runtime_checkable
@@ -1029,6 +1089,20 @@ class FileWriterBase(abc.ABC):
     def write_file(self, rel_path: str, content: str) -> WriteResult: ...
 
 
+class OperationWriterBase(abc.ABC):
+    """Nominal ABC parallel to the ``OperationWriter`` Protocol (same pattern as the other
+    adapters). ``list_writable_operations`` has a concrete default (``[]``, "nothing
+    introspectable"), matching ``ModelProviderBase.supports_web_search``'s pattern of a
+    non-abstract optional capability; an implementer that CAN describe its own catalog overrides
+    it."""
+
+    def list_writable_operations(self) -> List[Dict[str, Any]]:
+        return []
+
+    @abc.abstractmethod
+    def write_operation(self, name: str, args: Dict[str, Any]) -> WriteResult: ...
+
+
 class DeepRunnerBase(abc.ABC):
     # How THIS runner returns its future-context bullets (see FUTURE_CONTEXT_VIA_* above).
     #
@@ -1167,3 +1241,122 @@ class FanoutSink(ProgressSinkBase):
             sink.update(event, eff_mode)
         except Exception:  # noqa: BLE001
             pass
+
+
+# ---------------------------------------------------------------------------
+# ChannelTransport: a LIVE, two-way messaging channel (the sixth adapter role).
+# ---------------------------------------------------------------------------
+#
+# Everything above this line is about ONE turn: the brain reads/plans/answers, and a
+# ProgressSink decides what surfaces. ChannelTransport is a different kind of boundary — it is
+# how a message gets INTO the brain and a reply gets back OUT, over some real-time messaging
+# surface (a phone chat app, a Slack channel, ...) that this library does not itself speak. A
+# consumer's ``runner.channel_runner.ChannelRunner`` drives one ``ChannelTransport`` in a loop:
+# receive a batch, authorize + dedup, run one orchestrator turn per chat, send the reply back.
+#
+# Reference implementation: ``adapters.openclaw_channel.OpenClawChannel``, which wraps the
+# generic ``MCPClient`` (``adapters/mcp_client.py``) to talk to OpenClaw's MCP server — one
+# bridge, every channel OpenClaw has configured (WhatsApp/Telegram/Discord/Slack/...) becomes a
+# live QAR channel. A consumer is free to implement ``ChannelTransport`` directly against any
+# other messaging surface; the runner only depends on this Protocol.
+#
+# Same discipline as every other adapter role: NEVER raises. A dead process, a protocol error, a
+# timeout, an unreachable gateway — all of it comes back as a returned value (``InboundBatch``
+# with ``error``/``healthy=False``, or ``SendResult(ok=False, error=...)``), never an exception.
+
+@dataclass
+class InboundMessage:
+    """ONE message received on a channel, normalized to a transport-agnostic shape.
+
+    ``chat_ref`` is the channel's own conversation/thread identifier — the key a
+    ``ChannelRunner`` sessions turns by (one in-flight turn per ``chat_ref`` at a time; see
+    ``runner.channel_runner``). ``sender_id`` is the channel's own user identifier — the ONLY
+    thing an operator's ``allowed_senders`` allowlist is checked against (a plain membership
+    test, never anything derived from message text). ``attachments`` uses the SAME
+    ``{filename, mime_type, data, kind}`` shape ``core.attachments.prepare_attachments`` already
+    consumes, so a channel's file/image uploads flow through the existing multimodal path with
+    no special casing.
+    """
+    channel: str
+    message_id: str
+    chat_ref: str
+    sender_id: str
+    sender_label: str = ""
+    text: str = ""
+    attachments: List[Dict[str, Any]] = field(default_factory=list)
+    received_at: str = ""
+    raw: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class InboundBatch:
+    """The outcome of ONE ``ChannelTransport.receive()`` call. Never raised — returned.
+
+    ``error`` set + ``healthy=False`` together mean the transport itself is in trouble (a dead
+    subprocess, a protocol error) — the caller should back off before retrying. ``error`` set with
+    ``healthy=True`` (the default) covers a clean, ordinary empty result (e.g. a long-poll that
+    simply timed out with nothing new) that still carries an informational message; most clean
+    timeouts instead just return ``InboundBatch()`` with no error at all.
+    """
+    messages: List[InboundMessage] = field(default_factory=list)
+    error: Optional[str] = None
+    healthy: bool = True
+
+
+@dataclass
+class OutboundReply:
+    """ONE reply to send back on a channel. ``kind`` is informational (a transport MAY use it to
+    pick a rendering, e.g. an ack vs. the final answer) — never a control-flow signal read off
+    generated text; the caller sets it explicitly from what KIND of reply this is, not by
+    inspecting the text.
+    """
+    chat_ref: str
+    text: str
+    reply_to_message_id: Optional[str] = None
+    kind: str = "answer"   # "ack" | "progress" | "answer" | "decision" | "error"
+
+
+@dataclass
+class SendResult:
+    """The outcome of ONE ``ChannelTransport.send()`` call. Mirrors ``WriteResult``'s shape:
+    ``ok=False`` always means nothing was delivered; never raised — returned."""
+    ok: bool
+    message_id: Optional[str] = None
+    error: Optional[str] = None
+
+
+@runtime_checkable
+class ChannelTransport(Protocol):
+    """A LIVE, two-way messaging channel. NEVER raises — every failure is a returned value."""
+
+    channel: str
+
+    def receive(self, *, timeout: float = 25.0) -> InboundBatch:
+        """Block up to ``timeout`` seconds for new inbound messages (a long-poll where the
+        underlying transport supports one). A clean timeout with nothing new returns an EMPTY
+        ``InboundBatch()`` (no error) — that is the normal, expected outcome of most calls, not a
+        failure. Never raises."""
+
+    def send(self, reply: OutboundReply) -> SendResult:
+        """Send ONE reply. Never raises."""
+
+    def close(self) -> None:
+        """Tear down any held connection/process. Idempotent. Never raises."""
+
+
+class ChannelTransportBase(abc.ABC):
+    """ABC variant of ``ChannelTransport`` for implementers who prefer explicit subclassing."""
+
+    channel: str = ""
+
+    @abc.abstractmethod
+    def receive(self, *, timeout: float = 25.0) -> InboundBatch:
+        """Block up to ``timeout`` seconds for new inbound messages. Never raises."""
+
+    @abc.abstractmethod
+    def send(self, reply: OutboundReply) -> SendResult:
+        """Send ONE reply. Never raises."""
+
+    def close(self) -> None:
+        """No-op default. Override for a transport that holds a connection/process."""
+        return None

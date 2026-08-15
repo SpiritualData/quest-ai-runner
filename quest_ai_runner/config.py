@@ -179,6 +179,34 @@ class RunnerConfig:
     # is a no-op (self-contained inputs add ZERO latency), exactly today's behavior.
     conversation_store: Optional[Any] = None
 
+    # --- LIVE CHANNEL lane (opt-in; see runner/channel_runner.py) ---------------------------
+    # A live, two-way messaging channel (e.g. ``adapters.openclaw_channel.OpenClawChannel``) QAR
+    # can hold a real-time conversation over -- a phone chat app, a Slack channel, etc. This is a
+    # SEPARATE process/entry point (the ``channel`` CLI subcommand) from the task poller: a chat
+    # message has no Quest task id to claim/PATCH, so it is never folded into ``poller.py``'s loop
+    # or ``TaskExecutor``. None (default) = the lane does not run.
+    channel_transport: Optional[Any] = None
+    # Sender ids (the TRANSPORT's own ``InboundMessage.sender_id``, e.g. a channel user id) this
+    # runner will act on. EMPTY (the default) means DENY ALL -- fail closed. This is a plain
+    # membership test against operator config, never a decision based on anything a model wrote
+    # (hard rule #3). An operator MUST explicitly list every sender allowed to reach the brain.
+    channel_allowed_senders: List[str] = field(default_factory=list)
+    # Seconds after a turn starts before ChannelSink sends one "still working on it" ack, if
+    # nothing terminal has gone out yet. <= 0 disables the ack.
+    channel_ack_after_seconds: float = 15.0
+    # Minimum seconds between two milestone-progress sends within the SAME turn (throttling, not a
+    # hard cap -- a turn with no milestones sends none at all).
+    channel_progress_min_seconds: float = 20.0
+    # Outer wall-clock safety net per turn, checked between ``run_stream`` events. <= 0 disables
+    # it (the orchestrator's/deep-runner's own internal timeouts are still in effect either way --
+    # this is an ADDITIONAL bound specific to the channel lane, not a replacement for them).
+    channel_turn_timeout_seconds: float = 900.0
+    # Dedup state file for the channel lane's ``StateStore`` (keyed on "<channel>:<message_id>").
+    # None = in-memory only (no persistence across restarts) -- unlike the poller's state path,
+    # which defaults to a file, this defaults to None because a consumer wiring a channel in tests
+    # or a short-lived process should not have to think about a stray state file.
+    channel_state_path: Optional[str] = None
+
     # --- the org's skills/corpus path (for orgs); generic, optional ---
     corpus_root: Optional[str] = None
 
@@ -836,27 +864,71 @@ def resolve_fast_edit_runner(cfg: RunnerConfig):
         return None
 
 
+def resolve_mcp_write_runners(cfg: RunnerConfig) -> List[Any]:
+    """Build one ``MCPOperationRunner`` per configured ``MCPServerSpec`` that has non-empty
+    ``writable_tools``, or ``[]``. OFF unless a spec's ``writable_tools`` is wired.
+
+    Same opt-in shape as ``resolve_fast_edit_runner``: a single condition, no env-var escape
+    hatch, no "auto" tri-state. ``RunnerConfig.mcp_servers`` already carries connection specs for
+    the read-only ``MCPRetrievalAdapter`` side (Phase 1); a spec's ``writable_tools`` is a
+    SEPARATE, additional allowlist a consumer sets explicitly to also grant writes through that
+    same server -- being read-allowlisted (``allowed_tools``) grants nothing here. Each qualifying
+    spec becomes its own namespaced ``MCPWriteAdapter`` wrapped in its own ``MCPOperationRunner``,
+    the same "one spec, its own adapter" pattern the read side uses.
+
+    Returns ``[]`` (silently -- no writable spec is the normal case) when ``mcp_servers`` is empty,
+    no spec has ``writable_tools``, or there is no model provider to make the one call with. Never
+    raises: a failure to build an optional cheap rung must never cost a consumer its runner.
+    """
+    if not cfg.mcp_servers or cfg.model_provider is None:
+        return []
+    runners: List[Any] = []
+    try:
+        from .adapters.mcp_write_adapter import MCPWriteAdapter
+        from .adapters.mcp_write_runner import MCPOperationRunner
+
+        registry = ModelRegistry(cfg.model_provider, fallback=cfg.model_fallback or None)
+        for spec in cfg.mcp_servers:
+            if not getattr(spec, "writable_tools", None):
+                continue
+            writer = MCPWriteAdapter(alias=spec.alias, spec=spec, writable_tools=spec.writable_tools)
+            runners.append(MCPOperationRunner(
+                provider=cfg.model_provider, writer=writer, registry=registry,
+            ))
+        if runners:
+            _log.info("MCP write runners wired for: %s",
+                      [s.alias for s in cfg.mcp_servers if getattr(s, "writable_tools", None)])
+    except Exception:  # noqa: BLE001
+        _log.warning("mcp write: could not build MCPOperationRunner(s); deep work will use the "
+                     "remaining ladder only", exc_info=True)
+    return runners
+
+
 def resolve_deep_runner_ladder(cfg: RunnerConfig, *, warn: bool = True) -> List[Any]:
     """The ORDERED runners one deep goal may be tried with, cheapest rung first.
 
-    Today this is at most two rungs:
+    Today this is at most three groups of rungs:
 
       1. ``FastEditRunner`` — present ONLY when the consumer wired a ``file_writer``. One model
          call, applied in process, against files already in the turn's context.
-      2. the resolved ``deep_runner`` — the full worker (``SubprocessGoalRunner`` by default).
+      2. one ``MCPOperationRunner`` per ``MCPServerSpec`` with non-empty ``writable_tools`` —
+         present ONLY when a consumer configured a write allowlist for that server. One model
+         call, executed in process through that server's own ``MCPWriteAdapter``.
+      3. the resolved ``deep_runner`` — the full worker (``SubprocessGoalRunner`` by default).
 
     A consumer that changed nothing gets ``[SubprocessGoalRunner]``: a one-rung ladder, which the
     goal loop treats exactly as it treated a single runner before ladders existed. That equivalence
     is the point — this is additive, never a silent change to what already ships.
 
-    Both rungs may be absent (no writer, and no worker because ``claude`` is not installed or
-    execution was explicitly disabled), in which case this returns ``[]`` and the orchestrator
-    reports honestly that nothing can execute.
+    All the cheap rungs may be absent (no writer, no writable MCP spec, and no worker because
+    ``claude`` is not installed or execution was explicitly disabled), in which case this returns
+    ``[]`` and the orchestrator reports honestly that nothing can execute.
     """
     ladder: List[Any] = []
     fast = resolve_fast_edit_runner(cfg)
     if fast is not None:
         ladder.append(fast)
+    ladder.extend(resolve_mcp_write_runners(cfg))
     deep = resolve_deep_runner(cfg, warn=warn)
     if deep is not None:
         ladder.append(deep)

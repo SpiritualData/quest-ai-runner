@@ -91,12 +91,13 @@ class MCPServerSpec:
         bearer token injected as an ``Authorization`` header (same injection pattern as
         ``google_chat_adapter.TokenProvider``); ``None`` connects with no auth header.
 
-    ``alias`` and ``allowed_tools`` are carried here too so a ``RunnerConfig.mcp_servers`` entry is
-    self-contained for ``build_orchestrator``'s wiring, but ``MCPRetrievalAdapter`` takes its own
-    explicit ``alias``/``allowed_tools`` constructor arguments as the authoritative values (letting
-    a test or a consumer wrap one spec in adapters under different aliases/policies without cloning
-    the spec). ``MCPClient`` itself only reads the connection fields; it ignores ``alias`` and
-    ``allowed_tools``.
+    ``alias``, ``allowed_tools`` and ``writable_tools`` are carried here too so a
+    ``RunnerConfig.mcp_servers`` entry is self-contained for ``build_orchestrator``'s wiring, but
+    ``MCPRetrievalAdapter``/``MCPWriteAdapter`` each take their own explicit ``alias``/
+    ``allowed_tools``/``writable_tools`` constructor arguments as the authoritative values
+    (letting a test or a consumer wrap one spec in adapters under different aliases/policies
+    without cloning the spec). ``MCPClient`` itself only reads the connection fields; it ignores
+    ``alias``, ``allowed_tools`` and ``writable_tools``.
     """
     alias: str
     transport: str                                    # "stdio" | "http"
@@ -109,7 +110,14 @@ class MCPServerSpec:
     url: Optional[str] = None
     token_provider: Optional[TokenProvider] = None
     # --- shared policy (informational at the MCPClient layer; authoritative at the adapter layer) ---
+    # READ-side allowlist for ``MCPRetrievalAdapter.query()`` (tools/call). Deliberately a
+    # SEPARATE list from ``writable_tools`` below -- a tool being allowed for read-side query()
+    # grants it nothing on the write side, and vice versa.
     allowed_tools: List[str] = field(default_factory=list)
+    # WRITE-side allowlist for ``MCPWriteAdapter.write_operation()`` (tools/call, mutating).
+    # A tool must be listed HERE to be callable via a write; being in ``allowed_tools`` above
+    # grants no write access, by design.
+    writable_tools: List[str] = field(default_factory=list)
     timeout_s: float = DEFAULT_CALL_TIMEOUT_SECONDS
 
 

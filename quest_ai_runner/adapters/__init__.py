@@ -87,6 +87,16 @@ These satisfy the core interfaces; a consumer wires the ones it needs into a Run
                                 an explicit allowlist, and namespacing every surfaced name with a
                                 configured alias so multiple MCP servers never collide inside a
                                 CompositeRetrievalAdapter. Read-only foundation phase.
+  * MCPWriteAdapter          — OperationWriter over ONE MCP server's MUTATING tools (tools/list for
+                                discovery, tools/call to execute), gated by its own ``writable_tools``
+                                allowlist -- a SEPARATE list from MCPRetrievalAdapter's
+                                ``allowed_tools``; being read-allowlisted grants no write access.
+                                Same alias-namespacing convention as the read adapter.
+  * MCPOperationRunner       — DeepRunner that executes ONE MCP write operation in ONE model call
+                                (the OperationWriter analogue of FastEditRunner). Wired as an
+                                additional rung of the deep-runner ladder when an
+                                RunnerConfig.mcp_servers entry has ``writable_tools`` set; reachable
+                                only through the same "action: deep" gate FastEditRunner uses.
 
 The DeepRunner reference (SubprocessGoalRunner) lives in core.goal_runner; the EscalationSink
 reference (the Quest team decision-request) lives in runner.quest_client.
@@ -94,6 +104,8 @@ reference (the Quest team decision-request) lives in runner.quest_client.
 from .acp_deep_runner import AcpConfig, AcpDeepRunner
 from .mcp_client import MCPClient, MCPDiscovery, MCPResourceResult, MCPServerSpec, MCPToolResult
 from .mcp_retrieval_adapter import MCPRetrievalAdapter
+from .mcp_write_adapter import MCPWriteAdapter
+from .mcp_write_runner import MCPOperationConfig, MCPOperationRunner
 from .anthropic_provider import AnthropicProvider
 from .quest_context_adapter import QuestContextAdapter, build_quest_resolvers
 from .cached_db_adapter import CachedDbAdapter
@@ -201,6 +213,9 @@ __all__ = [
     "MCPToolResult",
     "MCPResourceResult",
     "MCPRetrievalAdapter",
+    "MCPWriteAdapter",
+    "MCPOperationRunner",
+    "MCPOperationConfig",
     "FilesAdapter",
     "FilesWriter",
     "FastEditRunner",

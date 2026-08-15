@@ -161,6 +161,42 @@ All notable changes to this project are documented here. The format is based on
   (`adapters/mcp_client.py`, `adapters/mcp_retrieval_adapter.py`, `config.py`, `core/goal_runner.py`,
   `adapters/acp_deep_runner.py`; `tests/test_mcp_client.py`, `tests/test_mcp_retrieval_adapter.py`,
   `tests/test_deep_runner_mcp_passthrough.py`.)
+- **Generic MCP write support -- Phase 2, gated exactly like every other write in this library.**
+  Investigated first, not assumed: `FileWriter.write_file` (`core/adapters.py`) has exactly ONE
+  reachable caller in the whole library, `FastEditRunner.apply_response`, and `FastEditRunner` is
+  reachable only through `config.resolve_deep_runner_ladder` -> `Orchestrator._run_deep`, itself
+  reachable only once the planner's own structured decision is `action: "deep"` -- nothing in the
+  plan/gather/re-plan loop can call it. New `OperationWriter` Protocol + `OperationWriterBase` ABC
+  (`core/adapters.py`) generalize that same gated-write shape from "replace a file's content" to
+  "execute a named, schema-described mutating operation" (an MCP write tool is the motivating case,
+  but the interface is not MCP-specific), reusing `WriteResult`'s existing value-not-exception
+  contract rather than inventing a parallel one -- `WriteResult` gained an optional `detail` field
+  for adapter-specific auditability (an MCP write's executed `{"tool", "args"}`) since a mutation
+  here does not have a "path" the way a file write does; every other field keeps its FileWriter
+  meaning unchanged. `adapters/mcp_write_adapter.py`'s `MCPWriteAdapter` implements it over
+  `MCPClient.call_tool`, gated by its own `writable_tools` allowlist -- a SEPARATE list from
+  `MCPRetrievalAdapter.allowed_tools`; being read-allowlisted grants no write access, and a refused
+  call never reaches `MCPClient.call_tool` (spy-verified). `MCPServerSpec` gained a
+  `writable_tools: List[str]` field alongside the existing `allowed_tools`, so one spec's
+  connection can back both a read and a write adapter with independent policies.
+  `adapters/mcp_write_runner.py`'s `MCPOperationRunner` is the `OperationWriter` analogue of
+  `FastEditRunner`: a `DeepRunner` that picks at most one writable operation (from the writer's own
+  discovered catalog) and its arguments via ONE forced-structured-output model call (never keyword
+  scanning of free text, same discipline hard rule #3 requires of the main planner), executes it,
+  and returns -- declining (empty catalog, or the model's own explicit decline) does nothing and
+  reports `met=False`, escalating to the next rung exactly like FastEditRunner's "no candidate
+  file" case. New `config.resolve_mcp_write_runners()` builds one `MCPOperationRunner` per
+  `MCPServerSpec` with non-empty `writable_tools` (mirroring `resolve_fast_edit_runner`'s opt-in
+  shape: a single condition, no env-var escape hatch) and `resolve_deep_runner_ladder` folds them in
+  as an additional rung between `FastEditRunner` and the full deep runner -- the SAME ladder, SAME
+  gate, no parallel escalation path. A default consumer (no `writable_tools` anywhere) sees byte-
+  for-byte the same ladder as before this change.
+  (`core/adapters.py`, `adapters/mcp_client.py`, `adapters/mcp_write_adapter.py`,
+  `adapters/mcp_write_runner.py`, `config.py`; `tests/test_mcp_write_adapter.py`,
+  `tests/test_mcp_write_runner.py`, `tests/test_mcp_write_ladder.py` -- the last of which drives the
+  real orchestrator loop to prove a plain answer/read turn can never reach `write_operation`, with a
+  positive control proving the same wiring genuinely does execute a write once the planner actually
+  decides `action: "deep"`.)
 - **An attended chat session standing in a quest's folder now OPENS already holding that folder's
   standing next-steps answer, instead of re-deriving one when asked.** The
   `QAR:MANAGED:next_steps` block in `QUEST_SYNC.md` was built as the one canonical "what to do next
