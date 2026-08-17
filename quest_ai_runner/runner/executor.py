@@ -63,6 +63,19 @@ def email_contract(quest_id: str, rep_id: Optional[str] = None) -> str:
     )
 
 
+# How a good colleague behaves around a question they had to ask. Raising one is not a reason to
+# stop: they get on with everything that does not depend on the answer, and say what is waiting on
+# it. A run that downs tools the moment it needs something turns one unanswered message into a
+# stalled week, and the person finds out only when nothing has moved.
+KEEP_GOING_CONTRACT = (
+    "If you raise a question, need a decision, or hit a blocker: do NOT stop there. Carry on with "
+    "everything that does not depend on the answer, and finish by naming what is still waiting on "
+    "them and what you did in the meantime. An unanswered question is a fact to work around, not a "
+    "stop sign -- and if an earlier run already asked something that is still unanswered, work "
+    "around it the same way rather than asking again."
+)
+
+
 # Stated to any run that can see the person's own words, because the reply loop only closes if
 # both halves hold: the run has to answer what they said, and it has to leave the thing they can
 # answer NEXT time where they will find it.
@@ -660,7 +673,8 @@ class TaskExecutor:
                 pass
 
         if not goal_id and not quest_id:
-            return "\n".join(parts) if parts else ""
+            parts.append(KEEP_GOING_CONTRACT)
+            return "\n".join(parts)
         # Fetch quest metadata if available
         if quest_id:
             self._append_email_contract(parts, quest_id, rep_id)
@@ -727,7 +741,9 @@ class TaskExecutor:
             if notes_text or insights_text:
                 parts.append(REPLY_LOOP_CONTRACT)
 
-        return "\n".join(parts) if parts else ""  # Combined conversation + quest/goal context
+        # Applies to every run: hitting a blocker is normal, stopping because of one is not.
+        parts.append(KEEP_GOING_CONTRACT)
+        return "\n".join(parts)  # Combined conversation + quest/goal context
 
     def _append_email_contract(self, parts: List[str], quest_id: str,
                                rep_id: Optional[str] = None) -> None:

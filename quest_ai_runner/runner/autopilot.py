@@ -694,6 +694,7 @@ class AutopilotPass:
     def __init__(self, client: Any, *, team_id: str = "",
                  persona_resolver: Optional[Callable[[Dict[str, Any]], Optional[str]]] = None,
                  daily_budget: int = DEFAULT_TEAM_DAILY_BUDGET,
+                 backpressure: bool = False,
                  adopt_recurring_default: Optional[bool] = None,
                  quest_folder_map: Optional[Dict[str, str]] = None,
                  now: Optional[Callable[[], datetime]] = None):
@@ -701,6 +702,7 @@ class AutopilotPass:
         self._team_id = team_id or ""
         self._persona_resolver = persona_resolver
         self._daily_budget = daily_budget if daily_budget and daily_budget > 0 else DEFAULT_TEAM_DAILY_BUDGET
+        self._backpressure = bool(backpressure)
         self._adopt_recurring_default = adopt_recurring_default
         # ``{quest_id: folder}`` (RunnerConfig.quest_folder_map). A quest with a folder gets the
         # next-steps artifact read and refreshed; one without is unaffected.
@@ -1189,7 +1191,7 @@ class AutopilotPass:
         autopilot_cfg = quest.get("autopilot") or {}
         if not cadence_due(autopilot_cfg, self._now()):
             return "cadence not due yet"
-        if self._has_backpressure(quest_id):
+        if self._backpressure and self._has_backpressure(quest_id):
             return "backpressure: a previous autopilot task for this quest is still open"
         if self._has_open_hold_decision(quest_id):
             return "an open HOLD decision is pending on this quest"
@@ -1225,6 +1227,11 @@ class AutopilotPass:
     def _has_backpressure(self, quest_id: str) -> bool:
         """True when a task AUTOPILOT ITSELF authored for this quest is still open, so the last
         batch it produced is not finished and it should not stack another on top.
+
+        OFF unless ``RunnerConfig.autopilot_backpressure`` is set. It used to be unconditional,
+        which meant one unapproved suggestion or one unanswered decision stopped a quest outright
+        and indefinitely -- the person's silence read as a stop sign. Nobody asked for that
+        behaviour and it is the opposite of how a good colleague handles a pending question.
 
         "Not finished" covers two different things, and only one of them is about the person:
         ``queued``/``in_progress`` is work that has not RUN yet (the AI's own backlog), while

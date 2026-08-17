@@ -135,6 +135,7 @@ class Poller:
             team_id=config.team_id or "",
             persona_resolver=config.autopilot_persona_resolver,
             daily_budget=config.autopilot_daily_budget,
+            backpressure=config.autopilot_backpressure,
             adopt_recurring_default=config.autopilot_adopt_recurring,
             # Same map the folder sync uses, so a quest whose folder is already synced also gets
             # its canonical next-steps artifact read and refreshed by each pass.

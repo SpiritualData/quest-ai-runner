@@ -169,11 +169,15 @@ def test_the_reply_loop_contract_rides_along_only_when_there_is_something_to_ans
     assert REPLY_LOOP_CONTRACT not in without
 
 
-def test_a_client_that_can_answer_nothing_yields_no_invented_context():
+def test_a_client_that_can_answer_nothing_invents_no_data():
+    """No notes, captures or history means no DATA — only the standing rule about blockers, which
+    is behaviour rather than something fetched, so it must not depend on a client answering."""
+    from quest_ai_runner.runner.executor import KEEP_GOING_CONTRACT
+
     class Bare:
         pass
 
-    assert _executor(Bare())._build_context_view(goal_id="g1", quest_id="q1") == ""
+    assert _executor(Bare())._build_context_view(goal_id="g1", quest_id="q1") == KEEP_GOING_CONTRACT
 
 
 # --- the email contract ---------------------------------------------------------
@@ -292,3 +296,20 @@ def test_a_client_with_no_history_call_still_builds_context():
         goal_id=None, quest_id="q1")
 
     assert "hi" in view
+
+
+# --- a blocker is not a stop sign -----------------------------------------------
+
+def test_every_run_is_told_to_keep_going_around_a_blocker():
+    """An ideal colleague who asks a question still does everything that does not depend on the
+    answer. A run that stops turns one unanswered message into a stalled week."""
+    view = _executor(HistoryClient())._build_context_view(goal_id="g1", quest_id="q1")
+
+    assert "do NOT stop there" in view
+    assert "work around" in view
+
+
+def test_even_an_unlinked_task_is_told_that():
+    view = _executor(HistoryClient())._build_context_view(goal_id=None, quest_id=None)
+
+    assert "do NOT stop there" in view

@@ -271,13 +271,27 @@ def test_gate_skips_quest_whose_cadence_is_not_due():
 
 # --- gate: backpressure ---------------------------------------------------------------------
 
-def test_gate_skips_quest_with_open_autopilot_task_still_pending():
+def test_an_unanswered_question_does_not_stop_the_quest_by_default():
+    """Backpressure is OFF unless a deployment asks for it. A pending decision is something to work
+    around, not a reason to down tools: one unanswered message must not stall a quest for days."""
     q1 = _quest("q1")
     goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))}
     existing = [{"id": "prev", "task_kind": "autopilot_work", "goal_id": "q1",
                 "status": "needs_you"}]
     client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals, tasks=existing)
     passer = AutopilotPass(client, team_id="team1", now=_now)
+    result = passer.run({"text": "pass"})
+    assert len(result.created_task_ids) == 1
+    assert not any("backpressure" in s["reason"] for s in result.skipped)
+
+
+def test_gate_skips_quest_with_open_autopilot_task_when_backpressure_is_enabled():
+    q1 = _quest("q1")
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))}
+    existing = [{"id": "prev", "task_kind": "autopilot_work", "goal_id": "q1",
+                "status": "needs_you"}]
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals, tasks=existing)
+    passer = AutopilotPass(client, team_id="team1", backpressure=True, now=_now)
     result = passer.run({"text": "pass"})
     assert result.created_task_ids == []
     assert any("backpressure" in s["reason"] for s in result.skipped)
@@ -720,7 +734,7 @@ def test_backpressure_matches_a_task_by_goal_id_because_tasks_have_no_quest_id()
     client = FakeAutopilotClient(
         quests=[q1], tasks=existing,
         goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
-    passer = AutopilotPass(client, team_id="team1", now=_now)
+    passer = AutopilotPass(client, team_id="team1", backpressure=True, now=_now)
     result = passer.run({"text": "pass"})
     assert result.created_task_ids == []
     assert any("backpressure" in s["reason"] for s in result.skipped)

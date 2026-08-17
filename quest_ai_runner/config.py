@@ -313,6 +313,12 @@ class RunnerConfig:
     # Team-wide daily cap on autopilot-created tasks (batches + goal proposals each count as one
     # unit). Default 3, per the design's starting number.
     autopilot_daily_budget: int = 3
+    # Whether a quest with an unfinished autopilot task is SKIPPED by the next pass. OFF by
+    # default: an ideal colleague who raised a question or hit a blocker gets on with everything
+    # that does not depend on the answer, rather than downing tools until someone replies. With it
+    # off, a pass that finds unfinished work simply sees it in context and works around it. Turn it
+    # on for a deployment that would rather have one batch at a time.
+    autopilot_backpressure: bool = False
     # Default for adopting a quest's own due recurring tasks into the pass's batch (see
     # ``runner/autopilot.py``). A quest's OWN ``autopilot.adopt_recurring`` always wins; this is
     # only consulted when the quest does not state one, which includes deployments whose backend
