@@ -1233,8 +1233,11 @@ def test_poller_no_team_id_skips_heartbeat_cleanly():
 
 
 def test_poller_passes_org_id_through_to_heartbeat_when_configured():
-    """When cfg.org_id is set, _emit_heartbeat passes it through to
-    post_environment_heartbeat(org_id=...) so the env registers at org scope."""
+    """When cfg.org_id is set ALONGSIDE an existing team_id, _emit_heartbeat sends TWO
+    independent heartbeats — team scope (unchanged, back-compat) plus org scope (new) — since
+    post_environment_heartbeat treats org_id as scope-exclusive per call and can't register both
+    in one POST. This is what lets a runner opt into org-wide availability without regressing any
+    team-scoped consumer."""
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
     client = MockQuestClient([])
     poller = _poller_with(
@@ -1244,8 +1247,10 @@ def test_poller_passes_org_id_through_to_heartbeat_when_configured():
     poller.cfg.org_id = "org_example"
 
     poller.run_once()
-    assert len(client.heartbeats) == 1
-    assert client.last_org_id == "org_example"
+    assert len(client.heartbeats) == 2          # one team-scope call, one org-scope call
+    team_id, _, _ = client.heartbeats[0]
+    assert team_id == "team1"                    # the team-scope call still fired, unchanged
+    assert client.last_org_id == "org_example"   # the org-scope call also fired
 
 
 def test_poller_org_only_still_heartbeats_with_no_team_id():

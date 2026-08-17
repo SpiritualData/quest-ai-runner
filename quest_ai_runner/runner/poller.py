@@ -241,21 +241,38 @@ class Poller:
         Never raises — a heartbeat failure (no team_id/org_id, network, endpoint absent) is
         logged and the poll proceeds. The team_id, org_id, runner_label, and env_id come from the
         consumer's RunnerConfig (env_id distinguishes this runner when a team/org attaches
-        several). Proceeds if EITHER org_id or team_id is set: an org-only registration should
-        still heartbeat even if team_id happens to be empty, though in practice team_id is
-        usually still set (it's required for task claiming/escalation regardless)."""
+        several).
+
+        When BOTH team_id and org_id are configured, this sends TWO independent heartbeats (team
+        scope, then org scope) rather than picking one: `post_environment_heartbeat` treats org_id
+        as scope-exclusive per call (org_id set -> org-only POST, team_id ignored for that call),
+        so a single call can't register both. Dual-heartbeating keeps every existing team-scoped
+        consumer (routing, fan-out, env pickers) working unchanged while ALSO keeping the org-level
+        registration alive, so nothing regresses for a runner that opts into org-wide availability
+        on top of its existing team. Each call is independently best-effort; one failing never
+        blocks the other."""
         if not self.cfg.org_id and not self.cfg.team_id:
             return  # no team or org to attach the env to — nothing to heartbeat (still a valid poll)
-        try:
-            self.client.post_environment_heartbeat(
-                self._capabilities,
-                runner_label=self.cfg.runner_label,
-                env_id=self.cfg.env_id,
-                team_id=self.cfg.team_id,
-                org_id=self.cfg.org_id or None,
-            )
-        except Exception as e:  # noqa: BLE001 — heartbeat is best-effort, never breaks the scan
-            log.info("environment heartbeat failed (%s) — continuing poll", e)
+        if self.cfg.team_id:
+            try:
+                self.client.post_environment_heartbeat(
+                    self._capabilities,
+                    runner_label=self.cfg.runner_label,
+                    env_id=self.cfg.env_id,
+                    team_id=self.cfg.team_id,
+                )
+            except Exception as e:  # noqa: BLE001 — heartbeat is best-effort, never breaks the scan
+                log.info("environment heartbeat (team scope) failed (%s) — continuing poll", e)
+        if self.cfg.org_id:
+            try:
+                self.client.post_environment_heartbeat(
+                    self._capabilities,
+                    runner_label=self.cfg.runner_label,
+                    env_id=self.cfg.env_id,
+                    org_id=self.cfg.org_id,
+                )
+            except Exception as e:  # noqa: BLE001 — heartbeat is best-effort, never breaks the scan
+                log.info("environment heartbeat (org scope) failed (%s) — continuing poll", e)
 
     def _claim_slot(self, task_id: str) -> bool:
         """Reserve ``task_id`` for in-process handling. False if another path here already has it.
