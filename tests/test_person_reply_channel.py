@@ -17,6 +17,7 @@ faults broke it, each of them silent:
 from __future__ import annotations
 
 from quest_ai_runner.runner.executor import (
+    NO_ASSUMED_PROGRESS_CONTRACT,
     PERSON_NOTE_FLOOR,
     REPLY_LOOP_CONTRACT,
     TaskExecutor,
@@ -169,11 +170,15 @@ def test_the_reply_loop_contract_rides_along_only_when_there_is_something_to_ans
     assert REPLY_LOOP_CONTRACT not in without
 
 
-def test_context_survives_a_client_with_neither_route():
+def test_a_client_that_can_answer_nothing_yields_no_invented_context():
+    """A client with no notes, captures or history contributes no DATA — only the standing rule
+    that applies whether or not anything came back, which must not be conditional on a fetch."""
     class Bare:
         pass
 
-    assert _executor(Bare())._build_context_view(goal_id="g1", quest_id="q1") == ""
+    view = _executor(Bare())._build_context_view(goal_id="g1", quest_id="q1")
+
+    assert view == NO_ASSUMED_PROGRESS_CONTRACT
 
 
 # --- the email contract ---------------------------------------------------------
@@ -221,3 +226,64 @@ def test_a_client_that_cannot_report_quest_settings_never_breaks_the_run():
     view = _executor(NotesClient(quest_notes=[]))._build_context_view(goal_id="g1", quest_id="q1")
 
     assert "send_quest_email" not in view
+
+
+# --- what earlier runs did ------------------------------------------------------
+
+class HistoryClient(NotesClient):
+    def __init__(self, *, tasks=None, **kw):
+        super().__init__(**kw)
+        self._tasks = tasks or []
+        self.list_tasks_calls = []
+
+    def list_tasks(self, **kw):
+        self.list_tasks_calls.append(kw)
+        return list(self._tasks)
+
+
+def task(status: str, title: str, result: str = "", when: str = "2026-08-14") -> dict:
+    return {"task_id": f"atask_{title}", "status": status, "title": title,
+            "result": result, "updated_at": when}
+
+
+def test_a_failed_run_is_still_reported_because_its_work_happened():
+    """The live case: Friday's brief reported failed after mailing and writing notes, so Monday's
+    run saw nothing and carried on as if the week had not started."""
+    client = HistoryClient(tasks=[task("failed", "Friday brief", "Sent the brief; Gap 5 resolved.")])
+    view = _executor(client)._build_context_view(goal_id=None, quest_id="q1")
+
+    assert "Friday brief" in view
+    assert "Gap 5 resolved" in view
+    assert "may have written files, sent mail" in view      # failed != nothing happened
+
+
+def test_history_is_asked_for_by_quest_and_not_filtered_to_successes():
+    client = HistoryClient(tasks=[task("done", "a"), task("failed", "b")])
+    _executor(client)._build_context_view(goal_id=None, quest_id="q1")
+
+    assert client.list_tasks_calls == [{"goal_id": "q1"}]
+
+
+def test_history_is_bounded_and_ends_with_the_most_recent():
+    client = HistoryClient(tasks=[task("done", f"run{i}", when="2026-08-%02d" % (i + 1))
+                                  for i in range(12)])
+    view = _executor(client)._build_context_view(goal_id=None, quest_id="q1")
+
+    assert "run11" in view          # newest kept
+    assert "run0" not in view       # oldest dropped
+    assert view.count("• [") <= 6
+
+
+def test_every_run_is_told_not_to_assume_the_person_acted():
+    """Monday's brief moved on as though Friday's instructions had been followed. They had not."""
+    view = _executor(HistoryClient())._build_context_view(goal_id=None, quest_id="q1")
+
+    assert "Do NOT assume the person did anything you asked for previously" in view
+    assert "treat it as NOT done" in view
+
+
+def test_a_client_with_no_history_call_still_builds_context():
+    view = _executor(NotesClient(quest_notes=[person("hi")]))._build_context_view(
+        goal_id=None, quest_id="q1")
+
+    assert "hi" in view

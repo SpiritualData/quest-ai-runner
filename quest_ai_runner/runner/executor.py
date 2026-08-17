@@ -80,6 +80,43 @@ REPLY_LOOP_CONTRACT = (
 )
 
 
+# What earlier runs did, INCLUDING the ones that failed. A failed run is not an empty one: it may
+# have written files, sent mail, or resolved half the work before its goal could be confirmed, and
+# the next run that cannot see that redoes it, contradicts it, or reports it as still pending.
+RUN_HISTORY_HEADER = (
+    "Earlier runs on this quest, oldest first. `failed` means the goal could not be CONFIRMED, not "
+    "that nothing happened -- a failed run may have written files, sent mail, or finished most of "
+    "the work. Read what it actually did before repeating or contradicting it."
+)
+
+# The person is not a subroutine: asking them to do something does not make it done.
+NO_ASSUMED_PROGRESS_CONTRACT = (
+    "Do NOT assume the person did anything you asked for previously. Confirm it from evidence: a "
+    "goal or habit marked done, a note in their own words, or a change you can actually see in "
+    "their files. With no evidence, treat it as NOT done, say so plainly, and carry it forward "
+    "rather than moving on as though it happened."
+)
+
+
+def render_run_history(tasks: Optional[List[Dict[str, Any]]], limit: int = 6) -> str:
+    """Recent runs on this quest, with what each one produced."""
+    rows = [t for t in (tasks or []) if (t or {}).get("status") in
+            ("done", "failed", "needs_you", "in_progress")]
+    rows = sorted(rows, key=lambda t: str(t.get("updated_at") or ""))[-limit:]
+    if not rows:
+        return ""
+    lines = []
+    for task in rows:
+        when = str(task.get("updated_at") or "")[:10]
+        title = (task.get("title") or (task.get("text") or "")[:60] or "task").strip()
+        result = " ".join(str(task.get("result") or "").split())[:300]
+        line = f"  • [{when}] {task.get('status')}: {title}"
+        if result:
+            line += f"\n      produced: {result}"
+        lines.append(line)
+    return f"{RUN_HISTORY_HEADER}\n" + "\n".join(lines)
+
+
 def render_goal_notes(notes: Optional[List[Dict[str, Any]]]) -> str:
     """Render a goal's recent notes for a run, saying WHO wrote each one.
 
@@ -679,8 +716,13 @@ class TaskExecutor:
             if insights_text:
                 parts.append(insights_text)
 
+            history_text = render_run_history(self._fetch_run_history(quest_id))
+            if history_text:
+                parts.append(history_text)
+
             if notes_text or insights_text:
                 parts.append(REPLY_LOOP_CONTRACT)
+            parts.append(NO_ASSUMED_PROGRESS_CONTRACT)
 
         return "\n".join(parts) if parts else ""  # Return combined conversation + quest/goal context
 
@@ -724,6 +766,20 @@ class TaskExecutor:
             except Exception:  # noqa: BLE001
                 pass  # API unavailable or error; continue with what we have
         return []
+
+    def _fetch_run_history(self, quest_id: str) -> List[Dict[str, Any]]:
+        """Recent tasks on this quest, whatever their outcome.
+
+        Deliberately unfiltered by status: the run that most needs reading is often the one that
+        FAILED, because its work happened anyway and only its confirmation did not.
+        """
+        list_tasks = getattr(self._client, "list_tasks", None)
+        if not callable(list_tasks):
+            return []
+        try:
+            return list(list_tasks(goal_id=quest_id) or [])
+        except Exception:  # noqa: BLE001 — history is context, never a reason to fail a run
+            return []
 
     def _fetch_person_captures(self) -> str:
         """The person's recent unacted captures, rendered, or "" when there are none."""
