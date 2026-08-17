@@ -719,12 +719,15 @@ class TaskExecutor:
             history_text = render_run_history(self._fetch_run_history(quest_id))
             if history_text:
                 parts.append(history_text)
+                # Only where there IS a "previously". On a quest nothing has run on yet, nobody has
+                # been asked to do anything, so this would only make a first run hedge about work
+                # that was never requested.
+                parts.append(NO_ASSUMED_PROGRESS_CONTRACT)
 
             if notes_text or insights_text:
                 parts.append(REPLY_LOOP_CONTRACT)
-            parts.append(NO_ASSUMED_PROGRESS_CONTRACT)
 
-        return "\n".join(parts) if parts else ""  # Return combined conversation + quest/goal context
+        return "\n".join(parts) if parts else ""  # Combined conversation + quest/goal context
 
     def _append_email_contract(self, parts: List[str], quest_id: str,
                                rep_id: Optional[str] = None) -> None:

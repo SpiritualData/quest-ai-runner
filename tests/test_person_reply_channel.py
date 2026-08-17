@@ -17,7 +17,6 @@ faults broke it, each of them silent:
 from __future__ import annotations
 
 from quest_ai_runner.runner.executor import (
-    NO_ASSUMED_PROGRESS_CONTRACT,
     PERSON_NOTE_FLOOR,
     REPLY_LOOP_CONTRACT,
     TaskExecutor,
@@ -171,14 +170,10 @@ def test_the_reply_loop_contract_rides_along_only_when_there_is_something_to_ans
 
 
 def test_a_client_that_can_answer_nothing_yields_no_invented_context():
-    """A client with no notes, captures or history contributes no DATA — only the standing rule
-    that applies whether or not anything came back, which must not be conditional on a fetch."""
     class Bare:
         pass
 
-    view = _executor(Bare())._build_context_view(goal_id="g1", quest_id="q1")
-
-    assert view == NO_ASSUMED_PROGRESS_CONTRACT
+    assert _executor(Bare())._build_context_view(goal_id="g1", quest_id="q1") == ""
 
 
 # --- the email contract ---------------------------------------------------------
@@ -274,12 +269,22 @@ def test_history_is_bounded_and_ends_with_the_most_recent():
     assert view.count("• [") <= 6
 
 
-def test_every_run_is_told_not_to_assume_the_person_acted():
+def test_a_run_with_predecessors_is_told_not_to_assume_the_person_acted():
     """Monday's brief moved on as though Friday's instructions had been followed. They had not."""
-    view = _executor(HistoryClient())._build_context_view(goal_id=None, quest_id="q1")
+    view = _executor(HistoryClient(tasks=[task("done", "Friday brief", "asked him to write")])) \
+        ._build_context_view(goal_id=None, quest_id="q1")
 
     assert "Do NOT assume the person did anything you asked for previously" in view
     assert "treat it as NOT done" in view
+
+
+def test_a_quest_nothing_has_run_on_yet_is_not_told_to_doubt_progress():
+    """The rule only means something where there IS a previously. With no earlier run, nobody has
+    been asked to do anything, so this would only make a first run hedge about work never
+    requested."""
+    view = _executor(HistoryClient(tasks=[]))._build_context_view(goal_id=None, quest_id="q1")
+
+    assert "Do NOT assume" not in view
 
 
 def test_a_client_with_no_history_call_still_builds_context():
