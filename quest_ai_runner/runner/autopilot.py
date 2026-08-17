@@ -1223,8 +1223,16 @@ class AutopilotPass:
         return count
 
     def _has_backpressure(self, quest_id: str) -> bool:
-        """True when a previous autopilot task for THIS quest is still open (queued/in_progress/
-        needs_you/suggested) -- the human has not worked through the last thing we produced.
+        """True when a task AUTOPILOT ITSELF authored for this quest is still open, so the last
+        batch it produced is not finished and it should not stack another on top.
+
+        "Not finished" covers two different things, and only one of them is about the person:
+        ``queued``/``in_progress`` is work that has not RUN yet (the AI's own backlog), while
+        ``needs_you``/``suggested`` is genuinely waiting on them -- a decision to resolve, a
+        proposal to approve. Either way the answer is the same, which is why one check covers both.
+
+        Only autopilot-authored tasks count. A recurring task the person set up themselves (a daily
+        brief, say) is not autopilot's backlog and must never gate it.
 
         A task's link to its quest is its ``goal_id``: the Quest API resolves that field as a
         QUEST id (its handler loads the quest by it), and there is no separate ``quest_id`` field
