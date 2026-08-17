@@ -437,31 +437,41 @@ class QuestClient:
     def post_environment_heartbeat(self, capabilities: Dict[str, bool], *,
                                    runner_label: Optional[str] = None,
                                    env_id: Optional[str] = None,
-                                   team_id: Optional[str] = None) -> Dict[str, Any]:
+                                   team_id: Optional[str] = None,
+                                   org_id: Optional[str] = None) -> Dict[str, Any]:
         """Tell the backend this runner is ALIVE and what it can do (the env heartbeat).
 
-        POSTs to ``/api/teams/{team_id}/environment/heartbeat`` with the runner's declared
-        ``capabilities`` ({web, corpus, code}). The backend stamps last_heartbeat_at, stores the
-        reported capabilities, and auto-registers the team's env config on first contact — making
-        the env queryable by the routing classifier. Authed by THIS runner's qsk_ key (its user
-        must be a member of the team). Returns the stored env state.
+        By default POSTs to ``/api/teams/{team_id}/environment/heartbeat`` with the runner's
+        declared ``capabilities`` ({web, corpus, code}). The backend stamps last_heartbeat_at,
+        stores the reported capabilities, and auto-registers the team's env config on first
+        contact — making the env queryable by the routing classifier. Authed by THIS runner's
+        qsk_ key (its user must be a member of the team). Returns the stored env state.
 
-        ``env_id`` identifies WHICH of the team's environments this runner is — a team can attach
-        several runners, each its own environment. Omit it and this runner is the team's DEFAULT
-        environment (so a single-runner deployment needs no extra config). ``team_id`` defaults to
-        the client's configured team. The CALLER (poller) keeps this best-effort: a failed
-        heartbeat must never break task execution.
+        Pass ``org_id`` to register at ORG scope instead: POSTs to
+        ``/api/orgs/{org_id}/environment/heartbeat`` (same body shape) so this runner becomes
+        available to EVERY team in that org, not just one team. When ``org_id`` is truthy,
+        ``team_id`` is NOT required (org-scope heartbeats don't need one).
+
+        ``env_id`` identifies WHICH of the team's (or org's) environments this runner is — a
+        team/org can attach several runners, each its own environment. Omit it and this runner is
+        the DEFAULT environment (so a single-runner deployment needs no extra config). ``team_id``
+        defaults to the client's configured team. The CALLER (poller) keeps this best-effort: a
+        failed heartbeat must never break task execution.
         """
         try:
-            tid = team_id or self.team_id
-            if not tid:
-                raise QuestNotConfigured("team_id is required to post an environment heartbeat")
             body: Dict[str, Any] = {"capabilities": dict(capabilities)}
             if runner_label:
                 body["runner_label"] = runner_label
             if env_id:
                 body["env_id"] = env_id
-            return self._request("POST", f"/api/teams/{tid}/environment/heartbeat", body=body) or {}
+            if org_id:
+                path = f"/api/orgs/{org_id}/environment/heartbeat"
+            else:
+                tid = team_id or self.team_id
+                if not tid:
+                    raise QuestNotConfigured("team_id is required to post an environment heartbeat")
+                path = f"/api/teams/{tid}/environment/heartbeat"
+            return self._request("POST", path, body=body) or {}
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("post_environment_heartbeat failed: %s", e)
             return {}

@@ -93,9 +93,11 @@ class MockQuestClient:
         self.post_card_ids.append(card_id)
         return {"role": "assistant", "kind": kind, "content": content}
 
-    def post_environment_heartbeat(self, capabilities, *, runner_label=None, env_id=None, team_id=None):
+    def post_environment_heartbeat(self, capabilities, *, runner_label=None, env_id=None,
+                                    team_id=None, org_id=None):
         self.heartbeats.append((team_id, dict(capabilities), runner_label))
         self.last_env_id = env_id
+        self.last_org_id = org_id
         return {"team_id": team_id, "enabled": True, "reported_capabilities": dict(capabilities)}
 
     def whoami(self):
@@ -1203,7 +1205,8 @@ def test_poller_heartbeat_failure_never_breaks_task_execution():
     """If the heartbeat POST raises (endpoint down, network), the scan still discovers, claims,
     runs, and reports the due task. Best-effort, exactly like progress-posting."""
     class BoomHeartbeatClient(MockQuestClient):
-        def post_environment_heartbeat(self, capabilities, *, runner_label=None, env_id=None, team_id=None):
+        def post_environment_heartbeat(self, capabilities, *, runner_label=None, env_id=None,
+                                        team_id=None, org_id=None):
             raise RuntimeError("heartbeat endpoint unavailable")
 
     provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
@@ -1227,6 +1230,38 @@ def test_poller_no_team_id_skips_heartbeat_cleanly():
     poller = Poller(cfg, state_path=None, client=client)
     assert poller.run_once() == []
     assert client.heartbeats == []             # nothing heartbeated, no crash
+
+
+def test_poller_passes_org_id_through_to_heartbeat_when_configured():
+    """When cfg.org_id is set, _emit_heartbeat passes it through to
+    post_environment_heartbeat(org_id=...) so the env registers at org scope."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = MockQuestClient([])
+    poller = _poller_with(
+        client, provider,
+        deep_runner=StubDeepRunner(met=True, output="x"), corpus_root="/some/corpus",
+    )
+    poller.cfg.org_id = "org_example"
+
+    poller.run_once()
+    assert len(client.heartbeats) == 1
+    assert client.last_org_id == "org_example"
+
+
+def test_poller_org_only_still_heartbeats_with_no_team_id():
+    """org_id alone (no team_id) is enough to heartbeat -- org-scope registration doesn't need a
+    team_id, even though team_id is still required separately for task claiming/escalation."""
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = MockQuestClient([])
+    from quest_ai_runner.config import RunnerConfig
+    cfg = RunnerConfig(
+        quest_base_url="http://x", quest_api_key="qsk_test", team_id="", org_id="org_example",
+        retrieval=StubRetrieval({"README.md": "fact"}), model_provider=provider,
+    )
+    poller = Poller(cfg, state_path=None, client=client)
+    poller.run_once()
+    assert len(client.heartbeats) == 1
+    assert client.last_org_id == "org_example"
 
 
 # --- handler stamping + live task-detail progress stream ------------------------

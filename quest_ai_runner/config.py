@@ -75,6 +75,13 @@ class RunnerConfig:
     # owner-scoped discovery (picks up null-team tasks) while still using team_id for heartbeat
     # and escalation — needed for personal/single-user lanes where tasks are owner-scoped.
     discovery_team_id: Optional[str] = None
+    # Optional org-scoped registration for the environment heartbeat, loaded from QUEST_ORG_ID.
+    # When set, the poller's heartbeat POSTs to /api/orgs/{org_id}/environment/heartbeat instead
+    # of the team-scoped endpoint, registering this runner as available to EVERY team in that
+    # org rather than just one team -- the mechanism a shared/org-wide runner deployment needs.
+    # team_id is still required for task claiming/escalation regardless; org_id only changes
+    # where the environment heartbeat/registration lands.
+    org_id: str = ""
     runner_label: Optional[str] = None       # human-readable tag sent on the env heartbeat (optional)
     env_id: Optional[str] = None             # which of the team's environments this runner is
                                              # (omit = the team's default env; set it when a team

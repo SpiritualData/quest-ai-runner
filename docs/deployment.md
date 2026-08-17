@@ -12,7 +12,8 @@ All configuration is environment-driven (see [`.env.example`](../.env.example)):
 |---|---|---|
 | `QUEST_BASE_URL` | yes | Quest API base URL |
 | `QUEST_API_KEY` | yes | executor identity (`qsk_...`) — keep secret |
-| `QUEST_TEAM_ID` | yes | the team this lane serves |
+| `QUEST_TEAM_ID` | yes | the team this lane serves (task claiming/escalation, always required) |
+| `QUEST_ORG_ID` | optional | when set, the environment heartbeat registers at ORG scope instead of team scope, making this runner available to every team in the org, not just `QUEST_TEAM_ID` |
 | `ANTHROPIC_API_KEY` | yes (for the reference provider) | model calls |
 | `QAR_CORPUS_ROOT` | optional | file root for the `FilesAdapter` |
 | `QAR_DEEP_WORKING_DIR` | optional | working dir for the subprocess deep-runner |

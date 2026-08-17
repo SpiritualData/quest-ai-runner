@@ -6,6 +6,13 @@ variables (so a stranger's org can run it with no code) and starts the Poller in
 
 Env it reads:
   QUEST_BASE_URL, QUEST_API_KEY, QUEST_TEAM_ID   — the Quest connection (key is qsk_...)
+  QUEST_ORG_ID (optional)                        — when set, the environment heartbeat registers
+                                                   at ORG scope (/api/orgs/{org_id}/environment/
+                                                   heartbeat), making this runner available to
+                                                   EVERY team in the org instead of just
+                                                   QUEST_TEAM_ID. QUEST_TEAM_ID is still required
+                                                   for task claiming/escalation regardless -- this
+                                                   only changes where the heartbeat lands.
   QAR_CORPUS_ROOT                                — file root for the FilesAdapter (grounding);
                                                    also the default for QAR_DEEP_WORKING_DIR
   QAR_DEEP_WORKING_DIR (optional)               — working dir for the subprocess deep-runner;
@@ -357,6 +364,7 @@ def _config_from_env() -> RunnerConfig:
         quest_base_url=os.getenv("QUEST_BASE_URL", ""),
         quest_api_key=os.getenv("QUEST_API_KEY", ""),
         team_id=os.getenv("QUEST_TEAM_ID", ""),
+        org_id=os.getenv("QUEST_ORG_ID", ""),
         retrieval=retrieval,
         model_provider=_model_provider_from_env(),
         model_fallback=model_fallback or None,

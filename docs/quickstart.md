@@ -52,6 +52,7 @@ The installed CLI builds everything from environment variables:
 export QUEST_BASE_URL=https://api.example.org
 export QUEST_API_KEY=qsk_...        # your executor identity (keep secret)
 export QUEST_TEAM_ID=team_...
+# export QUEST_ORG_ID=org_...   # optional: registers the env heartbeat org-wide, see deployment.md
 export QAR_CORPUS_ROOT=/path/to/corpus
 export ANTHROPIC_API_KEY=sk-ant-...
 

@@ -21,6 +21,11 @@ def build_config() -> RunnerConfig:
         quest_base_url=os.getenv("QUEST_BASE_URL", ""),
         quest_api_key=os.getenv("QUEST_API_KEY", ""),   # qsk_...  (executor identity)
         team_id=os.getenv("QUEST_TEAM_ID", ""),
+        # OPTIONAL. Set this (from QUEST_ORG_ID) to register the environment heartbeat at ORG
+        # scope instead of team scope, so this runner is available to EVERY team in the org
+        # rather than just team_id above. team_id is still required for task claiming/escalation
+        # regardless -- org_id only changes where the heartbeat/registration lands.
+        org_id=os.getenv("QUEST_ORG_ID", ""),
         runner_label="my-team-runner",                  # shows on the env heartbeat
 
         # --- adapters (you choose which) ---
@@ -46,7 +51,8 @@ def build_config() -> RunnerConfig:
 | Field | Purpose |
 |---|---|
 | `quest_base_url`, `quest_api_key`, `team_id` | the Quest connection; the key is the executor identity |
-| `runner_label` | human-readable tag sent on the team-environment heartbeat |
+| `org_id` | OPT-IN, `""` by default: when set, the environment heartbeat registers at ORG scope (`/api/orgs/{org_id}/environment/heartbeat`) instead of team scope, so this runner is available to every team in the org, not just `team_id`. `team_id` is still required for task claiming/escalation either way |
+| `runner_label` | human-readable tag sent on the environment heartbeat (team- or org-scoped) |
 | `retrieval` | a `RetrievalAdapter` — how the brain gathers grounding |
 | `model_provider` | a `ModelProvider` — the LLM (plan/answer/list_models) |
 | `deep_runner` | a `DeepRunner` — runs deep, goal-driven work. **On by default**: leave it unset and one is built for you (see below); pass `None` to turn execution off |

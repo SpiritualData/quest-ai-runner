@@ -238,17 +238,21 @@ class Poller:
     def _emit_heartbeat(self) -> None:
         """Best-effort env heartbeat: report this runner is live + its capabilities.
 
-        Never raises — a heartbeat failure (no team_id, network, endpoint absent) is logged and
-        the poll proceeds. The team_id, runner_label, and env_id come from the consumer's
-        RunnerConfig (env_id distinguishes this runner when a team attaches several)."""
-        if not self.cfg.team_id:
-            return  # no team to attach the env to — nothing to heartbeat (still a valid poll)
+        Never raises — a heartbeat failure (no team_id/org_id, network, endpoint absent) is
+        logged and the poll proceeds. The team_id, org_id, runner_label, and env_id come from the
+        consumer's RunnerConfig (env_id distinguishes this runner when a team/org attaches
+        several). Proceeds if EITHER org_id or team_id is set: an org-only registration should
+        still heartbeat even if team_id happens to be empty, though in practice team_id is
+        usually still set (it's required for task claiming/escalation regardless)."""
+        if not self.cfg.org_id and not self.cfg.team_id:
+            return  # no team or org to attach the env to — nothing to heartbeat (still a valid poll)
         try:
             self.client.post_environment_heartbeat(
                 self._capabilities,
                 runner_label=self.cfg.runner_label,
                 env_id=self.cfg.env_id,
                 team_id=self.cfg.team_id,
+                org_id=self.cfg.org_id or None,
             )
         except Exception as e:  # noqa: BLE001 — heartbeat is best-effort, never breaks the scan
             log.info("environment heartbeat failed (%s) — continuing poll", e)

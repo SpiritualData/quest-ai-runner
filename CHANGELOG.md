@@ -134,6 +134,18 @@ All notable changes to this project are documented here. The format is based on
   (`core/goal_runner.py`; `tests/test_deep_failure_session_diagnostics.py`.)
 
 ### Added
+- **Org-scoped environment heartbeat registration.** The environment heartbeat (how a runner tells
+  the Quest backend "I'm alive, here's what I can do" so the backend can route deferred AI work to
+  it) could previously only register at TEAM scope, even though the Quest backend already supports
+  an org-scoped heartbeat endpoint -- so a shared/org-wide runner deployment had no way to make
+  itself visible to every team in an org, only one team at a time. New optional
+  `RunnerConfig.org_id` (loaded from `QUEST_ORG_ID`): when set, `QuestClient.post_environment_
+  heartbeat(..., org_id=...)` POSTs to `/api/orgs/{org_id}/environment/heartbeat` instead of
+  `/api/teams/{team_id}/environment/heartbeat` (same body shape, no backend changes needed), and
+  `Poller._emit_heartbeat` passes it through automatically when configured. `team_id` remains
+  required for task claiming/escalation regardless -- `org_id` only changes where the heartbeat
+  lands. (`config.py`, `cli.py`, `runner/quest_client.py`, `runner/poller.py`;
+  `tests/test_quest_client_heartbeat.py`, `tests/test_runner.py`.)
 - **Live, two-way messaging channels -- a hub-to-hub bridge to OpenClaw over MCP.** QAR could only
   run queued Quest tasks (`poller.py`) or an interactive terminal session (`interactive_session.py`)
   -- nothing let it hold a real-time conversation over a phone chat app. New generic
