@@ -306,10 +306,31 @@ def test_every_run_is_told_to_keep_going_around_a_blocker():
     view = _executor(HistoryClient())._build_context_view(goal_id="g1", quest_id="q1")
 
     assert "do NOT stop there" in view
-    assert "work around" in view
+    assert "what is still waiting on them" in view
+
+
+def test_an_unanswered_ask_is_repeated_but_not_refiled():
+    """Two different things: the person who has not acted needs reminding, so the ask belongs in
+    tomorrow's brief; a SECOND decision-request for it just leaves two rows to resolve for one
+    question."""
+    view = _executor(HistoryClient())._build_context_view(goal_id="g1", quest_id="q1")
+
+    assert "SAY SO AGAIN" in view
+    assert "do NOT file a second request" in view
+    assert "refer to the one already open" in view
 
 
 def test_even_an_unlinked_task_is_told_that():
     view = _executor(HistoryClient())._build_context_view(goal_id=None, quest_id=None)
 
     assert "do NOT stop there" in view
+
+
+def test_an_overdue_item_is_named_rather_than_replaced_by_todays_new_one():
+    """If yesterday's reading was not done, today's brief must not hand over a new one and let the
+    first slip: the person cannot chase what the AI stopped mentioning."""
+    view = _executor(HistoryClient())._build_context_view(goal_id="g1", quest_id="q1")
+
+    assert "An outstanding item stays outstanding" in view
+    assert "how long it has been waiting" in view
+    assert "do not quietly replace it" in view

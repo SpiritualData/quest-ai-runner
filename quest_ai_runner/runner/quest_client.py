@@ -1375,7 +1375,35 @@ class QuestDecisionSink(EscalationSinkBase):
         self._client = client
         self._default_assignee = default_assignee_user_id
 
+    @staticmethod
+    def _same_ask(a: str, b: str) -> bool:
+        """Whether two decision summaries are the same ask, ignoring incidental formatting."""
+        norm = lambda s: " ".join(str(s or "").split()).strip().lower()  # noqa: E731
+        return bool(norm(a)) and norm(a) == norm(b)
+
+    def _existing_open_decision(self, escalation: Escalation) -> str:
+        """The id of an OPEN decision already asking this, or "".
+
+        A run that needs the same answer every morning would otherwise file a new request every
+        morning: the person opens their queue to five rows for one question they have already seen,
+        and resolving it clears only today's. Asking again in what they READ is right -- somebody
+        who has not got to it needs reminding -- but the record should stay one row.
+        """
+        if not escalation.quest_id:
+            return ""
+        try:
+            for decision in self._client.list_open_decisions_for_quest(escalation.quest_id) or []:
+                if self._same_ask(escalation.summary, decision.get("summary")):
+                    return str(decision.get("decision_id") or decision.get("id") or "")
+        except Exception:  # noqa: BLE001 — a dedupe lookup must never block an escalation
+            return ""
+        return ""
+
     def escalate(self, escalation: Escalation) -> str:
+        existing = self._existing_open_decision(escalation)
+        if existing:
+            log.info("escalate: reusing open decision %s rather than filing a duplicate", existing)
+            return existing
         try:
             res = self._client.create_decision(
                 escalation.summary,

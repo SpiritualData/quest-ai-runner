@@ -67,12 +67,22 @@ def email_contract(quest_id: str, rep_id: Optional[str] = None) -> str:
 # stop: they get on with everything that does not depend on the answer, and say what is waiting on
 # it. A run that downs tools the moment it needs something turns one unanswered message into a
 # stalled week, and the person finds out only when nothing has moved.
+#
+# The distinction that matters when the answer still has not come: ASKING again is right, FILING
+# again is not. Someone who has not acted needs reminding, so the same ask belongs in tomorrow's
+# brief; but a second decision-request for it leaves two rows to resolve for one question, and the
+# queue fills with duplicates of a thing they have already seen.
 KEEP_GOING_CONTRACT = (
     "If you raise a question, need a decision, or hit a blocker: do NOT stop there. Carry on with "
     "everything that does not depend on the answer, and finish by naming what is still waiting on "
-    "them and what you did in the meantime. An unanswered question is a fact to work around, not a "
-    "stop sign -- and if an earlier run already asked something that is still unanswered, work "
-    "around it the same way rather than asking again."
+    "them and what you did in the meantime. If an earlier run already asked for the same thing and "
+    "it is still unanswered, SAY SO AGAIN in what you produce -- someone who has not got to it "
+    "needs reminding, not silence -- but do NOT file a second request for it: refer to the one "
+    "already open instead of creating a duplicate.\n"
+    "The same holds for anything you asked THEM to do. An outstanding item stays outstanding: name "
+    "it first, say how long it has been waiting, and do not quietly replace it with today's new "
+    "thing. Moving on silently is how the first item is missed entirely -- they cannot chase what "
+    "you stopped mentioning."
 )
 
 
