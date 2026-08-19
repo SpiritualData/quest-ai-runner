@@ -430,12 +430,23 @@ def _summarize_previous(previous: Dict[str, Any]) -> str:
     if open_goals:
         lines.append("  Goals left INCOMPLETE (carry them or re-sequence, do not silently drop "
                      "them): " + "; ".join((g.get("name") or "?").strip() for g in open_goals))
+    dismissed_any = False
     for t in tasks:
         title = (t.get("title") or t.get("text") or "").strip().splitlines()
         label = (title[0] if title else "(untitled task)")[:90]
         outcome = str(t.get("result") or "").strip().replace("\n", " ")
-        lines.append(f"  Task [{t.get('status')}] {label}"
+        # A dismissal is the person saying this run was not worth their attention. It is the only
+        # unprompted signal the feed produces, and it is cheap for them to give, so it is worth
+        # more than its size: several dismissals in a row say the work itself is off, not that the
+        # summary was long.
+        dismissed = " [they cleared this from their feed]" if t.get("dismissed_at") else ""
+        dismissed_any = dismissed_any or bool(dismissed)
+        lines.append(f"  Task [{t.get('status')}] {label}{dismissed}"
                      + (f" -> {outcome[:280]}" if outcome else ""))
+    if dismissed_any:
+        lines.append("  A cleared run is feedback, not a failure and not a request: they saw it "
+                     "and did not want it. Treat it as a signal about what to surface, and never "
+                     "as work to redo, re-send or ask them about.")
     if not (done_goals or open_goals or tasks):
         lines.append("  No recorded activity. Treat the plan's schedule as untouched, and if that "
                      "is because work slipped, say so rather than repeating the same instruction.")

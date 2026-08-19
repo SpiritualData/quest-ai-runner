@@ -698,6 +698,25 @@ def test_compose_batch_text_names_the_persona_when_one_resolved():
     assert "Act as bailey" in text
 
 
+def test_previous_block_marks_runs_the_person_cleared_from_their_feed():
+    """A dismissal is the only unprompted signal the feed produces. If the pass cannot see it, the
+    person clears the same kind of run every morning and nothing ever changes."""
+    previous = {"period": "2026-08-18", "tasks": [
+        {"status": "done", "title": "Daily brief", "dismissed_at": "2026-08-18T15:00:00Z"},
+        {"status": "done", "title": "Gap 3 review"},
+    ]}
+    text = compose_batch_text("Ship it", [{"id": "g1", "name": "A goal"}], previous=previous)
+    assert "Daily brief [they cleared this from their feed]" in text
+    assert "Gap 3 review [they cleared" not in text
+    assert "feedback, not a failure and not a request" in text
+
+
+def test_previous_block_stays_quiet_about_dismissals_when_there_are_none():
+    previous = {"period": "2026-08-18", "tasks": [{"status": "done", "title": "Gap 3 review"}]}
+    text = compose_batch_text("Ship it", [{"id": "g1", "name": "A goal"}], previous=previous)
+    assert "cleared this from their feed" not in text
+
+
 def test_compose_batch_text_always_states_who_confirms_work_is_done():
     """A pass cannot observe whether the person did the thing, so left to infer it treats its own
     assignment as the event and issues something new each period while the first item is still
