@@ -706,6 +706,26 @@ def _resolve_persona_from_corpus(
     return (name, persona_text)
 
 
+def _make_startup_notifier(console: "_Console", notices: List[str], startup_notify=None):
+    """Build the callback ``notify_and_log`` used to surface bootstrap/index notices.
+
+    When a live notice callback is wired (Textual UI), it is the sole display path
+    — the TUI shows the message itself. Also writing to ``console`` here would leak
+    straight to the real stdout underneath the TUI's alternate screen, showing the
+    same message twice. Plain (non-Textual) mode has no such callback, so direct
+    console output is the only display path there.
+    """
+
+    def notify_and_log(msg: str) -> None:
+        notices.append(msg)
+        if startup_notify is not None:
+            startup_notify(msg)
+        else:
+            console.dim(f"  {msg}")
+
+    return notify_and_log
+
+
 class InteractiveSession:
     """Multi-turn interactive session over a RunnerConfig's orchestrator."""
 
@@ -724,12 +744,7 @@ class InteractiveSession:
         # soon as it has one, so the command handlers below print into its transcript.
         self._console = _Console()
 
-        def notify_and_log(msg: str) -> None:
-            """Show bootstrap/index messages to user and queue for the UI header."""
-            self._startup_notices.append(msg)
-            self._console.dim(f"  {msg}")
-            if _startup_notify is not None:
-                _startup_notify(msg)
+        notify_and_log = _make_startup_notifier(self._console, self._startup_notices, _startup_notify)
 
         self._cfg = cfg
         self._rep_name = rep_name
