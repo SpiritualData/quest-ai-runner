@@ -59,7 +59,11 @@ def email_contract(quest_id: str, rep_id: Optional[str] = None) -> str:
         f"  python -m quest_ai_runner.tools.send_quest_email --quest {quest_id} "
         f"--subject \"<subject>\" --body-file <path>{rep}\n"
         "Recipients come from the quest's own settings: you choose the words and the moment, never "
-        "the audience."
+        "the audience.\n"
+        "Write the result AS the message they will read, in markdown, and nothing else. No "
+        "\"here is what I sent\" preamble, no second copy of the text pasted underneath, no note "
+        "to yourself about which delivery path you used: the result IS the mail, so anything else "
+        "in it is something a person reads in their inbox and has to skip past."
     )
 
 
@@ -685,9 +689,11 @@ class TaskExecutor:
         if not goal_id and not quest_id:
             parts.append(KEEP_GOING_CONTRACT)
             return "\n".join(parts)
+        # Not inside the ``if quest_id`` below: a task created against a quest carries that
+        # quest's id in goal_id and leaves quest_id null, and those are exactly the runs that mail.
+        self._append_email_contract(parts, goal_id, quest_id, rep_id)
         # Fetch quest metadata if available
         if quest_id:
-            self._append_email_contract(parts, quest_id, rep_id)
             get_quest = getattr(self._client, "get_quest", None)
             if callable(get_quest):
                 try:
@@ -755,19 +761,36 @@ class TaskExecutor:
         parts.append(KEEP_GOING_CONTRACT)
         return "\n".join(parts)  # Combined conversation + quest/goal context
 
-    def _append_email_contract(self, parts: List[str], quest_id: str,
+    def _append_email_contract(self, parts: List[str], goal_id: Optional[str],
+                               quest_id: Optional[str],
                                rep_id: Optional[str] = None) -> None:
-        """Add the email contract when (and only when) this quest actually mails its work."""
+        """Add the email contract when (and only when) this quest actually mails its work.
+
+        Both ids are tried, quest_id first and goal_id second, because a task created against a
+        quest carries that quest's id in ``goal_id`` and leaves ``quest_id`` NULL -- the same
+        goal-or-quest ambiguity the poller already handles for the quest folder map. Reading only
+        ``quest_id`` meant the contract never fired for those tasks: every run concluded email was
+        off, mailed by hand through a local script, and the person received the automatic copy and
+        the hand-rolled one, minutes apart -- the exact duplicate this contract exists to prevent.
+        A ``get_quest`` on an id that is a goal rather than a quest returns {} and falls through,
+        so trying both is safe as well as necessary.
+        """
         get_quest = getattr(self._client, "get_quest", None)
         if not callable(get_quest):
             return
-        try:
-            quest = get_quest(quest_id) or {}
+        for candidate in (quest_id, goal_id):
+            if not candidate:
+                continue
+            try:
+                quest = get_quest(candidate) or {}
+            except Exception:  # noqa: BLE001 — never let a context extra break a run
+                continue
             settings = ((quest.get("autopilot") or {}).get("email") or {})
             if settings.get("enabled"):
-                parts.append(email_contract(quest_id, rep_id))
-        except Exception:  # noqa: BLE001 — never let a context extra break a run
-            pass
+                # The id that actually carries the settings, so the printed command names the
+                # quest whose recipients the mail will go to.
+                parts.append(email_contract(candidate, rep_id))
+                return
 
     def _fetch_person_notes(self, quest_id: str, goal_id: Optional[str]) -> List[Dict[str, Any]]:
         """The quest's notes, which is where a person answers their AI.

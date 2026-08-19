@@ -206,6 +206,27 @@ def test_a_run_on_an_email_quest_is_told_not_to_mail_by_hand():
     assert "never" in view and "the audience" in view   # it picks the words, not the recipients
 
 
+def test_a_task_that_names_its_quest_only_in_goal_id_is_still_told_email_is_on():
+    """The live failure. Tasks created against a quest carry the quest id in ``goal_id`` and leave
+    ``quest_id`` null, so a contract that consulted only ``quest_id`` never fired: the run read the
+    absence as "email is off", mailed the brief itself through a local script, and the person got
+    that copy AND the automatic one. The command has to name the id that holds the settings."""
+    client = EmailQuestClient(email_enabled=True, quest_notes=[])
+    view = _executor(client)._build_context_view(goal_id="quest_abc123", quest_id=None)
+
+    assert "Email for this quest is ON" in view
+    assert "send_quest_email --quest quest_abc123" in view
+
+
+def test_the_result_is_the_message_and_not_a_report_about_it():
+    """A result opening "Today's brief is written and sent. Full text below:" is a line the person
+    reads in their inbox, because the result IS the body of the mail."""
+    client = EmailQuestClient(email_enabled=True, quest_notes=[])
+    view = _executor(client)._build_context_view(goal_id="g1", quest_id="q1")
+
+    assert "the result IS the mail" in view
+
+
 def test_a_quest_without_email_is_told_nothing_about_it():
     client = EmailQuestClient(email_enabled=False, quest_notes=[])
     view = _executor(client)._build_context_view(goal_id="g1", quest_id="q1")
