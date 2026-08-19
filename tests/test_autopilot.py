@@ -310,12 +310,27 @@ def test_backpressure_gate_ignores_terminal_autopilot_tasks():
 
 # --- gate: open HOLD decision -----------------------------------------------------------------
 
-def test_gate_skips_quest_with_open_hold_decision():
+def test_open_hold_decision_does_not_stop_a_pass_by_default():
+    """An unresolved decision is a question the person has not answered yet. Treating it as a stop
+    sign makes their silence an instruction to down tools, and everything independent of that
+    question sits there workable while the quest stays frozen. The run sees the open decision in
+    context and works around it."""
     q1 = _quest("q1")
     goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))}
     client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals)
     client.open_decisions["q1"] = True
     passer = AutopilotPass(client, team_id="team1", now=_now)
+    result = passer.run({"text": "pass"})
+    assert len(result.created_task_ids) == 1
+    assert not any("HOLD" in s["reason"] for s in result.skipped)
+
+
+def test_gate_skips_quest_with_open_hold_decision_when_backpressure_is_enabled():
+    q1 = _quest("q1")
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))}
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals)
+    client.open_decisions["q1"] = True
+    passer = AutopilotPass(client, team_id="team1", backpressure=True, now=_now)
     result = passer.run({"text": "pass"})
     assert result.created_task_ids == []
     assert any("HOLD" in s["reason"] for s in result.skipped)
@@ -331,7 +346,7 @@ def test_gate_order_cadence_before_backpressure_before_hold():
                 "status": "queued"}]
     client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals, tasks=existing)
     client.open_decisions["q1"] = True
-    passer = AutopilotPass(client, team_id="team1", now=_now)
+    passer = AutopilotPass(client, team_id="team1", backpressure=True, now=_now)
     result = passer.run({"text": "pass"})
     assert result.skipped == [{"quest_id": "q1", "reason": "cadence not due yet"}]
 

@@ -5,9 +5,10 @@ recurring assistant task (``task_kind == "autopilot"``, routed by ``runner.execu
 normal deep-run path). Each pass:
 
   1. Lists the team's quests; keeps the ones opted in (``autopilot.mode`` in ``suggest``/``act``).
-  2. Gates each, cheapest first: a team-wide daily budget, per-quest cadence, backpressure (an
-     open autopilot-created task already sitting on the quest), and an open HOLD decision on the
-     quest.
+  2. Gates each, cheapest first: a team-wide daily budget, per-quest cadence, and -- only where
+     the deployment opts into backpressure -- an open autopilot-created task or an unresolved HOLD
+     decision already sitting on the quest. By default neither stops a pass: work continues and
+     the unfinished thing is visible in context to be worked around.
   3. Picks the quest's CURRENT-SCOPE target goals (today's, this period's, or the single next
      incomplete one when the quest is unscoped) among the ones flagged ``ai_help``.
   4. Resolves a persona per goal (goal assignee -> quest persona-for-today -> a consumer-injected
@@ -1217,7 +1218,14 @@ class AutopilotPass:
             return "cadence not due yet"
         if self._backpressure and self._has_backpressure(quest_id):
             return "backpressure: a previous autopilot task for this quest is still open"
-        if self._has_open_hold_decision(quest_id):
+        # Behind the SAME opt-in as task backpressure, and for the same reason. An unresolved
+        # decision is a question the person has not answered yet; treating it as a stop sign makes
+        # their silence an instruction to down tools, and the quest stays frozen for as long as
+        # they do not get to it. 02ba2de removed that reading for an unfinished TASK but left it
+        # standing here, which is the more direct case: a quest with one open question stopped
+        # dead while everything independent of that question sat there, workable. The run sees the
+        # open decision in its context and is told to carry on around it.
+        if self._backpressure and self._has_open_hold_decision(quest_id):
             return "an open HOLD decision is pending on this quest"
         return None
 
