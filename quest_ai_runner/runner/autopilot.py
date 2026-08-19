@@ -484,6 +484,29 @@ def next_steps_from_pass(goals: List[Dict[str, Any]],
                      scope=scope_label or "", updated=updated or "", note=note)
 
 
+# Always told to a batch run, with or without previous-period rows to read it against.
+#
+# A recurring pass has no way to observe whether a person did the thing it asked for. Left to
+# infer, it treats its own assignment as the event -- it asked yesterday, a day passed, so it
+# moves on and asks for something else. The person then receives a new instruction every period
+# while the first one is still untouched, which reads as the AI not noticing them at all. The
+# fix is not more memory; it is being explicit that completion is a claim only the person can
+# make, and that "re-sequence" means moving when work happens, never quietly substituting a
+# fresh item for an untouched one.
+_CONFIRMATION_RULE = (
+    "WHAT COUNTS AS DONE. Only the person confirms their own work: a goal they completed, a note "
+    "or reply they wrote, or an artifact they produced. None of these are confirmation -- that "
+    "you assigned it, that an earlier run's plan listed it, that the period ended, or that you "
+    "read the material yourself. You may never record their work as done on their behalf.\n"
+    "While something you asked of them is unconfirmed, repeat THAT item rather than replacing it "
+    "with a fresh one of the same kind, and say how long it has been outstanding. Re-sequencing "
+    "means changing WHEN the remaining work happens; it never means swapping an untouched item "
+    "for a different one, because someone who has not done the first thing is not helped by being "
+    "handed a second. If the same item goes unconfirmed three times, stop reissuing it and make "
+    "what to do about it the question you raise -- shrink it, swap it, or drop it."
+)
+
+
 def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
                        persona: Optional[str] = None, *,
                        scope_label: Optional[str] = None,
@@ -569,6 +592,7 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
         parts.append(insights)
     if previous:
         parts.append(_summarize_previous(previous))
+    parts.append(_CONFIRMATION_RULE)
     return "\n\n".join(parts)
 
 

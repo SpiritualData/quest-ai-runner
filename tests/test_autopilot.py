@@ -683,6 +683,28 @@ def test_compose_batch_text_names_the_persona_when_one_resolved():
     assert "Act as bailey" in text
 
 
+def test_compose_batch_text_always_states_who_confirms_work_is_done():
+    """A pass cannot observe whether the person did the thing, so left to infer it treats its own
+    assignment as the event and issues something new each period while the first item is still
+    untouched. The rule is unconditional: it must be there with no previous-period rows to read
+    it against, since a first pass can hand out work just as blindly as a tenth."""
+    text = compose_batch_text("Ship it", [{"id": "g1", "name": "A goal"}])
+    assert "WHAT COUNTS AS DONE" in text
+    assert "Only the person confirms their own work" in text
+    assert "repeat THAT item rather than replacing it" in text
+
+
+def test_compose_batch_text_confirmation_rule_survives_a_previous_period_block():
+    """The two belong together: the previous block says what happened, the rule says what may be
+    concluded from it. Emitting the rows without the rule is what let 're-sequence' get read as
+    'swap in a fresh item'."""
+    previous = {"period": "2026-08-18", "goals": [{"name": "Read Thagard", "completed": False}]}
+    text = compose_batch_text("Ship it", [{"id": "g1", "name": "A goal"}], previous=previous)
+    assert "Goals left INCOMPLETE" in text
+    assert "WHAT COUNTS AS DONE" in text
+    assert "never means swapping an untouched item" in text
+
+
 # --- REAL-CONTRACT fidelity: the shapes verified against quest-backend's july branch -------------
 
 def test_autopilot_mode_is_read_from_the_quest_state_not_the_team_listing():
