@@ -134,6 +134,23 @@ All notable changes to this project are documented here. The format is based on
   (`core/goal_runner.py`; `tests/test_deep_failure_session_diagnostics.py`.)
 
 ### Added
+- **Documented the guidance-card system ([`docs/guidance-cards.md`](docs/guidance-cards.md)).** The
+  whole mechanism for standing rules (`core/guidance_provider.py`,
+  `adapters/guidance_card_manager.py`, `adapters/quest_guidance_loader.py`,
+  `adapters/feedback_processor.py`) shipped with no public documentation, so nothing about it was
+  discoverable from the repo: not the card format, not the tag vocabulary, not that guidance is
+  auto-enabled by `build_orchestrator`, not that cards can be served from a host database to many
+  machines at once. The new doc covers the card format and where the cards directory resolves from,
+  the scope/operation/function/task tag vocabulary and the exact selection weights, the per-turn
+  `APPLICABLE GUIDANCE` block and its timeout, how selected cards double as the goal-verification
+  quality bar, `list_guidance`/`read_guidance`, the model-preference directive, the file + dynamic
+  loader split, `FeedbackProcessor`, authoring rules, wiring, and a "what this does not do yet"
+  section (no model-scoped selection, no per-card history in the hosted lane). Also records a
+  signature mismatch found while writing it: `GuidanceProviderBase.select()` declares
+  `(user_message, *, k=3, meta=None)` but the orchestrator calls
+  `select(user_message, team_id=..., org_id=..., limit=...)`, so an ABC subclass matching the
+  declared signature raises `TypeError`, which is caught and silently costs the turn its guidance.
+  Documented as "accept `**kwargs`" pending a fix. Linked from `README.md` and `docs/README.md`.
 - **Org-scoped environment heartbeat registration.** The environment heartbeat (how a runner tells
   the Quest backend "I'm alive, here's what I can do" so the backend can route deferred AI work to
   it) could previously only register at TEAM scope, even though the Quest backend already supports

@@ -115,6 +115,9 @@ QUEST_BASE_URL=... QUEST_API_KEY=qsk_... QAR_CORPUS_ROOT=... quest-ai-runner --o
   Claude sessions, including how a cross-session recall hit is learned onto the active card and
   gains the same usage-recency boost files and collections already get.
 - [The minimal-intervention overseer](docs/overseer.md) — a cheap, high-quality watcher that almost always stays silent.
+- [Guidance cards](docs/guidance-cards.md) — standing rules (preferences, policies, house standards)
+  retrieved per message rather than pasted into one always-on prompt: tagging and scope, selection,
+  one shared rules base across machines, and learning new rules from human corrections.
 - [Answer explanation](docs/answer-explanation.md) — the opt-in, user-facing "Explain how I got this" panel, and why half of it is a record of the run rather than prose about it.
 - [Architecture Standards](docs/ARCHITECTURE_STANDARDS.md) — brain / runner / adapters, why `core` is `core`, and the standards code here must follow.
 - [Writing a consumer](docs/writing-a-consumer.md) — wire the library to your own Quest backend.
