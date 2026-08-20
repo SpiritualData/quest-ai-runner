@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **The Quest-API card backend could never read a single card, so cards written through it stayed
+  invisible.** `QuestApiCardRepository` broke the `CardRepository` protocol in three ways at once,
+  each failing quietly: `revision()` was declared as a per-CARD stamp (`revision(card_id)`) while
+  `FileContextStore._load_all` calls it with NO arguments, so every read raised TypeError;
+  `load_all()` returned a LIST where the store requires `{card_id: card_dict}` and calls
+  `.values()` on it; and `search_cards()` took `max_results` positionally and returned a list,
+  while the store calls `search(text, limit=N)` and type-checks the result as a dict, so the
+  native search arm never ran. It also sent the search limit as `max` rather than the `max_results`
+  the endpoint reads. The result was that a runner configured to persist context cards centrally
+  behaved as if it had none, which is the opposite of the point: the backend is meant to be the
+  source of truth for cards, not each machine's local `.quest-context` directory. `revision()` is
+  now a cheap store-wide stamp (local write counter, card count, newest `updated_at`), and the
+  listing it needs is briefly cached and reused by the `load_all()` that immediately follows, so a
+  store read costs one request rather than two. Both reply shapes for `cards` (the list the API
+  serves now, and the mapping older deployments served) are accepted. Covered by
+  `tests/test_quest_api_card_repository.py`, including a real `FileContextStore` reading through
+  the repository.
+
 ### Changed
 - **An autopilot pass now reports the WORK it set in motion, by name, instead of its own
   bookkeeping.** A pass row read `Autopilot pass complete. Created 1 task(s): atask_d2014273cff6`:
