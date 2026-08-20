@@ -19,6 +19,56 @@ Those specifics are **config + adapters the consumer supplies** via
 > Built and used in production by [Spiritual Data](https://spiritualdata.org); released as open
 > source for any team running Quest AI tasks.
 
+## What Quest is, and where this fits
+
+[**Quest**](https://quest.spiritualdata.org) is a goal app for the goals that actually take a
+strategy: you describe a transformative goal, Quest researches it, turns it into an evidence-backed
+plan of milestones, dated goals and habits, and keeps you on pace with daily and period reviews.
+A quest can be private, shared with a team, or worked with a mentor or community.
+
+Quest also lets you hand work to AI. Any goal can carry **AI tasks**: "research the three best
+options and write up a comparison", "draft the outreach list", "check whether this plan actually
+covers the outcome". Quest schedules those tasks and queues them. What Quest does not do is run
+them. There is no worker, no callback contract, no reference client.
+
+**`quest-ai-runner` is that worker.** Point it at a Quest team with an API key and a corpus, and it
+polls for due AI tasks, claims each one, grounds it in your own sources, runs it to a written
+standard, reports the result back against the goal in Quest, and raises a decision-request to a human
+when a call is genuinely theirs to make (a payment, an irreversible send, a matter of taste). The
+same library is also the **brain** behind Quest AI chat, so a conversation and a scheduled task are
+answered by one engine rather than two that drift apart.
+
+### Why use it with Quest
+
+- **Your goals get worked on while you sleep.** Scheduling an AI task is the same gesture as
+  scheduling a goal, and something actually happens at the scheduled time.
+- **Answers are grounded in your material,** not a generic model's guess: your docs, your database,
+  your past Claude conversations, the live web, whatever adapters you supply.
+- **Humans stay in the loop where it matters.** The runner acts first and escalates the genuine
+  forks as Quest decision-requests, instead of either stalling on approval or doing something
+  irreversible on its own.
+- **One engine, many lanes.** A whole org, a single team, or one person's private lane all run the
+  same code and differ only in config.
+
+### Why it is useful without Quest
+
+The brain (`quest_ai_runner.core`) is domain-free and has no dependency on Quest at all. Import it
+and you get a small, dependency-light agent loop you can run anywhere:
+
+- a bounded **plan, gather, re-plan, answer** loop that stops when it has enough, instead of looping
+  until a token budget runs out
+- **smart context selection** (TF-DF-IDF sampling) that picks the most representative sources rather
+  than reading everything: about 62% fewer tokens on a typical codebase, no external deps
+- **multi-source retrieval** across files, databases, vector stores and past conversations in one
+  orchestrator
+- **web search with no extra key**, using the model provider's own tool
+- **escalation to a deep runner** (for example Claude Code) when a task needs real work, not an answer
+- **LIVE and BACKGROUND modes** with streaming, plus an optional cheap overseer that almost always
+  stays silent
+
+Only the `runner/` package speaks Quest. Skip it, supply your own adapters, and the rest is a
+general-purpose grounded-agent library.
+
 ## Install
 
 ```bash
