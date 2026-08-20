@@ -357,6 +357,33 @@ class TestVectorContextAssemblerNoProvider:
         ac = asm.assemble("billing unrelated")
         assert ac.context_view == ""
 
+    def test_item_can_declare_its_own_lower_floor(self):
+        """A collection holding items of different KINDS: each may set its own floor.
+
+        A long auto-derived digest item scores lower than a short hand-written one for the same
+        relevance, so a single global floor either cuts through the first kind or lets the second
+        kind's noise in. The item that knows its kind declares ``vector_min_score``."""
+        store = FakeVectorStore()
+        store.upsert([{"id": "digest", "text": "billing", "payload": {"vector_min_score": 0.4}}])
+        asm = VectorContextAssembler(store, confidence_min_score=0.9)
+        # score = 0.5 -> below the global 0.9 floor, above the item's own 0.4.
+        ac = asm.assemble("billing unrelated")
+        assert "digest" in ac.card_ids
+
+    def test_item_can_declare_its_own_higher_floor(self):
+        store = FakeVectorStore()
+        store.upsert([{"id": "picky", "text": "billing", "payload": {"vector_min_score": 0.9}}])
+        asm = VectorContextAssembler(store, confidence_min_score=0.0)
+        assert asm.assemble("billing unrelated").card_ids == []
+
+    def test_malformed_declared_floor_falls_back_to_the_global_one(self):
+        store = FakeVectorStore()
+        store.upsert([{"id": "bad", "text": "billing", "payload": {"vector_min_score": "high"}}])
+        asm = VectorContextAssembler(store, confidence_min_score=0.9)
+        assert asm.assemble("billing unrelated").card_ids == []
+        asm_open = VectorContextAssembler(store, confidence_min_score=0.0)
+        assert "bad" in asm_open.assemble("billing unrelated").card_ids
+
     def test_max_in_view_respected(self):
         store = FakeVectorStore()
         for i in range(10):

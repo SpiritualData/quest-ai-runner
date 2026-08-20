@@ -151,7 +151,9 @@ class VectorContextAssembler(ContextAssemblerBase):
     top_k:
         How many nearest neighbours to retrieve per query.
     confidence_min_score:
-        Minimum similarity score for a hit to be considered.  Applied to the hit's
+        Minimum similarity score for a hit to be considered. An individual item may
+        override it for ITSELF with a ``vector_min_score`` payload field, for a
+        collection holding items of different kinds (see ``_hit_min_score``).  Applied to the hit's
         RAW similarity score (the recency decay below only re-orders hits, it does
         not pull a still-similar hit below the floor).  Set to ``0.0`` to keep all
         hits.  For the CARD use case (Voyage cosine over learned cards) a modest
@@ -530,6 +532,32 @@ class VectorContextAssembler(ContextAssemblerBase):
         """
         return "\n\n---\n\n".join(self._render_hit_sections(hits, task_text))
 
+    def _hit_min_score(self, hit: Any) -> float:
+        """The confidence floor THIS hit must clear: its own declared floor, else the global one.
+
+        One global floor assumes every item in the collection has the same similarity scale, which
+        stops being true once a collection holds items of different KINDS. Measured on Voyage cosines
+        over a shared card collection: short, hand-learned topic cards separate cleanly at ~0.45,
+        while a long auto-derived digest card (e.g. one card per record in the consumer's database)
+        scores lower for the same degree of relevance -- a genuinely on-topic question landed at
+        0.46 where a plainly unrelated one landed at 0.32. A single floor either cuts through the
+        first band or lets the second one's noise in.
+
+        So an ITEM may carry its own ``vector_min_score`` in its payload and the writer that knows
+        the kind sets it. Clamped to [0, 1]; anything missing or unparseable falls back to the
+        assembler's global floor, so every existing item behaves exactly as before.
+        """
+        try:
+            declared = (getattr(hit, "payload", None) or {}).get("vector_min_score")
+            if declared is None:
+                return self._confidence_min_score
+            value = float(declared)
+            if value != value:  # NaN
+                return self._confidence_min_score
+            return min(1.0, max(0.0, value))
+        except (TypeError, ValueError):
+            return self._confidence_min_score
+
     def _render_hit_sections(
         self,
         hits: List[VectorHit],
@@ -699,7 +727,7 @@ class VectorContextAssembler(ContextAssemblerBase):
         # floor (~0.45) meaningful: the card scores ARE the raw cosines, undistorted by the 0.5x
         # neutral decay applied to ts-less hits.
         kept_decayed = [
-            (eff, h) for eff, h in decayed if h.score >= self._confidence_min_score
+            (eff, h) for eff, h in decayed if h.score >= self._hit_min_score(h)
         ]
         if not kept_decayed:
             return AssembledContext()

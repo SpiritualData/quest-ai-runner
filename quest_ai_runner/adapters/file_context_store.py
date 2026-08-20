@@ -25,8 +25,15 @@ Card JSON schema (matches docs/context-assembly.md exactly):
       "created_at": "...", "last_verified_at": "..."
     },
     "usage_count": 0,
-    "last_outcome": "met|failed|unknown"
+    "last_outcome": "met|failed|unknown",
+    "managed_fields": ["name", "description"],   # optional: fields only the card's WRITER may set
+    "managed_items": ["<content item id>"]       # optional: items only the card's WRITER may edit
   }
+
+``managed_fields`` / ``managed_items`` are how a CONSUMER-MANAGED card (one derived from the
+consumer's own source of truth and rewritten whenever that source changes) protects the parts it
+owns from the card-update API, while still letting a learning updater ADD content to it. See
+``_update_card_inner``.
 
 A file entry's ``mtime``/``sha256``/``git_sha`` are FINGERPRINTS (has this file changed since we
 captured it), never usage. ``usage_count``/``last_outcome`` are CARD-level (was this card used).
@@ -367,6 +374,18 @@ def _card_covered_paths(card: Dict[str, Any], limit: int = 10) -> List[str]:
     except Exception:  # noqa: BLE001
         return paths[:limit]
     return paths[:limit]
+
+
+def _managed_names(raw: Any) -> Set[str]:
+    """The set of names in a card's ``managed_fields`` / ``managed_items`` declaration.
+
+    A card written by a consumer that owns it (see ``_update_card_inner``) may declare which
+    embedded fields and content items only IT may write. Anything unparseable yields an empty set,
+    so a malformed declaration degrades to "nothing is managed" rather than freezing the card.
+    """
+    if not isinstance(raw, (list, tuple, set)):
+        return set()
+    return {str(x).strip() for x in raw if isinstance(x, (str, int)) and str(x).strip()}
 
 
 def _trim_content_by_recency(
@@ -3068,16 +3087,37 @@ class FileContextStore(ContextAssemblerBase):
         trim, and writes atomically. Returns True on a successful write. Changing ``name``/
         ``description``/``summary`` changes the card's embedding text, so ``export_for_embedding``
         re-fingerprints it and ``VectorStore.sync()`` re-embeds it on the next sync.
+
+        CONSUMER-MANAGED CARDS. A card MAY declare parts of itself as owned by whoever writes it
+        (a consumer that derives the card from its own source of truth and rewrites it whenever that
+        source changes, e.g. one card per record in the consumer's database):
+
+          * ``managed_fields``: list of embedded field names (``name``/``description``/``summary``)
+            this API must NOT edit. An edit to a managed field is dropped; the rest still applies.
+          * ``managed_items``: list of content-item ids this API must NOT remove or replace.
+
+        Additions are never blocked, so a learning updater keeps accruing notes onto a managed card
+        (which is the point of putting them on the same card) while the consumer-owned digest and its
+        live reference stay exactly as the consumer wrote them. A card that declares neither key
+        behaves exactly as before.
         """
         loaded = self._repo.read(card_id)
         card: Dict[str, Any] = loaded if isinstance(loaded, dict) else {}
         card.setdefault("id", card_id)
 
+        # The card's own declaration of what its WRITER owns (see the docstring). Read from the
+        # loaded card, so only a card that opted in is protected and every other card is untouched.
+        managed_fields = _managed_names(card.get("managed_fields"))
+        managed_items = _managed_names(card.get("managed_items"))
+
         # 0) embedded field edits (name/description/summary). These are part of the embedding text,
         # so changing them re-fingerprints the card and triggers re-embedding on the next sync.
+        # A field the card declares as consumer-managed is skipped: the consumer rewrites it from its
+        # own source of truth, so an edit here would be overwritten on the next sync anyway (and in
+        # the meantime would leave the card describing something its live reference contradicts).
         if fields:
             for _k in ("name", "description", "summary"):
-                if _k in fields and fields[_k] is not None:
+                if _k in fields and fields[_k] is not None and _k not in managed_fields:
                     card[_k] = fields[_k]
         # A card with no ``summary`` is invisible to everything that reads one (the keyword index,
         # the relevance filter, the rendered header). An updater supplies ``name``/``description``,
@@ -3090,13 +3130,15 @@ class FileContextStore(ContextAssemblerBase):
 
         content = _normalize_content(card.get("content"))
 
-        # 1) removals
+        # 1) removals (a consumer-managed item is never removable through this API)
         if remove:
-            remove_set = {r for r in remove if r}
+            remove_set = {r for r in remove if r and r not in managed_items}
             content = [it for it in content if it.get("id") not in remove_set]
 
         # 2) replacements (correct in place; append when the id is unknown)
         for item_id, new_raw in (replace or []):
+            if item_id in managed_items:
+                continue
             normalized = _normalize_content([new_raw])
             if not normalized:
                 continue
