@@ -60,11 +60,28 @@ def email_contract(quest_id: str, rep_id: Optional[str] = None) -> str:
         f"--subject \"<subject>\" --body-file <path>{rep}\n"
         "Recipients come from the quest's own settings: you choose the words and the moment, never "
         "the audience.\n"
-        "Write the result AS the message they will read, in markdown, and nothing else. No "
-        "\"here is what I sent\" preamble, no second copy of the text pasted underneath, no note "
-        "to yourself about which delivery path you used: the result IS the mail, so anything else "
-        "in it is something a person reads in their inbox and has to skip past."
+        "Write it exactly as you would with email off (see the result contract above): the result "
+        "IS the mail, so a \"here is what I sent\" preamble, or a second copy pasted underneath, "
+        "is something a person reads in their inbox and has to skip past."
     )
+
+
+# Said to EVERY run, whether or not its quest mails anything. The result is the one place the
+# person actually reads, so what goes in it cannot depend on a delivery setting the run happens to
+# see: the same piece of work is read on the quest, rolled up onto the autopilot pass that created
+# it, and mailed where mail is on. Delivery is code's job; the run's job is to write the thing.
+#
+# The failure this heads off is a result that describes work stored elsewhere ("brief written, see
+# the doc"), which leaves Quest holding a pointer instead of the work, and the person with nothing
+# to read or reply to.
+RESULT_IS_THE_WORK_CONTRACT = (
+    "Your result is the one thing a person actually reads: it lands on their quest, it is what an "
+    "autopilot pass reports as the work it did, and where a quest mails its work it is mailed word "
+    "for word. So put the finished thing IN it, in markdown, written to them: the brief, the "
+    "draft, the answer, the decision and why. Say plainly what you did and what is still open. Do "
+    "not open with a status banner, do not paste a second copy of anything, and never leave the "
+    "real content somewhere else with only a pointer to it here."
+)
 
 
 # How a good colleague behaves around a question they had to ask. Raising one is not a reason to
@@ -685,6 +702,11 @@ class TaskExecutor:
                     pass
             except Exception:  # noqa: BLE001 — conversation fetch failure is non-critical
                 pass
+
+        # Before the quest branch and before the email contract: how a result is written is the
+        # same question for every task, and the answer must not depend on whether this one happens
+        # to sit on a quest that mails.
+        parts.append(RESULT_IS_THE_WORK_CONTRACT)
 
         if not goal_id and not quest_id:
             parts.append(KEEP_GOING_CONTRACT)

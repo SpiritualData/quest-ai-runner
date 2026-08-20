@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **An autopilot pass now reports the WORK it set in motion, by name, instead of its own
+  bookkeeping.** A pass row read `Autopilot pass complete. Created 1 task(s): atask_d2014273cff6`:
+  an internal id where the work's name belongs, and the scanner's own accounting presented as the
+  outcome. `AutopilotResult` now carries one record per created item (title, quest, persona,
+  whether it is running or waiting for approval, the goals it covers, any recurring tasks it
+  adopted), and `summary_text()` writes plain sentences from that: what started, what is waiting on
+  the person, what was skipped and why, each named the way the person named it. Ids stay in
+  `created_task_ids`, which is code's business. A dry run keeps its id-bearing detail on purpose:
+  it is read while setting autopilot up, by someone checking the picks.
+- **A pass stamps `parent_task_id` (its own id) on every task it creates**, and
+  `QuestClient.create_task` accepts the field. That link is what lets a consumer answer "what did
+  autopilot actually do" with the finished work itself: quest-backend now rolls a completed
+  autopilot task's output back onto the pass row that created it, so the pass reports the work
+  whether or not the quest mails anything. A client whose `create_task` predates the argument
+  still gets its task, without the link.
+- **Every run is told how to write its result, whether or not its quest mails** (new
+  `RESULT_IS_THE_WORK_CONTRACT` in `runner/executor.py`). The rule used to arrive only inside the
+  email contract, so the same work was written as a readable brief when email happened to be on
+  and as a status note when it was off. Delivery is code's decision; how the work is written is
+  not. The email contract keeps only what is specific to delivery.
+
 ### Fixed
 - **`BM25ContentStore` found nothing, always, even for a query matching a term that exists
   verbatim in exactly one file.** `_search_one`'s hit filter was `isinstance(score, float) and

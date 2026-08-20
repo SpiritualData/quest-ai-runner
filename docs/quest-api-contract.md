@@ -336,6 +336,16 @@ built from), an insight marked acted-on for a task that is then never approved, 
 been silently removed from their list with nothing to show for it. Call it from a surface that
 knows the work actually landed, and write the description as a statement of what exists now.
 
+**What a pass reports, and the `parent_task_id` link.** A pass creates work and finishes long
+before that work runs, so its own result can only ever say what it set in motion. It says that in
+plain words, naming the work and the quest (never a bare task id), and it stamps its OWN task id as
+`parent_task_id` on everything it creates. That link is the hook a consumer needs to answer "what
+did autopilot actually do" with the work itself: when a created task reaches a terminal status, the
+consumer can write that task's own output onto the pass row (quest-backend does exactly this in
+`app/business/quests/autopilot_rollup.py`). The result is one text, authored once by the run that
+did the work, read on the quest and mailed where a quest mails its work. A backend whose create
+route ignores `parent_task_id` loses the rollup, not the task.
+
 ### The quest folder's standing next steps (a context-entry upsert)
 
 ```

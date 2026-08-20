@@ -31,6 +31,15 @@ normal deep-run path). Each pass:
      quest", and before this they answered it separately, from different material, with no way to
      notice they had drifted apart.
 
+WHAT A PASS REPORTS is what it set in motion, in plain words: the work by name, the quest by its
+outcome, who it went to, and what is waiting on the person. Not "Created 1 task(s):
+atask_d2014273cff6" -- that names an internal id where the work's name belongs, and presents the
+scanner's own accounting as the outcome. The pass also stamps its OWN task id as ``parent_task_id``
+on everything it creates, which is the link a consumer uses to replace this summary with the work's
+actual output once that work finishes (quest-backend does this in
+``app/business/quests/autopilot_rollup.py``). So the pass row ends up holding the work itself,
+whether or not the quest mails anything, and the mail carries the same text.
+
 A DRY RUN (the pass task's own text contains "dry-run") reports what WOULD be created and creates
 nothing: no tasks, no goals, no bookkeeping writes.
 
@@ -643,13 +652,22 @@ def propose_next_goal(quest: Dict[str, Any]) -> Tuple[str, str]:
 
 @dataclass
 class AutopilotResult:
-    """What one autopilot pass did -- the pass task's own reported result (see ``summary_text``)."""
+    """What one autopilot pass did -- the pass task's own reported result (see ``summary_text``).
+
+    ``created`` holds one dict per item the pass created, and it holds NAMES, not just ids:
+    ``{task_id, kind, title, quest_id, quest_label, persona_label, awaiting_approval,
+    goal_names, adopted_titles}``. That is not decoration. This result is read by a person, in
+    their quest, and a line like "Created 1 task(s): atask_d2014273cff6" tells them nothing they
+    can act on: it names an internal id instead of the work, and it describes the pass's own
+    bookkeeping as if it were the point. The point is what is now being worked on, said in the
+    words the person themselves gave that work.
+    """
     ran_at: datetime
     dry_run: bool = False
-    created_task_ids: List[str] = field(default_factory=list)
-    skipped: List[Dict[str, Any]] = field(default_factory=list)      # {quest_id, reason}
+    created: List[Dict[str, Any]] = field(default_factory=list)
+    skipped: List[Dict[str, Any]] = field(default_factory=list)      # {quest_id, quest_label, reason}
     proposals: List[Dict[str, Any]] = field(default_factory=list)    # dry-run "would create" items
-    errors: List[Dict[str, Any]] = field(default_factory=list)       # {quest_id, error}
+    errors: List[Dict[str, Any]] = field(default_factory=list)       # {quest_id, quest_label, error}
     # Bookkeeping writes the backend ACCEPTED (200) but did not actually persist. Kept separate
     # from ``errors`` because the pass itself succeeded; what failed is the cadence/miss_streak
     # memory, which silently degrades the NEXT pass (a last_pass_at that never sticks means the
@@ -658,53 +676,155 @@ class AutopilotResult:
     # Quests whose canonical next-steps artifact this pass rewrote: {quest_id, path, quest_target}.
     next_steps_refreshed: List[Dict[str, Any]] = field(default_factory=list)
 
+    @property
+    def created_task_ids(self) -> List[str]:
+        """The ids of everything this pass created, for the gates and for callers that link rows.
+
+        Ids belong HERE, in a field code reads, and not in the prose a person reads.
+        """
+        return [str(c.get("task_id")) for c in self.created if c.get("task_id")]
+
     def summary_text(self) -> str:
+        """What this pass set in motion, in plain words.
+
+        This is what the pass task reports, so it is what a person sees on their quest until the
+        work itself finishes -- at which point the consumer replaces it with the work's OWN output
+        (see the module docstring). So it says what is running and what is waiting on them, and it
+        never presents the pass's own bookkeeping as the result.
+        """
+        if self.dry_run:
+            return self._dry_run_text()
         lines: List[str] = []
-        lines.append("Autopilot dry-run: nothing was created. Here is what WOULD happen:"
-                     if self.dry_run else "Autopilot pass complete.")
-        if self.created_task_ids:
-            lines.append(f"Created {len(self.created_task_ids)} task(s): "
-                        + ", ".join(self.created_task_ids))
-        if self.proposals:
-            lines.append(f"Would create {len(self.proposals)} item(s):")
-            for p in self.proposals:
-                if p.get("kind") == "goal_proposal":
-                    lines.append(f"  - Proposed goal on quest {p.get('quest_id')}: {p.get('title')}")
-                else:
-                    line = (f"  - Work batch on quest {p.get('quest_id')} "
-                            f"(persona={p.get('persona') or 'assistant'}, scope={p.get('scope')}): "
-                            f"goal(s) {p.get('goal_ids')}")
-                    # Adoption CLOSES the user's own recurring tasks, so a report that omitted it
-                    # would hide the most consequential thing the pass does.
-                    adopted = p.get("adopted_task_ids")
-                    if adopted:
-                        line += f", adopting and closing recurring task(s) {adopted}"
-                    lines.append(line)
+        running = [c for c in self.created if not c.get("awaiting_approval")]
+        awaiting = [c for c in self.created if c.get("awaiting_approval")]
+        if running:
+            lines.append(_count_line(len(running), "Autopilot started one piece of work:",
+                                     "Autopilot started {n} pieces of work:"))
+            lines.extend(_describe_created(c) for c in running)
+        if awaiting:
+            if lines:
+                lines.append("")
+            lines.append(_count_line(len(awaiting),
+                                     "Waiting for your approval before it can run:",
+                                     "Waiting for your approval before they can run:"))
+            lines.extend(_describe_created(c) for c in awaiting)
         if self.next_steps_refreshed:
-            lines.append(f"Refreshed the next-steps artifact on {len(self.next_steps_refreshed)} "
-                         f"quest(s):")
+            if lines:
+                lines.append("")
+            lines.append("Next steps rewritten for:")
             for n in self.next_steps_refreshed:
-                lines.append(f"  - {n.get('quest_id')}: {n.get('path')} "
-                             f"(on Quest: {n.get('quest_target')})")
+                lines.append(f"  - {n.get('quest_label') or n.get('quest_id')}: {n.get('path')}")
         if self.skipped:
-            lines.append(f"Skipped {len(self.skipped)} quest(s):")
+            if lines:
+                lines.append("")
+            lines.append(_count_line(len(self.skipped), "Nothing started on one quest:",
+                                     "Nothing started on {n} quests:"))
             for s in self.skipped:
-                lines.append(f"  - {s.get('quest_id')}: {s.get('reason')}")
+                lines.append(f"  - {s.get('quest_label') or s.get('quest_id')}: {s.get('reason')}")
         if self.errors:
-            lines.append(f"Errors on {len(self.errors)} quest(s):")
+            if lines:
+                lines.append("")
+            lines.append(_count_line(len(self.errors), "One quest hit an error:",
+                                     "{n} quests hit an error:"))
             for e in self.errors:
-                lines.append(f"  - {e.get('quest_id')}: {e.get('error')}")
+                lines.append(f"  - {e.get('quest_label') or e.get('quest_id')}: {e.get('error')}")
         if self.bookkeeping_warnings:
+            if lines:
+                lines.append("")
             lines.append(
                 f"WARNING: autopilot bookkeeping did not persist on "
                 f"{len(self.bookkeeping_warnings)} quest(s). The cadence gate reads "
                 f"last_pass_at, so until this is fixed those quests are considered due on EVERY "
                 f"pass (the per-quest cadence cannot hold them back):")
             for w in self.bookkeeping_warnings:
-                lines.append(f"  - {w.get('quest_id')}: {w.get('detail')}")
-        if not (self.created_task_ids or self.proposals or self.skipped or self.errors):
-            lines.append("No opted-in quests found.")
+                label = w.get("quest_label") or w.get("quest_id")
+                lines.append(f"  - {label}: {w.get('detail')}")
+        if not lines:
+            lines.append("No quest has autopilot switched on, so this pass had nothing to work on.")
         return "\n".join(lines)
+
+    def _dry_run_text(self) -> str:
+        """The dry run's report: what a real pass WOULD do, nothing created.
+
+        Kept id-bearing where a real pass's report is not: a dry run is read while setting the
+        thing up, by someone checking that the right goals and the right recurring tasks were
+        picked, and an id is what they check against.
+        """
+        lines = ["Autopilot dry run: nothing was created. Here is what WOULD happen:"]
+        for p in self.proposals:
+            label = p.get("quest_label") or p.get("quest_id")
+            if p.get("kind") == "goal_proposal":
+                lines.append(f"  - Propose a goal on {label}: {p.get('title')}")
+                continue
+            names = ", ".join(n for n in (p.get("goal_names") or []) if n)
+            line = (f"  - Work on {label} as {p.get('persona_label') or 'the assistant'} "
+                    f"({p.get('scope')}): {names or p.get('goal_ids')}")
+            # Adoption CLOSES the user's own recurring tasks, so a report that omitted it
+            # would hide the most consequential thing the pass does.
+            adopted = p.get("adopted_task_ids")
+            if adopted:
+                line += f", adopting and closing recurring task(s) {adopted}"
+            lines.append(line)
+        for s in self.skipped:
+            lines.append(f"  - Skip {s.get('quest_label') or s.get('quest_id')}: {s.get('reason')}")
+        for e in self.errors:
+            lines.append(f"  - Error on {e.get('quest_label') or e.get('quest_id')}: {e.get('error')}")
+        if not (self.proposals or self.skipped or self.errors):
+            lines.append("  - Nothing: no quest has autopilot switched on.")
+        return "\n".join(lines)
+
+
+def _count_line(n: int, one: str, many: str) -> str:
+    """``one`` when there is exactly one of something, otherwise ``many`` with ``{n}`` filled in.
+
+    A person reading "Created 1 task(s)" is reading a template that was never finished.
+    """
+    return one if n == 1 else many.format(n=n)
+
+
+def _quest_label(quest: Dict[str, Any], quest_id: str) -> str:
+    """A quest said the way its owner would say it: its outcome, or the id if it has none.
+
+    The outcome IS the quest's name in the product (a quest is stated as the outcome it is for), so
+    this is the phrase the person recognizes. Truncated, because an outcome can be a paragraph and
+    this goes in a one-line report.
+    """
+    label = str(quest.get("outcome") or "").strip().splitlines()[0] if quest.get("outcome") else ""
+    if not label:
+        return quest_id
+    return label if len(label) <= 80 else label[:77].rstrip() + "..."
+
+
+def _goal_name(goal: Dict[str, Any]) -> str:
+    return str(goal.get("name") or "").strip() or "(untitled goal)"
+
+
+def _task_label(task: Dict[str, Any]) -> str:
+    """A task said by its title, falling back to its first line. Never a bare id."""
+    text = str(task.get("title") or task.get("text") or "").strip()
+    first = text.splitlines()[0].strip() if text else ""
+    if not first:
+        return str(task.get("id") or task.get("task_id") or "an unnamed task")
+    return first if len(first) <= 80 else first[:77].rstrip() + "..."
+
+
+def _describe_created(item: Dict[str, Any]) -> str:
+    """One created item, described by NAME: the work, whose quest it serves, who is doing it."""
+    title = str(item.get("title") or "").strip() or "an unnamed piece of work"
+    line = f"  - {title}"
+    quest_label = str(item.get("quest_label") or "").strip()
+    if quest_label:
+        line += f" (on {quest_label})"
+    persona = str(item.get("persona_label") or "").strip()
+    if persona:
+        line += f", as {persona}"
+    adopted = [t for t in (item.get("adopted_titles") or []) if t]
+    if adopted:
+        # Adoption takes over tasks the PERSON scheduled and closes the originals, so it can never
+        # go unsaid: they would otherwise be waiting for runs that are never going to happen.
+        line += (". It also takes over, and closes, the recurring task"
+                 f"{'s' if len(adopted) > 1 else ''} you had scheduled: {', '.join(adopted)}")
+    return line
 
 
 class AutopilotPass:
@@ -755,6 +875,9 @@ class AutopilotPass:
         # ``None`` means "not read yet" (an empty context is a legitimate result and must not be
         # mistaken for a cache miss).
         self._insights_cache: Optional[InsightsContext] = None
+        # The id of the pass task currently being run, set in ``run`` and stamped onto everything
+        # this pass creates (see _create_autopilot_task). None until a pass starts.
+        self._pass_task_id: Optional[str] = None
 
     def _persona_label(self, rep_id: Optional[str]) -> Optional[str]:
         """A rep's human display name, falling back to the raw id.
@@ -859,6 +982,12 @@ class AutopilotPass:
         text = str(task.get("text") or task.get("title") or "")
         dry_run = "dry-run" in text.lower()
         result = AutopilotResult(ran_at=self._now(), dry_run=dry_run)
+        # The pass task's OWN id, stamped onto everything this pass creates as ``parent_task_id``.
+        # That link is what lets a consumer answer "what did autopilot actually do" with the work
+        # itself rather than with a list of ids: the created task's result can be rolled back onto
+        # the pass row that made it. Without it, the two rows are unrelated as far as the data is
+        # concerned, and the pass can only ever report its own bookkeeping.
+        self._pass_task_id = str(task.get("id") or task.get("task_id") or "") or None
 
         quests = self._eligible_quests()
         budget_used = 0 if dry_run else self._count_autopilot_tasks_today()
@@ -867,19 +996,21 @@ class AutopilotPass:
             quest_id = str(quest.get("quest_id") or quest.get("id") or "")
             if not quest_id:
                 continue
+            label = _quest_label(quest, quest_id)
             try:
                 if budget_used >= self._daily_budget:
-                    self._skip(result, quest_id,
-                              f"team daily budget reached ({budget_used}/{self._daily_budget})")
+                    self._skip(result, quest_id, label,
+                              f"today's budget of {self._daily_budget} autopilot task(s) is used up")
                     continue
                 gate_reason = self._gate_quest(quest, quest_id)
                 if gate_reason:
-                    self._skip(result, quest_id, gate_reason)
+                    self._skip(result, quest_id, label, gate_reason)
                     continue
                 budget_used = self._run_one_quest(quest, quest_id, dry_run, budget_used, result)
             except Exception as e:  # noqa: BLE001 -- one quest's failure never aborts the pass
                 log.error("autopilot: quest %s pass failed: %s", quest_id, e, exc_info=True)
-                result.errors.append({"quest_id": quest_id, "error": f"{type(e).__name__}: {e}"})
+                result.errors.append({"quest_id": quest_id, "quest_label": label,
+                                      "error": f"{type(e).__name__}: {e}"})
         return result
 
     def _run_one_quest(self, quest: Dict[str, Any], quest_id: str, dry_run: bool,
@@ -915,17 +1046,23 @@ class AutopilotPass:
         insights = self._insights(autopilot_cfg)
         insights_text = insights.as_text() or None
 
+        quest_label = _quest_label(quest, quest_id)
         produced = False
         if target_goals or adopted:
             batches = self._batches_with_adopted(target_goals, adopted, autopilot_cfg)
             for persona, goals, tasks in batches:
                 if budget_used >= self._daily_budget:
-                    self._skip(result, quest_id, "team daily budget reached mid-pass")
+                    self._skip(result, quest_id, quest_label,
+                               f"today's budget of {self._daily_budget} autopilot task(s) ran out "
+                               f"part-way through this quest")
                     break
+                title = _batch_title(goals, tasks)
                 if dry_run:
                     result.proposals.append({
-                        "quest_id": quest_id, "kind": "work_batch", "persona": persona,
-                        "goal_ids": [g.get("id") for g in goals], "scope": scope_label,
+                        "quest_id": quest_id, "quest_label": quest_label, "kind": "work_batch",
+                        "persona": persona, "persona_label": self._persona_label(persona),
+                        "goal_ids": [g.get("id") for g in goals],
+                        "goal_names": [_goal_name(g) for g in goals], "scope": scope_label,
                         "adopted_task_ids": [t.get("id") or t.get("task_id") for t in tasks],
                     })
                     produced = True
@@ -935,30 +1072,41 @@ class AutopilotPass:
                     budget_used += 1
                     continue
                 task_id = self._create_batch_task(quest, quest_id, persona, goals, mode,
+                                                  title=title,
                                                   scope_label=scope_label, adopted_tasks=tasks,
                                                   next_steps=standing_next_steps,
                                                   previous=previous,
                                                   reflection=reflection_text,
                                                   insights=insights_text)
                 if task_id:
-                    result.created_task_ids.append(task_id)
+                    result.created.append({
+                        "task_id": task_id, "kind": "work_batch", "quest_id": quest_id,
+                        "quest_label": quest_label, "title": title,
+                        "persona_label": self._persona_label(persona),
+                        "awaiting_approval": mode != "act",
+                        "goal_names": [_goal_name(g) for g in goals],
+                        "adopted_titles": [_task_label(t) for t in tasks],
+                    })
                     budget_used += 1
                     produced = True
                     self._close_adopted(tasks, task_id, quest_id, result)
             if produced and not dry_run:
                 self._refresh_next_steps(quest_id, target_goals, adopted, scope_label, previous,
-                                         result, reflection_note=reflections.one_line(),
+                                         result, quest_label=quest_label,
+                                         reflection_note=reflections.one_line(),
                                          insights_note=insights.one_line())
         elif planning == "plan_and_work":
             if budget_used < self._daily_budget:
-                self._handle_proposal(quest, quest_id, mode, dry_run, result)
+                self._handle_proposal(quest, quest_id, quest_label, mode, dry_run, result)
                 produced = True
                 budget_used += 1
             else:
-                self._skip(result, quest_id, "team daily budget reached mid-pass")
+                self._skip(result, quest_id, quest_label,
+                           f"today's budget of {self._daily_budget} autopilot task(s) ran out "
+                           f"part-way through this quest")
 
         if not dry_run:
-            self._update_pass_bookkeeping(quest_id, autopilot_cfg, produced, result)
+            self._update_pass_bookkeeping(quest_id, quest_label, autopilot_cfg, produced, result)
         return budget_used
 
     # --- gates -------------------------------------------------------------------------------
@@ -1147,6 +1295,7 @@ class AutopilotPass:
                             adopted: List[Dict[str, Any]], scope_label: str,
                             previous: Optional[Dict[str, Any]],
                             result: AutopilotResult, *,
+                            quest_label: str = "",
                             reflection_note: str = "",
                             insights_note: str = "") -> None:
         """Write this pass's conclusion as the quest's canonical next steps (folder + Quest).
@@ -1170,18 +1319,19 @@ class AutopilotPass:
             log.warning("autopilot: could not refresh next steps for quest %s", quest_id,
                         exc_info=True)
             result.bookkeeping_warnings.append(
-                {"quest_id": quest_id,
+                {"quest_id": quest_id, "quest_label": quest_label or quest_id,
                  "detail": f"the next-steps artifact was not refreshed ({type(e).__name__}: {e})"})
             return
         result.next_steps_refreshed.append({
             "quest_id": quest_id, "path": published.sync_path,
             "quest_target": published.quest_target,
+            "quest_label": quest_label or quest_id,
         })
         if published.detail:
             # The local file is current either way; what did not happen is the Quest-side write, and
             # a silently local-only artifact is how the two views drift apart again.
             result.bookkeeping_warnings.append(
-                {"quest_id": quest_id,
+                {"quest_id": quest_id, "quest_label": quest_label or quest_id,
                  "detail": f"next-steps artifact written locally, but on Quest: {published.detail}"})
 
     def _previous_period_summary(self, quest_id: str, goals_payload: Dict[str, Any],
@@ -1330,6 +1480,12 @@ class AutopilotPass:
         The created task carries ``task_kind="autopilot_work"`` (NOT the pass's own
         ``"autopilot"`` kind, which the executor routes into another pass -- that would spawn an
         infinite loop) and names its persona structurally in ``assignee_rep_id``.
+
+        It also carries ``parent_task_id`` -- the id of the PASS that created it. That link is what
+        makes "what did autopilot do today" answerable with the work itself: a consumer can roll
+        the finished task's own output back onto the pass row, so the person reads the work instead
+        of the scanner's bookkeeping. A client whose ``create_task`` predates the argument simply
+        creates the task without it, exactly as before.
         """
         # suggest mode (and every goal proposal, which is always a proposal for a human) must not
         # be runnable until a human approves it.
@@ -1350,7 +1506,16 @@ class AutopilotPass:
         env_id = (quest.get("autopilot") or {}).get("env_id")
         if env_id:
             kwargs["env_id"] = env_id
-        created = self._client.create_task(text, **kwargs) or {}
+        if self._pass_task_id:
+            kwargs["parent_task_id"] = self._pass_task_id
+        try:
+            created = self._client.create_task(text, **kwargs) or {}
+        except TypeError:
+            # An older/stand-in client without ``parent_task_id``. The link is an improvement to
+            # how the pass reports, never a requirement for it to work, so lose the link rather
+            # than the task.
+            kwargs.pop("parent_task_id", None)
+            created = self._client.create_task(text, **kwargs) or {}
         task_id = created.get("id") or created.get("task_id")
         if not task_id:
             return None
@@ -1358,6 +1523,7 @@ class AutopilotPass:
 
     def _create_batch_task(self, quest: Dict[str, Any], quest_id: str, persona: Optional[str],
                            goals: List[Dict[str, Any]], mode: str, *,
+                           title: Optional[str] = None,
                            scope_label: Optional[str] = None,
                            adopted_tasks: Optional[List[Dict[str, Any]]] = None,
                            next_steps: Optional[str] = None,
@@ -1372,7 +1538,7 @@ class AutopilotPass:
         try:
             return self._create_autopilot_task(
                 quest, quest_id, text, mode, persona=persona,
-                title=_batch_title(goals, adopted_tasks))
+                title=title if title is not None else _batch_title(goals, adopted_tasks))
         except Exception as e:  # noqa: BLE001 -- surfaced to the caller's per-quest try/except
             log.error("autopilot: task creation failed for quest %s: %s", quest_id, e,
                       exc_info=True)
@@ -1395,12 +1561,12 @@ class AutopilotPass:
             log.warning("autopilot: create_goal failed for quest %s: %s", quest_id, e)
             return None
 
-    def _handle_proposal(self, quest: Dict[str, Any], quest_id: str, mode: str, dry_run: bool,
-                         result: AutopilotResult) -> None:
+    def _handle_proposal(self, quest: Dict[str, Any], quest_id: str, quest_label: str, mode: str,
+                         dry_run: bool, result: AutopilotResult) -> None:
         title, description = propose_next_goal(quest)
         if dry_run:
             result.proposals.append({
-                "quest_id": quest_id, "kind": "goal_proposal",
+                "quest_id": quest_id, "quest_label": quest_label, "kind": "goal_proposal",
                 "title": title, "description": description,
             })
             return
@@ -1411,11 +1577,18 @@ class AutopilotPass:
         # A proposed goal is ALWAYS surfaced for a human to accept, even on an `act` quest: the
         # design keeps AI-created goals reviewable ("attributed and editable"), so force suggested.
         task_id = self._create_autopilot_task(
-            quest, quest_id, task_text, mode, force_suggested=True)
+            quest, quest_id, task_text, mode, title=title, force_suggested=True)
         if task_id:
-            result.created_task_ids.append(task_id)
+            # ALWAYS awaiting approval: a proposed goal is surfaced for a human to accept even on
+            # an ``act`` quest (see _create_autopilot_task's force_suggested).
+            result.created.append({
+                "task_id": task_id, "kind": "goal_proposal", "quest_id": quest_id,
+                "quest_label": quest_label, "title": f"Proposed goal: {title}",
+                "awaiting_approval": True,
+            })
 
-    def _update_pass_bookkeeping(self, quest_id: str, autopilot_cfg: Dict[str, Any],
+    def _update_pass_bookkeeping(self, quest_id: str, quest_label: str,
+                                 autopilot_cfg: Dict[str, Any],
                                  produced: bool, result: AutopilotResult) -> None:
         """Stamp ``last_pass_at`` (and the ``miss_streak``) on the quest, then VERIFY it stuck.
 
@@ -1441,7 +1614,8 @@ class AutopilotPass:
             log.warning("autopilot: last_pass_at/miss_streak update failed for quest %s",
                        quest_id, exc_info=True)
             result.bookkeeping_warnings.append(
-                {"quest_id": quest_id, "detail": f"update raised {type(e).__name__}: {e}"})
+                {"quest_id": quest_id, "quest_label": quest_label or quest_id,
+                 "detail": f"update raised {type(e).__name__}: {e}"})
             return
         echoed = (resp or {}).get("autopilot")
         if not isinstance(echoed, dict):
@@ -1451,8 +1625,11 @@ class AutopilotPass:
             detail = (f"the backend accepted the PATCH but did not persist {unpersisted} "
                       f"(its autopilot update schema does not accept these bookkeeping fields)")
             log.warning("autopilot: quest %s -- %s", quest_id, detail)
-            result.bookkeeping_warnings.append({"quest_id": quest_id, "detail": detail})
+            result.bookkeeping_warnings.append(
+                {"quest_id": quest_id, "quest_label": quest_label or quest_id, "detail": detail})
 
-    def _skip(self, result: AutopilotResult, quest_id: str, reason: str) -> None:
+    def _skip(self, result: AutopilotResult, quest_id: str, quest_label: str,
+              reason: str) -> None:
         log.info("autopilot: skipping quest %s (%s)", quest_id, reason)
-        result.skipped.append({"quest_id": quest_id, "reason": reason})
+        result.skipped.append({"quest_id": quest_id, "quest_label": quest_label,
+                               "reason": reason})

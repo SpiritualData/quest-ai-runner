@@ -170,14 +170,19 @@ def test_the_reply_loop_contract_rides_along_only_when_there_is_something_to_ans
 
 
 def test_a_client_that_can_answer_nothing_invents_no_data():
-    """No notes, captures or history means no DATA — only the standing rule about blockers, which
-    is behaviour rather than something fetched, so it must not depend on a client answering."""
-    from quest_ai_runner.runner.executor import KEEP_GOING_CONTRACT
+    """No notes, captures or history means no DATA, only the standing rules (how to write a result,
+    and what to do about a blocker), which are behaviour rather than something fetched, so they must
+    not depend on a client answering."""
+    from quest_ai_runner.runner.executor import (
+        KEEP_GOING_CONTRACT,
+        RESULT_IS_THE_WORK_CONTRACT,
+    )
 
     class Bare:
         pass
 
-    assert _executor(Bare())._build_context_view(goal_id="g1", quest_id="q1") == KEEP_GOING_CONTRACT
+    assert _executor(Bare())._build_context_view(goal_id="g1", quest_id="q1") == (
+        RESULT_IS_THE_WORK_CONTRACT + "\n" + KEEP_GOING_CONTRACT)
 
 
 # --- the email contract ---------------------------------------------------------
@@ -225,6 +230,24 @@ def test_the_result_is_the_message_and_not_a_report_about_it():
     view = _executor(client)._build_context_view(goal_id="g1", quest_id="q1")
 
     assert "the result IS the mail" in view
+
+
+def test_how_to_write_a_result_never_depends_on_whether_email_is_on():
+    """The same work is read on the quest, reported by the autopilot pass that created it, and
+    mailed where mail is on. A run that writes a status line when email is off and a readable brief
+    when it is on makes the autopilot's own output depend on a delivery setting."""
+    on = _executor(EmailQuestClient(email_enabled=True, quest_notes=[]))._build_context_view(
+        goal_id="g1", quest_id="q1")
+    off = _executor(EmailQuestClient(email_enabled=False, quest_notes=[]))._build_context_view(
+        goal_id="g1", quest_id="q1")
+
+    for view in (on, off):
+        assert "put the finished thing IN it" in view
+        assert "never leave the real content somewhere else" in view
+    # And a task on no quest at all is told the same thing.
+    assert "put the finished thing IN it" in _executor(
+        EmailQuestClient(email_enabled=False, quest_notes=[]))._build_context_view(
+            goal_id=None, quest_id=None)
 
 
 def test_a_quest_without_email_is_told_nothing_about_it():

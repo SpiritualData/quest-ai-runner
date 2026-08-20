@@ -1024,6 +1024,7 @@ class QuestClient:
                     status: Optional[str] = None,
                     recurrence: Optional[Any] = None,
                     assignee_rep_id: Optional[str] = None,
+                    parent_task_id: Optional[str] = None,
                     card_ids: Optional[List[str]] = None) -> Dict[str, Any]:
         """POST a new queued AI task to /api/assistant-tasks.
 
@@ -1065,6 +1066,11 @@ class QuestClient:
         (``{"frequency": "daily", "time": "07:00"}``). Pair it with ``scheduled_date`` /
         ``scheduled_time`` ('YYYY-MM-DD' / 'HH:MM') to fix when occurrences fire.
 
+        ``parent_task_id`` links this task to the task that CREATED it (e.g. the autopilot pass
+        that scheduled a piece of work). It is what lets a caller answer "what came of that run"
+        with the child's own output instead of a list of ids, and it is how the Quest API threads a
+        follow-up onto its parent. Omit it for a task nothing else authored.
+
         ``assignee_rep_id`` carries the PERSONA structurally (e.g. the rep id a quest's
         ``autopilot.personas`` roster assigns to today). It does not change which lane executes the
         task -- that is the quest owner / ``assignee_user_id`` -- it states which character voice
@@ -1104,6 +1110,8 @@ class QuestClient:
             body["recurrence"] = recurrence
         if assignee_rep_id is not None:
             body["assignee_rep_id"] = assignee_rep_id
+        if parent_task_id is not None:
+            body["parent_task_id"] = parent_task_id
         if card_ids:
             body["card_ids"] = card_ids
         return self._request("POST", "/api/assistant-tasks", body=body) or {}

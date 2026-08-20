@@ -266,7 +266,8 @@ def test_gate_skips_quest_whose_cadence_is_not_due():
     passer = AutopilotPass(client, team_id="team1", now=_now)
     result = passer.run({"text": "pass"})
     assert result.created_task_ids == []
-    assert result.skipped == [{"quest_id": "q1", "reason": "cadence not due yet"}]
+    assert result.skipped == [{"quest_id": "q1", "quest_label": "ship the thing",
+                               "reason": "cadence not due yet"}]
 
 
 # --- gate: backpressure ---------------------------------------------------------------------
@@ -348,7 +349,8 @@ def test_gate_order_cadence_before_backpressure_before_hold():
     client.open_decisions["q1"] = True
     passer = AutopilotPass(client, team_id="team1", backpressure=True, now=_now)
     result = passer.run({"text": "pass"})
-    assert result.skipped == [{"quest_id": "q1", "reason": "cadence not due yet"}]
+    assert result.skipped == [{"quest_id": "q1", "quest_label": "ship the thing",
+                               "reason": "cadence not due yet"}]
 
 
 # --- opt-in filtering: only suggest/act quests are scanned at all ------------------------------
@@ -902,12 +904,77 @@ def test_one_quest_error_is_isolated_and_others_still_run():
     assert any(e["quest_id"] == "qbad" for e in result.errors)
 
 
+# --- what the pass REPORTS ---------------------------------------------------------------------
+# The pass row is read by a person, in their quest. "Created 1 task(s): atask_d2014273cff6" names an
+# internal id instead of the work and presents the scanner's bookkeeping as the outcome.
+
+def test_the_report_names_the_work_and_the_quest_never_a_task_id():
+    q1 = _quest("q1")
+    q1["outcome"] = "Get 20 psychics certified"
+    q1["autopilot"]["mode"] = "act"
+    goals = {"q1": _goals_payload(
+        ("day", "2026-07-12", [_goal("g1", name="Draft the certification rubric")]))}
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals, accepts_bookkeeping=True)
+    result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+
+    text = result.summary_text()
+    assert "Draft the certification rubric" in text
+    assert "Get 20 psychics certified" in text
+    assert "task(s)" not in text
+    assert not any(task_id in text for task_id in result.created_task_ids)
+
+
+def test_work_awaiting_approval_is_reported_as_waiting_not_as_started():
+    """suggest mode creates nothing that runs. Saying "started" would be a plain untruth, and the
+    person would never learn that the work is sitting there waiting for them."""
+    q1 = _quest("q1", mode="suggest")
+    q1["outcome"] = "Get 20 psychics certified"
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1", name="Draft the rubric")]))}
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals, accepts_bookkeeping=True)
+    result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+
+    text = result.summary_text()
+    assert "Waiting for your approval" in text
+    assert "Autopilot started" not in text
+
+
+def test_the_pass_stamps_itself_as_the_parent_of_the_work_it_creates():
+    """The link that lets a consumer report the WORK as what autopilot did: the finished task's own
+    output can be rolled back onto the pass row that created it."""
+    q1 = _quest("q1")
+    q1["autopilot"]["mode"] = "act"
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1", name="Draft the rubric")]))}
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals, accepts_bookkeeping=True)
+    AutopilotPass(client, team_id="team1", now=_now).run(
+        {"id": "atask_thepass", "text": "pass"})
+
+    assert [t.get("parent_task_id") for t in client.created_tasks] == ["atask_thepass"]
+
+
+def test_a_client_whose_create_task_predates_parent_task_id_still_gets_its_task():
+    """The link is an improvement to how a pass reports, never a requirement for it to work."""
+    class OlderClient(FakeAutopilotClient):
+        def create_task(self, text, **kwargs):
+            if "parent_task_id" in kwargs:
+                raise TypeError("create_task() got an unexpected keyword argument")
+            return super().create_task(text, **kwargs)
+
+    q1 = _quest("q1")
+    q1["autopilot"]["mode"] = "act"
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1", name="Draft the rubric")]))}
+    client = OlderClient(quests=[q1], goals_by_quest=goals, accepts_bookkeeping=True)
+    result = AutopilotPass(client, team_id="team1", now=_now).run(
+        {"id": "atask_thepass", "text": "pass"})
+
+    assert len(result.created_task_ids) == 1
+
+
 def test_no_opted_in_quests_reports_clean_empty_summary():
     client = FakeAutopilotClient(quests=[])
     passer = AutopilotPass(client, team_id="team1", now=_now)
     result = passer.run({"text": "pass"})
     assert result.created_task_ids == []
-    assert "No opted-in quests found." in result.summary_text()
+    assert "No quest has autopilot switched on" in result.summary_text()
 
 
 def test_daily_budget_defaults_to_the_documented_default():
@@ -1087,7 +1154,7 @@ def test_a_pass_writes_its_conclusion_as_the_quests_next_steps(tmp_path):
     assert "Draft chapter 2 (target 2026-07-20)" in body
     assert result.next_steps_refreshed == [
         {"quest_id": "q1", "path": str(tmp_path / "QUEST_SYNC.md"),
-         "quest_target": "context_entry"}]
+         "quest_target": "context_entry", "quest_label": "ship the thing"}]
     # And on Quest as ONE upserted entry, not another timestamped note.
     assert [e["name"] for e in client.entries] == [NEXT_STEPS_ENTRY_NAME]
     assert client.notes == []
