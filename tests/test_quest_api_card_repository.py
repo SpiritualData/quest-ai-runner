@@ -78,7 +78,11 @@ def test_search_cards_is_callable_the_way_the_context_store_calls_it():
 
     assert result == {"morning-routine": CARD_A}
     # The endpoint reads ``max_results``; the old ``max`` was silently ignored.
-    assert calls[-1]["params"] == {"q": "morning", "max_results": 32}
+    assert calls[-1]["params"] == {
+        "q": "morning",
+        "max_results": 32,
+        "include_managed": "true",
+    }
 
 
 def test_search_cards_returns_none_on_a_bad_reply_so_the_store_falls_back():
@@ -94,3 +98,89 @@ def test_the_context_store_can_actually_read_through_this_repository(tmp_path):
 
     assert set(loaded) == {"morning-routine", "production-bugs"}
     assert loaded["production-bugs"]["name"] == "Production Bugs"
+
+
+# ---------------------------------------------------------------------------
+# Auto-maintained ("managed") cards must reach the runner
+# ---------------------------------------------------------------------------
+#
+# The card API hides any card carrying ``managed_by`` from GET /api/cards and
+# GET /api/cards/search unless the caller passes ``include_managed=true``. That default
+# exists for the user-facing Topics list, where one auto-written card per quest would be
+# noise the user can neither edit nor delete. A runner is the opposite kind of caller: the
+# per-quest cards are precisely the grounding it is supposed to read. Omitting the flag
+# costs the runner every quest card on BOTH retrieval arms (keyword and vector), silently,
+# and only once the backend carrying that default deploys, which is indistinguishable from
+# the per-quest cards never having worked.
+
+QUEST_CARD = {
+    "id": "quest-inner-work",
+    "name": "Quest: Inner Work",
+    "summary": "Daily practice.",
+    "managed_by": "quest",  # what quest_ai_quest_cards actually stamps
+}
+
+
+def backend_that_hides_managed_cards(cards, record=None):
+    """A repo whose fake backend applies the API's real ``include_managed`` default.
+
+    Mirrors ``_drop_managed`` in quest-backend's ``cards_api``: managed cards come back only
+    when the request asked for them, so a repository that forgets the flag observes exactly
+    what it would observe against a deployed backend.
+    """
+    repo = QuestApiCardRepository(base_url="https://api.example", api_key="k", user_id="u")
+
+    def fake_request(method, path, body=None, params=None):
+        if record is not None:
+            record.append({"method": method, "path": path, "params": params})
+        include_managed = str((params or {}).get("include_managed", "")).lower() == "true"
+        visible = [
+            c for c in cards
+            if include_managed or not str(c.get("managed_by") or "").strip()
+        ]
+        return {"cards": visible}
+
+    repo._request = fake_request  # type: ignore[assignment]
+    return repo
+
+
+def test_load_all_asks_for_managed_cards_so_quest_cards_are_not_dropped():
+    calls: list = []
+    repo = backend_that_hides_managed_cards([CARD_A, QUEST_CARD], record=calls)
+
+    cards = repo.load_all()
+
+    assert calls[-1]["path"] == "/api/cards"
+    assert calls[-1]["params"] == {"include_managed": "true"}
+    assert set(cards) == {"morning-routine", "quest-inner-work"}
+
+
+def test_search_asks_for_managed_cards_so_the_keyword_arm_sees_quest_cards():
+    calls: list = []
+    repo = backend_that_hides_managed_cards([QUEST_CARD], record=calls)
+
+    result = repo.search_cards("inner work", limit=10)
+
+    assert calls[-1]["path"] == "/api/cards/search"
+    assert calls[-1]["params"]["include_managed"] == "true"
+    assert result == {"quest-inner-work": QUEST_CARD}
+
+
+def test_revision_sees_managed_cards_so_a_quest_card_write_invalidates_the_cache():
+    """``revision()`` counts cards; a filtered listing would make quest-card churn invisible."""
+    repo = backend_that_hides_managed_cards([CARD_A, QUEST_CARD])
+
+    _local, count, _stamp = repo.revision()
+
+    assert count == 2
+
+
+def test_the_context_store_reads_quest_cards_through_this_repository(tmp_path):
+    """End to end: the grounding path the per-quest cards exist to feed."""
+    repo = backend_that_hides_managed_cards([CARD_A, QUEST_CARD])
+    store = FileContextStore(str(tmp_path / "cards"), auto_bootstrap=False, card_repository=repo)
+
+    loaded = store._load_all()
+
+    assert "quest-inner-work" in loaded
+    assert loaded["quest-inner-work"]["name"] == "Quest: Inner Work"

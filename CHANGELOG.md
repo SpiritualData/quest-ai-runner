@@ -7,6 +7,20 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **A runner on the Quest-API card backend was about to lose every per-quest card, silently.** The
+  card API hides auto-maintained cards (anything carrying `managed_by`, today one card per quest)
+  from `GET /api/cards` and `GET /api/cards/search` unless the caller passes
+  `include_managed=true`. That default is right for the user-facing Topics list, where cards the
+  user never wrote and cannot usefully edit are noise. It is exactly wrong for a runner, which
+  reads cards to GROUND the AI and for which the per-quest cards are the point.
+  `QuestApiCardRepository` sent neither request with the flag, so the moment a backend carrying
+  that default deploys, any lane with `QAR_QUEST_API_URL` / `QAR_QUEST_API_KEY` / `QAR_USER_ID`
+  set would get zero quest cards on the listing (`load_all`, `revision`, and the store's in-app
+  IDF fallback) and zero on search, where the endpoint filters the merged keyword AND vector
+  result. Nothing would have reported it: the failure mode is a feature that appears never to have
+  worked. Both requests now ask for the full store, and
+  `tests/test_quest_api_card_repository.py` asserts it against a fake backend that reproduces the
+  API's own filtering.
 - **The Quest-API card backend could never read a single card, so cards written through it stayed
   invisible.** `QuestApiCardRepository` broke the `CardRepository` protocol in three ways at once,
   each failing quietly: `revision()` was declared as a per-CARD stamp (`revision(card_id)`) while

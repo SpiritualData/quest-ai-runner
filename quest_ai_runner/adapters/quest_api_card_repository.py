@@ -160,6 +160,15 @@ def _cards_by_id(payload: Any) -> Dict[str, Dict[str, Any]]:
 # than two; it is deliberately short, since another process may write at any time.
 _LISTING_TTL_S = 5.0
 
+# The card API HIDES auto-maintained cards (anything carrying ``managed_by``, e.g. the one card
+# per quest) from its list and search replies unless the caller opts in, because those cards would
+# clutter the user-facing Topics list with entries nobody made and cannot usefully edit. A runner
+# is not that surface: it is a GROUNDING consumer, and the per-quest cards are exactly the context
+# it needs, so it asks for the full store on every read. Without this the keyword arm and the
+# vector arm both come back with zero quest cards the moment a backend with that default deploys,
+# which looks identical to the per-quest cards never having worked at all.
+_INCLUDE_MANAGED = {"include_managed": "true"}
+
 
 class QuestApiCardRepository:
     """CardRepository backed by quest-backend's /api/cards HTTP API.
@@ -264,7 +273,7 @@ class QuestApiCardRepository:
             and (time.monotonic() - self._listing_at) < max_age_s
         ):
             return self._listing
-        result = self._request("GET", "/api/cards")
+        result = self._request("GET", "/api/cards", params=dict(_INCLUDE_MANAGED))
         cards = _cards_by_id(result.get("cards")) if isinstance(result, dict) else {}
         self._listing = cards
         self._listing_at = time.monotonic()
@@ -326,7 +335,7 @@ class QuestApiCardRepository:
             result = self._request(
                 "GET",
                 "/api/cards/search",
-                params={"q": query, "max_results": limit},
+                params={"q": query, "max_results": limit, **_INCLUDE_MANAGED},
             )
             if isinstance(result, dict):
                 return _cards_by_id(result.get("cards"))
