@@ -7,6 +7,20 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Autopilot re-proposed the same goal on every pass, forever.** On a `plan_and_work` quest with
+  no eligible AI goal, each pass created a fresh "Next step toward: `<outcome>`" proposal without
+  ever looking to see whether the LAST one had been answered. A proposal is one question, so the
+  person got a duplicate suggestion in their task list every pass and the same "Waiting for your
+  approval before it can run: Proposed goal: Next step toward: X (on X)" line in every report:
+  the quest's outcome three times in one line, under a heading about work that can "run" when no
+  work exists yet. A pass now checks for its own still-open proposal on the quest (autopilot
+  authored, text starting `Proposed goal:`, status queued/in_progress/needs_you/suggested), and
+  when it finds one it creates nothing, spends no budget, and reports one honest skip line saying
+  the earlier proposal is still waiting on them. This is deliberately narrower than the (opt-in,
+  off-by-default) backpressure gate: an unanswered question must not stop a quest from doing work
+  that is independent of it, but a duplicate of that question is never such work. Proposals also
+  get their own heading in the report ("A goal proposed for you to accept or reject"), and a
+  created item no longer names its quest when its own title already does.
 - **A runner on the Quest-API card backend was about to lose every per-quest card, silently.** The
   card API hides auto-maintained cards (anything carrying `managed_by`, today one card per quest)
   from `GET /api/cards` and `GET /api/cards/search` unless the caller passes

@@ -8,6 +8,7 @@ proves, and the qar-playbook invariant: every skipped quest must be logged with 
 from datetime import datetime, timezone
 
 from quest_ai_runner.runner.autopilot import (
+    AUTOPILOT_WORK_KIND,
     DEFAULT_TEAM_DAILY_BUDGET,
     AutopilotPass,
     batch_by_persona,
@@ -612,6 +613,111 @@ def test_plan_and_work_proposes_next_goal_when_no_eligible_goal():
     assert client.task_updates == []
     # The proposal lands on the QUEST (goal_id = quest id).
     assert created["goal_id"] == "q1"
+
+
+def test_a_proposal_still_waiting_on_the_person_is_not_proposed_again():
+    """Reported 2026-08-22: the same proposed goal, and the same "waiting for your approval" line,
+    in pass after pass ("over and over, not useful at all"). A proposal is one question; asking it
+    again because it has not been answered is noise, and it piles up duplicate rows in the
+    person's task list."""
+    q1 = _quest("q1", planning="plan_and_work", outcome="I have a PhD")
+    pending = {"id": "atask_earlier", "goal_id": "q1", "status": "suggested",
+               "task_kind": AUTOPILOT_WORK_KIND, "title": "Next step toward: I have a PhD",
+               "text": "Proposed goal: Next step toward: I have a PhD\n\nPropose and take..."}
+    client = FakeAutopilotClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", []))},
+        tasks=[pending], accepts_bookkeeping=True)
+    result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+
+    assert client.created_tasks == []
+    assert len(result.skipped) == 1
+    assert "still waiting for your yes or no" in result.skipped[0]["reason"]
+    # Nothing was created, so nothing is claimed: the report must not say a proposal is waiting
+    # for approval as though this pass had just made one.
+    assert "accept or reject" not in result.summary_text()
+    # And the budget is untouched, so another quest in the same pass can still be worked.
+    assert client.autopilot_updates == [("q1", {"last_pass_at": "2026-07-12T09:00:00Z",
+                                                "miss_streak": 1})]
+
+
+def test_a_proposal_the_person_already_answered_does_not_block_the_next_one():
+    """The guard is about a question still open, not about ever proposing again. Once the earlier
+    proposal is resolved (accepted, declined, or otherwise closed), the quest can be proposed for
+    again."""
+    q1 = _quest("q1", planning="plan_and_work")
+    answered = {"id": "atask_earlier", "goal_id": "q1", "status": "done",
+                "task_kind": AUTOPILOT_WORK_KIND,
+                "text": "Proposed goal: Next step toward: ship the thing"}
+    client = FakeAutopilotClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", []))},
+        tasks=[answered], accepts_bookkeeping=True)
+    result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+
+    assert len(client.created_tasks) == 1
+    assert client.created_tasks[0]["text"].startswith("Proposed goal:")
+    assert result.skipped == []
+
+
+def test_an_open_work_task_is_not_mistaken_for_an_open_proposal():
+    """Only a PROPOSAL blocks a proposal. An ordinary autopilot work task sitting queued on the
+    quest is the backpressure gate's business (opt-in, off by default), never this one's."""
+    q1 = _quest("q1", planning="plan_and_work")
+    work = {"id": "atask_work", "goal_id": "q1", "status": "queued",
+            "task_kind": AUTOPILOT_WORK_KIND, "text": "Act as bailey.\n\nGoal: draft the thing"}
+    client = FakeAutopilotClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", []))},
+        tasks=[work], accepts_bookkeeping=True)
+    result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+
+    assert len(client.created_tasks) == 1
+    assert result.skipped == []
+
+
+def test_a_persons_own_task_that_mentions_a_proposal_never_blocks_one():
+    """The marker is autopilot's own authorship plus its own text prefix. A task the PERSON wrote
+    is not autopilot's pending question, whatever it happens to say."""
+    q1 = _quest("q1", planning="plan_and_work")
+    theirs = {"id": "atask_human", "goal_id": "q1", "status": "queued",
+              "text": "Proposed goal: something I typed myself"}
+    client = FakeAutopilotClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", []))},
+        tasks=[theirs], accepts_bookkeeping=True)
+    AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+
+    assert len(client.created_tasks) == 1
+
+
+def test_a_proposed_goal_is_reported_once_and_without_repeating_the_quest():
+    """The reported line was "Proposed goal: Next step toward: <outcome> (on <outcome>)": the
+    quest's outcome three times, under a heading about work that can "run" when no work exists
+    yet."""
+    q1 = _quest("q1", planning="plan_and_work",
+                outcome="I've completed my dissertation and have a PhD")
+    client = FakeAutopilotClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", []))},
+        accepts_bookkeeping=True)
+    text = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"}).summary_text()
+
+    assert "A goal proposed for you to accept or reject:" in text
+    assert "Next step toward: I've completed my dissertation and have a PhD" in text
+    assert "(on I've completed my dissertation and have a PhD)" not in text
+    assert "Proposed goal: Next step toward:" not in text
+    assert "before it can run" not in text
+    assert text.count("I've completed my dissertation and have a PhD") == 1
+
+
+def test_work_awaiting_approval_and_a_proposal_are_reported_as_different_things():
+    q1 = _quest("q1", mode="suggest", outcome="Ship the launch")
+    q2 = _quest("q2", mode="suggest", planning="plan_and_work", outcome="Learn Spanish")
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1", name="Draft the rubric")])),
+             "q2": _goals_payload(("day", "2026-07-12", []))}
+    client = FakeAutopilotClient(quests=[q1, q2], goals_by_quest=goals, accepts_bookkeeping=True)
+    text = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"}).summary_text()
+
+    assert "Waiting for your approval before it can run:" in text
+    assert "Draft the rubric" in text
+    assert "A goal proposed for you to accept or reject:" in text
+    assert "Next step toward: Learn Spanish" in text
 
 
 def test_act_mode_goal_proposal_is_still_only_suggested():

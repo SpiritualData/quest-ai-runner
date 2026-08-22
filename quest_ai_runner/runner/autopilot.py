@@ -15,7 +15,10 @@ normal deep-run path). Each pass:
      fallback) and batches goals sharing a persona into ONE task (one budget unit).
   5. Creates each batch as a real task (``status="suggested"`` in suggest mode, ``"queued"`` in
      act mode), or -- when planning allows and nothing is eligible -- proposes the quest's next
-     goal instead of a work task. The batch text carries the person's OWN latest reflection
+     goal instead of a work task, UNLESS the previous pass's proposal is still sitting there
+     unanswered (a proposal is one question, and re-asking it every pass is how the same
+     suggestion ends up in the person's list every morning). The batch text carries the person's
+     OWN latest reflection
      (``runner.reflections``: the daily plan's review of yesterday, plus the newest submitted
      period review) and the insights they have CAPTURED but not yet acted on since this quest's
      last pass (``runner.insights``, with the person's own category tags shown beside each one).
@@ -98,6 +101,10 @@ _CADENCE_DAYS = {"daily": 1, "weekly": 7, "monthly": 30}
 # A previous autopilot task in any of these states is still "open" -- its quest is under
 # backpressure and gets no more autonomous work piled on until it resolves.
 OPEN_TASK_STATUSES = {"queued", "in_progress", "needs_you", "suggested"}
+
+# Every proposed-goal task's text starts with this, which is how a later pass recognizes the
+# proposal it already made and does not make it again (see ``_open_proposal``).
+PROPOSAL_TEXT_PREFIX = "Proposed goal:"
 
 # Time-scope granularities recognized in a quest's ``list_quest_goals`` period grouping, checked
 # FINEST first (day) so "today" wins over a same-quarter month/quarter/year group that also
@@ -701,13 +708,25 @@ class AutopilotResult:
             lines.append(_count_line(len(running), "Autopilot started one piece of work:",
                                      "Autopilot started {n} pieces of work:"))
             lines.extend(_describe_created(c) for c in running)
-        if awaiting:
+        # Proposals are separated from work: a proposed goal is not a task queued behind an
+        # approval, it is a suggestion to accept or reject, and saying "before it can run" of a
+        # goal that does not exist yet describes the wrong thing.
+        proposals = [c for c in awaiting if c.get("kind") == "goal_proposal"]
+        awaiting_work = [c for c in awaiting if c.get("kind") != "goal_proposal"]
+        if awaiting_work:
             if lines:
                 lines.append("")
-            lines.append(_count_line(len(awaiting),
+            lines.append(_count_line(len(awaiting_work),
                                      "Waiting for your approval before it can run:",
                                      "Waiting for your approval before they can run:"))
-            lines.extend(_describe_created(c) for c in awaiting)
+            lines.extend(_describe_created(c) for c in awaiting_work)
+        if proposals:
+            if lines:
+                lines.append("")
+            lines.append(_count_line(len(proposals),
+                                     "A goal proposed for you to accept or reject:",
+                                     "{n} goals proposed for you to accept or reject:"))
+            lines.extend(_describe_created(c) for c in proposals)
         if self.next_steps_refreshed:
             if lines:
                 lines.append("")
@@ -813,7 +832,9 @@ def _describe_created(item: Dict[str, Any]) -> str:
     title = str(item.get("title") or "").strip() or "an unnamed piece of work"
     line = f"  - {title}"
     quest_label = str(item.get("quest_label") or "").strip()
-    if quest_label:
+    # Which quest, unless the title already says so. A proposed goal is titled after the quest's
+    # own outcome, so naming the quest again gave "Next step toward: <outcome> (on <outcome>)".
+    if quest_label and quest_label.lower() not in title.lower():
         line += f" (on {quest_label})"
     persona = str(item.get("persona_label") or "").strip()
     if persona:
@@ -1097,9 +1118,16 @@ class AutopilotPass:
                                          insights_note=insights.one_line())
         elif planning == "plan_and_work":
             if budget_used < self._daily_budget:
-                self._handle_proposal(quest, quest_id, quest_label, mode, dry_run, result)
-                produced = True
-                budget_used += 1
+                skipped_because = self._handle_proposal(quest, quest_id, quest_label, mode,
+                                                        dry_run, result)
+                if skipped_because:
+                    # Nothing was created, so nothing is spent and nothing is claimed. The person
+                    # still hears why the quest was quiet, in one line, instead of getting the
+                    # same proposal again.
+                    self._skip(result, quest_id, quest_label, skipped_because)
+                else:
+                    produced = True
+                    budget_used += 1
             else:
                 self._skip(result, quest_id, quest_label,
                            f"today's budget of {self._daily_budget} autopilot task(s) ran out "
@@ -1561,17 +1589,57 @@ class AutopilotPass:
             log.warning("autopilot: create_goal failed for quest %s: %s", quest_id, e)
             return None
 
+    def _open_proposal(self, quest_id: str) -> Optional[Dict[str, Any]]:
+        """A proposed-goal task from an earlier pass that is still waiting on the person, or None.
+
+        A proposal is not work: it is one question ("shall this be a goal?"), and asking it again
+        because it has not been answered yet is how a person ends up with the same suggestion in
+        their list every single day, and the same "Waiting for your approval" line in every pass
+        report. Reported 2026-08-22, on a quest whose proposals had been repeating: "not useful at
+        all".
+
+        This is NOT the backpressure gate (which is opt-in, off by default, and deliberately so:
+        an unanswered question must not stop a quest from doing work that is independent of it).
+        It is narrower and always on, because a duplicate of a pending question is never the work
+        that was blocked; it is only more of the question.
+        """
+        try:
+            tasks = self._client.list_tasks(
+                team_id=self._team_id or None, goal_id=quest_id) or []
+        except Exception:  # noqa: BLE001 -- fail OPEN: a bad read must not silence a proposal
+            log.info("autopilot: could not check for an open proposal on quest %s", quest_id,
+                     exc_info=True)
+            return None
+        for t in tasks:
+            if not self._is_autopilot_authored(t):
+                continue
+            if str(t.get("status", "")).strip().lower() not in OPEN_TASK_STATUSES:
+                continue
+            if str(t.get("text") or "").lstrip().startswith(PROPOSAL_TEXT_PREFIX):
+                return t
+        return None
+
     def _handle_proposal(self, quest: Dict[str, Any], quest_id: str, quest_label: str, mode: str,
-                         dry_run: bool, result: AutopilotResult) -> None:
+                         dry_run: bool, result: AutopilotResult) -> Optional[str]:
+        """Propose the quest's next goal, unless the last pass's proposal is still unanswered.
+
+        Returns the skip reason when nothing was proposed, so the caller can report it as a skip
+        and leave the budget alone.
+        """
         title, description = propose_next_goal(quest)
+        pending = None if dry_run else self._open_proposal(quest_id)
+        if pending is not None:
+            asked = _task_label(pending)
+            return (f"a proposed goal from an earlier pass is still waiting for your yes or no "
+                    f"({asked})")
         if dry_run:
             result.proposals.append({
                 "quest_id": quest_id, "quest_label": quest_label, "kind": "goal_proposal",
                 "title": title, "description": description,
             })
-            return
+            return None
         created_goal_id = self._maybe_create_goal(quest_id, title, description, mode)
-        task_text = f"Proposed goal: {title}\n\n{description}"
+        task_text = f"{PROPOSAL_TEXT_PREFIX} {title}\n\n{description}"
         if created_goal_id:
             task_text += f"\n\n(Created as goal {created_goal_id} on this quest.)"
         # A proposed goal is ALWAYS surfaced for a human to accept, even on an `act` quest: the
@@ -1581,11 +1649,17 @@ class AutopilotPass:
         if task_id:
             # ALWAYS awaiting approval: a proposed goal is surfaced for a human to accept even on
             # an ``act`` quest (see _create_autopilot_task's force_suggested).
+            #
+            # The title here is the proposal's own title, with no "Proposed goal:" prefix glued
+            # on: the report prints proposals under their own heading, and prefixing them there
+            # too produced "Proposed goal: Next step toward: <outcome> (on <outcome>)" -- the same
+            # words three times in one line.
             result.created.append({
                 "task_id": task_id, "kind": "goal_proposal", "quest_id": quest_id,
-                "quest_label": quest_label, "title": f"Proposed goal: {title}",
+                "quest_label": quest_label, "title": title,
                 "awaiting_approval": True,
             })
+        return None
 
     def _update_pass_bookkeeping(self, quest_id: str, quest_label: str,
                                  autopilot_cfg: Dict[str, Any],
