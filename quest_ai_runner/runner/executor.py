@@ -200,7 +200,7 @@ def render_goal_notes(notes: Optional[List[Dict[str, Any]]]) -> str:
             # Oldest-to-newest overall, so the run still reads them in chronological order.
             kept = [n for n in rows if n in missing or n in kept]
 
-    lines = []
+    lines, retrievable = [], False
     for note in kept:
         kind = str(note.get("author_kind") or "").lower()
         name = str(note.get("author_name") or "").strip()
@@ -210,13 +210,55 @@ def render_goal_notes(notes: Optional[List[Dict[str, Any]]]) -> str:
             who = f"{name} (AI)" if name and name.lower() != "ai assistant" else "AI"
         else:
             who = name or "unattributed"
+        if str(note.get("source") or "").lower() == "email":
+            who += ", by email"
         when = str(note.get("created_at") or "")[:10]
         stamp = f"[{when}] " if when else ""
-        lines.append(f"  • {stamp}({who}) {note['text']}")
+        answering = describe_reply_target(note)
+        retrievable = retrievable or bool((note.get("in_reply_to") or {}).get("task_id"))
+        lines.append(f"  • {stamp}({who}){answering} {note['text']}")
 
     header = ("Goal notes, oldest first. Notes marked \"the person\" are the goal owner's own "
               "words: treat them as instructions that override anything an AI note claims.")
+    if retrievable:
+        header += (" A note that answers one of your emails names that message and the task that "
+                   "produced it. A short reply (\"yes, do that\", \"skip it\") means nothing "
+                   "without what it answers, so read the original in full with "
+                   "query({kind: \"task_history\", task_id: \"<id>\"}) before acting on one, "
+                   "rather than guessing which message it meant.")
     return f"{header}\n" + "\n".join(lines)
+
+
+def describe_reply_target(note: Dict[str, Any]) -> str:
+    """What this note is answering, as a phrase to sit after the author, or "".
+
+    Two carriers, deliberately unequal. ``in_reply_to`` is CERTAIN: the reply address the person
+    wrote to named that message, so the backend resolved it to the task that produced it and the
+    run can read that task in full. ``source_subject`` is only what the subject line said, which
+    survives a forward the ref did not and covers mail sent before refs existed, but names a thread
+    rather than a message.
+
+    They are worded differently on purpose. A run that cannot tell "this answers task X" from
+    "this arrived under some subject" will treat the second as though it could fetch something,
+    and the whole point of the certain path is that it never has to guess.
+    """
+    target = note.get("in_reply_to") or {}
+    task_id = target.get("task_id")
+    if task_id:
+        called = (target.get("title") or target.get("subject") or "").strip()
+        sent = str(target.get("sent_at") or "")[:10]
+        parts = [f'"{called}"' if called else "an earlier message"]
+        if sent:
+            parts.append(f"sent {sent}")
+        parts.append(f"task {task_id}")
+        return f" answering {parts[0]} ({', '.join(parts[1:])}):" if len(parts) > 1 \
+            else f" answering {parts[0]}:"
+    subject = (note.get("source_subject") or "").strip()
+    if subject:
+        # No task to read: the subject is a name, not a handle. Said plainly so a run does not go
+        # looking for something to fetch.
+        return f' under the subject "{subject}" (the message itself is not linked):'
+    return ""
 
 # Same throttle, same reasoning, for the ``pending_inputs`` callable built by
 # ``_build_pending_inputs``: a human typing a mid-task steering message is rare and not

@@ -77,7 +77,8 @@ class QuestRetrievalAdapter(RetrievalAdapter):
         - goal_context: fetch goal metadata, notes, related goals (requires goal_id + quest_id)
         - quest_context: fetch quest metadata and goals (requires quest_id)
         - reflection_context: fetch the person's own latest daily + period reflections (no ids)
-        - task_history: fetch task details and history (future)
+        - task_history: fetch one task in full, including the result the person read (requires
+          task_id; a goal note answering an email names the task it answers)
         - cross_env_search: search related goals/tasks across envs (future)
 
         When exact IDs aren't available, use list_sources() first to discover quests,
@@ -240,11 +241,59 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             text=ctx.as_text(),
         )
 
+    # How much of a task's result to hand back. A brief is a page; anything past this is a report
+    # that was written to a file, and the run asked for the message, not the archive.
+    MAX_RESULT_CHARS = 20000
+
     def _query_task_history(self, spec: Dict[str, Any]) -> Observation:
-        """Fetch task history and previous results (future: not yet implemented)."""
+        """One task in full: what it was asked to do and what it produced.
+
+        This is the far end of an emailed reply. A note the person sent back by mail names the task
+        whose result they were reading, and this is how a run reads that result IN FULL. Without
+        it, the only thing a run has to match a reply against is the run-history block, which
+        carries 300 characters of each recent result: enough to see that a brief happened, not
+        enough to know what "yes, do that" is agreeing to.
+
+        Fetched on demand rather than pasted into every prompt, because most runs never need it
+        and a reply-heavy quest would otherwise carry its whole outbox in context.
+        """
+        task_id = spec.get("task_id")
+        if not task_id:
+            return Observation(
+                kind="error",
+                error=("task_history query requires task_id. A goal note that answers one of your "
+                       "emails names it (\"task atask_...\"); pass that id here to read the "
+                       "message being answered."),
+            )
+
+        task = self.client.get_task(task_id) or {}
+        if not task:
+            return Observation(
+                kind="error",
+                error=(f"No task {task_id} is readable on this Quest account. It may have been "
+                       "deleted, or belong to a different account."),
+            )
+
+        parts = [f"Task: {task.get('title') or task_id}"]
+        for label, key in (("Status", "status"), ("Scheduled", "scheduled_for"),
+                           ("Updated", "updated_at")):
+            value = task.get(key)
+            if value:
+                parts.append(f"{label}: {value}")
+        if (task.get("text") or "").strip():
+            parts.append(f"\nWhat it was asked to do:\n{task['text'].strip()}")
+        result = (task.get("result") or "").strip()
+        if result:
+            if len(result) > self.MAX_RESULT_CHARS:
+                result = result[:self.MAX_RESULT_CHARS].rstrip() + "\n\n[truncated]"
+            parts.append(f"\nWhat it produced (this is what the person read):\n{result}")
+        else:
+            parts.append("\nThis task produced no result text.")
+
         return Observation(
-            kind="error",
-            error="task_history query not yet implemented",
+            kind="query",
+            text="\n".join(parts),
+            rel_path=f"quest://task/{task_id}",
         )
 
     def _query_cross_env(self, spec: Dict[str, Any]) -> Observation:
@@ -361,6 +410,8 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             "daily review of how yesterday went, and their week/month review). Needs no ids. Use "
             "this whenever a request refers to their reflection, their review, how their day or "
             "week went, or what they said they want to focus on",
+            "get_task: Read one task in full, including the result the person received. Use it "
+            "when a goal note answers one of your emails and names the task it answers",
         ]
         return Observation(kind="query", locator="list_operations", text="\n".join(lines))
 
@@ -370,6 +421,12 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             "get_goal_context": "Fetch goal metadata, notes, and deadline from Quest. Usage: query({kind: 'goal_context', goal_id: '...', quest_id: '...', include_notes: true})",
             "query_quest": "Query a specific quest for metadata and status. Usage: query({kind: 'goal_context', quest_id: '...'})",
             "discover_goals": "List goals within a quest. Usage: list_sources() to discover available quests, then query() with goal_id from context.",
+            "get_task": (
+                "Read one task in full: what it was asked to do, and the result text the person "
+                "actually received. This is how you read the message an emailed reply is "
+                "answering, instead of inferring it from the truncated run history. "
+                "Usage: query({kind: 'task_history', task_id: 'atask_...'})"
+            ),
             "get_reflection_context": (
                 "Fetch what the person themselves last wrote about their own work: the daily "
                 "plan's review of how the previous day went (and what they planned for the day), "

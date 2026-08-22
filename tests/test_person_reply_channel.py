@@ -20,6 +20,7 @@ from quest_ai_runner.runner.executor import (
     PERSON_NOTE_FLOOR,
     REPLY_LOOP_CONTRACT,
     TaskExecutor,
+    describe_reply_target,
     render_goal_notes,
 )
 
@@ -378,3 +379,140 @@ def test_an_overdue_item_is_named_rather_than_replaced_by_todays_new_one():
     assert "An outstanding item stays outstanding" in view
     assert "how long it has been waiting" in view
     assert "do not quietly replace it" in view
+
+
+# --- a reply that arrived by email says WHAT it is answering ----------------------
+#
+# The fourth silent fault, and the one that survived the first three fixes: a note reached the run
+# with the person's words and no indication of which of the week's emails they were answering. On
+# a quest that mails a brief every morning, "yes, do that" was unactionable, and the run's only
+# recourse was to match timestamps against its own history and hope.
+
+
+def emailed(text: str, *, when: str = "2026-08-21", answering: dict = None,
+            subject: str = None) -> dict:
+    note = {"text": text, "author_kind": "user", "author_name": "Ada", "created_at": when,
+            "source": "email"}
+    if answering:
+        note["in_reply_to"] = answering
+    if subject:
+        note["source_subject"] = subject
+    return note
+
+
+SEND = {"send_ref": "k4m2p9xw", "task_id": "atask_1", "title": "Weekly reading brief",
+        "subject": "[Bailey] Dissertation: Weekly reading brief",
+        "sent_at": "2026-08-20T06:30:00+00:00"}
+
+
+def test_a_short_reply_names_the_message_it_answers():
+    out = render_goal_notes([emailed("Yes, do that.", answering=SEND)])
+
+    line = [ln for ln in out.splitlines() if "Yes, do that." in ln][0]
+    assert '(Ada, the person, by email) answering "Weekly reading brief"' in line
+    assert "sent 2026-08-20" in line
+    assert "task atask_1" in line
+
+
+def test_the_run_is_told_how_to_read_the_message_being_answered():
+    """Naming the task is only half of it: the run has to know it can fetch the thing."""
+    out = render_goal_notes([emailed("Yes, do that.", answering=SEND)])
+
+    assert "task_history" in out
+    assert "task_id" in out
+
+
+def test_notes_that_answer_nothing_do_not_advertise_a_lookup():
+    """An ordinary run's context should not carry instructions for a capability it has no use for."""
+    out = render_goal_notes([person("Committee first this week.")])
+
+    assert "task_history" not in out
+
+
+def test_a_reply_with_only_a_subject_says_so_rather_than_implying_a_lookup():
+    out = render_goal_notes([emailed("Skip the writing.", subject="Re: [Bailey] Monday brief")])
+
+    line = [ln for ln in out.splitlines() if "Skip the writing." in ln][0]
+    assert 'under the subject "Re: [Bailey] Monday brief"' in line
+    assert "not linked" in line
+    assert "task_history" not in out
+
+
+def test_a_note_typed_into_the_app_is_not_dressed_up_as_email():
+    out = render_goal_notes([person("Committee first this week.")])
+
+    assert "by email" not in out
+
+
+def test_an_email_with_nothing_to_link_still_reads_as_email():
+    out = render_goal_notes([emailed("Skip the writing.")])
+
+    assert "(Ada, the person, by email) Skip the writing." in out
+
+
+def test_a_link_missing_its_task_is_not_offered_as_one():
+    """Half a link is worse than none: it sends the run looking for something to fetch."""
+    assert describe_reply_target({"in_reply_to": {"send_ref": "k4m2p9xw"}}) == ""
+
+
+# --- reading the message that was answered ---------------------------------------
+#
+# Naming the task closes the loop only if the run can then READ it. The run-history block carries
+# 300 characters of each recent result, which is enough to see that a brief happened and not
+# enough to know what the person agreed to.
+
+class TaskClient:
+    """The slice of QuestClient the task_history query touches."""
+
+    configured = True
+
+    def __init__(self, tasks):
+        self.tasks = tasks
+        self.asked = []
+
+    def get_task(self, task_id):
+        self.asked.append(task_id)
+        return dict(self.tasks.get(task_id) or {})
+
+
+BRIEF = {"task_id": "atask_1", "title": "Weekly reading brief", "status": "done",
+         "updated_at": "2026-08-20T06:30:00+00:00", "text": "Write this week's reading brief.",
+         "result": "LISTEN: Larsson, part 2. WRITE: 500 words on the committee question."}
+
+
+def adapter_for(tasks):
+    from quest_ai_runner.adapters.quest_retrieval_adapter import QuestRetrievalAdapter
+    return QuestRetrievalAdapter(TaskClient(tasks))
+
+
+def test_the_brief_a_reply_answers_is_readable_in_full():
+    obs = adapter_for({"atask_1": BRIEF}).query({"kind": "task_history", "task_id": "atask_1"})
+
+    assert obs.kind == "query"
+    assert "Weekly reading brief" in obs.text
+    assert "WRITE: 500 words on the committee question." in obs.text
+    assert "Write this week's reading brief." in obs.text
+
+
+def test_asking_without_a_task_says_where_the_id_comes_from():
+    obs = adapter_for({}).query({"kind": "task_history"})
+
+    assert obs.kind == "error"
+    assert "task_id" in obs.error
+
+
+def test_a_task_that_is_not_there_is_said_plainly_not_invented():
+    obs = adapter_for({}).query({"kind": "task_history", "task_id": "atask_gone"})
+
+    assert obs.kind == "error"
+    assert "atask_gone" in obs.error
+
+
+def test_a_report_sized_result_is_truncated_rather_than_flooding_the_run():
+    from quest_ai_runner.adapters.quest_retrieval_adapter import QuestRetrievalAdapter
+
+    huge = dict(BRIEF, result="x" * (QuestRetrievalAdapter.MAX_RESULT_CHARS + 5000))
+    obs = adapter_for({"atask_1": huge}).query({"kind": "task_history", "task_id": "atask_1"})
+
+    assert "[truncated]" in obs.text
+    assert len(obs.text) < QuestRetrievalAdapter.MAX_RESULT_CHARS + 1000
