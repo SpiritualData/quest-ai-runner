@@ -1476,6 +1476,18 @@ Set is_execution_directive=true ONLY when the user is telling the assistant to m
 (a command, even a polite one: "can you fix X", "go ahead and add Y"). Set it false when the
 message is asking ABOUT something, weighing options, or does not actually direct action.
 
+The bar is an explicit, current instruction to act. These are all FALSE, and each one has been
+wrongly executed as a task before:
+  * A status or progress ask, however it is phrased: "where are we with X", "give me an update on
+    Y", "how do we move forward on this". They want to be TOLD, and executing them redoes work.
+  * A statement of context, plan, or preference with no instruction in it: "I shared the feedback,
+    when he replies I will let you know", "I was thinking of working with Mary on this".
+  * Anything about the assistant's own behavior rather than the work: "don't create a task", "just
+    answer here", "kill those runs", "I haven't given you an instruction yet".
+  * A follow-up that only comments on work already done ("thanks, that looks right").
+When you are torn, answer false. A missed directive costs the user one more sentence ("go ahead");
+a wrong one opens a task nobody asked for and reports work that was never wanted.
+
 Do NOT use em dashes.
 
 --- USER MESSAGE ---
@@ -2221,12 +2233,29 @@ _WRONGNESS_RE = re.compile(
 # questions in natural speech even though they are not textbook interrogatives -- these were
 # previously missed here, which meant they only survived via the "?"-ending check (and not at all
 # when the speaker dropped the question mark, as people often do when talking, not typing).
+# A leading discourse marker ("so how do we move forward", "okay what's next", "hey where are we")
+# is how people actually open a question in chat. Anchoring on the interrogative alone missed every
+# one of them, and each miss fell through to the unconditional "this is a command" at the end.
+_DISCOURSE_OPENER_RE = re.compile(
+    r"^\s*(?:so|ok|okay|and|but|also|well|hey|hi|hello|actually|alright|right|now|then|"
+    r"quick\s+question|question|just)\b[\s,:-]*",
+    re.IGNORECASE,
+)
+
 _INFO_QUESTION_RE = re.compile(
     r"^\s*(?:how|what|what['’]?s|why|which|who|whom|whose|when|where|explain|describe|summari[sz]e|"
     r"tell\s+me|walk\s+me\s+through|is\s+it|are\s+there|is\s+there|do\s+you|does\s+it|did\s+you|"
     r"would\s+it|could\s+we|should\s+(?:i|we|it)|do\s+we|is\s+it\s+possible|"
     r"any\s+(?:idea|clue|chance|reason)|no\s+idea\s+why|not\s+sure\s+why|"
-    r"(?:i'?m\s+)?(?:wondering|curious)\s+(?:if|why|whether))\b",
+    r"(?:i'?m\s+)?(?:wondering|curious)\s+(?:if|why|whether)|"
+    # STATUS / PROGRESS asks. "where are we with X", "give me an update on Y", "how are we doing
+    # on Z" ask to be TOLD where something stands. They carry change verbs ("update", "move") and
+    # were escalated into tasks that redid the work the human only wanted reported.
+    r"where\s+(?:are\s+we|do\s+we\s+stand)|any\s+update|update\s+me\b|"
+    r"give\s+me\s+(?:an?\s+)?(?:update|status|rundown|recap|breakdown)|"
+    r"(?:catch|fill)\s+me\s+(?:up|in)\b|"
+    r"status\s+(?:on|of)\b|how\s+(?:are|is)\s+(?:we|it|things|that)\b|"
+    r"did\s+we|have\s+we|has\s+(?:it|he|she|they))\b",
     re.IGNORECASE,
 )
 # A POLITE IMPERATIVE aimed at the assistant ("can you fix…", "could you add…", "please update…").
@@ -2237,6 +2266,70 @@ _POLITE_COMMAND_RE = re.compile(
     r"i\s+(?:want|need)\s+you\s+to\b|let'?s\b|go\s+ahead\b)",
     re.IGNORECASE,
 )
+
+
+# Words that turn a change verb into a NOUN: "give me an update", "the latest change", "a quick
+# fix", "any improvements". Without this, every status request read as an order to go change
+# something, because "update"/"fix"/"change"/"report" are the same string as verb or noun.
+_NOUN_DETERMINERS = frozenset((
+    "a", "an", "the", "any", "some", "no", "this", "that", "these", "those", "another",
+    "my", "your", "our", "his", "her", "their", "its", "one", "each", "every", "such",
+))
+
+_WORD_RE = re.compile(r"[A-Za-z'\u2019]+")
+
+
+def _change_verb_used_as_verb(message: str) -> bool:
+    """True when at least one change verb in ``message`` is used AS A VERB, not as a noun.
+
+    A determiner in the two words before the match ("an update", "the latest change", "a quick
+    fix") means the human is naming a THING, usually to ask about it, not ordering the action.
+    "update the sheet" keeps its verb reading because nothing determiner-like precedes it.
+    """
+    try:
+        for m in _CHANGE_VERB_RE.finditer(message):
+            preceding = _WORD_RE.findall(message[:m.start()])[-2:]
+            if any(w.lower() in _NOUN_DETERMINERS for w in preceding):
+                continue
+            return True
+    except Exception:  # noqa: BLE001
+        return bool(_CHANGE_VERB_RE.search(message))
+    return False
+
+
+# The human speaking about the ASSISTANT'S OWN machinery rather than about the work: telling it not
+# to open a task, to answer in the chat instead, to kill what is running, or that no instruction has
+# been given yet. These are the messages that must never become a task, and they used to become one
+# most reliably of all, because "create", "delete" and "make" are change verbs. Read from the USER's
+# own words (never from model output), which is the reading QAR's rules allow.
+_HOLD_OFF_RE = re.compile(
+    r"(?:"
+    r"\b(?:do\s*n[o\u2019']?t|dont|never|stop|avoid|refrain\s+from|without)\b[^.!?\n]{0,40}"
+    r"\b(?:creat\w*|open\w*|start\w*|spawn\w*|queu\w*|mak\w*|run\w*)\b[^.!?\n]{0,25}\btasks?\b"
+    r"|\bno\s+(?:new\s+|more\s+)?tasks?\b"
+    r"|\bjust\b[^.!?\n]{0,30}\b(?:answer|reply|respond|tell\s+me|drop|say)\b"
+    r"|\b(?:answer|reply|respond|drop)\b[^.!?\n]{0,25}\b(?:here|in\s+(?:the\s+)?chat)\b"
+    r"|\b(?:kill|stop|cancel|abort|dismiss|delete|remove)\b[^.!?\n]{0,30}\b(?:task|tasks|run|runs|job|jobs)\b"
+    r"|\bhave\s*n[o\u2019']?t\s+(?:even\s+)?(?:given|asked|told)\b|\bhavent\s+(?:even\s+)?(?:given|asked|told)\b"
+    r"|\bhold\s+(?:on|off)\b|\bstand\s+by\b|\bnot\s+yet\b"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def message_holds_off_work(message: Optional[str]) -> bool:
+    """True when the human is telling the assistant NOT to go do work right now.
+
+    Gates every ESCALATION NET (the fallbacks that turn an answer turn into a task). It does not
+    touch a planner decision of ``action="deep"``: when someone asks for work, they still get it.
+    Never raises.
+    """
+    if not message or not message.strip():
+        return False
+    try:
+        return bool(_HOLD_OFF_RE.search(message))
+    except Exception:  # noqa: BLE001
+        return False
 
 
 def _message_requests_change(message: Optional[str]) -> bool:
@@ -2255,7 +2348,11 @@ def _message_requests_change(message: Optional[str]) -> bool:
         return False
     try:
         m = message.strip()
-        has_verb = bool(_CHANGE_VERB_RE.search(m))
+        # "don't create a task", "just answer here", "kill those runs": the human is talking about
+        # the assistant's own behavior, not asking for work. Never escalate that.
+        if message_holds_off_work(m):
+            return False
+        has_verb = _change_verb_used_as_verb(m)
         has_wrongness = bool(_WRONGNESS_RE.search(m))
         if not (has_verb or has_wrongness):
             return False
@@ -2267,7 +2364,7 @@ def _message_requests_change(message: Optional[str]) -> bool:
         # it, do not execute, even if it mentions a change verb ("how would I add X?", "should we
         # refactor Y?", "what would it take to fix Z?"). This is the fix for questions being
         # mishandled as tasks.
-        if _INFO_QUESTION_RE.search(m):
+        if _INFO_QUESTION_RE.search(_DISCOURSE_OPENER_RE.sub("", m)):
             return False
         # A message ending in "?" reads as a question by default, not a command, unless it was
         # already caught above as a polite command directed at the assistant ("can you fix...?").
@@ -2313,7 +2410,9 @@ def message_change_signal_ambiguous(message: Optional[str]) -> bool:
         return False
     try:
         m = message.strip()
-        return bool(_CHANGE_VERB_RE.search(m) or _WRONGNESS_RE.search(m))
+        if message_holds_off_work(m):
+            return False
+        return bool(_change_verb_used_as_verb(m) or _WRONGNESS_RE.search(m))
     except Exception:  # noqa: BLE001
         return False
 
@@ -8516,7 +8615,12 @@ class Orchestrator:
         # Capability for these nets = inline execution OR a wired deferred queue: everything they
         # can set flows through the deferred block below, which reaches the queue runner by explicit
         # override, so a queue-only consumer (no default runner, no classifier) is capable here.
+        # Every net below can only ADD execution to an answer turn, so the human telling us to hold
+        # off ("don't create a task", "just answer here", "I haven't given you an instruction yet")
+        # turns the whole block off. Those messages carry change verbs, so without this they were
+        # the most reliably escalated of all: the request not to open a task opened one.
         if (not should_defer_deep and not brainstorm_active
+                and not message_holds_off_work(user_message)
                 and (self._has_deep_execution_capability()
                      or self._has_deferred_queue_capability())):
             # Primary: trust planner's explicit flag
