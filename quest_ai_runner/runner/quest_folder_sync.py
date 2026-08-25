@@ -575,6 +575,105 @@ def push_folder_to_quest(client: Any, quest_id: str, folder: str,
     )
 
 
+# --- pushing the quest STATE back (the goal block is editable, within limits) --------
+
+# What the goal block renders vs. what the API will accept are not the same set, and the gap is
+# not ours to close. ``current_state`` is in NO role's write scope server-side, and ``strategies``
+# are objects (id, title, accepted) that a list of bare titles cannot faithfully reconstruct -- a
+# push from titles alone would silently drop ids and acceptance flags. So the editable surface is
+# the two fields that round-trip losslessly, and an edit to either of the others is REPORTED
+# rather than dropped: a person who retypes their current state deserves to be told it did not
+# land, not to discover it next week.
+_PUSHABLE_STATE_FIELDS = ("outcome", "completed")
+
+_GOAL_LINE_RE = re.compile(r"^\*\*Goal:\*\*\s*(?P<outcome>.*)$")
+_STATUS_LINE_RE = re.compile(r"^\*\*Status:\*\*\s*(?P<status>.*)$")
+
+
+def parse_goal_block(text: str) -> Dict[str, Any]:
+    """Read the managed goal block back into fields. Missing markers simply yield fewer keys."""
+    block = extract_between(text, _GOAL_START, _GOAL_END)
+    if block is None:
+        return {}
+    out: Dict[str, Any] = {}
+    state_lines: List[str] = []
+    in_state = False
+    for raw in block.splitlines():
+        line = raw.strip()
+        if line.startswith("**Current state:**"):
+            in_state = True
+            continue
+        if line.startswith("**Accepted strategies:**"):
+            in_state = False
+            continue
+        if in_state:
+            state_lines.append(raw)
+            continue
+        m = _GOAL_LINE_RE.match(line)
+        if m:
+            out["outcome"] = m.group("outcome").strip()
+            continue
+        m = _STATUS_LINE_RE.match(line)
+        if m:
+            out["completed"] = m.group("status").strip().lower() == "completed"
+    state = "\n".join(state_lines).strip()
+    if state:
+        out["current_state"] = state
+    return out
+
+
+def push_quest_state(client: Any, quest_id: str, folder: str,
+                     *, filename: str = SYNC_FILE_NAME) -> Dict[str, Any]:
+    """Local -> Quest: send edits made to the goal block's writable fields.
+
+    Returns ``{"pushed": {...}, "blocked": [...], "held": str, "unwritable": [...]}``.
+    ``unwritable`` names fields the person edited that no role may write through this route, so a
+    caller can say so out loud instead of letting the edit evaporate.
+
+    Best-effort and non-raising, except when the quest itself cannot be read: with nothing to
+    compare against there is no way to tell an edit from the status quo, and pushing the whole
+    block blind would overwrite Quest with a stale file.
+    """
+    path = _sync_path(folder, filename)
+    if not path.exists():
+        raise QuestFolderSyncError(f"no sync file to push at {path} — pull first")
+    quest_resp = client.get_my_quest(quest_id) or {}
+    live = quest_resp.get("state") or {}
+    if not live:
+        raise QuestFolderSyncError(f"quest {quest_id} not found or inaccessible")
+
+    local = parse_goal_block(_read_existing(path))
+    result: Dict[str, Any] = {"pushed": {}, "blocked": [], "held": "", "unwritable": []}
+    if not local:
+        return result
+
+    if "current_state" in local and local["current_state"] != str(live.get("current_state") or "").strip():
+        result["unwritable"].append("current_state")
+        log.warning("current_state was edited in %s but no role may write it; left unpushed", path)
+
+    changed = {f: local[f] for f in _PUSHABLE_STATE_FIELDS
+               if f in local and local[f] != live.get(f)}
+    if not changed:
+        return result
+
+    write = getattr(client, "write_quest_fields", None)
+    if not callable(write):
+        log.warning("client cannot write quest fields; %s left unpushed", sorted(changed))
+        result["blocked"] = sorted(changed)
+        return result
+
+    resp = write(quest_id, changed) or {}
+    # The endpoint reports a partial refusal in the BODY rather than by status, so a caller that
+    # only checks for an exception believes every field landed. Surface both keys.
+    if resp.get("ok"):
+        result["pushed"] = changed
+    else:
+        result["blocked"] = list(resp.get("blocked") or sorted(changed))
+        result["held"] = str(resp.get("held") or "")
+    log.info("pushed quest state for %s: %s", quest_id, result)
+    return result
+
+
 def sync_quest_folder(client: Any, quest_id: str, folder: str, direction: str = "pull",
                      *, filename: str = SYNC_FILE_NAME,
                      zones: bool = True) -> QuestFolderSyncResult:
@@ -592,6 +691,12 @@ def sync_quest_folder(client: Any, quest_id: str, folder: str, direction: str = 
     if direction == "push":
         return push_folder_to_quest(client, quest_id, folder, filename=filename)
     if direction == "both":
+        # State first, for the same reason quest_goal_sync pushes before it pulls: the goal block
+        # is regenerated by the pull, so a local edit not sent first is a local edit destroyed.
+        try:
+            push_quest_state(client, quest_id, folder, filename=filename)
+        except (QuestFolderSyncError, Exception) as e:  # noqa: BLE001 -- never fail the sync
+            log.info("quest-state push for %s skipped (%s)", quest_id, e)
         pulled = pull_quest_to_folder(client, quest_id, folder, filename=filename, zones=zones)
         pushed = push_folder_to_quest(client, quest_id, folder, filename=filename)
         return QuestFolderSyncResult(

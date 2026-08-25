@@ -712,3 +712,88 @@ def test_env_wiring_ignores_invalid_quest_folder_map_json(monkeypatch):
     monkeypatch.setenv("QAR_QUEST_FOLDER_MAP", '["a", "list", "not", "an", "object"]')
     cfg = _config_from_env()
     assert cfg.quest_folder_map is None   # non-object JSON ignored, default kept
+
+
+# --- pushing the quest STATE back (the goal block is editable, within limits) ---
+
+class MockStateClient(MockQuestFolderClient):
+    """Adds the role-scoped field write, and records what was sent."""
+
+    def __init__(self, *a, ok=True, blocked=None, held="", **kw):
+        super().__init__(*a, **kw)
+        self.writes = []
+        self._ok, self._blocked, self._held = ok, blocked or [], held
+
+    def write_quest_fields(self, quest_id, fields, *, team_id=None):
+        self.writes.append((quest_id, dict(fields)))
+        return {"ok": self._ok, "blocked": self._blocked, "held": self._held}
+
+
+def _pulled(client, folder):
+    pull_quest_to_folder(client, QUEST_ID, folder)
+    return Path(folder) / "QUEST_SYNC.md"
+
+
+def test_editing_the_outcome_pushes_it():
+    from quest_ai_runner.runner.quest_folder_sync import push_quest_state
+    with tempfile.TemporaryDirectory() as d:
+        client = MockStateClient()
+        path = _pulled(client, d)
+        path.write_text(path.read_text().replace(
+            "**Goal:** The Super Psychic Academy reaches 100 paying clients",
+            "**Goal:** The Super Psychic Academy reaches 250 paying clients"))
+        result = push_quest_state(client, QUEST_ID, d)
+        assert client.writes == [(QUEST_ID, {"outcome":
+                                             "The Super Psychic Academy reaches 250 paying clients"})]
+        assert result["pushed"]
+
+
+def test_an_unedited_file_pushes_nothing():
+    from quest_ai_runner.runner.quest_folder_sync import push_quest_state
+    with tempfile.TemporaryDirectory() as d:
+        client = MockStateClient()
+        _pulled(client, d)
+        assert push_quest_state(client, QUEST_ID, d)["pushed"] == {}
+        assert client.writes == []
+
+
+def test_ticking_the_status_pushes_completion():
+    from quest_ai_runner.runner.quest_folder_sync import push_quest_state
+    with tempfile.TemporaryDirectory() as d:
+        client = MockStateClient()
+        path = _pulled(client, d)
+        path.write_text(path.read_text().replace("**Status:** In progress",
+                                                 "**Status:** Completed"))
+        push_quest_state(client, QUEST_ID, d)
+        assert client.writes == [(QUEST_ID, {"completed": True})]
+
+
+def test_editing_current_state_is_reported_not_silently_dropped():
+    """No role may write current_state; a person who retypes it must be told it did not land."""
+    from quest_ai_runner.runner.quest_folder_sync import push_quest_state
+    with tempfile.TemporaryDirectory() as d:
+        client = MockStateClient()
+        path = _pulled(client, d)
+        path.write_text(path.read_text().replace(
+            "Website is live. A few friends trialed it for free.",
+            "Totally different situation now."))
+        result = push_quest_state(client, QUEST_ID, d)
+        assert result["unwritable"] == ["current_state"]
+        assert client.writes == []
+
+
+def test_a_server_side_refusal_is_surfaced_not_reported_as_success():
+    from quest_ai_runner.runner.quest_folder_sync import push_quest_state
+    with tempfile.TemporaryDirectory() as d:
+        client = MockStateClient(ok=False, blocked=["outcome"], held="")
+        path = _pulled(client, d)
+        path.write_text(path.read_text().replace("100 paying clients", "250 paying clients"))
+        result = push_quest_state(client, QUEST_ID, d)
+        assert result["pushed"] == {} and result["blocked"] == ["outcome"]
+
+
+def test_push_state_without_a_file_raises():
+    from quest_ai_runner.runner.quest_folder_sync import push_quest_state
+    with tempfile.TemporaryDirectory() as d:
+        with pytest.raises(QuestFolderSyncError):
+            push_quest_state(MockStateClient(), QUEST_ID, d)

@@ -7,6 +7,29 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **`GOALS.md`: a quest's goal ladder in the folder, syncing both ways** (`runner/quest_goal_sync.py`,
+  on by default via `RunnerConfig.quest_goal_sync`; direction follows `quest_folder_sync_direction`).
+  `QUEST_SYNC.md`'s state block carries one OUTCOME and `next_steps` carries the two or three
+  things to do now. Neither is the plan, so a folder that wanted its goals locally grew a
+  hand-maintained substitute that drifted from Quest and that no other consumer had. Now one
+  standard file, grouped by period, each goal a checkbox bullet carrying its id. Three edits push,
+  chosen because each is unambiguous on the page: tick a box (completes the goal), change the text
+  after an id (renames it), add a bullet with no id under a period heading (creates it, then the
+  bullet is stamped with its new id so a repeated push is a no-op). Un-ticking does NOT reopen a
+  goal, since inferring that from a missing `x` would make any rendering hiccup a silent state
+  change. `direction="both"` pushes BEFORE it pulls, opposite to `quest_folder_sync`: the edits
+  live inside the managed block that a pull regenerates, so pulling first would erase a tick
+  before it was ever sent. New client methods `update_goal` and `set_goal_completed`.
+  See `docs/quest-folder-goals.md`.
+- **The quest state block in `QUEST_SYNC.md` now pushes back too** (`push_quest_state`, run
+  automatically on `direction="both"`). Editing `**Goal:**` or `**Status:**` sends the new outcome
+  or completion up via the role-scoped write. Two fields render but deliberately do NOT push:
+  `current_state`, which no role may write through that route, and `strategies`, which are objects
+  (id, title, accepted) that a list of bare titles cannot faithfully reconstruct. Both are
+  REPORTED in the result's `unwritable` list rather than dropped, and a server-side partial
+  refusal (`{"ok": false, "blocked": [...]}`, which arrives in the body rather than as a status)
+  is surfaced instead of being read as success. New client method `write_quest_fields`.
+
 - **Three-zone provenance convention for synced quest folders** (`runner/quest_folder_zones.py`,
   on by default via `RunnerConfig.quest_folder_zones`). A folder synced to a quest accumulates the
   person's material and the AI's side by side, and nothing on the page says which is which. The

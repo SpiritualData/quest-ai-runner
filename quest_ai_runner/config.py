@@ -307,6 +307,11 @@ class RunnerConfig:
     # until the plan rests on a premise the person never agreed to. Set False for a consumer whose
     # folders are organised some other way.
     quest_folder_zones: bool = True
+    # Keep a GOALS.md in each mapped folder, two-way (runner/quest_goal_sync.py). The quest state
+    # block carries one OUTCOME and next_steps carries the next two or three things; neither is
+    # the PLAN, so without this the only local answer to "what are all my goals" is whatever
+    # hand-maintained file the folder grew. Direction follows quest_folder_sync_direction.
+    quest_goal_sync: bool = True
 
     # --- Autopilot (opt-in per QUEST; see runner/autopilot.py and quest_autopilot_design.md).
     # Autopilot runs as a recurring "autopilot pass" task carrying ``task_kind: "autopilot"``,

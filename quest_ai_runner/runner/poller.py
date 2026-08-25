@@ -717,9 +717,25 @@ class Poller:
             try:
                 sync_quest_folder(self.client, quest_id, folder, direction=direction,
                                   zones=getattr(self.cfg, 'quest_folder_zones', True))
+                self._sync_quest_goals(quest_id, folder, direction)
             except Exception as e:  # noqa: BLE001 — one bad folder must not block the others/scan
                 log.info("quest-folder periodic sync for %s failed (%s) — will retry next scan",
                          quest_id, e)
+
+    def _sync_quest_goals(self, quest_id: str, folder: str, direction: str) -> None:
+        """Best-effort GOALS.md sync for one mapped folder. Never raises.
+
+        Separate from the folder sync rather than folded into it: a quest whose goals cannot be
+        listed (an older backend, a permission gap) must still get its QUEST_SYNC.md, and one
+        try/except around both would lose that.
+        """
+        if not getattr(self.cfg, "quest_goal_sync", True):
+            return
+        try:
+            from .quest_goal_sync import sync_quest_goals
+            sync_quest_goals(self.client, quest_id, folder, direction=direction)
+        except Exception as e:  # noqa: BLE001 -- goals are additive; never block the scan
+            log.info("goal sync for %s skipped (%s) — will retry next scan", quest_id, e)
 
     def _pull_quest_folder_for(self, task: Dict[str, Any]) -> None:
         """Best-effort PRE-run pull: refresh the mapped folder's QUEST_SYNC.md from Quest.
@@ -737,6 +753,7 @@ class Poller:
             from .quest_folder_sync import pull_quest_to_folder
             pull_quest_to_folder(self.client, quest_id, folder,
                                  zones=getattr(self.cfg, 'quest_folder_zones', True))
+            self._sync_quest_goals(quest_id, folder, "pull")
         except Exception as e:  # noqa: BLE001 — best-effort, like the rep pull
             log.info("quest-folder pull for %s failed (%s) — folder left as last synced",
                      quest_id, e)

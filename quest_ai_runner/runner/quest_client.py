@@ -584,6 +584,64 @@ class QuestClient:
             log.warning("list_quest_goals failed for quest %s: %s", quest_id, e)
             return {}
 
+    def update_goal(self, goal_id: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+        """PUT /api/planning/goals/{goal_id} — edit one goal's own fields.
+
+        The endpoint accepts ``title``/``name``, ``description``, ``criteria``, ``period``,
+        ``timeScope``, ``deadline``-adjacent scheduling fields and the assignee/aiHelp pair. Send
+        only what changed; anything omitted keeps its value.
+
+        Returns {} on failure rather than raising: a goal edit is one item in a sync that has
+        others to finish, and one rejected rename must not abort the rest.
+        """
+        try:
+            return self._request("PUT", f"/api/planning/goals/{goal_id}", body=dict(fields)) or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("update_goal failed for %s: %s", goal_id, e)
+            return {}
+
+    def set_goal_completed(self, goal_id: str, *, completed: bool = True) -> Dict[str, Any]:
+        """POST /api/planning/goals/{goal_id}/complete — tick or untick one goal.
+
+        Separate from ``update_goal`` because completion is its own endpoint server-side, and
+        because it is the one goal edit that changes what the plan MEANS rather than how it reads.
+        """
+        try:
+            return self._request(
+                "POST", f"/api/planning/goals/{goal_id}/complete",
+                body={"goalId": goal_id, "completed": bool(completed)}) or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("set_goal_completed failed for %s: %s", goal_id, e)
+            return {}
+
+    def write_quest_fields(self, quest_id: str, fields: Dict[str, Any], *,
+                           team_id: Optional[str] = None) -> Dict[str, Any]:
+        """POST /api/teams/{team_id}/write — role-scoped write of QuestState fields.
+
+        The server decides what the CALLER's role may write and returns
+        ``{"ok", "blocked", "held"}`` rather than raising on a partial refusal: ``blocked`` names
+        fields this role cannot write, ``held`` explains a sanity guard that stopped an autonomous
+        AI write. A caller that ignores those two keys will believe every write landed.
+
+        Field scopes at time of writing: an owner/admin may write intent (``outcome``,
+        ``acceptance_criteria``, ``quest_goal``, ``quest_completion_criteria``, ``timeline_days``,
+        ``start_date``), completion (``completed``, ``goal_achieved``, ``setup_complete``),
+        strategy (``strategies``) and progress (``plan``, ``progress``, ``confidence``,
+        ``achievements``, ...); a plain member only progress; the AI service member progress and
+        strategy, never intent or completion. ``current_state`` is in NO scope and cannot be
+        written through this route by anyone.
+        """
+        try:
+            self._require()
+            tid = team_id or self.team_id
+            if not tid:
+                raise QuestNotConfigured("team_id is required to write quest fields")
+            return self._request("POST", f"/api/teams/{tid}/write",
+                                 body={"quest_id": quest_id, "fields": dict(fields)}) or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("write_quest_fields failed for quest %s: %s", quest_id, e)
+            return {}
+
     # --- goal creation (a REAL typed Goal, distinct from create_task's AI work item) ----------
 
     def create_goal(self, title: str, *,
