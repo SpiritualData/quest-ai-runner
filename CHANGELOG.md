@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Three-zone provenance convention for synced quest folders** (`runner/quest_folder_zones.py`,
+  on by default via `RunnerConfig.quest_folder_zones`). A folder synced to a quest accumulates the
+  person's material and the AI's side by side, and nothing on the page says which is which. The
+  consequence is a slow one: an AI run produces an analysis, the next run reads it as the brief,
+  the run after builds on that, and eventually the plan rests on a premise the person never agreed
+  to. Every pull now scaffolds `human_context/` (their words, written to only to record input
+  VERBATIM or when asked) and `ai_driven/` (the AI's workspace, where everything is a proposal),
+  leaves everything else as collaborative work product, and writes the rule into the folder's own
+  `CLAUDE.md` as a managed section so it reaches runs that never touched this library. The
+  person's own Quest notes and email replies are captured verbatim into
+  `human_context/from_quest/`, keyed by note id so a repeated pull rewrites nothing, and an
+  unknown `author_kind` is deliberately never treated as human -- a missed capture is recoverable,
+  an AI note filed as the person's words is not. `ai_driven/provenance_ledger.md` records what
+  they have actually reviewed (`ai_proposed` -> `surfaced` -> `approved`/`rejected`/`superseded`,
+  only `approved` settled, each move quoting them), and any run on a foldered quest is told to
+  check it before building on AI-authored analysis. See `docs/quest-folder-zones.md`.
+
 ### Fixed
 - **Autopilot re-proposed the same goal on every pass, forever.** On a `plan_and_work` quest with
   no eligible AI goal, each pass created a fresh "Next step toward: `<outcome>`" proposal without

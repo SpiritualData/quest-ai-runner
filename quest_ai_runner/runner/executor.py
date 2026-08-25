@@ -339,7 +339,8 @@ class _TaskProgressSink:
 class TaskExecutor:
     def __init__(self, client, orchestrator: Orchestrator, *,
                 quest_folder_map: Optional[Dict[str, str]] = None,
-                autopilot_pass: Optional[Any] = None):
+                autopilot_pass: Optional[Any] = None,
+                quest_folder_zones: bool = True):
         self._client = client
         self._orch = orchestrator
         # Cache the retrieval adapter from the orchestrator so _build_context_view can fetch
@@ -349,6 +350,10 @@ class TaskExecutor:
         # QUEST_SYNC.md sync (RunnerConfig.quest_folder_map); None/empty = every task uses the
         # deep-runner's configured global working_dir, exactly as before this feature existed.
         self._quest_folder_map = quest_folder_map or {}
+        # Whether a run on a foldered quest is told the three-zone provenance convention
+        # (RunnerConfig.quest_folder_zones). Off = the folder is organised some other way and the
+        # contract would be describing directories that do not exist.
+        self._quest_folder_zones = bool(quest_folder_zones)
         # The consumer's AutopilotPass (see runner/autopilot.py), wired by the poller. A task whose
         # ``handler == "autopilot"`` is routed to it instead of a normal deep run (see execute()).
         # None (no consumer wiring, or a runner that never sees such a task) -> untouched behavior.
@@ -756,6 +761,7 @@ class TaskExecutor:
         # Not inside the ``if quest_id`` below: a task created against a quest carries that
         # quest's id in goal_id and leaves quest_id null, and those are exactly the runs that mail.
         self._append_email_contract(parts, goal_id, quest_id, rep_id)
+        self._append_folder_zones_contract(parts, goal_id, quest_id)
         # Fetch quest metadata if available
         if quest_id:
             get_quest = getattr(self._client, "get_quest", None)
@@ -855,6 +861,23 @@ class TaskExecutor:
                 # quest whose recipients the mail will go to.
                 parts.append(email_contract(candidate, rep_id))
                 return
+
+    def _append_folder_zones_contract(self, parts: List[str], goal_id: Optional[str],
+                                      quest_id: Optional[str]) -> None:
+        """Tell a run with a synced working folder how that folder separates whose work is whose.
+
+        Gated on the folder actually being MAPPED, not merely on the feature being on: a run with
+        no folder told to check a ledger goes looking for a file that does not exist, and a run
+        that cannot find what the prompt promised starts inventing a substitute. Same goal_id-then-
+        quest_id precedence as ``_resolve_working_dir``, since this is the same folder.
+        """
+        if not self._quest_folder_zones:
+            return
+        folder = self._resolve_working_dir(goal_id, quest_id)
+        if not folder:
+            return
+        from .quest_folder_zones import folder_zones_contract
+        parts.append(folder_zones_contract(folder))
 
     def _fetch_person_notes(self, quest_id: str, goal_id: Optional[str]) -> List[Dict[str, Any]]:
         """The quest's notes, which is where a person answers their AI.

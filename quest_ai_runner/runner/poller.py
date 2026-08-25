@@ -357,7 +357,9 @@ class Poller:
         self._pull_quest_folder_for(task)
         executor = TaskExecutor(self.client, self._orch(),
                                 quest_folder_map=getattr(self.cfg, "quest_folder_map", None),
-                                autopilot_pass=self._autopilot)
+                                autopilot_pass=self._autopilot,
+                                quest_folder_zones=getattr(
+                                    self.cfg, "quest_folder_zones", True))
         outcome = executor.execute(task, rep_preamble=rep_preamble)
         log.info("task %s -> %s", task_id, outcome.status)
         # Opt-in push-back: after the run, write the local skill file back up to Quest when the
@@ -713,7 +715,8 @@ class Poller:
         from .quest_folder_sync import sync_quest_folder
         for quest_id, folder in folder_map.items():
             try:
-                sync_quest_folder(self.client, quest_id, folder, direction=direction)
+                sync_quest_folder(self.client, quest_id, folder, direction=direction,
+                                  zones=getattr(self.cfg, 'quest_folder_zones', True))
             except Exception as e:  # noqa: BLE001 — one bad folder must not block the others/scan
                 log.info("quest-folder periodic sync for %s failed (%s) — will retry next scan",
                          quest_id, e)
@@ -732,7 +735,8 @@ class Poller:
         quest_id, folder = target
         try:
             from .quest_folder_sync import pull_quest_to_folder
-            pull_quest_to_folder(self.client, quest_id, folder)
+            pull_quest_to_folder(self.client, quest_id, folder,
+                                 zones=getattr(self.cfg, 'quest_folder_zones', True))
         except Exception as e:  # noqa: BLE001 — best-effort, like the rep pull
             log.info("quest-folder pull for %s failed (%s) — folder left as last synced",
                      quest_id, e)

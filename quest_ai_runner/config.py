@@ -296,6 +296,17 @@ class RunnerConfig:
     # Best-effort in both directions: a sync failure is logged and never fails the task. Validated
     # by ``validate()`` (unknown value -> a problem).
     quest_folder_sync_direction: str = "pull"
+    # Three-zone provenance convention inside a synced quest folder (runner/quest_folder_zones.py).
+    # On (default), every pull scaffolds ``ai_driven/`` + ``human_context/``, writes the rule into
+    # the folder's CLAUDE.md, and captures the person's own notes verbatim under
+    # ``human_context/from_quest/``; runs on a foldered quest are also told the convention and told
+    # to check the provenance ledger before building on AI-authored analysis.
+    #
+    # Why on by default: the failure it prevents is silent and compounding. An AI proposal that
+    # nothing marks as a proposal is read as the brief by the next run, and by the run after that,
+    # until the plan rests on a premise the person never agreed to. Set False for a consumer whose
+    # folders are organised some other way.
+    quest_folder_zones: bool = True
 
     # --- Autopilot (opt-in per QUEST; see runner/autopilot.py and quest_autopilot_design.md).
     # Autopilot runs as a recurring "autopilot pass" task carrying ``task_kind: "autopilot"``,

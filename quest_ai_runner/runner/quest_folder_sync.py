@@ -53,6 +53,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ._managed_sections import extract_between, replace_between
+from .quest_folder_zones import capture_human_input, ensure_folder_zones
 
 log = logging.getLogger("quest-ai-runner.quest_folder_sync")
 
@@ -109,6 +110,11 @@ class QuestFolderSyncResult:
     pushed: bool = False
     notes_pulled: int = 0
     notes_pushed: int = 0
+    #: Paths the three-zone scaffold created this call (see ``quest_folder_zones``). Empty on an
+    #: already-conforming folder, which is the steady state.
+    zones_created: List[str] = field(default_factory=list)
+    #: Human-authored notes captured verbatim into ``human_context/from_quest/`` this call.
+    human_notes_captured: List[str] = field(default_factory=list)
 
 
 # --- rendering (quest state + notes -> managed block text) ---------------------
@@ -472,12 +478,19 @@ def publish_next_steps(client: Any, quest_id: str, folder: str, next_steps: Next
 # --- the simple public functions --------------------------------------------------
 
 def pull_quest_to_folder(client: Any, quest_id: str, folder: str,
-                        *, filename: str = SYNC_FILE_NAME) -> QuestFolderSyncResult:
+                        *, filename: str = SYNC_FILE_NAME,
+                        zones: bool = True) -> QuestFolderSyncResult:
     """Quest -> local: GET the quest's state + notes and (re)render the folder's sync file.
 
     Human-authored content outside the managed markers (including the "Notes to push" section)
     is preserved. Idempotent: pulling unchanged Quest state leaves the file byte-identical.
     Raises :class:`QuestFolderSyncError` if the quest is not found or inaccessible.
+
+    ``zones`` (default on) also scaffolds the three-zone convention and captures the person's own
+    notes verbatim -- see :mod:`quest_ai_runner.runner.quest_folder_zones`. It rides on the pull
+    because this is the one moment the runner has both the folder and the notes in hand, and
+    because a convention that depends on a run remembering to invoke it is not a convention.
+    Pass ``zones=False`` for a pull that must touch nothing but the sync file.
     """
     quest_resp = client.get_my_quest(quest_id) or {}
     quest_state = quest_resp.get("state") or {}
@@ -489,10 +502,19 @@ def pull_quest_to_folder(client: Any, quest_id: str, folder: str,
     rendered = render_sync_file(existing, quest_id, quest_state, notes)
     if rendered != existing:
         _write(path, rendered)
-    log.info("pulled quest %s -> %s (%d notes)", quest_id, path, len(notes))
+    # After the sync file, never before: the scaffold is best-effort and must not be able to stop
+    # the pull that is this function's actual contract.
+    zones_created: List[str] = []
+    captured: List[str] = []
+    if zones:
+        zones_created = ensure_folder_zones(folder).created
+        captured = capture_human_input(folder, notes)
+    log.info("pulled quest %s -> %s (%d notes, %d captured)",
+             quest_id, path, len(notes), len(captured))
     return QuestFolderSyncResult(
         direction="pull", quest_id=quest_id, sync_path=str(path),
         pulled=True, notes_pulled=len(notes),
+        zones_created=zones_created, human_notes_captured=captured,
     )
 
 
@@ -554,7 +576,8 @@ def push_folder_to_quest(client: Any, quest_id: str, folder: str,
 
 
 def sync_quest_folder(client: Any, quest_id: str, folder: str, direction: str = "pull",
-                     *, filename: str = SYNC_FILE_NAME) -> QuestFolderSyncResult:
+                     *, filename: str = SYNC_FILE_NAME,
+                     zones: bool = True) -> QuestFolderSyncResult:
     """The one entry point: keep a quest's Quest state and a local folder in sync.
 
     ``direction``:
@@ -565,15 +588,17 @@ def sync_quest_folder(client: Any, quest_id: str, folder: str, direction: str = 
     """
     direction = (direction or "pull").lower()
     if direction == "pull":
-        return pull_quest_to_folder(client, quest_id, folder, filename=filename)
+        return pull_quest_to_folder(client, quest_id, folder, filename=filename, zones=zones)
     if direction == "push":
         return push_folder_to_quest(client, quest_id, folder, filename=filename)
     if direction == "both":
-        pulled = pull_quest_to_folder(client, quest_id, folder, filename=filename)
+        pulled = pull_quest_to_folder(client, quest_id, folder, filename=filename, zones=zones)
         pushed = push_folder_to_quest(client, quest_id, folder, filename=filename)
         return QuestFolderSyncResult(
             direction="both", quest_id=quest_id, sync_path=pushed.sync_path,
             pulled=True, pushed=True,
             notes_pulled=pulled.notes_pulled, notes_pushed=pushed.notes_pushed,
+            zones_created=pulled.zones_created,
+            human_notes_captured=pulled.human_notes_captured,
         )
     raise ValueError(f"unknown sync direction {direction!r}; use 'pull', 'push', or 'both'")
