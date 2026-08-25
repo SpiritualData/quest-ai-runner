@@ -77,12 +77,18 @@ from us. `push_quest_state` runs automatically on `direction="both"`.
 | --- | --- |
 | `**Goal:**` (outcome) | Yes |
 | `**Status:**` (completed) | Yes |
-| `**Current state:**` | **No** — in no role's write scope server-side |
+| `**Current state:**` | **Not from here** — writable by the owner via `edit_quest_field`, but a prose rewrite belongs in a decision-request the person reviews |
 | `**Accepted strategies:**` | **No** — objects with ids and acceptance flags that bare titles cannot reconstruct |
 
-The two that cannot push are **reported**, not dropped: the result's `unwritable` list names them,
-so a caller can say so out loud. Someone who retypes their current state deserves to be told it
-did not land, rather than discovering it next week.
+The two that do not push are **reported**, not dropped: the result's `unwritable` list names
+them, so a caller can say so out loud.
+
+"Does not push" is not "cannot be written". `current_state` is writable by the quest's owner
+through `PATCH /api/quests/{id}/field`, which covers "any field that the AI has set". Reading one
+route's permission table and concluding nothing can write a field is the mistake to avoid: the
+Quest API exposes what the app itself does. It stays out of this path because a prose rewrite is
+something the person should read and approve before it lands, which is what a decision-request
+with a parked executable is for.
 
 One more trap the code handles: the role-scoped write endpoint reports a partial refusal in the
 response **body** (`{"ok": false, "blocked": ["outcome"]}`), not as an HTTP status. A caller that

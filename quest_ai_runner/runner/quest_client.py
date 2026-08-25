@@ -614,6 +614,26 @@ class QuestClient:
             log.warning("set_goal_completed failed for %s: %s", goal_id, e)
             return {}
 
+    def edit_quest_field(self, quest_id: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+        """PATCH /api/quests/{quest_id}/field — owner-scoped edit of AI-determined quest fields.
+
+        The OTHER write path, and the one to reach for when a field the team route refuses needs
+        changing: this one is scoped to the quest's owner (or an active share) rather than to a
+        team role, and it covers the fields the AI itself sets -- ``outcome``, ``current_state``,
+        ``preferences``, ``strategies``. ``current_state`` in particular is writable HERE and
+        nowhere in ``write_quest_fields``' role scopes, which is easy to mistake for "nothing can
+        write it".
+
+        Prefer ``write_quest_fields`` when a team ROLE should govern the write (an AI service
+        member must not silently rewrite intent). Use this when the caller is acting as the owner.
+        """
+        try:
+            return self._request("PATCH", f"/api/quests/{quest_id}/field",
+                                 body={"fields": dict(fields)}) or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("edit_quest_field failed for quest %s: %s", quest_id, e)
+            return {}
+
     def write_quest_fields(self, quest_id: str, fields: Dict[str, Any], *,
                            team_id: Optional[str] = None) -> Dict[str, Any]:
         """POST /api/teams/{team_id}/write — role-scoped write of QuestState fields.
@@ -628,8 +648,8 @@ class QuestClient:
         ``start_date``), completion (``completed``, ``goal_achieved``, ``setup_complete``),
         strategy (``strategies``) and progress (``plan``, ``progress``, ``confidence``,
         ``achievements``, ...); a plain member only progress; the AI service member progress and
-        strategy, never intent or completion. ``current_state`` is in NO scope and cannot be
-        written through this route by anyone.
+        strategy, never intent or completion. ``current_state`` is in no role scope HERE; it is
+        written by the owner through ``edit_quest_field`` instead, not unwritable.
         """
         try:
             self._require()

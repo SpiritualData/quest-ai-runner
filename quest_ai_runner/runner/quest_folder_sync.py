@@ -577,13 +577,17 @@ def push_folder_to_quest(client: Any, quest_id: str, folder: str,
 
 # --- pushing the quest STATE back (the goal block is editable, within limits) --------
 
-# What the goal block renders vs. what the API will accept are not the same set, and the gap is
-# not ours to close. ``current_state`` is in NO role's write scope server-side, and ``strategies``
-# are objects (id, title, accepted) that a list of bare titles cannot faithfully reconstruct -- a
-# push from titles alone would silently drop ids and acceptance flags. So the editable surface is
-# the two fields that round-trip losslessly, and an edit to either of the others is REPORTED
-# rather than dropped: a person who retypes their current state deserves to be told it did not
-# land, not to discover it next week.
+# What the goal block renders vs. what THIS route accepts are not the same set. ``current_state``
+# is outside every ROLE scope on ``write_quest_fields`` -- but it is writable, by the quest's owner,
+# through ``edit_quest_field`` (PATCH /api/quests/{id}/field, "any field that the AI has set").
+# Reading one route's permission table and concluding "nothing can write it" is the mistake to
+# avoid here; the Quest API exposes what the app itself does.
+#
+# It still does not push from THIS path, for a different and better reason: an outcome or a
+# completion flag is one value, while a current-state rewrite is prose the person should see and
+# approve before it lands. That is what a decision-request with a parked executable is for. Same
+# for ``strategies``, which are objects (id, title, accepted) a list of bare titles cannot
+# reconstruct. Both are REPORTED in ``unwritable`` rather than dropped.
 _PUSHABLE_STATE_FIELDS = ("outcome", "completed")
 
 _GOAL_LINE_RE = re.compile(r"^\*\*Goal:\*\*\s*(?P<outcome>.*)$")
@@ -627,8 +631,10 @@ def push_quest_state(client: Any, quest_id: str, folder: str,
     """Local -> Quest: send edits made to the goal block's writable fields.
 
     Returns ``{"pushed": {...}, "blocked": [...], "held": str, "unwritable": [...]}``.
-    ``unwritable`` names fields the person edited that no role may write through this route, so a
-    caller can say so out loud instead of letting the edit evaporate.
+    ``unwritable`` names fields the person edited that this route will not carry, so a caller can
+    say so out loud instead of letting the edit evaporate. Note "will not carry", not "cannot be
+    written": ``current_state`` is writable by the owner via ``edit_quest_field``, and a
+    prose rewrite is meant to go through review rather than ride along with a one-value push.
 
     Best-effort and non-raising, except when the quest itself cannot be read: with nothing to
     compare against there is no way to tell an edit from the status quo, and pushing the whole
