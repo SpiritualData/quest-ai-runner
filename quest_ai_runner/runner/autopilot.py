@@ -104,6 +104,13 @@ OPEN_TASK_STATUSES = {"queued", "in_progress", "needs_you", "suggested"}
 
 # Every proposed-goal task's text starts with this, which is how a later pass recognizes the
 # proposal it already made and does not make it again (see ``_open_proposal``).
+#
+# It is also a CROSS-REPO wire contract: quest-backend re-declares the identical literal in
+# app/business/quests/autopilot_rollup.py to tell a proposal from a piece of work when it renders
+# the pass rollup. Rewording it here alone breaks nothing loudly -- the reader just stops
+# recognizing proposals and files them under "Waiting for your approval before it can run" again.
+# That backend's tests/business/test_autopilot_runner_contract.py asserts equality against THIS
+# constant, so change both sides together and it will say so.
 PROPOSAL_TEXT_PREFIX = "Proposed goal:"
 
 # Time-scope granularities recognized in a quest's ``list_quest_goals`` period grouping, checked
