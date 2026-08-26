@@ -553,6 +553,16 @@ not a script: use your judgment, and skip or soften the acknowledgment when the 
 just thinking out loud, or when your reply already makes the no-action state obvious.
 """
 
+READ_BUDGET_WRAPUP_HONESTY_NOTE = """\
+--- THIS REPLY IS THE END OF THE TURN ---
+The read budget is spent, so this reply is the last thing that happens: no tool runs after it, no
+file is written, and no further work starts. Say what you found, say plainly what you did not get
+to, and leave the rest named as work still to be done. Never describe work as underway or about to
+happen ("what I'm doing now", "I'll finish X this session", "next I will run Y") -- nothing after
+this reply executes, so any such line is a promise the run cannot keep, and the task is reported
+done carrying it.
+"""
+
 # Appended to the note above only when the PLANNER itself was ready to act this turn (it chose
 # deep/confirm, or set deferred_deep / answer_contains_work_to_execute) and the latch held it back.
 BRAINSTORM_HELD_WORK_ACK_NOTE = """\
@@ -8412,9 +8422,16 @@ class Orchestrator:
             if (gathered or brainstorm_active) and not must_execute:
                 emit.status("Wrapping up with a best-effort answer…")
                 model = self._answer_model(plan, "balanced", hint=model_hint)
+                # The wrap-up reply ENDS the turn, and the answerer is not otherwise told so: a
+                # 2026-08-24 dissertation run closed with "What I'm doing now: spec all nine
+                # gaps..." and was reported done having specced none, because a budget-capped
+                # answer reads like any other answer from inside. The honesty note says the turn
+                # is over, so what is left is named as left rather than promised.
+                wrapup_directive = (reply_directive + "\n\n" + READ_BUDGET_WRAPUP_HONESTY_NOTE
+                                    if reply_directive else READ_BUDGET_WRAPUP_HONESTY_NOTE)
                 text = self._grounded_answer(user_message, transcript, _answer_grounding(), gathered,
                                              model, True, native_blocks=native_blocks,
-                                             reply_directive=reply_directive)
+                                             reply_directive=wrapup_directive)
                 return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
                                                  partial=True, model=model,
                                                  exit_reason="read_budget"))

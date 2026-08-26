@@ -478,10 +478,53 @@ class QuestClient:
 
     # --- escalation (team decision-requests; the confirm-before-act surface) --
 
+    def propose_field_change(self, target_type: str, target_id: str,
+                             changes: List[Dict[str, Any]], *,
+                             why: str = "",
+                             quest_id: Optional[str] = None,
+                             assignee_user_id: Optional[str] = None,
+                             team_id: Optional[str] = None) -> Dict[str, Any]:
+        """Propose an edit the person approves, seeing the exact text, and which then APPLIES.
+
+        For the case where a run reads someone's plan and finds a field that no longer describes
+        reality -- a stale ``current_state``, a goal whose period has slipped, a habit scheduled on
+        days they stopped using. The run has the better value; it must not simply write it, because
+        a field like ``current_state`` is the person's own account of where they are.
+
+        ``changes`` is a list of ``{"field", "current", "proposed"}``. The summary is built to be
+        READ: what is changing, in human words, with the current and proposed values in full, so
+        the approval card shows the actual text rather than a description of it. Approving applies
+        it directly, with no second AI run.
+
+        Which fields are allowed, and what each is called, is the SERVER's registry
+        (``decision_field_edit.FIELD_SPECS``) -- a payload naming an unregistered field is rejected
+        at creation, here, rather than at approval time.
+        """
+        lines = [f"Proposed change to your {target_type}."]
+        if why:
+            lines.append("")
+            lines.append(why)
+        for change in changes:
+            field = str(change.get("field") or "")
+            lines.append("")
+            lines.append(f"--- {field} ---")
+            lines.append("CURRENT:")
+            lines.append(str(change.get("current") or "(empty)"))
+            lines.append("")
+            lines.append("PROPOSED:")
+            lines.append(str(change.get("proposed") or ""))
+        return self.create_decision(
+            "\n".join(lines), kind="approve", quest_id=quest_id,
+            assignee_user_id=assignee_user_id, team_id=team_id,
+            executable={"kind": "field_edit",
+                        "target": {"type": target_type, "id": target_id},
+                        "changes": list(changes)})
+
     def create_decision(self, summary: str, *, kind: str = "approve",
                         quest_id: Optional[str] = None, assignee_user_id: Optional[str] = None,
                         default_on_silence: str = "hold",
-                        team_id: Optional[str] = None) -> Dict[str, Any]:
+                        team_id: Optional[str] = None,
+                        executable: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         try:
             tid = team_id or self.team_id
             if not tid:
@@ -499,6 +542,12 @@ class QuestClient:
                 body["quest_id"] = quest_id
             if assignee_user_id:
                 body["assigned_to_user_id"] = assignee_user_id
+            if executable:
+                # An action to APPLY on approval. The server accepts only structured, data-shaped
+                # kinds here (see propose_field_change) and validates the payload at creation, so a
+                # proposal that could never apply is rejected now rather than becoming an ask the
+                # person answers into nothing.
+                body["executable"] = dict(executable)
             return self._request("POST", f"/api/teams/{tid}/decisions", body=body)
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("create_decision failed: %s", e)

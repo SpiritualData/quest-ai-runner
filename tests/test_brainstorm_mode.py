@@ -674,6 +674,25 @@ def test_brainstorm_read_budget_wrapup_in_normal_mode_unchanged():
     assert _HONESTY_MARKER not in _answer_prompt(provider)
 
 
+def test_read_budget_wrapup_says_the_turn_is_over():
+    """A budget-capped wrap-up must tell the answerer this reply ENDS the turn. Without it the
+    reply reads like any other answer from inside and can close with work in the present tense: a
+    2026-08-24 dissertation run ended "What I'm doing now: Spec all nine gaps with worked
+    examples..." and was reported done having specced none."""
+    provider = StubProvider(decisions=[
+        {"action": "read", "reads": [{"rel_path": "README.md"}], "rationale": "grounding"},
+        {"met": True, "reason": "done"},
+    ])
+    runner = StubDeepRunner(met=True, output="did it")
+    res = _orch(provider, StubRetrieval({"README.md": "GROUNDING notes"}), deep_runner=runner,
+                config=OrchestratorConfig(max_steps=1)).run(
+        "summarize what the README says about setup")
+    assert res.exit_reason == "read_budget"
+    prompt = _answer_prompt(provider)
+    assert "THIS REPLY IS THE END OF THE TURN" in prompt
+    assert "Never describe work as underway" in prompt
+
+
 def test_read_budget_change_request_escalates_to_deep_in_normal_mode():
     """A budget-capped CHANGE REQUEST must never wrap up with words in normal mode: the
     best-effort answer path used to answer 'here is what the system would need to do' and get
