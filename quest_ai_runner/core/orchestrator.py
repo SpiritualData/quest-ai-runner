@@ -204,34 +204,56 @@ Choose exactly one action via the `decide` tool. You run in a LOOP: after a "rea
 called again with what was read, so you can narrow in -- grep to locate, read the matching
 section, then answer -- exactly like a careful human reading the real source.
 
-QUESTION vs COMMAND -- DECIDE THIS FIRST, BEFORE ANYTHING ELSE:
-  Read the user's message and judge what they actually want from you:
+QUESTION vs STATEMENT vs COMMAND -- DECIDE THIS FIRST, BEFORE ANYTHING ELSE:
+  Read the user's message and judge what they actually want from you. There are THREE cases,
+  and only ONE of them is "deep":
     * A QUESTION / REQUEST FOR INFORMATION -- they want to be TOLD, SHOWN, or ADVISED
-      something: an explanation, a status, a summary, a comparison, your opinion, or a
-      "what would it take / how would I / should we ..." Answer it ("answer", after a
-      "read" when it's about substance). DO NOT execute work or open a task for a question,
-      EVEN WHEN it mentions action words like "fix", "add", "change", "build", "update",
-      "show". "How does the back button work?", "What would it take to add SSO?", "Should
-      we refactor this?", "Why is the build failing?", "Can you explain how X works?" are
-      all QUESTIONS -- answer them, do not do the work.
+      something: an explanation, a status, a summary, a comparison, a link, a list, a report
+      of where something stands, your opinion, or a "what would it take / how would I /
+      should we ..." Answer it ("answer", after a "read" when it's about substance). DO NOT
+      execute work or open a task for a question, EVEN WHEN it mentions action words like
+      "fix", "add", "change", "build", "update", "show". "How does the back button work?",
+      "What would it take to add SSO?", "Should we refactor this?", "Why is the build
+      failing?", "Can you explain how X works?", "give me a report on the campaign", "give
+      me the link to the leads sheet", "tell me what you know about X", "list my tasks" are
+      all QUESTIONS -- answer them, do not do the work. Being ASKED FOR something you can
+      say in a reply (a link, a number, a list, a rundown) is being asked to ANSWER, not to
+      go and produce a deliverable.
+    * A STATEMENT / THINKING OUT LOUD -- they are sharing a decision, a preference, a plan,
+      or a piece of context, WITHOUT asking you a question or telling you to start now:
+      "okay, we're starting from scratch, I was thinking of working with Mary on this", "now
+      I want to share a spreadsheet with you", "Joshua asked me to follow up with the list",
+      "I think grants are the easier win". A bare pasted link, file, or quoted text with no
+      instruction attached is also a STATEMENT. This is NOT authorization to open a task.
+      Treat it like a QUESTION: ANSWER it -- acknowledge it, react to it, and if it is
+      unclear what you should now DO, ask ONE clarifying question in that same answer ("want
+      me to pull the sheet in and start the follow-ups?"). NEVER turn a statement of intent,
+      preference, or context into a "deep" task on your own initiative.
     * A COMMAND / DIRECTIVE -- they are telling you to GO DO the work NOW: "fix the back
-      button", "add a field to the form", "update my goal", "build the endpoint", and the
-      polite-imperative forms aimed at you, "can you fix ...", "please add ...". THIS is the
-      kind of request that becomes "deep".
-  The test is INTENT, not keywords -- the SAME verb appears in both a question and a command.
+      button", "add a field to the form", "update my goal", "build the endpoint", "draft the
+      email and file it for approval", and the polite-imperative forms aimed at you, "can you
+      fix ...", "please add ...". THIS is the kind of request that becomes "deep". The bar is
+      an explicit, current instruction to act -- not a plan or a preference mentioned in
+      passing.
+  The test is INTENT, not keywords -- the SAME verb appears in all three cases.
   An interrogative opener ("how / what / why / which / should we / would it / is it / do you
   ...") or a message that asks ABOUT something and ends in "?" is a QUESTION -> answer. A
   plain imperative, or a polite imperative directed at you ("can you ...", "please ..."), is
-  a COMMAND -> deep. When you are genuinely torn, ANSWER (and you may offer to do the work) --
-  never silently turn a question into a task.
+  a COMMAND -> deep. When you are genuinely torn between COMMAND and either other case,
+  ANSWER (and you may offer to do the work, or use "confirm" to check before starting) --
+  never silently turn a question or a statement into a task.
 
-CODE / FILE CHANGE COMMANDS (once you've judged it's a COMMAND, this is highest priority):
+CODE / FILE CHANGE COMMANDS (this rule applies ONLY AFTER the gate above has already
+resolved the message to COMMAND -- it never overrides that gate, and it is not a reason to
+read the message as a command in the first place):
   If the user is DIRECTING a change to code or files (fix bug, implement feature, refactor,
   edit/apply a file, expand/collapse/toggle/show/hide a UI element, etc.) -- NOT merely asking
-  about one -- choose action="deep" IMMEDIATELY.
+  about one, and NOT merely mentioning it as a plan or a preference -- choose action="deep"
+  IMMEDIATELY.
   Do NOT read first. The deep runner is a full coding agent -- it explores and edits itself.
   Describing a fix instead of executing is a FAILURE. (But explaining a fix when the user only
-  ASKED how it works is correct -- that was a question, not a command.)
+  ASKED how it works is correct -- that was a question, not a command. And acknowledging a
+  plan the user is still only describing is correct -- that was a statement.)
 
   WHEN SEARCHES RETURN NOTHING (code/file tasks only): if you searched/grepped for a component,
   file, or symbol for a COMMAND/change request and got no results, that is NOT a reason to
@@ -511,6 +533,22 @@ work is CORRECT here, not a failure -- the ordinary rule that a change request m
 your best reading and put the open question to the user inside the reply itself.
 """
 
+# The planner-side half of the user's own veto (see ``message_forbids_new_task``). Same suspension
+# of "deep"/"confirm"/"clarify" as brainstorm mode, but it does NOT tell the model the user wants
+# to think out loud: they usually asked something specific and simply do not want a task opened
+# for it, and the "explore, compare, sketch" framing turns a crisp question into an essay.
+# Contains no literal {/} so it is .format()-safe.
+_HOLD_OFF_PLANNER_NOTE = """\
+--- THE USER ASKED YOU NOT TO OPEN A TASK (active for this turn) ---
+This message told you not to start work, not to create a task, or to answer here instead. The
+actions "deep", "confirm" and "clarify" are ALL UNAVAILABLE this turn -- use "read" or "answer"
+only, and do not set `deferred_deep` or `answer_contains_work_to_execute`. Read as much as you
+need: the restriction is on ACTING, not on gathering, so answer with your full judgment and
+whatever you had to read to get there. Answer the question they actually asked, at the length it
+deserves. If the message also describes real work, describing it is CORRECT here -- the ordinary
+rule that a change request must escalate to "deep" is suspended for this turn.
+"""
+
 # Appended to _BRAINSTORM_PLANNER_NOTE only when mode signals are enabled (the mode vocabulary the
 # note leans on only exists in the schema when the consumer opted in). The planner does NOT own the
 # exit while the latch is held: a dedicated structured judgment (Orchestrator.judge_brainstorm_release,
@@ -551,6 +589,29 @@ If this message asked you to do something, say plainly that you have not done it
 mode is on, and that the user can tell you to go ahead when they are ready. That part is guidance,
 not a script: use your judgment, and skip or soften the acknowledgment when the user was clearly
 just thinking out loud, or when your reply already makes the no-action state obvious.
+"""
+
+# The same no-action contract as above, worded for the case where the USER'S OWN MESSAGE forbade
+# opening a task ("don't create a task", "just answer me here", "hold off") rather than a
+# consumer-set brainstorm latch. Same invariant, different reason -- and the reason matters,
+# because telling someone "brainstorm mode is on" when what actually happened is that you did as
+# they asked reads as a system excuse for ignoring them.
+HOLD_OFF_NO_ACTION_ACK_NOTE = """\
+--- NO TASK WAS OPENED THIS TURN (THE USER ASKED FOR THAT) ---
+The user's message told you not to start work, not to open a task, or to answer here instead.
+Nothing was executed, changed, sent, scheduled, or queued this turn. Never say or imply that you
+have acted, that something is underway, or that anything is about to run.
+Answer them properly in the chat, with everything you actually know. Do not make a point of
+announcing the restraint or asking permission again: they already told you what they wanted, and
+the right acknowledgment is simply doing it. If the message also described work, talk about it as
+something you would do once they say go ahead.
+"""
+
+# Appended to the note above when the planner was ready to act and the user's veto is the only
+# reason it did not.
+HOLD_OFF_HELD_WORK_ACK_NOTE = """\
+There is real work in this message that you are ready to start. Say briefly that you have not
+started it, and that you will as soon as they say the word.
 """
 
 READ_BUDGET_WRAPUP_HONESTY_NOTE = """\
@@ -2252,6 +2313,35 @@ _DISCOURSE_OPENER_RE = re.compile(
     re.IGNORECASE,
 )
 
+# A SHORT SCENE-SETTING CLAUSE the speaker puts before the question itself: "from the database,
+# tell me what you know about X", "for the August campaign, what were the opens?". Because
+# _INFO_QUESTION_RE is anchored at the start of the message, ANY such preamble hid the
+# interrogative from it and the message fell through to the unconditional "this is a command" at
+# the end -- a plain question opened a task purely for having a comma in front of it. One leading
+# clause is stripped, and only a genuinely short one that ENDS IN A COMMA, so a real instruction
+# followed by a request for confirmation ("update the sheet and tell me when done" -- no comma;
+# "update the sheet, then tell me when done" -- the clause is a command, not scene-setting) keeps
+# its command reading: the strip requires the clause to carry no change verb of its own.
+_LEADING_CLAUSE_RE = re.compile(r"^\s*([^,.!?\n]{1,40}),\s*")
+
+
+def _strip_question_preamble(message: str) -> str:
+    """Strip a leading discourse marker and, at most, one short scene-setting clause.
+
+    Returns the text ``_INFO_QUESTION_RE`` should be matched against. The clause is only removed
+    when it contains no change verb used as a verb, so "update the sheet, tell me when done" is
+    left intact (the preamble IS the instruction) while "from the database, tell me what you know"
+    is reduced to the question it actually is. Never raises.
+    """
+    try:
+        stripped = _DISCOURSE_OPENER_RE.sub("", message or "")
+        m = _LEADING_CLAUSE_RE.match(stripped)
+        if m and not _change_verb_used_as_verb(m.group(1)):
+            stripped = stripped[m.end():]
+        return _DISCOURSE_OPENER_RE.sub("", stripped)
+    except Exception:  # noqa: BLE001 — intent classification must never break the turn
+        return message or ""
+
 _INFO_QUESTION_RE = re.compile(
     r"^\s*(?:how|what|what['’]?s|why|which|who|whom|whose|when|where|explain|describe|summari[sz]e|"
     r"tell\s+me|walk\s+me\s+through|is\s+it|are\s+there|is\s+there|do\s+you|does\s+it|did\s+you|"
@@ -2262,7 +2352,17 @@ _INFO_QUESTION_RE = re.compile(
     # on Z" ask to be TOLD where something stands. They carry change verbs ("update", "move") and
     # were escalated into tasks that redid the work the human only wanted reported.
     r"where\s+(?:are\s+we|do\s+we\s+stand)|any\s+update|update\s+me\b|"
-    r"give\s+me\s+(?:an?\s+)?(?:update|status|rundown|recap|breakdown)|"
+    # BEING ASKED FOR SOMETHING SAYABLE. "give me a report on the campaign", "give me the link to
+    # the leads sheet", "list out my tasks" ask to be TOLD, in the reply. The nouns here are the
+    # same strings as the change verbs ("report", "list", "update"), so without these the ask was
+    # read as an order to GO PRODUCE the thing and opened a task that redid the work. Only the
+    # "hand it to me" phrasings are listed: "create a report", "write the list", "send the link"
+    # keep their command reading and still escalate.
+    r"give\s+me\s+(?:an?\s+|the\s+)?"
+    r"(?:update|status|rundown|recap|breakdown|report|summary|overview|list|link|url)\b|"
+    r"(?:provide|share)\s+(?:me\s+)?(?:with\s+)?(?:an?\s+|the\s+)?"
+    r"(?:link|url|list|report|summary|overview|update|status)\b|"
+    r"list\s+(?:out\s+)?(?:my|our|the|all)\b|"
     r"(?:catch|fill)\s+me\s+(?:up|in)\b|"
     r"status\s+(?:on|of)\b|how\s+(?:are|is)\s+(?:we|it|things|that)\b|"
     r"did\s+we|have\s+we|has\s+(?:it|he|she|they))\b",
@@ -2327,12 +2427,55 @@ _HOLD_OFF_RE = re.compile(
 )
 
 
+# The subset of the hold-off intents that VETO a planner "deep" as well as the escalation nets:
+# the human talking about whether a TASK MAY BE OPENED AT ALL ("don't create a task", "no new
+# tasks", "just answer me here", "hold off", "I haven't given you an instruction yet").
+#
+# The one hold-off intent deliberately NOT included is "kill/cancel/dismiss that run": that is an
+# instruction to ACT on the runner's own state, and a consumer may well execute it as deep work.
+# Suppressing the planner there would answer "sure, I'll cancel it" and cancel nothing -- the exact
+# false-completion failure this file is full of fixes for. It still gates the escalation nets
+# (via ``message_holds_off_work``), which is all it ever did.
+_FORBIDS_NEW_TASK_RE = re.compile(
+    r"(?:"
+    r"\b(?:do\s*n[o’']?t|dont|never|stop|avoid|refrain\s+from|without)\b[^.!?\n]{0,40}"
+    r"\b(?:creat\w*|open\w*|start\w*|spawn\w*|queu\w*|mak\w*|run\w*)\b[^.!?\n]{0,25}\btasks?\b"
+    r"|\bno\s+(?:new\s+|more\s+)?tasks?\b"
+    r"|\bjust\b[^.!?\n]{0,30}\b(?:answer|reply|respond|tell\s+me|drop|say)\b"
+    r"|\b(?:answer|reply|respond|drop)\b[^.!?\n]{0,25}\b(?:here|in\s+(?:the\s+)?chat)\b"
+    r"|\bhave\s*n[o’']?t\s+(?:even\s+)?(?:given|asked|told)\b|\bhavent\s+(?:even\s+)?(?:given|asked|told)\b"
+    r"|\bhold\s+(?:on|off)\b|\bstand\s+by\b|\bnot\s+yet\b"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def message_forbids_new_task(message: Optional[str]) -> bool:
+    """True when the human's own words say NO TASK MAY BE OPENED for this message.
+
+    Unlike ``message_holds_off_work`` (which only gates the escalation nets), this DOES veto a
+    planner ``action="deep"``: it degrades the turn to "answer", through the same structural
+    no-action gate brainstorm mode uses. Without it, "don't create a task, just answer me here"
+    was unanswerable -- every guard in this file could only ever ADD execution, so the one thing a
+    user could not do was ask for less of it, and the request not to open a task opened one.
+
+    Read from the USER's own message only, never from model output. Never raises.
+    """
+    if not message or not message.strip():
+        return False
+    try:
+        return bool(_FORBIDS_NEW_TASK_RE.search(message))
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def message_holds_off_work(message: Optional[str]) -> bool:
     """True when the human is telling the assistant NOT to go do work right now.
 
-    Gates every ESCALATION NET (the fallbacks that turn an answer turn into a task). It does not
-    touch a planner decision of ``action="deep"``: when someone asks for work, they still get it.
-    Never raises.
+    Gates every ESCALATION NET (the fallbacks that turn an answer turn into a task). The stricter
+    subset that ALSO vetoes a planner ``action="deep"`` is ``message_forbids_new_task``; outside
+    that subset a planner "deep" still stands, so "cancel that run" is executed rather than merely
+    talked about. Never raises.
     """
     if not message or not message.strip():
         return False
@@ -2374,7 +2517,7 @@ def _message_requests_change(message: Optional[str]) -> bool:
         # it, do not execute, even if it mentions a change verb ("how would I add X?", "should we
         # refactor Y?", "what would it take to fix Z?"). This is the fix for questions being
         # mishandled as tasks.
-        if _INFO_QUESTION_RE.search(_DISCOURSE_OPENER_RE.sub("", m)):
+        if _INFO_QUESTION_RE.search(_strip_question_preamble(m)):
             return False
         # A message ending in "?" reads as a question by default, not a command, unless it was
         # already caught above as a polite command directed at the assistant ("can you fix...?").
@@ -4229,6 +4372,7 @@ class Orchestrator:
               narrate: bool = False, persona: str = "",
               already_said: Optional[List[str]] = None,
               brainstorm: bool = False,
+              user_vetoed_task: bool = False,
               card_thread_block: str = "") -> PlanDecision:
         # Step 1 (step == 0) always sees the FULL transcript + context_view. On later re-plan
         # steps, if the consumer opted in, swap the (unchanged) transcript + context_view for a
@@ -4249,9 +4393,15 @@ class Orchestrator:
         # block, the decide schema has no `mode_signal` field, and the brainstorm note (when a
         # consumer drives the mode from its own state) omits the exit-signal exception.
         mode_signal_block = _MODE_SIGNAL_PLANNER_BLOCK if self.cfg.mode_signals_enabled else ""
-        brainstorm_note = _BRAINSTORM_PLANNER_NOTE
-        if self.cfg.mode_signals_enabled:
-            brainstorm_note += _BRAINSTORM_EXIT_SIGNAL_NOTE
+        # Same no-action contract, two different reasons, and the planner is told the true one:
+        # "the user has asked to think out loud" is wrong (and steers toward a rambling reply) when
+        # what actually happened is that they asked a crisp question and said not to open a task.
+        if user_vetoed_task:
+            brainstorm_note = _HOLD_OFF_PLANNER_NOTE
+        else:
+            brainstorm_note = _BRAINSTORM_PLANNER_NOTE
+            if self.cfg.mode_signals_enabled:
+                brainstorm_note += _BRAINSTORM_EXIT_SIGNAL_NOTE
         decide_tool = decide_tool_for(self.cfg.mode_signals_enabled,
                                       self.cfg.deferred_deep_queued,
                                       self.cfg.card_thread_enabled)
@@ -7079,7 +7229,19 @@ class Orchestrator:
         # the gating from an unlatched turn. Any other execution_mode value behaves as "normal".
         # ``mode_signal_detected`` is the first (and only) signal captured this turn, surfaced via
         # EVENT_MODE_SIGNAL + OrchestratorResult.mode_signal; the orchestrator persists nothing.
-        brainstorm_active = (cfg.execution_mode == "brainstorm")
+        # THE USER'S OWN VETO. When the message itself says no task may be opened ("don't create a
+        # task", "just answer me here", "hold off"), this turn runs under the SAME no-action gate
+        # as brainstorm mode: the planner may still choose "deep", and it is degraded to "answer"
+        # at the two structural gates below, exactly as a latched turn is. Reusing that gate rather
+        # than adding a new bypass is deliberate -- the invariant "a no-action turn executes nothing
+        # and creates no decision-request" stays in ONE place. It is turn-scoped (re-derived from
+        # each message, never latched) and immutable within the turn, so neither the release judge
+        # nor a planner mode signal can clear a veto the user just gave.
+        hold_off_active = message_forbids_new_task(user_message)
+        if hold_off_active:
+            log.info("User message forbids opening a task this turn; running under the no-action "
+                     "gate (planner deep/confirm will degrade to answer).")
+        brainstorm_active = (cfg.execution_mode == "brainstorm") or hold_off_active
         mode_signal_detected: Optional[str] = None
         # --- PER-IDEA THREADING (the idea IS the card; opt-in via cfg.card_thread_enabled) -------
         # ``card_thread_ctx`` is the consumer's per-turn thread context (active card + the cards it
@@ -7215,7 +7377,10 @@ class Orchestrator:
             log.info("Brainstorm-release judge: %s (%s)",
                      "RELEASE" if _released else "HOLD", _release_reason)
             if _released:
-                brainstorm_active = False
+                # A release lifts the CONSUMER'S LATCH, never the veto the user gave in this very
+                # message: "go ahead, but don't open a task for it" releases the mode and still
+                # forbids the task.
+                brainstorm_active = hold_off_active
                 brainstorm_released_this_turn = True
                 mode_signal_detected = "exit_brainstorm"
                 try:
@@ -8077,6 +8242,8 @@ class Orchestrator:
                                   narrate=narrator.enabled, persona=rep_preamble or "",
                                   already_said=narrator._said if narrator.enabled else None,
                                   brainstorm=brainstorm_active,
+                                  user_vetoed_task=(hold_off_active
+                                                    and cfg.execution_mode != "brainstorm"),
                                   card_thread_block=card_thread_block)
             except Exception as e:  # noqa: BLE001 — planner failure -> grounded fallback answer
                 log.exception(
@@ -8155,7 +8322,9 @@ class Orchestrator:
                              "judge owns the exit while the latch is held.")
                 else:
                     mode_signal_detected = plan.mode_signal
-                    brainstorm_active = (plan.mode_signal == "enter_brainstorm")
+                    # A planner mode signal may ENGAGE the gate, never clear the user's own veto.
+                    brainstorm_active = (hold_off_active
+                                         or plan.mode_signal == "enter_brainstorm")
                     try:
                         emit.emit(ProgressEvent(type=EVENT_MODE_SIGNAL, step=steps,
                                                 data={"signal": mode_signal_detected,
@@ -8368,12 +8537,17 @@ class Orchestrator:
         # steers below are added when the turn ALSO wanted to act or to ask.
         brainstorm_ack_note: Optional[str] = None
         if brainstorm_active:
-            brainstorm_ack_note = BRAINSTORM_NO_ACTION_ACK_NOTE
+            # Which reason held the turn decides the wording: the user's own veto is not a mode to
+            # explain to them, it is an instruction that was followed.
+            user_vetoed = hold_off_active and cfg.execution_mode != "brainstorm"
+            brainstorm_ack_note = (HOLD_OFF_NO_ACTION_ACK_NOTE if user_vetoed
+                                   else BRAINSTORM_NO_ACTION_ACK_NOTE)
             planner_tried_to_act = (brainstorm_suppressed_action in ("deep", "confirm")
                                     or bool(plan.deferred_deep)
                                     or bool(plan.answer_contains_work_to_execute))
             if planner_tried_to_act:
-                brainstorm_ack_note += BRAINSTORM_HELD_WORK_ACK_NOTE
+                brainstorm_ack_note += (HOLD_OFF_HELD_WORK_ACK_NOTE if user_vetoed
+                                        else BRAINSTORM_HELD_WORK_ACK_NOTE)
             if brainstorm_clarify_question:
                 brainstorm_ack_note += (BRAINSTORM_CLARIFY_ACK_PREFIX
                                         + brainstorm_clarify_question.strip() + "\n")
