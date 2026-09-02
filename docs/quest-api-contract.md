@@ -49,6 +49,7 @@ optional but the instruction text):
 | `id` (or `task_id`) | the task's identity: claim, report, progress stream |
 | `text` (or `title` / `description`) | the instruction to run |
 | `goal_id`, `quest_id` | the linked goal/quest, fetched for context and used to resolve a quest folder |
+| `related_goal_id` | optional: a SPECIFIC goal inside a quest that this task is scoped to (distinct from `goal_id`, which holds the QUEST's own id on a quest-scoped task); when present, the goal-context fetch resolves this goal using `goal_id` as its quest id. Absent = unchanged single-id behavior. |
 | `conv_id` | the conversation the task was delegated from; live progress and the done report post back into it |
 | `card_id` | reserved: forwarded on conversation posts so a backend can thread them |
 | `model` | per-task model/tier override (`model_hint`) |

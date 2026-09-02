@@ -7,6 +7,16 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **A task can name a specific goal inside a quest via `related_goal_id`** (`runner/executor.py`,
+  `_build_context_view`). The task document already carries `goal_id`, but that field actually
+  holds the QUEST's id on a quest-scoped task (a historical misnomer this repo does not rename),
+  so there was no way for a task to say "this run is about goal X within this quest" and have the
+  goal-context fetch honor it. When `related_goal_id` is present it is fetched as the real goal,
+  resolved against `goal_id` as its quest id; when absent, behavior is byte-for-byte identical to
+  before. Purely additive: reads the field defensively (`task.get("related_goal_id")`) so it
+  activates automatically once a backend starts sending it. See `docs/quest-api-contract.md`.
+
+
 - **`GOALS.md`: a quest's goal ladder in the folder, syncing both ways** (`runner/quest_goal_sync.py`,
   on by default via `RunnerConfig.quest_goal_sync`; direction follows `quest_folder_sync_direction`).
   `QUEST_SYNC.md`'s state block carries one OUTCOME and `next_steps` carries the two or three

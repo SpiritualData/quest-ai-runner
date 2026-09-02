@@ -528,6 +528,11 @@ class TaskExecutor:
         # task metadata or fetch it separately if the backend provides it.
         if goal_id and not quest_id:
             quest_id = task.get("_inferred_quest_id")
+        # related_goal_id (optional, additive): a SPECIFIC goal inside a quest, distinct from
+        # goal_id (which holds the QUEST's id on a quest-scoped task -- see _build_context_view's
+        # docstring). Read defensively: not every backend/task sends it, and its absence must not
+        # change anything below.
+        related_goal_id = task.get("related_goal_id")
         # conv_id links this task back to the Quest AI conversation it was delegated from. When
         # present, we post LIVE progress (started → milestones → done) INTO that chat so the
         # conversation doesn't go silent after the hand-off.
@@ -579,7 +584,8 @@ class TaskExecutor:
         # a context_view for the orchestrator so the deep agent knows what goal/quest it's working on
         # and the prior conversation that led to the task.
         context_view = self._build_context_view(
-            goal_id, quest_id, conv_id, rep_id=task.get("assignee_rep_id"))
+            goal_id, quest_id, conv_id, rep_id=task.get("assignee_rep_id"),
+            related_goal_id=related_goal_id)
 
         # Route all orchestrator events (except raw streaming partials) to the task's live progress
         # stream so the task-detail SSE shows step-by-step what the AI is doing (plan, read, replan,
@@ -719,13 +725,21 @@ class TaskExecutor:
 
     def _build_context_view(self, goal_id: Optional[str], quest_id: Optional[str],
                             conv_id: Optional[str] = None,
-                            rep_id: Optional[str] = None) -> str:
+                            rep_id: Optional[str] = None,
+                            related_goal_id: Optional[str] = None) -> str:
         """Fetch goal + quest metadata + notes + conversation history from the Quest API.
 
         The context_view is passed to the orchestrator so the deep agent knows what goal/quest
         it's working on, what progress has been made, and the prior conversation that led to
         the task. Gracefully handles missing API (no-ops when client lacks needed methods) and
-        API errors (builds partial context)."""
+        API errors (builds partial context).
+
+        ``related_goal_id`` (optional, additive) names a SPECIFIC goal inside a quest that this
+        task is scoped to -- distinct from ``goal_id``, which (per a historical naming accident
+        this repo does not fix) actually holds the QUEST's id on a task created against a quest.
+        When present, it is the real goal id to fetch, and ``goal_id`` is what supplies the quest
+        id to fetch it WITH (see the goal-metadata fetch below). Absent, behavior is unchanged:
+        the existing single-id path runs exactly as before."""
         parts = []
 
         # Fetch prior conversation history if this task was delegated from a chat — but ONLY as a
@@ -779,12 +793,16 @@ class TaskExecutor:
                 except Exception:  # noqa: BLE001
                     pass  # API unavailable or error; continue with what we have
 
-        # Fetch goal metadata if available
-        if goal_id and quest_id:
+        # Fetch goal metadata if available. When related_goal_id is set, it is the real goal to
+        # fetch and goal_id resolves the quest it lives in (the misnomer noted on this method's
+        # docstring); otherwise this is exactly the prior single-id behavior.
+        _fetch_goal_id = related_goal_id or goal_id
+        _fetch_quest_id = goal_id if related_goal_id else quest_id
+        if _fetch_goal_id and _fetch_quest_id:
             get_goal = getattr(self._client, "get_goal", None)
             if callable(get_goal):
                 try:
-                    goal = get_goal(goal_id, quest_id=quest_id)
+                    goal = get_goal(_fetch_goal_id, quest_id=_fetch_quest_id)
                     if goal:
                         name = goal.get("name", "")
                         if name:
