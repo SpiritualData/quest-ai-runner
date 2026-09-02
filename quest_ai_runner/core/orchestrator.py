@@ -2444,10 +2444,19 @@ _FORBIDS_NEW_TASK_RE = re.compile(
     r"|\bjust\b[^.!?\n]{0,30}\b(?:answer|reply|respond|tell\s+me|drop|say)\b"
     r"|\b(?:answer|reply|respond|drop)\b[^.!?\n]{0,25}\b(?:here|in\s+(?:the\s+)?chat)\b"
     r"|\bhave\s*n[o’']?t\s+(?:even\s+)?(?:given|asked|told)\b|\bhavent\s+(?:even\s+)?(?:given|asked|told)\b"
-    r"|\bhold\s+(?:on|off)\b|\bstand\s+by\b|\bnot\s+yet\b"
     r")",
     re.IGNORECASE,
 )
+
+# "hold on", "hold off", "stand by", "not yet" -- unlike every phrase in _FORBIDS_NEW_TASK_RE above,
+# these four name no TOPIC of their own (no "task", no "answer"), they just mean "pause". That makes
+# them ambiguous in a mixed message: "hold off on the emails, but go ahead and update the leads
+# sheet" and "the deploy is not yet done -- fix it" each contain one of these phrases while also
+# containing a directive that should still execute. Kept separate so ``message_forbids_new_task``
+# can require the rest of the message to carry no directive of its own before honoring a bare match
+# as a turn-wide veto; the phrases in _FORBIDS_NEW_TASK_RE stay an unconditional veto since they are
+# already about the assistant's own task-opening machinery, not just "wait".
+_BARE_HOLD_PHRASE_RE = re.compile(r"\bhold\s+(?:on|off)\b|\bstand\s+by\b|\bnot\s+yet\b", re.IGNORECASE)
 
 
 def message_forbids_new_task(message: Optional[str]) -> bool:
@@ -2459,12 +2468,23 @@ def message_forbids_new_task(message: Optional[str]) -> bool:
     was unanswerable -- every guard in this file could only ever ADD execution, so the one thing a
     user could not do was ask for less of it, and the request not to open a task opened one.
 
+    The bare phrases in ``_BARE_HOLD_PHRASE_RE`` ("hold on", "hold off", "stand by", "not yet") are
+    honored only when nothing ELSE in the message is itself a directive (a change verb used as a
+    verb) -- otherwise a mixed instruction like "hold off on the emails, but go ahead and update the
+    leads sheet" or "the deploy is not yet done -- fix it" would answer instead of executing the
+    part that was never held back: the same false-completion failure this file is full of fixes
+    for, just in the other direction.
+
     Read from the USER's own message only, never from model output. Never raises.
     """
     if not message or not message.strip():
         return False
     try:
-        return bool(_FORBIDS_NEW_TASK_RE.search(message))
+        if _FORBIDS_NEW_TASK_RE.search(message):
+            return True
+        if _BARE_HOLD_PHRASE_RE.search(message) and not _change_verb_used_as_verb(message):
+            return True
+        return False
     except Exception:  # noqa: BLE001
         return False
 

@@ -144,6 +144,30 @@ def test_veto_degrades_planner_deep_to_answer():
     assert runner.calls == []                     # nothing executed
 
 
+# The bare "hold on"/"hold off"/"stand by"/"not yet" phrasing names no topic of its own (no "task",
+# no "answer"): it is ambiguous in a MIXED message that also carries a directive elsewhere. Without
+# this, "hold off on the emails, but go ahead and update the leads sheet" and "the deploy is not yet
+# done -- fix it" were answered instead of executed, because the bare phrase alone vetoed the whole
+# turn even though the rest of the message was a live instruction.
+MIXED_HOLD_AND_DIRECTIVE = [
+    "hold off on the emails, but go ahead and update the leads sheet",
+    "the deploy is not yet done -- fix it",
+    "hold on, actually go ahead and fix the back button",
+    "stand by on the campaign, but please update the draft subject line",
+]
+
+
+def test_mixed_hold_and_directive_does_not_forbid_a_task():
+    for message in MIXED_HOLD_AND_DIRECTIVE:
+        assert message_forbids_new_task(message) is False, message
+
+
+# A bare hold phrase with no directive anywhere else in the message still vetoes, same as before.
+def test_bare_hold_phrase_alone_still_forbids_a_task():
+    for message in ["hold off for now", "not yet", "hold on a second", "stand by"]:
+        assert message_forbids_new_task(message) is True, message
+
+
 def test_veto_degrades_planner_confirm_to_answer():
     provider = StubProvider(decisions=[
         {"action": "confirm", "confirm_question": "Shall I start?", "rationale": "r"},

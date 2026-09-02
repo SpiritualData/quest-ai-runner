@@ -48,6 +48,18 @@ All notable changes to this project are documented here. The format is based on
   check it before building on AI-authored analysis. See `docs/quest-folder-zones.md`.
 
 ### Fixed
+- **A bare "hold off"/"not yet" anywhere in the message vetoed the WHOLE turn, even a mixed one
+  that also gave a directive.** `message_forbids_new_task` treated "hold on", "hold off", "stand
+  by", and "not yet" the same as the unambiguous veto phrases ("don't create a task", "just answer
+  here"), so "hold off on the emails, but go ahead and update the leads sheet" and "the deploy is
+  not yet done -- fix it" degraded the planner's `action="deep"` to an answer and executed nothing,
+  even though the second half of each message was a live instruction. Unlike the other veto
+  phrases, these four name no topic of their own (no "task", no "answer"): they just mean "pause",
+  so they are ambiguous the moment something else in the message is itself a directive. Split into
+  its own pattern (`_BARE_HOLD_PHRASE_RE`) and only honored as a turn-wide veto when the rest of the
+  message carries no change verb used as a verb; a bare hold phrase with nothing else in the
+  message still vetoes exactly as before. Covered by
+  `tests/test_question_not_task.py::test_mixed_hold_and_directive_does_not_forbid_a_task`.
 - **Autopilot re-proposed the same goal on every pass, forever.** On a `plan_and_work` quest with
   no eligible AI goal, each pass created a fresh "Next step toward: `<outcome>`" proposal without
   ever looking to see whether the LAST one had been answered. A proposal is one question, so the
