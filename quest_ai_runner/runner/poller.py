@@ -678,17 +678,15 @@ class Poller:
         produced silence forever. This closes the loop from the runner side -- the lane that would
         execute the pass is the one that ensures it exists.
 
-        The pass schedule is a HYBRID (quest_autopilot_design.md's autopilot spec, section A): the
-        original team-wide pass (``task_kind="autopilot"``, no ``goal_id``) still serves every
-        opted-in quest that sets no ``run_time`` of its own, unchanged from before this feature.
-        A quest that sets its own ``run_time`` gets its OWN recurring pass series
-        (``goal_id`` == that quest's id) -- created, retuned when its schedule drifts from what
-        the quest now says (including the backend's UTC-midnight spawn-date bug, see A3), and
-        retired when the quest is no longer eligible. Both halves read the SAME schedule snapshot
-        below, so they can never disagree about which quest belongs to which series.
+        EVERY opted-in quest has its own recurring pass series (``goal_id`` == that quest's id),
+        at its own run time -- created when missing, retuned when its schedule drifts from what
+        the quest now says (including the backend's UTC-midnight spawn-date bug), and retired when
+        the quest stops being eligible. A quest that names no run time of its own is not a
+        different case: it is given the lane's default hour when its schedule is read, so there is
+        one kind of pass and one path that makes it. Any surviving team-wide series (no
+        ``goal_id``) is retired on sight.
 
-        The liveness test generalizes rather than changes: "exactly one open occurrence" per
-        SERIES, keyed by ``goal_id or ""`` (the team series has no ``goal_id``). Still ONE
+        Liveness: "exactly one open occurrence" per SERIES, keyed by ``goal_id``. Still ONE
         ``list_tasks`` call per scan, grouped in memory -- no list call per quest.
 
         Best-effort throughout: any failure is logged and retried next scan. A missing or
@@ -712,57 +710,24 @@ class Poller:
                     continue
                 open_by_series.setdefault(str(t.get("goal_id") or ""), []).append(t)
             snapshot = self._quest_schedule_snapshot()
-            self._ensure_team_pass(open_by_series.get("", []), snapshot)
-            if self.cfg.autopilot_quest_pass_tasks:
-                self._ensure_quest_pass_tasks(open_by_series, snapshot)
+            self._retire_team_pass(open_by_series.get("", []))
+            self._ensure_quest_pass_tasks(open_by_series, snapshot)
         except Exception as e:  # noqa: BLE001 -- never let this block the scan
             log.warning("autopilot: could not ensure the recurring pass task(s) (%s) — "
                         "will retry next scan", e)
 
-    def _ensure_team_pass(self, open_occurrences: List[Dict[str, Any]],
-                          snapshot: Dict[str, Dict[str, Any]]) -> None:
-        """The original team-wide pass (no ``goal_id``): today's liveness test, unchanged, and a
-        narrowed eligibility check -- it now exists only when at least one opted-in quest has NO
-        ``run_time`` of its own (or, with the per-quest kill switch off, whenever any quest is
-        opted in at all -- see ``_any_quest_on_autopilot``)."""
-        if open_occurrences:
-            return  # today's liveness test, unchanged
-        if not self._any_quest_on_autopilot(snapshot):
-            return
-        created = self.client.create_task(
-            "Autopilot pass: scan this team's opted-in quests and make progress on their "
-            "current-scope goals.",
-            title="Autopilot pass",
-            team_id=self.cfg.team_id,
-            source="chat",
-            task_kind=AUTOPILOT_PASS_KIND,
-            recurrence={"frequency": "daily", "time": self.cfg.autopilot_pass_time},
-            scheduled_time=self.cfg.autopilot_pass_time,
-            env_id=self.cfg.env_id or None,
-        ) or {}
-        log.info("autopilot: created the recurring pass task %s (daily at %s)",
-                 created.get("id") or created.get("task_id"), self.cfg.autopilot_pass_time)
+    def _retire_team_pass(self, occurrences: List[Dict[str, Any]]) -> None:
+        """Stop the old team-wide series (a pass with no ``goal_id``).
 
-    def _any_quest_on_autopilot(self, snapshot: Dict[str, Dict[str, Any]]) -> bool:
-        """Whether the TEAM pass has anything to do: an opted-in quest with no ``run_time`` of its
-        own (a quest that HAS one gets its own pass series instead, see ``_ensure_quest_pass_tasks``)
-        -- or, with per-quest passes killed by config (``autopilot_quest_pass_tasks=False``), any
-        opted-in quest at all, since the switch is meant to fully restore the pre-hybrid,
-        team-pass-only behaviour.
+        It is superseded rather than disabled: every opted-in quest now has its own pass at its
+        own run time, so a team-wide scanner has nothing left to scan. Retiring it here is what
+        lets a deployment that already had one converge by itself, instead of leaving an orphan
+        firing daily forever."""
+        if occurrences:
+            self._retire_quest_pass("(team-wide)", occurrences,
+                                    "superseded by per-quest passes")
 
-        Answers off the already-read schedule snapshot instead of doing its own reads (the same
-        semantics the old per-quest-state-read version had, one fewer read pass).
-        """
-        quest_pass_enabled = self.cfg.autopilot_quest_pass_tasks
-        for entry in snapshot.values():
-            if entry.get("mode") not in ("suggest", "act"):
-                continue
-            if quest_pass_enabled and entry.get("run_time"):
-                continue  # this quest gets its OWN pass series instead
-            return True
-        return False
-
-    # --- per-quest pass series (RunnerConfig.autopilot_quest_pass_tasks, on by default) ---------
+    # --- the pass series: one per opted-in quest ---------------------------------------------
 
     def _quest_schedule_snapshot(self) -> Dict[str, Dict[str, Any]]:
         """``{quest_id: {mode, run_time, run_timezone, cadence, last_pass_at, has_instructions,
@@ -793,7 +758,7 @@ class Poller:
             return self._quest_schedule_cache
         snapshot: Dict[str, Dict[str, Any]] = {}
         quests = self.client.list_quests(team_id=self.cfg.team_id or None) or []
-        with_run_time = 0
+        opted_in = 0
         for row in quests:
             quest_id = str(row.get("quest_id") or row.get("id") or "")
             if not quest_id:
@@ -805,10 +770,16 @@ class Poller:
                          quest_id, exc_info=True)
                 continue
             autopilot_cfg = state.get("autopilot") or {}
-            run_time = str(autopilot_cfg.get("run_time") or "").strip() or None
             instructions = str(autopilot_cfg.get("instructions") or "").strip()
+            mode = str(autopilot_cfg.get("mode") or "off")
+            # A quest that names no run time of its own runs at the lane's default hour. The
+            # default is applied HERE, once, which is what keeps there being ONE kind of pass:
+            # every opted-in quest has a run time, so every one gets its own series. Branching on
+            # "did this quest set a time" instead would buy a second pass shape and nothing else.
+            run_time = (str(autopilot_cfg.get("run_time") or "").strip()
+                        or self.cfg.autopilot_pass_time)
             snapshot[quest_id] = {
-                "mode": str(autopilot_cfg.get("mode") or "off"),
+                "mode": mode,
                 "run_time": run_time,
                 "run_timezone": str(autopilot_cfg.get("run_timezone") or "").strip() or None,
                 "cadence": autopilot_cfg.get("cadence"),
@@ -816,12 +787,12 @@ class Poller:
                 "has_instructions": bool(instructions),
                 "env_id": autopilot_cfg.get("env_id"),
             }
-            if run_time:
-                with_run_time += 1
+            if mode in ("suggest", "act"):
+                opted_in += 1
         self._quest_schedule_cache = snapshot
         self._quest_schedule_cache_at = now_ts
-        log.info("autopilot: read schedules for %d quest(s), %d with their own run time",
-                 len(snapshot), with_run_time)
+        log.info("autopilot: read schedules for %d quest(s), %d opted in",
+                 len(snapshot), opted_in)
         return snapshot
 
     def _pass_timezone_for(self, task: Dict[str, Any]) -> Optional[str]:
@@ -875,13 +846,9 @@ class Poller:
     def _ensure_one_quest_pass(self, quest_id: str, entry: Dict[str, Any],
                                occurrences: List[Dict[str, Any]]) -> None:
         mode = str(entry.get("mode") or "off")
-        run_time = entry.get("run_time")
-        eligible = mode in ("suggest", "act") and bool(run_time)
-
-        if not eligible:
+        if mode not in ("suggest", "act"):
             if occurrences:
-                reason = "mode off" if mode not in ("suggest", "act") else "run time cleared"
-                self._retire_quest_pass(quest_id, occurrences, reason)
+                self._retire_quest_pass(quest_id, occurrences, "mode off")
             return
 
         if len(occurrences) > 1:

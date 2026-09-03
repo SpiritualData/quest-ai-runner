@@ -382,19 +382,7 @@ def test_quests_with_mode_off_or_unset_are_never_touched():
     assert client.autopilot_updates == []
 
 
-# --- _eligible_quests partition: the hybrid pass schedule (own-pass vs team-pass quests) ---------
-
-def test_eligible_quests_team_pass_excludes_a_quest_with_its_own_run_time():
-    with_time = _quest("with_time", mode="act")
-    with_time["autopilot"]["run_time"] = "06:30"
-    without_time = _quest("without_time", mode="act")
-    client = FakeAutopilotClient(quests=[with_time, without_time])
-    passer = AutopilotPass(client, team_id="team1", now=_now)
-    eligible = passer._eligible_quests()   # None -> the team pass's own eligibility test
-    ids = [q["quest_id"] for q in eligible]
-    assert "without_time" in ids
-    assert "with_time" not in ids
-
+# --- _eligible_quests -----------------------------------------------------------------------
 
 def test_eligible_quests_with_only_quest_id_returns_just_that_quest_and_never_lists():
     q1 = _quest("q1", mode="act")

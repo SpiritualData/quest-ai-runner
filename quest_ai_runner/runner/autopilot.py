@@ -1271,12 +1271,9 @@ class AutopilotPass:
         created) -> ``[]``, logged at INFO; the poller retires the now-orphaned pass on its next
         sweep, this method just declines to work it.
 
-        ``only_quest_id`` None (the team pass): the team's quests that are opted in
-        (``autopilot.mode`` in suggest/act) AND have not set their own ``run_time`` -- a quest
-        that has is worked by its OWN pass instead (see ``Poller._ensure_quest_pass_tasks``), and
-        skipping it here (rather than double-working it) is what makes the partition a single
-        source of truth: both this loop and the poller's read ``run_time`` off the exact same
-        ``autopilot`` dict, so they cannot drift apart.
+        ``only_quest_id`` None: every opted-in quest (``autopilot.mode`` in suggest/act). A pass
+        created by this runner always names its quest, so this is the unscoped fallback -- what a
+        pass with no quest id can still honestly mean -- not a second scheduling shape.
 
         TWO reads per quest either way, deliberately. The team quest LISTING
         (``GET /api/teams/{team_id}/quests``) returns only
@@ -1312,11 +1309,6 @@ class AutopilotPass:
             mode = str(autopilot_cfg.get("mode") or "off")
             if mode not in ("suggest", "act"):
                 log.info("autopilot: quest %s mode=%r -- not opted in, skipping", quest_id, mode)
-                continue
-            run_time = str(autopilot_cfg.get("run_time") or "").strip()
-            if run_time:
-                log.info("autopilot: quest %s worked by its own pass at %s -- skipping in the "
-                        "team pass", quest_id, run_time)
                 continue
             eligible.append({
                 "quest_id": quest_id,

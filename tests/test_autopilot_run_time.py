@@ -1,9 +1,8 @@
-"""Per-quest ``run_time``: the hybrid pass schedule (quest_autopilot_design.md's autopilot spec,
-section A).
+"""Per-quest ``run_time``: one pass series per opted-in quest, at its own hour.
 
-The team-wide pass stays exactly as it was, serving only quests that set no ``run_time`` of their
-own; a quest that sets one gets its OWN recurring pass series, created/retuned/retired by
-``Poller._ensure_quest_pass_tasks``. These tests pin the partition, the schedule-correction sweep
+There is no second kind of pass. A quest that names no ``run_time`` is given the lane's default
+hour when its schedule is read, so it gets its own series like every other one; any surviving
+team-wide series is retired. These tests pin that, the schedule-correction sweep
 (A3: the backend spawns the next occurrence on a UTC date, which is wrong for a run time west
 enough to cross UTC midnight), the catch-up formula, retirement, and duplicate handling -- all of
 it against ``FakeRunTimeClient``, a thin extension of ``test_autopilot_pass_task``'s
@@ -76,21 +75,24 @@ def test_quest_with_run_time_gets_its_own_pass_task():
     assert "scheduled_date" in created
 
 
-# --- 2/3: the partition ---------------------------------------------------------------------
+# --- 2/3: a quest that names no time is not a different case ---------------------------------
 
-def test_quest_with_no_run_time_gets_no_quest_pass_and_team_pass_is_still_created():
+def test_quest_with_no_run_time_gets_its_own_pass_at_the_lane_default_hour():
+    """The absent field is a default, not a branch: this quest gets exactly the same kind of
+    series as one that named a time, fired at ``cfg.autopilot_pass_time``."""
     client = FakeRunTimeClient(
         quests=[{"quest_id": "q1"}],
         autopilot_by_quest={"q1": {"mode": "act"}},
     )
-    _poller_now(client, NOW)._ensure_autopilot_pass()
-    quest_passes = [t for t in client.created if t.get("goal_id") == "q1"]
-    team_passes = [t for t in client.created if "goal_id" not in t]
-    assert quest_passes == []
-    assert len(team_passes) == 1
+    _poller_now(client, NOW, autopilot_pass_time="07:00")._ensure_autopilot_pass()
+    assert len(client.created) == 1
+    created = client.created[0]
+    assert created["goal_id"] == "q1"
+    assert created["recurrence"] == {"frequency": "daily", "time": "07:00"}
+    assert created["scheduled_time"] == "07:00"
 
 
-def test_every_opted_in_quest_has_run_time_so_no_team_pass_is_created():
+def test_no_team_wide_pass_is_ever_created():
     client = FakeRunTimeClient(
         quests=[{"quest_id": "q1"}, {"quest_id": "q2"}],
         autopilot_by_quest={
@@ -99,10 +101,8 @@ def test_every_opted_in_quest_has_run_time_so_no_team_pass_is_created():
         },
     )
     _poller_now(client, NOW)._ensure_autopilot_pass()
-    team_passes = [t for t in client.created if "goal_id" not in t]
-    quest_passes = [t for t in client.created if t.get("goal_id") in ("q1", "q2")]
-    assert team_passes == []
-    assert len(quest_passes) == 2
+    assert [t for t in client.created if "goal_id" not in t] == []
+    assert len([t for t in client.created if t.get("goal_id") in ("q1", "q2")]) == 2
 
 
 # --- 4: one open occurrence per quest is the liveness test ---------------------------------------
@@ -262,22 +262,36 @@ def test_retiring_a_series_when_mode_goes_off_clears_recurrence_and_cancels_in_o
     assert fields == {"recurrence": "", "status": "cancelled"}
 
 
-def test_retiring_a_series_when_run_time_is_cleared_clears_recurrence_and_cancels_in_one_patch():
+def test_clearing_run_time_retunes_to_the_default_hour_instead_of_retiring():
+    """Clearing the field is not "switch this quest off": the quest is still opted in, so its
+    series stays and simply moves to the lane's default hour. Retirement is for mode off."""
     client = FakeRunTimeClient(
         tasks=[_pass_task("p1", quest_id="q1", scheduled_date="2026-08-20",
                           scheduled_time="06:30", recurrence_time="06:30")],
         quests=[{"quest_id": "q1"}],
-        # mode is still on -- only run_time was cleared.
         autopilot_by_quest={"q1": {"mode": "act", "run_time": ""}},
     )
-    _poller_now(client, NOW)._ensure_autopilot_pass()
+    _poller_now(client, NOW, autopilot_pass_time="07:00")._ensure_autopilot_pass()
     assert len(client.task_updates) == 1
     task_id, fields = client.task_updates[0]
     assert task_id == "p1"
-    assert fields == {"recurrence": "", "status": "cancelled"}
-    # No gap: with run_time cleared and mode still on, the team pass picks the quest up on the
-    # SAME scan (it is now eligible for the team pass's own eligibility test).
-    assert any("goal_id" not in t for t in client.created)
+    assert fields.get("scheduled_time") == "07:00"
+    assert "status" not in fields          # retuned, not retired
+    assert client.created == []
+
+
+def test_an_open_team_wide_pass_is_retired_and_replaced_by_the_quest_own_series():
+    """Migration, so a deployment that already had a team-wide pass converges by itself rather
+    than leaving an orphan firing daily forever. One PATCH: recurrence cleared AND cancelled."""
+    client = FakeRunTimeClient(
+        tasks=[{"id": "team1_pass", "task_kind": AUTOPILOT_PASS_KIND, "status": "queued"}],
+        quests=[{"quest_id": "q1"}],
+        autopilot_by_quest={"q1": {"mode": "act", "run_time": "06:30"}},
+    )
+    _poller_now(client, NOW)._ensure_autopilot_pass()
+    assert client.task_updates == [("team1_pass", {"recurrence": "", "status": "cancelled"})]
+    assert len(client.created) == 1
+    assert client.created[0]["goal_id"] == "q1"
 
 
 # --- 10: duplicate open occurrences ---------------------------------------------------------
@@ -301,17 +315,3 @@ def test_two_open_occurrences_warns_and_acts_on_the_earliest_only(caplog):
     task_id, _fields = client.task_updates[0]
     assert task_id == "earlier"          # acted on the earliest scheduled_date only
     assert "2 open pass occurrences" in caplog.text
-
-
-# --- 11: the per-quest kill switch ---------------------------------------------------------
-
-def test_autopilot_quest_pass_tasks_false_disables_quest_passes_team_pass_unchanged():
-    client = FakeRunTimeClient(
-        quests=[{"quest_id": "q1"}],
-        autopilot_by_quest={"q1": {"mode": "act", "run_time": "06:30"}},
-    )
-    _poller_now(client, NOW, autopilot_quest_pass_tasks=False)._ensure_autopilot_pass()
-    quest_passes = [t for t in client.created if t.get("goal_id") == "q1"]
-    team_passes = [t for t in client.created if "goal_id" not in t]
-    assert quest_passes == []
-    assert len(team_passes) == 1  # the kill switch restores pre-hybrid, team-pass-only behaviour
