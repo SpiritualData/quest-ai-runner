@@ -260,6 +260,21 @@ def test_cadence_unparsable_timestamp_fails_open_to_due():
     assert cadence_due({"cadence": "weekly", "last_pass_at": "not-a-date"}, NOW) is True
 
 
+def test_cadence_due_with_tz_reads_the_evening_run_in_its_own_local_day():
+    """A 05:00 UTC ``last_pass_at`` is the PREVIOUS evening in America/Los_Angeles (22:00 PDT,
+    UTC-7): 2026-08-21T05:00:00Z is 2026-08-20T22:00 local. Checked from a moment that is still
+    the SAME UTC calendar day (2026-08-21) but already the NEXT calendar day in Los Angeles
+    (2026-08-21T13:00 local), the two comparisons disagree on purpose: tz=None keeps comparing
+    UTC days (same day as last_pass_at -> not due, the old, unchanged behaviour), while tz=<name>
+    compares LOCAL days (a new local day has begun -> due). This is the exact bug: read as UTC
+    days, the evening run makes the FOLLOWING day's pass look like it already ran today.
+    """
+    autopilot_cfg = {"cadence": "daily", "last_pass_at": "2026-08-21T05:00:00Z"}
+    now = datetime(2026, 8, 21, 20, 0, tzinfo=timezone.utc)  # 2026-08-21T13:00 America/Los_Angeles
+    assert cadence_due(autopilot_cfg, now, tz="America/Los_Angeles") is True
+    assert cadence_due(autopilot_cfg, now, tz=None) is False  # the old UTC-day answer, unchanged
+
+
 def test_gate_skips_quest_whose_cadence_is_not_due():
     q1 = _quest("q1", last_pass_at="2026-07-11T09:00:00Z")  # 1 day ago, weekly cadence
     goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))}
@@ -365,6 +380,46 @@ def test_quests_with_mode_off_or_unset_are_never_touched():
     assert result.created_task_ids == []
     assert result.skipped == []          # never-opted-in quests aren't even "skipped" with a gate reason
     assert client.autopilot_updates == []
+
+
+# --- _eligible_quests partition: the hybrid pass schedule (own-pass vs team-pass quests) ---------
+
+def test_eligible_quests_team_pass_excludes_a_quest_with_its_own_run_time():
+    with_time = _quest("with_time", mode="act")
+    with_time["autopilot"]["run_time"] = "06:30"
+    without_time = _quest("without_time", mode="act")
+    client = FakeAutopilotClient(quests=[with_time, without_time])
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+    eligible = passer._eligible_quests()   # None -> the team pass's own eligibility test
+    ids = [q["quest_id"] for q in eligible]
+    assert "without_time" in ids
+    assert "with_time" not in ids
+
+
+def test_eligible_quests_with_only_quest_id_returns_just_that_quest_and_never_lists():
+    q1 = _quest("q1", mode="act")
+    q1["autopilot"]["run_time"] = "06:30"
+    other = _quest("other", mode="act")   # must never be returned, and list_quests must never fire
+    client = FakeAutopilotClient(quests=[q1, other])
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+
+    def _must_not_be_called(**kw):
+        raise AssertionError("a per-quest pass must never call list_quests")
+    client.list_quests = _must_not_be_called
+
+    eligible = passer._eligible_quests("q1")
+    assert [q["quest_id"] for q in eligible] == ["q1"]
+
+
+def test_eligible_quests_with_only_quest_id_no_longer_opted_in_returns_nothing_and_logs(caplog):
+    q1 = _quest("q1", mode="off")
+    q1["autopilot"]["run_time"] = "06:30"    # the pass series still exists; the quest opted out
+    client = FakeAutopilotClient(quests=[q1])
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+    with caplog.at_level("INFO"):
+        eligible = passer._eligible_quests("q1")
+    assert eligible == []
+    assert "no longer opted in" in caplog.text
 
 
 # --- scope targeting ----------------------------------------------------------------------------

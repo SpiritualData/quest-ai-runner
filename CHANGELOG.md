@@ -7,6 +7,24 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Per-quest autopilot run time and standing instructions** (`runner/local_time.py` new,
+  `runner/poller.py`, `runner/autopilot.py`, `config.py`). A quest can now set its own
+  `run_time`/`run_timezone` (instead of only the team-wide `autopilot_pass_time`) and standing
+  `instructions` that are folded into every batch the pass builds for it. Hybrid pass schedule:
+  the existing team-wide pass keeps serving quests with no `run_time`; a quest that sets one gets
+  its own recurring pass series, created/retuned/retired by the new
+  `Poller._ensure_quest_pass_tasks` (kill switch: `RunnerConfig.autopilot_quest_pass_tasks`). The
+  poller corrects the backend's UTC-dated spawn for a run time that crosses UTC midnight, and
+  `cadence_due`/`_due_now_locally` gained an optional `tz` so the schedule and its gate read the
+  same predicate. A quest whose instructions describe a deliverable now produces exactly one work
+  batch per due pass even with no eligible goal (the "always-work" rule), so a quest's standing
+  instructions can fully replace a hand-authored recurring task. New
+  `RunnerConfig.autopilot_settings_refresh_seconds` controls how often the poller re-reads quest
+  autopilot settings for this (TTL-cached snapshot, `Poller._quest_schedule_snapshot`). Fully
+  backward compatible: a quest with no `run_time` and no `instructions` behaves byte-identically
+  to before. New dependency: `tzdata` (a pure-data wheel backing `zoneinfo` where the host has no
+  system tz database).
+
 - **A task can name a specific goal inside a quest via `related_goal_id`** (`runner/executor.py`,
   `_build_context_view`). The task document already carries `goal_id`, but that field actually
   holds the QUEST's id on a quest-scoped task (a historical misnomer this repo does not rename),

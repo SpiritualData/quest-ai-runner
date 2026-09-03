@@ -25,13 +25,19 @@ classifiers = [
     "Typing :: Typed",
 ]
 
-# The CORE brain + the RUNNER are stdlib-only (urllib for the Quest client).
+# The CORE brain + the RUNNER are stdlib-only (urllib for the Quest client) except for tzdata.
 # TUI dependencies are core: Textual is the ONLY chat UI, with no fallback renderer.
 # Model providers (anthropic, gemini) and vector stores (qdrant, bm25) remain optional.
 dependencies = [
     "rich>=13.0",
     "textual>=0.40.0",
     "PyYAML>=6.0",
+    # A small, pure-data wheel providing the IANA tz database to `zoneinfo` (runner/local_time.py)
+    # on hosts whose OS has none (minimal containers, Windows). `zoneinfo` itself is stdlib
+    # (3.9+); this only supplies the DATA it reads. Per-quest run_timezone degrades gracefully to
+    # the runner's local clock when a zone can't be resolved either way (see local_time.py), so a
+    # missing database is a warning, never a crash.
+    "tzdata>=2024.1",
 ]
 
 [project.optional-dependencies]

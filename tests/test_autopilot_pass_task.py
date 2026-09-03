@@ -96,14 +96,23 @@ def test_creates_nothing_when_no_quest_is_opted_in():
 def test_an_open_pass_task_is_the_liveness_test_for_the_whole_series(status):
     """A recurring series always has exactly one occurrence outstanding (the backend spawns the
     next when the current reaches a terminal status), so one open occurrence means the series is
-    alive. Finding one must also skip the expensive opt-in scan entirely."""
+    alive: no second team pass is created.
+
+    The per-quest schedule snapshot (introduced for the hybrid pass schedule, see
+    ``test_autopilot_run_time.py``) still reads each quest's autopilot state every time this
+    method runs -- it needs to, to retune/retire any per-quest pass series -- so this is no longer
+    a zero-read steady state. What stays true, and is still the point of this test: the ``list_tasks``
+    call for existing pass occurrences stays ONE call regardless of how many quests exist, and an
+    open team-series occurrence still means no second team pass gets created.
+    """
     client = FakePassClient(
         tasks=[{"id": "p1", "task_kind": "autopilot", "status": status}],
         quests=[{"quest_id": "q1"}], autopilot_by_quest={"q1": {"mode": "act"}},
     )
     _poller(client)._ensure_autopilot_pass()
     assert client.created == []
-    assert client.state_reads == []          # steady state stays one list call, no per-quest reads
+    assert len(client.list_tasks_calls) == 1  # one list_tasks call, regardless of quest count
+    assert client.state_reads == ["q1"]       # the schedule snapshot still reads every quest once
 
 
 @pytest.mark.parametrize("status", ["done", "failed", "cancelled"])

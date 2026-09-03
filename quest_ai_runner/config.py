@@ -324,11 +324,32 @@ class RunnerConfig:
     # that finds an opted-in quest with no open pass task creates one.
     # Set False for a deployment where something else owns that lifecycle.
     autopilot_ensure_pass_task: bool = True
-    # When this runner creates the pass task, the local clock time its daily occurrence fires at.
+    # The TEAM pass's own daily time (the runner's local clock), used ONLY for quests that set no
+    # per-quest ``run_time`` of their own. A quest that sets one gets its own recurring pass
+    # series instead, fired at ITS run_time in ITS run_timezone -- see
+    # ``autopilot_quest_pass_tasks`` and ``Poller._ensure_quest_pass_tasks``.
     autopilot_pass_time: str = "07:00"
     # Team-wide daily cap on autopilot-created tasks (batches + goal proposals each count as one
-    # unit). Default 3, per the design's starting number.
+    # unit). Default 3, per the design's starting number. MUST be at least the number of opted-in
+    # quests that carry standing ``instructions``: each of those consumes one budget unit every
+    # scheduled day (see runner/autopilot.py's always-work rule), and a quest that loses the
+    # budget race on a given day produces NO output that day -- its own daily brief simply does
+    # not arrive, with no error anywhere but a skip line on a pass row nobody mails.
     autopilot_daily_budget: int = 3
+    # Kill switch for PER-QUEST pass series (a quest's own ``run_time`` getting its own recurring
+    # pass, see ``Poller._ensure_quest_pass_tasks``). True (default) is the hybrid schedule this
+    # runner implements. False fully restores the pre-hybrid, team-pass-only behaviour: no quest
+    # ever gets its own series, and the team pass serves every opted-in quest regardless of
+    # whether it set a run_time (see ``Poller._any_quest_on_autopilot``). Set False for a
+    # deployment that wants the old single-pass schedule for some other reason.
+    autopilot_quest_pass_tasks: bool = True
+    # How often the poller re-reads every quest's autopilot settings (mode/run_time/run_timezone/
+    # cadence/instructions) for the per-quest pass schedule (``Poller._quest_schedule_snapshot``).
+    # Cached in between, so this trades read cost against convergence speed: a settings change (a
+    # new run time, new instructions, mode flipped off) takes effect within one refresh interval,
+    # not on the very next scan. Lower it for a deployment that wants faster convergence at the
+    # cost of more reads; it is config rather than a constant for exactly that trade-off.
+    autopilot_settings_refresh_seconds: int = 300
     # Whether a quest with an unfinished autopilot task is SKIPPED by the next pass. OFF by
     # default: an ideal colleague who raised a question or hit a blocker gets on with everything
     # that does not depend on the answer, rather than downing tools until someone replies. With it

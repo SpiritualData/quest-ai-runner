@@ -53,11 +53,13 @@ exactly the failure mode the qar playbook bans.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .insights import InsightsContext, collect_unacted_insights
+from .local_time import now_in_zone
 from .quest_folder_sync import NextSteps, publish_next_steps, read_next_steps
 from .reflections import DEFAULT_PERIODS, ReflectionContext, collect_reflections
 
@@ -127,6 +129,17 @@ _FINISHED_TASK_STATUSES = {"done", "failed", "needs_you"}
 # should not push its actual instructions out of the model's attention with old status lines.
 _MAX_PREVIOUS_TASKS = 8
 
+# A quest's standing ``autopilot.instructions``, in characters. Mirrors the backend's own
+# ``AutopilotSettings.instructions`` cap (``max_length=8000``) so a value written before either
+# cap existed, or written through some other client, still gets truncated defensively here rather
+# than riding an oversized block into every prompt this quest ever gets.
+MAX_INSTRUCTIONS_CHARS = 8000
+
+# Leading Markdown "furniture" stripped off the first line of a person's instructions when it
+# becomes a batch's title (headings, bullets, blockquotes) -- a title should read as a title, not
+# carry the markup that made sense inside the instructions block itself.
+_MD_TITLE_FURNITURE_RE = re.compile(r"^[#\-*>\s]+")
+
 
 def _truthy(value: Any) -> bool:
     """Whether a config value means yes, tolerating the string forms a JSON round-trip can leave
@@ -154,7 +167,7 @@ def _parse_dt(raw: Any) -> Optional[datetime]:
         return None
 
 
-def cadence_due(autopilot_cfg: Dict[str, Any], now: datetime) -> bool:
+def cadence_due(autopilot_cfg: Dict[str, Any], now: datetime, tz: Optional[str] = None) -> bool:
     """Whether a quest's cadence gate is DUE (True) or should skip this pass (False).
 
     Compared as CALENDAR periods, not elapsed time: "daily" means a pass has not run yet TODAY,
@@ -166,6 +179,14 @@ def cadence_due(autopilot_cfg: Dict[str, Any], now: datetime) -> bool:
 
     Never run before (no ``last_pass_at``) is always due. An unparsable timestamp fails OPEN to
     due -- a corrupt/missing stamp must never permanently wedge a quest as "not due yet".
+
+    ``tz``, when given (a quest's own ``run_timezone``), compares BOTH ``last_pass_at`` and
+    ``now`` in that zone instead of UTC calendar days. This is not a nicety: a 22:00
+    America/Los_Angeles run stamps ``last_pass_at`` at about 05:00 UTC the NEXT UTC day. Compared
+    as UTC days, the following evening's pass would look like it already ran "today" and a daily
+    brief would be skipped every other day. Left ``None`` (the default), behaviour is byte for
+    byte the original UTC-day comparison. An unresolvable zone degrades the same way, via
+    ``local_time.now_in_zone``.
     """
     last_pass = autopilot_cfg.get("last_pass_at")
     if not last_pass:
@@ -176,8 +197,12 @@ def cadence_due(autopilot_cfg: Dict[str, Any], now: datetime) -> bool:
     cadence = str(autopilot_cfg.get("cadence") or "weekly").strip().lower()
     if cadence not in _CADENCE_DAYS:
         cadence = "weekly"
-    then = parsed.astimezone(timezone.utc)
-    here = now.astimezone(timezone.utc)
+    if tz:
+        then = now_in_zone(tz, parsed)
+        here = now_in_zone(tz, now)
+    else:
+        then = parsed.astimezone(timezone.utc)
+        here = now.astimezone(timezone.utc)
     if cadence == "daily":
         return then.date() < here.date()
     if cadence == "weekly":
@@ -542,6 +567,15 @@ _CONFIRMATION_RULE = (
 )
 
 
+_INSTRUCTIONS_PREAMBLE = (
+    "Standing instructions for this quest, written by the person who owns it. They are the "
+    "specification for this run: they say what to produce and how. Everything below is the "
+    "material to apply them to. Follow them verbatim where they are specific, and where an "
+    "instruction and a goal's \"Done when\" disagree about what finishing that goal means, do "
+    "what the goal says and note the conflict in your result."
+)
+
+
 def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
                        persona: Optional[str] = None, *,
                        scope_label: Optional[str] = None,
@@ -549,7 +583,8 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
                        next_steps: Optional[str] = None,
                        previous: Optional[Dict[str, Any]] = None,
                        reflection: Optional[str] = None,
-                       insights: Optional[str] = None) -> str:
+                       insights: Optional[str] = None,
+                       instructions: Optional[str] = None) -> str:
     """The batch task's text: what period this run owns, the goals and AI tasks in it, what the
     person themselves last said about the work, and what the previous period actually produced.
 
@@ -570,6 +605,14 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
     would be a fixed string rule that silently drops every insight whose wording it did not
     anticipate, which is exactly what this repository's hard rule #3 forbids.
 
+    ``instructions``, when the quest carries any, is the FOURTH block: right after ``Scope:`` and
+    before the first ``Goal:`` block, verbatim, never summarized/reflowed/rewritten (it is the one
+    input here the person authored as a specification, not material to interpret). Its precedence
+    over the goals below it is stated in the framing sentence, not just implied by position -- a
+    specification that arrived after the material it governs would read as commentary on work
+    already planned. Absent, this emits nothing and the composed text is byte-identical to before
+    this parameter existed.
+
     ``persona``, when resolved, is named in the text AS WELL AS stamped structurally in
     ``assignee_rep_id`` at creation. The structured field is authoritative; the prose is kept
     because some consumers resolve the persona from the request text.
@@ -586,6 +629,8 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
         parts.append(f"Scope: this quest's {scope_label}. What follows is that PERIOD's target, "
                      f"not this single run's. Advance it as far as one focused session honestly "
                      f"can, then say plainly what remains.")
+    if instructions:
+        parts.append(_INSTRUCTIONS_PREAMBLE + "\n\n" + instructions)
     for goal in goals:
         name = (goal.get("name") or "(untitled goal)").strip()
         description = (goal.get("description") or "").strip()
@@ -632,22 +677,37 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
 
 
 def _batch_title(goals: List[Dict[str, Any]],
-                 adopted_tasks: Optional[List[Dict[str, Any]]] = None) -> Optional[str]:
+                 adopted_tasks: Optional[List[Dict[str, Any]]] = None,
+                 instructions: Optional[str] = None) -> Optional[str]:
     """A short label for the task list: what this batch is ABOUT.
 
     Without one the server derives a title from the first line of the text, which is the "Act as
     ..." persona line, so every autopilot task in the list is titled after its persona instead of
     its work. Named goals win; an adoption-only batch is titled after the task it took over.
+
+    ``instructions`` is the third fallback, for a batch with no goals and nothing adopted (the
+    always-work rule's instructions-only case): the first non-empty line of the person's own
+    instructions, stripped of leading Markdown furniture ("#", "-", "*", ">") and capped at 80
+    characters -- so an instructions-only batch is titled after what the person asked for rather
+    than the "Act as ..." persona line. That title becomes the mail SUBJECT once send-on-completion
+    lands, which is why it matters here and not just cosmetically. Falls back to "Autopilot run"
+    when ``instructions`` was passed but has no line with real content after stripping.
     """
     names = [(g.get("name") or "").strip() for g in goals]
     names = [n for n in names if n]
     if not names and adopted_tasks:
         first = str((adopted_tasks[0].get("title") or adopted_tasks[0].get("text") or "")).strip()
         names = [first.splitlines()[0]] if first else []
-    if not names:
-        return None
-    title = names[0] if len(names) == 1 else f"{names[0]} (+{len(names) - 1} more)"
-    return title[:120]
+    if names:
+        title = names[0] if len(names) == 1 else f"{names[0]} (+{len(names) - 1} more)"
+        return title[:120]
+    if instructions:
+        for line in instructions.splitlines():
+            stripped = _MD_TITLE_FURNITURE_RE.sub("", line).strip()
+            if stripped:
+                return stripped[:80]
+        return "Autopilot run"
+    return None
 
 
 def propose_next_goal(quest: Dict[str, Any]) -> Tuple[str, str]:
@@ -1016,8 +1076,12 @@ class AutopilotPass:
         # the pass row that made it. Without it, the two rows are unrelated as far as the data is
         # concerned, and the pass can only ever report its own bookkeeping.
         self._pass_task_id = str(task.get("id") or task.get("task_id") or "") or None
+        # A per-quest pass (the hybrid schedule, quest_autopilot_design.md's autopilot spec
+        # section A) carries its quest's id in ``goal_id`` -- the team pass carries none. Scope
+        # this run to exactly that one quest instead of scanning the whole team.
+        only_quest_id = str(task.get("goal_id") or "") or None
 
-        quests = self._eligible_quests()
+        quests = self._eligible_quests(only_quest_id)
         budget_used = 0 if dry_run else self._count_autopilot_tasks_today()
 
         for quest in quests:
@@ -1046,6 +1110,19 @@ class AutopilotPass:
         autopilot_cfg = quest.get("autopilot") or {}
         mode = str(autopilot_cfg.get("mode") or "off")
         planning = str(autopilot_cfg.get("planning") or "work_only")
+
+        # Standing instructions: read once, near the top, defensively truncated at the same cap
+        # the backend enforces on write (values written before the cap existed are the only way
+        # this ever fires in practice). Never logged verbatim -- it is the person's private
+        # content and can run to 8 KB.
+        instructions = str(autopilot_cfg.get("instructions") or "").strip()
+        if len(instructions) > MAX_INSTRUCTIONS_CHARS:
+            log.warning("autopilot: quest %s instructions truncated from %d to %d characters",
+                       quest_id, len(instructions), MAX_INSTRUCTIONS_CHARS)
+            instructions = instructions[:MAX_INSTRUCTIONS_CHARS]
+        if instructions:
+            log.info("autopilot: quest %s has standing instructions (%d chars)",
+                     quest_id, len(instructions))
 
         goals_payload = self._client.list_quest_goals(quest_id, team_id=self._team_id or None) or {}
         target_goals, scope_label = select_target_goals(goals_payload, self._now())
@@ -1076,21 +1153,54 @@ class AutopilotPass:
 
         quest_label = _quest_label(quest, quest_id)
         produced = False
-        if target_goals or adopted:
-            batches = self._batches_with_adopted(target_goals, adopted, autopilot_cfg)
+        # The always-work rule: a quest whose standing instructions describe a deliverable must
+        # produce exactly one batch per due pass EVEN WHEN no ai_help goal is in the current
+        # scope -- otherwise the migration case (a hand-authored daily brief replaced by
+        # instructions) silently stops on any day the quest has no eligible goal. This is why
+        # ``instructions`` joins the condition below rather than only gating the goal-proposal
+        # branch: with instructions set, that ``elif`` becomes unreachable for this quest, which
+        # is deliberate (see the comment at the ``elif`` below) -- goal proposals stay untouched
+        # for every quest that does NOT carry instructions.
+        if target_goals or adopted or instructions:
+            if target_goals or adopted:
+                batches = self._batches_with_adopted(target_goals, adopted, autopilot_cfg)
+            else:
+                # Instructions-only: exactly one batch, no goals and nothing adopted. Persona
+                # comes from the quest's roster on duty today (first entry, day-matched before
+                # unrestricted), else the consumer's fallback resolver, else no persona --
+                # the same precedence goal-driven batching uses, just with no goal to resolve it
+                # FROM.
+                log.info("autopilot: quest %s -- no eligible goal this pass, working the "
+                        "standing instructions alone", quest_id)
+                on_duty = personas_on_duty(autopilot_cfg, self._now())
+                if on_duty:
+                    persona = on_duty[0]
+                elif self._persona_resolver is not None:
+                    try:
+                        resolved = self._persona_resolver({})
+                        persona = str(resolved) if resolved else None
+                    except Exception:  # noqa: BLE001 -- a bad fallback must never break a pass
+                        log.info("autopilot: persona fallback_resolver raised while resolving an "
+                                "instructions-only batch; treating as no match", exc_info=True)
+                        persona = None
+                else:
+                    persona = None
+                batches = [(persona, [], [])]
             for persona, goals, tasks in batches:
                 if budget_used >= self._daily_budget:
                     self._skip(result, quest_id, quest_label,
                                f"today's budget of {self._daily_budget} autopilot task(s) ran out "
                                f"part-way through this quest")
                     break
-                title = _batch_title(goals, tasks)
+                title = _batch_title(goals, tasks, instructions=instructions)
                 if dry_run:
                     result.proposals.append({
                         "quest_id": quest_id, "quest_label": quest_label, "kind": "work_batch",
                         "persona": persona, "persona_label": self._persona_label(persona),
                         "goal_ids": [g.get("id") for g in goals],
-                        "goal_names": [_goal_name(g) for g in goals], "scope": scope_label,
+                        "goal_names": [_goal_name(g) for g in goals] or
+                                      (["standing instructions"] if instructions else []),
+                        "scope": scope_label,
                         "adopted_task_ids": [t.get("id") or t.get("task_id") for t in tasks],
                     })
                     produced = True
@@ -1105,7 +1215,8 @@ class AutopilotPass:
                                                   next_steps=standing_next_steps,
                                                   previous=previous,
                                                   reflection=reflection_text,
-                                                  insights=insights_text)
+                                                  insights=insights_text,
+                                                  instructions=instructions)
                 if task_id:
                     result.created.append({
                         "task_id": task_id, "kind": "work_batch", "quest_id": quest_id,
@@ -1123,6 +1234,10 @@ class AutopilotPass:
                                          result, quest_label=quest_label,
                                          reflection_note=reflections.one_line(),
                                          insights_note=insights.one_line())
+        # The goal-proposal path is untouched: with instructions set, the branch above always
+        # matches, so this ``elif`` is unreachable for that quest -- proposals keep their exact
+        # current behaviour for quests WITHOUT instructions, and no double-proposing can occur.
+        # Instructions are deliberately never threaded into ``propose_next_goal``.
         elif planning == "plan_and_work":
             if budget_used < self._daily_budget:
                 skipped_because = self._handle_proposal(quest, quest_id, quest_label, mode,
@@ -1146,18 +1261,46 @@ class AutopilotPass:
 
     # --- gates -------------------------------------------------------------------------------
 
-    def _eligible_quests(self) -> List[Dict[str, Any]]:
-        """The team's quests that are opted in (``autopilot.mode`` in suggest/act).
+    def _eligible_quests(self, only_quest_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """The quest(s) this pass should work.
 
-        TWO reads per quest, deliberately. The team quest LISTING
+        ``only_quest_id`` set (a per-quest pass, the hybrid schedule's own series): ONE
+        ``_quest_state`` read, no ``list_quests`` call at all -- cheaper than the team pass, and
+        the point of a dedicated series is that it already knows which quest it is for. Opted in
+        -> that one quest. No longer opted in (mode flipped back to off since the series was
+        created) -> ``[]``, logged at INFO; the poller retires the now-orphaned pass on its next
+        sweep, this method just declines to work it.
+
+        ``only_quest_id`` None (the team pass): the team's quests that are opted in
+        (``autopilot.mode`` in suggest/act) AND have not set their own ``run_time`` -- a quest
+        that has is worked by its OWN pass instead (see ``Poller._ensure_quest_pass_tasks``), and
+        skipping it here (rather than double-working it) is what makes the partition a single
+        source of truth: both this loop and the poller's read ``run_time`` off the exact same
+        ``autopilot`` dict, so they cannot drift apart.
+
+        TWO reads per quest either way, deliberately. The team quest LISTING
         (``GET /api/teams/{team_id}/quests``) returns only
         ``{quest_id, outcome, completed, owner_user_ids}`` -- it does NOT include the ``autopilot``
         block. Reading the opt-in mode off those rows would find no ``autopilot`` on ANY quest,
         treat every one as mode "off", and make the whole feature a silent no-op forever. The
         ``autopilot`` settings live on the full QuestState, so we fetch it per quest
         (``get_quest_autopilot`` -> ``GET /api/quests/{quest_id}/state``) and merge it onto the
-        listing row. Cost is one small read per team quest, once per pass.
+        listing row.
         """
+        if only_quest_id:
+            state = self._quest_state(only_quest_id)
+            autopilot_cfg = (state.get("autopilot") or {}) if state else {}
+            mode = str(autopilot_cfg.get("mode") or "off")
+            if mode not in ("suggest", "act"):
+                log.info("autopilot: quest %s mode=%r -- no longer opted in; this pass should be "
+                        "retired", only_quest_id, mode)
+                return []
+            return [{
+                "quest_id": only_quest_id,
+                "outcome": state.get("outcome") or "",
+                "autopilot": autopilot_cfg,
+            }]
+
         quests = self._client.list_quests(team_id=self._team_id or None) or []
         eligible = []
         for row in quests:
@@ -1169,6 +1312,11 @@ class AutopilotPass:
             mode = str(autopilot_cfg.get("mode") or "off")
             if mode not in ("suggest", "act"):
                 log.info("autopilot: quest %s mode=%r -- not opted in, skipping", quest_id, mode)
+                continue
+            run_time = str(autopilot_cfg.get("run_time") or "").strip()
+            if run_time:
+                log.info("autopilot: quest %s worked by its own pass at %s -- skipping in the "
+                        "team pass", quest_id, run_time)
                 continue
             eligible.append({
                 "quest_id": quest_id,
@@ -1410,7 +1558,11 @@ class AutopilotPass:
     def _gate_quest(self, quest: Dict[str, Any], quest_id: str) -> Optional[str]:
         """Per-quest gates, cheapest first. Returns a skip reason, or None if the quest passes."""
         autopilot_cfg = quest.get("autopilot") or {}
-        if not cadence_due(autopilot_cfg, self._now()):
+        # tz= the quest's own run_timezone (None for a quest with no per-quest schedule, which
+        # keeps this on UTC calendar days exactly as before). This is the SAME predicate the
+        # poller's schedule-correction sweep reads (A3 of the autopilot spec), so the schedule and
+        # this gate can never disagree about whether today's occurrence is due.
+        if not cadence_due(autopilot_cfg, self._now(), tz=autopilot_cfg.get("run_timezone")):
             return "cadence not due yet"
         if self._backpressure and self._has_backpressure(quest_id):
             return "backpressure: a previous autopilot task for this quest is still open"
@@ -1564,16 +1716,19 @@ class AutopilotPass:
                            next_steps: Optional[str] = None,
                            previous: Optional[Dict[str, Any]] = None,
                            reflection: Optional[str] = None,
-                           insights: Optional[str] = None) -> Optional[str]:
+                           insights: Optional[str] = None,
+                           instructions: Optional[str] = None) -> Optional[str]:
         text = compose_batch_text(str(quest.get("outcome") or ""), goals,
                                   self._persona_label(persona),
                                   scope_label=scope_label, adopted_tasks=adopted_tasks,
                                   next_steps=next_steps, previous=previous,
-                                  reflection=reflection, insights=insights)
+                                  reflection=reflection, insights=insights,
+                                  instructions=instructions)
         try:
             return self._create_autopilot_task(
                 quest, quest_id, text, mode, persona=persona,
-                title=title if title is not None else _batch_title(goals, adopted_tasks))
+                title=title if title is not None
+                else _batch_title(goals, adopted_tasks, instructions=instructions))
         except Exception as e:  # noqa: BLE001 -- surfaced to the caller's per-quest try/except
             log.error("autopilot: task creation failed for quest %s: %s", quest_id, e,
                       exc_info=True)

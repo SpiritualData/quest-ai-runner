@@ -13,7 +13,7 @@ gets stranded.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from quest_ai_runner.runner.poller import _due_now_locally
 
@@ -124,3 +124,73 @@ def test_run_once_still_claims_a_task_that_is_due():
 
     assert poller.run_once() == ["ctx-1"]
     assert client.claimed == ["ctx-1"]
+
+
+# --- tz_for: a per-quest pass compared in ITS OWN zone (not the runner's local clock) -----------
+
+def test_tz_for_none_leaves_every_existing_case_untouched():
+    """`tz_for` left at its default (None) is byte for byte the original signature: same result
+    as calling with no `tz_for` argument at all."""
+    now = datetime(2026, 8, 13, 17, 3)
+    tomorrow_brief = {"task_id": "brief", **_at(datetime(2026, 8, 14, 6, 30))}
+
+    due, deferred = _due_now_locally([tomorrow_brief], now=now, tz_for=None)
+
+    assert due == []
+    assert deferred == [tomorrow_brief]
+
+
+def test_tz_for_compares_in_the_quests_own_zone_at_a_frozen_instant():
+    """A quest pass scheduled for 06:30 America/Los_Angeles: not yet due at 04:00 local, due at
+    07:00 local -- both checked at the SAME kind of frozen instant (a UTC-aware `now`), never the
+    wall clock."""
+    task = {"task_id": "quest-pass", "scheduled_date": "2026-08-14", "scheduled_time": "06:30"}
+
+    def tz_for(t):
+        return "America/Los_Angeles"
+
+    # 2026-08-14T11:00:00Z == 2026-08-14T04:00:00-07:00 (PDT) -- not yet due.
+    before = datetime(2026, 8, 14, 11, 0, tzinfo=timezone.utc)
+    due, deferred = _due_now_locally([task], now=before, tz_for=tz_for)
+    assert due == []
+    assert deferred == [task]
+
+    # 2026-08-14T14:00:00Z == 2026-08-14T07:00:00-07:00 (PDT) -- due.
+    after = datetime(2026, 8, 14, 14, 0, tzinfo=timezone.utc)
+    due, deferred = _due_now_locally([task], now=after, tz_for=tz_for)
+    assert due == [task]
+    assert deferred == []
+
+
+def test_tz_for_only_affects_the_task_it_resolves_a_zone_for():
+    """`tz_for` returning None for one task in a batch keeps THAT task on the naive local
+    comparison even when another task in the same batch gets a real zone."""
+    now = datetime(2026, 8, 14, 12, 0)   # naive local -- the legacy comparison's own clock
+    zoned = {"task_id": "zoned", "scheduled_date": "2026-08-14", "scheduled_time": "23:00"}
+    plain = {"task_id": "plain", **_at(datetime(2026, 8, 14, 6, 30))}   # due by the naive clock
+
+    def tz_for(t):
+        return "America/Los_Angeles" if t.get("task_id") == "zoned" else None
+
+    due, deferred = _due_now_locally([zoned, plain], now=now, tz_for=tz_for)
+
+    assert plain in due            # untouched by tz_for returning None for it
+    assert zoned in deferred       # 23:00 PDT has not arrived yet
+
+
+def test_unknown_zone_name_degrades_to_the_naive_local_comparison_and_never_raises(caplog):
+    now = datetime(2026, 8, 14, 12, 0)
+    task = {"task_id": "t1", **_at(datetime(2026, 8, 14, 6, 30))}   # due by the naive comparison
+
+    # A zone name distinct from other test modules': the "warn once per distinct bad name" rule
+    # is process-global (module-level state in local_time.py), so a name another test already
+    # warned about this run would silently skip the warning here too.
+    def tz_for(t):
+        return "Nowhere/DueNowLocallyTest"
+
+    with caplog.at_level("WARNING"):
+        due, deferred = _due_now_locally([task], now=now, tz_for=tz_for)
+
+    assert due == [task]
+    assert deferred == []
+    assert "could not be resolved" in caplog.text

@@ -21,15 +21,17 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..config import RunnerConfig, build_orchestrator, derive_capabilities
 from ..resources import ResourceGuard, ResourceLimits
-from .autopilot import AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, AutopilotPass
+from .autopilot import AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, AutopilotPass, cadence_due
 from .executor import TaskExecutor
+from .local_time import now_in_zone, scheduled_moment, today_in_zone
 from .quest_client import QuestApiError, QuestClient, QuestDecisionSink, QuestNotConfigured
 # StateStore lives in its own module (runner/state_store.py) so the channel-runner lane can reuse
 # the SAME dedup mechanism without duplicating it. Re-exported here (not just imported for local
@@ -53,8 +55,9 @@ def _task_signature(task: Dict[str, Any]) -> str:
 
 
 def _due_now_locally(tasks: List[Dict[str, Any]],
-                     now: Optional[datetime] = None) -> tuple[List[Dict[str, Any]],
-                                                              List[Dict[str, Any]]]:
+                     now: Optional[datetime] = None,
+                     tz_for: Optional[Callable[[Dict[str, Any]], Optional[str]]] = None
+                     ) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     """Split discovered tasks into (due, not-yet-due) by LOCAL wall clock.
 
     Discovery asks the backend for `due_before=<ISO now, UTC>`, but the backend compares only the
@@ -71,11 +74,18 @@ def _due_now_locally(tasks: List[Dict[str, Any]],
     time means midnight, and an unscheduled task ("do it now", the chat-delegated case) is always
     due. Holding one back is lossless: it stays `queued` and surfaces on a later scan.
 
-    Timezone: the runner's own local time, which is the tz a person authoring "06:30" means. The
-    task model carries no tz of its own, so a runner in a different tz than the schedule's author
-    is a real (pre-existing) limitation, not one this filter introduces.
+    Timezone, for a task `tz_for` returns nothing for: the runner's own local time, which is the
+    tz a person authoring "06:30" means when no zone was ever stated. Byte-for-byte the original
+    behaviour -- `tz_for` left `None`, or returning `None` for a given task, changes nothing here.
+
+    `tz_for`, when given, maps a task to an IANA zone name (a per-quest autopilot pass's own
+    `run_timezone` -- see `Poller._pass_timezone_for`). For a task it resolves one for, the
+    comparison happens in THAT zone instead (`local_time.scheduled_moment`/`now_in_zone`), which
+    is what fixes the same early-firing bug for a quest whose owner is not in the runner host's
+    own timezone. An unresolvable zone name degrades to the same naive local comparison every
+    other task gets (never raises, logs once via `local_time.resolve_zone`).
     """
-    now = now or datetime.now()
+    legacy_now = now or datetime.now()
     due: List[Dict[str, Any]] = []
     deferred: List[Dict[str, Any]] = []
     for task in tasks:
@@ -84,6 +94,15 @@ def _due_now_locally(tasks: List[Dict[str, Any]],
             due.append(task)
             continue
         clock = str(task.get("scheduled_time") or "00:00").strip()[:5]
+        zone_name = tz_for(task) if tz_for else None
+        if zone_name:
+            scheduled = scheduled_moment(date, clock, zone_name)
+            if scheduled is not None and scheduled.tzinfo is not None:
+                moment = now_in_zone(zone_name, now)
+                (due if scheduled <= moment else deferred).append(task)
+                continue
+            # The zone itself did not resolve (scheduled_moment fell back to naive, or failed to
+            # parse at all) -- fall through to the same legacy comparison every other task gets.
         try:
             scheduled = datetime.strptime(f"{date} {clock}", "%Y-%m-%d %H:%M")
         except ValueError:
@@ -92,15 +111,26 @@ def _due_now_locally(tasks: List[Dict[str, Any]],
                         task.get("task_id") or task.get("id"), date, clock)
             due.append(task)
             continue
-        (due if scheduled <= now else deferred).append(task)
+        (due if scheduled <= legacy_now else deferred).append(task)
     return due, deferred
 
 
 class Poller:
     def __init__(self, config: RunnerConfig, *, state_path: Optional[str] = None,
                  client: Optional[QuestClient] = None,
-                 resource_guard: Optional[ResourceGuard] = None):
+                 resource_guard: Optional[ResourceGuard] = None,
+                 now: Optional[Callable[[], datetime]] = None):
         self.cfg = config
+        # Injectable clock, used by the per-quest pass scheduling (retune/catch-up, see
+        # ``_expected_quest_occurrence``) so tests can assert against a frozen instant instead of
+        # the wall clock. Defaults to the real, timezone-AWARE current moment (UTC) -- every
+        # timezone conversion downstream needs an aware instant to convert correctly regardless of
+        # the host's own zone.
+        self._now = now or (lambda: datetime.now(timezone.utc))
+        # TTL-cached quest autopilot-schedule snapshot (see ``_quest_schedule_snapshot``). None
+        # means "never read yet"; refreshed at most every ``cfg.autopilot_settings_refresh_seconds``.
+        self._quest_schedule_cache: Dict[str, Dict[str, Any]] = {}
+        self._quest_schedule_cache_at: Optional[float] = None
         # Resource-aware pickup (opt-in): explicit guard > config limits > QAR_* env vars.
         # With nothing configured the guard is disabled and every check is a cheap no-op.
         if resource_guard is None:
@@ -208,12 +238,14 @@ class Poller:
             return []
 
         # The backend's due filter is date-granular, so it hands back tomorrow-morning's work as
-        # soon as UTC rolls over. Keep only what the LOCAL clock says has actually arrived.
-        due, deferred = _due_now_locally(due)
+        # soon as UTC rolls over. Keep only what the LOCAL clock says has actually arrived --
+        # local to the RUNNER for an ordinary task, local to the QUEST's own run_timezone for a
+        # per-quest autopilot pass (``_pass_timezone_for``; the schedule snapshot it reads was
+        # already refreshed above, by ``_ensure_autopilot_pass``, before this call).
+        due, deferred = _due_now_locally(due, tz_for=self._pass_timezone_for)
         if deferred:
             log.info("holding %d task(s) until their local scheduled time: %s", len(deferred),
-                     ", ".join(f"{t.get('task_id') or t.get('id')}@{t.get('scheduled_date')} "
-                               f"{t.get('scheduled_time') or '00:00'}" for t in deferred))
+                     ", ".join(self._deferred_task_desc(t) for t in deferred))
 
         fresh = [t for t in due if not self.state.seen(_task_signature(t))]
         if not fresh:
@@ -274,6 +306,15 @@ class Poller:
                 )
             except Exception as e:  # noqa: BLE001 — heartbeat is best-effort, never breaks the scan
                 log.info("environment heartbeat (org scope) failed (%s) — continuing poll", e)
+
+    def _deferred_task_desc(self, task: Dict[str, Any]) -> str:
+        """One "holding N task(s)" line entry, naming the zone it was compared in when it had
+        one (a per-quest autopilot pass), so an operator reading the log can tell a quest's own
+        timezone apart from the runner's local clock without a debugger."""
+        base = (f"{task.get('task_id') or task.get('id')}@{task.get('scheduled_date')} "
+               f"{task.get('scheduled_time') or '00:00'}")
+        zone = self._pass_timezone_for(task)
+        return f"{base} ({zone})" if zone else base
 
     def _claim_slot(self, task_id: str) -> bool:
         """Reserve ``task_id`` for in-process handling. False if another path here already has it.
@@ -629,20 +670,30 @@ class Poller:
         return (str(qid), folder) if folder else None
 
     def _ensure_autopilot_pass(self) -> None:
-        """Make a quest's autopilot opt-in actually DO something, by guaranteeing the recurring
-        "Autopilot pass" task exists.
+        """Make every opted-in quest's autopilot pass series EXIST, and keep each one in tune.
 
         Autopilot is deliberately implemented as a task rather than a daemon (no cron, pausable
-        from the same UI, auditable in the same activity stream). The gap was that NOTHING created
-        that task: opting a quest into Suggest/Act saved the setting and produced silence forever.
-        This closes the loop from the runner side -- the lane that would execute the pass is the
-        one that ensures it exists.
+        from the same UI, auditable in the same activity stream). The original gap was that
+        NOTHING created that task at all: opting a quest into Suggest/Act saved the setting and
+        produced silence forever. This closes the loop from the runner side -- the lane that would
+        execute the pass is the one that ensures it exists.
 
-        Cost is one list call on a healthy scan. The expensive opt-in check (a state read per
-        team quest) runs ONLY when no open pass task was found, so the steady state stays cheap.
+        The pass schedule is a HYBRID (quest_autopilot_design.md's autopilot spec, section A): the
+        original team-wide pass (``task_kind="autopilot"``, no ``goal_id``) still serves every
+        opted-in quest that sets no ``run_time`` of its own, unchanged from before this feature.
+        A quest that sets its own ``run_time`` gets its OWN recurring pass series
+        (``goal_id`` == that quest's id) -- created, retuned when its schedule drifts from what
+        the quest now says (including the backend's UTC-midnight spawn-date bug, see A3), and
+        retired when the quest is no longer eligible. Both halves read the SAME schedule snapshot
+        below, so they can never disagree about which quest belongs to which series.
 
-        Best-effort throughout: any failure is logged and retried next scan. A missing pass task
-        is a degraded feature, never a reason to skip the ordinary task pickup that follows.
+        The liveness test generalizes rather than changes: "exactly one open occurrence" per
+        SERIES, keyed by ``goal_id or ""`` (the team series has no ``goal_id``). Still ONE
+        ``list_tasks`` call per scan, grouped in memory -- no list call per quest.
+
+        Best-effort throughout: any failure is logged and retried next scan. A missing or
+        out-of-tune pass task is a degraded feature, never a reason to skip the ordinary task
+        pickup that follows.
         """
         if not self.cfg.autopilot_ensure_pass_task:
             return
@@ -653,49 +704,277 @@ class Poller:
                 team_id=self.cfg.team_id, task_kind=AUTOPILOT_PASS_KIND)
             # A recurring series always has exactly one occurrence outstanding: the backend spawns
             # the next one when the current reaches a terminal status. So "an open occurrence
-            # exists" is the correct liveness test for the whole series. Only if the series was
-            # cancelled or never created does nothing open remain -- and then we make one.
-            if any(str(t.get("status", "")).strip().lower() in OPEN_TASK_STATUSES
-                   for t in existing):
-                return
-            if not self._any_quest_on_autopilot():
-                return
-            created = self.client.create_task(
-                "Autopilot pass: scan this team's opted-in quests and make progress on their "
-                "current-scope goals.",
-                title="Autopilot pass",
-                team_id=self.cfg.team_id,
-                source="chat",
-                task_kind=AUTOPILOT_PASS_KIND,
-                recurrence={"frequency": "daily", "time": self.cfg.autopilot_pass_time},
-                scheduled_time=self.cfg.autopilot_pass_time,
-                env_id=self.cfg.env_id or None,
-            ) or {}
-            log.info("autopilot: created the recurring pass task %s (daily at %s)",
-                     created.get("id") or created.get("task_id"), self.cfg.autopilot_pass_time)
+            # exists" is the correct liveness test for a series. Only if a series was cancelled or
+            # never created does nothing open remain for it -- and then we make one.
+            open_by_series: Dict[str, List[Dict[str, Any]]] = {}
+            for t in existing:
+                if str(t.get("status", "")).strip().lower() not in OPEN_TASK_STATUSES:
+                    continue
+                open_by_series.setdefault(str(t.get("goal_id") or ""), []).append(t)
+            snapshot = self._quest_schedule_snapshot()
+            self._ensure_team_pass(open_by_series.get("", []), snapshot)
+            if self.cfg.autopilot_quest_pass_tasks:
+                self._ensure_quest_pass_tasks(open_by_series, snapshot)
         except Exception as e:  # noqa: BLE001 -- never let this block the scan
-            log.warning("autopilot: could not ensure the recurring pass task (%s) — "
+            log.warning("autopilot: could not ensure the recurring pass task(s) (%s) — "
                         "will retry next scan", e)
 
-    def _any_quest_on_autopilot(self) -> bool:
-        """Whether ANY of the team's quests is opted in (``autopilot.mode`` in suggest/act).
+    def _ensure_team_pass(self, open_occurrences: List[Dict[str, Any]],
+                          snapshot: Dict[str, Dict[str, Any]]) -> None:
+        """The original team-wide pass (no ``goal_id``): today's liveness test, unchanged, and a
+        narrowed eligibility check -- it now exists only when at least one opted-in quest has NO
+        ``run_time`` of its own (or, with the per-quest kill switch off, whenever any quest is
+        opted in at all -- see ``_any_quest_on_autopilot``)."""
+        if open_occurrences:
+            return  # today's liveness test, unchanged
+        if not self._any_quest_on_autopilot(snapshot):
+            return
+        created = self.client.create_task(
+            "Autopilot pass: scan this team's opted-in quests and make progress on their "
+            "current-scope goals.",
+            title="Autopilot pass",
+            team_id=self.cfg.team_id,
+            source="chat",
+            task_kind=AUTOPILOT_PASS_KIND,
+            recurrence={"frequency": "daily", "time": self.cfg.autopilot_pass_time},
+            scheduled_time=self.cfg.autopilot_pass_time,
+            env_id=self.cfg.env_id or None,
+        ) or {}
+        log.info("autopilot: created the recurring pass task %s (daily at %s)",
+                 created.get("id") or created.get("task_id"), self.cfg.autopilot_pass_time)
 
-        Mirrors ``AutopilotPass._eligible_quests``' two-read shape, and for the same reason: the
-        team quest LISTING does not carry the ``autopilot`` block, so the mode has to be read off
-        each quest's full state or every quest looks switched off.
+    def _any_quest_on_autopilot(self, snapshot: Dict[str, Dict[str, Any]]) -> bool:
+        """Whether the TEAM pass has anything to do: an opted-in quest with no ``run_time`` of its
+        own (a quest that HAS one gets its own pass series instead, see ``_ensure_quest_pass_tasks``)
+        -- or, with per-quest passes killed by config (``autopilot_quest_pass_tasks=False``), any
+        opted-in quest at all, since the switch is meant to fully restore the pre-hybrid,
+        team-pass-only behaviour.
+
+        Answers off the already-read schedule snapshot instead of doing its own reads (the same
+        semantics the old per-quest-state-read version had, one fewer read pass).
         """
+        quest_pass_enabled = self.cfg.autopilot_quest_pass_tasks
+        for entry in snapshot.values():
+            if entry.get("mode") not in ("suggest", "act"):
+                continue
+            if quest_pass_enabled and entry.get("run_time"):
+                continue  # this quest gets its OWN pass series instead
+            return True
+        return False
+
+    # --- per-quest pass series (RunnerConfig.autopilot_quest_pass_tasks, on by default) ---------
+
+    def _quest_schedule_snapshot(self) -> Dict[str, Dict[str, Any]]:
+        """``{quest_id: {mode, run_time, run_timezone, cadence, last_pass_at, has_instructions,
+        env_id}}`` for every one of the team's quests, refreshed at most every
+        ``cfg.autopilot_settings_refresh_seconds`` (default 300s / 5 minutes) and reused from
+        cache in between.
+
+        Built from ``list_quests`` (the slim team listing) plus one ``get_quest_autopilot`` per
+        quest -- the same two-read shape ``AutopilotPass._eligible_quests`` uses, and for the same
+        reason: the team listing carries no ``autopilot`` block at all. One unreadable quest is
+        skipped with a log; it never voids the rest of the snapshot.
+
+        MUST be refreshed before task discovery in ``run_once`` so the timezone map ``tz_for``
+        reads (``_pass_timezone_for``) is warm on the very first scan -- the existing call order
+        already guarantees this, since ``_ensure_autopilot_pass`` (which calls this) runs before
+        ``discover_due``.
+
+        Cost and its consequence, worth knowing before touching the refresh interval: a settings
+        change (a new run time, new instructions, mode flipped off) takes effect within one
+        refresh interval, not on the very next scan. That is why the interval is config and not a
+        constant -- a deployment that wants faster convergence sets it lower, at the cost of more
+        reads.
+        """
+        now_ts = time.monotonic()
+        if (self._quest_schedule_cache_at is not None
+                and (now_ts - self._quest_schedule_cache_at)
+                < max(0, self.cfg.autopilot_settings_refresh_seconds)):
+            return self._quest_schedule_cache
+        snapshot: Dict[str, Dict[str, Any]] = {}
         quests = self.client.list_quests(team_id=self.cfg.team_id or None) or []
+        with_run_time = 0
         for row in quests:
             quest_id = str(row.get("quest_id") or row.get("id") or "")
             if not quest_id:
                 continue
             try:
                 state = self.client.get_quest_autopilot(quest_id) or {}
-            except Exception:  # noqa: BLE001 -- one unreadable quest never decides the answer
+            except Exception:  # noqa: BLE001 -- one bad quest never voids the snapshot
+                log.info("autopilot: could not read quest %s's schedule this refresh -- skipping",
+                         quest_id, exc_info=True)
                 continue
-            if str((state.get("autopilot") or {}).get("mode") or "off") in ("suggest", "act"):
-                return True
-        return False
+            autopilot_cfg = state.get("autopilot") or {}
+            run_time = str(autopilot_cfg.get("run_time") or "").strip() or None
+            instructions = str(autopilot_cfg.get("instructions") or "").strip()
+            snapshot[quest_id] = {
+                "mode": str(autopilot_cfg.get("mode") or "off"),
+                "run_time": run_time,
+                "run_timezone": str(autopilot_cfg.get("run_timezone") or "").strip() or None,
+                "cadence": autopilot_cfg.get("cadence"),
+                "last_pass_at": autopilot_cfg.get("last_pass_at"),
+                "has_instructions": bool(instructions),
+                "env_id": autopilot_cfg.get("env_id"),
+            }
+            if run_time:
+                with_run_time += 1
+        self._quest_schedule_cache = snapshot
+        self._quest_schedule_cache_at = now_ts
+        log.info("autopilot: read schedules for %d quest(s), %d with their own run time",
+                 len(snapshot), with_run_time)
+        return snapshot
+
+    def _pass_timezone_for(self, task: Dict[str, Any]) -> Optional[str]:
+        """The IANA zone a PASS task's local due-check should compare in.
+
+        Only a per-quest pass occurrence (``task_kind == "autopilot"`` carrying a ``goal_id``)
+        gets one, via that quest's own ``run_timezone``. Every other task -- the team pass, and
+        ordinary work -- returns ``None`` so ``_due_now_locally`` keeps today's naive-local
+        comparison for them: an ``assistant_task`` carries no timezone of its own, and inventing
+        one for a non-pass task is a separate feature, out of scope here.
+        """
+        if str(task.get("task_kind") or "").strip().lower() != AUTOPILOT_PASS_KIND:
+            return None
+        quest_id = str(task.get("goal_id") or "").strip()
+        if not quest_id:
+            return None
+        entry = self._quest_schedule_snapshot().get(quest_id)
+        return (entry or {}).get("run_timezone") or None
+
+    def _expected_quest_occurrence(self, entry: Dict[str, Any]) -> Tuple[str, str]:
+        """The catch-up formula (autopilot spec A3): ``today_in_tz`` if the quest's cadence is
+        due, else tomorrow -- computed from the exact SAME predicate ``cadence_due`` uses inside
+        the pass itself, so the schedule and the gate can never disagree. A late run therefore
+        never consumes the next day's occurrence (the corrected date comes from the clock and
+        ``last_pass_at``, never from the previous occurrence's own date) and never produces two
+        briefs (once a pass has run today, this returns tomorrow, and ``cadence_due`` is a second,
+        independent guard inside the pass).
+
+        Returns ``(expected_date "YYYY-MM-DD", expected_time "HH:MM")``.
+        """
+        zone = entry.get("run_timezone")
+        run_time = entry.get("run_time") or "00:00"
+        now = self._now()
+        today = today_in_zone(zone, now)
+        expected_date = today if cadence_due(entry, now, tz=zone) else today + timedelta(days=1)
+        return expected_date.isoformat(), run_time
+
+    def _ensure_quest_pass_tasks(self, open_by_series: Dict[str, List[Dict[str, Any]]],
+                                 snapshot: Dict[str, Dict[str, Any]]) -> None:
+        """One recurring pass series PER opted-in quest that has set its own ``run_time``: created
+        when missing, retuned when its open occurrence drifts from what the quest now says,
+        retired when the quest is no longer eligible. Each quest is isolated from the others --
+        one quest's failure here never blocks another's."""
+        for quest_id, entry in snapshot.items():
+            try:
+                self._ensure_one_quest_pass(quest_id, entry, open_by_series.get(quest_id, []))
+            except Exception as e:  # noqa: BLE001 -- one quest's pass never blocks another's
+                log.warning("autopilot: could not ensure quest %s's own pass (%s) — will retry "
+                            "next scan", quest_id, e)
+
+    def _ensure_one_quest_pass(self, quest_id: str, entry: Dict[str, Any],
+                               occurrences: List[Dict[str, Any]]) -> None:
+        mode = str(entry.get("mode") or "off")
+        run_time = entry.get("run_time")
+        eligible = mode in ("suggest", "act") and bool(run_time)
+
+        if not eligible:
+            if occurrences:
+                reason = "mode off" if mode not in ("suggest", "act") else "run time cleared"
+                self._retire_quest_pass(quest_id, occurrences, reason)
+            return
+
+        if len(occurrences) > 1:
+            ids = [o.get("id") or o.get("task_id") for o in occurrences]
+            log.warning("autopilot: quest %s has %d open pass occurrences (%s) -- acting on the "
+                        "earliest scheduled_date only, creating nothing", quest_id,
+                        len(occurrences), ids)
+            occurrences = sorted(occurrences, key=lambda o: str(o.get("scheduled_date") or ""))[:1]
+
+        expected_date, expected_time = self._expected_quest_occurrence(entry)
+        if not occurrences:
+            self._create_quest_pass(quest_id, entry, expected_date, expected_time)
+            return
+        self._retune_quest_pass(quest_id, occurrences[0], expected_date, expected_time)
+
+    def _create_quest_pass(self, quest_id: str, entry: Dict[str, Any], expected_date: str,
+                           expected_time: str) -> None:
+        env_id = entry.get("env_id") or self.cfg.env_id or None
+        created = self.client.create_task(
+            "Autopilot pass for this quest: work its current-scope goals and its standing "
+            "instructions.",
+            title="Autopilot pass",
+            team_id=self.cfg.team_id,
+            goal_id=quest_id,
+            source="chat",
+            task_kind=AUTOPILOT_PASS_KIND,
+            recurrence={"frequency": "daily", "time": expected_time},
+            scheduled_date=expected_date,
+            scheduled_time=expected_time,
+            env_id=env_id,
+        ) or {}
+        log.info("autopilot: created quest %s's own pass (daily at %s %s, first occurrence %s)",
+                 quest_id, expected_time, entry.get("run_timezone") or "runner-local",
+                 expected_date)
+
+    def _retune_quest_pass(self, quest_id: str, occurrence: Dict[str, Any], expected_date: str,
+                           expected_time: str) -> None:
+        """PATCH the quest's open occurrence to ``expected_date``/``expected_time`` when either
+        differs from what it currently holds -- zero writes when they already match (the steady
+        state must stay quiet). This is what makes a changed ``run_time`` take effect (the
+        spawner inherits ``recurrence`` from the task document, so without this a change would
+        never reach a future occurrence) AND what corrects the backend's UTC-dated spawn (A3).
+        """
+        task_id = str(occurrence.get("id") or occurrence.get("task_id") or "")
+        current_date = str(occurrence.get("scheduled_date") or "")
+        current_time = str(occurrence.get("scheduled_time") or "")
+        recurrence = occurrence.get("recurrence")
+        current_recurrence_time = recurrence.get("time") if isinstance(recurrence, dict) else None
+
+        diffs: Dict[str, Any] = {}
+        if current_date != expected_date:
+            diffs["scheduled_date"] = expected_date
+        if current_time != expected_time:
+            diffs["scheduled_time"] = expected_time
+        if current_recurrence_time != expected_time:
+            diffs["recurrence"] = {"frequency": "daily", "time": expected_time}
+        if not diffs:
+            return  # steady state -- must stay quiet, no write
+
+        settings_changed = current_time != expected_time or current_recurrence_time != expected_time
+        reason = "settings changed" if settings_changed else "spawn date corrected for timezone"
+        try:
+            self.client.update_task(task_id, diffs)
+            log.info("autopilot: retuned quest %s's pass %s %s -> %s %s (%s)",
+                     quest_id, current_date, current_time, expected_date, expected_time, reason)
+        except QuestApiError as e:
+            if e.status == 409:
+                log.warning("autopilot: could not retune quest %s's pass -- schedule conflict "
+                            "(%s); leaving the occurrence alone, next sweep will re-evaluate",
+                            quest_id, e)
+            else:
+                log.warning("autopilot: could not retune quest %s's pass (%s) — will retry next "
+                            "scan", quest_id, e)
+        except Exception as e:  # noqa: BLE001 -- one quest's retune failure never blocks another
+            log.warning("autopilot: could not retune quest %s's pass (%s) — will retry next scan",
+                        quest_id, e)
+
+    def _retire_quest_pass(self, quest_id: str, occurrences: List[Dict[str, Any]],
+                           reason: str) -> None:
+        """Stop a quest's pass series in ONE PATCH per occurrence: ``recurrence`` cleared AND
+        ``status`` cancelled together. Order matters, and it must be one call: a bare
+        ``status: "cancelled"`` PATCH would still spawn one more occurrence off the just-cancelled
+        document (verified live behaviour, not theory -- see C4/C7 of the autopilot spec)."""
+        for occ in occurrences:
+            task_id = str(occ.get("id") or occ.get("task_id") or "")
+            if not task_id:
+                continue
+            try:
+                self.client.update_task(task_id, {"recurrence": "", "status": "cancelled"})
+                log.info("autopilot: retired quest %s's pass %s (%s)", quest_id, task_id, reason)
+            except Exception as e:  # noqa: BLE001 -- one quest's retire failure never blocks another
+                log.warning("autopilot: could not retire quest %s's pass %s (%s) — will retry "
+                            "next scan", quest_id, task_id, e)
 
     def _sync_all_quest_folders(self) -> None:
         """Best-effort: sync EVERY entry in ``cfg.quest_folder_map``, independent of whether a
