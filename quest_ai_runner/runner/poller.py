@@ -29,7 +29,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..config import RunnerConfig, build_orchestrator, derive_capabilities
 from ..resources import ResourceGuard, ResourceLimits
-from .autopilot import AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, AutopilotPass, cadence_due
+from .autopilot import (AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, AutopilotPass, cadence_due,
+                        run_requested)
 from .executor import TaskExecutor
 from .local_time import now_in_zone, scheduled_moment, today_in_zone
 from .quest_client import QuestApiError, QuestClient, QuestDecisionSink, QuestNotConfigured
@@ -784,6 +785,7 @@ class Poller:
                 "run_timezone": str(autopilot_cfg.get("run_timezone") or "").strip() or None,
                 "cadence": autopilot_cfg.get("cadence"),
                 "last_pass_at": autopilot_cfg.get("last_pass_at"),
+                "run_requested_at": autopilot_cfg.get("run_requested_at"),
                 "has_instructions": bool(instructions),
                 "env_id": autopilot_cfg.get("env_id"),
             }
@@ -821,12 +823,20 @@ class Poller:
         briefs (once a pass has run today, this returns tomorrow, and ``cadence_due`` is a second,
         independent guard inside the pass).
 
+        A pending "Run now" request (``run_requested``) overrides both halves: the date is today,
+        and the time is pulled back to the current local time when ``run_time`` is still ahead of
+        it, so the occurrence is due the moment the runner next looks instead of at a run_time
+        that may be hours away (or already gone, which needs no pulling back). This is the whole
+        of "run now" on the schedule side -- the same series, the same occurrence, moved.
+
         Returns ``(expected_date "YYYY-MM-DD", expected_time "HH:MM")``.
         """
         zone = entry.get("run_timezone")
         run_time = entry.get("run_time") or "00:00"
         now = self._now()
         today = today_in_zone(zone, now)
+        if run_requested(entry):
+            return today.isoformat(), min(run_time, now_in_zone(zone, now).strftime("%H:%M"))
         expected_date = today if cadence_due(entry, now, tz=zone) else today + timedelta(days=1)
         return expected_date.isoformat(), run_time
 

@@ -315,3 +315,82 @@ def test_two_open_occurrences_warns_and_acts_on_the_earliest_only(caplog):
     task_id, _fields = client.task_updates[0]
     assert task_id == "earlier"          # acted on the earliest scheduled_date only
     assert "2 open pass occurrences" in caplog.text
+
+
+# --- 12: "Run now" pulls the SAME occurrence forward --------------------------------------------
+
+def test_a_pending_run_request_pulls_the_occurrence_to_today_even_after_a_pass_ran():
+    """"Run now" on a quest that ALREADY ran today must still run.
+
+    This is the case the button exists for, and the one the cadence gate would otherwise refuse:
+    ``last_pass_at`` is earlier today, so the occurrence sits on tomorrow. A pending request
+    (``run_requested_at`` newer than ``last_pass_at``) moves that same occurrence back to today.
+    """
+    client = FakeRunTimeClient(
+        tasks=[_pass_task("p1", quest_id="q1", scheduled_date="2026-08-21",
+                          scheduled_time="06:30", recurrence_time="06:30")],
+        quests=[{"quest_id": "q1"}],
+        autopilot_by_quest={"q1": {"mode": "act", "run_time": "06:30", "cadence": "daily",
+                                   "run_timezone": "America/Los_Angeles",
+                                   "last_pass_at": "2026-08-20T08:40:00Z",
+                                   "run_requested_at": "2026-08-20T08:55:00Z"}},
+    )
+    _poller_now(client, NOW)._ensure_autopilot_pass()
+    assert client.created == []               # the same series, not a second one
+    task_id, fields = client.task_updates[0]
+    assert task_id == "p1"
+    assert fields["scheduled_date"] == "2026-08-20"
+
+
+def test_a_pending_run_request_pulls_the_time_back_to_now_when_the_run_time_is_still_ahead():
+    """Requested at 02:00 local with a 06:30 run_time: waiting until 06:30 is not "run now".
+
+    NOW is 2026-08-20 09:00 UTC == 02:00 America/Los_Angeles, so run_time is four hours away. The
+    occurrence has to be dated at or before the current local time to be discovered as due.
+    """
+    client = FakeRunTimeClient(
+        tasks=[_pass_task("p1", quest_id="q1", scheduled_date="2026-08-20",
+                          scheduled_time="06:30", recurrence_time="06:30")],
+        quests=[{"quest_id": "q1"}],
+        autopilot_by_quest={"q1": {"mode": "act", "run_time": "06:30", "cadence": "daily",
+                                   "run_timezone": "America/Los_Angeles",
+                                   "last_pass_at": "2026-08-19T10:00:00Z",
+                                   "run_requested_at": "2026-08-20T08:59:00Z"}},
+    )
+    _poller_now(client, NOW)._ensure_autopilot_pass()
+    task_id, fields = client.task_updates[0]
+    # The date was already today, so only the time is written -- the retune writes diffs only.
+    assert "scheduled_date" not in fields
+    assert fields["scheduled_time"] == "02:00"   # now, not the 06:30 that is still ahead
+
+
+def test_a_spent_run_request_changes_nothing():
+    """A request OLDER than ``last_pass_at`` has been answered: back to the ordinary schedule.
+
+    This is what makes the request self-consuming -- the pass stamping ``last_pass_at`` is the
+    only "clear" there is, so a stale stamp left on the quest forever must be inert.
+    """
+    client = FakeRunTimeClient(
+        tasks=[_pass_task("p1", quest_id="q1", scheduled_date="2026-08-21",
+                          scheduled_time="06:30", recurrence_time="06:30")],
+        quests=[{"quest_id": "q1"}],
+        autopilot_by_quest={"q1": {"mode": "act", "run_time": "06:30", "cadence": "daily",
+                                   "run_timezone": "America/Los_Angeles",
+                                   "last_pass_at": "2026-08-20T08:40:00Z",
+                                   "run_requested_at": "2026-08-20T08:10:00Z"}},
+    )
+    _poller_now(client, NOW)._ensure_autopilot_pass()
+    assert client.created == []
+    assert client.task_updates == []   # steady state: the request is spent, nothing to correct
+
+
+def test_a_run_request_never_starts_a_series_for_a_quest_whose_autopilot_is_off():
+    """Mode is the outer gate and a request does not override it. The backend refuses the request
+    with a 409 for the same reason; this is the runner's half of that guarantee."""
+    client = FakeRunTimeClient(
+        quests=[{"quest_id": "q1"}],
+        autopilot_by_quest={"q1": {"mode": "off", "run_time": "06:30",
+                                   "run_requested_at": "2026-08-20T08:59:00Z"}},
+    )
+    _poller_now(client, NOW)._ensure_autopilot_pass()
+    assert client.created == []

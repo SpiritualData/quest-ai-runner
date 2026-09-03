@@ -7,6 +7,27 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **"Run now" for a quest's autopilot** (`runner/autopilot.py`, `runner/poller.py`). A quest's
+  `autopilot.run_requested_at` (stamped by the consumer's own endpoint) asks for the next pass
+  immediately. The new `run_requested()` predicate treats a request as PENDING while it is newer
+  than `last_pass_at`, and a pending request both satisfies the cadence gate and pulls the quest's
+  existing pass occurrence to today (and back to the current local time when `run_time` is still
+  ahead). Deliberately not a second execution path: it moves the SAME recurring occurrence, so the
+  pass, its budget and its mail are unchanged. Self-consuming, so nothing has to clear it -- the
+  pass stamps `last_pass_at`, which makes the request older and therefore spent. `mode` remains
+  the outer gate: a request never runs a quest whose autopilot is off.
+
+### Fixed
+- **A daily brief was skipped after any evening pass** (`runner/autopilot.py`). `cadence_due`
+  compared UTC calendar days whenever a quest set no `run_timezone`, so a pass that ran late in
+  the evening on a runner west of UTC stamped `last_pass_at` with the NEXT UTC date and the
+  following day's pass was gated out as "already ran today". Real case: a 20:26 US/Pacific
+  catch-up pass stamped 03:26Z and the next morning's brief never arrived. The zone-less path now
+  degrades to the runner's own local clock via `local_time.now_in_zone`, the same single
+  degradation rule the rest of the repo follows, and the UTC branch is gone rather than kept as an
+  option. The suite pins `TZ` (new `conftest` fixture) so calendar-boundary assertions no longer
+  silently inherit the host's zone.
+
 - **Per-quest autopilot run time and standing instructions** (`runner/local_time.py` new,
   `runner/poller.py`, `runner/autopilot.py`, `config.py`). A quest can now set its own
   `run_time`/`run_timezone` (instead of only the team-wide `autopilot_pass_time`) and standing

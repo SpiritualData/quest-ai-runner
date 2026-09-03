@@ -5,6 +5,7 @@ pure helper functions directly. See ``quest_autopilot_design.md`` (Part B) for t
 proves, and the qar-playbook invariant: every skipped quest must be logged with its gate reason
 (``AutopilotResult.skipped``) — a silent skip is exactly the failure mode banned there.
 """
+import time
 from datetime import datetime, timezone
 
 from quest_ai_runner.runner.autopilot import (
@@ -13,6 +14,7 @@ from quest_ai_runner.runner.autopilot import (
     AutopilotPass,
     batch_by_persona,
     cadence_due,
+    run_requested,
     compose_batch_text,
     resolve_persona,
     select_target_goals,
@@ -144,11 +146,13 @@ class FakeAutopilotClient:
 
 def _quest(quest_id, *, mode="act", cadence="weekly", last_pass_at=None, planning="work_only",
           env_id=None, personas=None, outcome="ship the thing", miss_streak=0,
-          adopt_recurring=None):
+          adopt_recurring=None, run_requested_at=None):
     autopilot = {"mode": mode, "cadence": cadence, "planning": planning,
                 "miss_streak": miss_streak}
     if last_pass_at is not None:
         autopilot["last_pass_at"] = last_pass_at
+    if run_requested_at is not None:
+        autopilot["run_requested_at"] = run_requested_at
     if env_id is not None:
         autopilot["env_id"] = env_id
     if personas is not None:
@@ -264,15 +268,33 @@ def test_cadence_due_with_tz_reads_the_evening_run_in_its_own_local_day():
     """A 05:00 UTC ``last_pass_at`` is the PREVIOUS evening in America/Los_Angeles (22:00 PDT,
     UTC-7): 2026-08-21T05:00:00Z is 2026-08-20T22:00 local. Checked from a moment that is still
     the SAME UTC calendar day (2026-08-21) but already the NEXT calendar day in Los Angeles
-    (2026-08-21T13:00 local), the two comparisons disagree on purpose: tz=None keeps comparing
-    UTC days (same day as last_pass_at -> not due, the old, unchanged behaviour), while tz=<name>
-    compares LOCAL days (a new local day has begun -> due). This is the exact bug: read as UTC
-    days, the evening run makes the FOLLOWING day's pass look like it already ran today.
+    (2026-08-21T13:00 local), the two readings disagree: as UTC days it is the same day as
+    ``last_pass_at`` (not due), as LOCAL days a new day has begun (due). This is the exact bug --
+    read as UTC days, an evening run makes the FOLLOWING day's pass look like it already ran.
     """
     autopilot_cfg = {"cadence": "daily", "last_pass_at": "2026-08-21T05:00:00Z"}
     now = datetime(2026, 8, 21, 20, 0, tzinfo=timezone.utc)  # 2026-08-21T13:00 America/Los_Angeles
     assert cadence_due(autopilot_cfg, now, tz="America/Los_Angeles") is True
-    assert cadence_due(autopilot_cfg, now, tz=None) is False  # the old UTC-day answer, unchanged
+
+
+def test_cadence_due_without_tz_uses_the_runner_clock_not_utc(monkeypatch):
+    """No ``run_timezone`` degrades to the RUNNER'S clock, never UTC -- ``local_time``'s one rule.
+
+    This cost a real brief. Joshua's dissertation quest set no ``run_timezone``; a catch-up pass
+    ran at 20:26 on a US/Pacific runner and stamped ``last_pass_at`` 03:26Z the NEXT UTC day. The
+    next morning's pass compared UTC days, saw "already ran today", and the daily brief never
+    arrived. Same instants as the test above, with the zone supplied by the host instead of the
+    quest: the runner is in Los Angeles, so it must reach the same answer (due).
+    """
+    autopilot_cfg = {"cadence": "daily", "last_pass_at": "2026-08-21T05:00:00Z"}
+    now = datetime(2026, 8, 21, 20, 0, tzinfo=timezone.utc)
+    monkeypatch.setenv("TZ", "America/Los_Angeles")
+    time.tzset()
+    assert cadence_due(autopilot_cfg, now, tz=None) is True
+    # ...and an unresolvable zone name degrades down the same path rather than to UTC. (The name
+    # is unique to this test on purpose: local_time's warn-once set is process-global, so reusing
+    # another test's bad name would swallow the warning it asserts on.)
+    assert cadence_due(autopilot_cfg, now, tz="Not/ACadenceZone") is True
 
 
 def test_gate_skips_quest_whose_cadence_is_not_due():
@@ -1399,3 +1421,47 @@ def test_a_failed_artifact_refresh_warns_loudly_and_never_fails_the_pass(tmp_pat
     assert (tmp_path / "QUEST_SYNC.md").exists()               # and so did the local artifact
     assert any("next-steps artifact" in w["detail"] for w in result.bookkeeping_warnings)
     assert "next-steps artifact" in result.summary_text()
+
+
+# --- "Run now": a pending request satisfies the cadence gate -------------------------------------
+
+def test_run_requested_is_pending_only_while_newer_than_the_last_pass():
+    """The request is spent by the pass that answers it -- there is no separate clear.
+
+    Which is exactly why "newer than last_pass_at" is the test and a bare boolean flag is not: a
+    flag needs someone to reset it, and whoever forgets leaves the quest either passing forever or
+    silently ignoring the button.
+    """
+    assert run_requested({}) is False
+    assert run_requested({"run_requested_at": "2026-07-12T09:00:00Z"}) is True   # never run
+    assert run_requested({"run_requested_at": "2026-07-12T09:00:00Z",
+                          "last_pass_at": "2026-07-12T08:00:00Z"}) is True       # after the pass
+    assert run_requested({"run_requested_at": "2026-07-12T08:00:00Z",
+                          "last_pass_at": "2026-07-12T09:00:00Z"}) is False      # already answered
+    # A corrupt request stamp is not pending: it must not wedge the quest into passing forever.
+    assert run_requested({"run_requested_at": "not-a-date"}) is False
+    # A corrupt last_pass_at leaves a REAL request pending -- fail toward what the user asked for.
+    assert run_requested({"run_requested_at": "2026-07-12T09:00:00Z",
+                          "last_pass_at": "not-a-date"}) is True
+
+
+def test_a_pending_run_request_runs_the_quest_the_cadence_gate_would_have_skipped():
+    """Same quest and same instant as ``test_gate_skips_quest_whose_cadence_is_not_due``, with a
+    request added. Anything else would make "Run now" a button that reports success and does
+    nothing on the day someone is most likely to press it."""
+    q1 = _quest("q1", last_pass_at="2026-07-11T09:00:00Z",
+                run_requested_at="2026-07-12T08:59:00Z")
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))}
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals)
+    result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+    assert result.skipped == []
+    assert len(result.created_task_ids) == 1
+
+
+def test_a_run_request_does_not_override_mode_off():
+    """Mode is the outer gate: a quest that is not opted in is never reached by a request."""
+    q1 = _quest("q1", mode="off", run_requested_at="2026-07-12T08:59:00Z")
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))}
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals)
+    result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+    assert result.created_task_ids == []

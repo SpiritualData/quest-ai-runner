@@ -180,13 +180,18 @@ def cadence_due(autopilot_cfg: Dict[str, Any], now: datetime, tz: Optional[str] 
     Never run before (no ``last_pass_at``) is always due. An unparsable timestamp fails OPEN to
     due -- a corrupt/missing stamp must never permanently wedge a quest as "not due yet".
 
-    ``tz``, when given (a quest's own ``run_timezone``), compares BOTH ``last_pass_at`` and
-    ``now`` in that zone instead of UTC calendar days. This is not a nicety: a 22:00
-    America/Los_Angeles run stamps ``last_pass_at`` at about 05:00 UTC the NEXT UTC day. Compared
-    as UTC days, the following evening's pass would look like it already ran "today" and a daily
-    brief would be skipped every other day. Left ``None`` (the default), behaviour is byte for
-    byte the original UTC-day comparison. An unresolvable zone degrades the same way, via
-    ``local_time.now_in_zone``.
+    ``tz`` (a quest's own ``run_timezone``) is the zone BOTH ``last_pass_at`` and ``now`` are
+    compared in. This is not a nicety: a 22:00 America/Los_Angeles run stamps ``last_pass_at`` at
+    about 05:00 UTC the NEXT UTC day. Compared as UTC days, the following day's pass looks like it
+    already ran "today" and the brief is skipped.
+
+    A missing or unresolvable ``tz`` degrades to the RUNNER'S OWN clock via
+    ``local_time.now_in_zone``, never to UTC -- the one degradation rule this repo has, stated in
+    ``local_time``'s module docstring and in the autopilot spec (A4). It used to degrade to UTC
+    here instead, and that cost a real brief: this quest set no ``run_timezone``, an evening
+    catch-up pass on a US/Pacific runner stamped 03:26Z the next UTC day, and the following
+    morning's pass was gated out as "already ran today". A calendar-day comparison against a zone
+    nobody lives in is not a safe default, so there is no longer a branch offering one.
     """
     last_pass = autopilot_cfg.get("last_pass_at")
     if not last_pass:
@@ -197,17 +202,35 @@ def cadence_due(autopilot_cfg: Dict[str, Any], now: datetime, tz: Optional[str] 
     cadence = str(autopilot_cfg.get("cadence") or "weekly").strip().lower()
     if cadence not in _CADENCE_DAYS:
         cadence = "weekly"
-    if tz:
-        then = now_in_zone(tz, parsed)
-        here = now_in_zone(tz, now)
-    else:
-        then = parsed.astimezone(timezone.utc)
-        here = now.astimezone(timezone.utc)
+    then = now_in_zone(tz, parsed)
+    here = now_in_zone(tz, now)
     if cadence == "daily":
         return then.date() < here.date()
     if cadence == "weekly":
         return then.isocalendar()[:2] < here.isocalendar()[:2]
     return (then.year, then.month) < (here.year, here.month)
+
+
+def run_requested(autopilot_cfg: Dict[str, Any]) -> bool:
+    """Whether a "Run now" request is PENDING for this quest.
+
+    Pending means ``run_requested_at`` is newer than ``last_pass_at`` -- the request has not yet
+    been answered by a pass. That comparison is the whole mechanism, and it is why the request
+    needs no separate clear: a finished pass stamps ``last_pass_at``, which makes the request older
+    and therefore spent. Nothing has to remember to reset a flag, so there is no state that can be
+    left stuck ON (a pass that runs forever) or stuck OFF (a request silently dropped).
+
+    Compared as INSTANTS in UTC, deliberately unlike ``cadence_due``'s calendar-day comparison:
+    "is this request newer than that pass" is a question about moments, so no timezone enters into
+    it. An unparsable ``run_requested_at`` is not pending (a corrupt stamp must not wedge a quest
+    into passing forever), while an unparsable ``last_pass_at`` leaves a real request pending --
+    both fail toward the behaviour the user last actually asked for.
+    """
+    requested = _parse_dt(autopilot_cfg.get("run_requested_at"))
+    if requested is None:
+        return False
+    last_pass = _parse_dt(autopilot_cfg.get("last_pass_at"))
+    return last_pass is None or requested > last_pass
 
 
 def _current_period_key(scope: str, now: datetime) -> Optional[str]:
@@ -1550,11 +1573,17 @@ class AutopilotPass:
     def _gate_quest(self, quest: Dict[str, Any], quest_id: str) -> Optional[str]:
         """Per-quest gates, cheapest first. Returns a skip reason, or None if the quest passes."""
         autopilot_cfg = quest.get("autopilot") or {}
-        # tz= the quest's own run_timezone (None for a quest with no per-quest schedule, which
-        # keeps this on UTC calendar days exactly as before). This is the SAME predicate the
-        # poller's schedule-correction sweep reads (A3 of the autopilot spec), so the schedule and
-        # this gate can never disagree about whether today's occurrence is due.
-        if not cadence_due(autopilot_cfg, self._now(), tz=autopilot_cfg.get("run_timezone")):
+        # tz= the quest's own run_timezone; absent one, cadence_due falls back to the runner's
+        # local clock (never UTC). This is the SAME predicate the poller's schedule-correction
+        # sweep reads (A3 of the autopilot spec), so the schedule and this gate can never disagree
+        # about whether today's occurrence is due.
+        #
+        # A pending "Run now" request satisfies the cadence gate on its own. Without that, the
+        # button would be a no-op on exactly the day someone is most likely to press it (the quest
+        # already ran and they want another pass), and a no-op that reports success is the silent
+        # failure this codebase bans.
+        if (not cadence_due(autopilot_cfg, self._now(), tz=autopilot_cfg.get("run_timezone"))
+                and not run_requested(autopilot_cfg)):
             return "cadence not due yet"
         if self._backpressure and self._has_backpressure(quest_id):
             return "backpressure: a previous autopilot task for this quest is still open"
