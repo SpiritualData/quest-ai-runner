@@ -97,3 +97,31 @@ def test_scheduled_moment_dst_boundary_never_raises():
     moment = scheduled_moment("2026-03-08", "02:30", "America/Los_Angeles")
     assert moment is not None
     assert moment.tzinfo is not None
+
+
+# --- the fallback must be the RUNNER's clock, never UTC ----------------------------------------
+
+def test_an_aware_utc_now_with_no_zone_is_expressed_on_the_runners_local_clock():
+    """The regression that cost a morning brief. The poller anchors every scan on an aware UTC
+    ``now``; with no per-quest zone the fallback returned it UNCHANGED, so ``.date()`` gave the
+    UTC date. At 22:05 US/Pacific that is already tomorrow, so the daily pass was scheduled a day
+    late and the run never happened."""
+    from datetime import datetime, timedelta, timezone as _tz
+    from quest_ai_runner.runner import local_time
+
+    # An instant that is a DIFFERENT calendar day in UTC than on any negative-offset local clock.
+    now_utc = datetime.now(_tz.utc).replace(hour=5, minute=5)
+    got = local_time.now_in_zone(None, now_utc)
+    assert got.utcoffset() == datetime.now().astimezone().utcoffset()
+    assert local_time.today_in_zone(None, now_utc) == now_utc.astimezone().date()
+
+
+def test_a_naive_now_with_no_zone_is_passed_through_unchanged():
+    """The pre-existing convention the rest of the repo relies on: a naive timestamp is already a
+    local reading, so the fallback must not shift it."""
+    from datetime import datetime
+    from quest_ai_runner.runner import local_time
+
+    naive = datetime(2026, 9, 2, 22, 5)
+    assert local_time.now_in_zone(None, naive) == naive
+    assert local_time.today_in_zone(None, naive) == naive.date()

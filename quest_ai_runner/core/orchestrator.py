@@ -5968,8 +5968,11 @@ class Orchestrator:
                     break
                 # Not met: record why; escalate the model; stop if the token budget is spent.
                 res.met = False
-                reason = verdict.get("reason") or "done-standard not satisfied"
-                res.error = res.error or ("goal not yet met: " + reason)
+                reason = verdict.get("reason") or "the done-standard was not satisfied"
+                # Reads as a sentence, because a person reads it: this lands in the activity feed
+                # and can reach a human. A lowercase "goal not yet met:" followed by a verifier's
+                # raw clause looked like debug output leaking into a report.
+                res.error = res.error or ("Goal not yet met: " + reason[:1].upper() + reason[1:])
                 if emit is not None:
                     # Always show what was attempted (the output) first
                     output_text = _strip_future_context(res.output).strip()

@@ -58,13 +58,22 @@ def now_in_zone(name: Optional[str], now: Optional[datetime] = None) -> datetime
     ``astimezone``, correct regardless of its own tzinfo) or naive (treated as UTC, matching the
     convention this repo already uses for a naive stored timestamp -- see ``autopilot._parse_dt``).
 
-    Returns an AWARE datetime in ``name`` when the zone resolves. When it does not, returns
-    ``now`` unchanged if given, else the naive local ``datetime.now()`` -- the same value
-    ``_due_now_locally`` used everywhere before per-quest timezones existed.
+    Returns an AWARE datetime in ``name`` when the zone resolves. When it does not, the result is
+    expressed on the RUNNER'S OWN clock -- the same value ``_due_now_locally`` used everywhere
+    before per-quest timezones existed.
+
+    That last part is the whole point of the fallback and it is easy to get wrong: returning an
+    aware ``now`` unchanged would hand back a UTC reading, and callers take ``.date()`` off this.
+    A runner in US/Pacific asking "what day is it" at 22:05 local got tomorrow's date, so a daily
+    pass was scheduled a day late and the person's morning brief simply did not arrive. A naive
+    ``now`` is already a local reading by this repo's convention and is passed through untouched.
     """
     zone = resolve_zone(name)
     if zone is None:
-        return now if now is not None else datetime.now()
+        if now is None:
+            return datetime.now()
+        # Aware -> the runner's local zone (astimezone() with no argument), never UTC.
+        return now.astimezone() if now.tzinfo is not None else now
     if now is None:
         return datetime.now(zone)
     if now.tzinfo is not None:
