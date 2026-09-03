@@ -639,7 +639,13 @@ class TaskExecutor:
                 sink=sink, model_hint=model_hint, rep_preamble=rep_preamble,
                 context_meta=context_meta, working_dir_override=working_dir_override,
                 conv_id=conv_id, conv_scope=conv_scope or None, cancel_check=cancel_check,
-                pending_inputs=pending_inputs)
+                pending_inputs=pending_inputs,
+                # This text is a QUEUED TASK's brief, not something the human typed at us this
+                # turn, so the user-veto gate must not read it. See the no-action gate in
+                # Orchestrator.run: a work brief full of legitimate instructions ("stop asking",
+                # "do not silently drop them") otherwise degrades the run to an answer with no
+                # tools, and it reports as though it had looked.
+                message_is_user_turn=False)
         except Exception as e:  # noqa: BLE001 — brain failure -> failed report, never crash poller
             # A run that raises BECAUSE it was interrupted must not be reported as failed: check
             # (unthrottled, this is the terminal path) whether the task was cancelled meanwhile.

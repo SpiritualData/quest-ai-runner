@@ -7096,6 +7096,7 @@ class Orchestrator:
             card_thread: Optional[Any] = None,
             prior_narration: Optional[List[str]] = None,
             anticipated_id: Optional[str] = None,
+            message_is_user_turn: bool = True,
             now: Optional[str] = None) -> OrchestratorResult:
         """Run the bounded loop for one request and return a terminal OrchestratorResult.
 
@@ -7257,7 +7258,17 @@ class Orchestrator:
         # and creates no decision-request" stays in ONE place. It is turn-scoped (re-derived from
         # each message, never latched) and immutable within the turn, so neither the release judge
         # nor a planner mode signal can clear a veto the user just gave.
-        hold_off_active = message_forbids_new_task(user_message)
+        # ...but ONLY for a message the human actually typed this turn. A QUEUED TASK being
+        # executed is not a conversational turn: the decision to act was already taken when the
+        # task was created (a veto in chat prevents the task from existing at all), and the brief
+        # the executor passes here is machine-composed -- goal briefs, carried-over notes, a
+        # month's review lines. Running the veto heuristic over that text made ordinary
+        # instructions inside the work ("stop asking", "do not silently drop them") read as the
+        # user forbidding action, and the run degraded to a text-only answer with NO TOOLS. The
+        # visible symptom was a report claiming it had looked at files and found nothing, when it
+        # never had a filesystem at all -- a silent false-completion, which is the exact failure
+        # this file is otherwise full of guards against.
+        hold_off_active = message_is_user_turn and message_forbids_new_task(user_message)
         if hold_off_active:
             log.info("User message forbids opening a task this turn; running under the no-action "
                      "gate (planner deep/confirm will degrade to answer).")
