@@ -488,3 +488,96 @@ def test_quest_client_report_done_with_data_omits_result_data_when_empty(monkeyp
         "status": "done", "result": "with cards",
         "result_data": {"card_metadata": [{"id": "c1"}]},
     }
+
+
+# --- the fast lane must share the background scan's discovery scope ---------------
+
+def test_fast_lane_wait_uses_discovery_team_id_not_team_id():
+    """An owner-scoped lane (``discovery_team_id=""``) must wait owner-scoped too.
+
+    Regression: the fast lane scoped its long-poll by ``cfg.team_id`` while ``run_once`` used
+    ``discovery_team_id``. Quest's UI creates a personal chat task with ``team_id=None``, so the
+    team-filtered wait matched nothing and every real-time chat task fell through to the slow
+    background scan -- indistinguishable, from the chat, from the lane being dead.
+    """
+    seen: Dict[str, Any] = {}
+
+    def _wait_for_interactive(*, team_id=None, env_id=None, timeout=25.0):
+        seen["team_id"] = team_id
+        seen["env_id"] = env_id
+        stop_event.set()
+        return None
+
+    client = MockQuestClient([])
+    client.wait_for_interactive = _wait_for_interactive
+    poller, _provider = _poller_with_assembler(
+        client, discovery_team_id="", env_id="env-personal")
+
+    stop_event = threading.Event()
+    poller._fast_lane_loop(stop_event)
+
+    assert seen["team_id"] == ""          # owner-scoped: the client sends no team filter
+    assert seen["env_id"] == "env-personal"
+
+
+def test_fast_lane_short_poll_uses_discovery_team_id_not_team_id():
+    """Same scoping fix on the wait-channel-disabled fallback path."""
+    seen: Dict[str, Any] = {}
+
+    def _list_interactive_due(*, team_id=None, env_id=None):
+        seen["team_id"] = team_id
+        stop_event.set()
+        return []
+
+    client = MockQuestClient([])
+    client.list_interactive_due = _list_interactive_due
+    poller, _provider = _poller_with_assembler(
+        client, discovery_team_id="", wait_channel_enabled=False, context_poll_seconds=0.01)
+
+    stop_event = threading.Event()
+    poller._fast_lane_loop(stop_event)
+
+    assert seen["team_id"] == ""
+
+
+def test_fast_lane_still_scopes_by_team_when_no_discovery_override():
+    """A team-bound lane keeps its per-team isolation: no override means scope by team_id."""
+    seen: Dict[str, Any] = {}
+
+    def _wait_for_interactive(*, team_id=None, env_id=None, timeout=25.0):
+        seen["team_id"] = team_id
+        stop_event.set()
+        return None
+
+    client = MockQuestClient([])
+    client.wait_for_interactive = _wait_for_interactive
+    poller, _provider = _poller_with_assembler(client)  # team_id="team1", no discovery override
+
+    stop_event = threading.Event()
+    poller._fast_lane_loop(stop_event)
+
+    assert seen["team_id"] == "team1"
+
+
+def test_fast_lane_attaches_for_a_teamless_owner_scoped_lane():
+    """team_id="" but discovery_team_id="" set: owner-scoped discovery is intended, so attach."""
+    seen = {"n": 0}
+
+    def _wait_for_interactive(*, team_id=None, env_id=None, timeout=25.0):
+        seen["n"] += 1
+        stop_event.set()
+        return None
+
+    client = MockQuestClient([])
+    client.wait_for_interactive = _wait_for_interactive
+    provider = StubProvider(decisions=[])
+    cfg = RunnerConfig(
+        quest_base_url="http://x", quest_api_key="qsk_test", team_id="",
+        discovery_team_id="", retrieval=StubRetrieval({}), model_provider=provider,
+    )
+    poller = Poller(cfg, state_path=None, client=client)
+
+    stop_event = threading.Event()
+    poller._fast_lane_loop(stop_event)
+
+    assert seen["n"] == 1  # attached, rather than returning immediately

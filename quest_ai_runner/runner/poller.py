@@ -227,13 +227,9 @@ class Poller:
             )
             return []
         try:
-            # Use discovery_team_id when set (allows owner-scoped discovery on a personal lane while
-            # still using team_id for heartbeat/escalation); otherwise fall back to team_id.
-            disc_tid = (self.cfg.discovery_team_id
-                        if self.cfg.discovery_team_id is not None
-                        else (self.cfg.team_id or ""))
             due = self.client.discover_due(
-                now=datetime.now(timezone.utc), team_id=disc_tid, env_id=self.cfg.env_id)
+                now=datetime.now(timezone.utc), team_id=self._discovery_team_id(),
+                env_id=self.cfg.env_id)
         except (QuestApiError, QuestNotConfigured) as e:
             log.info("discovery unavailable (%s) — will retry next scan", e)
             return []
@@ -1059,6 +1055,23 @@ class Poller:
         finally:
             self._release_slot(task_id)
 
+    def _discovery_team_id(self) -> str:
+        """The team scope BOTH discovery paths must use (background scan and fast lane).
+
+        ``discovery_team_id`` when the consumer set one (allows owner-scoped discovery on a
+        personal lane while ``team_id`` still routes heartbeat/escalation); otherwise fall back to
+        ``team_id``. Returns "" for owner-scoped, which the client turns into "send no team filter".
+
+        The fast lane MUST share this with the background scan. Scoping the real-time channel by
+        ``cfg.team_id`` alone silently strands every owner-scoped task: the Quest UI creates a
+        personal chat task with ``team_id=None``, so a team-filtered wait/poll matches nothing and
+        the task falls through to the full ``poll_interval_seconds`` background scan -- which, in a
+        live chat where someone is waiting on the reply, reads as the lane simply not picking it up.
+        """
+        return (self.cfg.discovery_team_id
+                if self.cfg.discovery_team_id is not None
+                else (self.cfg.team_id or ""))
+
     def _fast_lane_loop(self, stop_event: threading.Event) -> None:
         """Background thread: serve REAL-TIME work with sub-poll-interval latency (D2 revised).
 
@@ -1079,15 +1092,17 @@ class Poller:
         continues, exactly like the background scan's own error handling."""
         import time as _time
 
-        if not self.client.configured or not self.cfg.team_id:
-            return  # nothing to attach the fast lane to (mirrors the heartbeat's own gate)
+        if not self.client.configured:
+            return  # nothing to attach the fast lane to
+        if not self.cfg.team_id and self.cfg.discovery_team_id is None:
+            return  # no team AND no explicit owner-scoped discovery -- nothing to poll for
 
         while not stop_event.is_set():
             try:
                 if self.cfg.wait_channel_enabled:
                     started = _time.monotonic()
                     task = self.client.wait_for_interactive(
-                        team_id=self.cfg.team_id, env_id=self.cfg.env_id,
+                        team_id=self._discovery_team_id(), env_id=self.cfg.env_id,
                         timeout=self.cfg.wait_timeout_seconds,
                     )
                     elapsed = _time.monotonic() - started
@@ -1103,7 +1118,7 @@ class Poller:
                     if interval <= 0:
                         return  # fast lane explicitly disabled
                     for t in self.client.list_interactive_due(
-                        team_id=self.cfg.team_id, env_id=self.cfg.env_id,
+                        team_id=self._discovery_team_id(), env_id=self.cfg.env_id,
                     ):
                         self._dispatch_fast_task(t)
                     if stop_event.wait(interval):

@@ -18,6 +18,20 @@ All notable changes to this project are documented here. The format is based on
   the outer gate: a request never runs a quest whose autopilot is off.
 
 ### Fixed
+- **The fast lane stranded every owner-scoped real-time task** (`runner/poller.py`). The
+  background scan resolved its discovery scope through `discovery_team_id` (falling back to
+  `team_id`), but `_fast_lane_loop` scoped its long-poll and its short-poll fallback by
+  `cfg.team_id` alone. A lane configured for owner-scoped discovery (`discovery_team_id=""`) is
+  exactly the lane whose tasks carry `team_id=None` -- Quest's UI creates a personal chat task
+  that way -- so the team-filtered wait matched nothing and every `real_time` task fell through
+  to the full `poll_interval_seconds` background scan. From inside a live chat, where someone is
+  waiting on the reply, that is indistinguishable from the lane being down (measured against a
+  live backend: a team-scoped wait returned nothing after its full timeout while an owner-scoped
+  one returned the queued task in 0.3s). Both fast-lane paths now share the background scan's
+  scope via the new `Poller._discovery_team_id()`, and the attach gate accepts a teamless lane
+  that has opted into owner-scoped discovery. A team-bound lane's per-team isolation is unchanged
+  and pinned by a test.
+
 - **A daily brief was skipped after any evening pass** (`runner/autopilot.py`). `cadence_due`
   compared UTC calendar days whenever a quest set no `run_timezone`, so a pass that ran late in
   the evening on a runner west of UTC stamped `last_pass_at` with the NEXT UTC date and the
