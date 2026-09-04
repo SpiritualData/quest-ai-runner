@@ -18,6 +18,16 @@ All notable changes to this project are documented here. The format is based on
   the outer gate: a request never runs a quest whose autopilot is off.
 
 ### Fixed
+- **A quest on another team synced its notes but never its goals** (`runner/quest_client.py`).
+  `list_quest_goals` hits a team-scoped endpoint and always used the client's OWN `team_id`, but
+  the quest need not be on it: an owner-scoped lane legitimately syncs quests across every team its
+  owner belongs to, and a quest moved to another team 404s on the configured one from then on --
+  every scan, forever, logged only as a skipped goal sync. When the caller did not name a team and
+  the configured one does not own the quest, the client now resolves the quest's own team once
+  (cached per quest, consulted only after a team-scoped call has already failed, so the ordinary
+  path costs nothing) and retries there. An explicit `team_id` is honored as given and never
+  second-guessed.
+
 - **The fast lane stranded every owner-scoped real-time task** (`runner/poller.py`). The
   background scan resolved its discovery scope through `discovery_team_id` (falling back to
   `team_id`), but `_fast_lane_loop` scoped its long-poll and its short-poll fallback by

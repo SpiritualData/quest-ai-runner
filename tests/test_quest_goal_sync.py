@@ -236,3 +236,81 @@ def test_both_pushes_before_it_pulls(folder):
 def test_unknown_direction_raises(folder):
     with pytest.raises(ValueError):
         sync_quest_goals(MockGoalClient(), QUEST_ID, folder, direction="sideways")
+
+
+# --- a quest on a team other than the client's own ---------------------------
+
+def test_list_quest_goals_falls_back_to_the_quests_own_team(monkeypatch):
+    """A quest moved off the lane's configured team must still sync its goals.
+
+    Regression: the endpoint is team-scoped and the client always used its OWN team_id, so a quest
+    living on any other team of the same owner 404'd on every scan, forever. An owner-scoped lane
+    routinely spans teams, and a quest can be moved between them at any time.
+    """
+    import json
+    import urllib.error
+    import urllib.request
+
+    from quest_ai_runner.runner.quest_client import QuestClient
+
+    urls = []
+
+    class _Resp:
+        def __init__(self, payload):
+            self._payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self):
+            return json.dumps(self._payload).encode()
+
+    def _fake_urlopen(req, timeout=None):
+        url = req.full_url
+        urls.append(url)
+        if "/api/quests/me" in url:
+            return _Resp([{"quest_id": "q1", "team_id": "team-owner"}])
+        if "/api/teams/team-configured/" in url:
+            raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+        if "/api/teams/team-owner/" in url:
+            return _Resp({"quest_id": "q1", "period_groups": [{"goals": [{"id": "g1"}]}]})
+        raise AssertionError(f"unexpected url {url}")
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    client = QuestClient("http://quest.example", "qsk_test", team_id="team-configured")
+    data = client.list_quest_goals("q1")
+
+    assert data.get("period_groups"), "goals should come back from the quest's own team"
+    assert any("/api/teams/team-configured/" in u for u in urls), "tries the configured team first"
+    assert any("/api/teams/team-owner/" in u for u in urls), "retries on the quest's own team"
+
+    # The resolution is cached: a second call must not re-list the owner's quests.
+    before = sum(1 for u in urls if "/api/quests/me" in u)
+    client.list_quest_goals("q1")
+    after = sum(1 for u in urls if "/api/quests/me" in u)
+    assert after == before, "the owning team is resolved once, then cached"
+
+
+def test_list_quest_goals_honors_an_explicit_team(monkeypatch):
+    """An explicitly named team is the caller's call: no second-guessing, no fallback."""
+    import urllib.error
+    import urllib.request
+
+    from quest_ai_runner.runner.quest_client import QuestClient
+
+    urls = []
+
+    def _fake_urlopen(req, timeout=None):
+        urls.append(req.full_url)
+        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, None)
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+
+    client = QuestClient("http://quest.example", "qsk_test", team_id="team-configured")
+    assert client.list_quest_goals("q1", team_id="team-explicit") == {}
+    assert all("/api/quests/me" not in u for u in urls), "never resolves an owner team"
+    assert len(urls) == 1, "no retry when the caller named the team"

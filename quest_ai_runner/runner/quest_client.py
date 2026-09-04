@@ -98,6 +98,9 @@ class QuestClient:
         self.api_key = api_key or ""
         self.team_id = team_id or ""
         self.timeout = timeout
+        # quest_id -> the team that actually owns it, resolved lazily by
+        # _owning_team_for and only when the configured team turns out not to.
+        self._quest_team_cache: Dict[str, str] = {}
 
     @property
     def configured(self) -> bool:
@@ -614,6 +617,26 @@ class QuestClient:
             log.warning("list_quests failed: %s", e)
             return []
 
+    def _owning_team_for(self, quest_id: str) -> str:
+        """The team that actually owns ``quest_id``, per the owner-scoped quest list.
+
+        A lane's configured ``team_id`` is not always the quest's team: an owner-scoped lane
+        legitimately syncs quests across every team its owner belongs to, and a quest can be moved
+        between teams at any time. Cached per quest, and only ever consulted after a team-scoped
+        call has already failed, so the ordinary path costs nothing. Returns "" when unknown.
+        """
+        cached = self._quest_team_cache.get(quest_id)
+        if cached is not None:
+            return cached
+        found = ""
+        for q in self.list_my_quests():
+            qid = str(q.get("quest_id") or q.get("id") or "")
+            if qid == quest_id:
+                found = str(q.get("team_id") or "")
+                break
+        self._quest_team_cache[quest_id] = found
+        return found
+
     def list_quest_goals(self, quest_id: str, *,
                          team_id: Optional[str] = None) -> Dict[str, Any]:
         """GET /api/teams/{team_id}/quests/{quest_id}/goals — goals grouped by time period.
@@ -621,14 +644,33 @@ class QuestClient:
         Returns {quest_id, outcome, period_groups: [{time_scope, period, period_label, goals: [{id,
         name, time_scope, period, period_label, deadline, completed, parent_goal_id}]}]}.
         Groups are ordered year → quarter → month → week → day → custom, then chronologically.
-        Requires team_id either here or on the client instance.
+
+        The endpoint is team-scoped but the quest need not be on the CLIENT'S team: an owner-scoped
+        lane syncs quests across all of its owner's teams, and a quest can be moved to another team
+        at any time, after which the configured team 404s that quest forever. So when the caller
+        did not name a team and the configured one does not own the quest, resolve the quest's own
+        team once (cached) and retry there. An explicit ``team_id`` is honored as given and never
+        second-guessed.
         """
         try:
             self._require()
             tid = team_id or self.team_id
+            if not tid and not team_id:
+                tid = self._owning_team_for(quest_id)
             if not tid:
                 raise QuestNotConfigured("team_id is required to list quest goals")
-            return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}/goals") or {}
+            try:
+                return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}/goals") or {}
+            except QuestApiError:
+                if team_id:
+                    raise  # caller named the team: their call, their error
+                owner_tid = self._owning_team_for(quest_id)
+                if not owner_tid or owner_tid == tid:
+                    raise
+                log.info("quest %s is not on team %s; using its own team %s",
+                         quest_id, tid, owner_tid)
+                return self._request(
+                    "GET", f"/api/teams/{owner_tid}/quests/{quest_id}/goals") or {}
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("list_quest_goals failed for quest %s: %s", quest_id, e)
             return {}
