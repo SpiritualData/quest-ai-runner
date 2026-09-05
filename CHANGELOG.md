@@ -6,7 +6,50 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **Goals are CONTEXT for autopilot, never assignments, and every character on duty now works to a
+  brief** (`runner/autopilot.py`). Quest backends removed `ai_help` and `assignee_rep_id` from a
+  goal outright, including from the `GET /api/teams/{team_id}/quests/{quest_id}/goals` grouping
+  payload this runner reads, so the whole goal-to-work path had become dead code that still read as
+  live. It is gone: `_goal_ai_help`, `_incomplete_ai_goals`, `batch_by_persona`,
+  `_definition_of_done`, `AutopilotPass._with_description` (with it, the per-goal `get_goal` read)
+  and `compose_batch_text`'s `goals` parameter, along with the `Goal: / Brief: / Done when:` blocks
+  it composed. Goals now reach a run through ONE path, `current_goal_ladder`, which already carries
+  every current goal at every horizon; its `target_goal_ids` parameter and the `[this run]` marking
+  went with the rest, since nothing is a target any more. `select_target_goals` is replaced by
+  `current_scope_label(goals_payload, now) -> str`, which keeps the only thing the pass still
+  needed from it: the finest current period's label (`"month:2026_09"`, `"unscoped"`), which the
+  ladder, the reflection lookup, the previous-period summary and `goal_period_for_scope` all depend
+  on. `resolve_persona` loses its goal-assignee step and is now the roster-plus-fallback chain it
+  actually is, taking `(autopilot_cfg, now, fallback_resolver, fallback_context)`; the day rule and
+  `PERSONA_HELD` survive intact for adopted recurring tasks, which still name a rep, via the new
+  `resolve_task_persona(task, autopilot_cfg, now, fallback_resolver)` that `split_held_for_another_day`
+  now uses. `_maybe_create_goal` no longer sends `ai_help=True`.
+- **Every persona on duty gets one batch per due pass** (`runner/autopilot.py`). With a default
+  brief behind them (below), being rostered for today IS the job, so a quest with three unrestricted
+  personas produces three batches a pass, bounded only by the team's daily budget, and a quest with
+  NO roster falls back to a single plain-assistant batch so an unconfigured quest still does
+  something useful. New `AutopilotPass._batches_for_pass` replaces `_batches_with_adopted`: one slot
+  per on-duty roster entry, adopted tasks filed into the slot of whoever `resolve_task_persona`
+  names. Consequence to know about: the `plan_and_work` goal-proposal branch is no longer reachable
+  from `run()` (a due pass always has someone with a brief). The proposal machinery is KEPT, because
+  quest-backend renders these proposals and re-declares `PROPOSAL_TEXT_PREFIX` against this module's
+  constant, and its own behavior is still covered by tests driving `_handle_proposal` directly.
+
 ### Added
+- **A default brief, so a persona with no instructions produces work instead of nothing**
+  (`runner/autopilot.py`). Quest backends serve `autopilot.default_instructions` on the quest
+  payload, read-only and server-derived; `default_instructions_for(autopilot_cfg)` returns it, and
+  `compose_batch_text`'s new keyword-only `default_instructions` emits it under
+  `_DEFAULT_INSTRUCTIONS_PREAMBLE` ONLY when neither quest-wide `instructions` nor
+  `persona_instructions` exists. The layering rule is otherwise unchanged: both written levels still
+  ride into the prompt together when both exist. Against a backend that serves no such field the
+  runner degrades to a bundled `BUNDLED_DEFAULT_INSTRUCTIONS` constant rather than going silent; the
+  server's value always wins, so improving the text there improves every unconfigured quest with no
+  client release. `_batch_title` falls through to the default too, so an unconfigured quest's task is
+  named after what its run will do rather than after its "Act as ..." line, and a dry run reports
+  "the built-in default brief" as the source. Absent, the parameter emits nothing, so every direct
+  caller's composition is byte-identical to before it existed.
 - **The goal ladder: an autopilot run now sees the person's current goals at EVERY horizon**
   (`runner/autopilot.py`). `select_target_goals` picks exactly one scope (day beats week beats
   month beats quarter beats year) and hands the run only that scope's `ai_help` goals, so

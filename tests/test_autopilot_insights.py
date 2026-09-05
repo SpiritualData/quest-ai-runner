@@ -64,15 +64,14 @@ def test_compose_batch_text_carries_the_insight_block_with_its_tags():
     block = ("Insights the person captured on Quest since 2026-07-11 and has not yet marked acted "
              "on, in their own words, with the category tags they chose:\n"
              "  - [2026-07-12] tagged dissertation\n      Mornings are the only writing time")
-    text = compose_batch_text("ship the thing", [_goal("g1", "Draft chapter two")], insights=block)
+    text = compose_batch_text("ship the thing", insights=block)
     assert "Mornings are the only writing time" in text
     assert "tagged dissertation" in text
 
 
 def test_compose_batch_text_is_unchanged_without_insights():
-    goals = [_goal("g1", "Draft chapter two")]
-    assert compose_batch_text("ship the thing", goals) == \
-        compose_batch_text("ship the thing", goals, insights=None)
+    assert compose_batch_text("ship the thing") == \
+        compose_batch_text("ship the thing", insights=None)
 
 
 def test_next_steps_artifact_notes_the_capture_without_promoting_it_to_a_step():
@@ -186,7 +185,7 @@ def test_a_pass_with_no_insights_on_record_still_creates_its_batch():
     result = _pass_with(client).run({"text": "autopilot pass"})
     assert len(result.created_task_ids) == 1
     text = client.created_tasks[0]["text"]
-    assert "Goal: Draft ch. 2" in text
+    assert "- Draft ch. 2" in text
     assert "insight" not in text.lower()
 
 
@@ -210,4 +209,4 @@ def test_a_client_without_the_insight_methods_behaves_exactly_as_before():
     )
     result = _pass_with(client).run({"text": "autopilot pass"})
     assert len(result.created_task_ids) == 1
-    assert "Goal: Draft ch. 2" in client.created_tasks[0]["text"]
+    assert "- Draft ch. 2" in client.created_tasks[0]["text"]

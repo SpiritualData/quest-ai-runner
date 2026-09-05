@@ -48,7 +48,7 @@ class ReflectingClient(FakeAutopilotClient):
 # --- the composed text ---------------------------------------------------------------------
 
 def test_compose_batch_text_carries_the_reflection_verbatim():
-    text = compose_batch_text("ship the thing", [_goal("g1", "Draft chapter two")],
+    text = compose_batch_text("ship the thing",
                               reflection="The person's own reflection:\n  Two mornings for writing.")
     assert "Two mornings for writing." in text
     # Named as theirs and pointed at the decision it should influence, not dropped in unlabeled.
@@ -56,9 +56,8 @@ def test_compose_batch_text_carries_the_reflection_verbatim():
 
 
 def test_compose_batch_text_is_unchanged_without_a_reflection():
-    goals = [_goal("g1", "Draft chapter two")]
-    assert compose_batch_text("ship the thing", goals) == \
-        compose_batch_text("ship the thing", goals, reflection=None)
+    assert compose_batch_text("ship the thing") == \
+        compose_batch_text("ship the thing", reflection=None)
 
 
 def test_next_steps_artifact_carries_one_condensed_reflection_line():
@@ -105,7 +104,7 @@ def test_a_pass_with_no_reflection_on_record_still_creates_its_batch():
     )
     result = _pass_with(client).run({"text": "autopilot pass"})
     assert len(result.created_task_ids) == 1
-    assert "Goal: Draft ch. 2" in client.created_tasks[0]["text"]
+    assert "- Draft ch. 2" in client.created_tasks[0]["text"]
     assert "reflection" not in client.created_tasks[0]["text"].lower()
 
 
@@ -160,4 +159,4 @@ def test_a_client_without_the_reflection_methods_behaves_exactly_as_before():
     )
     result = _pass_with(client).run({"text": "autopilot pass"})
     assert len(result.created_task_ids) == 1
-    assert "Goal: Draft ch. 2" in client.created_tasks[0]["text"]
+    assert "- Draft ch. 2" in client.created_tasks[0]["text"]

@@ -15,6 +15,7 @@ import pytest
 from quest_ai_runner.runner.autopilot import (
     AutopilotPass,
     compose_batch_text,
+    current_scope_label,
     previous_period_bounds,
     previous_period_key,
     select_period_goals,
@@ -222,7 +223,7 @@ def test_previous_period_bounds_are_half_open_and_cover_exactly_one_period():
 
 def test_batch_text_reports_the_previous_period_goals_and_task_results():
     text = compose_batch_text(
-        "ship it", [_goal("g1", name="Today's goal")], "rep_bailey",
+        "ship it", "rep_bailey",
         scope_label="day:2026-07-12",
         previous={"period": "day:2026-07-11",
                   "goals": [_goal("g0", name="Yesterday done", completed=True),
@@ -238,7 +239,7 @@ def test_batch_text_reports_the_previous_period_goals_and_task_results():
 def test_batch_text_says_so_when_the_previous_period_produced_nothing():
     """Silence must be stated, not omitted: an absent section reads as no information, while an
     explicit 'no recorded activity' is the signal that the plan may need re-sequencing."""
-    text = compose_batch_text("ship it", [_goal("g1")], None,
+    text = compose_batch_text("ship it", None,
                               previous={"period": "day:2026-07-11", "goals": [], "tasks": []})
     assert "No recorded activity" in text
 
@@ -253,62 +254,23 @@ def test_previous_period_summary_is_attached_to_a_real_pass():
 
 
 def test_select_period_goals_returns_completed_goals_too():
-    """The current-scope selector filters completed goals out (they are not work). The previous
-    period needs them precisely BECAUSE they are done: that is the progress being reported."""
+    """The goal ladder filters completed goals out (they are no longer something to move toward).
+    The previous period needs them precisely BECAUSE they are done: that is the progress being
+    reported."""
     payload = _goals_payload(("day", "2026-07-11", [_goal("g0", completed=True)]))
     assert len(select_period_goals(payload, "day", "2026-07-11")) == 1
 
 
-# --- scope fallthrough ----------------------------------------------------------------------------
+# --- the scope the previous-period summary is computed against ------------------------------------
 
-def test_a_human_only_day_does_not_shadow_the_week_that_holds_the_real_work():
-    """The finest CURRENT scope wins only when it actually yields eligible goals.
-
-    A quest can easily have a human-only goal dated today sitting above a weekly goal that is the
-    AI's work for the whole week. Stopping at the empty day group would make autopilot report
-    nothing to do on exactly the days the user had also planned something for themselves. Real
-    case: a day goal "Decide whether to contact another external committee member" (ai_help off)
-    on a Monday whose week held the live method-writing goal.
-    """
-    from quest_ai_runner.runner.autopilot import select_target_goals
-
+def test_the_finest_current_scope_is_what_the_previous_period_is_measured_from():
+    """A quest whose finest current group is the week gets last WEEK's summary, not yesterday's."""
     payload = _goals_payload(
-        ("day", "2026-07-12", [_goal("human", name="A human-only errand", ai_help=False)]),
-        ("week", "2026_W28", [_goal("g1", name="The week's real work")]),
-    )
-    goals, scope = select_target_goals(payload, NOW)
-    assert [g["id"] for g in goals] == ["g1"]
-    assert scope == "week:2026_W28"
-
-
-def test_a_day_with_real_work_still_wins_over_the_week():
-    from quest_ai_runner.runner.autopilot import select_target_goals
-
-    payload = _goals_payload(
-        ("day", "2026-07-12", [_goal("today", name="Today's AI work")]),
+        ("day", "2026-07-01", [_goal("stale", name="Not today")]),
         ("week", "2026_W28", [_goal("g1", name="The week's work")]),
     )
-    goals, scope = select_target_goals(payload, NOW)
-    assert [g["id"] for g in goals] == ["today"]
-    assert scope == "day:2026-07-12"
-
-
-def test_when_no_current_scope_has_ai_work_the_quest_goes_quiet_rather_than_grabbing_future_work():
-    """Falling through is only ever to a coarser CURRENT scope, never past all of them.
-
-    Having planned today and this week and left no AI-enabled goal in either is a decision. Pulling
-    in an unrelated later goal would override it, which is why the unscoped fallback is reserved for
-    quests that have no current scope at all."""
-    from quest_ai_runner.runner.autopilot import select_target_goals
-
-    payload = _goals_payload(
-        ("day", "2026-07-12", [_goal("h1", ai_help=False)]),
-        ("week", "2026_W28", [_goal("h2", ai_help=False)]),
-        ("custom", "whenever", [_goal("later", name="Next in line")]),
-    )
-    goals, scope = select_target_goals(payload, NOW)
-    assert goals == []
-    assert scope == "day:2026-07-12"      # the finest scope that matched, for the report
+    assert current_scope_label(payload, NOW) == "week:2026_W28"
+    assert previous_period_key("week", NOW) == "2026_W27"
 
 
 # --- readable tasks -------------------------------------------------------------------------------
@@ -350,25 +312,24 @@ def test_an_unresolvable_name_degrades_to_the_id_rather_than_failing():
 
 def test_the_task_is_titled_after_the_work_not_the_persona():
     """Without an explicit title the server derives one from the first line of the text, which is
-    the persona line, so every autopilot task in the list is named after its persona."""
-    q1 = _quest("q1", personas=[{"rep_id": "rep_09d3"}])
+    the persona line, so every autopilot task in the list is named after its persona. The title
+    comes from the brief the run works to, which is what the run will actually produce."""
+    q1 = _quest("q1", personas=[{"rep_id": "rep_09d3",
+                                 "instructions": "Rewrite the ranking formula"}])
     client = _NamingClient(
         quests=[q1],
-        goals_by_quest={"q1": _goals_payload(("day", "2026-07-12",
-                                              [_goal("g1", name="Rewrite the ranking formula")]))})
+        goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
     _passer(client).run({"text": "pass"})
     assert client.created_tasks[0]["title"] == "Rewrite the ranking formula"
 
 
-def test_a_multi_goal_batch_titles_after_the_first_and_counts_the_rest():
-    q1 = _quest("q1")
+def test_an_adoption_batch_is_titled_after_the_task_it_took_over():
+    q1 = _quest("q1", adopt_recurring=True, personas=[{"rep_id": "rep_09d3"}])
     client = _NamingClient(
-        quests=[q1],
-        goals_by_quest={"q1": _goals_payload(("day", "2026-07-12",
-                                              [_goal("g1", name="First goal"),
-                                               _goal("g2", name="Second goal")]))})
+        quests=[q1], goals_by_quest={},
+        tasks=[_recurring("r1", text="Email the morning brief")])
     _passer(client).run({"text": "pass"})
-    assert client.created_tasks[0]["title"] == "First goal (+1 more)"
+    assert client.created_tasks[0]["title"] == "Email the morning brief"
 
 
 def test_the_period_target_is_not_presented_as_this_runs_workload():
@@ -383,11 +344,16 @@ def test_the_period_target_is_not_presented_as_this_runs_workload():
     assert "say plainly what remains" in text
 
 
-def test_the_goals_own_criteria_are_the_definition_of_done():
+def test_a_goals_criteria_never_reach_the_run_because_a_goal_is_not_a_brief():
+    """``criteria`` describe when the PERSON's goal is finished. They used to be composed as this
+    run's "Done when", which is what made a goal read as an assignment."""
     q1 = _quest("q1")
     goal = _goal("g1", name="A goal")
     goal["criteria"] = "the ranking formula subsection is rewritten"
     client = _NamingClient(
         quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [goal]))})
     _passer(client).run({"text": "pass"})
-    assert "Done when: the ranking formula subsection is rewritten" in client.created_tasks[0]["text"]
+    text = client.created_tasks[0]["text"]
+    assert "Done when:" not in text
+    assert "the ranking formula subsection is rewritten" not in text
+    assert "- A goal" in text

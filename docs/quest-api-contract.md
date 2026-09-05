@@ -201,8 +201,14 @@ before making the request, so a malformed period fails fast with a clear message
 round trip to get a 400.
 
 Optional fields: `description`, `criteria` (completion criteria), `goal_type`, `parent_goal_id`
-(for a sub-goal), `target_value` / `target_unit` (a measurable target), `ai_help` (bool),
-`assignee_rep_id`.
+(for a sub-goal), `target_value` / `target_unit` (a measurable target).
+
+`ai_help` and `assignee_rep_id` are **gone from a goal** on current Quest backends, and nothing in
+this runner sends them any more. A goal is the plan that work serves, never a unit of AI work and
+never an assignment to a character: what an autopilot run produces is defined by the persona's
+standing instructions, and the day roster decides who works. `QuestClient.create_goal` still
+accepts both keywords so a caller aimed at an older backend keeps working; a current backend
+ignores them.
 
 There is **no attribution field**: the endpoint's request model has none, ignores unknown keys, and
 stamps every goal it creates `source="user"` server-side. So a caller cannot mark a goal as

@@ -11,25 +11,30 @@ normal deep-run path). Each pass:
      unresolved HOLD decision already sitting on the quest. By default neither of the last two
      stops a pass: work continues and the unfinished thing is visible in context to be worked
      around.
-  3. Picks the quest's CURRENT-SCOPE target goals (today's, this period's, or the single next
-     incomplete one when the quest is unscoped) among the ones flagged ``ai_help``. It also builds
-     the GOAL LADDER from the same payload (``current_goal_ladder``): the person's current goals at
-     EVERY horizon, day up to year, ``ai_help`` or not, which every batch carries as context. The
-     targets say what this run does; the ladder says what that has to add up to, and without it a
-     run advancing today's goal cannot see the month or quarter it serves.
-  4. Resolves a persona per goal, always INSIDE the day rule: a character works a quest only on
-     the days their own roster entry names, and nothing overrides that. Among the characters on
-     duty today the order is goal assignee -> quest persona-for-today -> a consumer-injected
-     fallback, and goals sharing a persona are batched into ONE task (one budget unit). A goal
-     assigned to a rostered character who is NOT on duty today is held for a day they are, never
-     passed to whoever is around instead. A roster entry flagged ``instructions_only`` is skipped
-     by that routing: it says its character is on duty to work their OWN standing instructions and
-     takes no goals, which is what lets a specialist share a roster with the character who actually
-     works the quest's goals that day. Every persona on duty carrying instructions of their own
-     also gets a batch, goals or not (see 5).
-  5. Creates each batch as a real task (``status="suggested"`` in suggest mode, ``"queued"`` in
-     act mode), or -- when planning allows and nothing is eligible -- proposes the quest's next
-     goal instead of a work task, UNLESS the previous pass's proposal is still sitting there
+  3. Reads the quest's goals ONCE and turns them into the GOAL LADDER (``current_goal_ladder``):
+     the person's current goals at EVERY horizon, day up to year, which every batch carries.
+     Goals are CONTEXT here and nothing else. No goal is selected, assigned, or turned into work:
+     what a run produces is what its persona's standing instructions say, and the ladder is what
+     that output has to add up to. The one thing still derived from the goals payload is the
+     quest's current SCOPE LABEL (``current_scope_label``), which decides which period review to
+     read, which previous period to summarize, and what period a proposed goal is filed under.
+  4. Decides WHO works the quest today, always INSIDE the day rule: a character works a quest only
+     on the days their own roster entry names, and nothing overrides that. EVERY character the
+     roster puts on duty today gets one batch (one budget unit). A quest with NO roster gets a
+     single batch for the plain assistant, or for whoever a consumer-injected fallback resolver
+     names. A roster entry flagged ``instructions_only`` is on duty and gets its batch like any
+     other; the flag only keeps that character out of the routing that hands an UNASSIGNED
+     recurring task to somebody, which is what lets a specialist share a roster with the character
+     who carries the quest's ordinary work.
+  5. Decides WHAT each batch is for: the quest-wide ``autopilot.instructions`` and the character's
+     own roster ``instructions``, layered, with both riding into the prompt when both exist. When
+     NEITHER exists the batch works to the default brief the backend serves read-only on the quest
+     payload (``autopilot.default_instructions``), so a character on duty always has a
+     specification instead of an empty run. Recurring tasks the quest opted into adopting are
+     folded into the batch of whoever they name.
+  6. Creates each batch as a real task (``status="suggested"`` in suggest mode, ``"queued"`` in
+     act mode), or -- when planning allows and no batch was produced at all -- proposes the quest's
+     next goal instead of a work task, UNLESS the previous pass's proposal is still sitting there
      unanswered (a proposal is one question, and re-asking it every pass is how the same
      suggestion ends up in the person's list every morning). The batch text carries the person's
      OWN latest reflection
@@ -38,10 +43,10 @@ normal deep-run path). Each pass:
      last pass (``runner.insights``, with the person's own category tags shown beside each one).
      Both are read once per pass, since both are user-scoped rather than per quest. Everything
      else in that text is derived from rows the system recorded; those two are the parts the
-     person wrote, so they are what break ties about which eligible goal actually matters today.
-  6. Updates the quest's ``autopilot.last_pass_at`` (and ``miss_streak`` when nothing was
+     person wrote, so they are what break ties about what actually matters today.
+  7. Updates the quest's ``autopilot.last_pass_at`` (and ``miss_streak`` when nothing was
      produced) via the quest update route.
-  7. For a quest with a mapped local folder (``quest_folder_map``), REFRESHES that quest's
+  8. For a quest with a mapped local folder (``quest_folder_map``), REFRESHES that quest's
      canonical next-steps artifact (``quest_folder_sync.publish_next_steps``) with the conclusion
      the pass just reached, and READS the existing artifact into the batch text first. That closes
      a real gap: the pass and an attended session both have to answer "what is next for this
@@ -70,7 +75,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from .insights import InsightsContext, collect_unacted_insights
 from .local_time import now_in_zone
@@ -152,6 +157,44 @@ _MAX_PREVIOUS_TASKS = 8
 # cap existed, or written through some other client, still gets truncated defensively here rather
 # than riding an oversized block into every prompt this quest ever gets.
 MAX_INSTRUCTIONS_CHARS = 8000
+
+# The standing brief a batch works to when NEITHER its quest nor its character wrote one.
+#
+# The authoritative copy is the backend's: a current quest payload carries it read-only as
+# ``autopilot.default_instructions`` (server-derived, never client-settable), and THAT value always
+# wins here. That is the point of serving it: improving the text on the server improves every quest
+# that never wrote its own brief, immediately, with no client release and no per-quest migration.
+#
+# This bundled copy exists for the other case. Against a backend that predates the field -- or any
+# client that simply does not serve it -- a character on duty would otherwise have no specification
+# at all and the pass would go silent, which is the exact failure this default was introduced to
+# remove. So the runner degrades to a real brief rather than to nothing. It is a fallback and never
+# a second source of truth: if the two ever disagree, the server's text is the one that ran.
+# The text below is a VERBATIM copy of the server's, word for word, and must stay that way. It was
+# written and confirmed by a person, so a paraphrase here is not a smaller version of the same
+# brief: an earlier draft of this constant tightened the third paragraph and lost the concrete list
+# ("the link to open, the route and the place to run, the command to paste"), which is the entire
+# instruction that paragraph exists to give. Two texts that differ are two briefs, and the one that
+# runs against an older backend would be the weaker one. Copy it, never re-word it.
+BUNDLED_DEFAULT_INSTRUCTIONS = (
+    "Work this quest today. Read its outcome, its current goals at every horizon, and what has "
+    "happened on it recently, then pick the one or two things that most move it forward right now "
+    "and do them.\n\n"
+    "Decide from the quest and its context whether your role here is to do the work yourself or to "
+    "set the person up to do it. Both are real. Some quests want a draft, a comparison, or a "
+    "decision worked through with its options. Others want the state of things read back clearly, "
+    "or the next steps laid out for the person to carry out. Judge which this quest is asking for "
+    "rather than defaulting to one.\n\n"
+    "When you hand the person something to do, make it doable without thinking. Give the exact "
+    "action with its specifics already filled in: the link to open, the route and the place to "
+    "run, the command to paste, the message to send and who to send it to. Never a category of "
+    "task, and never something they have to work out before they can start.\n\n"
+    "Ground every claim about where things stand in the quest's own goals, notes and files, never "
+    "in this prompt. If the plan has slipped, say so plainly and say what you would change.\n\n"
+    "Keep it short enough to read on a phone. End with what is left, and with anything only the "
+    "person can decide. If there is genuinely nothing worth doing today, say that in one line "
+    "rather than filling the space."
+)
 
 # How many of a horizon's current goals the goal ladder lists before it says "+N more". Eight is
 # chosen against a real quest that carries around twenty goals in one month: enough that a person
@@ -359,25 +402,16 @@ def select_period_goals(goals_payload: Dict[str, Any], scope: str,
     return []
 
 
-def _goal_ai_help(goal: Dict[str, Any]) -> bool:
-    """Missing ``ai_help`` counts as False (human-only, invisible to autopilot) per the design."""
-    return bool(goal.get("ai_help"))
-
-
-def _incomplete_ai_goals(goals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    return [g for g in goals if not g.get("completed") and _goal_ai_help(g)]
-
-
 def _current_period_groups(goals_payload: Dict[str, Any], now: datetime
                            ) -> List[Tuple[str, str, List[Dict[str, Any]]]]:
     """Every period group that is CURRENT at ``now``, finest scope first: ``(scope, period, goals)``.
 
     THE ONE period matcher in this module. Both readers of "what period is this quest in right
-    now" go through it -- ``select_target_goals`` (which of these groups this pass works) and
-    ``current_goal_ladder`` (all of them, as the context that work serves). A second matcher would
-    be a second place to get the backend's separator formats wrong, and the two answers drifting
-    apart is precisely how a run would end up told it is advancing a month that is not the current
-    one. Groups within a scope keep the payload's own order.
+    now" go through it -- ``current_scope_label`` (which period the pass says it is working in) and
+    ``current_goal_ladder`` (every current horizon, as the context the run serves). A second
+    matcher would be a second place to get the backend's separator formats wrong, and the two
+    answers drifting apart is precisely how a run would end up told it is advancing a month that is
+    not the current one. Groups within a scope keep the payload's own order.
     """
     groups = goals_payload.get("period_groups") or []
     current: List[Tuple[str, str, List[Dict[str, Any]]]] = []
@@ -391,49 +425,27 @@ def _current_period_groups(goals_payload: Dict[str, Any], now: datetime
     return current
 
 
-def select_target_goals(goals_payload: Dict[str, Any],
-                        now: datetime) -> Tuple[List[Dict[str, Any]], str]:
-    """Pick this pass's target goals from a quest's ``list_quest_goals`` period grouping.
+def current_scope_label(goals_payload: Dict[str, Any], now: datetime) -> str:
+    """WHICH PERIOD this quest is planning in right now, e.g. ``"day:2026-07-12"``.
 
-    Returns ``(goals, scope_label)``:
-      * a CURRENT period group with eligible goals (day beats week beats month beats quarter beats
-        year) -> ALL its incomplete + ``ai_help`` goals, ``scope_label`` like ``"day:2026-07-12"``.
-        This is deliberately ALL of them (not just one): the resolved 2026-07-12 scope question in
-        the design doc is "a pass works ALL incomplete AI-enabled goals in the quest's current
-        scope".
-      * no scope is current (an unscoped quest, or only "custom"-scoped goals) -> the SINGLE next
-        incomplete + ``ai_help`` goal in the payload's own order, ``scope_label="unscoped"``.
-      * nothing eligible either way -> ``([], "unscoped")``.
+    The FINEST current period group in the quest's ``list_quest_goals`` grouping (day beats week
+    beats month beats quarter beats year), or ``"unscoped"`` when no group is current at all (a
+    quest with only "custom"-scoped goals, or with none).
 
-    A current group that exists but yields NOTHING eligible does not stop the search: the next
-    COARSER CURRENT scope is tried. This matters more than it sounds. A quest can easily have a
-    human-only goal dated today (say "decide whether to email another committee member") sitting
-    above a weekly goal that is the actual AI work for that whole week. Stopping at the day group
-    would shadow the week, and autopilot would report nothing to do on precisely the days the user
-    had also planned something for themselves. A goal scoped to this week is genuinely in scope on
-    every day of it.
+    This is a LABEL, not a selection. It used to be the by-product of picking which goals a pass
+    would work, and it survived that job's removal because four other things genuinely depend on
+    knowing the quest's horizon: ``_reflection_periods`` (which period review to read first),
+    ``_previous_period_summary`` (what "last period" means for this quest), the ``Scope:`` line in
+    the batch text, and ``goal_period_for_scope`` (what period a newly proposed goal is filed
+    under). None of those is answerable without it, and none of them needs a goal picked.
 
-    But if NO current scope yields anything, the quest goes quiet with the finest matching scope's
-    label, rather than falling through to the unscoped next-goal fallback. Having planned today (or
-    this week) and left no AI-enabled goal in it is a decision, and pulling in some unrelated future
-    goal would override it. The fallback exists for quests with no current scope at all.
+    An empty current group still names the scope. Having planned today and completed everything in
+    it does not move the quest into next week, and a label is a statement about the calendar rather
+    than about how much work is left.
     """
-    matched_label: Optional[str] = None
-    for scope, key, goals in _current_period_groups(goals_payload, now):
-        eligible = _incomplete_ai_goals(goals)
-        if eligible:
-            return eligible, f"{scope}:{key}"
-        if matched_label is None:
-            matched_label = f"{scope}:{key}"
-    if matched_label is not None:
-        return [], matched_label
-    flattened: List[Dict[str, Any]] = []
-    for group in goals_payload.get("period_groups") or []:
-        flattened.extend(group.get("goals") or [])
-    for goal in flattened:
-        if not goal.get("completed") and _goal_ai_help(goal):
-            return [goal], "unscoped"
-    return [], "unscoped"
+    for scope, key, _goals in _current_period_groups(goals_payload, now):
+        return f"{scope}:{key}"
+    return "unscoped"
 
 
 def _ladder_order_key(goal: Dict[str, Any]) -> Tuple[int, str]:
@@ -447,45 +459,38 @@ def _ladder_order_key(goal: Dict[str, Any]) -> Tuple[int, str]:
 
 
 def current_goal_ladder(goals_payload: Dict[str, Any], now: datetime,
-                        target_goal_ids: Optional[Iterable[str]] = None,
                         per_scope_limit: int = DEFAULT_LADDER_PER_SCOPE
                         ) -> List[Dict[str, Any]]:
     """The person's CURRENT goals at EVERY horizon: day, week, month, quarter, year.
 
-    ``select_target_goals`` answers a different question, and answers only that one: which single
-    scope this pass works. Everything above the scope it picks is invisible to the run, so a run
-    advancing today's goal has no idea what month or quarter that day is meant to add up to. This
-    is the missing half: the ladder is CONTEXT, never this run's assignment (see
-    ``compose_batch_text``'s framing, which says so to the reader in as many words).
+    THE ONLY WAY GOALS REACH A RUN. Goals are context for autopilot and never an assignment to it:
+    nothing here or anywhere else in this module picks a goal, hands one to a character, or turns
+    one into work. What a run produces is defined by its persona's standing instructions; the
+    ladder is what that output has to add up to (see ``compose_batch_text``'s framing, which says
+    so to the reader in as many words).
 
     Returns one rung per current horizon that has anything in it, finest first::
 
         [{"scope": "day", "period": "2026-07-12",
-          "goals": [{"id": ..., "name": ..., "deadline": ..., "is_target": True}, ...],
+          "goals": [{"id": ..., "name": ..., "deadline": ...}, ...],
           "more": 0}, ...]
 
-    Three decisions worth stating, because each is the opposite of what ``select_target_goals``
-    does and none of them is an oversight:
+    Three decisions worth stating, because none of them is an oversight:
 
-      * ``ai_help`` IS IGNORED HERE. A goal the person kept for themselves is still what the AI's
-        work has to add up to, and hiding it produces a run that optimizes a fragment of a plan it
-        cannot see. Only ``completed`` excludes a goal, because a finished one is no longer
-        something to move toward.
+      * EVERY current goal is here, including the ones the person is plainly doing themselves. A
+        goal the AI will never touch is still what its work has to add up to, and hiding it
+        produces a run that optimizes a fragment of a plan it cannot see. Only ``completed``
+        excludes a goal, because a finished one is no longer something to move toward.
       * NAMES ONLY (plus a deadline where the goal has one). This is orientation, not a brief:
-        descriptions and criteria belong to the goals this run actually owns, and pasting them for
-        a whole year of goals would bury the run's own instructions.
+        pasting descriptions and criteria for a whole year of goals would bury the run's own
+        instructions, which are the thing that actually says what to produce.
       * CAPPED per horizon at ``per_scope_limit``, nearest deadline first, with the count of what
         was left out. A real quest carries around twenty goals in a single month, and an uncapped
         dump would cost more attention than the ladder buys back.
 
-    ``target_goal_ids`` marks the goals this run actually owns, so the reader can tell the slice it
-    is working from the frame it is working inside. Everything else on the ladder is served, not
-    worked.
-
     Empty list when no horizon is current or every current one is finished, which composes to
     nothing at all rather than to an empty heading.
     """
-    targets = {str(g) for g in (target_goal_ids or []) if g}
     limit = per_scope_limit if per_scope_limit and per_scope_limit > 0 else DEFAULT_LADDER_PER_SCOPE
     by_scope: Dict[str, Dict[str, Any]] = {}
     for scope, period, goals in _current_period_groups(goals_payload, now):
@@ -505,7 +510,6 @@ def current_goal_ladder(goals_payload: Dict[str, Any], now: datetime,
                 "id": str(g.get("id") or ""),
                 "name": _goal_name(g),
                 "deadline": str(g.get("deadline") or "").strip(),
-                "is_target": bool(g.get("id")) and str(g.get("id")) in targets,
             } for g in shown],
             "more": len(ordered) - len(shown),
         })
@@ -516,7 +520,7 @@ def goal_period_for_scope(scope_label: str, now: datetime) -> str:
     """The ``period`` to file a newly proposed goal under, from this pass's own scope label.
 
     ``create_goal`` REQUIRES a period and there is no universal default for one, so it has to be
-    derived. The pass already knows the answer: ``select_target_goals`` hands back labels like
+    derived. The pass already knows the answer: ``current_scope_label`` hands back labels like
     ``"day:2026-07-12"`` or ``"month:2026_09"``, whose right-hand side is already the backend's own
     period id. An ``"unscoped"`` quest has no current period at all, so it falls back to the
     current MONTH: a proposal is a suggestion about what to do next, and a month is the coarsest
@@ -546,23 +550,24 @@ class _HeldPersona:
         return "PERSONA_HELD"
 
 
-# Returned by ``resolve_persona`` instead of a rep id when today's answer to "who works this" is
+# Returned by the persona resolvers instead of a rep id when today's answer to "who works this" is
 # NOBODY: the work belongs to a character the person rostered for other days.
 #
 # It is a third answer on purpose, and the reason is a real incident. A quest had Bailey rostered
 # Mon-Fri and Batman rostered Sat. On a Saturday, Bailey produced work and emailed the owner,
-# because a goal carrying her ``assignee_rep_id`` outranked her own roster entry -- her days were
-# advisory. They are authoritative now, and this constant is what makes that expressible: ``None``
-# already means "the plain assistant", so without a distinct value a held goal would either fall
-# through to the plain assistant or be handed to whichever character happens to be on duty. Both
-# are the same mistake as running it on the wrong day. The person chose WHO does this work; the
-# only thing the calendar decides is WHEN.
+# because a work item carrying her ``assignee_rep_id`` outranked her own roster entry -- her days
+# were advisory. They are authoritative now, and this constant is what makes that expressible:
+# ``None`` already means "the plain assistant", so without a distinct value a held item would
+# either fall through to the plain assistant or be handed to whichever character happens to be on
+# duty. Both are the same mistake as running it on the wrong day. The person chose WHO does this
+# work; the only thing the calendar decides is WHEN.
 #
-# This SUPERSEDES the earlier design note that a persona with a goal assigned to it is activated
-# whenever that goal comes due, independent of the quest's day schedule. The day schedule wins.
+# The item that still names a rep is an ADOPTED RECURRING TASK (``assignee_rep_id`` on the task the
+# person scheduled). Goals no longer name one at all: they are context for a run, never an
+# assignment to one, so nothing about a goal can put a character on duty or take one off.
 PERSONA_HELD = _HeldPersona()
 
-# What ``resolve_persona`` can answer: a rep id, ``None`` (the plain assistant), or
+# What the persona resolvers can answer: a rep id, ``None`` (the plain assistant), or
 # ``PERSONA_HELD`` (nobody today -- this work waits for the day its character is rostered for).
 ResolvedPersona = Union[str, None, _HeldPersona]
 
@@ -577,68 +582,58 @@ def _rostered_rep_ids(autopilot_cfg: Dict[str, Any]) -> set:
     return {str(p.get("rep_id")) for p in (autopilot_cfg.get("personas") or []) if p.get("rep_id")}
 
 
-def _goal_routing_entries(autopilot_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """The roster entries GOAL routing can use: every entry not flagged ``instructions_only``.
+def _work_routing_entries(autopilot_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The roster entries work routing can use: every entry not flagged ``instructions_only``.
 
-    A roster made up only of ``instructions_only`` entries is, for goal routing, no roster at all
-    (the flag says exactly that: behave as though this character were not in the roster). That is
-    what keeps the day rule from turning such a quest's goals into work nobody may do.
+    A roster made up only of ``instructions_only`` entries is, for routing, no roster at all (the
+    flag says exactly that: behave as though this character were not in the roster). That is what
+    keeps the day rule from turning an unassigned recurring task into work nobody may do.
     """
     return [p for p in (autopilot_cfg.get("personas") or [])
             if not _truthy(p.get("instructions_only"))]
 
 
-def resolve_persona(goal: Dict[str, Any], autopilot_cfg: Dict[str, Any], now: datetime,
-                    fallback_resolver: Optional[Callable[[Dict[str, Any]], Optional[str]]] = None
-                    ) -> ResolvedPersona:
-    """Who works this goal TODAY, or ``PERSONA_HELD`` when the honest answer is "nobody, today".
+def resolve_persona(autopilot_cfg: Dict[str, Any], now: datetime,
+                    fallback_resolver: Optional[Callable[[Dict[str, Any]], Optional[str]]] = None,
+                    fallback_context: Optional[Dict[str, Any]] = None) -> ResolvedPersona:
+    """Which character this quest routes UNNAMED work to TODAY, or ``PERSONA_HELD`` when the honest
+    answer is "nobody, today".
 
     THE DAY RULE COMES FIRST AND NOTHING OVERRIDES IT: a character works a quest only on the days
     their own roster entry names. Everything below decides how work is routed AMONG the characters
     the person rostered for today; none of it can reach past that set.
 
-      1. The goal's own ``assignee_rep_id`` (a per-goal override), when that character is on duty
-         today OR carries no roster entry at all (no entry means the person set no days for them,
-         so there is no day setting to follow). Rostered but not on duty -> ``PERSONA_HELD``: the
-         goal waits for a day that character works this quest, and is never quietly re-assigned.
-      2. A quest ``autopilot.personas`` entry whose ``days`` include today, EXCLUDING entries
-         flagged ``instructions_only`` (checked first, so an explicit day-restricted assignment
-         wins over an unrestricted one for the same day).
-      3. A quest ``autopilot.personas`` entry with NO ``days`` restriction, again excluding
+      1. A quest ``autopilot.personas`` entry whose ``days`` include today, EXCLUDING entries
+         flagged ``instructions_only`` (checked first, so an explicit day-restricted entry wins
+         over an unrestricted one for the same day).
+      2. A quest ``autopilot.personas`` entry with NO ``days`` restriction, again excluding
          ``instructions_only`` entries (applies any day).
-      4. ``PERSONA_HELD`` when the roster DOES name goal-working characters but none of them is on
-         duty today. Their goals wait; handing one character's work to whoever happens to be around
+      3. ``PERSONA_HELD`` when the roster DOES name work-routing characters but none of them is on
+         duty today. Their work waits; handing one character's work to whoever happens to be around
          is its own wrong answer, and falling through to the plain assistant is the bug that made
          this rule necessary (a quest with standing instructions ran as the plain assistant on days
          nobody was rostered for).
-      5. A consumer-injected fallback (e.g. the existing card-vote resolver), given the goal dict.
-      6. ``None`` -- the plain assistant persona (no character voice).
+      4. A consumer-injected fallback (e.g. the existing card-vote resolver), given
+         ``fallback_context`` (the item being routed, or ``{}`` when there is none).
+      5. ``None`` -- the plain assistant persona (no character voice).
 
-    Steps 5 and 6 are reachable ONLY when the roster names no goal-working character at all, which
+    Steps 4 and 5 are reachable ONLY when the roster names no work-routing character at all, which
     is every quest that never configured one. Those quests behave exactly as they always have.
 
-    Why ``instructions_only`` is excluded from 2 and 3, and only from those: a roster entry is
-    two different statements at once ("this character is on duty today" and "this character is who
-    should work the goals"), and rule 2 beating rule 3 makes the second statement greedy. A quest
-    with a weekday worker and a Saturday specialist reads, on Saturday, as "the specialist takes
-    every goal" -- so the specialist inherits a week of work they were never meant to touch, and
-    the weekday worker goes quiet on the one day the specialist is around. ``instructions_only``
-    says this entry is only the FIRST statement: the character is on duty and works their own
-    standing instructions, and goal routing behaves as though they were not in the roster at all.
-    Step 1 still wins over it FOR A CHARACTER ON DUTY, because a per-goal ``assignee_rep_id`` is a
-    human naming that character for that goal, which is more specific than any roster-wide
-    preference. It cannot win over their days, which is a statement by the same human about when
-    that character works at all.
+    There is no step reading an ``assignee_rep_id`` off a goal any more, because a goal no longer
+    carries one: goals are context for a run and never an assignment to one. The one item that
+    still names a rep is an adopted recurring task, and ``resolve_task_persona`` below is where
+    that reading lives, so the naming is beside the only input that still exists for it.
+
+    Why ``instructions_only`` is excluded from 1 and 2: a roster entry is two different statements
+    at once ("this character is on duty today" and "this character is who unnamed work goes to"),
+    and rule 1 beating rule 2 makes the second statement greedy. A quest with a weekday worker and
+    a Saturday specialist would read, on Saturday, as "the specialist takes everything" -- so the
+    specialist inherits work they were never meant to touch. ``instructions_only`` says this entry
+    is only the FIRST statement: the character is on duty and works their own standing
+    instructions, and routing behaves as though they were not in the roster at all.
     """
-    on_duty = {str(entry.get("rep_id")) for entry in persona_entries_on_duty(autopilot_cfg, now)
-               if entry.get("rep_id")}
-    assignee = goal.get("assignee_rep_id")
-    if assignee:
-        assignee = str(assignee)
-        if assignee in on_duty or assignee not in _rostered_rep_ids(autopilot_cfg):
-            return assignee
-        return PERSONA_HELD
-    routing_entries = _goal_routing_entries(autopilot_cfg)
+    routing_entries = _work_routing_entries(autopilot_cfg)
     today = _weekday_abbrev(now)
     for persona in routing_entries:
         days = persona.get("days")
@@ -655,13 +650,44 @@ def resolve_persona(goal: Dict[str, Any], autopilot_cfg: Dict[str, Any], now: da
         return PERSONA_HELD
     if fallback_resolver is not None:
         try:
-            resolved = fallback_resolver(goal)
+            resolved = fallback_resolver(dict(fallback_context or {}))
             if resolved:
                 return str(resolved)
         except Exception:  # noqa: BLE001 -- a bad fallback must never break a pass
             log.info("autopilot: persona fallback_resolver raised; treating as no match",
                      exc_info=True)
     return None
+
+
+def resolve_task_persona(task: Dict[str, Any], autopilot_cfg: Dict[str, Any], now: datetime,
+                         fallback_resolver: Optional[Callable[[Dict[str, Any]],
+                                                              Optional[str]]] = None
+                         ) -> ResolvedPersona:
+    """Who works an ADOPTED RECURRING TASK today, under the same day rule.
+
+    A recurring task the person scheduled can name a character in its own ``assignee_rep_id``, and
+    that naming is honoured FIRST: it is a human choosing who does this specific thing, which is
+    more specific than any roster-wide preference. What it cannot do is beat that character's DAYS,
+    which is a statement by the same human about when they work this quest at all. So:
+
+      * named character on duty today, or carrying no roster entry at all (no entry means the
+        person set no days for them, so there is no day setting to follow) -> that character;
+      * named character rostered but NOT on duty today -> ``PERSONA_HELD``, and the caller leaves
+        the occurrence queued to run on its own rather than re-assigning it to whoever is around;
+      * no name on the task -> whatever ``resolve_persona`` routes for this quest today, so an
+        unassigned occurrence rides along with the character already working the quest instead of
+        spawning a second run.
+    """
+    assignee = task.get("assignee_rep_id")
+    if assignee:
+        assignee = str(assignee)
+        on_duty = {str(entry.get("rep_id"))
+                   for entry in persona_entries_on_duty(autopilot_cfg, now)
+                   if entry.get("rep_id")}
+        if assignee in on_duty or assignee not in _rostered_rep_ids(autopilot_cfg):
+            return assignee
+        return PERSONA_HELD
+    return resolve_persona(autopilot_cfg, now, fallback_resolver, fallback_context=task)
 
 
 def persona_entries_on_duty(autopilot_cfg: Dict[str, Any], now: datetime) -> List[Dict[str, Any]]:
@@ -745,67 +771,48 @@ def persona_instructions_for(autopilot_cfg: Dict[str, Any], rep_id: Optional[str
     return None
 
 
-def split_held_for_another_day(items: List[Dict[str, Any]], autopilot_cfg: Dict[str, Any],
+def default_instructions_for(autopilot_cfg: Dict[str, Any]) -> str:
+    """The brief a batch works to when neither the quest nor the character wrote one.
+
+    The SERVER'S value wins whenever the payload carries one: ``autopilot.default_instructions`` is
+    derived read-only by quest-backend, so the text a run works to is whatever that backend
+    currently says it is, and improving it there improves every quest that never wrote its own.
+    ``BUNDLED_DEFAULT_INSTRUCTIONS`` is only what an older backend (or any client that does not
+    serve the field) degrades to, so a character on duty still has a specification instead of a
+    silent pass. See that constant for why the copy exists at all.
+    """
+    served = str(autopilot_cfg.get("default_instructions") or "").strip()
+    return served or BUNDLED_DEFAULT_INSTRUCTIONS
+
+
+def split_held_for_another_day(tasks: List[Dict[str, Any]], autopilot_cfg: Dict[str, Any],
                               now: datetime
                               ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """Split work into ``(workable today, held)`` under the day rule.
+    """Split adopted recurring tasks into ``(workable today, held)`` under the day rule.
 
-    Held means the item names a character the person rostered for other days, or that the roster's
-    goal-working characters are all off duty today: either way nobody may work it today, and it
-    comes back on a day one of them does. Applied to goals and to adopted recurring tasks alike,
-    since both carry an ``assignee_rep_id`` and both would otherwise become a batch.
+    Held means the task names a character the person rostered for other days, or that the roster's
+    work-routing characters are all off duty today: either way nobody may work it today, and it
+    comes back on a day one of them does. Held is not lost. The caller simply does not ADOPT a held
+    occurrence, so it stays queued and runs as the person scheduled it, which is the same direction
+    ``_close_adopted`` fails in (duplicated work is recoverable, lost work is not).
 
-    Deliberately called BEFORE anything is fetched or composed for these items, so a held goal
-    costs no description fetch and becomes no part of this run's work: no ``Goal:`` block, no
-    adopted task, nothing this character is asked to do. It can still be NAMED in the goal ladder
-    (``current_goal_ladder``), unmarked, along with every other current goal of the person's,
-    which is a statement about their plan rather than an assignment to whoever is on duty. The
-    incident this rule comes from was a character WORKING another's goal on the wrong day, and
-    that is what stays impossible. The fallback resolver is not consulted
-    here: it is only ever reached for a quest whose roster names no goal-working character, and
-    such a quest can hold nothing, so passing it would spend a consumer callback on a decision it
-    cannot change.
+    Deliberately called BEFORE anything is composed for these tasks, so a held occurrence becomes
+    no part of this run: nothing this character is asked to do, and no close on a task somebody
+    else's day owns. The incident this rule comes from was a character working another's item on
+    the wrong day, and that is what stays impossible.
+
+    The fallback resolver is not consulted here: it is only ever reached for a quest whose roster
+    names no work-routing character, and such a quest can hold nothing, so passing it would spend a
+    consumer callback on a decision it cannot change.
     """
     workable: List[Dict[str, Any]] = []
     held: List[Dict[str, Any]] = []
-    for item in items:
-        if resolve_persona(item, autopilot_cfg, now) is PERSONA_HELD:
-            held.append(item)
+    for task in tasks:
+        if resolve_task_persona(task, autopilot_cfg, now) is PERSONA_HELD:
+            held.append(task)
         else:
-            workable.append(item)
+            workable.append(task)
     return workable, held
-
-
-def batch_by_persona(goals: List[Dict[str, Any]], autopilot_cfg: Dict[str, Any], now: datetime,
-                     fallback_resolver: Optional[Callable[[Dict[str, Any]], Optional[str]]] = None
-                     ) -> List[Tuple[ResolvedPersona, List[Dict[str, Any]]]]:
-    """Group ``goals`` by resolved persona, preserving first-seen order. Same persona (including
-    ``None``, the plain assistant) -> ONE batch; different personas -> separate batches.
-
-    A goal held by the day rule groups under ``PERSONA_HELD`` like any other key rather than
-    vanishing, so a caller that skipped ``split_held_for_another_day`` can still see it. No task
-    may be created for that key: it names no character.
-    """
-    order: List[ResolvedPersona] = []
-    batches: Dict[ResolvedPersona, List[Dict[str, Any]]] = {}
-    for goal in goals:
-        persona = resolve_persona(goal, autopilot_cfg, now, fallback_resolver)
-        if persona not in batches:
-            batches[persona] = []
-            order.append(persona)
-        batches[persona].append(goal)
-    return [(persona, batches[persona]) for persona in order]
-
-
-def _definition_of_done(goal: Dict[str, Any]) -> str:
-    """One short line. The goal's own ``criteria`` when it has any, since the human wrote those
-    for this goal specifically and they beat a generic restatement of the brief."""
-    criteria = (goal.get("criteria") or "").strip()
-    deadline = (goal.get("deadline") or "").strip()
-    dod = criteria or "the work matches the brief above and is ready to read as-is."
-    if deadline:
-        dod += f" Target: {deadline}."
-    return dod
 
 
 def _summarize_previous(previous: Dict[str, Any]) -> str:
@@ -849,7 +856,7 @@ def _summarize_previous(previous: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def next_steps_from_pass(goals: List[Dict[str, Any]],
+def next_steps_from_pass(current_goals: List[Dict[str, Any]],
                          adopted_tasks: Optional[List[Dict[str, Any]]] = None, *,
                          scope_label: str = "", updated: str = "",
                          previous: Optional[Dict[str, Any]] = None,
@@ -857,14 +864,16 @@ def next_steps_from_pass(goals: List[Dict[str, Any]],
                          insights_note: str = "") -> NextSteps:
     """The pass's own conclusion about what comes next, as the canonical artifact.
 
-    Deterministic and LLM-free, like ``propose_next_goal``: the pass has already done the selecting
-    (current scope, ai_help, incomplete, persona batching), so the artifact is a restatement of that
-    decision, not a second opinion about it. Asking a model to re-derive it here would spend a call
-    to produce a DIFFERENT answer from the one the pass just acted on, which is the exact drift this
-    artifact exists to remove.
+    Deterministic and LLM-free, like ``propose_next_goal``: the pass has already read the quest's
+    current scope, its goals at that scope and the recurring tasks it took over, so the artifact is
+    a restatement of what it acted on, not a second opinion about it. Asking a model to re-derive
+    it here would spend a call to produce a DIFFERENT answer from the one the pass just acted on,
+    which is the exact drift this artifact exists to remove.
 
-    One line per target goal (its deadline included, since "next" and "by when" are the same
-    question), then one per adopted recurring task, then the previous period's unfinished goals as
+    ``current_goals`` is the quest's own goals at the scope it is working in (the ladder's finest
+    rung), which is what "what is next for this quest" means to the person who wrote them. One line
+    each, with the deadline where there is one, since "next" and "by when" are the same question.
+    Then one line per adopted recurring task, then the previous period's unfinished goals as
     carry-over.
 
     ``reflection_note`` is one condensed line from the person's own latest reflection, and
@@ -876,7 +885,7 @@ def next_steps_from_pass(goals: List[Dict[str, Any]],
     artifact stops being trustworthy.
     """
     steps: List[str] = []
-    for goal in goals:
+    for goal in current_goals:
         name = (goal.get("name") or "(untitled goal)").strip()
         deadline = (goal.get("deadline") or "").strip()
         steps.append(f"{name}{f' (target {deadline})' if deadline else ''}")
@@ -918,9 +927,7 @@ _CONFIRMATION_RULE = (
 _INSTRUCTIONS_PREAMBLE = (
     "Standing instructions for this quest, written by the person who owns it. They are the "
     "specification for this run: they say what to produce and how. Everything below is the "
-    "material to apply them to. Follow them verbatim where they are specific, and where an "
-    "instruction and a goal's \"Done when\" disagree about what finishing that goal means, do "
-    "what the goal says and note the conflict in your result."
+    "material to apply them to. Follow them verbatim where they are specific."
 )
 
 # The same idea one level down, for the instructions a character carries on this quest. Two things
@@ -933,28 +940,37 @@ _PERSONA_INSTRUCTIONS_PREAMBLE = (
     "Standing instructions {who} on this quest, written by the person who owns it. They describe "
     "the job this character does here, which is not the same job the quest-wide instructions "
     "describe. They are MORE SPECIFIC than those, so where the two disagree, follow these and say "
-    "in your result which you followed and why. The rule about goals still holds: where an "
-    "instruction and a goal's \"Done when\" disagree about what finishing that goal means, do what "
-    "the goal says and note the conflict."
+    "in your result which you followed and why."
+)
+
+# The brief a run works to when the person has written none of their own, at either level. It is
+# said outright that this text is the built-in one rather than theirs, because a run told "written
+# by the person who owns it" about words they never wrote would report back against a standard
+# nobody set, and because the honest framing is also the useful one: it tells the run this is the
+# floor, and that anything the person later writes replaces it outright.
+_DEFAULT_INSTRUCTIONS_PREAMBLE = (
+    "Standing instructions for this run. Neither this quest nor this character has a brief written "
+    "for it yet, so this is the built-in one, and it is the specification for this run: it says "
+    "what to produce and how. Everything below is the material to apply it to. The moment the "
+    "person writes instructions of their own, theirs replace this entirely."
 )
 
 
 # The framing for the goal ladder (``current_goal_ladder``). Three things have to be said outright
 # rather than left to position, because the block LOOKS like a work list and a run that reads it as
 # one does exactly the wrong thing with it: that these goals are the person's and not this run's
-# assignment, that goals the person never opted the AI into are on the list on purpose, and that
-# the job is to make this run's output add up to them. Without the last sentence the ladder is just
-# more text; with it, it is the check the run applies to its own result.
+# assignment, that goals the AI will never touch are on the list on purpose, and that the job is to
+# make this run's output add up to them. Without the last sentence the ladder is just more text;
+# with it, it is the check the run applies to its own result.
 _GOAL_LADDER_PREAMBLE = (
     "THE PERSON'S CURRENT GOALS, at every horizon they plan in. This is the frame around this run, "
     "not a list of work for it. This run does not own these goals: do not try to finish them, do "
-    "not report on them, and never record any of them as done. Goals the person is doing "
+    "not report on them, and never record any of them as done. Goals the person is plainly doing "
     "themselves are included deliberately, because work that ignores them is work pulling against "
     "the plan rather than with it.\n"
-    "Entries marked [this run] are the slice this run does own; everything else is what that slice "
-    "is in service of. Before you finish, check that what you produced actually moves the marked "
-    "ones forward AND adds up to the horizons above them. If it does not, say so plainly in your "
-    "result instead of leaving the person to notice."
+    "Before you finish, check that what you produced actually serves these goals and adds up to "
+    "the horizons above them. If it does not, say so plainly in your result instead of leaving the "
+    "person to notice."
 )
 
 
@@ -969,8 +985,7 @@ def _render_goal_ladder(ladder: List[Dict[str, Any]]) -> str:
         for goal in rung.get("goals") or []:
             name = str(goal.get("name") or "").strip() or "(untitled goal)"
             deadline = str(goal.get("deadline") or "").strip()
-            mark = " [this run]" if goal.get("is_target") else ""
-            lines.append(f"  - {name}{mark}{f' (by {deadline})' if deadline else ''}")
+            lines.append(f"  - {name}{f' (by {deadline})' if deadline else ''}")
         more = int(rung.get("more") or 0)
         if more > 0:
             # Said, never silently dropped: a person who plans twenty goals in a month must not be
@@ -979,7 +994,7 @@ def _render_goal_ladder(ladder: List[Dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
-def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
+def compose_batch_text(quest_outcome: str,
                        persona: Optional[str] = None, *,
                        scope_label: Optional[str] = None,
                        adopted_tasks: Optional[List[Dict[str, Any]]] = None,
@@ -989,9 +1004,10 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
                        insights: Optional[str] = None,
                        instructions: Optional[str] = None,
                        persona_instructions: Optional[str] = None,
+                       default_instructions: Optional[str] = None,
                        goal_ladder: Optional[List[Dict[str, Any]]] = None) -> str:
-    """The batch task's text: what period this run owns, the goals and AI tasks in it, what the
-    person themselves last said about the work, and what the previous period actually produced.
+    """The batch task's text: what this run is asked to produce, the period and goals it serves,
+    what the person themselves last said about the work, and what the previous period produced.
 
     The last two are what keep a recurring pass from starting cold every time. A daily pass that
     cannot see yesterday's goals and task results has no way to notice that the plan slipped, so it
@@ -1002,39 +1018,44 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
     ``insights`` the captures they have made and not yet acted on since the last pass
     (``runner.insights``). Those two are the only inputs here written BY them rather than derived
     from rows: everything else describes what the system recorded, while these say what the person
-    made of it and what occurred to them in between, so they are what should break ties about which
-    of several eligible goals actually matters this run.
+    made of it and what occurred to them in between, so they are what should break ties about what
+    actually matters this run.
 
     The insights block carries each capture's own category tags and asks the READER to judge which
     apply to this quest. That is deliberate: matching a tag against a quest or goal name in code
     would be a fixed string rule that silently drops every insight whose wording it did not
     anticipate, which is exactly what this repository's hard rule #3 forbids.
 
-    ``instructions``, when the quest carries any, is the FOURTH block: right after ``Scope:`` and
-    before the first ``Goal:`` block, verbatim, never summarized/reflowed/rewritten (it is the one
-    input here the person authored as a specification, not material to interpret). Its precedence
-    over the goals below it is stated in the framing sentence, not just implied by position -- a
-    specification that arrived after the material it governs would read as commentary on work
+    ``instructions``, when the quest carries any, is the block right after ``Scope:``: verbatim,
+    never summarized/reflowed/rewritten (it is the one input here the person authored as a
+    specification, not material to interpret). It comes before the material it governs, not after,
+    because a specification that arrived after that material would read as commentary on work
     already planned. Absent, this emits nothing and the composed text is byte-identical to before
     this parameter existed.
 
     ``persona_instructions`` is the same thing one level down: the standing instructions THIS
-    character carries on this quest, emitted immediately after the quest-wide block and before the
-    first ``Goal:`` block, equally verbatim. It exists because one roster can hold characters doing
-    genuinely different jobs on the same quest -- the weekday worker advancing the goals and the
-    Saturday reviewer looking at the quest from outside -- and handing both the identical
-    quest-wide brief describes neither of them. Its precedence over that brief is stated in its own
-    framing sentence for the same reason the quest-wide one states its own. Absent, this likewise
-    emits nothing and composes byte-identically to before the parameter existed.
-
-    ``goal_ladder`` (from ``current_goal_ladder``) is emitted immediately BEFORE the first
-    ``Goal:`` block, so the reader gets the whole picture and then this run's slice of it. It is
-    the person's current goals at every horizon, marked to show which of them this run owns, and
-    its framing says outright that the rest is context to serve rather than work to do. It matters
-    MOST for a batch with no goal blocks at all: a standing-instructions run (a daily brief, a
-    weekly review) would otherwise carry no goal information whatsoever, which is exactly the run
-    that most needs to know what it is aiming at. Absent or empty, this emits nothing and composes
+    character carries on this quest, emitted immediately after the quest-wide block, equally
+    verbatim. It exists because one roster can hold characters doing genuinely different jobs on
+    the same quest -- the weekday worker carrying the ordinary work and the Saturday reviewer
+    looking at the quest from outside -- and handing both the identical quest-wide brief describes
+    neither of them. Its precedence over that brief is stated in its own framing sentence for the
+    same reason the quest-wide one states its own. Absent, this likewise emits nothing and composes
     byte-identically to before the parameter existed.
+
+    ``default_instructions`` is the FLOOR under both, and the layering rule lives here so there is
+    exactly one place that decides it: quest-wide and persona instructions both ride into the
+    prompt whenever they exist, together when both do, and the default is emitted ONLY when
+    NEITHER does. A run whose owner has written no brief anywhere still gets a specification rather
+    than a quest outcome and a shrug. Its framing says outright that this text is the built-in one,
+    so the run is never told the person wrote words they did not. Absent, this emits nothing, which
+    is what keeps every direct caller's composition unchanged.
+
+    ``goal_ladder`` (from ``current_goal_ladder``) is emitted after the brief: the run reads what
+    it is asked to produce, then the picture that output has to fit into. It is the person's
+    current goals at every horizon, and its framing says outright that they are context to serve
+    rather than work to do. It is THE ONLY WAY A GOAL REACHES A RUN: no goal is ever composed as
+    an assignment here. Absent or empty, this emits nothing and composes byte-identically to before
+    the parameter existed.
 
     ``persona``, when resolved, is named in the text AS WELL AS stamped structurally in
     ``assignee_rep_id`` at creation. The structured field is authoritative; the prose is kept
@@ -1046,32 +1067,29 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
     if quest_outcome:
         parts.append(f"Quest outcome: {quest_outcome}")
     if scope_label:
-        # Saying whose target this is matters. A weekly goal handed to a daily run reads as "do all
-        # of this today", which is both discouraging and wrong; the run's job is to advance it and
-        # report what is left.
-        parts.append(f"Scope: this quest's {scope_label}. What follows is that PERIOD's target, "
-                     f"not this single run's. Advance it as far as one focused session honestly "
-                     f"can, then say plainly what remains.")
+        # Saying whose target this period is matters. A week's worth of goals seen by a daily run
+        # reads as "do all of this today", which is both discouraging and wrong; the run's job is
+        # to move them along and report what is left.
+        parts.append(f"Scope: this quest's {scope_label}. The goals below are that PERIOD's "
+                     f"target, not this single run's workload. Advance them as far as one focused "
+                     f"session honestly can, then say plainly what remains.")
     if instructions:
         parts.append(_INSTRUCTIONS_PREAMBLE + "\n\n" + instructions)
     if persona_instructions:
         who = f"for {persona} specifically" if persona else "for this character specifically"
         parts.append(_PERSONA_INSTRUCTIONS_PREAMBLE.format(who=who) + "\n\n"
                      + persona_instructions)
+    if default_instructions and not (instructions or persona_instructions):
+        # THE LAYERING RULE, in one line: the default is a floor, not a layer. Anything the person
+        # wrote at either level replaces it outright, and emitting both would hand the run two
+        # specifications for the same job with nothing ranking them.
+        parts.append(_DEFAULT_INSTRUCTIONS_PREAMBLE + "\n\n" + default_instructions)
     if goal_ladder:
-        # Before the goals, deliberately: the run reads what the person is working toward, then
-        # the part of it this run has been handed. The reverse order reads as "here is your work,
-        # and here is some more work", which is the misreading the framing above spends its words
+        # After the brief, deliberately: the run reads what it is asked to produce, then the goals
+        # that output has to add up to. The reverse order reads as "here is a list of work, and
+        # here is some more work", which is the misreading the framing above spends its words
         # preventing.
         parts.append(_render_goal_ladder(goal_ladder))
-    for goal in goals:
-        name = (goal.get("name") or "(untitled goal)").strip()
-        description = (goal.get("description") or "").strip()
-        block = [f"Goal: {name}"]
-        if description:
-            block.append(f"Brief: {description}")
-        block.append(f"Done when: {_definition_of_done(goal)}")
-        parts.append("\n".join(block))
     if adopted_tasks:
         block = ["Recurring AI tasks for this period, adopted into this run. Carry out each one "
                  "as part of this run; the original occurrences are closed and will NOT run "
@@ -1109,45 +1127,42 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
     return "\n\n".join(parts)
 
 
-def _batch_title(goals: List[Dict[str, Any]],
-                 adopted_tasks: Optional[List[Dict[str, Any]]] = None,
+def _batch_title(adopted_tasks: Optional[List[Dict[str, Any]]] = None,
                  instructions: Optional[str] = None,
-                 persona_instructions: Optional[str] = None) -> Optional[str]:
+                 persona_instructions: Optional[str] = None,
+                 default_instructions: Optional[str] = None) -> Optional[str]:
     """A short label for the task list: what this batch is ABOUT.
 
     Without one the server derives a title from the first line of the text, which is the "Act as
     ..." persona line, so every autopilot task in the list is titled after its persona instead of
-    its work. Named goals win; an adoption-only batch is titled after the task it took over.
+    its work. An adoption batch is titled after the task it took over; everything else is titled
+    after the brief it is working to.
 
-    Instructions are the remaining fallbacks, for a batch with no goals and nothing adopted (the
-    always-work rule's instructions-only case): the first non-empty line, stripped of leading
-    Markdown furniture ("#", "-", "*", ">") and capped at 80 characters -- so an instructions-only
-    batch is titled after what the person asked for rather than the "Act as ..." persona line. That
-    title becomes the mail SUBJECT once send-on-completion lands, which is why it matters here and
-    not just cosmetically.
+    A brief's title is its first non-empty line, stripped of leading Markdown furniture ("#", "-",
+    "*", ">") and capped at 80 characters. That title becomes the mail SUBJECT once
+    send-on-completion lands, which is why it matters here and not just cosmetically.
 
-    ``persona_instructions`` is tried BEFORE the quest-wide ``instructions``, because a batch that
-    exists only because a character has their own standing job on this quest is about THAT job, and
-    titling it after the quest's general brief would name work this run is not doing. Falls back to
-    "Autopilot run" when instructions of either kind were passed but no line has real content after
-    stripping.
+    The order is the same precedence the brief itself has. ``persona_instructions`` first, because
+    a batch that exists because a character has their own standing job on this quest is about THAT
+    job, and titling it after the quest's general brief would name work this run is not doing. Then
+    the quest-wide ``instructions``. Then ``default_instructions``, so a quest whose owner has
+    written no brief anywhere is still titled after what its run will actually do rather than after
+    its persona. Falls back to "Autopilot run" when a brief of some kind was passed but no line has
+    real content after stripping, and to ``None`` when there was nothing to title from at all.
     """
-    names = [(g.get("name") or "").strip() for g in goals]
-    names = [n for n in names if n]
-    if not names and adopted_tasks:
+    if adopted_tasks:
         first = str((adopted_tasks[0].get("title") or adopted_tasks[0].get("text") or "")).strip()
-        names = [first.splitlines()[0]] if first else []
-    if names:
-        title = names[0] if len(names) == 1 else f"{names[0]} (+{len(names) - 1} more)"
-        return title[:120]
-    for source in (persona_instructions, instructions):
+        lines = first.splitlines()
+        if lines and lines[0].strip():
+            return lines[0].strip()[:120]
+    for source in (persona_instructions, instructions, default_instructions):
         if not source:
             continue
         for line in source.splitlines():
             stripped = _MD_TITLE_FURNITURE_RE.sub("", line).strip()
             if stripped:
                 return stripped[:80]
-    if persona_instructions or instructions:
+    if persona_instructions or instructions or default_instructions:
         return "Autopilot run"
     return None
 
@@ -1155,13 +1170,13 @@ def _batch_title(goals: List[Dict[str, Any]],
 def propose_next_goal(quest: Dict[str, Any]) -> Tuple[str, str]:
     """A deterministic (LLM-free, so this stays fast/offline-testable) proposed next-goal (title,
     description) in service of the quest's stated outcome, used when ``planning=="plan_and_work"``
-    and no AI-enabled goal is eligible this pass."""
+    and the pass produced no work batch at all."""
     outcome = (quest.get("outcome") or "this quest's outcome").strip()
     title = f"Next step toward: {outcome}"
     description = (
-        f'Propose and take the next concrete step toward "{outcome}". No AI-enabled goal was '
-        "eligible this pass, and this quest allows autopilot to plan as well as work. Define a "
-        "specific, checkable outcome for this goal before starting on it."
+        f'Propose and take the next concrete step toward "{outcome}". This pass produced no work '
+        "on the quest, and the quest allows autopilot to plan as well as work. Define a specific, "
+        "checkable outcome for this goal before starting on it."
     )
     return title, description
 
@@ -1172,7 +1187,7 @@ class AutopilotResult:
 
     ``created`` holds one dict per item the pass created, and it holds NAMES, not just ids:
     ``{task_id, kind, title, quest_id, quest_label, persona_label, awaiting_approval,
-    goal_names, adopted_titles}``. That is not decoration. This result is read by a person, in
+    adopted_titles}``. That is not decoration. This result is read by a person, in
     their quest, and a line like "Created 1 task(s): atask_d2014273cff6" tells them nothing they
     can act on: it names an internal id instead of the work, and it describes the pass's own
     bookkeeping as if it were the point. The point is what is now being worked on, said in the
@@ -1284,9 +1299,8 @@ class AutopilotResult:
             if p.get("kind") == "goal_proposal":
                 lines.append(f"  - Propose a goal on {label}: {p.get('title')}")
                 continue
-            names = ", ".join(n for n in (p.get("goal_names") or []) if n)
             line = (f"  - Work on {label} as {p.get('persona_label') or 'the assistant'} "
-                    f"({p.get('scope')}): {names or p.get('goal_ids')}")
+                    f"({p.get('scope')})")
             # Adoption CLOSES the user's own recurring tasks, so a report that omitted it
             # would hide the most consequential thing the pass does.
             adopted = p.get("adopted_task_ids")
@@ -1366,7 +1380,7 @@ class AutopilotPass:
     """Runs ONE autopilot pass against a Quest client. See the module docstring for the algorithm.
 
     ``client`` is a ``QuestClient`` (or any object with the same methods this class calls:
-    ``list_quests``, ``get_quest_autopilot``, ``list_quest_goals``, ``get_goal``, ``list_tasks``,
+    ``list_quests``, ``get_quest_autopilot``, ``list_quest_goals``, ``list_tasks``,
     ``list_open_decisions_for_quest``, ``create_task``, ``update_task``,
     ``update_quest_autopilot``, and optionally ``create_goal``, ``get_daily_reflection``,
     ``get_period_reflection``, ``get_insights_collection`` and ``list_collection_entries`` -- a
@@ -1374,7 +1388,9 @@ class AutopilotPass:
     before they existed).
 
     ``persona_resolver`` is the consumer-injected fallback (step 4 of ``resolve_persona``) -- e.g.
-    the personal lane's card-vote resolver. Given a goal dict, returns a rep_id or ``None``.
+    the personal lane's card-vote resolver. Given the item being routed (an adopted task, or ``{}``
+    when the batch is not about one), returns a rep_id or ``None``. It is reached only on a quest
+    whose roster names no work-routing character.
 
     ``quest_folder_map`` (``{quest_id: folder}``, from ``RunnerConfig``) opts a quest into the
     canonical next-steps artifact: the pass reads the folder's standing answer into the batch it
@@ -1442,12 +1458,14 @@ class AutopilotPass:
 
     def instructions_source(self, persona: Optional[str],
                              persona_instructions: Optional[str],
-                             instructions: Optional[str]) -> Optional[str]:
-        """Whose standing instructions this batch is carrying, in words, for the dry-run report.
+                             instructions: Optional[str]) -> str:
+        """Which brief this batch is carrying, in words, for the dry-run report.
 
-        Both can apply at once, and when they do BOTH are named: the character's brief governs
-        where the two disagree, but the quest's still rides into the same run, and a report that
-        hid it would be describing a shorter brief than the one that gets sent.
+        Both written kinds can apply at once, and when they do BOTH are named: the character's
+        brief governs where the two disagree, but the quest's still rides into the same run, and a
+        report that hid it would be describing a shorter brief than the one that gets sent. With
+        neither written, the run works to the built-in default, and saying so is the whole value of
+        this line on a quest nobody has configured yet.
         """
         sources: List[str] = []
         if persona_instructions:
@@ -1455,7 +1473,7 @@ class AutopilotPass:
             sources.append(f"{who}'s own standing instructions")
         if instructions:
             sources.append("this quest's standing instructions")
-        return ", plus ".join(sources) if sources else None
+        return ", plus ".join(sources) if sources else "the built-in default brief"
 
     def _reflection_periods(self, scope_label: str) -> Tuple[str, ...]:
         """Which period reviews to consult for a quest at ``scope_label``, finest match first.
@@ -1587,48 +1605,26 @@ class AutopilotPass:
         if instructions:
             log.info("autopilot: quest %s has standing instructions (%d chars)",
                      quest_id, len(instructions))
-        # The characters on duty today who carry standing instructions of their OWN. Each is a
-        # separate job on this quest, so each is a separate batch below: the always-work rule is
-        # per PERSONA, not per quest. A quest-level rule would let one character's goal work
-        # satisfy it and leave the Saturday reviewer, whose whole existence on this quest IS their
-        # instructions, silent on the day they were rostered for. Read from the on-duty entries
-        # rather than the whole roster, since being on duty is what makes today their day.
-        instructed_on_duty: List[str] = []
-        for entry in persona_entries_on_duty(autopilot_cfg, self._now()):
-            rep_id = str(entry.get("rep_id") or "")
-            if rep_id and str(entry.get("instructions") or "").strip():
-                instructed_on_duty.append(rep_id)
-        if instructed_on_duty:
-            log.info("autopilot: quest %s has %d persona(s) on duty with standing instructions",
-                     quest_id, len(instructed_on_duty))
+        # The floor under both instruction levels: what a batch works to when neither the quest nor
+        # the character carries a brief. The backend serves the authoritative text on the quest
+        # payload; this degrades to the bundled copy against an older one.
+        default_instructions = default_instructions_for(autopilot_cfg)
 
         goals_payload = self._client.list_quest_goals(quest_id, team_id=self._team_id or None) or {}
-        target_goals, scope_label = select_target_goals(goals_payload, self._now())
-        # THE DAY RULE, applied to the goals themselves: one assigned to a character the person
-        # rostered for OTHER days is held here and picked up on a day that character works this
-        # quest. Held before the description fetch below, so a held goal costs no read and reaches
-        # no prompt. Counts and ids only in the log -- goal text is the person's own content.
-        target_goals, held_goals = split_held_for_another_day(target_goals, autopilot_cfg,
-                                                              self._now())
-        if held_goals:
-            log.info("autopilot: quest %s -- holding %d goal(s) %s: their character is not "
-                     "rostered for %s, so they wait for a day that character works this quest",
-                     quest_id, len(held_goals),
-                     [str(g.get("id") or "?") for g in held_goals],
-                     self._now().strftime("%A"))
-        # The goals-grouping payload does NOT carry each goal's ``description`` (the backend's
-        # handler builds a slim per-goal dict: id/name/time_scope/period/deadline/completed/
-        # parent_goal_id/ai_help/assignee_rep_id). But the description IS the brief -- it is the
-        # entire statement of what the AI is being asked to do. So fetch it per TARGET goal (a
-        # handful at most, only for goals that survived the gates and the scope filter).
-        target_goals = [self._with_description(quest_id, g) for g in target_goals]
-        # The whole picture the work above is a slice of: the person's current goals at every
-        # horizon, this run's own targets marked. Built from the goals payload already fetched, so
-        # it costs no extra call, and carried into EVERY batch below including a batch with no
-        # goals in it -- an instructions-only run (a daily brief, a weekly review) would otherwise
-        # be the one run in the system that knows nothing about what the person is working toward.
-        goal_ladder = current_goal_ladder(goals_payload, self._now(),
-                                          target_goal_ids=[g.get("id") for g in target_goals])
+        # Which period this quest is planning in. A LABEL only: it decides which period review to
+        # read, what "the previous period" means here, and what period a proposed goal is filed
+        # under. It selects no work, because goals are not work.
+        scope_label = current_scope_label(goals_payload, self._now())
+        # THE ONLY WAY GOALS REACH A RUN: the person's current goals at every horizon, built from
+        # the payload already fetched (no extra call) and carried into EVERY batch below. Nothing
+        # here is this run's assignment; it is the picture the run's output has to add up to, and
+        # a run working standing instructions is exactly the run that would otherwise know nothing
+        # about what the person is aiming at.
+        goal_ladder = current_goal_ladder(goals_payload, self._now())
+        # The finest current horizon's goals, for the quest's next-steps artifact below. That
+        # artifact answers "what is next for this quest", and the person's own goals at the scope
+        # the quest is working in are that answer, restated rather than re-derived.
+        current_goals = list(goal_ladder[0]["goals"]) if goal_ladder else []
 
         # Recurring tasks the user set up on this quest. Adopted ONLY when the quest opts in:
         # taking over a task someone scheduled themselves is a real change in who executes it.
@@ -1661,62 +1657,22 @@ class AutopilotPass:
 
         quest_label = _quest_label(quest, quest_id)
         produced = False
-        # The always-work rule: standing instructions that describe a deliverable must produce a
-        # batch per due pass EVEN WHEN no ai_help goal is in the current scope -- otherwise the
-        # migration case (a hand-authored daily brief replaced by instructions) silently stops on
-        # any day the quest has no eligible goal. It applies per WRITER of instructions, so both
-        # the quest-wide field and each instructed persona on duty join the condition here.
-        # ``instructed_on_duty`` is a separate term rather than folded into ``instructions``
-        # because the two are independent: a quest can hand every character the same brief, hand
-        # each a different one, or both, and a character rostered for today with their own brief
-        # has work to do whether or not the quest itself carries one.
-        # With either kind set, the goal-proposal ``elif`` becomes unreachable for this quest,
-        # which is deliberate (see the comment at the ``elif`` below) -- goal proposals stay
-        # untouched for every quest that carries NO instructions of either kind.
-        if target_goals or adopted or instructions or instructed_on_duty:
-            if target_goals or adopted:
-                batches = self._batches_with_adopted(target_goals, adopted, autopilot_cfg)
-                # The case this whole feature exists for: the day's goals go to whoever routing
-                # resolves (the weekday worker), and each instructed persona on duty who did not
-                # already get a batch gets their own EMPTY one, so their standing job happens on
-                # the same pass instead of waiting for a day with no goals in it.
-                covered = {persona for persona, _goals, _tasks in batches}
-                for rep in instructed_on_duty:
-                    if rep not in covered:
-                        covered.add(rep)
-                        batches.append((rep, [], []))
-            elif instructed_on_duty:
-                # No goals and nothing adopted, but characters are rostered today with their own
-                # instructions: one batch each. They still carry the quest-wide instructions too,
-                # if the quest has any -- the two are layered, never either/or.
-                log.info("autopilot: quest %s -- no eligible goal this pass, working the standing "
-                        "instructions of %d persona(s) on duty", quest_id, len(instructed_on_duty))
-                batches = [(rep, [], []) for rep in instructed_on_duty]
-            else:
-                # Instructions-only: exactly one batch, no goals and nothing adopted. Persona
-                # comes from the quest's roster on duty today (first entry, day-matched before
-                # unrestricted), else the consumer's fallback resolver, else no persona --
-                # the same precedence goal-driven batching uses, just with no goal to resolve it
-                # FROM. The fallback and the no-persona arms are reachable only for a quest with
-                # NO roster: with one, ``_gate_quest``'s day rule has already skipped the quest
-                # unless somebody is on duty, and then ``personas_on_duty`` is never empty.
-                log.info("autopilot: quest %s -- no eligible goal this pass, working the "
-                        "standing instructions alone", quest_id)
-                on_duty = personas_on_duty(autopilot_cfg, self._now())
-                if on_duty:
-                    persona = on_duty[0]
-                elif self._persona_resolver is not None:
-                    try:
-                        resolved = self._persona_resolver({})
-                        persona = str(resolved) if resolved else None
-                    except Exception:  # noqa: BLE001 -- a bad fallback must never break a pass
-                        log.info("autopilot: persona fallback_resolver raised while resolving an "
-                                "instructions-only batch; treating as no match", exc_info=True)
-                        persona = None
-                else:
-                    persona = None
-                batches = [(persona, [], [])]
-            for persona, goals, tasks in batches:
+        # THE ALWAYS-WORK RULE, and it is now unconditional for a quest that reaches this point.
+        # Every character on duty has an effective brief -- their own, the quest's, or the default
+        # -- so every character on duty gets ONE batch per due pass. A quest with three unrestricted
+        # personas therefore produces three batches a pass, and the only thing that bounds that is
+        # the team's daily budget, which is checked per batch inside the loop.
+        #
+        # A quest with NO roster at all gets a single plain-assistant batch on the default, so a
+        # quest somebody switched autopilot on for and then configured no further still does
+        # something useful instead of going quiet.
+        #
+        # The consequence for the goal-proposal ``elif`` below is that it no longer fires: with a
+        # default brief there is no such thing as a due pass with nothing to work. See the comment
+        # there for why the path is kept rather than deleted.
+        batches = self._batches_for_pass(autopilot_cfg, adopted)
+        if batches:
+            for persona, tasks in batches:
                 if budget_used >= self._daily_budget:
                     self._skip(result, quest_id, quest_label,
                                f"today's budget of {self._daily_budget} autopilot task(s) ran out "
@@ -1728,22 +1684,19 @@ class AutopilotPass:
                 # on duty -- a day-restricted entry carrying the brief plus a catch-all, say -- so
                 # reading the whole roster is what makes which entry irrelevant.
                 persona_instructions = persona_instructions_for(autopilot_cfg, persona)
-                title = _batch_title(goals, tasks, instructions=instructions,
-                                     persona_instructions=persona_instructions)
+                title = _batch_title(tasks, instructions=instructions,
+                                     persona_instructions=persona_instructions,
+                                     default_instructions=default_instructions)
                 if dry_run:
                     result.proposals.append({
                         "quest_id": quest_id, "quest_label": quest_label, "kind": "work_batch",
                         "persona": persona, "persona_label": self._persona_label(persona),
-                        "goal_ids": [g.get("id") for g in goals],
-                        "goal_names": [_goal_name(g) for g in goals] or
-                                      (["standing instructions"]
-                                       if (instructions or persona_instructions) else []),
                         "scope": scope_label,
                         "adopted_task_ids": [t.get("id") or t.get("task_id") for t in tasks],
-                        # Whose instructions are driving this batch. A dry run is read by someone
-                        # checking that the right character was picked for the right job, and
-                        # "standing instructions" alone does not say whose -- which is the only
-                        # question a two-character roster raises.
+                        # Which brief is driving this batch. A dry run is read by someone checking
+                        # that the right character was picked for the right job, and "standing
+                        # instructions" alone does not say whose -- which is the only question a
+                        # two-character roster raises.
                         "instructions_from": self.instructions_source(
                             persona, persona_instructions, instructions),
                     })
@@ -1753,7 +1706,7 @@ class AutopilotPass:
                     # once the budget is exhausted -- exactly what a real pass would do.
                     budget_used += 1
                     continue
-                task_id = self._create_batch_task(quest, quest_id, persona, goals, mode,
+                task_id = self._create_batch_task(quest, quest_id, persona, mode,
                                                   title=title,
                                                   scope_label=scope_label, adopted_tasks=tasks,
                                                   next_steps=standing_next_steps,
@@ -1762,6 +1715,7 @@ class AutopilotPass:
                                                   insights=insights_text,
                                                   instructions=instructions,
                                                   persona_instructions=persona_instructions,
+                                                  default_instructions=default_instructions,
                                                   goal_ladder=goal_ladder)
                 if task_id:
                     result.created.append({
@@ -1769,34 +1723,23 @@ class AutopilotPass:
                         "quest_label": quest_label, "title": title,
                         "persona_label": self._persona_label(persona),
                         "awaiting_approval": mode != "act",
-                        "goal_names": [_goal_name(g) for g in goals],
                         "adopted_titles": [_task_label(t) for t in tasks],
                     })
                     budget_used += 1
                     produced = True
                     self._close_adopted(tasks, task_id, quest_id, result)
             if produced and not dry_run:
-                self._refresh_next_steps(quest_id, target_goals, adopted, scope_label, previous,
+                self._refresh_next_steps(quest_id, current_goals, adopted, scope_label, previous,
                                          result, quest_label=quest_label,
                                          reflection_note=reflections.one_line(),
                                          insights_note=insights.one_line())
-        # Everything due today belongs to a character who is not rostered for today. The quest is
-        # not out of work and it does not need a new goal proposed at it: it needs the day its
-        # character works. Said as a skip, because a quest that goes silently quiet on a day it
-        # visibly has work is the failure mode this repository bans.
-        elif held_goals or held_adopted:
-            day_name = self._now().strftime("%A")
-            self._skip(result, quest_id, quest_label, _count_line(
-                len(held_goals) + len(held_adopted),
-                f"the only work due belongs to a character who is not rostered for {day_name}, so "
-                f"it waits for a day they work this quest",
-                f"{{n}} pieces of work due belong to characters who are not rostered for "
-                f"{day_name}, so they wait for a day those characters work this quest"))
-        # The goal-proposal path is untouched: with instructions set -- the quest's own, or any
-        # carried by a persona on duty today -- the branch above always matches, so this ``elif``
-        # is unreachable for that quest. Proposals keep their exact current behaviour for quests
-        # WITHOUT instructions of either kind, and no double-proposing can occur. Instructions are
-        # deliberately never threaded into ``propose_next_goal``.
+        # The goal-proposal path, kept and unchanged, and NOT currently reachable from here: a due
+        # pass always has at least one character with an effective brief, so ``batches`` is never
+        # empty by the time this runs. It stays because it is a real product surface rather than
+        # dead scaffolding -- quest-backend renders these proposals and re-declares
+        # ``PROPOSAL_TEXT_PREFIX`` against this module's constant -- and because the condition that
+        # makes it unreachable is the DEFAULT BRIEF, which is exactly the kind of thing a
+        # deployment may switch off later. Its own helpers are still covered directly by tests.
         elif planning == "plan_and_work":
             if budget_used < self._daily_budget:
                 skipped_because = self._handle_proposal(quest, quest_id, quest_label, mode,
@@ -1890,30 +1833,6 @@ class AutopilotPass:
                        quest_id, exc_info=True)
             return {}
 
-    def _with_description(self, quest_id: str, goal: Dict[str, Any]) -> Dict[str, Any]:
-        """Return ``goal`` enriched with its ``description`` (the AI's brief), fetched per goal.
-
-        The grouping payload omits ``description``; ``get_goal`` returns the full goal document.
-        Best-effort: on any failure the goal is used as-is (``compose_batch_text`` simply omits the
-        Brief line), which degrades the task's richness but never drops the goal from the batch."""
-        if goal.get("description"):
-            return goal
-        get_goal = getattr(self._client, "get_goal", None)
-        goal_id = goal.get("id")
-        if not callable(get_goal) or not goal_id:
-            return goal
-        try:
-            full = get_goal(str(goal_id), quest_id=quest_id,
-                           team_id=self._team_id or None) or {}
-            description = (full.get("description") or "").strip()
-            if description:
-                enriched = dict(goal)
-                enriched["description"] = description
-                return enriched
-        except Exception:  # noqa: BLE001 -- enrichment is best-effort, never fatal
-            log.info("autopilot: could not fetch description for goal %s", goal_id, exc_info=True)
-        return goal
-
     # --- adopting the quest's own recurring tasks (opt-in per quest) --------------------------
 
     def _due_recurring_tasks(self, quest_id: str) -> List[Dict[str, Any]]:
@@ -1942,45 +1861,69 @@ class AutopilotPass:
             due.append(t)
         return due
 
-    def _batches_with_adopted(self, goals: List[Dict[str, Any]],
-                              adopted: List[Dict[str, Any]],
-                              autopilot_cfg: Dict[str, Any]
-                              ) -> List[Tuple[Optional[str], List[Dict[str, Any]],
-                                              List[Dict[str, Any]]]]:
-        """Merge goal batches and adopted tasks into ONE batch per persona.
+    def _batches_for_pass(self, autopilot_cfg: Dict[str, Any], adopted: List[Dict[str, Any]]
+                          ) -> List[Tuple[Optional[str], List[Dict[str, Any]]]]:
+        """This pass's batches for one quest: ``[(persona, adopted tasks for them), ...]``.
 
-        An adopted task's persona is its own ``assignee_rep_id`` when it has one (the user chose a
-        character for it), otherwise the persona the quest's roster resolves for today, so an
-        unassigned recurring task rides along with that persona's goal work instead of spawning a
-        second run for the same character. Both readings come from ``resolve_persona``, which is
-        also where the day rule lives, so an adopted task cannot name a character the roster has
-        off duty today.
+        ONE PER CHARACTER ON DUTY TODAY, in the roster's own on-duty order (day-restricted entries
+        before unrestricted ones). Being on duty is the whole condition, because every character on
+        duty now has a brief to work to: their own, the quest's, or the default. An
+        ``instructions_only`` entry is included like any other -- the flag only keeps that
+        character out of the routing that hands an UNASSIGNED recurring task to somebody.
 
-        Anything the day rule holds is skipped here rather than re-routed. The caller has already
-        held and reported it (see ``_run_one_quest``); this is the belt to that braces, so a held
-        item can never become a batch keyed on a marker that names no character.
+        A quest with NO roster gets exactly ONE batch, for whoever the consumer's fallback resolver
+        names, or for the plain assistant when it names nobody. That is the unconfigured quest, and
+        it still does its default brief rather than nothing. (An empty on-duty list can only mean
+        an empty roster here: ``_gate_quest``'s day rule has already skipped a quest whose roster
+        names people but puts none of them on duty today.)
+
+        Adopted tasks are then filed into the batch of whoever ``resolve_task_persona`` names, so
+        an unassigned occurrence rides along with the character already working the quest instead
+        of spawning a second run for the same character, and one naming somebody else gets its own
+        batch. Anything the day rule holds is skipped here rather than re-routed: the caller has
+        already held and reported it, and this is the belt to that braces, so a held task can never
+        become a batch keyed on a marker that names no character.
         """
         now = self._now()
-        merged: Dict[Optional[str], Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]] = {}
+        merged: Dict[Optional[str], List[Dict[str, Any]]] = {}
         order: List[Optional[str]] = []
 
-        def slot(persona: Optional[str]):
+        def slot(persona: Optional[str]) -> List[Dict[str, Any]]:
             if persona not in merged:
-                merged[persona] = ([], [])
+                merged[persona] = []
                 order.append(persona)
             return merged[persona]
 
-        for persona, batch_goals in batch_by_persona(goals, autopilot_cfg, now,
-                                                     self._persona_resolver):
-            if persona is PERSONA_HELD:
-                continue
-            slot(persona)[0].extend(batch_goals)
+        on_duty = persona_entries_on_duty(autopilot_cfg, now)
+        for entry in on_duty:
+            rep_id = entry.get("rep_id")
+            if rep_id:
+                slot(str(rep_id))
+        if not on_duty:
+            slot(self._fallback_persona())
         for task in adopted:
-            persona = resolve_persona(task, autopilot_cfg, now, self._persona_resolver)
+            persona = resolve_task_persona(task, autopilot_cfg, now, self._persona_resolver)
             if persona is PERSONA_HELD:
                 continue
-            slot(str(persona) if persona else None)[1].append(task)
-        return [(persona, merged[persona][0], merged[persona][1]) for persona in order]
+            slot(str(persona) if persona else None).append(task)
+        return [(persona, merged[persona]) for persona in order]
+
+    def _fallback_persona(self) -> Optional[str]:
+        """The consumer's own answer to "who is this quest's character", or None.
+
+        Reached only for a quest whose roster names nobody, which is every quest that never
+        configured one. A resolver that raises is treated as no match: a bad consumer callback must
+        never break a pass.
+        """
+        if self._persona_resolver is None:
+            return None
+        try:
+            resolved = self._persona_resolver({})
+            return str(resolved) if resolved else None
+        except Exception:  # noqa: BLE001 -- a bad fallback must never break a pass
+            log.info("autopilot: persona fallback_resolver raised while resolving this quest's "
+                     "batch; treating as no match", exc_info=True)
+            return None
 
     def _close_adopted(self, tasks: List[Dict[str, Any]], batch_task_id: str, quest_id: str,
                        result: AutopilotResult) -> None:
@@ -2035,7 +1978,7 @@ class AutopilotPass:
             log.info("autopilot: could not read next steps for quest %s", quest_id, exc_info=True)
             return None
 
-    def _refresh_next_steps(self, quest_id: str, goals: List[Dict[str, Any]],
+    def _refresh_next_steps(self, quest_id: str, current_goals: List[Dict[str, Any]],
                             adopted: List[Dict[str, Any]], scope_label: str,
                             previous: Optional[Dict[str, Any]],
                             result: AutopilotResult, *,
@@ -2044,16 +1987,16 @@ class AutopilotPass:
                             insights_note: str = "") -> None:
         """Write this pass's conclusion as the quest's canonical next steps (folder + Quest).
 
-        Only called when the pass actually PRODUCED work, and never on a dry run. A pass that found
-        nothing eligible must leave the artifact alone: overwriting a considered answer with "no
-        current target" on the day a quest happens to be gated or quiet would make the artifact less
+        Only called when the pass actually PRODUCED work, and never on a dry run. A pass that
+        produced nothing must leave the artifact alone: overwriting a considered answer with "no
+        current target" on a day the quest happens to be gated or quiet would make the artifact less
         trustworthy than the guesswork it replaces.
         """
         folder = self._quest_folder_map.get(str(quest_id))
         if not folder:
             return
         updated = self._now().astimezone(timezone.utc).strftime("%Y-%m-%d")
-        next_steps = next_steps_from_pass(goals, adopted, scope_label=scope_label,
+        next_steps = next_steps_from_pass(current_goals, adopted, scope_label=scope_label,
                                           updated=updated, previous=previous,
                                           reflection_note=reflection_note,
                                           insights_note=insights_note)
@@ -2237,9 +2180,9 @@ class AutopilotPass:
         Quest API resolves it with ``storage.get_quest(goal_id)`` and 404s anything else -- so a
         per-goal id from ``list_quest_goals`` (a separate document with its own id) must never be
         passed here. Doing so failed every work-batch creation outright, and any that had survived
-        would have been invisible to ``_has_backpressure``, which looks tasks up by quest id.
-        Which GOALS a task covers is carried in its text (see ``compose_batch_text``), not in this
-        field.
+        would have been invisible to ``_has_backpressure``, which looks tasks up by quest id. This
+        field never held a goal id and never will: a task is linked to its QUEST, and goals reach
+        the run as context in its text (see ``compose_batch_text``).
 
         ``status`` is asserted AT CREATION rather than PATCHed afterwards. Creating a proposal
         ``queued`` and demoting it in a second call leaves a window in which the runner's poll can
@@ -2291,7 +2234,7 @@ class AutopilotPass:
         return str(task_id)
 
     def _create_batch_task(self, quest: Dict[str, Any], quest_id: str, persona: Optional[str],
-                           goals: List[Dict[str, Any]], mode: str, *,
+                           mode: str, *,
                            title: Optional[str] = None,
                            scope_label: Optional[str] = None,
                            adopted_tasks: Optional[List[Dict[str, Any]]] = None,
@@ -2301,21 +2244,24 @@ class AutopilotPass:
                            insights: Optional[str] = None,
                            instructions: Optional[str] = None,
                            persona_instructions: Optional[str] = None,
+                           default_instructions: Optional[str] = None,
                            goal_ladder: Optional[List[Dict[str, Any]]] = None) -> Optional[str]:
-        text = compose_batch_text(str(quest.get("outcome") or ""), goals,
+        text = compose_batch_text(str(quest.get("outcome") or ""),
                                   self._persona_label(persona),
                                   scope_label=scope_label, adopted_tasks=adopted_tasks,
                                   next_steps=next_steps, previous=previous,
                                   reflection=reflection, insights=insights,
                                   instructions=instructions,
                                   persona_instructions=persona_instructions,
+                                  default_instructions=default_instructions,
                                   goal_ladder=goal_ladder)
         try:
             return self._create_autopilot_task(
                 quest, quest_id, text, mode, persona=persona,
                 title=title if title is not None
-                else _batch_title(goals, adopted_tasks, instructions=instructions,
-                                  persona_instructions=persona_instructions))
+                else _batch_title(adopted_tasks, instructions=instructions,
+                                  persona_instructions=persona_instructions,
+                                  default_instructions=default_instructions))
         except Exception as e:  # noqa: BLE001 -- surfaced to the caller's per-quest try/except
             log.error("autopilot: task creation failed for quest %s: %s", quest_id, e,
                       exc_info=True)
@@ -2330,10 +2276,12 @@ class AutopilotPass:
         mode, since creating a goal on a ``suggest`` quest would be autopilot writing the plan the
         person asked to approve first.
 
-        The call is ``create_goal(title, quest_id=..., period=..., description=..., ai_help=True)``.
+        The call is ``create_goal(title, quest_id=..., period=..., description=...)``.
         ``period`` is REQUIRED by both the client and ``POST /api/planning/goals`` (the backend
         derives the goal's deadline and time_scope from it), so it is derived from this pass's own
-        scope label by ``goal_period_for_scope`` rather than guessed.
+        scope label by ``goal_period_for_scope`` rather than guessed. Nothing marks the goal as
+        AI-workable, because a goal is not a unit of AI work: it is the plan the work serves, and
+        the flag that used to say otherwise no longer exists on a goal at all.
 
         HISTORY, because the failure mode matters more than the fix. This method called
         ``create_goal(quest_id, name=title, description=..., ai_help=True, created_by="ai")``:
@@ -2341,8 +2289,9 @@ class AutopilotPass:
         and the required ``period`` was missing. It could not bind, so every call raised TypeError
         the moment ``QuestClient.create_goal`` existed, and AI-proposed goals were silently never
         created. Nothing noticed for two reasons at once, and the pair is the lesson: the branch is
-        UNREACHABLE for any quest carrying standing instructions (the always-work rule matches
-        first), so it effectively never ran, and the bare ``except`` below downgraded a
+        UNREACHABLE for any quest carrying standing instructions (the always-work rule matched
+        first, and now matches for every quest), so it effectively never ran, and the bare
+        ``except`` below downgraded a
         programming error to one INFO-shaped warning line indistinguishable from a backend that
         simply lacks the endpoint. Absence of "create_goal failed" in the logs was therefore not
         evidence that it worked.
@@ -2364,7 +2313,7 @@ class AutopilotPass:
         period = goal_period_for_scope(scope_label, self._now())
         try:
             created = create_goal(title, quest_id=quest_id, period=period,
-                                  description=description, ai_help=True) or {}
+                                  description=description) or {}
             return created.get("id") if isinstance(created, dict) else None
         except TypeError:
             # A call this file got wrong, not an endpoint the deployment lacks. Loud, with a
@@ -2415,7 +2364,7 @@ class AutopilotPass:
         Returns the skip reason when nothing was proposed, so the caller can report it as a skip
         and leave the budget alone.
 
-        ``scope_label`` is this pass's own scope (``select_target_goals``), carried through only so
+        ``scope_label`` is this pass's own scope (``current_scope_label``), carried through only so
         a goal created from the proposal is filed under the period the quest is actually working
         in. See ``_maybe_create_goal``: the period is required and cannot be defaulted centrally.
         """
