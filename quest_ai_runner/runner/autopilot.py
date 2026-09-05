@@ -12,7 +12,11 @@ normal deep-run path). Each pass:
      stops a pass: work continues and the unfinished thing is visible in context to be worked
      around.
   3. Picks the quest's CURRENT-SCOPE target goals (today's, this period's, or the single next
-     incomplete one when the quest is unscoped) among the ones flagged ``ai_help``.
+     incomplete one when the quest is unscoped) among the ones flagged ``ai_help``. It also builds
+     the GOAL LADDER from the same payload (``current_goal_ladder``): the person's current goals at
+     EVERY horizon, day up to year, ``ai_help`` or not, which every batch carries as context. The
+     targets say what this run does; the ladder says what that has to add up to, and without it a
+     run advancing today's goal cannot see the month or quarter it serves.
   4. Resolves a persona per goal, always INSIDE the day rule: a character works a quest only on
      the days their own roster entry names, and nothing overrides that. Among the characters on
      duty today the order is goal assignee -> quest persona-for-today -> a consumer-injected
@@ -66,10 +70,14 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Union
 
 from .insights import InsightsContext, collect_unacted_insights
 from .local_time import now_in_zone
+# The client's OWN period formats, borrowed rather than restated: a goal this module proposes is
+# created through ``QuestClient.create_goal``, so the shape it must satisfy is that client's, and a
+# second copy here would be a second thing to keep in step with the backend's period_utils.
+from .quest_client import _PERIOD_RE as _GOAL_PERIOD_RE
 from .quest_folder_sync import NextSteps, publish_next_steps, read_next_steps
 from .reflections import DEFAULT_PERIODS, ReflectionContext, collect_reflections
 
@@ -144,6 +152,22 @@ _MAX_PREVIOUS_TASKS = 8
 # cap existed, or written through some other client, still gets truncated defensively here rather
 # than riding an oversized block into every prompt this quest ever gets.
 MAX_INSTRUCTIONS_CHARS = 8000
+
+# How many of a horizon's current goals the goal ladder lists before it says "+N more". Eight is
+# chosen against a real quest that carries around twenty goals in one month: enough that a person
+# recognizes their own plan in the list, few enough that the ladder stays context rather than
+# becoming the bulk of the prompt. Overridable per call (``current_goal_ladder``).
+DEFAULT_LADDER_PER_SCOPE = 8
+
+# How each horizon is named in the ladder. The period id rides alongside in parentheses, so the
+# reader gets both the word they think in and the exact period the goals are filed under.
+_LADDER_SCOPE_LABELS = {
+    "day": "Today",
+    "week": "This week",
+    "month": "This month",
+    "quarter": "This quarter",
+    "year": "This year",
+}
 
 # Leading Markdown "furniture" stripped off the first line of a person's instructions when it
 # becomes a batch's title (headings, bullets, blockquotes) -- a title should read as a title, not
@@ -344,6 +368,29 @@ def _incomplete_ai_goals(goals: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [g for g in goals if not g.get("completed") and _goal_ai_help(g)]
 
 
+def _current_period_groups(goals_payload: Dict[str, Any], now: datetime
+                           ) -> List[Tuple[str, str, List[Dict[str, Any]]]]:
+    """Every period group that is CURRENT at ``now``, finest scope first: ``(scope, period, goals)``.
+
+    THE ONE period matcher in this module. Both readers of "what period is this quest in right
+    now" go through it -- ``select_target_goals`` (which of these groups this pass works) and
+    ``current_goal_ladder`` (all of them, as the context that work serves). A second matcher would
+    be a second place to get the backend's separator formats wrong, and the two answers drifting
+    apart is precisely how a run would end up told it is advancing a month that is not the current
+    one. Groups within a scope keep the payload's own order.
+    """
+    groups = goals_payload.get("period_groups") or []
+    current: List[Tuple[str, str, List[Dict[str, Any]]]] = []
+    for scope in _SCOPE_ORDER:
+        key = _current_period_key(scope, now)
+        for group in groups:
+            if str(group.get("time_scope", "")).strip().lower() != scope:
+                continue
+            if str(group.get("period", "")).strip() == key:
+                current.append((scope, str(key), list(group.get("goals") or [])))
+    return current
+
+
 def select_target_goals(goals_payload: Dict[str, Any],
                         now: datetime) -> Tuple[List[Dict[str, Any]], str]:
     """Pick this pass's target goals from a quest's ``list_quest_goals`` period grouping.
@@ -371,29 +418,119 @@ def select_target_goals(goals_payload: Dict[str, Any],
     this week) and left no AI-enabled goal in it is a decision, and pulling in some unrelated future
     goal would override it. The fallback exists for quests with no current scope at all.
     """
-    groups = goals_payload.get("period_groups") or []
     matched_label: Optional[str] = None
-    for scope in _SCOPE_ORDER:
-        key = _current_period_key(scope, now)
-        for group in groups:
-            if str(group.get("time_scope", "")).strip().lower() != scope:
-                continue
-            period = str(group.get("period", "")).strip()
-            if period == key:
-                eligible = _incomplete_ai_goals(group.get("goals") or [])
-                if eligible:
-                    return eligible, f"{scope}:{key}"
-                if matched_label is None:
-                    matched_label = f"{scope}:{key}"
+    for scope, key, goals in _current_period_groups(goals_payload, now):
+        eligible = _incomplete_ai_goals(goals)
+        if eligible:
+            return eligible, f"{scope}:{key}"
+        if matched_label is None:
+            matched_label = f"{scope}:{key}"
     if matched_label is not None:
         return [], matched_label
     flattened: List[Dict[str, Any]] = []
-    for group in groups:
+    for group in goals_payload.get("period_groups") or []:
         flattened.extend(group.get("goals") or [])
     for goal in flattened:
         if not goal.get("completed") and _goal_ai_help(goal):
             return [goal], "unscoped"
     return [], "unscoped"
+
+
+def _ladder_order_key(goal: Dict[str, Any]) -> Tuple[int, str]:
+    """Sort key for one ladder rung: nearest deadline first, undated last.
+
+    Payload order breaks every tie, since ``sorted`` is stable -- so a horizon whose goals carry no
+    deadlines at all is listed exactly as the person's own plan lists them.
+    """
+    deadline = str(goal.get("deadline") or "").strip()
+    return (0, deadline) if deadline else (1, "")
+
+
+def current_goal_ladder(goals_payload: Dict[str, Any], now: datetime,
+                        target_goal_ids: Optional[Iterable[str]] = None,
+                        per_scope_limit: int = DEFAULT_LADDER_PER_SCOPE
+                        ) -> List[Dict[str, Any]]:
+    """The person's CURRENT goals at EVERY horizon: day, week, month, quarter, year.
+
+    ``select_target_goals`` answers a different question, and answers only that one: which single
+    scope this pass works. Everything above the scope it picks is invisible to the run, so a run
+    advancing today's goal has no idea what month or quarter that day is meant to add up to. This
+    is the missing half: the ladder is CONTEXT, never this run's assignment (see
+    ``compose_batch_text``'s framing, which says so to the reader in as many words).
+
+    Returns one rung per current horizon that has anything in it, finest first::
+
+        [{"scope": "day", "period": "2026-07-12",
+          "goals": [{"id": ..., "name": ..., "deadline": ..., "is_target": True}, ...],
+          "more": 0}, ...]
+
+    Three decisions worth stating, because each is the opposite of what ``select_target_goals``
+    does and none of them is an oversight:
+
+      * ``ai_help`` IS IGNORED HERE. A goal the person kept for themselves is still what the AI's
+        work has to add up to, and hiding it produces a run that optimizes a fragment of a plan it
+        cannot see. Only ``completed`` excludes a goal, because a finished one is no longer
+        something to move toward.
+      * NAMES ONLY (plus a deadline where the goal has one). This is orientation, not a brief:
+        descriptions and criteria belong to the goals this run actually owns, and pasting them for
+        a whole year of goals would bury the run's own instructions.
+      * CAPPED per horizon at ``per_scope_limit``, nearest deadline first, with the count of what
+        was left out. A real quest carries around twenty goals in a single month, and an uncapped
+        dump would cost more attention than the ladder buys back.
+
+    ``target_goal_ids`` marks the goals this run actually owns, so the reader can tell the slice it
+    is working from the frame it is working inside. Everything else on the ladder is served, not
+    worked.
+
+    Empty list when no horizon is current or every current one is finished, which composes to
+    nothing at all rather than to an empty heading.
+    """
+    targets = {str(g) for g in (target_goal_ids or []) if g}
+    limit = per_scope_limit if per_scope_limit and per_scope_limit > 0 else DEFAULT_LADDER_PER_SCOPE
+    by_scope: Dict[str, Dict[str, Any]] = {}
+    for scope, period, goals in _current_period_groups(goals_payload, now):
+        rung = by_scope.setdefault(scope, {"period": period, "goals": []})
+        rung["goals"].extend(g for g in goals if not g.get("completed"))
+    ladder: List[Dict[str, Any]] = []
+    for scope in _SCOPE_ORDER:
+        rung = by_scope.get(scope)
+        if not rung or not rung["goals"]:
+            continue  # a horizon with nothing current is omitted, not shown as empty
+        ordered = sorted(rung["goals"], key=_ladder_order_key)
+        shown = ordered[:limit]
+        ladder.append({
+            "scope": scope,
+            "period": rung["period"],
+            "goals": [{
+                "id": str(g.get("id") or ""),
+                "name": _goal_name(g),
+                "deadline": str(g.get("deadline") or "").strip(),
+                "is_target": bool(g.get("id")) and str(g.get("id")) in targets,
+            } for g in shown],
+            "more": len(ordered) - len(shown),
+        })
+    return ladder
+
+
+def goal_period_for_scope(scope_label: str, now: datetime) -> str:
+    """The ``period`` to file a newly proposed goal under, from this pass's own scope label.
+
+    ``create_goal`` REQUIRES a period and there is no universal default for one, so it has to be
+    derived. The pass already knows the answer: ``select_target_goals`` hands back labels like
+    ``"day:2026-07-12"`` or ``"month:2026_09"``, whose right-hand side is already the backend's own
+    period id. An ``"unscoped"`` quest has no current period at all, so it falls back to the
+    current MONTH: a proposal is a suggestion about what to do next, and a month is the coarsest
+    horizon that still says "soon" without pinning the person to a day they did not choose.
+
+    The result is validated against ``QuestClient``'s own accepted formats (the five the backend's
+    ``period_utils`` parses) rather than a shape invented here, so a malformed or unfamiliar label
+    degrades to the month key instead of riding through to a 400.
+    """
+    _scope, _sep, period = str(scope_label or "").partition(":")
+    period = period.strip()
+    if period and _GOAL_PERIOD_RE.match(period):
+        return period
+    return str(_current_period_key("month", now))
 
 
 def _weekday_abbrev(now: datetime) -> str:
@@ -619,7 +756,12 @@ def split_held_for_another_day(items: List[Dict[str, Any]], autopilot_cfg: Dict[
     since both carry an ``assignee_rep_id`` and both would otherwise become a batch.
 
     Deliberately called BEFORE anything is fetched or composed for these items, so a held goal
-    costs no description fetch and appears in no prompt. The fallback resolver is not consulted
+    costs no description fetch and becomes no part of this run's work: no ``Goal:`` block, no
+    adopted task, nothing this character is asked to do. It can still be NAMED in the goal ladder
+    (``current_goal_ladder``), unmarked, along with every other current goal of the person's,
+    which is a statement about their plan rather than an assignment to whoever is on duty. The
+    incident this rule comes from was a character WORKING another's goal on the wrong day, and
+    that is what stays impossible. The fallback resolver is not consulted
     here: it is only ever reached for a quest whose roster names no goal-working character, and
     such a quest can hold nothing, so passing it would spend a consumer callback on a decision it
     cannot change.
@@ -797,6 +939,46 @@ _PERSONA_INSTRUCTIONS_PREAMBLE = (
 )
 
 
+# The framing for the goal ladder (``current_goal_ladder``). Three things have to be said outright
+# rather than left to position, because the block LOOKS like a work list and a run that reads it as
+# one does exactly the wrong thing with it: that these goals are the person's and not this run's
+# assignment, that goals the person never opted the AI into are on the list on purpose, and that
+# the job is to make this run's output add up to them. Without the last sentence the ladder is just
+# more text; with it, it is the check the run applies to its own result.
+_GOAL_LADDER_PREAMBLE = (
+    "THE PERSON'S CURRENT GOALS, at every horizon they plan in. This is the frame around this run, "
+    "not a list of work for it. This run does not own these goals: do not try to finish them, do "
+    "not report on them, and never record any of them as done. Goals the person is doing "
+    "themselves are included deliberately, because work that ignores them is work pulling against "
+    "the plan rather than with it.\n"
+    "Entries marked [this run] are the slice this run does own; everything else is what that slice "
+    "is in service of. Before you finish, check that what you produced actually moves the marked "
+    "ones forward AND adds up to the horizons above them. If it does not, say so plainly in your "
+    "result instead of leaving the person to notice."
+)
+
+
+def _render_goal_ladder(ladder: List[Dict[str, Any]]) -> str:
+    """The goal ladder as the text a run reads: the framing, then one short line per goal."""
+    lines = [_GOAL_LADDER_PREAMBLE]
+    for rung in ladder:
+        scope = str(rung.get("scope") or "")
+        label = _LADDER_SCOPE_LABELS.get(scope, scope or "This period")
+        period = str(rung.get("period") or "").strip()
+        lines.append(f"{label}{f' ({period})' if period else ''}:")
+        for goal in rung.get("goals") or []:
+            name = str(goal.get("name") or "").strip() or "(untitled goal)"
+            deadline = str(goal.get("deadline") or "").strip()
+            mark = " [this run]" if goal.get("is_target") else ""
+            lines.append(f"  - {name}{mark}{f' (by {deadline})' if deadline else ''}")
+        more = int(rung.get("more") or 0)
+        if more > 0:
+            # Said, never silently dropped: a person who plans twenty goals in a month must not be
+            # shown eight of them as though that were the whole plan.
+            lines.append(f"  +{more} more")
+    return "\n".join(lines)
+
+
 def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
                        persona: Optional[str] = None, *,
                        scope_label: Optional[str] = None,
@@ -806,7 +988,8 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
                        reflection: Optional[str] = None,
                        insights: Optional[str] = None,
                        instructions: Optional[str] = None,
-                       persona_instructions: Optional[str] = None) -> str:
+                       persona_instructions: Optional[str] = None,
+                       goal_ladder: Optional[List[Dict[str, Any]]] = None) -> str:
     """The batch task's text: what period this run owns, the goals and AI tasks in it, what the
     person themselves last said about the work, and what the previous period actually produced.
 
@@ -844,6 +1027,15 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
     framing sentence for the same reason the quest-wide one states its own. Absent, this likewise
     emits nothing and composes byte-identically to before the parameter existed.
 
+    ``goal_ladder`` (from ``current_goal_ladder``) is emitted immediately BEFORE the first
+    ``Goal:`` block, so the reader gets the whole picture and then this run's slice of it. It is
+    the person's current goals at every horizon, marked to show which of them this run owns, and
+    its framing says outright that the rest is context to serve rather than work to do. It matters
+    MOST for a batch with no goal blocks at all: a standing-instructions run (a daily brief, a
+    weekly review) would otherwise carry no goal information whatsoever, which is exactly the run
+    that most needs to know what it is aiming at. Absent or empty, this emits nothing and composes
+    byte-identically to before the parameter existed.
+
     ``persona``, when resolved, is named in the text AS WELL AS stamped structurally in
     ``assignee_rep_id`` at creation. The structured field is authoritative; the prose is kept
     because some consumers resolve the persona from the request text.
@@ -866,6 +1058,12 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
         who = f"for {persona} specifically" if persona else "for this character specifically"
         parts.append(_PERSONA_INSTRUCTIONS_PREAMBLE.format(who=who) + "\n\n"
                      + persona_instructions)
+    if goal_ladder:
+        # Before the goals, deliberately: the run reads what the person is working toward, then
+        # the part of it this run has been handed. The reverse order reads as "here is your work,
+        # and here is some more work", which is the misreading the framing above spends its words
+        # preventing.
+        parts.append(_render_goal_ladder(goal_ladder))
     for goal in goals:
         name = (goal.get("name") or "(untitled goal)").strip()
         description = (goal.get("description") or "").strip()
@@ -1424,6 +1622,13 @@ class AutopilotPass:
         # entire statement of what the AI is being asked to do. So fetch it per TARGET goal (a
         # handful at most, only for goals that survived the gates and the scope filter).
         target_goals = [self._with_description(quest_id, g) for g in target_goals]
+        # The whole picture the work above is a slice of: the person's current goals at every
+        # horizon, this run's own targets marked. Built from the goals payload already fetched, so
+        # it costs no extra call, and carried into EVERY batch below including a batch with no
+        # goals in it -- an instructions-only run (a daily brief, a weekly review) would otherwise
+        # be the one run in the system that knows nothing about what the person is working toward.
+        goal_ladder = current_goal_ladder(goals_payload, self._now(),
+                                          target_goal_ids=[g.get("id") for g in target_goals])
 
         # Recurring tasks the user set up on this quest. Adopted ONLY when the quest opts in:
         # taking over a task someone scheduled themselves is a real change in who executes it.
@@ -1556,7 +1761,8 @@ class AutopilotPass:
                                                   reflection=reflection_text,
                                                   insights=insights_text,
                                                   instructions=instructions,
-                                                  persona_instructions=persona_instructions)
+                                                  persona_instructions=persona_instructions,
+                                                  goal_ladder=goal_ladder)
                 if task_id:
                     result.created.append({
                         "task_id": task_id, "kind": "work_batch", "quest_id": quest_id,
@@ -1594,7 +1800,8 @@ class AutopilotPass:
         elif planning == "plan_and_work":
             if budget_used < self._daily_budget:
                 skipped_because = self._handle_proposal(quest, quest_id, quest_label, mode,
-                                                        dry_run, result)
+                                                        dry_run, result,
+                                                        scope_label=scope_label)
                 if skipped_because:
                     # Nothing was created, so nothing is spent and nothing is claimed. The person
                     # still hears why the quest was quiet, in one line, instead of getting the
@@ -2093,14 +2300,16 @@ class AutopilotPass:
                            reflection: Optional[str] = None,
                            insights: Optional[str] = None,
                            instructions: Optional[str] = None,
-                           persona_instructions: Optional[str] = None) -> Optional[str]:
+                           persona_instructions: Optional[str] = None,
+                           goal_ladder: Optional[List[Dict[str, Any]]] = None) -> Optional[str]:
         text = compose_batch_text(str(quest.get("outcome") or ""), goals,
                                   self._persona_label(persona),
                                   scope_label=scope_label, adopted_tasks=adopted_tasks,
                                   next_steps=next_steps, previous=previous,
                                   reflection=reflection, insights=insights,
                                   instructions=instructions,
-                                  persona_instructions=persona_instructions)
+                                  persona_instructions=persona_instructions,
+                                  goal_ladder=goal_ladder)
         try:
             return self._create_autopilot_task(
                 quest, quest_id, text, mode, persona=persona,
@@ -2112,19 +2321,58 @@ class AutopilotPass:
                       exc_info=True)
             raise
 
-    def _maybe_create_goal(self, quest_id: str, title: str, description: str,
-                          mode: str) -> Optional[str]:
-        """Create the REAL goal object only when the client has a create_goal endpoint AND mode is
-        "act" (per the design: creating goals stays manual in v1 unless the client already
-        supports it). Generic/adapter-agnostic: works today (no-op, since QuestClient has no
-        create_goal yet) and picks up automatically once one is added."""
+    def _maybe_create_goal(self, quest_id: str, title: str, description: str, mode: str,
+                          scope_label: str) -> Optional[str]:
+        """Create the REAL, typed Goal behind a proposal, when the client can and the quest allows.
+
+        Two conditions, both unchanged: the client must expose ``create_goal`` (a client without
+        one still gets the proposal TASK, just no goal object), and the quest must be in ``act``
+        mode, since creating a goal on a ``suggest`` quest would be autopilot writing the plan the
+        person asked to approve first.
+
+        The call is ``create_goal(title, quest_id=..., period=..., description=..., ai_help=True)``.
+        ``period`` is REQUIRED by both the client and ``POST /api/planning/goals`` (the backend
+        derives the goal's deadline and time_scope from it), so it is derived from this pass's own
+        scope label by ``goal_period_for_scope`` rather than guessed.
+
+        HISTORY, because the failure mode matters more than the fix. This method called
+        ``create_goal(quest_id, name=title, description=..., ai_help=True, created_by="ai")``:
+        the quest id landed in ``title``, ``name`` and ``created_by`` are not parameters at all,
+        and the required ``period`` was missing. It could not bind, so every call raised TypeError
+        the moment ``QuestClient.create_goal`` existed, and AI-proposed goals were silently never
+        created. Nothing noticed for two reasons at once, and the pair is the lesson: the branch is
+        UNREACHABLE for any quest carrying standing instructions (the always-work rule matches
+        first), so it effectively never ran, and the bare ``except`` below downgraded a
+        programming error to one INFO-shaped warning line indistinguishable from a backend that
+        simply lacks the endpoint. Absence of "create_goal failed" in the logs was therefore not
+        evidence that it worked.
+
+        Hence the split below: a TypeError is a bad call signature in THIS file, logged at ERROR
+        with a traceback so the next one is visible on the day it lands, while any other exception
+        stays a warning, because a missing or misbehaving optional endpoint genuinely must not fail
+        the pass. Neither propagates: the proposal task is still created either way, and it carries
+        the whole proposal in its text.
+
+        ``created_by="ai"`` was DROPPED rather than fixed. The endpoint's request model
+        (``CreateGoalRequest``) has no attribution field, its base config ignores unknown keys, and
+        the handler hardcodes ``source="user"`` on every goal it creates. Passing an attribution
+        field would have looked like attribution while carrying none.
+        """
         create_goal = getattr(self._client, "create_goal", None)
         if not callable(create_goal) or mode != "act":
             return None
+        period = goal_period_for_scope(scope_label, self._now())
         try:
-            created = create_goal(quest_id, name=title, description=description,
-                                  ai_help=True, created_by="ai") or {}
+            created = create_goal(title, quest_id=quest_id, period=period,
+                                  description=description, ai_help=True) or {}
             return created.get("id") if isinstance(created, dict) else None
+        except TypeError:
+            # A call this file got wrong, not an endpoint the deployment lacks. Loud, with a
+            # traceback, and still not fatal to the pass.
+            log.error("autopilot: create_goal call is not compatible with this client's signature "
+                      "(quest %s, period %s); no goal was created", quest_id, period,
+                      exc_info=True)
+            return None
         except Exception as e:  # noqa: BLE001 -- a missing/misbehaving optional endpoint must not fail the pass
             log.warning("autopilot: create_goal failed for quest %s: %s", quest_id, e)
             return None
@@ -2160,11 +2408,16 @@ class AutopilotPass:
         return None
 
     def _handle_proposal(self, quest: Dict[str, Any], quest_id: str, quest_label: str, mode: str,
-                         dry_run: bool, result: AutopilotResult) -> Optional[str]:
+                         dry_run: bool, result: AutopilotResult,
+                         scope_label: str = "") -> Optional[str]:
         """Propose the quest's next goal, unless the last pass's proposal is still unanswered.
 
         Returns the skip reason when nothing was proposed, so the caller can report it as a skip
         and leave the budget alone.
+
+        ``scope_label`` is this pass's own scope (``select_target_goals``), carried through only so
+        a goal created from the proposal is filed under the period the quest is actually working
+        in. See ``_maybe_create_goal``: the period is required and cannot be defaulted centrally.
         """
         title, description = propose_next_goal(quest)
         pending = None if dry_run else self._open_proposal(quest_id)
@@ -2178,7 +2431,7 @@ class AutopilotPass:
                 "title": title, "description": description,
             })
             return None
-        created_goal_id = self._maybe_create_goal(quest_id, title, description, mode)
+        created_goal_id = self._maybe_create_goal(quest_id, title, description, mode, scope_label)
         task_text = f"{PROPOSAL_TEXT_PREFIX} {title}\n\n{description}"
         if created_goal_id:
             task_text += f"\n\n(Created as goal {created_goal_id} on this quest.)"

@@ -132,7 +132,12 @@ def test_saturday_still_produces_the_saturday_characters_own_batch():
     assert created["assignee_rep_id"] == BATMAN
     assert BATMAN_BRIEF in created["text"]
     assert "Goal: " not in created["text"]
-    assert "Draft chapter three" not in created["text"]
+    # Held means NOT WORKED, which is what these two lines pin: the goal is no work block and is
+    # not marked as this run's. Since the goal ladder landed it does appear, unmarked, in the
+    # ladder's picture of the person's current goals -- a statement about their plan, not an
+    # assignment to this character. See ``split_held_for_another_day``.
+    assert "Goal: Draft chapter three" not in created["text"]
+    assert "Draft chapter three [this run]" not in created["text"]
 
 
 # --- a day nobody was rostered for ----------------------------------------------------------------
@@ -201,7 +206,9 @@ def test_an_unassigned_goal_is_held_rather_than_handed_to_whoever_is_on_duty():
     created = client.created_tasks[0]
     assert created["assignee_rep_id"] == BATMAN
     assert "Goal: " not in created["text"]
-    assert "Draft chapter three" not in created["text"]
+    # As above: absorbed means WORKED, and it is neither a work block nor marked as this run's.
+    assert "Goal: Draft chapter three" not in created["text"]
+    assert "Draft chapter three [this run]" not in created["text"]
 
 
 def test_an_unassigned_goal_is_not_given_to_the_fallback_resolver_when_a_roster_exists():

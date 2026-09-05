@@ -204,6 +204,13 @@ Optional fields: `description`, `criteria` (completion criteria), `goal_type`, `
 (for a sub-goal), `target_value` / `target_unit` (a measurable target), `ai_help` (bool),
 `assignee_rep_id`.
 
+There is **no attribution field**: the endpoint's request model has none, ignores unknown keys, and
+stamps every goal it creates `source="user"` server-side. So a caller cannot mark a goal as
+AI-proposed through this route, and passing something like `created_by` looks like attribution
+while carrying none. Autopilot instead surfaces its proposal as a task the person accepts or
+rejects (`runner/autopilot.py`, `_maybe_create_goal`), which is where the "an AI proposed this"
+signal actually lives.
+
 Like `create_task`, `create_goal` raises `QuestApiError`/`QuestNotConfigured` on failure instead
 of swallowing it — a caller that acknowledges "goal added" must know it actually was. CLI:
 `quest-ai-runner create-goal "<title>" [--quest-id ID] [--period P] [--description ...] [...]`.

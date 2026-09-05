@@ -20,6 +20,9 @@ from quest_ai_runner.runner.autopilot import (
     resolve_persona,
     select_target_goals,
 )
+# The client's OWN period formats, so the fake below accepts exactly what the real one accepts
+# instead of a shape invented here (the five quest-backend's period_utils parses).
+from quest_ai_runner.runner.quest_client import _PERIOD_RE
 
 NOW = datetime(2026, 7, 12, 9, 0, 0, tzinfo=timezone.utc)  # a Sunday
 MONDAY = datetime(2026, 7, 13, 9, 0, 0, tzinfo=timezone.utc)
@@ -817,6 +820,143 @@ def test_act_mode_goal_proposal_is_still_only_suggested():
     passer = AutopilotPass(client, team_id="team1", now=_now)
     passer.run({"text": "pass"})
     assert client.created_tasks[0]["status"] == "suggested"
+
+
+# --- the proposal's REAL goal object (QuestClient.create_goal) -----------------------------------
+
+class StrictGoalClient(FakeAutopilotClient):
+    """A client whose ``create_goal`` mirrors ``QuestClient.create_goal``'s signature EXACTLY.
+
+    The fidelity is the whole test. The old call was
+    ``create_goal(quest_id, name=..., description=..., ai_help=True, created_by="ai")``: the quest
+    id landed in ``title``, ``name`` and ``created_by`` are not parameters at all, and the required
+    keyword-only ``period`` was missing. Against a stub that swallowed ``**kwargs`` that call would
+    have passed a test happily while raising TypeError against the real client on every pass, which
+    is exactly what it did in production. So this raises the same TypeError the real client raises,
+    and validates ``period`` against the same five formats.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.created_goals = []
+
+    def create_goal(self, title, *, period, quest_id=None, description=None, criteria=None,
+                    goal_type=None, parent_goal_id=None, target_value=None, target_unit=None,
+                    ai_help=None, assignee_rep_id=None):
+        assert _PERIOD_RE.match(period), f"the real client rejects period {period!r}"
+        self.created_goals.append({"title": title, "period": period, "quest_id": quest_id,
+                                   "description": description, "ai_help": ai_help})
+        return {"id": f"goal_{len(self.created_goals)}"}
+
+
+def test_an_act_mode_proposal_creates_the_real_goal_with_the_right_arguments():
+    """This was broken from the moment ``QuestClient.create_goal`` landed: every call raised
+    TypeError into a bare ``except``, which logged one warning and returned None, so an AI-proposed
+    goal was never actually created. It went unnoticed because the branch is unreachable for any
+    quest carrying standing instructions, so no log line ever appeared to contradict it."""
+    q1 = _quest("q1", mode="act", planning="plan_and_work", outcome="Get the PhD")
+    client = StrictGoalClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", []))},
+        accepts_bookkeeping=True)
+    AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+
+    assert len(client.created_goals) == 1
+    created = client.created_goals[0]
+    assert created["title"] == "Next step toward: Get the PhD"   # the TITLE, positionally
+    assert created["quest_id"] == "q1"                           # ...and the quest id as a keyword
+    assert created["period"] == "2026-07-12"                     # from this pass's own scope
+    assert created["ai_help"] is True
+    assert created["description"].startswith("Propose and take the next concrete step")
+    # The proposal task still points at the goal it created, which is how a person finds it.
+    assert "(Created as goal goal_1 on this quest.)" in client.created_tasks[0]["text"]
+
+
+def test_the_created_goals_period_follows_the_passs_scope_for_every_scope_shape():
+    """``period`` is required and has no universal default, so it is derived from the scope label
+    ``select_target_goals`` already returns. An unscoped quest has no current period at all and
+    falls back to the current month, in the ``YYYY_MM`` form the client validates."""
+    client = StrictGoalClient(quests=[_quest("q1", mode="act")])
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+    for scope_label, expected in (("day:2026-07-12", "2026-07-12"),
+                                  ("week:2026_W28", "2026_W28"),
+                                  ("month:2026_09", "2026_09"),
+                                  ("quarter:2026_Q3", "2026_Q3"),
+                                  ("year:2026", "2026"),
+                                  ("unscoped", "2026_07"),
+                                  ("", "2026_07")):
+        assert passer._maybe_create_goal("q1", "A title", "A description", "act",
+                                         scope_label) is not None
+        assert client.created_goals[-1]["period"] == expected
+
+
+def test_suggest_mode_proposes_the_task_but_creates_no_goal_object():
+    """Creating the goal on a quest whose owner asked to approve first would be autopilot writing
+    the plan it is meant to be suggesting."""
+    q1 = _quest("q1", mode="suggest", planning="plan_and_work")
+    client = StrictGoalClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", []))},
+        accepts_bookkeeping=True)
+    AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+
+    assert client.created_goals == []
+    assert len(client.created_tasks) == 1
+    assert client.created_tasks[0]["text"].startswith("Proposed goal:")
+    assert "Created as goal" not in client.created_tasks[0]["text"]
+
+
+def test_a_client_without_create_goal_still_proposes_the_task():
+    """The goal object is an optional extra; the proposal itself never depends on it."""
+    q1 = _quest("q1", mode="act", planning="plan_and_work")
+    client = FakeAutopilotClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", []))},
+        accepts_bookkeeping=True)
+    result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+
+    assert len(result.created_task_ids) == 1
+    assert client.created_tasks[0]["text"].startswith("Proposed goal:")
+
+
+def test_a_bad_create_goal_signature_is_logged_loudly_and_never_fails_the_pass(caplog):
+    """A TypeError here is a programming error in THIS file, not an endpoint the deployment lacks,
+    and the two must not look the same in the logs: the old code logged both as one warning line,
+    which is how a call that could never bind survived unnoticed. The pass still completes and the
+    proposal task is still created."""
+    class MismatchedGoalClient(FakeAutopilotClient):
+        def create_goal(self, title, *, period, description=None, ai_help=None):
+            raise AssertionError("unreachable: quest_id cannot bind, so this never runs")
+
+    q1 = _quest("q1", mode="act", planning="plan_and_work")
+    client = MismatchedGoalClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", []))},
+        accepts_bookkeeping=True)
+    with caplog.at_level("ERROR"):
+        result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+
+    assert result.errors == []
+    assert len(result.created_task_ids) == 1                    # the proposal still lands
+    assert "Created as goal" not in client.created_tasks[0]["text"]
+    errors = [r for r in caplog.records if r.levelname == "ERROR"]
+    assert any("create_goal call is not compatible" in r.getMessage() for r in errors)
+    assert any(r.exc_info for r in errors)                      # with the traceback attached
+
+
+def test_a_failing_create_goal_endpoint_stays_a_warning(caplog):
+    """The other half of the split: an endpoint that exists and misbehaves is an operational
+    condition, not a bug in the call, so it stays a warning and the pass carries on."""
+    class FailingGoalClient(StrictGoalClient):
+        def create_goal(self, title, **kwargs):
+            raise RuntimeError("the API said no")
+
+    q1 = _quest("q1", mode="act", planning="plan_and_work")
+    client = FailingGoalClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", []))},
+        accepts_bookkeeping=True)
+    with caplog.at_level("WARNING"):
+        result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+
+    assert len(result.created_task_ids) == 1
+    assert not [r for r in caplog.records if r.levelname == "ERROR"]
+    assert "create_goal failed for quest q1" in caplog.text
 
 
 def test_work_only_planning_goes_quiet_when_nothing_eligible():

@@ -6,7 +6,55 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **The goal ladder: an autopilot run now sees the person's current goals at EVERY horizon**
+  (`runner/autopilot.py`). `select_target_goals` picks exactly one scope (day beats week beats
+  month beats quarter beats year) and hands the run only that scope's `ai_help` goals, so
+  everything above it was invisible: a run advancing today's goal had no idea which month or
+  quarter that day was meant to add up to. New `current_goal_ladder(goals_payload, now,
+  target_goal_ids, per_scope_limit)` returns one rung per CURRENT horizon (day, week, month,
+  quarter, year), and `compose_batch_text`'s new keyword-only `goal_ladder` parameter emits it
+  immediately before the first `Goal:` block, framed in as many words as CONTEXT the run serves
+  rather than work it owns. Three deliberate differences from target selection: `ai_help` is
+  IGNORED (a goal the person kept for themselves is still what the AI's work has to add up to, and
+  hiding it produces a run optimizing a fragment of a plan it cannot see), only `completed`
+  excludes a goal, and each horizon is capped at `per_scope_limit` (default
+  `DEFAULT_LADDER_PER_SCOPE`, 8) nearest deadline first with a "+N more" line, since a real quest
+  carries around twenty goals in a single month. Names and deadlines only, never descriptions or
+  criteria: orientation, not a second brief. This run's own targets are marked `[this run]` so the
+  reader can tell the slice from the frame. Built in `_run_one_quest` from the goals payload the
+  pass already fetched (no extra API call) and passed to every batch INCLUDING one with no goals in
+  it: a standing-instructions run (a daily brief, a weekly review) is exactly the run that
+  otherwise carries no goal information at all. A horizon with nothing current is omitted, and an
+  absent or empty ladder composes byte-identically to before the parameter existed, the same
+  guarantee `instructions` and `persona_instructions` carry. `select_target_goals` and the ladder
+  now share ONE period matcher (`_current_period_groups`), so the two answers to "what period is
+  this quest in" cannot drift apart. A goal HELD by the day rule can appear on the ladder, unmarked
+  and never as a `Goal:` block: held means not worked, and the ladder is a statement about the
+  person's plan rather than an assignment (two assertions in
+  `tests/test_autopilot_day_authority.py` were narrowed to say exactly that). Tests:
+  `tests/test_autopilot_goal_ladder.py`.
+
 ### Fixed
+- **AI-proposed goals were silently never created** (`runner/autopilot.py`,
+  `AutopilotPass._maybe_create_goal`). The call was
+  `create_goal(quest_id, name=title, description=..., ai_help=True, created_by="ai")` against
+  `QuestClient.create_goal(title, *, period, quest_id=None, description=None, ...)`: the quest id
+  landed in `title`, `name` and `created_by` are not parameters at all, and the required
+  keyword-only `period` was missing, so the call could not bind and raised TypeError on every
+  attempt from the moment the endpoint landed. Two things kept it invisible, and the pair is the
+  lesson: the branch is unreachable for any quest carrying standing instructions (the always-work
+  rule matches first), so it effectively never ran, and a bare `except` downgraded the programming
+  error to a single warning line indistinguishable from a backend that simply lacks the endpoint.
+  Absence of "create_goal failed" in the logs was therefore not evidence that it worked. Now: the
+  real signature is called, `period` is derived from the pass's own scope label by the new
+  `goal_period_for_scope` (an `"unscoped"` quest falls back to the current month in `YYYY_MM`) and
+  validated against the client's own five accepted formats, and a TypeError is logged at ERROR with
+  a traceback while other exceptions stay a warning, neither failing the pass. `created_by` was
+  DROPPED rather than fixed: `POST /api/planning/goals` has no attribution field, ignores unknown
+  keys, and hardcodes `source="user"`, so passing one looked like attribution while carrying none.
+  Tests extended in `tests/test_autopilot.py`, against a fake whose `create_goal` mirrors the real
+  signature exactly and so raises the same TypeError a stub would have swallowed.
 - **A character worked a quest on a day they were not rostered for** (`runner/autopilot.py`). A
   quest had one character rostered `["Mon".."Fri"]` and another `["Sat"]`; on a Saturday the
   weekday character produced work and emailed the owner, because `resolve_persona` honored a
