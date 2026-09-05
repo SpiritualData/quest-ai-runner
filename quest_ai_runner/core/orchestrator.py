@@ -3428,22 +3428,33 @@ def describe_read_spec(spec: Dict[str, Any]) -> str:
 def context_assembly_timeout_seconds() -> float:
     """Wall-clock budget for the turn-start context-assembly background fetch (cards + recent +
     corpus consolidation, run concurrently with the instant ack). Env
-    ``QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS`` (default 5.0, accepts a float); read fresh on every
+    ``QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS`` (default 15.0, accepts a float); read fresh on every
     call so it can be tuned without a restart. A soft deadline slightly under this budget is
     threaded to the assembler via ``meta["assembly_deadline"]`` so a deadline-aware assembler
     (e.g. ``HybridContextAssembler``) returns whatever completed in time as a PARTIAL result
     (``AssembledContext.partial``) instead of blowing the whole budget. Only when not even a
     partial result lands in time does the collect below drop ALL fresh context for the turn --
     see the WARNING logged at the call site plus ``record_context_assembly_timeout`` for the
-    counter this triggers."""
+    counter this triggers.
+
+    The default was raised from 5.0 to 15.0 (2026-09) after measuring real assembly latency on a
+    live deployment: a warm assembler (card store + vector search + one downstream profile fetch)
+    typically completes in well under 1s, but a recurring weekly burst of concurrent deep-run
+    subprocess spawns (a reliability-probe batch, one worker started roughly every minute for
+    several minutes) reliably pushed assembly past the old 5.0s budget -- hitting the soft
+    deadline a dozen times across two such bursts, and at least once blowing the hard budget
+    entirely (0 cards / 0 sources for that turn). 15.0 gives real headroom over that observed tail
+    while staying tiny next to the overall per-turn answer budget (``QAR_ANSWER_TIMEOUT``, minutes)
+    and the deep-run wall-clock timeout (``QAR_DEEP_TIMEOUT_SECONDS``, an hour); the common case is
+    unaffected since it already returns in under a second."""
     raw = os.getenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS")
     if raw is None or not raw.strip():
-        return 5.0
+        return 15.0
     try:
         value = float(raw)
     except ValueError:
-        return 5.0
-    return value if value > 0 else 5.0
+        return 15.0
+    return value if value > 0 else 15.0
 
 
 def guidance_selection_timeout_seconds() -> float:

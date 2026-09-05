@@ -1447,14 +1447,14 @@ def test_context_assembly_timeout_is_loud_and_recoverable(monkeypatch, caplog):
     assert any(e.data.get("assembly_timed_out") for e in ctx_events)
 
 
-def test_context_assembly_timeout_default_is_five_seconds(monkeypatch):
+def test_context_assembly_timeout_default_is_fifteen_seconds(monkeypatch):
     from quest_ai_runner.core.orchestrator import context_assembly_timeout_seconds
     monkeypatch.delenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS", raising=False)
-    assert context_assembly_timeout_seconds() == 5.0
+    assert context_assembly_timeout_seconds() == 15.0
     monkeypatch.setenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS", "2.5")
     assert context_assembly_timeout_seconds() == 2.5
     monkeypatch.setenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS", "garbage")
-    assert context_assembly_timeout_seconds() == 5.0  # bad value falls back, never raises
+    assert context_assembly_timeout_seconds() == 15.0  # bad value falls back, never raises
 
 
 def test_context_assembly_partial_result_is_used_and_loud(monkeypatch, caplog):

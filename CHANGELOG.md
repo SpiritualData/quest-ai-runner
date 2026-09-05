@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Context-assembly timeout default was too tight for a real deployment under load**
+  (`core/orchestrator.py`, `context_assembly_timeout_seconds`). Measured on a live deployment: a
+  warm turn-start assembly (card store + vector search + one downstream profile fetch) typically
+  completes in well under 1s, but a recurring weekly burst of concurrent deep-run subprocess
+  spawns (a reliability-probe batch, one worker started roughly every minute for several minutes)
+  reliably pushed assembly past the old 5.0s budget -- the soft deadline was hit a dozen times
+  across two such bursts, and at least once the hard budget was blown entirely, dropping ALL
+  turn-start context (0 cards / 0 sources) for that turn. Default for
+  `QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` raised 5.0 -> 15.0: real headroom over the observed tail,
+  still tiny next to the per-turn answer budget (`QAR_ANSWER_TIMEOUT`, minutes) and the deep-run
+  wall-clock timeout (`QAR_DEEP_TIMEOUT_SECONDS`, an hour), and the common case is unaffected since
+  it already returns in under a second. Still fully overridable via the env var.
+
 ### Added
 - **"Run now" for a quest's autopilot** (`runner/autopilot.py`, `runner/poller.py`). A quest's
   `autopilot.run_requested_at` (stamped by the consumer's own endpoint) asks for the next pass
