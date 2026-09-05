@@ -46,6 +46,16 @@ All notable changes to this project are documented here. The format is based on
   (cached per quest, consulted only after a team-scoped call has already failed, so the ordinary
   path costs nothing) and retries there. An explicit `team_id` is honored as given and never
   second-guessed.
+- **A quest moved to a SECOND team stopped syncing its goals until the runner restarted**
+  (`runner/quest_client.py`). The fix above resolved a quest's own team once and cached it for the
+  life of the process with nothing to invalidate it, so it survived exactly one move: after the
+  next one both the configured team and the cached team 404'd, and `list_quest_goals` returned `{}`
+  on every scan until a restart. The cached team failing is now read as the staleness signal it
+  is: the entry is dropped and the team is resolved once more from the live quest list, bounded to
+  that one re-resolution per call so a lagging quest list costs one skipped scan, not a retry
+  storm. A miss (quest absent from the owner's list, or the listing itself failing) is no longer
+  cached either; a cached "" was the same restart-only bug in a different coat. Pinned by three
+  tests in `tests/test_quest_goal_sync.py`.
 
 - **The fast lane stranded every owner-scoped real-time task** (`runner/poller.py`). The
   background scan resolved its discovery scope through `discovery_team_id` (falling back to

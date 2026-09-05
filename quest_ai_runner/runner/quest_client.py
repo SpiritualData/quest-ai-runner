@@ -99,7 +99,9 @@ class QuestClient:
         self.team_id = team_id or ""
         self.timeout = timeout
         # quest_id -> the team that actually owns it, resolved lazily by
-        # _owning_team_for and only when the configured team turns out not to.
+        # _owning_team_for and only when the configured team turns out not to. An entry is
+        # dropped the moment the team it names fails to serve the quest, so a quest moved a
+        # second time is re-resolved instead of 404ing until the process restarts.
         self._quest_team_cache: Dict[str, str] = {}
 
     @property
@@ -624,6 +626,11 @@ class QuestClient:
         legitimately syncs quests across every team its owner belongs to, and a quest can be moved
         between teams at any time. Cached per quest, and only ever consulted after a team-scoped
         call has already failed, so the ordinary path costs nothing. Returns "" when unknown.
+
+        Only a FOUND team is cached. A miss (the quest is not in the owner's list, or the list
+        itself failed) is answered fresh next time: caching "" would turn one transient listing
+        failure into a quest that never resolves for the life of the process. Callers that learn
+        the cached team is wrong call ``forget_owning_team`` and ask again.
         """
         cached = self._quest_team_cache.get(quest_id)
         if cached is not None:
@@ -634,8 +641,50 @@ class QuestClient:
             if qid == quest_id:
                 found = str(q.get("team_id") or "")
                 break
-        self._quest_team_cache[quest_id] = found
+        if found:
+            self._quest_team_cache[quest_id] = found
         return found
+
+    def forget_owning_team(self, quest_id: str) -> bool:
+        """Drop the cached owning team for ``quest_id``; True if there was one.
+
+        The cache has no TTL and nothing tells the runner when a quest changes team, so the only
+        signal that an entry is stale is the cached team failing to serve the quest. The caller
+        that sees that failure forgets the entry and resolves once more.
+        """
+        return self._quest_team_cache.pop(quest_id, None) is not None
+
+    def goals_from_owning_team(self, quest_id: str, failed_team: str,
+                                err: QuestApiError, *, resolved_now: bool) -> Dict[str, Any]:
+        """Retry a failed team-scoped goals read on the team that actually owns the quest.
+
+        Two rounds at most. The first uses the cached resolution (or resolves fresh when nothing
+        is cached). If that team also fails, or is the team that already failed, the cache is
+        stale: the quest moved again since it was filled. Forget it and resolve ONCE more against
+        the live quest list. ``resolved_now`` says the cache was filled during this very call, in
+        which case a second listing would only repeat the first and is skipped. Re-raises the last
+        failure when no team serves the quest.
+        """
+        tried = {failed_team}
+        have_cached = quest_id in self._quest_team_cache and not resolved_now
+        for round_ in ("cached", "fresh"):
+            if round_ == "fresh":
+                if not have_cached:
+                    break  # the previous round already looked at the live list
+                self.forget_owning_team(quest_id)
+                log.info("quest %s is no longer served by its cached team; re-resolving", quest_id)
+            owner_tid = self._owning_team_for(quest_id)
+            if not owner_tid or owner_tid in tried:
+                continue
+            log.info("quest %s is not on team %s; using its own team %s",
+                     quest_id, failed_team, owner_tid)
+            try:
+                return self._request(
+                    "GET", f"/api/teams/{owner_tid}/quests/{quest_id}/goals") or {}
+            except QuestApiError as e:
+                tried.add(owner_tid)
+                err = e
+        raise err
 
     def list_quest_goals(self, quest_id: str, *,
                          team_id: Optional[str] = None) -> Dict[str, Any]:
@@ -649,28 +698,26 @@ class QuestClient:
         lane syncs quests across all of its owner's teams, and a quest can be moved to another team
         at any time, after which the configured team 404s that quest forever. So when the caller
         did not name a team and the configured one does not own the quest, resolve the quest's own
-        team once (cached) and retry there. An explicit ``team_id`` is honored as given and never
-        second-guessed.
+        team (cached) and retry there; if the cached team has ALSO stopped serving the quest, it
+        moved again, so the stale entry is dropped and resolved once more from the live quest
+        list. An explicit ``team_id`` is honored as given and never second-guessed.
         """
         try:
             self._require()
             tid = team_id or self.team_id
+            resolved_now = False
             if not tid and not team_id:
+                resolved_now = quest_id not in self._quest_team_cache
                 tid = self._owning_team_for(quest_id)
             if not tid:
                 raise QuestNotConfigured("team_id is required to list quest goals")
             try:
                 return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}/goals") or {}
-            except QuestApiError:
+            except QuestApiError as e:
                 if team_id:
                     raise  # caller named the team: their call, their error
-                owner_tid = self._owning_team_for(quest_id)
-                if not owner_tid or owner_tid == tid:
-                    raise
-                log.info("quest %s is not on team %s; using its own team %s",
-                         quest_id, tid, owner_tid)
-                return self._request(
-                    "GET", f"/api/teams/{owner_tid}/quests/{quest_id}/goals") or {}
+                return self.goals_from_owning_team(
+                    quest_id, tid, e, resolved_now=resolved_now)
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("list_quest_goals failed for quest %s: %s", quest_id, e)
             return {}
