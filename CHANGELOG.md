@@ -17,6 +17,25 @@ All notable changes to this project are documented here. The format is based on
   pass stamps `last_pass_at`, which makes the request older and therefore spent. `mode` remains
   the outer gate: a request never runs a quest whose autopilot is off.
 
+- **Standing instructions per PERSONA, and a persona who takes no goals** (`runner/autopilot.py`).
+  A quest's roster entry (`autopilot.personas[]`) can now carry its own `instructions` and an
+  `instructions_only` flag, because one roster can hold characters doing genuinely different jobs
+  on the same quest: the character advancing the goals most days, and a specialist rostered for one
+  day to review the quest from outside. Handing both the identical quest-wide brief describes
+  neither. A persona's instructions are emitted as their own block, immediately after the
+  quest-wide one and before the first `Goal:` block, verbatim, and their precedence over it is
+  stated in the text rather than implied by position. `instructions_only` takes a persona out of
+  GOAL routing (`resolve_persona` skips those entries in both roster loops) while leaving them on
+  duty for their own work: without it, day-matched-beats-unrestricted means the specialist absorbs
+  every goal on the day they are rostered and the weekday worker goes quiet. A goal's own
+  `assignee_rep_id` still wins outright, and an assigned persona brings their instructions with
+  them on any day. The always-work rule is now per persona, so one pass can create the day's goal
+  batch AND the specialist's standing-review batch; each batch is one budget unit as before. New
+  public helpers `persona_entries_on_duty` and `persona_instructions_for`; `personas_on_duty` is
+  now a thin wrapper over the first and still lists `instructions_only` reps (they ARE on duty,
+  which is what an attended chat on the quest asks). Fully backward compatible: a roster carrying
+  neither field composes byte-identically to before.
+
 ### Fixed
 - **A quest on another team synced its notes but never its goals** (`runner/quest_client.py`).
   `list_quest_goals` hits a team-scoped endpoint and always used the client's OWN `team_id`, but

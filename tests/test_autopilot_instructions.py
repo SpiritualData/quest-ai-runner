@@ -41,6 +41,11 @@ def test_no_instructions_is_byte_identical_to_before_the_parameter_existed():
     explicit_none = compose_batch_text("Ship it", goals, "bailey", instructions=None, **kwargs)
     assert omitted == explicit_none
     assert "Standing instructions" not in omitted
+    # The same guarantee for the per-persona field that landed alongside it: neither instructions
+    # parameter may cost a single byte on the composition of a quest that uses neither.
+    both_none = compose_batch_text("Ship it", goals, "bailey", instructions=None,
+                                   persona_instructions=None, **kwargs)
+    assert both_none == omitted
 
 
 # --- the always-work rule (AutopilotPass) ---------------------------------------------------------

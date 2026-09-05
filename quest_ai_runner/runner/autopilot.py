@@ -12,7 +12,11 @@ normal deep-run path). Each pass:
   3. Picks the quest's CURRENT-SCOPE target goals (today's, this period's, or the single next
      incomplete one when the quest is unscoped) among the ones flagged ``ai_help``.
   4. Resolves a persona per goal (goal assignee -> quest persona-for-today -> a consumer-injected
-     fallback) and batches goals sharing a persona into ONE task (one budget unit).
+     fallback) and batches goals sharing a persona into ONE task (one budget unit). A roster entry
+     flagged ``instructions_only`` is skipped by that routing: it says its character is on duty to
+     work their OWN standing instructions and takes no goals, which is what lets a specialist share
+     a roster with the character who actually works the quest's goals that day. Every persona on
+     duty carrying instructions of their own also gets a batch, goals or not (see 5).
   5. Creates each batch as a real task (``status="suggested"`` in suggest mode, ``"queued"`` in
      act mode), or -- when planning allows and nothing is eligible -- proposes the quest's next
      goal instead of a work task, UNLESS the previous pass's proposal is still sitting there
@@ -396,11 +400,24 @@ def resolve_persona(goal: Dict[str, Any], autopilot_cfg: Dict[str, Any], now: da
     """Resolver order (explicit always beats inferred), per the design's persona-routing section:
 
       1. The goal's own ``assignee_rep_id`` (a per-goal override).
-      2. A quest ``autopilot.personas`` entry whose ``days`` include today (checked first, so an
-         explicit day-restricted assignment wins over an unrestricted one for the same day).
-      3. A quest ``autopilot.personas`` entry with NO ``days`` restriction (applies any day).
+      2. A quest ``autopilot.personas`` entry whose ``days`` include today, EXCLUDING entries
+         flagged ``instructions_only`` (checked first, so an explicit day-restricted assignment
+         wins over an unrestricted one for the same day).
+      3. A quest ``autopilot.personas`` entry with NO ``days`` restriction, again excluding
+         ``instructions_only`` entries (applies any day).
       4. A consumer-injected fallback (e.g. the existing card-vote resolver), given the goal dict.
       5. ``None`` -- the plain assistant persona (no character voice).
+
+    Why ``instructions_only`` is excluded from 2 and 3, and only from those: a roster entry is
+    two different statements at once ("this character is on duty today" and "this character is who
+    should work the goals"), and rule 2 beating rule 3 makes the second statement greedy. A quest
+    with a weekday worker and a Saturday specialist reads, on Saturday, as "the specialist takes
+    every goal" -- so the specialist inherits a week of work they were never meant to touch, and
+    the weekday worker goes quiet on the one day the specialist is around. ``instructions_only``
+    says this entry is only the FIRST statement: the character is on duty and works their own
+    standing instructions, and goal routing behaves as though they were not in the roster at all.
+    Step 1 still wins over it, because a per-goal ``assignee_rep_id`` is a human naming that
+    character for that goal, which is more specific than any roster-wide preference.
     """
     assignee = goal.get("assignee_rep_id")
     if assignee:
@@ -408,12 +425,16 @@ def resolve_persona(goal: Dict[str, Any], autopilot_cfg: Dict[str, Any], now: da
     personas = autopilot_cfg.get("personas") or []
     today = _weekday_abbrev(now)
     for persona in personas:
+        if _truthy(persona.get("instructions_only")):
+            continue
         days = persona.get("days")
         if days and today in days:
             rep_id = persona.get("rep_id")
             if rep_id:
                 return str(rep_id)
     for persona in personas:
+        if _truthy(persona.get("instructions_only")):
+            continue
         if not persona.get("days"):
             rep_id = persona.get("rep_id")
             if rep_id:
@@ -429,6 +450,36 @@ def resolve_persona(goal: Dict[str, Any], autopilot_cfg: Dict[str, Any], now: da
     return None
 
 
+def persona_entries_on_duty(autopilot_cfg: Dict[str, Any], now: datetime) -> List[Dict[str, Any]]:
+    """The full roster ENTRIES that apply TODAY, most specific first, one per rep_id.
+
+    Day-restricted entries that name today come before unrestricted ones, matching
+    ``resolve_persona``'s precedence: an explicit "Bailey on Mondays" outranks a catch-all. A
+    rep_id appearing in several entries is kept once, at its earliest (most specific) position.
+
+    The entries, not just the ids, because an entry now carries the character's own standing
+    ``instructions`` for this quest and its ``instructions_only`` flag, and a caller deciding
+    whether that character has a job to do today needs to read them. ``personas_on_duty`` stays
+    the answer to the narrower "who is on duty" question and is written in terms of this.
+    """
+    personas = autopilot_cfg.get("personas") or []
+    today = _weekday_abbrev(now)
+    entries: List[Dict[str, Any]] = []
+    seen: set = set()
+    for restricted in (True, False):
+        for persona in personas:
+            days = persona.get("days")
+            if bool(days) is not restricted:
+                continue
+            if days and today not in days:
+                continue
+            rep_id = persona.get("rep_id")
+            if rep_id and str(rep_id) not in seen:
+                seen.add(str(rep_id))
+                entries.append(persona)
+    return entries
+
+
 def personas_on_duty(autopilot_cfg: Dict[str, Any], now: datetime) -> List[str]:
     """Every rep_id in a quest's roster that applies TODAY, most specific first.
 
@@ -439,21 +490,42 @@ def personas_on_duty(autopilot_cfg: Dict[str, Any], now: datetime) -> List[str]:
     autonomously. Opening a chat inside a quest and getting a generic assistant, while its
     autopilot runs as a named character with that character's accumulated corrections, makes the
     two feel like unrelated systems when they are meant to be one.
+
+    ``instructions_only`` entries are deliberately still listed here. That flag says a character
+    does not take the quest's GOALS, not that they are absent: they are on duty, working their own
+    standing instructions, and a person opening a chat on the quest should be able to reach them.
     """
-    personas = autopilot_cfg.get("personas") or []
-    today = _weekday_abbrev(now)
-    on_duty: List[str] = []
-    for restricted in (True, False):
-        for persona in personas:
-            days = persona.get("days")
-            if bool(days) is not restricted:
-                continue
-            if days and today not in days:
-                continue
-            rep_id = persona.get("rep_id")
-            if rep_id and str(rep_id) not in on_duty:
-                on_duty.append(str(rep_id))
-    return on_duty
+    return [str(entry.get("rep_id")) for entry in persona_entries_on_duty(autopilot_cfg, now)]
+
+
+def persona_instructions_for(autopilot_cfg: Dict[str, Any], rep_id: Optional[str]) -> Optional[str]:
+    """A character's own standing instructions for this quest, or None.
+
+    The WHOLE roster is searched, not only today's on-duty entries: a goal can name a character
+    through its ``assignee_rep_id`` on any day at all, and a character working this quest without
+    their standing brief would be a different character than the one the person configured. The
+    first entry for that rep with non-empty instructions wins, so a roster that lists the same
+    character twice is read the same way ``persona_entries_on_duty`` reads it.
+
+    Truncated defensively at ``MAX_INSTRUCTIONS_CHARS``, the same cap and the same warning the
+    quest-level field gets. As there, the text itself is never logged: it is the person's private
+    content and can run to 8 KB.
+    """
+    if not rep_id:
+        return None
+    wanted = str(rep_id)
+    for entry in (autopilot_cfg.get("personas") or []):
+        if str(entry.get("rep_id") or "") != wanted:
+            continue
+        instructions = str(entry.get("instructions") or "").strip()
+        if not instructions:
+            continue
+        if len(instructions) > MAX_INSTRUCTIONS_CHARS:
+            log.warning("autopilot: persona %s instructions truncated from %d to %d characters",
+                        wanted, len(instructions), MAX_INSTRUCTIONS_CHARS)
+            instructions = instructions[:MAX_INSTRUCTIONS_CHARS]
+        return instructions
+    return None
 
 
 def batch_by_persona(goals: List[Dict[str, Any]], autopilot_cfg: Dict[str, Any], now: datetime,
@@ -598,6 +670,21 @@ _INSTRUCTIONS_PREAMBLE = (
     "what the goal says and note the conflict in your result."
 )
 
+# The same idea one level down, for the instructions a character carries on this quest. Two things
+# are said explicitly rather than left to position. WHO it is addressed to, because this block sits
+# directly under a quest-wide block that describes a different job, and "instructions for this
+# character" is not actionable unless the text names the character. And WHICH governs, because two
+# specifications in one brief with nothing ranking them is how a run quietly follows the more
+# general one. ``{who}`` is filled with the persona's name when one is resolved.
+_PERSONA_INSTRUCTIONS_PREAMBLE = (
+    "Standing instructions {who} on this quest, written by the person who owns it. They describe "
+    "the job this character does here, which is not the same job the quest-wide instructions "
+    "describe. They are MORE SPECIFIC than those, so where the two disagree, follow these and say "
+    "in your result which you followed and why. The rule about goals still holds: where an "
+    "instruction and a goal's \"Done when\" disagree about what finishing that goal means, do what "
+    "the goal says and note the conflict."
+)
+
 
 def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
                        persona: Optional[str] = None, *,
@@ -607,7 +694,8 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
                        previous: Optional[Dict[str, Any]] = None,
                        reflection: Optional[str] = None,
                        insights: Optional[str] = None,
-                       instructions: Optional[str] = None) -> str:
+                       instructions: Optional[str] = None,
+                       persona_instructions: Optional[str] = None) -> str:
     """The batch task's text: what period this run owns, the goals and AI tasks in it, what the
     person themselves last said about the work, and what the previous period actually produced.
 
@@ -636,6 +724,15 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
     already planned. Absent, this emits nothing and the composed text is byte-identical to before
     this parameter existed.
 
+    ``persona_instructions`` is the same thing one level down: the standing instructions THIS
+    character carries on this quest, emitted immediately after the quest-wide block and before the
+    first ``Goal:`` block, equally verbatim. It exists because one roster can hold characters doing
+    genuinely different jobs on the same quest -- the weekday worker advancing the goals and the
+    Saturday reviewer looking at the quest from outside -- and handing both the identical
+    quest-wide brief describes neither of them. Its precedence over that brief is stated in its own
+    framing sentence for the same reason the quest-wide one states its own. Absent, this likewise
+    emits nothing and composes byte-identically to before the parameter existed.
+
     ``persona``, when resolved, is named in the text AS WELL AS stamped structurally in
     ``assignee_rep_id`` at creation. The structured field is authoritative; the prose is kept
     because some consumers resolve the persona from the request text.
@@ -654,6 +751,10 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
                      f"can, then say plainly what remains.")
     if instructions:
         parts.append(_INSTRUCTIONS_PREAMBLE + "\n\n" + instructions)
+    if persona_instructions:
+        who = f"for {persona} specifically" if persona else "for this character specifically"
+        parts.append(_PERSONA_INSTRUCTIONS_PREAMBLE.format(who=who) + "\n\n"
+                     + persona_instructions)
     for goal in goals:
         name = (goal.get("name") or "(untitled goal)").strip()
         description = (goal.get("description") or "").strip()
@@ -701,20 +802,26 @@ def compose_batch_text(quest_outcome: str, goals: List[Dict[str, Any]],
 
 def _batch_title(goals: List[Dict[str, Any]],
                  adopted_tasks: Optional[List[Dict[str, Any]]] = None,
-                 instructions: Optional[str] = None) -> Optional[str]:
+                 instructions: Optional[str] = None,
+                 persona_instructions: Optional[str] = None) -> Optional[str]:
     """A short label for the task list: what this batch is ABOUT.
 
     Without one the server derives a title from the first line of the text, which is the "Act as
     ..." persona line, so every autopilot task in the list is titled after its persona instead of
     its work. Named goals win; an adoption-only batch is titled after the task it took over.
 
-    ``instructions`` is the third fallback, for a batch with no goals and nothing adopted (the
-    always-work rule's instructions-only case): the first non-empty line of the person's own
-    instructions, stripped of leading Markdown furniture ("#", "-", "*", ">") and capped at 80
-    characters -- so an instructions-only batch is titled after what the person asked for rather
-    than the "Act as ..." persona line. That title becomes the mail SUBJECT once send-on-completion
-    lands, which is why it matters here and not just cosmetically. Falls back to "Autopilot run"
-    when ``instructions`` was passed but has no line with real content after stripping.
+    Instructions are the remaining fallbacks, for a batch with no goals and nothing adopted (the
+    always-work rule's instructions-only case): the first non-empty line, stripped of leading
+    Markdown furniture ("#", "-", "*", ">") and capped at 80 characters -- so an instructions-only
+    batch is titled after what the person asked for rather than the "Act as ..." persona line. That
+    title becomes the mail SUBJECT once send-on-completion lands, which is why it matters here and
+    not just cosmetically.
+
+    ``persona_instructions`` is tried BEFORE the quest-wide ``instructions``, because a batch that
+    exists only because a character has their own standing job on this quest is about THAT job, and
+    titling it after the quest's general brief would name work this run is not doing. Falls back to
+    "Autopilot run" when instructions of either kind were passed but no line has real content after
+    stripping.
     """
     names = [(g.get("name") or "").strip() for g in goals]
     names = [n for n in names if n]
@@ -724,11 +831,14 @@ def _batch_title(goals: List[Dict[str, Any]],
     if names:
         title = names[0] if len(names) == 1 else f"{names[0]} (+{len(names) - 1} more)"
         return title[:120]
-    if instructions:
-        for line in instructions.splitlines():
+    for source in (persona_instructions, instructions):
+        if not source:
+            continue
+        for line in source.splitlines():
             stripped = _MD_TITLE_FURNITURE_RE.sub("", line).strip()
             if stripped:
                 return stripped[:80]
+    if persona_instructions or instructions:
         return "Autopilot run"
     return None
 
@@ -873,6 +983,11 @@ class AutopilotResult:
             adopted = p.get("adopted_task_ids")
             if adopted:
                 line += f", adopting and closing recurring task(s) {adopted}"
+            # Which brief this run would be working to. On a roster where two characters do
+            # different jobs, this is the line that shows the routing landed the right way round.
+            instructions_from = p.get("instructions_from")
+            if instructions_from:
+                line += f", working {instructions_from}"
             lines.append(line)
         for s in self.skipped:
             lines.append(f"  - Skip {s.get('quest_label') or s.get('quest_id')}: {s.get('reason')}")
@@ -1016,6 +1131,23 @@ class AutopilotPass:
         self._persona_names[rep_id] = label
         return label
 
+    def _instructions_source(self, persona: Optional[str],
+                             persona_instructions: Optional[str],
+                             instructions: Optional[str]) -> Optional[str]:
+        """Whose standing instructions this batch is carrying, in words, for the dry-run report.
+
+        Both can apply at once, and when they do BOTH are named: the character's brief governs
+        where the two disagree, but the quest's still rides into the same run, and a report that
+        hid it would be describing a shorter brief than the one that gets sent.
+        """
+        sources: List[str] = []
+        if persona_instructions:
+            who = self._persona_label(persona) or "this character"
+            sources.append(f"{who}'s own standing instructions")
+        if instructions:
+            sources.append("this quest's standing instructions")
+        return ", plus ".join(sources) if sources else None
+
     def _reflection_periods(self, scope_label: str) -> Tuple[str, ...]:
         """Which period reviews to consult for a quest at ``scope_label``, finest match first.
 
@@ -1146,6 +1278,20 @@ class AutopilotPass:
         if instructions:
             log.info("autopilot: quest %s has standing instructions (%d chars)",
                      quest_id, len(instructions))
+        # The characters on duty today who carry standing instructions of their OWN. Each is a
+        # separate job on this quest, so each is a separate batch below: the always-work rule is
+        # per PERSONA, not per quest. A quest-level rule would let one character's goal work
+        # satisfy it and leave the Saturday reviewer, whose whole existence on this quest IS their
+        # instructions, silent on the day they were rostered for. Read from the on-duty entries
+        # rather than the whole roster, since being on duty is what makes today their day.
+        instructed_on_duty: List[str] = []
+        for entry in persona_entries_on_duty(autopilot_cfg, self._now()):
+            rep_id = str(entry.get("rep_id") or "")
+            if rep_id and str(entry.get("instructions") or "").strip():
+                instructed_on_duty.append(rep_id)
+        if instructed_on_duty:
+            log.info("autopilot: quest %s has %d persona(s) on duty with standing instructions",
+                     quest_id, len(instructed_on_duty))
 
         goals_payload = self._client.list_quest_goals(quest_id, team_id=self._team_id or None) or {}
         target_goals, scope_label = select_target_goals(goals_payload, self._now())
@@ -1176,17 +1322,37 @@ class AutopilotPass:
 
         quest_label = _quest_label(quest, quest_id)
         produced = False
-        # The always-work rule: a quest whose standing instructions describe a deliverable must
-        # produce exactly one batch per due pass EVEN WHEN no ai_help goal is in the current
-        # scope -- otherwise the migration case (a hand-authored daily brief replaced by
-        # instructions) silently stops on any day the quest has no eligible goal. This is why
-        # ``instructions`` joins the condition below rather than only gating the goal-proposal
-        # branch: with instructions set, that ``elif`` becomes unreachable for this quest, which
-        # is deliberate (see the comment at the ``elif`` below) -- goal proposals stay untouched
-        # for every quest that does NOT carry instructions.
-        if target_goals or adopted or instructions:
+        # The always-work rule: standing instructions that describe a deliverable must produce a
+        # batch per due pass EVEN WHEN no ai_help goal is in the current scope -- otherwise the
+        # migration case (a hand-authored daily brief replaced by instructions) silently stops on
+        # any day the quest has no eligible goal. It applies per WRITER of instructions, so both
+        # the quest-wide field and each instructed persona on duty join the condition here.
+        # ``instructed_on_duty`` is a separate term rather than folded into ``instructions``
+        # because the two are independent: a quest can hand every character the same brief, hand
+        # each a different one, or both, and a character rostered for today with their own brief
+        # has work to do whether or not the quest itself carries one.
+        # With either kind set, the goal-proposal ``elif`` becomes unreachable for this quest,
+        # which is deliberate (see the comment at the ``elif`` below) -- goal proposals stay
+        # untouched for every quest that carries NO instructions of either kind.
+        if target_goals or adopted or instructions or instructed_on_duty:
             if target_goals or adopted:
                 batches = self._batches_with_adopted(target_goals, adopted, autopilot_cfg)
+                # The case this whole feature exists for: the day's goals go to whoever routing
+                # resolves (the weekday worker), and each instructed persona on duty who did not
+                # already get a batch gets their own EMPTY one, so their standing job happens on
+                # the same pass instead of waiting for a day with no goals in it.
+                covered = {persona for persona, _goals, _tasks in batches}
+                for rep in instructed_on_duty:
+                    if rep not in covered:
+                        covered.add(rep)
+                        batches.append((rep, [], []))
+            elif instructed_on_duty:
+                # No goals and nothing adopted, but characters are rostered today with their own
+                # instructions: one batch each. They still carry the quest-wide instructions too,
+                # if the quest has any -- the two are layered, never either/or.
+                log.info("autopilot: quest %s -- no eligible goal this pass, working the standing "
+                        "instructions of %d persona(s) on duty", quest_id, len(instructed_on_duty))
+                batches = [(rep, [], []) for rep in instructed_on_duty]
             else:
                 # Instructions-only: exactly one batch, no goals and nothing adopted. Persona
                 # comes from the quest's roster on duty today (first entry, day-matched before
@@ -1215,16 +1381,28 @@ class AutopilotPass:
                                f"today's budget of {self._daily_budget} autopilot task(s) ran out "
                                f"part-way through this quest")
                     break
-                title = _batch_title(goals, tasks, instructions=instructions)
+                # Resolved per BATCH, from the whole roster rather than today's on-duty entries:
+                # a goal's own ``assignee_rep_id`` can put a character on this quest on a day
+                # their ``days`` do not name, and they should still arrive with their brief.
+                persona_instructions = persona_instructions_for(autopilot_cfg, persona)
+                title = _batch_title(goals, tasks, instructions=instructions,
+                                     persona_instructions=persona_instructions)
                 if dry_run:
                     result.proposals.append({
                         "quest_id": quest_id, "quest_label": quest_label, "kind": "work_batch",
                         "persona": persona, "persona_label": self._persona_label(persona),
                         "goal_ids": [g.get("id") for g in goals],
                         "goal_names": [_goal_name(g) for g in goals] or
-                                      (["standing instructions"] if instructions else []),
+                                      (["standing instructions"]
+                                       if (instructions or persona_instructions) else []),
                         "scope": scope_label,
                         "adopted_task_ids": [t.get("id") or t.get("task_id") for t in tasks],
+                        # Whose instructions are driving this batch. A dry run is read by someone
+                        # checking that the right character was picked for the right job, and
+                        # "standing instructions" alone does not say whose -- which is the only
+                        # question a two-character roster raises.
+                        "instructions_from": self._instructions_source(
+                            persona, persona_instructions, instructions),
                     })
                     produced = True
                     # A dry-run still SIMULATES budget consumption (one unit per batch that
@@ -1239,7 +1417,8 @@ class AutopilotPass:
                                                   previous=previous,
                                                   reflection=reflection_text,
                                                   insights=insights_text,
-                                                  instructions=instructions)
+                                                  instructions=instructions,
+                                                  persona_instructions=persona_instructions)
                 if task_id:
                     result.created.append({
                         "task_id": task_id, "kind": "work_batch", "quest_id": quest_id,
@@ -1257,10 +1436,11 @@ class AutopilotPass:
                                          result, quest_label=quest_label,
                                          reflection_note=reflections.one_line(),
                                          insights_note=insights.one_line())
-        # The goal-proposal path is untouched: with instructions set, the branch above always
-        # matches, so this ``elif`` is unreachable for that quest -- proposals keep their exact
-        # current behaviour for quests WITHOUT instructions, and no double-proposing can occur.
-        # Instructions are deliberately never threaded into ``propose_next_goal``.
+        # The goal-proposal path is untouched: with instructions set -- the quest's own, or any
+        # carried by a persona on duty today -- the branch above always matches, so this ``elif``
+        # is unreachable for that quest. Proposals keep their exact current behaviour for quests
+        # WITHOUT instructions of either kind, and no double-proposing can occur. Instructions are
+        # deliberately never threaded into ``propose_next_goal``.
         elif planning == "plan_and_work":
             if budget_used < self._daily_budget:
                 skipped_because = self._handle_proposal(quest, quest_id, quest_label, mode,
@@ -1738,18 +1918,21 @@ class AutopilotPass:
                            previous: Optional[Dict[str, Any]] = None,
                            reflection: Optional[str] = None,
                            insights: Optional[str] = None,
-                           instructions: Optional[str] = None) -> Optional[str]:
+                           instructions: Optional[str] = None,
+                           persona_instructions: Optional[str] = None) -> Optional[str]:
         text = compose_batch_text(str(quest.get("outcome") or ""), goals,
                                   self._persona_label(persona),
                                   scope_label=scope_label, adopted_tasks=adopted_tasks,
                                   next_steps=next_steps, previous=previous,
                                   reflection=reflection, insights=insights,
-                                  instructions=instructions)
+                                  instructions=instructions,
+                                  persona_instructions=persona_instructions)
         try:
             return self._create_autopilot_task(
                 quest, quest_id, text, mode, persona=persona,
                 title=title if title is not None
-                else _batch_title(goals, adopted_tasks, instructions=instructions))
+                else _batch_title(goals, adopted_tasks, instructions=instructions,
+                                  persona_instructions=persona_instructions))
         except Exception as e:  # noqa: BLE001 -- surfaced to the caller's per-quest try/except
             log.error("autopilot: task creation failed for quest %s: %s", quest_id, e,
                       exc_info=True)
