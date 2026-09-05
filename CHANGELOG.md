@@ -67,7 +67,7 @@ All notable changes to this project are documented here. The format is based on
   waiting on the reply, that is indistinguishable from the lane being down (measured against a
   live backend: a team-scoped wait returned nothing after its full timeout while an owner-scoped
   one returned the queued task in 0.3s). Both fast-lane paths now share the background scan's
-  scope via the new `Poller._discovery_team_id()`, and the attach gate accepts a teamless lane
+  scope via the new `Poller.discovery_team_id()`, and the attach gate accepts a teamless lane
   that has opted into owner-scoped discovery. A team-bound lane's per-team isolation is unchanged
   and pinned by a test.
 

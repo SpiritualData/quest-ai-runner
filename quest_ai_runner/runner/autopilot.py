@@ -1131,7 +1131,7 @@ class AutopilotPass:
         self._persona_names[rep_id] = label
         return label
 
-    def _instructions_source(self, persona: Optional[str],
+    def instructions_source(self, persona: Optional[str],
                              persona_instructions: Optional[str],
                              instructions: Optional[str]) -> Optional[str]:
         """Whose standing instructions this batch is carrying, in words, for the dry-run report.
@@ -1401,7 +1401,7 @@ class AutopilotPass:
                         # checking that the right character was picked for the right job, and
                         # "standing instructions" alone does not say whose -- which is the only
                         # question a two-character roster raises.
-                        "instructions_from": self._instructions_source(
+                        "instructions_from": self.instructions_source(
                             persona, persona_instructions, instructions),
                     })
                     produced = True

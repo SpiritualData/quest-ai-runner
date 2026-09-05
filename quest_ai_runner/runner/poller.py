@@ -228,7 +228,7 @@ class Poller:
             return []
         try:
             due = self.client.discover_due(
-                now=datetime.now(timezone.utc), team_id=self._discovery_team_id(),
+                now=datetime.now(timezone.utc), team_id=self.discovery_team_id(),
                 env_id=self.cfg.env_id)
         except (QuestApiError, QuestNotConfigured) as e:
             log.info("discovery unavailable (%s) — will retry next scan", e)
@@ -1055,7 +1055,7 @@ class Poller:
         finally:
             self._release_slot(task_id)
 
-    def _discovery_team_id(self) -> str:
+    def discovery_team_id(self) -> str:
         """The team scope BOTH discovery paths must use (background scan and fast lane).
 
         ``discovery_team_id`` when the consumer set one (allows owner-scoped discovery on a
@@ -1102,7 +1102,7 @@ class Poller:
                 if self.cfg.wait_channel_enabled:
                     started = _time.monotonic()
                     task = self.client.wait_for_interactive(
-                        team_id=self._discovery_team_id(), env_id=self.cfg.env_id,
+                        team_id=self.discovery_team_id(), env_id=self.cfg.env_id,
                         timeout=self.cfg.wait_timeout_seconds,
                     )
                     elapsed = _time.monotonic() - started
@@ -1118,7 +1118,7 @@ class Poller:
                     if interval <= 0:
                         return  # fast lane explicitly disabled
                     for t in self.client.list_interactive_due(
-                        team_id=self._discovery_team_id(), env_id=self.cfg.env_id,
+                        team_id=self.discovery_team_id(), env_id=self.cfg.env_id,
                     ):
                         self._dispatch_fast_task(t)
                     if stop_event.wait(interval):

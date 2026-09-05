@@ -99,7 +99,7 @@ class QuestClient:
         self.team_id = team_id or ""
         self.timeout = timeout
         # quest_id -> the team that actually owns it, resolved lazily by
-        # _owning_team_for and only when the configured team turns out not to. An entry is
+        # owning_team_for and only when the configured team turns out not to. An entry is
         # dropped the moment the team it names fails to serve the quest, so a quest moved a
         # second time is re-resolved instead of 404ing until the process restarts.
         self._quest_team_cache: Dict[str, str] = {}
@@ -619,7 +619,7 @@ class QuestClient:
             log.warning("list_quests failed: %s", e)
             return []
 
-    def _owning_team_for(self, quest_id: str) -> str:
+    def owning_team_for(self, quest_id: str) -> str:
         """The team that actually owns ``quest_id``, per the owner-scoped quest list.
 
         A lane's configured ``team_id`` is not always the quest's team: an owner-scoped lane
@@ -673,7 +673,7 @@ class QuestClient:
                     break  # the previous round already looked at the live list
                 self.forget_owning_team(quest_id)
                 log.info("quest %s is no longer served by its cached team; re-resolving", quest_id)
-            owner_tid = self._owning_team_for(quest_id)
+            owner_tid = self.owning_team_for(quest_id)
             if not owner_tid or owner_tid in tried:
                 continue
             log.info("quest %s is not on team %s; using its own team %s",
@@ -708,7 +708,7 @@ class QuestClient:
             resolved_now = False
             if not tid and not team_id:
                 resolved_now = quest_id not in self._quest_team_cache
-                tid = self._owning_team_for(quest_id)
+                tid = self.owning_team_for(quest_id)
             if not tid:
                 raise QuestNotConfigured("team_id is required to list quest goals")
             try:
