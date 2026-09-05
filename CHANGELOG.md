@@ -7,6 +7,31 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **A character worked a quest on a day they were not rostered for** (`runner/autopilot.py`). A
+  quest had one character rostered `["Mon".."Fri"]` and another `["Sat"]`; on a Saturday the
+  weekday character produced work and emailed the owner, because `resolve_persona` honored a
+  goal's own `assignee_rep_id` unconditionally and the roster's days were therefore advisory. They
+  are authoritative now: a character works a quest only on the days their own roster entry names,
+  and nothing overrides that. A goal assigned to a ROSTERED character who is not on duty today is
+  HELD (excluded from today's targets, worked on a day that character is rostered for, logged by
+  count and id) rather than re-routed, since handing one character's assigned goal to whoever
+  happens to be around is its own wrong answer; `resolve_persona` says so with a new `PERSONA_HELD`
+  answer, because `None` already means "the plain assistant". A goal assigned to a character with
+  NO roster entry is unchanged (no entry, no day setting to follow), and an unassigned goal keeps
+  the day-matched-then-unrestricted roster order but can no longer fall past it to the
+  consumer-injected fallback resolver or the plain assistant while the roster names any
+  goal-working character. A day NOBODY is rostered for is now a cheap per-quest gate beside the
+  cadence check (config plus clock, before any goal fetch or model call): the quest produces
+  nothing and records a skip naming the day. That case previously ran the quest as the PLAIN
+  ASSISTANT whenever it carried standing instructions, since the instructions branch fell from
+  `personas_on_duty[0]` to the fallback resolver to `None`. New public helpers `PERSONA_HELD` and
+  `split_held_for_another_day`; `personas_on_duty` / `persona_entries_on_duty` are unchanged (they
+  were already the day-precedence source of truth, and a consumer keeps a parallel copy for
+  attended chat), and `instructions_only` still keeps an entry out of goal routing while it works
+  its own instructions on its own days. A quest with an EMPTY roster sees zero behavior change,
+  which `tests/test_autopilot_day_authority.py` pins along with the rest of the rule. This
+  supersedes the earlier design note that a persona with a goal assigned to it is activated
+  whenever that goal comes due, independent of the quest's day schedule.
 - **Context-assembly timeout default was too tight for a real deployment under load**
   (`core/orchestrator.py`, `context_assembly_timeout_seconds`). Measured on a live deployment: a
   warm turn-start assembly (card store + vector search + one downstream profile fetch) typically

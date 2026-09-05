@@ -5,18 +5,24 @@ recurring assistant task (``task_kind == "autopilot"``, routed by ``runner.execu
 normal deep-run path). Each pass:
 
   1. Lists the team's quests; keeps the ones opted in (``autopilot.mode`` in ``suggest``/``act``).
-  2. Gates each, cheapest first: a team-wide daily budget, per-quest cadence, and -- only where
-     the deployment opts into backpressure -- an open autopilot-created task or an unresolved HOLD
-     decision already sitting on the quest. By default neither stops a pass: work continues and
-     the unfinished thing is visible in context to be worked around.
+  2. Gates each, cheapest first: a team-wide daily budget, per-quest cadence, the roster's day
+     rule (a quest whose roster names nobody for today does nothing at all today), and -- only
+     where the deployment opts into backpressure -- an open autopilot-created task or an
+     unresolved HOLD decision already sitting on the quest. By default neither of the last two
+     stops a pass: work continues and the unfinished thing is visible in context to be worked
+     around.
   3. Picks the quest's CURRENT-SCOPE target goals (today's, this period's, or the single next
      incomplete one when the quest is unscoped) among the ones flagged ``ai_help``.
-  4. Resolves a persona per goal (goal assignee -> quest persona-for-today -> a consumer-injected
-     fallback) and batches goals sharing a persona into ONE task (one budget unit). A roster entry
-     flagged ``instructions_only`` is skipped by that routing: it says its character is on duty to
-     work their OWN standing instructions and takes no goals, which is what lets a specialist share
-     a roster with the character who actually works the quest's goals that day. Every persona on
-     duty carrying instructions of their own also gets a batch, goals or not (see 5).
+  4. Resolves a persona per goal, always INSIDE the day rule: a character works a quest only on
+     the days their own roster entry names, and nothing overrides that. Among the characters on
+     duty today the order is goal assignee -> quest persona-for-today -> a consumer-injected
+     fallback, and goals sharing a persona are batched into ONE task (one budget unit). A goal
+     assigned to a rostered character who is NOT on duty today is held for a day they are, never
+     passed to whoever is around instead. A roster entry flagged ``instructions_only`` is skipped
+     by that routing: it says its character is on duty to work their OWN standing instructions and
+     takes no goals, which is what lets a specialist share a roster with the character who actually
+     works the quest's goals that day. Every persona on duty carrying instructions of their own
+     also gets a batch, goals or not (see 5).
   5. Creates each batch as a real task (``status="suggested"`` in suggest mode, ``"queued"`` in
      act mode), or -- when planning allows and nothing is eligible -- proposes the quest's next
      goal instead of a work task, UNLESS the previous pass's proposal is still sitting there
@@ -60,7 +66,7 @@ import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from .insights import InsightsContext, collect_unacted_insights
 from .local_time import now_in_zone
@@ -394,19 +400,85 @@ def _weekday_abbrev(now: datetime) -> str:
     return now.strftime("%a")  # "Mon", "Tue", ...
 
 
+class _HeldPersona:
+    """The type of :data:`PERSONA_HELD`. A singleton, so ``is`` is the whole test."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:  # pragma: no cover -- a debugging aid, never user-facing
+        return "PERSONA_HELD"
+
+
+# Returned by ``resolve_persona`` instead of a rep id when today's answer to "who works this" is
+# NOBODY: the work belongs to a character the person rostered for other days.
+#
+# It is a third answer on purpose, and the reason is a real incident. A quest had Bailey rostered
+# Mon-Fri and Batman rostered Sat. On a Saturday, Bailey produced work and emailed the owner,
+# because a goal carrying her ``assignee_rep_id`` outranked her own roster entry -- her days were
+# advisory. They are authoritative now, and this constant is what makes that expressible: ``None``
+# already means "the plain assistant", so without a distinct value a held goal would either fall
+# through to the plain assistant or be handed to whichever character happens to be on duty. Both
+# are the same mistake as running it on the wrong day. The person chose WHO does this work; the
+# only thing the calendar decides is WHEN.
+#
+# This SUPERSEDES the earlier design note that a persona with a goal assigned to it is activated
+# whenever that goal comes due, independent of the quest's day schedule. The day schedule wins.
+PERSONA_HELD = _HeldPersona()
+
+# What ``resolve_persona`` can answer: a rep id, ``None`` (the plain assistant), or
+# ``PERSONA_HELD`` (nobody today -- this work waits for the day its character is rostered for).
+ResolvedPersona = Union[str, None, _HeldPersona]
+
+
+def _rostered_rep_ids(autopilot_cfg: Dict[str, Any]) -> set:
+    """Every rep_id the quest's roster names, ``instructions_only`` entries included.
+
+    Appearing in the roster at all is what puts a character under the day rule: the person opened
+    that entry and set their days. A character with NO entry has no day setting to follow, so work
+    assigned to them is not held on any day.
+    """
+    return {str(p.get("rep_id")) for p in (autopilot_cfg.get("personas") or []) if p.get("rep_id")}
+
+
+def _goal_routing_entries(autopilot_cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """The roster entries GOAL routing can use: every entry not flagged ``instructions_only``.
+
+    A roster made up only of ``instructions_only`` entries is, for goal routing, no roster at all
+    (the flag says exactly that: behave as though this character were not in the roster). That is
+    what keeps the day rule from turning such a quest's goals into work nobody may do.
+    """
+    return [p for p in (autopilot_cfg.get("personas") or [])
+            if not _truthy(p.get("instructions_only"))]
+
+
 def resolve_persona(goal: Dict[str, Any], autopilot_cfg: Dict[str, Any], now: datetime,
                     fallback_resolver: Optional[Callable[[Dict[str, Any]], Optional[str]]] = None
-                    ) -> Optional[str]:
-    """Resolver order (explicit always beats inferred), per the design's persona-routing section:
+                    ) -> ResolvedPersona:
+    """Who works this goal TODAY, or ``PERSONA_HELD`` when the honest answer is "nobody, today".
 
-      1. The goal's own ``assignee_rep_id`` (a per-goal override).
+    THE DAY RULE COMES FIRST AND NOTHING OVERRIDES IT: a character works a quest only on the days
+    their own roster entry names. Everything below decides how work is routed AMONG the characters
+    the person rostered for today; none of it can reach past that set.
+
+      1. The goal's own ``assignee_rep_id`` (a per-goal override), when that character is on duty
+         today OR carries no roster entry at all (no entry means the person set no days for them,
+         so there is no day setting to follow). Rostered but not on duty -> ``PERSONA_HELD``: the
+         goal waits for a day that character works this quest, and is never quietly re-assigned.
       2. A quest ``autopilot.personas`` entry whose ``days`` include today, EXCLUDING entries
          flagged ``instructions_only`` (checked first, so an explicit day-restricted assignment
          wins over an unrestricted one for the same day).
       3. A quest ``autopilot.personas`` entry with NO ``days`` restriction, again excluding
          ``instructions_only`` entries (applies any day).
-      4. A consumer-injected fallback (e.g. the existing card-vote resolver), given the goal dict.
-      5. ``None`` -- the plain assistant persona (no character voice).
+      4. ``PERSONA_HELD`` when the roster DOES name goal-working characters but none of them is on
+         duty today. Their goals wait; handing one character's work to whoever happens to be around
+         is its own wrong answer, and falling through to the plain assistant is the bug that made
+         this rule necessary (a quest with standing instructions ran as the plain assistant on days
+         nobody was rostered for).
+      5. A consumer-injected fallback (e.g. the existing card-vote resolver), given the goal dict.
+      6. ``None`` -- the plain assistant persona (no character voice).
+
+    Steps 5 and 6 are reachable ONLY when the roster names no goal-working character at all, which
+    is every quest that never configured one. Those quests behave exactly as they always have.
 
     Why ``instructions_only`` is excluded from 2 and 3, and only from those: a roster entry is
     two different statements at once ("this character is on duty today" and "this character is who
@@ -416,29 +488,34 @@ def resolve_persona(goal: Dict[str, Any], autopilot_cfg: Dict[str, Any], now: da
     the weekday worker goes quiet on the one day the specialist is around. ``instructions_only``
     says this entry is only the FIRST statement: the character is on duty and works their own
     standing instructions, and goal routing behaves as though they were not in the roster at all.
-    Step 1 still wins over it, because a per-goal ``assignee_rep_id`` is a human naming that
-    character for that goal, which is more specific than any roster-wide preference.
+    Step 1 still wins over it FOR A CHARACTER ON DUTY, because a per-goal ``assignee_rep_id`` is a
+    human naming that character for that goal, which is more specific than any roster-wide
+    preference. It cannot win over their days, which is a statement by the same human about when
+    that character works at all.
     """
+    on_duty = {str(entry.get("rep_id")) for entry in persona_entries_on_duty(autopilot_cfg, now)
+               if entry.get("rep_id")}
     assignee = goal.get("assignee_rep_id")
     if assignee:
-        return str(assignee)
-    personas = autopilot_cfg.get("personas") or []
+        assignee = str(assignee)
+        if assignee in on_duty or assignee not in _rostered_rep_ids(autopilot_cfg):
+            return assignee
+        return PERSONA_HELD
+    routing_entries = _goal_routing_entries(autopilot_cfg)
     today = _weekday_abbrev(now)
-    for persona in personas:
-        if _truthy(persona.get("instructions_only")):
-            continue
+    for persona in routing_entries:
         days = persona.get("days")
         if days and today in days:
             rep_id = persona.get("rep_id")
             if rep_id:
                 return str(rep_id)
-    for persona in personas:
-        if _truthy(persona.get("instructions_only")):
-            continue
+    for persona in routing_entries:
         if not persona.get("days"):
             rep_id = persona.get("rep_id")
             if rep_id:
                 return str(rep_id)
+    if any(p.get("rep_id") for p in routing_entries):
+        return PERSONA_HELD
     if fallback_resolver is not None:
         try:
             resolved = fallback_resolver(goal)
@@ -501,11 +578,14 @@ def personas_on_duty(autopilot_cfg: Dict[str, Any], now: datetime) -> List[str]:
 def persona_instructions_for(autopilot_cfg: Dict[str, Any], rep_id: Optional[str]) -> Optional[str]:
     """A character's own standing instructions for this quest, or None.
 
-    The WHOLE roster is searched, not only today's on-duty entries: a goal can name a character
-    through its ``assignee_rep_id`` on any day at all, and a character working this quest without
-    their standing brief would be a different character than the one the person configured. The
-    first entry for that rep with non-empty instructions wins, so a roster that lists the same
-    character twice is read the same way ``persona_entries_on_duty`` reads it.
+    The WHOLE roster is searched, not only today's on-duty entries. One character can hold
+    several entries -- a day-restricted one carrying their instructions plus a catch-all that is
+    what actually puts them on duty today -- and a character working this quest without their
+    standing brief would be a different character than the one the person configured. The first
+    entry for that rep with non-empty instructions wins, so a roster that lists the same character
+    twice is read the same way ``persona_entries_on_duty`` reads it. (Since the day rule landed,
+    every character this quest routes work to today is on duty today; searching the whole roster
+    is what makes WHICH of their entries carries the text irrelevant.)
 
     Truncated defensively at ``MAX_INSTRUCTIONS_CHARS``, the same cap and the same warning the
     quest-level field gets. As there, the text itself is never logged: it is the person's private
@@ -528,13 +608,44 @@ def persona_instructions_for(autopilot_cfg: Dict[str, Any], rep_id: Optional[str
     return None
 
 
+def split_held_for_another_day(items: List[Dict[str, Any]], autopilot_cfg: Dict[str, Any],
+                              now: datetime
+                              ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Split work into ``(workable today, held)`` under the day rule.
+
+    Held means the item names a character the person rostered for other days, or that the roster's
+    goal-working characters are all off duty today: either way nobody may work it today, and it
+    comes back on a day one of them does. Applied to goals and to adopted recurring tasks alike,
+    since both carry an ``assignee_rep_id`` and both would otherwise become a batch.
+
+    Deliberately called BEFORE anything is fetched or composed for these items, so a held goal
+    costs no description fetch and appears in no prompt. The fallback resolver is not consulted
+    here: it is only ever reached for a quest whose roster names no goal-working character, and
+    such a quest can hold nothing, so passing it would spend a consumer callback on a decision it
+    cannot change.
+    """
+    workable: List[Dict[str, Any]] = []
+    held: List[Dict[str, Any]] = []
+    for item in items:
+        if resolve_persona(item, autopilot_cfg, now) is PERSONA_HELD:
+            held.append(item)
+        else:
+            workable.append(item)
+    return workable, held
+
+
 def batch_by_persona(goals: List[Dict[str, Any]], autopilot_cfg: Dict[str, Any], now: datetime,
                      fallback_resolver: Optional[Callable[[Dict[str, Any]], Optional[str]]] = None
-                     ) -> List[Tuple[Optional[str], List[Dict[str, Any]]]]:
+                     ) -> List[Tuple[ResolvedPersona, List[Dict[str, Any]]]]:
     """Group ``goals`` by resolved persona, preserving first-seen order. Same persona (including
-    ``None``, the plain assistant) -> ONE batch; different personas -> separate batches."""
-    order: List[Optional[str]] = []
-    batches: Dict[Optional[str], List[Dict[str, Any]]] = {}
+    ``None``, the plain assistant) -> ONE batch; different personas -> separate batches.
+
+    A goal held by the day rule groups under ``PERSONA_HELD`` like any other key rather than
+    vanishing, so a caller that skipped ``split_held_for_another_day`` can still see it. No task
+    may be created for that key: it names no character.
+    """
+    order: List[ResolvedPersona] = []
+    batches: Dict[ResolvedPersona, List[Dict[str, Any]]] = {}
     for goal in goals:
         persona = resolve_persona(goal, autopilot_cfg, now, fallback_resolver)
         if persona not in batches:
@@ -1295,6 +1406,18 @@ class AutopilotPass:
 
         goals_payload = self._client.list_quest_goals(quest_id, team_id=self._team_id or None) or {}
         target_goals, scope_label = select_target_goals(goals_payload, self._now())
+        # THE DAY RULE, applied to the goals themselves: one assigned to a character the person
+        # rostered for OTHER days is held here and picked up on a day that character works this
+        # quest. Held before the description fetch below, so a held goal costs no read and reaches
+        # no prompt. Counts and ids only in the log -- goal text is the person's own content.
+        target_goals, held_goals = split_held_for_another_day(target_goals, autopilot_cfg,
+                                                              self._now())
+        if held_goals:
+            log.info("autopilot: quest %s -- holding %d goal(s) %s: their character is not "
+                     "rostered for %s, so they wait for a day that character works this quest",
+                     quest_id, len(held_goals),
+                     [str(g.get("id") or "?") for g in held_goals],
+                     self._now().strftime("%A"))
         # The goals-grouping payload does NOT carry each goal's ``description`` (the backend's
         # handler builds a slim per-goal dict: id/name/time_scope/period/deadline/completed/
         # parent_goal_id/ai_help/assignee_rep_id). But the description IS the brief -- it is the
@@ -1306,6 +1429,17 @@ class AutopilotPass:
         # taking over a task someone scheduled themselves is a real change in who executes it.
         adopted = (self._due_recurring_tasks(quest_id)
                    if self._adopts_recurring(autopilot_cfg) else [])
+        # An adopted task becomes a batch for whoever it names, so it is under the day rule too.
+        # Held means simply NOT adopted: the occurrence stays queued and runs as the person
+        # scheduled it, which is the same direction ``_close_adopted`` fails in (duplicated work
+        # is recoverable, lost work is not).
+        adopted, held_adopted = split_held_for_another_day(adopted, autopilot_cfg, self._now())
+        if held_adopted:
+            log.info("autopilot: quest %s -- leaving %d recurring task(s) %s unadopted: their "
+                     "character is not rostered for %s",
+                     quest_id, len(held_adopted),
+                     [str(t.get("id") or t.get("task_id") or "?") for t in held_adopted],
+                     self._now().strftime("%A"))
         previous = self._previous_period_summary(quest_id, goals_payload, scope_label)
         # The standing artifact, read BEFORE this pass overwrites it: whatever the last refresh
         # concluded (possibly an attended session's, more recent than any pass) rides into the
@@ -1358,7 +1492,9 @@ class AutopilotPass:
                 # comes from the quest's roster on duty today (first entry, day-matched before
                 # unrestricted), else the consumer's fallback resolver, else no persona --
                 # the same precedence goal-driven batching uses, just with no goal to resolve it
-                # FROM.
+                # FROM. The fallback and the no-persona arms are reachable only for a quest with
+                # NO roster: with one, ``_gate_quest``'s day rule has already skipped the quest
+                # unless somebody is on duty, and then ``personas_on_duty`` is never empty.
                 log.info("autopilot: quest %s -- no eligible goal this pass, working the "
                         "standing instructions alone", quest_id)
                 on_duty = personas_on_duty(autopilot_cfg, self._now())
@@ -1381,9 +1517,11 @@ class AutopilotPass:
                                f"today's budget of {self._daily_budget} autopilot task(s) ran out "
                                f"part-way through this quest")
                     break
-                # Resolved per BATCH, from the whole roster rather than today's on-duty entries:
-                # a goal's own ``assignee_rep_id`` can put a character on this quest on a day
-                # their ``days`` do not name, and they should still arrive with their brief.
+                # Resolved per BATCH, from the whole roster rather than today's on-duty entries.
+                # Every character routed a batch is on duty today (the day rule guarantees it),
+                # but their instructions can sit on a DIFFERENT entry than the one that put them
+                # on duty -- a day-restricted entry carrying the brief plus a catch-all, say -- so
+                # reading the whole roster is what makes which entry irrelevant.
                 persona_instructions = persona_instructions_for(autopilot_cfg, persona)
                 title = _batch_title(goals, tasks, instructions=instructions,
                                      persona_instructions=persona_instructions)
@@ -1436,6 +1574,18 @@ class AutopilotPass:
                                          result, quest_label=quest_label,
                                          reflection_note=reflections.one_line(),
                                          insights_note=insights.one_line())
+        # Everything due today belongs to a character who is not rostered for today. The quest is
+        # not out of work and it does not need a new goal proposed at it: it needs the day its
+        # character works. Said as a skip, because a quest that goes silently quiet on a day it
+        # visibly has work is the failure mode this repository bans.
+        elif held_goals or held_adopted:
+            day_name = self._now().strftime("%A")
+            self._skip(result, quest_id, quest_label, _count_line(
+                len(held_goals) + len(held_adopted),
+                f"the only work due belongs to a character who is not rostered for {day_name}, so "
+                f"it waits for a day they work this quest",
+                f"{{n}} pieces of work due belong to characters who are not rostered for "
+                f"{day_name}, so they wait for a day those characters work this quest"))
         # The goal-proposal path is untouched: with instructions set -- the quest's own, or any
         # carried by a persona on duty today -- the branch above always matches, so this ``elif``
         # is unreachable for that quest. Proposals keep their exact current behaviour for quests
@@ -1595,7 +1745,13 @@ class AutopilotPass:
         An adopted task's persona is its own ``assignee_rep_id`` when it has one (the user chose a
         character for it), otherwise the persona the quest's roster resolves for today, so an
         unassigned recurring task rides along with that persona's goal work instead of spawning a
-        second run for the same character.
+        second run for the same character. Both readings come from ``resolve_persona``, which is
+        also where the day rule lives, so an adopted task cannot name a character the roster has
+        off duty today.
+
+        Anything the day rule holds is skipped here rather than re-routed. The caller has already
+        held and reported it (see ``_run_one_quest``); this is the belt to that braces, so a held
+        item can never become a batch keyed on a marker that names no character.
         """
         now = self._now()
         merged: Dict[Optional[str], Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]] = {}
@@ -1609,10 +1765,13 @@ class AutopilotPass:
 
         for persona, batch_goals in batch_by_persona(goals, autopilot_cfg, now,
                                                      self._persona_resolver):
+            if persona is PERSONA_HELD:
+                continue
             slot(persona)[0].extend(batch_goals)
         for task in adopted:
-            persona = task.get("assignee_rep_id") or resolve_persona(
-                {}, autopilot_cfg, now, self._persona_resolver)
+            persona = resolve_persona(task, autopilot_cfg, now, self._persona_resolver)
+            if persona is PERSONA_HELD:
+                continue
             slot(str(persona) if persona else None)[1].append(task)
         return [(persona, merged[persona][0], merged[persona][1]) for persona in order]
 
@@ -1765,6 +1924,21 @@ class AutopilotPass:
         if (not cadence_due(autopilot_cfg, self._now(), tz=autopilot_cfg.get("run_timezone"))
                 and not run_requested(autopilot_cfg)):
             return "cadence not due yet"
+        # THE DAY RULE, as a gate. With a roster configured, a day nobody was rostered for is a day
+        # this quest does no work at all -- config plus clock only, which is why it sits here with
+        # the other cheap checks and before any goal fetch or model call.
+        #
+        # Without it the pass reached the standing-instructions branch on such a day, fell from
+        # ``personas_on_duty[0]`` to the consumer's fallback resolver to ``None``, and ran the
+        # quest as the plain assistant on a day the person had rostered nobody. That is the same
+        # incident from the other side: the day setting has to decide whether a quest runs at all,
+        # not only who runs it.
+        #
+        # A quest with NO roster is untouched here: it set no days, so there is nothing to follow.
+        if (autopilot_cfg.get("personas")
+                and not persona_entries_on_duty(autopilot_cfg, self._now())):
+            return (f"no character on this quest's roster is rostered for "
+                    f"{self._now().strftime('%A')}")
         if self._backpressure and self._has_backpressure(quest_id):
             return "backpressure: a previous autopilot task for this quest is still open"
         # Behind the SAME opt-in as task backpressure, and for the same reason. An unresolved

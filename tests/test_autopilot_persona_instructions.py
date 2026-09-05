@@ -11,7 +11,9 @@ These tests pin the fix: a roster entry's own ``instructions`` (injected after t
 and before the first ``Goal:`` block, verbatim), its ``instructions_only`` flag (invisible to goal
 routing, still on duty for its own work), the per-persona always-work rule (goals and a
 specialist's standing review on the SAME pass), the title fallback, and that a goal's explicit
-``assignee_rep_id`` still outranks all of it.
+``assignee_rep_id`` still outranks all of it AMONG the characters on duty today. What it never
+outranks is the roster's days: that rule and its own tests live in
+``test_autopilot_day_authority.py``.
 """
 from quest_ai_runner.runner.autopilot import (
     MAX_INSTRUCTIONS_CHARS,
@@ -111,12 +113,13 @@ def test_personas_on_duty_still_lists_instructions_only_reps():
 
 
 def test_persona_instructions_are_found_anywhere_in_the_roster_not_just_today():
-    """A goal's ``assignee_rep_id`` can put a character on this quest on a day their ``days`` do
-    not name, and they must still arrive with their own brief."""
+    """One character can hold several entries, and the one carrying their brief need not be the
+    one that puts them on duty today. Reading the whole roster is what makes that irrelevant."""
     cfg = {"personas": [{"rep_id": "rep_batman", "days": NOT_TODAY,
-                         "instructions": BATMAN_BRIEF}]}
+                         "instructions": BATMAN_BRIEF},
+                        {"rep_id": "rep_batman"}]}
     assert persona_instructions_for(cfg, "rep_batman") == BATMAN_BRIEF
-    assert persona_entries_on_duty(cfg, NOW) == []
+    assert [e["rep_id"] for e in persona_entries_on_duty(cfg, NOW)] == ["rep_batman"]
 
 
 def test_persona_instructions_are_none_when_absent_blank_or_unknown():
@@ -179,9 +182,12 @@ def test_a_goals_own_assignee_wins_even_over_instructions_only():
     assert resolve_persona(_goal("g1", assignee_rep_id="rep_batman"), cfg, NOW) == "rep_batman"
 
 
-def test_an_assigned_instructions_only_rep_gets_the_goal_batch_with_their_own_brief():
+def test_an_assigned_instructions_only_rep_on_duty_gets_the_goal_batch_with_their_own_brief():
+    """``instructions_only`` keeps a character out of goal ROUTING; being named on the goal is the
+    person overriding that for this one goal. It is not an override of their DAYS, so the entry is
+    rostered for today here -- ``test_autopilot_day_authority`` pins the off-duty half."""
     personas = [{"rep_id": "rep_bailey"},
-                {"rep_id": "rep_batman", "days": NOT_TODAY, "instructions": BATMAN_BRIEF,
+                {"rep_id": "rep_batman", "days": TODAY, "instructions": BATMAN_BRIEF,
                  "instructions_only": True}]
     q1 = _roster_quest(personas=personas)
     goals = {"q1": _goals_payload(("day", "2026-07-12",
@@ -192,7 +198,6 @@ def test_an_assigned_instructions_only_rep_gets_the_goal_batch_with_their_own_br
     assert len(result.created_task_ids) == 1
     created = client.created_tasks[0]
     assert created["assignee_rep_id"] == "rep_batman"
-    # Off duty today, so this brief came from the WHOLE roster, not today's on-duty entries.
     assert BATMAN_BRIEF in created["text"]
     assert "Goal: Batman's own goal" in created["text"]
 

@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from quest_ai_runner.runner.autopilot import (
     AUTOPILOT_WORK_KIND,
     DEFAULT_TEAM_DAILY_BUDGET,
+    PERSONA_HELD,
     AutopilotPass,
     batch_by_persona,
     cadence_due,
@@ -21,6 +22,7 @@ from quest_ai_runner.runner.autopilot import (
 )
 
 NOW = datetime(2026, 7, 12, 9, 0, 0, tzinfo=timezone.utc)  # a Sunday
+MONDAY = datetime(2026, 7, 13, 9, 0, 0, tzinfo=timezone.utc)
 
 
 def _now():
@@ -57,6 +59,9 @@ class FakeAutopilotClient:
         self.goals_by_quest = dict(goals_by_quest or {})
         self.tasks = list(tasks or [])
         self.created_tasks = []
+        # Every ``list_quest_goals`` call, in order. A gate that is meant to be cheap has to be
+        # shown to run before the goal fetch, and this is the record that shows it.
+        self.goal_list_calls = []
         self.task_updates = []        # (task_id, fields) -- the PATCHes
         self.autopilot_updates = []   # (quest_id, fields)
         self.open_decisions = {}      # quest_id -> bool
@@ -83,6 +88,7 @@ class FakeAutopilotClient:
         return {}
 
     def list_quest_goals(self, quest_id, *, team_id=None):
+        self.goal_list_calls.append(quest_id)
         return self.goals_by_quest.get(quest_id, {})
 
     def get_goal(self, goal_id, *, quest_id=None, team_id=None):
@@ -501,6 +507,25 @@ def test_persona_resolves_goal_assignee_first():
     goal = _goal("g1", assignee_rep_id="rep_bailey")
     autopilot_cfg = {"personas": [{"rep_id": "rep_other"}]}
     assert resolve_persona(goal, autopilot_cfg, NOW) == "rep_bailey"
+
+
+def test_persona_assignee_does_not_beat_that_characters_own_roster_days():
+    """The incident this rule came from: a goal assigned to the Mon-Fri character pulled her in on
+    a Saturday, because her assignment outranked her days. It no longer does."""
+    goal = _goal("g1", assignee_rep_id="rep_bailey")
+    autopilot_cfg = {"personas": [{"rep_id": "rep_bailey", "days": ["Mon", "Tue", "Wed", "Thu",
+                                                                   "Fri"]},
+                                  {"rep_id": "rep_batman", "days": ["Sun"]}]}
+    assert resolve_persona(goal, autopilot_cfg, NOW) is PERSONA_HELD      # NOW is a Sunday
+    assert resolve_persona(goal, autopilot_cfg, MONDAY) == "rep_bailey"
+
+
+def test_persona_assignee_with_no_roster_entry_is_untouched_by_the_day_rule():
+    """No entry means the person set no days for that character, so there is no day setting to
+    follow -- the assignment stands on every day, exactly as it always did."""
+    goal = _goal("g1", assignee_rep_id="rep_nobody_rostered")
+    autopilot_cfg = {"personas": [{"rep_id": "rep_bailey", "days": ["Mon"]}]}
+    assert resolve_persona(goal, autopilot_cfg, NOW) == "rep_nobody_rostered"
 
 
 def test_persona_resolves_quest_persona_matching_today_over_unrestricted():
