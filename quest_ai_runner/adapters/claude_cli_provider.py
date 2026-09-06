@@ -21,7 +21,8 @@ It satisfies the same :class:`~quest_ai_runner.core.adapters.ModelProvider` inte
                 empty list made the ModelRegistry fall through to its Gemini-flavoured defaults,
                 which no provider on a claude_cli-only deployment could run. Tier ids are mapped
                 back to the CLI's bare family aliases on invoke, so a tier always resolves to
-                "latest of family".
+                "latest of family". (Fable is a runnable family too — see ``_FAMILY_ALIASES`` — but
+                is deliberately not advertised here; see the note on ``CLI_RUNNABLE_MODELS`` below.)
 
 Like the subprocess deep-runner, the spawned process has ``ANTHROPIC_API_KEY`` /
 ``ANTHROPIC_AUTH_TOKEN`` / ``CLAUDECODE`` stripped from its env so it can't reuse our own session
@@ -50,16 +51,23 @@ _PURE_COMPLETION_DISALLOWED = (
     "WebSearch", "WebFetch", "Task", "NotebookEdit",
 )
 
-# The CLI accepts a family alias ("haiku"/"sonnet"/"opus") that always points at the latest model
-# of that family — which is exactly what the ModelRegistry intends a tier to mean. We map any
-# concrete id the registry hands us onto its family alias so resolution is robust whether the id is
-# pinned ("claude-haiku-4-5"), date-suffixed, or already an alias.
-_FAMILY_ALIASES = ("opus", "sonnet", "haiku")
+# The CLI accepts a family alias ("haiku"/"sonnet"/"opus"/"fable") that always points at the
+# latest model of that family — which is exactly what the ModelRegistry intends a tier to mean. We
+# map any concrete id the registry hands us onto its family alias so resolution is robust whether
+# the id is pinned ("claude-haiku-4-5", "claude-fable-5-1"), date-suffixed, or already an alias.
+_FAMILY_ALIASES = ("opus", "sonnet", "haiku", "fable")
 
 # What ``list_models`` advertises (see its docstring for why this is not an empty list). Canonical
 # ``claude-<family>`` ids so ModelRegistry.bucket_top buckets them into fast/balanced/quality and
 # MultiProvider routes them by the "claude" prefix; cli_model() maps each back to the bare family
 # alias when the CLI is actually invoked, so the runner always gets the latest of that family.
+#
+# Deliberately no "claude-fable" entry: ``bucket_top`` (core/model_registry.py) only recognizes
+# haiku/opus/sonnet as Claude sub-families, so an unrecognized "claude-fable" would fall into its
+# catch-all "claude-other" bucket, which no fast/balanced/quality/best candidate list consults —
+# advertising it here would change nothing about tier resolution. A tier lands on Fable only via an
+# explicit ``QAR_MODEL_*``/fallback override (a bare ``fable`` resolves through ``cli_model()``
+# below like any other family alias), not through auto-bucketing.
 CLI_RUNNABLE_MODELS = ["claude-opus", "claude-sonnet", "claude-haiku"]
 
 # Standard per-user install locations the official Claude Code installer (and npm global

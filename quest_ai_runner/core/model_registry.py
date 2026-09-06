@@ -58,7 +58,8 @@ def next_lower_tier(tier: Optional[str]) -> Optional[str]:
 #
 # Capability is keyed by MODEL FAMILY, not by pinned id, so newer dated/point
 # releases of a known-vision family resolve correctly without a registry edit:
-#   * Anthropic Claude 3.x / 4.x (opus | sonnet | haiku)   → vision
+#   * Anthropic Claude, version 3 and up, any family
+#     (opus | sonnet | haiku | fable | mythos)          → vision
 #   * Google Gemini 1.5 / 2.x / 3.x                        → vision
 #   * OpenAI gpt-4o, gpt-4.1, and the o-series (o1/o3/o4)  → vision
 # Anything not matched (incl. unknown families and older text-only models) is
@@ -73,13 +74,17 @@ def next_lower_tier(tier: Optional[str]) -> Optional[str]:
 VISION_FAMILY_PATTERNS = [
     re.compile(p, re.IGNORECASE)
     for p in (
-        # Anthropic Claude 3.x and 4.x — all tiers are vision-capable. Matches
-        # "claude-3-5-sonnet…", "claude-3-opus…", "claude-sonnet-4-6", "claude-opus-4-8",
-        # the family aliases ("opus"/"sonnet"/"haiku"), and Fable-style ids.
+        # Anthropic Claude, version 3 and up, any family — all tiers are vision-capable.
+        # "claude[-_]?3" alone covers the odd "claude-3-5-sonnet…"/"claude-3-opus…" 3.x id shapes
+        # (a minor-version digit sits between the major version and the family name, so the
+        # family/version-scoped patterns below don't reach them). The two patterns below match
+        # every current family (opus/sonnet/haiku/fable/mythos) paired with a major version 3-9,
+        # in either id order: "claude-sonnet-4-6", "claude-opus-4-8", "claude-opus-5",
+        # "claude-fable-5-1", "claude-mythos-5-1", and the older "claude-3-opus" order.
         r"claude[-_]?3",
-        r"claude[-_]?(?:opus|sonnet|haiku)[-_]?4",
-        r"claude[-_]?4[-_]?(?:opus|sonnet|haiku)",
-        r"^(?:opus|sonnet|haiku)$",                 # bare CLI family aliases
+        r"claude[-_]?(?:opus|sonnet|haiku|fable|mythos)[-_]?[3-9]",
+        r"claude[-_]?[3-9][-_]?(?:opus|sonnet|haiku|fable|mythos)",
+        r"^(?:opus|sonnet|haiku|fable)$",            # bare CLI family aliases
         # Google Gemini 1.5 / 2.x / 3.x — all vision-capable.
         r"gemini[-_]?(?:1\.5|2|3)",
         # OpenAI multimodal: gpt-4o, gpt-4.1, and the reasoning o-series (o1/o3/o4).

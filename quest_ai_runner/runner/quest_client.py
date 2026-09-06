@@ -1241,7 +1241,8 @@ class QuestClient:
                     recurrence: Optional[Any] = None,
                     assignee_rep_id: Optional[str] = None,
                     parent_task_id: Optional[str] = None,
-                    card_ids: Optional[List[str]] = None) -> Dict[str, Any]:
+                    card_ids: Optional[List[str]] = None,
+                    model: Optional[str] = None) -> Dict[str, Any]:
         """POST a new queued AI task to /api/assistant-tasks.
 
         ``team_id`` routes the task to a specific team's runner (defaults to the client's
@@ -1257,6 +1258,14 @@ class QuestClient:
         ``env_id`` pins the task to one of the team's connected runner environments (e.g. a
         quest's configured ``autopilot.env_id``); omit to let the backend's normal env routing
         apply.
+
+        ``model`` is the per-task model/tier override (e.g. a quest's configured
+        ``autopilot.model``); the executor lane reads it as ``model_hint`` and the orchestrator's
+        deep-model resolution turns it into a pin on the deep worker when it names a
+        worker-runnable model. Omit to let the executor's own default model/tier ladder apply. The
+        accepted vocabulary (tier names, bare family aliases, pinned ids, ...) is the consumer
+        backend's, not this library's -- pass a value that backend's task-creation endpoint
+        accepts.
 
         ``task_kind`` is the PERSISTENT routing classification (e.g. ``"autopilot"`` for the
         recurring autopilot pass task). Unlike ``handler`` -- which the claim path OVERWRITES on
@@ -1330,6 +1339,8 @@ class QuestClient:
             body["parent_task_id"] = parent_task_id
         if card_ids:
             body["card_ids"] = card_ids
+        if model is not None:
+            body["model"] = model
         return self._request("POST", "/api/assistant-tasks", body=body) or {}
 
     def update_task(self, task_id: str, fields: Dict[str, Any]) -> Dict[str, Any]:

@@ -104,15 +104,15 @@ def _is_claude_model(model: str) -> bool:
 
     Claude Code only runs Claude models; a tier resolved from a Gemini/OpenAI deployment (e.g.
     ``gemini-3.5-flash``, ``gpt-4o``) must NOT be passed as ``--model`` or the worker errors and
-    does nothing. Accepts Claude ids/aliases (``claude-...``, bare ``opus``/``sonnet``/``haiku``,
-    ``us.anthropic.claude-...`` bedrock ids); rejects everything else."""
+    does nothing. Accepts Claude ids/aliases (``claude-...``, bare ``opus``/``sonnet``/``haiku``/
+    ``fable``, ``us.anthropic.claude-...`` bedrock ids); rejects everything else."""
     m = (model or "").strip().lower()
     if not m:
         return False
     if "claude" in m or "anthropic" in m:
         return True
     # Bare Claude tier aliases Claude Code accepts.
-    return any(m == alias or m.startswith(alias) for alias in ("opus", "sonnet", "haiku"))
+    return any(m == alias or m.startswith(alias) for alias in ("opus", "sonnet", "haiku", "fable"))
 
 
 def cli_safe_model(model: Optional[str]) -> Optional[str]:

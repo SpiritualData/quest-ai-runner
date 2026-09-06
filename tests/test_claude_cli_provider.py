@@ -6,6 +6,7 @@ the lenient JSON extraction (the CLI can't force tool_choice) and the tier->CLI-
 """
 from quest_ai_runner.adapters import ClaudeCliProvider
 from quest_ai_runner.adapters.claude_cli_provider import cli_model, extract_json_object
+from quest_ai_runner.core.goal_runner import _is_claude_model
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import DECIDE_TOOL
 
@@ -30,6 +31,19 @@ def test_cli_model_drops_non_claude_ids():
     assert cli_model("gemini-3.5-flash") is None
     assert cli_model("gpt-4o") is None
     assert cli_model("some-other-model") is None
+
+
+def test_cli_model_and_is_claude_model_accept_fable():
+    # Fable is a runnable Claude family alias the CLI documents alongside opus/sonnet/haiku
+    # (`claude --model` help: "an alias for the latest model (e.g. 'fable', 'opus', or
+    # 'sonnet')"). A bare alias and a pinned id both resolve; a non-Claude id is still rejected.
+    assert cli_model("fable") == "fable"
+    assert cli_model("claude-fable-5-1") == "fable"
+    assert cli_model("gemini-3.5-flash") is None
+
+    assert _is_claude_model("fable") is True
+    assert _is_claude_model("claude-fable-5-1") is True
+    assert _is_claude_model("gemini-3.5-flash") is False
 
 
 def test_invoke_error_surfaces_stdout_envelope(monkeypatch):

@@ -45,6 +45,31 @@ All notable changes to this project are documented here. The format is based on
   constant, and its own behavior is still covered by tests driving `_handle_proposal` directly.
 
 ### Added
+- **Claude Fable is now a runnable, vision-capable Claude family, alongside Opus/Sonnet/Haiku**
+  (`adapters/claude_cli_provider.py`, `core/goal_runner.py`, `core/model_registry.py`). The
+  `claude` CLI documents `--model` as accepting `fable` as a family alias exactly like
+  `opus`/`sonnet`; `_FAMILY_ALIASES` and `_is_claude_model`'s bare-alias tuple now include it, so a
+  bare `fable` (e.g. `QAR_DEEP_MODELS=fable`) resolves and pins the deep worker like any other
+  family. `CLI_RUNNABLE_MODELS` is left unchanged on purpose: `bucket_top` has no `claude-fable`
+  family bucket, so advertising one would only land in the inert `claude-other` catch-all -- a
+  comment now says so. Separately, `VISION_FAMILY_PATTERNS`' Claude patterns were flatly wrong for
+  every Claude 5-era id: they hardcoded a literal `4`, so `claude-opus-5`, `claude-sonnet-5`,
+  `claude-fable-5-1` and `claude-mythos-5-1` all silently resolved to NOT vision-capable (forcing
+  describe-fallback for image attachments). The two family/version patterns now match every
+  current family (opus/sonnet/haiku/fable/mythos) against major version 3 and up, in either id
+  order, and the bare-alias pattern gained `fable`.
+- **Per-quest model selection for autopilot's deep execution** (`runner/quest_client.py`,
+  `runner/autopilot.py`). `create_task` gained an optional `model` keyword, sent as the request's
+  `model` field only when set (never `null`) -- the same per-task model/tier override the executor
+  lane already reads as `model_hint` and `Orchestrator._deep_models` already pins the deep worker
+  to; this closes the one missing piece, getting a value onto the created task in the first place.
+  `_create_autopilot_task` now reads `model` off the quest's `autopilot` block right alongside
+  `env_id` and passes it through, so both a quest's work batches and its goal proposals inherit the
+  quest's chosen model through the one choke point every autopilot-created task passes through.
+  The existing `except TypeError:` fallback for a stand-in/older `create_task` (which predates
+  `parent_task_id`) now also drops `model` on retry, so a client accepting neither kwarg still gets
+  its task created. See `docs/writing-a-consumer.md` for the full deep-worker-model precedence
+  this field feeds into.
 - **Two default briefs, one per level, defaulting independently, so a persona with no instructions
   produces work instead of nothing** (`runner/autopilot.py`). Quest backends serve
   `autopilot.default_quest_instructions` (how to work here and how to deliver, the default for the

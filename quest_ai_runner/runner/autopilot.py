@@ -2279,6 +2279,12 @@ class AutopilotPass:
         the finished task's own output back onto the pass row, so the person reads the work instead
         of the scanner's bookkeeping. A client whose ``create_task`` predates the argument simply
         creates the task without it, exactly as before.
+
+        When the quest's ``autopilot`` block carries a ``model``, it is passed through as the
+        created task's own model/tier override -- which model the deep worker runs THIS quest's
+        autopilot work on. Unset means the lane's own default model ladder applies, exactly as
+        before this field existed. This is the single choke point every autopilot-created task
+        (work batches and goal proposals alike) passes through, so both inherit the setting.
         """
         # suggest mode (and every goal proposal, which is always a proposal for a human) must not
         # be runnable until a human approves it.
@@ -2296,18 +2302,23 @@ class AutopilotPass:
             kwargs["assignee_rep_id"] = persona
         if title:
             kwargs["title"] = title
-        env_id = (quest.get("autopilot") or {}).get("env_id")
+        autopilot_cfg = quest.get("autopilot") or {}
+        env_id = autopilot_cfg.get("env_id")
         if env_id:
             kwargs["env_id"] = env_id
+        model = autopilot_cfg.get("model")
+        if model:
+            kwargs["model"] = model
         if self._pass_task_id:
             kwargs["parent_task_id"] = self._pass_task_id
         try:
             created = self._client.create_task(text, **kwargs) or {}
         except TypeError:
-            # An older/stand-in client without ``parent_task_id``. The link is an improvement to
-            # how the pass reports, never a requirement for it to work, so lose the link rather
-            # than the task.
+            # An older/stand-in client without ``parent_task_id`` and/or ``model``. Both are
+            # improvements to how the pass reports/routes, never a requirement for it to work, so
+            # lose the refinement rather than the task.
             kwargs.pop("parent_task_id", None)
+            kwargs.pop("model", None)
             created = self._client.create_task(text, **kwargs) or {}
         task_id = created.get("id") or created.get("task_id")
         if not task_id:

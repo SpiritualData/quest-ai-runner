@@ -95,6 +95,29 @@ Pass an instance when you need to change something about the worker (a `context_
 gating, a non-default working dir, a different agent entirely). Pass `None` when your deployment
 genuinely must not execute, e.g. a read-only chat surface.
 
+### How the deep-worker model is chosen (precedence)
+
+`QAR_DEEP_MODELS` is one of four ways the deep worker's model gets decided, not the only one.
+`Orchestrator._deep_models` resolves them in this order, and the first one present wins:
+
+1. **A per-task `model` request.** A task carries its own `model` field (the executor reads it as
+   `model_hint`); when it resolves to a model the worker can actually run (a Claude id/alias), it
+   **pins** the deep worker to that single model for the whole run -- no escalation.
+2. **A guidance card's model preference.** If no per-task request applies, a matching guidance
+   card's own model preference also **pins** the deep worker (no escalation).
+3. **The configured ladder** -- `deep_model_ladder` on `OrchestratorConfig`, normally set from
+   `QAR_DEEP_MODELS` (weak -> strong Claude ids/aliases). Unlike the two pins above, this is a real
+   **ladder**: the goal loop escalates up it on a not-met goal.
+4. **The fallback ladder.** With none of the above configured, the ladder is built from whatever
+   single model the orchestrator's normal tier resolution ("quality"/"best") would otherwise use,
+   extended with a real escalation step when a distinct Claude-runnable id can be found for a
+   stronger tier.
+
+An **autopilot** quest sets step 1 for all of its own created work: the quest's
+`autopilot.model` setting (read by `AutopilotPass._create_autopilot_task`) rides onto every task
+that quest's autopilot pass creates, as that task's `model` field, so the quest's autopilot work
+runs pinned to that model without touching the lane's own `QAR_DEEP_MODELS` ladder.
+
 ### Fast in-process edits (opt-in, and the only way to grant write access)
 
 Deep execution is not the only rung. Wire a `FileWriter` and the deep runner is resolved as an

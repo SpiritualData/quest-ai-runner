@@ -162,7 +162,7 @@ class FakeAutopilotClient:
 
 
 def _quest(quest_id, *, mode="act", cadence="weekly", last_pass_at=None, planning="work_only",
-          env_id=None, personas=None, outcome="ship the thing", miss_streak=0,
+          env_id=None, model=None, personas=None, outcome="ship the thing", miss_streak=0,
           adopt_recurring=None, run_requested_at=None, default_quest_instructions=None,
           default_persona_instructions=None):
     autopilot = {"mode": mode, "cadence": cadence, "planning": planning,
@@ -180,6 +180,8 @@ def _quest(quest_id, *, mode="act", cadence="weekly", last_pass_at=None, plannin
         autopilot["run_requested_at"] = run_requested_at
     if env_id is not None:
         autopilot["env_id"] = env_id
+    if model is not None:
+        autopilot["model"] = model
     if personas is not None:
         autopilot["personas"] = personas
     if adopt_recurring is not None:
@@ -759,6 +761,46 @@ def test_created_task_links_to_the_QUEST_not_a_per_goal_id():
     assert created["task_kind"] != AUTOPILOT_PASS_KIND
     # source must be a value the API's closed enum accepts, or the create 400s.
     assert created["source"] in ("chat", "reflection", "review")
+
+
+def test_quest_autopilot_model_is_stamped_on_the_created_task():
+    """A quest's ``autopilot.model`` is the per-quest choice of which model the deep worker runs
+    THIS quest's autopilot work on. It rides through ``_create_autopilot_task`` onto every task
+    the pass creates, the same choke point ``env_id`` goes through."""
+    q1 = _quest("q1", model="opus")
+    goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest={"q1": goals_payload})
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+    passer.run({"text": "pass"})
+    assert client.created_tasks[0]["model"] == "opus"
+
+
+def test_a_quest_with_no_autopilot_model_creates_a_task_with_no_model_key_at_all():
+    """Unset means the lane's own default model ladder applies -- the create call must OMIT the
+    key entirely rather than send ``model: None``, matching the create_task contract."""
+    q1 = _quest("q1")
+    goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest={"q1": goals_payload})
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+    passer.run({"text": "pass"})
+    assert "model" not in client.created_tasks[0]
+
+
+def test_a_client_whose_create_task_rejects_model_still_gets_its_task_created():
+    """A stand-in ``create_task`` that predates ``model`` (or ``parent_task_id``, or both) must
+    still create the task: the field is an improvement to routing, never a requirement to run."""
+    class OlderClient(FakeAutopilotClient):
+        def create_task(self, text, **kwargs):
+            if "model" in kwargs or "parent_task_id" in kwargs:
+                raise TypeError("create_task() got an unexpected keyword argument")
+            return super().create_task(text, **kwargs)
+
+    q1 = _quest("q1", model="opus")
+    goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
+    client = OlderClient(quests=[q1], goals_by_quest={"q1": goals_payload})
+    result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+    assert len(result.created_task_ids) == 1
+    assert "model" not in client.created_tasks[0]
 
 
 def test_resolved_persona_is_stamped_structurally_not_only_in_the_prose():

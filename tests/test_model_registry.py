@@ -80,7 +80,12 @@ def test_registry_survives_provider_exception():
     "claude-sonnet-4-6",
     "claude-opus-4-8",
     "claude-haiku-4-5",
-    "opus", "sonnet", "haiku",
+    # Claude 5-generation ids, including the newer Fable/Mythos families.
+    "claude-opus-5",
+    "claude-sonnet-5",
+    "claude-fable-5-1",
+    "claude-mythos-5-1",
+    "opus", "sonnet", "haiku", "fable",
     DEFAULT_FALLBACK_TOP["best"],
     DEFAULT_FALLBACK_TOP["balanced"],
     DEFAULT_FALLBACK_TOP["fast"],
