@@ -25,6 +25,14 @@ All notable changes to this project are documented here. The format is based on
   `PERSONA_HELD` survive intact for adopted recurring tasks, which still name a rep, via the new
   `resolve_task_persona(task, autopilot_cfg, now, fallback_resolver)` that `split_held_for_another_day`
   now uses. `_maybe_create_goal` no longer sends `ai_help=True`.
+- **The `Scope:` block no longer describes the period's goals as this run's target**
+  (`runner/autopilot.py`, `compose_batch_text`). The goals-as-context refactor left this string
+  behind, so every batch carried "The goals below are that PERIOD's target ... Advance them as far
+  as one focused session honestly can" a few blocks above a goal ladder saying "This run does not
+  own these goals: do not try to finish them". The line now names the horizon the run sits inside
+  and says the period's contents are not this run's workload, leaving what to produce to the
+  standing instructions. The reason the block exists is unchanged: a week's or a month's plan read
+  by a single run must not read as "do all of this today".
 - **Every persona on duty gets one batch per due pass** (`runner/autopilot.py`). With a default
   brief behind them (below), being rostered for today IS the job, so a quest with three unrestricted
   personas produces three batches a pass, bounded only by the team's daily budget, and a quest with
@@ -37,19 +45,35 @@ All notable changes to this project are documented here. The format is based on
   constant, and its own behavior is still covered by tests driving `_handle_proposal` directly.
 
 ### Added
-- **A default brief, so a persona with no instructions produces work instead of nothing**
-  (`runner/autopilot.py`). Quest backends serve `autopilot.default_instructions` on the quest
-  payload, read-only and server-derived; `default_instructions_for(autopilot_cfg)` returns it, and
-  `compose_batch_text`'s new keyword-only `default_instructions` emits it under
-  `_DEFAULT_INSTRUCTIONS_PREAMBLE` ONLY when neither quest-wide `instructions` nor
-  `persona_instructions` exists. The layering rule is otherwise unchanged: both written levels still
-  ride into the prompt together when both exist. Against a backend that serves no such field the
-  runner degrades to a bundled `BUNDLED_DEFAULT_INSTRUCTIONS` constant rather than going silent; the
+- **Two default briefs, one per level, defaulting independently, so a persona with no instructions
+  produces work instead of nothing** (`runner/autopilot.py`). Quest backends serve
+  `autopilot.default_quest_instructions` (how to work here and how to deliver, the default for the
+  quest-wide `instructions`) and `autopilot.default_persona_instructions` (what to work on, the
+  default for a persona's own `instructions`) on the quest payload, read-only and server-derived;
+  `default_quest_instructions_for(autopilot_cfg)` and `default_persona_instructions_for(autopilot_cfg)`
+  return them. THE APPLICATION RULE: each slot takes the person's text where they wrote it and its
+  own default otherwise, so both slots are always filled and both always ride into the prompt,
+  layered exactly as two written briefs are (quest-wide first, persona second, persona stated as the
+  more specific). Writing one level never silences the other, which the earlier "only when NEITHER
+  level wrote anything" rule did: an owner who wrote how their quest works thereby left every
+  character on it with no statement of what they work on. `compose_batch_text` takes keyword-only
+  `default_quest_instructions` / `default_persona_instructions` (replacing `default_instructions`),
+  and a defaulted block is framed by `_DEFAULT_INSTRUCTIONS_PREAMBLE` /
+  `_DEFAULT_PERSONA_INSTRUCTIONS_PREAMBLE`, which say outright that the text is the built-in one:
+  the written preambles claim "written by the person who owns it", and a run told that about words
+  nobody wrote would report back against a standard nobody set. Against a backend that serves
+  neither field the runner degrades to the bundled `BUNDLED_DEFAULT_QUEST_INSTRUCTIONS` /
+  `BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS` constants (verbatim copies of the server's text; the
+  backend's runner-contract test asserts both pairs equal) rather than going silent, and the
   server's value always wins, so improving the text there improves every unconfigured quest with no
-  client release. `_batch_title` falls through to the default too, so an unconfigured quest's task is
-  named after what its run will do rather than after its "Act as ..." line, and a dry run reports
-  "the built-in default brief" as the source. Absent, the parameter emits nothing, so every direct
-  caller's composition is byte-identical to before it existed.
+  client release. **A default never titles a task**: `_batch_title` no longer takes a default at
+  all and its chain is adopted task, then the persona's own WRITTEN instructions, then the quest's
+  own WRITTEN instructions, then `"Autopilot run"` (it no longer returns `None`). Titling from a
+  default would name every task on every unconfigured quest, and every mail subject the runs send,
+  after the same built-in first line. A dry run's `instructions_from` now names both slots, saying
+  "the built-in default brief for a character" / "... for a quest" wherever the person wrote
+  nothing. Both parameters absent, `compose_batch_text` emits nothing extra, so every direct
+  caller's composition is byte-identical to before they existed.
 - **The goal ladder: an autopilot run now sees the person's current goals at EVERY horizon**
   (`runner/autopilot.py`). `select_target_goals` picks exactly one scope (day beats week beats
   month beats quarter beats year) and hands the run only that scope's `ai_help` goals, so

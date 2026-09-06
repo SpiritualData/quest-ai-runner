@@ -100,13 +100,30 @@ def test_no_goal_is_ever_composed_as_an_instruction():
         ("day", "2026-07-12", [_goal("d1", "Rewrite the rubric"),
                                _goal("d2", "I call the committee myself")]))
     text = compose_batch_text("Get the PhD", scope_label="day:2026-07-12",
-                              default_instructions="Work this quest today.",
+                              default_persona_instructions="Work this quest today.",
                               goal_ladder=current_goal_ladder(payload, NOW))
     assert "- Rewrite the rubric" in text
     assert "- I call the committee myself" in text
     assert "Goal: " not in text
     assert "Done when:" not in text
     assert "This run does not own these goals" in text
+
+
+def test_the_scope_block_never_calls_the_periods_goals_this_runs_target():
+    """The Scope line and the ladder are in the same prompt, so they cannot say opposite things.
+    The line's job is still to stop a week's or a month's plan reading as "do all of this today",
+    but the period's goals became CONTEXT, so telling the run to advance them contradicted the
+    ladder four blocks down that says it does not own them. It names the horizon and stops."""
+    payload = _goals_payload(("week", "2026_W28", [_goal("w1", "Rewrite the rubric")]))
+    text = compose_batch_text("Get the PhD", scope_label="week:2026_W28",
+                              default_persona_instructions="Work this quest today.",
+                              goal_ladder=current_goal_ladder(payload, NOW))
+    scope_block = text.split("\n\n")[1]
+    assert scope_block.startswith("Scope: this quest's week:2026_W28")
+    assert "This run does not own these goals" in text
+    for claim in ("Advance them", "advance them", "PERIOD's target", "this single run's workload",
+                  "what remains"):
+        assert claim not in scope_block
 
 
 # --- exclusions and emptiness ------------------------------------------------------------------

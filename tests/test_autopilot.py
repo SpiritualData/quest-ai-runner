@@ -14,13 +14,15 @@ from datetime import datetime, timezone
 
 from quest_ai_runner.runner.autopilot import (
     AUTOPILOT_WORK_KIND,
-    BUNDLED_DEFAULT_INSTRUCTIONS,
+    BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS,
+    BUNDLED_DEFAULT_QUEST_INSTRUCTIONS,
     DEFAULT_TEAM_DAILY_BUDGET,
     PERSONA_HELD,
     AutopilotPass,
     cadence_due,
     current_scope_label,
-    default_instructions_for,
+    default_persona_instructions_for,
+    default_quest_instructions_for,
     run_requested,
     compose_batch_text,
     resolve_persona,
@@ -161,13 +163,17 @@ class FakeAutopilotClient:
 
 def _quest(quest_id, *, mode="act", cadence="weekly", last_pass_at=None, planning="work_only",
           env_id=None, personas=None, outcome="ship the thing", miss_streak=0,
-          adopt_recurring=None, run_requested_at=None, default_instructions=None):
+          adopt_recurring=None, run_requested_at=None, default_quest_instructions=None,
+          default_persona_instructions=None):
     autopilot = {"mode": mode, "cadence": cadence, "planning": planning,
                 "miss_streak": miss_streak}
-    if default_instructions is not None:
-        # The read-only field a CURRENT backend derives and serves on the quest payload. The fake
-        # omits it by default on purpose, so the bundled-fallback path is what most tests exercise.
-        autopilot["default_instructions"] = default_instructions
+    # The two read-only fields a CURRENT backend derives and serves on the quest payload, one per
+    # brief slot. The fake omits both by default on purpose, so the bundled-fallback path is what
+    # most tests exercise, and either can be set alone since the slots default independently.
+    if default_quest_instructions is not None:
+        autopilot["default_quest_instructions"] = default_quest_instructions
+    if default_persona_instructions is not None:
+        autopilot["default_persona_instructions"] = default_persona_instructions
     if last_pass_at is not None:
         autopilot["last_pass_at"] = last_pass_at
     if run_requested_at is not None:
@@ -552,8 +558,8 @@ def test_the_daily_budget_is_what_bounds_the_batches_a_roster_can_produce():
 
 
 def test_a_quest_with_no_roster_gets_one_plain_assistant_batch():
-    """An unconfigured quest still does something useful: one batch, no character, on the default
-    brief."""
+    """An unconfigured quest still does something useful: one batch, no character, working both
+    default briefs."""
     client = FakeAutopilotClient(
         quests=[_quest("q1")],
         goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
@@ -561,62 +567,127 @@ def test_a_quest_with_no_roster_gets_one_plain_assistant_batch():
     assert len(result.created_task_ids) == 1
     created = client.created_tasks[0]
     assert "assignee_rep_id" not in created
-    assert BUNDLED_DEFAULT_INSTRUCTIONS in created["text"]
+    assert BUNDLED_DEFAULT_QUEST_INSTRUCTIONS in created["text"]
+    assert BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS in created["text"]
 
 
-# --- the default brief ----------------------------------------------------------------------------
-# A persona with no instructions of its own, on a quest with no quest-wide instructions, works to
-# the brief the backend serves rather than producing nothing.
+# --- the two default briefs, each defaulting on its own -------------------------------------------
+# The quest-wide slot (how to work here and how to deliver) and the persona slot (what this
+# character works on) fall back INDEPENDENTLY: whatever the person wrote fills its own slot, the
+# backend's default fills the other, and both always reach the run. Writing one level never
+# silences the other, because the two say different things.
 
-def test_a_persona_with_no_brief_on_a_quest_with_none_works_to_the_served_default():
-    served = "The server's own default brief for a quest nobody has configured."
-    q1 = _quest("q1", personas=[{"rep_id": "rep_a"}], default_instructions=served)
-    client = FakeAutopilotClient(quests=[q1], goals_by_quest={})
+SERVED_QUEST_DEFAULT = "The server's own default brief for how to work on a quest."
+SERVED_PERSONA_DEFAULT = "The server's own default brief for what a character works on."
+
+
+def _defaulted_quest(quest_id="q1", **kwargs):
+    """A quest whose backend serves both defaults and whose owner has written neither."""
+    return _quest(quest_id, personas=[{"rep_id": "rep_a"}],
+                  default_quest_instructions=SERVED_QUEST_DEFAULT,
+                  default_persona_instructions=SERVED_PERSONA_DEFAULT, **kwargs)
+
+
+def test_both_brief_slots_default_when_the_person_wrote_neither():
+    client = FakeAutopilotClient(quests=[_defaulted_quest()], goals_by_quest={})
     result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
     assert len(result.created_task_ids) == 1
     text = client.created_tasks[0]["text"]
-    assert served in text
-    assert "Neither this quest nor this character has a brief written for it" in text
+    assert SERVED_QUEST_DEFAULT in text
+    assert SERVED_PERSONA_DEFAULT in text
+    # Neither block claims the person wrote it.
+    assert "Nobody has written a brief for this quest yet" in text
+    assert "Nobody has written a brief for this character here yet" in text
+    assert "written by the person who owns it" not in text
 
 
-def test_a_persona_with_its_own_instructions_does_not_get_the_default():
-    served = "The server's own default brief."
-    q1 = _quest("q1", personas=[{"rep_id": "rep_a", "instructions": "Do Bailey's own job."}],
-                default_instructions=served)
-    client = FakeAutopilotClient(quests=[q1], goals_by_quest={})
-    AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
-    text = client.created_tasks[0]["text"]
-    assert "Do Bailey's own job." in text
-    assert served not in text
-    assert BUNDLED_DEFAULT_INSTRUCTIONS not in text
-
-
-def test_a_quest_wide_brief_keeps_the_default_out_even_for_a_persona_with_none():
-    """The quest's stand: its owner wrote what this quest is for, and a built-in brief alongside it
-    would be a second specification for the same run with nothing ranking the two."""
-    served = "The server's own default brief."
-    q1 = _quest("q1", personas=[{"rep_id": "rep_a"}], default_instructions=served)
+def test_a_written_quest_brief_leaves_the_persona_slot_on_its_default():
+    """The case the old "only when NEITHER level wrote anything" rule got wrong. An owner who
+    writes how their quest works must not thereby leave every character on it with no statement of
+    what they work on: the two are different questions."""
+    q1 = _defaulted_quest()
     q1["autopilot"]["instructions"] = "Write the daily brief for this quest."
     client = FakeAutopilotClient(quests=[q1], goals_by_quest={})
     AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
     text = client.created_tasks[0]["text"]
     assert "Write the daily brief for this quest." in text
-    assert served not in text
-    assert BUNDLED_DEFAULT_INSTRUCTIONS not in text
+    assert SERVED_QUEST_DEFAULT not in text
+    assert SERVED_PERSONA_DEFAULT in text
 
 
-def test_an_older_backend_that_serves_no_default_degrades_to_the_bundled_one():
-    """The runner must degrade to a real brief rather than to silence. The bundled copy is a
-    fallback only: the server's value wins whenever there is one."""
-    assert default_instructions_for({}) == BUNDLED_DEFAULT_INSTRUCTIONS
-    assert default_instructions_for({"default_instructions": "   "}) == BUNDLED_DEFAULT_INSTRUCTIONS
-    assert default_instructions_for({"default_instructions": "served"}) == "served"
+def test_a_written_persona_brief_leaves_the_quest_slot_on_its_default():
+    """The mirror: a character with their own job still gets the quest's standing rules about how
+    to work and how to deliver, which is what the quest-wide default is."""
+    q1 = _defaulted_quest()
+    q1["autopilot"]["personas"] = [{"rep_id": "rep_a", "instructions": "Do Bailey's own job."}]
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest={})
+    AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+    text = client.created_tasks[0]["text"]
+    assert "Do Bailey's own job." in text
+    assert SERVED_PERSONA_DEFAULT not in text
+    assert SERVED_QUEST_DEFAULT in text
 
-    q1 = _quest("q1", personas=[{"rep_id": "rep_a"}])       # the fake serves no such field
+
+def test_both_levels_written_puts_no_default_text_in_the_run_at_all():
+    q1 = _defaulted_quest()
+    q1["autopilot"]["instructions"] = "Write the daily brief for this quest."
+    q1["autopilot"]["personas"] = [{"rep_id": "rep_a", "instructions": "Do Bailey's own job."}]
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest={})
+    AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+    text = client.created_tasks[0]["text"]
+    assert "Write the daily brief for this quest." in text
+    assert "Do Bailey's own job." in text
+    for absent in (SERVED_QUEST_DEFAULT, SERVED_PERSONA_DEFAULT,
+                   BUNDLED_DEFAULT_QUEST_INSTRUCTIONS, BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS):
+        assert absent not in text
+    assert "written by the person who owns it" in text
+    assert "Nobody has written a brief" not in text
+
+
+def test_an_older_backend_that_serves_neither_field_falls_back_to_both_bundled_briefs():
+    """The runner must degrade to real briefs rather than to silence. The bundled copies are a
+    fallback only: for each slot, the server's value wins whenever there is one."""
+    assert default_quest_instructions_for({}) == BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
+    assert default_quest_instructions_for(
+        {"default_quest_instructions": "   "}) == BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
+    assert default_quest_instructions_for({"default_quest_instructions": "served"}) == "served"
+    assert default_persona_instructions_for({}) == BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS
+    assert default_persona_instructions_for(
+        {"default_persona_instructions": "   "}) == BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS
+    assert default_persona_instructions_for({"default_persona_instructions": "served"}) == "served"
+    # Each slot resolves on its own, so a backend part-way through serving them costs only the
+    # field it has not got to yet.
+    assert default_quest_instructions_for(
+        {"default_persona_instructions": "served"}) == BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
+
+    q1 = _quest("q1", personas=[{"rep_id": "rep_a"}])       # the fake serves neither field
     client = FakeAutopilotClient(quests=[q1], goals_by_quest={})
     result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
     assert len(result.created_task_ids) == 1
-    assert BUNDLED_DEFAULT_INSTRUCTIONS in client.created_tasks[0]["text"]
+    text = client.created_tasks[0]["text"]
+    assert BUNDLED_DEFAULT_QUEST_INSTRUCTIONS in text
+    assert BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS in text
+
+
+def test_a_fully_defaulted_quest_titles_its_batch_autopilot_run():
+    """A default may never name a task. It is the same text on every quest that has not written
+    one, so titling from it would call every task on every such quest "Ground every claim about
+    where things stand...", forever, in the person's list and in the subject of the mail the run
+    sends. The run composes with the effective brief and is titled from the written one alone."""
+    client = FakeAutopilotClient(quests=[_defaulted_quest()], goals_by_quest={})
+    AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+    created = client.created_tasks[0]
+    assert created["title"] == "Autopilot run"
+    assert SERVED_PERSONA_DEFAULT in created["text"]      # titled apart from the brief it carries
+
+
+def test_a_written_brief_still_titles_its_own_batch():
+    q1 = _defaulted_quest()
+    q1["autopilot"]["personas"] = [
+        {"rep_id": "rep_a", "instructions": "# Rewrite the launch page\nThen say what is left."}]
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest={})
+    AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+    assert client.created_tasks[0]["title"] == "Rewrite the launch page"
 
 
 # --- goals reach a run through the ladder and no other way ---------------------------------------
@@ -1008,8 +1079,10 @@ def test_dry_run_creates_no_tasks_and_reports_proposals():
     assert len(result.proposals) == 1
     assert result.proposals[0]["kind"] == "work_batch"
     assert result.proposals[0]["quest_id"] == "q1"
-    # With no brief of either kind written, the report says which brief the run would work to.
-    assert result.proposals[0]["instructions_from"] == "the built-in default brief"
+    # With no brief of either kind written, the report names the built-in default at BOTH levels
+    # rather than implying the person configured something.
+    assert result.proposals[0]["instructions_from"] == (
+        "the built-in default brief for a character, plus the built-in default brief for a quest")
 
 
 def test_dry_run_does_not_consume_or_check_daily_budget_from_prior_tasks():
@@ -1041,11 +1114,11 @@ def test_dry_run_proposes_goal_proposal_without_creating_a_goal_or_task():
 
 # --- compose_batch_text ---------------------------------------------------------------------
 
-def test_compose_batch_text_states_the_quest_outcome_and_the_scope_it_serves():
+def test_compose_batch_text_states_the_quest_outcome_and_the_period_it_sits_in():
     text = compose_batch_text("Ship the launch", scope_label="day:2026-07-12")
     assert "Quest outcome: Ship the launch" in text
     assert "Scope: this quest's day:2026-07-12" in text
-    assert "that PERIOD's target, not this single run's" in text
+    assert "does not make the period's contents this run's workload" in text
 
 
 def test_compose_batch_text_names_the_persona_when_one_resolved():
@@ -1053,29 +1126,73 @@ def test_compose_batch_text_names_the_persona_when_one_resolved():
     assert "Act as bailey" in text
 
 
-def test_the_default_brief_is_emitted_only_when_neither_written_brief_exists():
-    """THE LAYERING RULE, at the one place that decides it. The default is a floor, not a layer:
-    anything the person wrote at either level replaces it outright, and emitting both would hand
-    the run two specifications for the same job with nothing ranking them."""
-    default = "The built-in brief."
-    alone = compose_batch_text("Ship it", default_instructions=default)
-    assert default in alone
-    assert "Neither this quest nor this character has a brief written for it" in alone
+def test_each_brief_slot_defaults_on_its_own_and_both_always_reach_the_run():
+    """THE LAYERING RULE, at the one place that decides it. Two slots, each filled by what the
+    person wrote for it or by that level's own built-in brief, and both emitted either way. They
+    are not alternatives: one says how to work here and how to deliver, the other says what to work
+    on, so a run that lost the second because its owner wrote the first would not know what it is
+    for."""
+    quest_default = "The built-in quest brief."
+    persona_default = "The built-in character brief."
+    neither = compose_batch_text("Ship it", "bailey",
+                                 default_quest_instructions=quest_default,
+                                 default_persona_instructions=persona_default)
+    assert quest_default in neither
+    assert persona_default in neither
 
-    with_quest = compose_batch_text("Ship it", instructions="The quest's own brief.",
-                                    default_instructions=default)
+    with_quest = compose_batch_text("Ship it", "bailey", instructions="The quest's own brief.",
+                                    default_quest_instructions=quest_default,
+                                    default_persona_instructions=persona_default)
     assert "The quest's own brief." in with_quest
-    assert default not in with_quest
+    assert quest_default not in with_quest
+    assert persona_default in with_quest          # the other slot is untouched
 
     with_persona = compose_batch_text("Ship it", "bailey",
                                       persona_instructions="Bailey's own brief.",
-                                      default_instructions=default)
+                                      default_quest_instructions=quest_default,
+                                      default_persona_instructions=persona_default)
     assert "Bailey's own brief." in with_persona
-    assert default not in with_persona
+    assert persona_default not in with_persona
+    assert quest_default in with_persona
+
+    with_both = compose_batch_text("Ship it", "bailey", instructions="The quest's own brief.",
+                                   persona_instructions="Bailey's own brief.",
+                                   default_quest_instructions=quest_default,
+                                   default_persona_instructions=persona_default)
+    assert quest_default not in with_both
+    assert persona_default not in with_both
 
 
-def test_no_default_brief_composes_byte_identically_to_before_the_parameter_existed():
-    assert (compose_batch_text("Ship it", "bailey", default_instructions=None)
+def test_a_defaulted_block_never_claims_the_person_wrote_it():
+    """The written preambles say "written by the person who owns it", which is false of a default.
+    A run told that about words nobody wrote would report back against a standard nobody set."""
+    text = compose_batch_text("Ship it", "bailey",
+                              default_quest_instructions="The built-in quest brief.",
+                              default_persona_instructions="The built-in character brief.")
+    assert "written by the person who owns it" not in text
+    assert "Nobody has written a brief for this quest yet" in text
+    assert "Nobody has written a brief for this character here yet" in text
+    # A defaulted persona block still states the precedence its written counterpart states: the
+    # precedence belongs to the LEVEL, not to who happened to write the text.
+    assert "MORE SPECIFIC" in text
+
+
+def test_two_defaulted_blocks_are_layered_exactly_as_two_written_ones_are():
+    quest_default = "The built-in quest brief."
+    persona_default = "The built-in character brief."
+    text = compose_batch_text("Ship it", "bailey", scope_label="day:2026-07-12",
+                              default_quest_instructions=quest_default,
+                              default_persona_instructions=persona_default,
+                              goal_ladder=[{"scope": "day", "period": "2026-07-12",
+                                            "goals": [{"name": "A goal", "deadline": ""}],
+                                            "more": 0}])
+    assert (text.index("Scope: this quest's day:2026-07-12") < text.index(quest_default)
+            < text.index(persona_default) < text.index("THE PERSON'S CURRENT GOALS"))
+
+
+def test_no_default_briefs_composes_byte_identically_to_before_the_parameters_existed():
+    assert (compose_batch_text("Ship it", "bailey", default_quest_instructions=None,
+                               default_persona_instructions=None)
             == compose_batch_text("Ship it", "bailey"))
 
 

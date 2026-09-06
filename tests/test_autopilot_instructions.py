@@ -87,7 +87,7 @@ def test_the_quests_instructions_ride_into_a_batch_that_also_has_a_goal_ladder()
     assert "Goal: Draft chapter three" not in text
 
 
-# --- title fallback: adopted title -> persona brief -> quest brief -> default brief ---------------
+# --- title fallback: adopted title -> persona brief -> quest brief -> "Autopilot run" -----------
 
 def test_batch_title_falls_back_to_the_instructions_first_line_stripped_of_markdown():
     assert _batch_title([], instructions="# Daily Brief\nDetails follow.") == "Daily Brief"
@@ -104,17 +104,13 @@ def test_batch_title_from_instructions_is_capped_at_80_characters():
     assert title == "y" * 80
 
 
-def test_batch_title_falls_through_to_the_default_brief_when_nobody_wrote_one():
-    """An unconfigured quest is still titled after what its run will do, rather than after the
-    "Act as ..." line the server would otherwise derive a title from."""
-    assert _batch_title([], default_instructions="Work this quest today.\nMore.") \
-        == "Work this quest today."
-    assert _batch_title([], instructions="The quest's own brief",
-                        default_instructions="Work this quest today.") == "The quest's own brief"
-
-
-def test_batch_title_none_when_nothing_at_all_is_given():
-    assert _batch_title([], instructions=None) is None
+def test_batch_title_is_autopilot_run_when_the_person_wrote_no_brief_at_all():
+    """ONLY WRITTEN BRIEFS MAY TITLE A BATCH. A default is the same text on every quest that has
+    not written one, so titling from it would name every task on every such quest after the same
+    built-in first line, in the list and in the subject of the mail the run sends. A title has to
+    say what makes THIS run different, and "Autopilot run" at least does not claim otherwise."""
+    assert _batch_title([]) == "Autopilot run"
+    assert _batch_title([], instructions=None, persona_instructions=None) == "Autopilot run"
 
 
 # --- truncation ------------------------------------------------------------------------------

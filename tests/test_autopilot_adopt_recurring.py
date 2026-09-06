@@ -332,16 +332,17 @@ def test_an_adoption_batch_is_titled_after_the_task_it_took_over():
     assert client.created_tasks[0]["title"] == "Email the morning brief"
 
 
-def test_the_period_target_is_not_presented_as_this_runs_workload():
-    """A weekly goal handed to a daily run reads as "do all of this today", which is both
-    discouraging and wrong: the run's job is to advance it and report what is left."""
+def test_the_period_is_not_presented_as_this_runs_workload():
+    """A weekly period handed to a daily run reads as "do all of this today", which is both
+    discouraging and wrong. The line names the horizon the run sits in and says outright that the
+    period's contents are not this run's workload; what to produce is the brief's to say."""
     q1 = _quest("q1")
     client = _NamingClient(
         quests=[q1], goals_by_quest={"q1": _goals_payload(("week", "2026_W28", [_goal("g1")]))})
     _passer(client).run({"text": "pass"})
     text = client.created_tasks[0]["text"]
-    assert "that PERIOD's target, not this single run's" in text
-    assert "say plainly what remains" in text
+    assert "Scope: this quest's week:2026_W28" in text
+    assert "does not make the period's contents this run's workload" in text
 
 
 def test_a_goals_criteria_never_reach_the_run_because_a_goal_is_not_a_brief():

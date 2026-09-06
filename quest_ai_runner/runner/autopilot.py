@@ -26,12 +26,15 @@ normal deep-run path). Each pass:
      other; the flag only keeps that character out of the routing that hands an UNASSIGNED
      recurring task to somebody, which is what lets a specialist share a roster with the character
      who carries the quest's ordinary work.
-  5. Decides WHAT each batch is for: the quest-wide ``autopilot.instructions`` and the character's
-     own roster ``instructions``, layered, with both riding into the prompt when both exist. When
-     NEITHER exists the batch works to the default brief the backend serves read-only on the quest
-     payload (``autopilot.default_instructions``), so a character on duty always has a
-     specification instead of an empty run. Recurring tasks the quest opted into adopting are
-     folded into the batch of whoever they name.
+  5. Decides WHAT each batch is for, at TWO levels that default independently: the quest-wide
+     ``autopilot.instructions`` (how to work here and how to deliver, for everyone on the quest)
+     and the character's own roster ``instructions`` (what this character works on). Each slot
+     takes the person's text where they wrote it and the backend's read-only default otherwise
+     (``autopilot.default_quest_instructions`` / ``autopilot.default_persona_instructions``), so
+     both slots are always filled and both always ride into the prompt, layered quest-wide first
+     and character second. A character on duty therefore always has a specification instead of an
+     empty run, and writing one level never silences the other. Recurring tasks the quest opted
+     into adopting are folded into the batch of whoever they name.
   6. Creates each batch as a real task (``status="suggested"`` in suggest mode, ``"queued"`` in
      act mode), or -- when planning allows and no batch was produced at all -- proposes the quest's
      next goal instead of a work task, UNLESS the previous pass's proposal is still sitting there
@@ -158,25 +161,53 @@ _MAX_PREVIOUS_TASKS = 8
 # than riding an oversized block into every prompt this quest ever gets.
 MAX_INSTRUCTIONS_CHARS = 8000
 
-# The standing brief a batch works to when NEITHER its quest nor its character wrote one.
+# The standing briefs a batch works to where the person has written none of their own. There are
+# TWO, and they default INDEPENDENTLY, because they answer two different questions: the quest-wide
+# brief says HOW to work and how to deliver and applies to every character on the quest, while the
+# persona brief says WHAT to work on and is one character's own job here. A quest whose owner wrote
+# only one of them keeps their text for that slot and gets the built-in one for the other, rather
+# than losing the built-in floor for both the moment they write a line anywhere.
 #
-# The authoritative copy is the backend's: a current quest payload carries it read-only as
-# ``autopilot.default_instructions`` (server-derived, never client-settable), and THAT value always
-# wins here. That is the point of serving it: improving the text on the server improves every quest
-# that never wrote its own brief, immediately, with no client release and no per-quest migration.
+# The authoritative copies are the backend's: a current quest payload carries them read-only as
+# ``autopilot.default_quest_instructions`` and ``autopilot.default_persona_instructions``
+# (server-derived, never client-settable), and THOSE values always win here. That is the point of
+# serving them: improving the text on the server improves every quest that never wrote its own
+# brief, immediately, with no client release and no per-quest migration.
 #
-# This bundled copy exists for the other case. Against a backend that predates the field -- or any
-# client that simply does not serve it -- a character on duty would otherwise have no specification
-# at all and the pass would go silent, which is the exact failure this default was introduced to
-# remove. So the runner degrades to a real brief rather than to nothing. It is a fallback and never
-# a second source of truth: if the two ever disagree, the server's text is the one that ran.
-# The text below is a VERBATIM copy of the server's, word for word, and must stay that way. It was
-# written and confirmed by a person, so a paraphrase here is not a smaller version of the same
-# brief: an earlier draft of this constant tightened the third paragraph and lost the concrete list
-# ("the link to open, the route and the place to run, the command to paste"), which is the entire
-# instruction that paragraph exists to give. Two texts that differ are two briefs, and the one that
-# runs against an older backend would be the weaker one. Copy it, never re-word it.
-BUNDLED_DEFAULT_INSTRUCTIONS = (
+# These bundled copies exist for the other case. Against a backend that predates the fields -- or
+# any client that simply does not serve them -- a character on duty would otherwise have no
+# specification at all and the pass would go silent, which is the exact failure these defaults were
+# introduced to remove. So the runner degrades to a real brief rather than to nothing. They are a
+# fallback and never a second source of truth: if the two ever disagree, the server's text is the
+# one that ran.
+# The texts below are VERBATIM copies of the server's, word for word, and must stay that way. They
+# were written and confirmed by a person, so a paraphrase here is not a smaller version of the same
+# brief: an earlier draft of this constant tightened the "doable without thinking" paragraph and
+# lost its concrete list ("the link to open, the route and the place to run, the command to
+# paste"), which is the entire instruction that paragraph exists to give. Two texts that differ are
+# two briefs, and the one that runs against an older backend would be the weaker one. The backend's
+# own runner-contract test asserts both pairs equal, so a reword here fails there. Copy them, never
+# re-word them.
+
+# HOW to work and how to deliver. The default for the QUEST-WIDE ``instructions`` slot, so it
+# applies to every character the quest puts on duty.
+BUNDLED_DEFAULT_QUEST_INSTRUCTIONS = (
+    "Ground every claim about where things stand in this quest's own outcome, goals, notes and "
+    "files, never in this prompt. If the plan has slipped, say so plainly and say what you would "
+    "change.\n\n"
+    "When you hand the person something to do, make it doable without thinking. Give the exact "
+    "action with its specifics already filled in: the link to open, the route and the place to "
+    "run, the command to paste, the message to send and who to send it to. Never a category of "
+    "task, and never something they have to work out before they can start.\n\n"
+    "Your result is what reaches the person, so write it as the finished thing rather than a "
+    "report about doing it. No preamble, and no second copy underneath. Keep it short enough to "
+    "read on a phone. Use Markdown for formatting, never raw HTML, and never em dashes.\n\n"
+    "End with what is left, and with anything only the person can decide."
+)
+
+# WHAT to work on. The default for a character's OWN ``instructions`` on this quest, so it is the
+# job description a run gets when nobody has written one for that character.
+BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS = (
     "Work this quest today. Read its outcome, its current goals at every horizon, and what has "
     "happened on it recently, then pick the one or two things that most move it forward right now "
     "and do them.\n\n"
@@ -184,16 +215,7 @@ BUNDLED_DEFAULT_INSTRUCTIONS = (
     "set the person up to do it. Both are real. Some quests want a draft, a comparison, or a "
     "decision worked through with its options. Others want the state of things read back clearly, "
     "or the next steps laid out for the person to carry out. Judge which this quest is asking for "
-    "rather than defaulting to one.\n\n"
-    "When you hand the person something to do, make it doable without thinking. Give the exact "
-    "action with its specifics already filled in: the link to open, the route and the place to "
-    "run, the command to paste, the message to send and who to send it to. Never a category of "
-    "task, and never something they have to work out before they can start.\n\n"
-    "Ground every claim about where things stand in the quest's own goals, notes and files, never "
-    "in this prompt. If the plan has slipped, say so plainly and say what you would change.\n\n"
-    "Keep it short enough to read on a phone. End with what is left, and with anything only the "
-    "person can decide. If there is genuinely nothing worth doing today, say that in one line "
-    "rather than filling the space."
+    "rather than defaulting to one."
 )
 
 # How many of a horizon's current goals the goal ladder lists before it says "+N more". Eight is
@@ -771,18 +793,32 @@ def persona_instructions_for(autopilot_cfg: Dict[str, Any], rep_id: Optional[str
     return None
 
 
-def default_instructions_for(autopilot_cfg: Dict[str, Any]) -> str:
-    """The brief a batch works to when neither the quest nor the character wrote one.
+def default_quest_instructions_for(autopilot_cfg: Dict[str, Any]) -> str:
+    """The QUEST-WIDE brief a batch works to when the quest itself carries none: how to work here
+    and how to deliver, for every character on the quest.
 
-    The SERVER'S value wins whenever the payload carries one: ``autopilot.default_instructions`` is
-    derived read-only by quest-backend, so the text a run works to is whatever that backend
-    currently says it is, and improving it there improves every quest that never wrote its own.
-    ``BUNDLED_DEFAULT_INSTRUCTIONS`` is only what an older backend (or any client that does not
-    serve the field) degrades to, so a character on duty still has a specification instead of a
-    silent pass. See that constant for why the copy exists at all.
+    The SERVER'S value wins whenever the payload carries one:
+    ``autopilot.default_quest_instructions`` is derived read-only by quest-backend, so the text a
+    run works to is whatever that backend currently says it is, and improving it there improves
+    every quest that never wrote its own. ``BUNDLED_DEFAULT_QUEST_INSTRUCTIONS`` is only what an
+    older backend (or any client that does not serve the field) degrades to, so a character on duty
+    still has a specification instead of a silent pass. See that constant for why the copy exists
+    at all.
     """
-    served = str(autopilot_cfg.get("default_instructions") or "").strip()
-    return served or BUNDLED_DEFAULT_INSTRUCTIONS
+    served = str(autopilot_cfg.get("default_quest_instructions") or "").strip()
+    return served or BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
+
+
+def default_persona_instructions_for(autopilot_cfg: Dict[str, Any]) -> str:
+    """The PERSONA brief a batch works to when that character carries none: what to work on.
+
+    Resolved exactly like ``default_quest_instructions_for`` and from its own served field
+    (``autopilot.default_persona_instructions``), because the two slots default independently: a
+    quest that wrote a quest-wide brief and no character brief still needs this one, and the
+    reverse is just as common.
+    """
+    served = str(autopilot_cfg.get("default_persona_instructions") or "").strip()
+    return served or BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS
 
 
 def split_held_for_another_day(tasks: List[Dict[str, Any]], autopilot_cfg: Dict[str, Any],
@@ -943,16 +979,33 @@ _PERSONA_INSTRUCTIONS_PREAMBLE = (
     "in your result which you followed and why."
 )
 
-# The brief a run works to when the person has written none of their own, at either level. It is
-# said outright that this text is the built-in one rather than theirs, because a run told "written
-# by the person who owns it" about words they never wrote would report back against a standard
-# nobody set, and because the honest framing is also the useful one: it tells the run this is the
-# floor, and that anything the person later writes replaces it outright.
+# The framing for a slot the person has not written, one per level. Both say outright that the
+# text is the built-in one rather than theirs, because the written preambles above claim authorship
+# ("written by the person who owns it") and that claim is simply false of a default: a run told it
+# about words nobody wrote would report back against a standard nobody set. The honest framing is
+# also the useful one, since it tells the run this is the floor and that anything the person later
+# writes replaces it outright.
+#
+# Everything else about the two blocks is unchanged, and deliberately so: a defaulted slot occupies
+# the same position and carries the same authority as a written one, because it is the brief that
+# actually governs the run.
 _DEFAULT_INSTRUCTIONS_PREAMBLE = (
-    "Standing instructions for this run. Neither this quest nor this character has a brief written "
-    "for it yet, so this is the built-in one, and it is the specification for this run: it says "
-    "what to produce and how. Everything below is the material to apply it to. The moment the "
-    "person writes instructions of their own, theirs replace this entirely."
+    "Standing instructions for this quest. Nobody has written a brief for this quest yet, so this "
+    "is the built-in one, and it is the specification for this run: it says what to produce and "
+    "how. Everything below is the material to apply it to. The moment the person writes "
+    "instructions of their own for this quest, theirs replace this entirely."
+)
+
+# The persona-level default. It states the same precedence its written counterpart states, because
+# the precedence is a property of the LEVEL and not of who wrote the text: this block still
+# describes one character's own job, and still governs where it disagrees with the quest-wide
+# block. ``{who}`` is filled with the persona's name when one is resolved.
+_DEFAULT_PERSONA_INSTRUCTIONS_PREAMBLE = (
+    "Standing instructions {who} on this quest. Nobody has written a brief for this character "
+    "here yet, so this is the built-in one. It describes the job this character does here, which "
+    "is not the same job the quest-wide instructions describe. It is MORE SPECIFIC than those, so "
+    "where the two disagree, follow this and say in your result which you followed and why. The "
+    "moment the person writes instructions for this character, theirs replace this entirely."
 )
 
 
@@ -1004,7 +1057,8 @@ def compose_batch_text(quest_outcome: str,
                        insights: Optional[str] = None,
                        instructions: Optional[str] = None,
                        persona_instructions: Optional[str] = None,
-                       default_instructions: Optional[str] = None,
+                       default_quest_instructions: Optional[str] = None,
+                       default_persona_instructions: Optional[str] = None,
                        goal_ladder: Optional[List[Dict[str, Any]]] = None) -> str:
     """The batch task's text: what this run is asked to produce, the period and goals it serves,
     what the person themselves last said about the work, and what the previous period produced.
@@ -1042,13 +1096,18 @@ def compose_batch_text(quest_outcome: str,
     same reason the quest-wide one states its own. Absent, this likewise emits nothing and composes
     byte-identically to before the parameter existed.
 
-    ``default_instructions`` is the FLOOR under both, and the layering rule lives here so there is
-    exactly one place that decides it: quest-wide and persona instructions both ride into the
-    prompt whenever they exist, together when both do, and the default is emitted ONLY when
-    NEITHER does. A run whose owner has written no brief anywhere still gets a specification rather
-    than a quest outcome and a shrug. Its framing says outright that this text is the built-in one,
-    so the run is never told the person wrote words they did not. Absent, this emits nothing, which
-    is what keeps every direct caller's composition unchanged.
+    ``default_quest_instructions`` and ``default_persona_instructions`` are the FLOOR under those
+    two, one each, and the layering rule lives here so there is exactly one place that decides it.
+    THE TWO SLOTS DEFAULT INDEPENDENTLY: the quest-wide slot carries ``instructions`` when the
+    person wrote them and its default otherwise, the persona slot carries ``persona_instructions``
+    when the person wrote them and its default otherwise, and both slots are then emitted exactly
+    as two written briefs are, quest-wide first and persona second. The two are not alternatives at
+    all: one says how to work and how to deliver, the other says what to work on, so a quest that
+    lost the second because its owner wrote the first would be a quest whose runs no longer know
+    what they are for. A defaulted slot is framed as the built-in brief rather than as the
+    person's, so a run is never told they wrote words they did not. Each default absent, that slot
+    falls back to the written value alone, which is what keeps every direct caller's composition
+    unchanged.
 
     ``goal_ladder`` (from ``current_goal_ladder``) is emitted after the brief: the run reads what
     it is asked to produce, then the picture that output has to fit into. It is the person's
@@ -1067,23 +1126,31 @@ def compose_batch_text(quest_outcome: str,
     if quest_outcome:
         parts.append(f"Quest outcome: {quest_outcome}")
     if scope_label:
-        # Saying whose target this period is matters. A week's worth of goals seen by a daily run
-        # reads as "do all of this today", which is both discouraging and wrong; the run's job is
-        # to move them along and report what is left.
-        parts.append(f"Scope: this quest's {scope_label}. The goals below are that PERIOD's "
-                     f"target, not this single run's workload. Advance them as far as one focused "
-                     f"session honestly can, then say plainly what remains.")
-    if instructions:
-        parts.append(_INSTRUCTIONS_PREAMBLE + "\n\n" + instructions)
-    if persona_instructions:
+        # Naming the period still matters, and for the reason it always did: a week's or a month's
+        # worth of plan, read by a single run, reads as "do all of this today", which is both
+        # discouraging and wrong. What changed is what the period holds. Its goals are context now
+        # and never this run's assignment, so this line says which horizon the run is standing in
+        # and stops there. Telling the run to advance the goals below would contradict the ladder
+        # a few blocks down, which says in as many words that the run does not own them.
+        parts.append(f"Scope: this quest's {scope_label}. That is the period this run sits inside, "
+                     f"and it is longer than one session: it says which horizon everything here "
+                     f"belongs to, and it does not make the period's contents this run's workload. "
+                     f"What to produce is for the standing instructions to say. Where the period "
+                     f"itself has slipped or moved on, say so plainly.")
+    # THE LAYERING RULE, and it is two rules that never look at each other. Each slot takes what
+    # the person wrote for THAT slot, or its own built-in brief, and the framing is the only thing
+    # that changes with the answer. A written brief at one level says nothing about the other
+    # level, so it can never silence it.
+    quest_brief = instructions or default_quest_instructions
+    if quest_brief:
+        preamble = _INSTRUCTIONS_PREAMBLE if instructions else _DEFAULT_INSTRUCTIONS_PREAMBLE
+        parts.append(preamble + "\n\n" + quest_brief)
+    persona_brief = persona_instructions or default_persona_instructions
+    if persona_brief:
         who = f"for {persona} specifically" if persona else "for this character specifically"
-        parts.append(_PERSONA_INSTRUCTIONS_PREAMBLE.format(who=who) + "\n\n"
-                     + persona_instructions)
-    if default_instructions and not (instructions or persona_instructions):
-        # THE LAYERING RULE, in one line: the default is a floor, not a layer. Anything the person
-        # wrote at either level replaces it outright, and emitting both would hand the run two
-        # specifications for the same job with nothing ranking them.
-        parts.append(_DEFAULT_INSTRUCTIONS_PREAMBLE + "\n\n" + default_instructions)
+        template = (_PERSONA_INSTRUCTIONS_PREAMBLE if persona_instructions
+                    else _DEFAULT_PERSONA_INSTRUCTIONS_PREAMBLE)
+        parts.append(template.format(who=who) + "\n\n" + persona_brief)
     if goal_ladder:
         # After the brief, deliberately: the run reads what it is asked to produce, then the goals
         # that output has to add up to. The reverse order reads as "here is a list of work, and
@@ -1129,8 +1196,7 @@ def compose_batch_text(quest_outcome: str,
 
 def _batch_title(adopted_tasks: Optional[List[Dict[str, Any]]] = None,
                  instructions: Optional[str] = None,
-                 persona_instructions: Optional[str] = None,
-                 default_instructions: Optional[str] = None) -> Optional[str]:
+                 persona_instructions: Optional[str] = None) -> str:
     """A short label for the task list: what this batch is ABOUT.
 
     Without one the server derives a title from the first line of the text, which is the "Act as
@@ -1139,32 +1205,36 @@ def _batch_title(adopted_tasks: Optional[List[Dict[str, Any]]] = None,
     after the brief it is working to.
 
     A brief's title is its first non-empty line, stripped of leading Markdown furniture ("#", "-",
-    "*", ">") and capped at 80 characters. That title becomes the mail SUBJECT once
-    send-on-completion lands, which is why it matters here and not just cosmetically.
+    "*", ">") and capped at 80 characters. That title is also the SUBJECT of the mail a finished run
+    sends, which is why it matters here and not just cosmetically.
+
+    ONLY WRITTEN BRIEFS MAY TITLE A BATCH, and that is the whole reason the defaults are not in
+    this chain. A default is the same text on every quest that has not written one, so titling from
+    it would name every task on every such quest "Ground every claim about where things stand...",
+    forever, in the list and in the person's inbox. A title has to say what makes THIS run
+    different, and a built-in brief says nothing of the kind. So the run composes with the
+    effective text and is titled from the written text alone.
 
     The order is the same precedence the brief itself has. ``persona_instructions`` first, because
     a batch that exists because a character has their own standing job on this quest is about THAT
     job, and titling it after the quest's general brief would name work this run is not doing. Then
-    the quest-wide ``instructions``. Then ``default_instructions``, so a quest whose owner has
-    written no brief anywhere is still titled after what its run will actually do rather than after
-    its persona. Falls back to "Autopilot run" when a brief of some kind was passed but no line has
-    real content after stripping, and to ``None`` when there was nothing to title from at all.
+    the quest-wide ``instructions``. Then the plain "Autopilot run", which is what a fully defaulted
+    quest gets: honest, and short enough that a person reading their list sees the quest's name
+    doing the work instead.
     """
     if adopted_tasks:
         first = str((adopted_tasks[0].get("title") or adopted_tasks[0].get("text") or "")).strip()
         lines = first.splitlines()
         if lines and lines[0].strip():
             return lines[0].strip()[:120]
-    for source in (persona_instructions, instructions, default_instructions):
+    for source in (persona_instructions, instructions):
         if not source:
             continue
         for line in source.splitlines():
             stripped = _MD_TITLE_FURNITURE_RE.sub("", line).strip()
             if stripped:
                 return stripped[:80]
-    if persona_instructions or instructions or default_instructions:
-        return "Autopilot run"
-    return None
+    return "Autopilot run"
 
 
 def propose_next_goal(quest: Dict[str, Any]) -> Tuple[str, str]:
@@ -1459,21 +1529,23 @@ class AutopilotPass:
     def instructions_source(self, persona: Optional[str],
                              persona_instructions: Optional[str],
                              instructions: Optional[str]) -> str:
-        """Which brief this batch is carrying, in words, for the dry-run report.
+        """Which briefs this batch is carrying, in words, for the dry-run report.
 
-        Both written kinds can apply at once, and when they do BOTH are named: the character's
-        brief governs where the two disagree, but the quest's still rides into the same run, and a
-        report that hid it would be describing a shorter brief than the one that gets sent. With
-        neither written, the run works to the built-in default, and saying so is the whole value of
-        this line on a quest nobody has configured yet.
+        BOTH slots are always named, because both are always filled: the character's brief governs
+        where the two disagree, but the quest's rides into the same run, and a report that hid it
+        would be describing a shorter brief than the one that gets sent. A slot the person has not
+        written is named as the built-in default for that level rather than as theirs, which is the
+        whole value of this line on a quest nobody has configured yet, and the thing a person
+        checking their setup is actually looking for: whether the text they wrote is the text that
+        will run.
         """
-        sources: List[str] = []
-        if persona_instructions:
-            who = self._persona_label(persona) or "this character"
-            sources.append(f"{who}'s own standing instructions")
-        if instructions:
-            sources.append("this quest's standing instructions")
-        return ", plus ".join(sources) if sources else "the built-in default brief"
+        who = self._persona_label(persona) or "this character"
+        return ", plus ".join((
+            f"{who}'s own standing instructions" if persona_instructions
+            else "the built-in default brief for a character",
+            "this quest's standing instructions" if instructions
+            else "the built-in default brief for a quest",
+        ))
 
     def _reflection_periods(self, scope_label: str) -> Tuple[str, ...]:
         """Which period reviews to consult for a quest at ``scope_label``, finest match first.
@@ -1605,10 +1677,13 @@ class AutopilotPass:
         if instructions:
             log.info("autopilot: quest %s has standing instructions (%d chars)",
                      quest_id, len(instructions))
-        # The floor under both instruction levels: what a batch works to when neither the quest nor
-        # the character carries a brief. The backend serves the authoritative text on the quest
-        # payload; this degrades to the bundled copy against an older one.
-        default_instructions = default_instructions_for(autopilot_cfg)
+        # The floor under each instruction level, read once and independently: the quest-wide one
+        # fills the quest slot when this quest wrote nothing, the persona one fills each
+        # character's slot when that character has nothing of their own. The backend serves the
+        # authoritative texts on the quest payload; these degrade to the bundled copies against an
+        # older one.
+        default_quest_instructions = default_quest_instructions_for(autopilot_cfg)
+        default_persona_instructions = default_persona_instructions_for(autopilot_cfg)
 
         goals_payload = self._client.list_quest_goals(quest_id, team_id=self._team_id or None) or {}
         # Which period this quest is planning in. A LABEL only: it decides which period review to
@@ -1658,13 +1733,14 @@ class AutopilotPass:
         quest_label = _quest_label(quest, quest_id)
         produced = False
         # THE ALWAYS-WORK RULE, and it is now unconditional for a quest that reaches this point.
-        # Every character on duty has an effective brief -- their own, the quest's, or the default
-        # -- so every character on duty gets ONE batch per due pass. A quest with three unrestricted
-        # personas therefore produces three batches a pass, and the only thing that bounds that is
-        # the team's daily budget, which is checked per batch inside the loop.
+        # Every character on duty has an effective brief at BOTH levels -- what the person wrote
+        # for that level, or the built-in default for it -- so every character on duty gets ONE
+        # batch per due pass. A quest with three unrestricted personas therefore produces three
+        # batches a pass, and the only thing that bounds that is the team's daily budget, which is
+        # checked per batch inside the loop.
         #
-        # A quest with NO roster at all gets a single plain-assistant batch on the default, so a
-        # quest somebody switched autopilot on for and then configured no further still does
+        # A quest with NO roster at all gets a single plain-assistant batch on the two defaults, so
+        # a quest somebody switched autopilot on for and then configured no further still does
         # something useful instead of going quiet.
         #
         # The consequence for the goal-proposal ``elif`` below is that it no longer fires: with a
@@ -1684,9 +1760,11 @@ class AutopilotPass:
                 # on duty -- a day-restricted entry carrying the brief plus a catch-all, say -- so
                 # reading the whole roster is what makes which entry irrelevant.
                 persona_instructions = persona_instructions_for(autopilot_cfg, persona)
+                # Titled from what the PERSON wrote, composed from what actually governs the run.
+                # A default is identical on every unconfigured quest, so titling from one would
+                # name every task and every mail subject after the same built-in first line.
                 title = _batch_title(tasks, instructions=instructions,
-                                     persona_instructions=persona_instructions,
-                                     default_instructions=default_instructions)
+                                     persona_instructions=persona_instructions)
                 if dry_run:
                     result.proposals.append({
                         "quest_id": quest_id, "quest_label": quest_label, "kind": "work_batch",
@@ -1715,7 +1793,10 @@ class AutopilotPass:
                                                   insights=insights_text,
                                                   instructions=instructions,
                                                   persona_instructions=persona_instructions,
-                                                  default_instructions=default_instructions,
+                                                  default_quest_instructions=(
+                                                      default_quest_instructions),
+                                                  default_persona_instructions=(
+                                                      default_persona_instructions),
                                                   goal_ladder=goal_ladder)
                 if task_id:
                     result.created.append({
@@ -1867,13 +1948,13 @@ class AutopilotPass:
 
         ONE PER CHARACTER ON DUTY TODAY, in the roster's own on-duty order (day-restricted entries
         before unrestricted ones). Being on duty is the whole condition, because every character on
-        duty now has a brief to work to: their own, the quest's, or the default. An
-        ``instructions_only`` entry is included like any other -- the flag only keeps that
+        duty now has a brief to work to at both levels: what the person wrote there, or the
+        built-in default for it. An ``instructions_only`` entry is included like any other -- the flag only keeps that
         character out of the routing that hands an UNASSIGNED recurring task to somebody.
 
         A quest with NO roster gets exactly ONE batch, for whoever the consumer's fallback resolver
         names, or for the plain assistant when it names nobody. That is the unconfigured quest, and
-        it still does its default brief rather than nothing. (An empty on-duty list can only mean
+        it still does its default briefs rather than nothing. (An empty on-duty list can only mean
         an empty roster here: ``_gate_quest``'s day rule has already skipped a quest whose roster
         names people but puts none of them on duty today.)
 
@@ -2244,7 +2325,8 @@ class AutopilotPass:
                            insights: Optional[str] = None,
                            instructions: Optional[str] = None,
                            persona_instructions: Optional[str] = None,
-                           default_instructions: Optional[str] = None,
+                           default_quest_instructions: Optional[str] = None,
+                           default_persona_instructions: Optional[str] = None,
                            goal_ladder: Optional[List[Dict[str, Any]]] = None) -> Optional[str]:
         text = compose_batch_text(str(quest.get("outcome") or ""),
                                   self._persona_label(persona),
@@ -2253,15 +2335,15 @@ class AutopilotPass:
                                   reflection=reflection, insights=insights,
                                   instructions=instructions,
                                   persona_instructions=persona_instructions,
-                                  default_instructions=default_instructions,
+                                  default_quest_instructions=default_quest_instructions,
+                                  default_persona_instructions=default_persona_instructions,
                                   goal_ladder=goal_ladder)
         try:
             return self._create_autopilot_task(
                 quest, quest_id, text, mode, persona=persona,
                 title=title if title is not None
                 else _batch_title(adopted_tasks, instructions=instructions,
-                                  persona_instructions=persona_instructions,
-                                  default_instructions=default_instructions))
+                                  persona_instructions=persona_instructions))
         except Exception as e:  # noqa: BLE001 -- surfaced to the caller's per-quest try/except
             log.error("autopilot: task creation failed for quest %s: %s", quest_id, e,
                       exc_info=True)
