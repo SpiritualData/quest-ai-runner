@@ -45,6 +45,109 @@ All notable changes to this project are documented here. The format is based on
   constant, and its own behavior is still covered by tests driving `_handle_proposal` directly.
 
 ### Added
+- **Personas are configuration now, not consumer code** (`runner/personas.py`, exported from
+  `quest_ai_runner.runner`; how-to in `docs/personas.md`). `RunnerConfig.rep_sync_resolver` was a
+  bare `task -> (id, skill_dir) | None` callable seam with nothing to build a resolver *with*, so
+  every lane that wants its tasks to run AS somebody hand-wrote the same machinery: a registry
+  mapping ids to skill folders under a skills root, plus a policy for picking one. Two independent
+  lanes had grown their own copy, differing only in POLICY. That machinery is now
+  `PersonaRegistry` + `PersonaResolverConfig` + `build_persona_resolver(cfg, provider=...,
+  quest_client=..., team_id=..., on_resolved=...)`, and both policies are expressible as config.
+  `PersonaRegistry.from_file` normalizes BOTH real registry file shapes, deciding by the value
+  type: a dict value means the rich shape (the key is the persona's name, the id comes from
+  `rep_id`, the folder from `skill`, `display_name` inferred from the key when omitted), a string
+  value means the flat `{id: slug}` shape. `match()` is exact and case-insensitive over
+  id/slug/display_name/aliases, never a substring. The resolver composes up to four steps and
+  returns on the first hit: (1) a structured assignment field matched against the registry, no
+  model call; (2) an LLM-judged EXPLICIT ask on `judge_tier` (opt-in, needs a provider); (3)
+  domain-card dominance (opt-in, needs `cards_dir`) where a card is tied to a persona by an
+  explicit owner field or by carrying its identity as a whole token in the card id/filename, and
+  ambiguity counts for nobody; (4) the structural fallback for an id the registry does not know —
+  `auto_register` turns it into a real invocable skill (slugified display name from
+  `get_ai_profile`, unique under the skills root, seeded `SKILL.md` with valid frontmatter plus the
+  empty `QAR:MANAGED` markers, persisted into `registry_file` in that file's existing shape, never
+  clobbering a human-authored file), else `cache_dir/<id>`, else nothing. A disabled step is never
+  entered, so a structural-only lane makes no model call and reads no cards. **A bare name mention
+  never activates a persona** — enforced three ways at once (exact matching, the judge's prompt,
+  and each persona's own name/aliases excluded from its card scoring) because naming somebody is
+  not asking them. `on_resolved` is called with `{"task", "user_id", "skill_dir"}` on every
+  resolution and `None` otherwise, so a consumer can recover which persona a run is for (the
+  library keeps no thread-local of its own). Nothing raises: every failure logs and yields `None`.
+  Tests: `tests/test_personas.py`.
+- **The lane entry point is a library module now, not something every consumer hand-rolls**
+  (`runner/lane.py`, exporting `run_lane`, `load_env_file`, `install_local_time_due_gate`,
+  `build_arg_parser`; tutorial: `docs/tutorial-your-first-lane.md`; runnable example:
+  `examples/minimal_lane.py`). Three separate consumers of this library each wrote the same
+  `--check`/`--once`/loop-forever driver around `Poller` (argv shape, logging setup, `.env`
+  loading, degrade-instead-of-crash on an incomplete config). Two noticed the duplication and
+  extracted a shared copy — but OUTSIDE this library, so the third consumer had nowhere to find it
+  and wrote a fourth copy. `run_lane(argv, *, prog, description, lane_label, log_name,
+  build_config, env_file=None, state_path=None, not_configured_keywords=("key", "url"))` is that
+  driver, moved in and generalized: `state_path` now also defaults from `QAR_STATE_PATH` (folding
+  in a capability one of the three hand-rolled copies had and the others lacked) rather than being
+  a required argument. `install_local_time_due_gate` is now a logged no-op: it used to be a
+  lane-level fallback that monkey-patched `QuestClient.discover_due` for a runner build that
+  predated the library's own local-time due filter (`runner/poller._due_now_locally` /
+  `runner/local_time.py`); now that the driver lives IN the library, that filter is always present
+  by construction (same install, always), so the fallback could never fire and carrying its
+  monkey-patch here would be dead code standing in for a safety net that isn't one. The function
+  stays, doing nothing but logging which module owns the behavior, only so a caller that still
+  names it explicitly keeps working. `examples/run_lane.py` (the ~70-line hand-rolled driver this
+  replaces) is left in place but is now superseded — see the example's own module for the
+  pointer. Tests: `tests/test_lane.py`.
+- **Config gaps that forced a `.py` consumer for ordinary settings are closed** (`config.py`,
+  `cli.py`). `RunnerConfig.discovery_team_id`, `rep_sync_direction`, `default_assignee_user_id`,
+  `autopilot_pass_time`, and `autopilot_adopt_recurring` were real fields with no environment-variable
+  path to them at all in `cli._config_from_env` — a consumer that needed one of these had to import
+  the library and build `RunnerConfig` in code, even though every other adjacent setting was one
+  `QAR_*` env var away. New: `QAR_DISCOVERY_TEAM_ID` (unset falls back to `team_id`; `""` explicitly
+  requests owner-scoped discovery — `os.environ.get`, not `getenv(..., default)`, is what keeps that
+  distinction), `QAR_DECISION_ASSIGNEE` (documented in `.env.example`/`examples/custom_consumer.py`
+  since earlier but never actually wired into the stock CLI until now), `QAR_DEEP_MAX_TURNS` (lands
+  on `OrchestratorConfig.deep_max_turns`, same pattern as the existing `QAR_GOAL_TOKEN_BUDGET`/
+  `QAR_GOAL_MAX_ATTEMPTS`), `QAR_REP_SYNC_DIRECTION`, `QAR_AUTOPILOT_PASS_TIME`, and
+  `QAR_AUTOPILOT_ADOPT_RECURRING`. Also new: `RunnerConfig.context_preamble` (org/persona doctrine
+  prepended to every deep-run brief) — previously reachable only by constructing a `SubprocessConfig`
+  by hand; `config.resolve_deep_runner` now threads it into the auto-built default worker, and
+  `cli._config_from_env` fills it from `QAR_CONTEXT_PREAMBLE_FILE` (a file path — multi-line org
+  doctrine is miserable as a bare env var) or the shorter inline `QAR_CONTEXT_PREAMBLE`, file
+  winning when both are set. `rep_sync_resolver` (a callable) is deliberately NOT env-expressible —
+  see the personas entry above for its declarative alternative. Tests: `tests/test_config_env_vars.py`.
+- **`RunnerConfig.personas` wires straight into the poller** (`config.py`:
+  `resolve_rep_sync_resolver`; `runner/poller.py`: `Poller.__init__`). The declarative
+  `PersonaResolverConfig` from the entry above needs a seam onto `RunnerConfig.rep_sync_resolver`
+  to actually run anything: `resolve_rep_sync_resolver(cfg, quest_client=...)` composes one via
+  `build_persona_resolver` when `cfg.personas` is set and `cfg.rep_sync_resolver` was left unset —
+  an explicit `rep_sync_resolver` (any consumer wiring one by hand, before `personas` existed, or
+  one that means to fully replace the declarative policy) always wins, exactly the same
+  never-override-an-explicit-choice contract `resolve_deep_runner` already has for `deep_runner`.
+  `Poller.__init__` calls this and writes the result back onto `config.rep_sync_resolver`, so a
+  consumer or test that reads it after construction sees the resolved callable, not the config
+  object. `runner.personas` is imported lazily (only when `cfg.personas` is actually set, and only
+  inside this function) so building a `RunnerConfig` with no persona policy pays no import cost for
+  it — importing it at module level in `config.py` would also be circular (`quest_ai_runner.runner`'s
+  `__init__` imports `.poller`, which imports `RunnerConfig` from `config.py`). Tests:
+  `tests/test_personas_config_wiring.py`.
+- **File-based config (TOML), via stdlib `tomllib`** (`config.py`: `RunnerConfig.from_file`,
+  `apply_file_defaults`, `ConfigFileError`; `cli.py`: `_config_from_env(config_path=...)`,
+  `QAR_CONFIG_FILE`, `--config` on the `poll`/`chat`/`channel` subcommands). This library had no
+  file-based config at all before this (no TOML, no YAML). `RunnerConfig.from_file(path)` parses a
+  TOML file whose keys mirror `RunnerConfig` field names into a config, refusing (via
+  `ConfigFileError`, a `ValueError`) rather than silently ignoring: a missing/unreadable file,
+  invalid TOML, a key that is not a real field at all, and — distinctly, with its own message — a
+  real field name that holds a live adapter/callable/sentinel and so cannot be expressed as TOML
+  data (accepting one of those would silently build a config with the wrong kind of value in that
+  field, failing later far from the file that caused it). `[personas]` is the one nested table,
+  built into a `PersonaResolverConfig`. Precedence is file-loses-to-env, implemented generically
+  rather than threaded through every line of `_config_from_env`: `apply_file_defaults(cfg,
+  file_cfg)` fills only the fields still sitting at `RunnerConfig`'s own dataclass default, so a
+  field any environment variable actually set (by definition already different from the default)
+  is never touched. `corpus_root` is the one field resolved earlier than that generic pass (env
+  falls back to the file's value before the retrieval adapter is built from it), so a file-only
+  corpus still produces a working `FilesAdapter`. This repo has scar tissue about a config field
+  that silently did nothing because nobody validated the key that set it (see the quest-backend
+  `UpdateAutopilotRequest` incident, referenced in `docs/writing-a-consumer.md`) — loud failure
+  here is deliberate, not an oversight. Tests: `tests/test_config_from_file.py`.
 - **Claude Fable is now a runnable, vision-capable Claude family, alongside Opus/Sonnet/Haiku**
   (`adapters/claude_cli_provider.py`, `core/goal_runner.py`, `core/model_registry.py`). The
   `claude` CLI documents `--model` as accepting `fable` as a family alias exactly like

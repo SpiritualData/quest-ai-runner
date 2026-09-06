@@ -115,6 +115,92 @@ Sampling is stdlib-only (`/proc/meminfo` on Linux, `os.getloadavg` on Unix); ins
 extends memory sampling to other platforms. A configured limit whose metric this host can't read
 is logged once and skipped, never enforced blind.
 
+## Upgrading a running lane
+
+Standing a lane up is the easy half. The half that bites is the second deploy.
+
+**A lane loads its code at process start.** Upgrading the package, editing your consumer, or
+`pip install -e` on a working tree changes nothing about the process that is already running: it
+keeps executing whatever was in memory at its last restart, silently, for as long as you let it. A
+deployment in the wild was found still running five-day-old code after the fixes had landed,
+because nothing ever restarted the service. If you take one thing from this page, take this: a
+release is not deployed until the lane restarts.
+
+The naive fix has its own failure. A deep run can take many minutes, and a blind
+`systemctl restart` in the middle of one throws that work away.
+
+### Verify before you restart
+
+Run these against the code you are about to deploy, as the user the service runs as:
+
+```bash
+my_lane.py --check     # exits 0 and prints whoami; read-only, safe against a live lane
+my_lane.py --once      # ONE real scan, then exit
+```
+
+`--check` proves the config builds and the key authenticates. `--once` proves the lane actually
+works: it discovers, claims, runs, and reports one real task. Do not skip it because `--check`
+passed. A lane that starts cleanly can still fail on its first deep run.
+
+If the lane's config changed, confirm it changed the way you meant. Build the `RunnerConfig` from
+the old and new code and diff every field:
+
+```bash
+python -c "
+import my_lane
+cfg = my_lane.build_config()
+for f in sorted(vars(cfg)): print(f, '=', repr(getattr(cfg, f)))
+" > /tmp/after.txt
+# then the same against the previous version, and: diff /tmp/before.txt /tmp/after.txt
+```
+
+Every difference must be one you can explain. This is the cheapest safety net there is.
+
+### Restart without killing work in flight
+
+Ship the idle-guarded restart rather than a bare one:
+
+```bash
+scripts/restart_if_idle.sh my-lane.service            # a `systemctl --user` unit
+scripts/restart_if_idle.sh my-lane.service --system   # a system unit
+```
+
+It restarts the unit unless a deep-run child is alive inside the service cgroup, in which case it
+says so and exits 0. Shallow work is deliberately not protected: it finishes in seconds and
+survives a restart losslessly, because an unclaimed task stays queued and a task claimed mid-step
+is reaped by the backend's stale-task sweep.
+
+Schedule it so a lane can never drift far from the code you released:
+
+```ini
+# ~/.config/systemd/user/my-lane-restart.timer
+[Timer]
+OnCalendar=*-*-* 04:30:00
+Persistent=true
+RandomizedDelaySec=300
+```
+
+A scheduled refresh is a safety net, not a deploy mechanism. **It will also pick up anything else
+sitting in your working tree when it fires**, reviewed or not, so treat an editable install's
+working tree as production.
+
+### Then confirm it came up
+
+```bash
+systemctl --user is-active my-lane.service
+journalctl --user -u my-lane.service -n 60 --no-pager
+```
+
+Look for the identity line, a poll cycle completing, and no `ImportError` / `AttributeError` /
+`ConfigFileError`. Then leave it one poll interval and check that a real task ran.
+
+### Rollback
+
+Keep this possible before you need it. If your consumer is not in version control, copy it aside
+first (`cp -a my_lane.py my_lane.py.bak.$(date +%F)`); restoring is then a copy plus a restart.
+Rolling back the *library* is separate, and if several lanes share one install, a library rollback
+moves all of them at once.
+
 ## Operational notes
 
 - **State store.** `QAR_STATE_PATH` holds the signature dedup store for exactly-once handling.

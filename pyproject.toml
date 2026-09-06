@@ -7,7 +7,7 @@ name = "quest-ai-runner"
 version = "0.1.0"
 description = "The orchestrator brain (importable core) plus the queued-task executor (runner) for Quest AI tasks. Generic, no consumer-specific logic."
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"  # tomllib (RunnerConfig.from_file) is 3.11+
 license = { text = "Apache-2.0" }
 authors = [{ name = "Spiritual Data", email = "opensource@spiritualdata.org" }]
 keywords = ["quest", "orchestrator", "agent", "task-runner", "ai", "llm"]

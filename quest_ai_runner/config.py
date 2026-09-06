@@ -7,6 +7,7 @@ hardcodes none of them. Build the wired-up brain + poller via the factory helper
 """
 from __future__ import annotations
 
+import dataclasses
 import fcntl
 import logging
 import os
@@ -14,7 +15,7 @@ import threading
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple, Union
 
 _log = logging.getLogger("quest-ai-runner.context")
 
@@ -44,6 +45,13 @@ from .core.model_registry import ModelRegistry
 from .core.orchestrator import Orchestrator, OrchestratorConfig
 from .resources import ResourceLimits
 
+if TYPE_CHECKING:
+    # Type-checking only: importing runner.personas for real at module level would be circular
+    # (quest_ai_runner.runner's __init__ imports .poller, which imports RunnerConfig from THIS
+    # module). Every runtime use below imports it lazily instead, matching how this file already
+    # defers its other runner/adapter imports (e.g. QuestClient inside build_orchestrator).
+    from .runner.personas import PersonaResolverConfig
+
 # Sentinel default for RunnerConfig.context_assembler: "build the default FileContextStore".
 # Distinct from None (which means context handling is explicitly disabled) and from an instance
 # (use that one). Lets context handling be ON BY DEFAULT while staying overridable and disableable.
@@ -63,6 +71,50 @@ _AUTO_DEEP_RUNNER = object()
 # handler (``core.attachments.prepare_attachments``) with a clear note rather than processed.
 # 50 MB. Centralized here so both the runner config and the handler read the same number.
 MAX_ATTACHMENT_BYTES = 50 * 1024 * 1024
+
+
+class ConfigFileError(ValueError):
+    """A config FILE problem: missing, unreadable, invalid TOML, or naming a key ``RunnerConfig``
+    cannot take from a file. A subclass of ``ValueError`` (not a bare ``Exception``) so code that
+    already wraps config construction in ``except ValueError`` keeps working; check the type when a
+    config-file problem needs different handling than any other invalid config.
+
+    Every one of these is intentionally LOUD — raised, never logged-and-quietly-ignored. This repo
+    has scar tissue about a config field that silently did nothing because nobody validated the key
+    that set it (see the quest-backend ``UpdateAutopilotRequest`` incident referenced in
+    ``docs/writing-a-consumer.md``): a typo'd key in a config file must fail the process at
+    startup, loudly naming the mistake, not quietly run with a default nobody chose.
+    """
+
+
+# TOML-file-expressible ``RunnerConfig`` fields: plain data (str/int/float/bool/dict/list-of-str)
+# that round-trips through TOML with no Python object involved. Everything else on ``RunnerConfig``
+# is a live adapter/callable/sentinel (a ``ModelProvider``, a ``DeepRunner`` instance, the
+# ``_AUTO_*`` sentinels, a resolver callable, ...) that cannot be expressed as TOML data at all —
+# accepting one of those key names in a file would silently build a config whose field holds a
+# plain string or dict where an object belongs, which then fails far from the file that caused it,
+# deep inside whatever first calls that field. ``RunnerConfig.from_file`` rejects those BY NAME,
+# loudly, instead. Keep this in sync when a new plain-data field is added to ``RunnerConfig``.
+_FILE_SCALAR_FIELDS = {
+    "quest_base_url", "quest_api_key", "team_id", "discovery_team_id", "org_id",
+    "runner_label", "env_id",
+    "model_fallback", "model_provider_overrides",
+    "context_cards_dir",
+    "channel_allowed_senders", "channel_ack_after_seconds", "channel_progress_min_seconds",
+    "channel_turn_timeout_seconds", "channel_state_path",
+    "corpus_root", "context_preamble",
+    "poll_interval_seconds", "poll_lookahead_minutes", "max_concurrent_tasks",
+    "default_assignee_user_id",
+    "wait_channel_enabled", "context_poll_seconds", "wait_timeout_seconds",
+    "rep_sync_direction",
+    "quest_folder_map", "quest_folder_sync_direction", "quest_folder_zones", "quest_goal_sync",
+    "autopilot_ensure_pass_task", "autopilot_pass_time", "autopilot_daily_budget",
+    "autopilot_settings_refresh_seconds", "autopilot_backpressure", "autopilot_adopt_recurring",
+    "extra",
+}
+# Special-cased NESTED tables: the TOML value is itself a table and becomes a specific dataclass
+# (``PersonaResolverConfig``) rather than being assigned to the field as-is.
+_FILE_SPECIAL_FIELDS = {"personas"}
 
 
 @dataclass
@@ -216,6 +268,17 @@ class RunnerConfig:
 
     # --- the org's skills/corpus path (for orgs); generic, optional ---
     corpus_root: Optional[str] = None
+    # Org/persona context prepended to every deep-run brief (the ``SubprocessConfig.context_preamble``
+    # a consumer previously had to build a ``SubprocessGoalRunner`` by hand just to set). Read by
+    # ``resolve_deep_runner`` when it builds the DEFAULT worker (``deep_runner`` left unset): the
+    # auto-built ``SubprocessConfig`` gets ``context_preamble=cfg.context_preamble or ""``, so a
+    # consumer that wants only "run as this team, with this doctrine" — no other worker
+    # customization — never has to construct a ``SubprocessConfig`` at all. Ignored when
+    # ``deep_runner`` is an explicit instance (that instance's own ``context_preamble`` wins, since
+    # THAT is the consumer overriding this same thing on purpose). ``cli.py`` fills this from
+    # ``QAR_CONTEXT_PREAMBLE_FILE`` (a file path — multi-line org doctrine is miserable as a bare env
+    # var) or the shorter ``QAR_CONTEXT_PREAMBLE`` (inline, for a one-liner).
+    context_preamble: Optional[str] = None
 
     # --- tuning ---
     orchestrator: OrchestratorConfig = field(default_factory=OrchestratorConfig)
@@ -263,6 +326,14 @@ class RunnerConfig:
     # maps to a (user_id, skill_dir)), so it's a resolver callable, not baked into the brain.
     # Given a task dict, return ``(user_id, skill_dir)`` to sync that rep, or ``None`` to skip.
     rep_sync_resolver: Optional[Callable[[Dict[str, Any]], Optional[Tuple[str, str]]]] = None
+    # DECLARATIVE alternative to writing ``rep_sync_resolver`` by hand (see ``runner/personas.py``
+    # and ``docs/personas.md``). Two independent consumers each hand-wrote the same persona-
+    # resolution machinery (a registry of ids -> skill folders, plus a policy for picking one from a
+    # task) before this existed; set ``personas`` instead and ``resolve_rep_sync_resolver`` (called
+    # by ``Poller.__init__``) composes the equivalent callable for you. An EXPLICIT
+    # ``rep_sync_resolver`` always wins over this — set both only when you mean to fully replace the
+    # declarative policy with your own callable. Left None (the default), nothing changes.
+    personas: Optional["PersonaResolverConfig"] = None
     # Sync DIRECTION for the opt-in rep flow above (only consulted when ``rep_sync_resolver`` is
     # set and resolves a target). Generic, with a sensible default:
     #   * "pull" (default) — Quest -> local skill file BEFORE the run, so the rep behaves as its
@@ -384,6 +455,135 @@ class RunnerConfig:
                 "quest_folder_sync_direction must be 'pull', 'push', or 'both' "
                 f"(got {self.quest_folder_sync_direction!r})")
         return problems
+
+    @classmethod
+    def from_file(cls, path: Union[str, "os.PathLike[str]"]) -> "RunnerConfig":
+        """Build a ``RunnerConfig`` from a TOML file. Keys mirror ``RunnerConfig`` field names.
+
+        Precedence with the environment: this is the FILE's baseline only. ``cli.py``'s
+        ``_config_from_env`` (given ``config_path=`` or ``QAR_CONFIG_FILE``) layers environment
+        variables on top of a file built this way, and an env var always wins on any field both
+        set — see ``_layer_file_defaults`` there. ``from_file`` on its own reads no environment
+        variable and applies no precedence; it only parses the file.
+
+        Fails LOUDLY (raises :class:`ConfigFileError`) instead of silently dropping anything, on:
+          * a missing or unreadable file, or invalid TOML;
+          * a top-level key that is not a real ``RunnerConfig`` field name at all;
+          * a top-level key that IS a real field name but holds a live adapter/callable/sentinel
+            (a ``ModelProvider``, a ``DeepRunner`` instance, ``rep_sync_resolver``, ...) that cannot
+            be expressed as TOML data — wire that one in Python, or via its matching ``QAR_*``
+            environment variable, instead (see ``docs/writing-a-consumer.md``);
+          * an invalid ``[personas]`` table (its keys must be ``PersonaResolverConfig`` fields).
+
+        Uses the stdlib ``tomllib`` (Python 3.11+; this repo targets 3.12) — no new dependency.
+        """
+        p = Path(path)
+        try:
+            text = p.read_text(encoding="utf-8")
+        except OSError as e:
+            raise ConfigFileError(f"could not read config file {p}: {e}") from e
+        try:
+            import tomllib
+        except ModuleNotFoundError as e:  # pragma: no cover - this repo's target is 3.12
+            raise ConfigFileError(
+                "RunnerConfig.from_file() needs the stdlib 'tomllib' module (Python 3.11+); this "
+                "interpreter is older. Upgrade Python, or parse the file yourself and construct "
+                "RunnerConfig(...) directly."
+            ) from e
+        try:
+            data = tomllib.loads(text)
+        except tomllib.TOMLDecodeError as e:
+            raise ConfigFileError(f"config file {p} is not valid TOML: {e}") from e
+        if not isinstance(data, dict):
+            raise ConfigFileError(f"config file {p} must be a table at the top level")
+
+        data = dict(data)
+        personas_table = data.pop("personas", None)
+
+        all_field_names = {f.name for f in dataclasses.fields(cls)}
+        not_file_expressible = all_field_names - _FILE_SCALAR_FIELDS - _FILE_SPECIAL_FIELDS
+        unknown = set(data) - all_field_names
+        unsupported = set(data) & not_file_expressible
+        if unknown:
+            raise ConfigFileError(
+                f"config file {p} has key(s) that are not RunnerConfig fields at all: "
+                f"{', '.join(sorted(unknown))}. Refusing to load rather than silently ignoring "
+                f"them — a typo here would otherwise drop the setting instead of applying it."
+            )
+        if unsupported:
+            raise ConfigFileError(
+                f"config file {p} sets key(s) RunnerConfig cannot take from a file: "
+                f"{', '.join(sorted(unsupported))} (each holds a live adapter, callable, or "
+                f"object, not plain data). Wire it in Python, or via its matching QAR_* "
+                f"environment variable, instead — see docs/writing-a-consumer.md."
+            )
+
+        kwargs: Dict[str, Any] = dict(data)
+        if personas_table is not None:
+            if not isinstance(personas_table, dict):
+                raise ConfigFileError(f"config file {p}: [personas] must be a table")
+            from .runner.personas import PersonaResolverConfig
+
+            persona_fields = {f.name for f in dataclasses.fields(PersonaResolverConfig)}
+            unknown_persona = set(personas_table) - persona_fields
+            if unknown_persona:
+                raise ConfigFileError(
+                    f"config file {p}: [personas] has key(s) that are not PersonaResolverConfig "
+                    f"fields: {', '.join(sorted(unknown_persona))}"
+                )
+            try:
+                kwargs["personas"] = PersonaResolverConfig(**personas_table)
+            except TypeError as e:
+                raise ConfigFileError(f"config file {p}: [personas] table is invalid ({e})") from e
+
+        try:
+            return cls(**kwargs)
+        except TypeError as e:
+            raise ConfigFileError(f"config file {p} could not build a RunnerConfig: {e}") from e
+
+
+def apply_file_defaults(cfg: RunnerConfig, file_cfg: Optional[RunnerConfig]) -> RunnerConfig:
+    """Fill any field ``cfg`` still holds at ``RunnerConfig``'s own dataclass default from
+    ``file_cfg``'s value, in place, and return ``cfg`` — how "a config file's values lose to
+    environment variables" is implemented.
+
+    Rather than threading a parallel file-vs-env check through every line of ``_config_from_env``
+    (which builds ``cfg`` from env vars): build ``cfg`` the ordinary env-driven way first, build
+    ``file_cfg`` from the file (:meth:`RunnerConfig.from_file`), then call this. A field an env var
+    actually set is, by definition, already different from the class default and is left alone
+    here; a field NO env var touched (still at the default) takes the file's value instead, if the
+    file set something different from that same default.
+
+    Comparing field VALUES with ``==`` (not identity) is what makes this safe for the plain-data
+    fields ``from_file`` can populate (str/int/float/bool/dict/list, and ``PersonaResolverConfig``
+    via its own generated ``__eq__``). A field ``from_file`` never touches (an adapter, a callable,
+    one of the ``_AUTO_*`` sentinels) never differs from the default here either, because
+    ``file_cfg`` — itself only ever built by ``from_file`` — never set one.
+
+    ``file_cfg=None`` (no config file was given) is a no-op, returning ``cfg`` unchanged.
+    """
+    if file_cfg is None:
+        return cfg
+    defaults = RunnerConfig()
+    for f in dataclasses.fields(RunnerConfig):
+        if not f.init:
+            continue
+        default_value = getattr(defaults, f.name)
+        current_value = getattr(cfg, f.name)
+        try:
+            cfg_at_default = current_value == default_value
+        except Exception:  # noqa: BLE001 - an exotic __eq__ must never break config building
+            cfg_at_default = current_value is default_value
+        if not cfg_at_default:
+            continue  # an env var (or the caller) already set this field; the file never wins here
+        file_value = getattr(file_cfg, f.name)
+        try:
+            file_differs = file_value != default_value
+        except Exception:  # noqa: BLE001
+            file_differs = file_value is not default_value
+        if file_differs:
+            setattr(cfg, f.name, file_value)
+    return cfg
 
 
 def _retrieval_has_web_search(retrieval) -> bool:
@@ -828,6 +1028,10 @@ def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
       * ``QAR_DEEP_MODELS`` → the goal loop's model ladder, which lives on ``OrchestratorConfig``,
         not on the runner.
 
+    ``cfg.context_preamble``, when set, becomes the auto-built worker's ``context_preamble`` — the
+    one field a consumer most often wants to change is now reachable without building a
+    ``SubprocessConfig`` by hand (see the field's own docstring on ``RunnerConfig``).
+
     Degrades gracefully and NEVER raises. If the worker binary is not on PATH we return ``None``
     (no runner) after logging a loud warning: building a runner that would fail on every spawn
     would be worse than reporting honestly that execution is unavailable. ``warn=False`` silences
@@ -865,6 +1069,7 @@ def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
         runner = SubprocessGoalRunner(SubprocessConfig(
             working_dir=working_dir,
             claude_path=claude_path,
+            context_preamble=cfg.context_preamble or "",
         ))
         _log.info("deep runner: using the default SubprocessGoalRunner (%s, cwd=%s)",
                   found, working_dir)
@@ -874,6 +1079,38 @@ def resolve_deep_runner(cfg: RunnerConfig, *, warn: bool = True):
             _log.warning("deep runner: building the default SubprocessGoalRunner failed; deep/"
                          "execution work will be unavailable for this process", exc_info=True)
         return None
+
+
+def resolve_rep_sync_resolver(cfg: RunnerConfig, *, quest_client: Any = None):
+    """Resolve ``cfg.rep_sync_resolver``, composing one from ``cfg.personas`` when the consumer
+    left the callable itself unset — the ``RunnerConfig.personas`` field's build path.
+
+    Tri-state-flavored, but simpler than the deep-runner/context-assembler sentinels because there
+    is no "auto-build a default" case here (an unset persona policy is a perfectly normal lane that
+    runs every task as the plain assistant):
+      * ``rep_sync_resolver`` already set (any consumer that wired one by hand, before ``personas``
+        existed, or one that wants to fully replace the declarative policy) → returned UNCHANGED.
+        An explicit callable always wins.
+      * ``rep_sync_resolver`` unset AND ``personas`` set → ``runner.personas.build_persona_resolver``
+        composes the equivalent callable from the declarative config.
+      * neither set → ``None`` (unchanged): no persona routing, exactly today's behavior.
+
+    Like ``resolve_deep_runner``, this does not mutate ``cfg`` itself — the caller (``Poller``)
+    writes the result back, the same in-place style ``build_orchestrator`` uses for ``deep_runner``.
+    ``runner.personas`` is imported LAZILY, only when ``cfg.personas`` is actually set, so building
+    a RunnerConfig with no persona policy never pays for (or requires) that import — see the
+    ``TYPE_CHECKING`` import note near the top of this module for why it can't be a top-level import.
+    """
+    if cfg.rep_sync_resolver is not None or getattr(cfg, "personas", None) is None:
+        return cfg.rep_sync_resolver
+    from .runner.personas import build_persona_resolver
+
+    return build_persona_resolver(
+        cfg.personas,
+        provider=cfg.model_provider,
+        quest_client=quest_client,
+        team_id=cfg.team_id or "",
+    )
 
 
 def resolve_fast_edit_runner(cfg: RunnerConfig):

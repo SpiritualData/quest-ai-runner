@@ -61,12 +61,17 @@ quest-ai-runner --once     # one scan then exit (good for cron)
 quest-ai-runner            # loop forever (good for a service)
 ```
 
-Prefer to see/customize the wiring in code? Copy [`examples/custom_consumer.py`](../examples/custom_consumer.py)
-and run [`examples/run_lane.py`](../examples/run_lane.py). To prove the full round-trip against a
-live backend, use [`examples/e2e_demo.py`](../examples/e2e_demo.py) (it stubs only the LLM).
+Prefer to see the wiring in code, or drive it from a config file instead of env vars? Copy
+[`examples/minimal_lane.py`](../examples/minimal_lane.py) + [`examples/qar.toml`](../examples/qar.toml)
+— see [Your first lane](tutorial-your-first-lane.md) for the walkthrough. For a bigger reference with
+every adapter wired by hand, see [`examples/custom_consumer.py`](../examples/custom_consumer.py) and
+[`examples/run_lane.py`](../examples/run_lane.py) (the latter predates `runner.lane.run_lane` and is
+kept for reference, not as the recommended starting point any more). To prove the full round-trip
+against a live backend, use [`examples/e2e_demo.py`](../examples/e2e_demo.py) (it stubs only the LLM).
 
 ## 4. Where to go next
 
 - Make it yours → [Writing a consumer](writing-a-consumer.md)
+- Add a persona roster, a corpus, a deep-run preamble → [Your first lane](tutorial-your-first-lane.md)
 - Plug in a different source or model → [Implementing adapters](adapters.md)
 - Ship it → [Deployment](deployment.md)

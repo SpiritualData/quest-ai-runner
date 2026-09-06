@@ -6,6 +6,9 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 
 - **[Quickstart](quickstart.md)** — install the library, ground the brain in-process, then run the
   executor lane against a Quest backend.
+- **[Your first lane](tutorial-your-first-lane.md)** — from nothing to a working executor lane, and
+  what a consumer is NOT supposed to own any more (the CLI/loop shape, `.env` loading, persona
+  resolution — those are library concerns; see [`examples/minimal_lane.py`](../examples/minimal_lane.py)).
 
 ## How-to guides
 
@@ -13,6 +16,10 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
   backend, corpus, and persona via `RunnerConfig`.
 - **[Implementing adapters](adapters.md)** — the four interfaces (`RetrievalAdapter`,
   `ModelProvider`, `DeepRunner`, `EscalationSink`) and how to build your own.
+- **[Personas](personas.md)** — run each task AS somebody without writing a resolver: the persona
+  registry (both file shapes), the four resolution steps (structured field, LLM-judged explicit
+  ask, domain-card dominance, structural fallback), auto-registering an unknown persona as a real
+  skill, and why a bare name mention must never activate one.
 - **[The ACP deep runner](acp-deep-runner.md)** — the opt-in `DeepRunner` that drives Claude over
   the Agent Client Protocol instead of a one-shot `claude -p`, so a message queued mid-run reaches
   the turn already in progress. How to wire it, the Node >= 22 requirement, and why the default

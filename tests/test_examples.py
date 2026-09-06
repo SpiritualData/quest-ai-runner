@@ -15,8 +15,28 @@ from .conftest import StubEscalation, StubRetrieval
 
 def test_all_example_modules_import():
     # Importing proves the modules are syntactically valid and their imports resolve.
-    for name in ("examples", "examples.custom_consumer", "examples.run_lane", "examples.e2e_demo"):
+    for name in ("examples", "examples.custom_consumer", "examples.run_lane", "examples.e2e_demo",
+                 "examples.minimal_lane"):
         assert importlib.import_module(name) is not None
+
+
+def test_minimal_lane_build_config_layers_env_over_its_shipped_toml(monkeypatch, tmp_path):
+    """examples/minimal_lane.py: the shipped qar.toml sets runner_label; an env var still wins,
+    and QUEST_TEAM_ID (not in the file at all) reaches the config too."""
+    from examples import minimal_lane
+
+    monkeypatch.setenv("QUEST_BASE_URL", "https://api.example.org")
+    monkeypatch.setenv("QUEST_API_KEY", "qsk_example")
+    monkeypatch.setenv("QUEST_TEAM_ID", "team_example")
+    monkeypatch.delenv("QAR_RUNNER_LABEL", raising=False)
+
+    cfg = minimal_lane.build_config()
+    assert cfg.team_id == "team_example"
+    assert cfg.runner_label == "minimal-lane-example"  # from qar.toml, no env var set
+
+    monkeypatch.setenv("QAR_RUNNER_LABEL", "from-env-instead")
+    cfg2 = minimal_lane.build_config()
+    assert cfg2.runner_label == "from-env-instead"  # env wins over the same file value
 
 
 def test_custom_consumer_build_config_from_env(monkeypatch, tmp_path):

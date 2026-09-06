@@ -7,6 +7,11 @@ persona, decision routing — to the generic library. Everything flows through a
 > Keep your real keys and ids in the environment, never in code. The shipped
 > [`examples/`](../examples/) contain only env lookups and placeholders — copy them.
 
+> **New to this?** [`tutorial-your-first-lane.md`](tutorial-your-first-lane.md) walks from nothing
+> to a working lane and says plainly what a consumer is NOT supposed to own (the CLI/loop shape,
+> `.env` loading, persona resolution — all library concerns now). This page is the fuller
+> reference once you've done that walkthrough.
+
 ## The shape
 
 ```python
@@ -59,11 +64,19 @@ def build_config() -> RunnerConfig:
 | `file_writer` | OPT-IN, `None` by default: a `FileWriter` (e.g. `FilesWriter(root)`). The **only** switch that grants this library write access to your files; setting it puts the one-call `FastEditRunner` in front of the deep runner. See [fast-edit-runner.md](fast-edit-runner.md) |
 | `escalation` | an `EscalationSink` — where confirm/decision requests go (defaults from the Quest client) |
 | `corpus_root` | the org's files/skills root (generic, optional) |
+| `context_preamble` | org/persona doctrine prepended to every deep-run brief, **without** having to build a `SubprocessConfig` by hand — read by the auto-built default `deep_runner` (see below). An explicit `deep_runner` instance's own `context_preamble` still wins |
+| `discovery_team_id` | a separate team scope for task DISCOVERY only (heartbeat/escalation keep using `team_id`). `None` (default) falls back to `team_id`; `""` means owner-scoped discovery (a personal/single-user lane whose tasks carry no `team_id`) |
 | `rep_sync_resolver` | OPT-IN: map a task to `(user_id, skill_dir)` to run it AS that AI rep (off by default) |
+| `personas` | a declarative alternative to writing `rep_sync_resolver` by hand — see [personas.md](personas.md) and [`runner/personas.py`](../quest_ai_runner/runner/personas.py). An explicit `rep_sync_resolver` always wins over this |
 | `rep_sync_direction` | `"pull"` (default) / `"push"` / `"both"`: controls Quest <-> skill-file sync for reps |
 | `default_assignee_user_id` | who human-only decisions route to by default |
-| `orchestrator`, `poll_interval_seconds`, `poll_lookahead_minutes`, `max_concurrent_tasks` | tuning |
+| `orchestrator`, `poll_interval_seconds`, `poll_lookahead_minutes`, `max_concurrent_tasks` | tuning (`orchestrator.deep_max_turns` is the hard per-attempt turn cap on the deep goal loop) |
+| `autopilot_pass_time`, `autopilot_adopt_recurring` | per-deployment defaults for opted-in quests that don't state their own (see `runner/autopilot.py`) |
 | `extra` | a free-form dict for your own needs |
+
+Building `RunnerConfig` by hand isn't the only option any more — see **File-based config** below
+for the same fields expressed as a TOML file, and **Running the lane** for the entry point that
+turns a built config into a running poll loop with no hand-written CLI at all.
 
 ## Deep execution is on by default
 
@@ -86,6 +99,8 @@ so there is one set of switches and not two:
 | `QAR_CLAUDE_PATH` | the worker binary (default `claude`, looked up on PATH) |
 | `QAR_DEEP_TIMEOUT_SECONDS` | wall-clock cap per deep run (default 1 hour) |
 | `QAR_DEEP_MODELS` | the goal loop's escalation ladder (lives on `OrchestratorConfig`) |
+| `QAR_DEEP_MAX_TURNS` | hard per-attempt turn cap (`OrchestratorConfig.deep_max_turns`, default 30) |
+| `QAR_CONTEXT_PREAMBLE_FILE` | a file whose contents become `RunnerConfig.context_preamble` (org/persona doctrine on every deep-run brief) — preferred over the inline `QAR_CONTEXT_PREAMBLE` (still supported) since multi-line prose is miserable as a bare env var |
 
 Resolution happens in `config.resolve_deep_runner`, which `build_orchestrator` calls and then
 **writes back onto your config**: after `build_orchestrator(cfg)`, `cfg.deep_runner` is always a
@@ -159,6 +174,57 @@ from quest_ai_runner.runner.poller import Poller         # executor lane
 orch = build_orchestrator(cfg)        # for in-process chat: orch.run(message)
 Poller(cfg, state_path="qar_state.json").run_forever()   # for the executor lane
 ```
+
+## Running the lane: `runner.lane.run_lane`
+
+The four lines above are still exactly what an executor lane does, but you should not write the
+`--check` / `--once` / loop-forever dispatch, the logging setup, or the `.env` loading around them
+by hand — that is generic, and it is now in the library:
+
+```python
+from quest_ai_runner.runner.lane import run_lane
+
+def main(argv=None) -> int:
+    return run_lane(argv, prog="my-lane", description="My team's lane", lane_label="my-lane",
+                    log_name="my-lane", build_config=build_config)
+
+if __name__ == "__main__":
+    raise SystemExit(main())
+```
+
+That is the whole entry point — `build_config` (above) is the only thing genuinely yours. See
+[tutorial-your-first-lane.md](tutorial-your-first-lane.md) for the full walkthrough and
+[`examples/minimal_lane.py`](../examples/minimal_lane.py) for a runnable one, and `run_lane`'s own
+docstring for `env_file`/`state_path`/`not_configured_keywords`.
+
+## File-based config
+
+`RunnerConfig.from_file(path)` builds a config from a TOML file whose keys mirror `RunnerConfig`
+field names (stdlib `tomllib`, Python 3.11+ — no new dependency):
+
+```toml
+# qar.toml
+team_id = "team_1"
+runner_label = "my-team-runner"
+poll_interval_seconds = 300
+autopilot_pass_time = "06:00"
+
+[personas]
+skills_root = "/srv/skills"
+llm_explicit_ask = true
+```
+
+Fields that hold a live object (`retrieval`, `model_provider`, `deep_runner`, `rep_sync_resolver`,
+...) cannot be expressed this way — `from_file` refuses those by name, loudly, rather than silently
+building a config with the wrong thing in that field. `[personas]` is the one nested table, built
+into a `PersonaResolverConfig` (see [personas.md](personas.md)).
+
+The stock CLI layers this under your environment variables, never over them — pass `--config
+<path>` (the `poll`/`chat`/`channel` subcommands) or set `QAR_CONFIG_FILE`, and any `QUEST_*` /
+`QAR_*` env var that also sets a field still wins. A missing file, invalid TOML, or an unknown key
+raises `config.ConfigFileError` (a `ValueError`) at startup — this repo has scar tissue about a
+config field that silently did nothing because nobody validated the key that set it, so a config
+file is refused rather than partially applied.
 
 ## Capabilities are derived, not asserted
 
@@ -378,5 +444,7 @@ immediately. That thread is **owned**, not fire-and-forget: it walks the corpus 
 
 ## Next
 
+- Start from nothing → [Your first lane](tutorial-your-first-lane.md)
+- Declarative persona routing → [Personas](personas.md)
 - Plug in a non-file source or a different model → [Implementing adapters](adapters.md)
 - Run it as a service → [Deployment](deployment.md)

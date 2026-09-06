@@ -11,7 +11,7 @@ from quest_ai_runner.config import RunnerConfig
 
 
 def _valid_cfg(corpus_root=None):
-    def _make():
+    def _make(config_path=None):
         return RunnerConfig(
             quest_base_url="http://example.invalid",
             quest_api_key="qsk_test",

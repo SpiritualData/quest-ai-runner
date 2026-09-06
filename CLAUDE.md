@@ -146,6 +146,37 @@ Instead:
   `_message_requests_change` and `judge_execution_directive` do on the user message). The rule is
   specifically about gating on words the *model* generated.
 
+## 🔒 Hard rule #4 — a second consumer's need belongs in the library, not copied into a consumer
+
+**If a second lane would need it, it goes in `quest_ai_runner`, not in a consumer's own file.**
+This repo exists because generic, reusable plumbing kept getting written once, privately, per
+consumer, instead of once, here, for everybody. Three separate consumers each hand-rolled the same
+executor-lane entry point (the `--check`/`--once`/loop-forever driver around `Poller`); two of them
+noticed the duplication and extracted a shared copy of it — but OUTSIDE this library, in a path only
+their own two lanes could import, so the third consumer had nowhere to find it and wrote a fourth
+copy from scratch. Separately, two consumers independently wrote persona-resolution machinery (a
+registry of ids to skill folders, plus a policy for picking one from a task) with different
+capabilities that never met, until both were rebuilt as one generic module.
+
+**The test to apply:** before writing a helper, a resolver, a CLI loop, or a config-loading
+function inside a consumer, ask "would a second lane need this?" If yes, it is not consumer logic —
+it is a gap in this library, and the fix is here:
+
+- A shared entry-point shape, loop, or process-lifecycle concern → `runner/lane.py` (or a new
+  module next to it), not a copy in your consumer. Start from
+  [`docs/tutorial-your-first-lane.md`](docs/tutorial-your-first-lane.md).
+- A policy for deciding WHO or WHAT handles a task, expressible as data rather than one lane's
+  bespoke code → a `RunnerConfig` field with a resolver function beside it (see
+  `runner/personas.py`), documented in [`docs/personas.md`](docs/personas.md), not a hand-written
+  callable duplicated across consumers.
+- Anything else generic → an adapter interface (hard rule #2) or a new `RunnerConfig` field, per
+  the usual rule.
+
+This does not mean invent generality nobody asked for — a genuinely one-off piece of a single
+consumer's business logic stays in that consumer, same as always. It means: when you notice the
+SAME piece of plumbing being built twice, the second build is the signal to move it here instead of
+finishing a second private copy.
+
 ## Conventions
 
 - Match the surrounding code's style, naming, and comment density.

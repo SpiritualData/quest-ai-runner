@@ -13,7 +13,7 @@ from quest_ai_runner import cli
 from quest_ai_runner.config import RunnerConfig
 
 
-def _valid_cfg() -> RunnerConfig:
+def _valid_cfg(config_path=None) -> RunnerConfig:
     return RunnerConfig(
         quest_base_url="http://example.invalid",
         quest_api_key="qsk_test",

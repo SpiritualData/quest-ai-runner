@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
 """Run one executor lane built from ``custom_consumer.build_config`` — discover, claim, run, report.
 
+NOTE: this file predates ``quest_ai_runner.runner.lane.run_lane`` (the library's own shared
+``--check``/``--once``/loop-forever driver) and duplicates what that function now does. It is kept
+for reference alongside ``custom_consumer.py``'s from-scratch adapter wiring, but a NEW lane should
+start from ``examples/minimal_lane.py`` (see ``docs/tutorial-your-first-lane.md``) instead of
+copying the loop below.
+
 This mirrors the ``quest-ai-runner`` console entry point but uses an explicitly-built
 ``RunnerConfig`` from ``examples/custom_consumer.py``, so you can see the whole wiring in one
 place and customize it. It degrades visibly (never error-spams) while a key is still pending.

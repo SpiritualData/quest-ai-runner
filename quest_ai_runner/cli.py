@@ -31,6 +31,46 @@ Env it reads:
   QAR_ENV_ID (optional)                          — which of the team's environments this runner is
                                                    (omit = the team's default env; set a distinct id
                                                    per runner when a team attaches SEVERAL)
+  QAR_CONFIG_FILE (optional)                     — path to a TOML config file (RunnerConfig.from_file);
+                                                   the `poll`/`chat`/`channel` subcommands' `--config`
+                                                   flag does the same thing. File values are a
+                                                   BASELINE only: any env var above that also sets a
+                                                   field wins over the file. See
+                                                   docs/writing-a-consumer.md.
+  QAR_DISCOVERY_TEAM_ID (optional)               — separate team scope for task DISCOVERY only
+                                                   (heartbeat/escalation keep using QUEST_TEAM_ID).
+                                                   Unset = fall back to QUEST_TEAM_ID; set to "" for
+                                                   OWNER-scoped discovery (a personal/single-user
+                                                   lane whose tasks are created with no team_id).
+  QAR_DECISION_ASSIGNEE (optional)               — user id that human-only confirm/decision
+                                                   requests route to by default (RunnerConfig.
+                                                   default_assignee_user_id / QuestDecisionSink's
+                                                   fallback assignee)
+  QAR_DEEP_MAX_TURNS (optional)                  — hard per-attempt turn cap for the deep goal loop
+                                                   (OrchestratorConfig.deep_max_turns; library
+                                                   default 30 — raise it for a lane whose tasks
+                                                   chain several real actions in one run)
+  QAR_REP_SYNC_DIRECTION (optional)              — "pull" (default) | "push" | "both"; sets
+                                                   RunnerConfig.rep_sync_direction. Only takes
+                                                   effect once a rep_sync_resolver or a personas
+                                                   policy (RunnerConfig.personas, see
+                                                   runner/personas.py) is also wired.
+  QAR_CONTEXT_PREAMBLE_FILE (optional)           — path to a file whose contents become
+                                                   RunnerConfig.context_preamble (org/persona
+                                                   doctrine prepended to every deep-run brief by the
+                                                   AUTO-BUILT deep runner). Preferred over
+                                                   QAR_CONTEXT_PREAMBLE (inline; still supported,
+                                                   for a short one-liner) since multi-line prose is
+                                                   miserable as a bare env var; the file wins when
+                                                   both are set.
+  QAR_AUTOPILOT_PASS_TIME (optional)             — default daily local time ("HH:MM") for an
+                                                   opted-in quest that names no run_time of its own
+                                                   (RunnerConfig.autopilot_pass_time; default "07:00")
+  QAR_AUTOPILOT_ADOPT_RECURRING (optional)       — 1/true default for RunnerConfig.
+                                                   autopilot_adopt_recurring (fold a quest's own due
+                                                   recurring tasks into its autopilot pass); a
+                                                   quest's own autopilot.adopt_recurring setting
+                                                   always overrides this when it states one
   QAR_WAIT_CHANNEL (optional)                    — "0"/"false"/"off" disables the long-poll fast
                                                    lane for interactive context-requests (falls back
                                                    to a short poll, QAR_CONTEXT_POLL_SECONDS).
@@ -192,7 +232,7 @@ import shutil
 
 from .adapters import AnthropicProvider, ClaudeCliProvider, ClaudeConversationsAdapter, CompositeRetrievalAdapter, FilesAdapter, GeminiProvider, OpenAIProvider, WebSearchAdapter
 from .adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
-from .config import RunnerConfig
+from .config import RunnerConfig, apply_file_defaults
 from .core.adapters import ModelProvider
 from .pricing import estimate_bootstrap_cost, get_provider_and_model
 from .runner.channel_runner import ChannelRunner
@@ -304,8 +344,22 @@ def _apply_channel_env(cfg: RunnerConfig) -> None:
         cfg.channel_state_path = os.environ["QAR_CHANNEL_STATE_PATH"]
 
 
-def _config_from_env() -> RunnerConfig:
-    corpus = os.getenv("QAR_CORPUS_ROOT")
+def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
+    """Build a ``RunnerConfig`` from the environment (see the module docstring for the full list),
+    optionally layered on top of a TOML config file.
+
+    ``config_path`` (or ``QAR_CONFIG_FILE`` when the argument is omitted) names a file read via
+    ``RunnerConfig.from_file`` — see ``docs/writing-a-consumer.md``. Precedence: the FILE supplies
+    a baseline for whichever fields it sets; an environment variable that also sets a field always
+    wins (``config.apply_file_defaults``, applied once at the end, only fills fields no env var
+    touched). A bad file (missing, invalid TOML, an unknown or non-file-expressible key) raises
+    ``config.ConfigFileError`` — loudly, at startup, same as every other config problem this
+    function surfaces via ``RunnerConfig.validate()``.
+    """
+    config_path = config_path or os.getenv("QAR_CONFIG_FILE") or None
+    file_cfg = RunnerConfig.from_file(config_path) if config_path else None
+
+    corpus = os.getenv("QAR_CORPUS_ROOT") or (file_cfg.corpus_root if file_cfg else None)
     retrieval = FilesAdapter(corpus) if corpus else None
 
     # Optionally add live web search to the retrieval stack.
@@ -365,17 +419,63 @@ def _config_from_env() -> RunnerConfig:
         quest_api_key=os.getenv("QUEST_API_KEY", ""),
         team_id=os.getenv("QUEST_TEAM_ID", ""),
         org_id=os.getenv("QUEST_ORG_ID", ""),
+        # None (unset) falls back to team_id for discovery; "" (explicitly set empty) means
+        # owner-scoped discovery instead — os.environ.get (no default) is what preserves that
+        # three-way distinction. A personal/single-user lane whose tasks are created owner-scoped
+        # (null team_id) needs QAR_DISCOVERY_TEAM_ID="" for exactly this reason.
+        discovery_team_id=os.environ.get("QAR_DISCOVERY_TEAM_ID"),
         retrieval=retrieval,
         model_provider=_model_provider_from_env(),
         model_fallback=model_fallback or None,
         corpus_root=corpus,
         runner_label=os.getenv("QAR_RUNNER_LABEL") or None,
         env_id=os.getenv("QAR_ENV_ID") or None,
+        # Who human-only confirm/decision requests route to by default (QuestDecisionSink's
+        # fallback assignee). Documented since custom_consumer.py/.env.example but never actually
+        # wired into the stock CLI's env reading until now.
+        default_assignee_user_id=os.getenv("QAR_DECISION_ASSIGNEE") or None,
     )
     if os.getenv("QAR_MAX_PARALLEL"):
         cfg.orchestrator.max_parallel = int(os.environ["QAR_MAX_PARALLEL"])
     if os.getenv("QAR_POLL_INTERVAL"):
         cfg.poll_interval_seconds = float(os.environ["QAR_POLL_INTERVAL"])
+    # QAR_DEEP_MAX_TURNS: hard per-attempt turn cap for the deep goal loop (lives on
+    # OrchestratorConfig, not RunnerConfig directly, same as QAR_GOAL_TOKEN_BUDGET/
+    # QAR_GOAL_MAX_ATTEMPTS below). The library default (30) is tight for a lane whose tasks
+    # routinely chain several real actions in one run.
+    if os.getenv("QAR_DEEP_MAX_TURNS"):
+        try:
+            cfg.orchestrator.deep_max_turns = int(os.environ["QAR_DEEP_MAX_TURNS"])
+        except ValueError:
+            pass
+    # --- rep-sync direction (opt-in; only takes effect once a rep_sync_resolver/personas policy
+    # is also wired — see RunnerConfig.rep_sync_resolver / RunnerConfig.personas) --------------
+    if os.getenv("QAR_REP_SYNC_DIRECTION"):
+        cfg.rep_sync_direction = os.environ["QAR_REP_SYNC_DIRECTION"].strip().lower()
+    # --- autopilot tuning (opt-in per quest; see RunnerConfig.autopilot_*) ----------------------
+    if os.getenv("QAR_AUTOPILOT_PASS_TIME"):
+        cfg.autopilot_pass_time = os.environ["QAR_AUTOPILOT_PASS_TIME"].strip()
+    _adopt_recurring = (os.getenv("QAR_AUTOPILOT_ADOPT_RECURRING") or "").strip().lower()
+    if _adopt_recurring in ("1", "true", "on", "yes"):
+        cfg.autopilot_adopt_recurring = True
+    elif _adopt_recurring in ("0", "false", "off", "no"):
+        cfg.autopilot_adopt_recurring = False
+    # --- deep-run context preamble (org/persona doctrine prepended to every deep brief) ---------
+    # QAR_CONTEXT_PREAMBLE_FILE (a file path) is preferred: multi-line org doctrine is miserable as
+    # a bare env var. QAR_CONTEXT_PREAMBLE (inline) still works for a short one-liner and is kept
+    # for consumers already using it (see examples/custom_consumer.py, .env.example); the file
+    # variant wins when both are set. Only reaches the auto-built deep runner (see
+    # config.resolve_deep_runner) -- an explicit RunnerConfig.deep_runner instance is unaffected.
+    _preamble_file = os.getenv("QAR_CONTEXT_PREAMBLE_FILE")
+    if _preamble_file:
+        try:
+            cfg.context_preamble = Path(_preamble_file).read_text(encoding="utf-8")
+        except OSError as e:
+            logging.getLogger("quest-ai-runner").warning(
+                "QAR_CONTEXT_PREAMBLE_FILE=%r could not be read (%s); no context preamble set",
+                _preamble_file, e)
+    elif os.getenv("QAR_CONTEXT_PREAMBLE"):
+        cfg.context_preamble = os.environ["QAR_CONTEXT_PREAMBLE"]
 
     # --- quest <-> local folder sync (opt-in; see RunnerConfig.quest_folder_map) ---------------
     # QAR_QUEST_FOLDER_MAP: a JSON object mapping quest/goal id -> local folder, e.g.
@@ -541,6 +641,10 @@ def _config_from_env() -> RunnerConfig:
     _explain_tier = (os.getenv("QAR_EXPLAIN_TIER") or "").strip().lower()
     if _explain_tier:
         cfg.orchestrator.explain_tier = _explain_tier
+    # Config FILE last: fills any field no environment variable above touched, from config_path/
+    # QAR_CONFIG_FILE (see RunnerConfig.from_file + config.apply_file_defaults). A field an env var
+    # set always wins; this never overrides one.
+    apply_file_defaults(cfg, file_cfg)
     return cfg
 
 
@@ -650,6 +754,10 @@ def main(argv=None) -> int:
                         help="path to a persona/skill file injected into every turn "
                              "(default: QAR_REP_PERSONA_FILE env var)")
     chat_p.add_argument("--goal-id", default=None, help="attach session to this Quest goal id")
+    chat_p.add_argument("--config", default=None, metavar="PATH",
+                        help="TOML config file (see docs/writing-a-consumer.md); "
+                             "QAR_CONFIG_FILE also works. Environment variables always win over "
+                             "a value the file also sets.")
     chat_p.add_argument("--check", action="store_true",
                         help="validate chat prerequisites (model provider, context store) and exit, "
                              "without opening the terminal UI")
@@ -733,6 +841,10 @@ def main(argv=None) -> int:
     poll_p = sub.add_parser("poll", help="poll Quest for due tasks and run them")
     poll_p.add_argument("--once", action="store_true", help="one scan then exit (cron mode)")
     poll_p.add_argument("--check", action="store_true", help="validate config + key, then exit")
+    poll_p.add_argument("--config", default=None, metavar="PATH",
+                        help="TOML config file (see docs/writing-a-consumer.md); "
+                             "QAR_CONFIG_FILE also works. Environment variables always win over "
+                             "a value the file also sets.")
 
     # --- channel subcommand: hold a live, two-way conversation over a messaging channel -------
     channel_p = sub.add_parser(
@@ -741,6 +853,10 @@ def main(argv=None) -> int:
                            help="one receive+dispatch pass then exit (mainly for testing)")
     channel_p.add_argument("--check", action="store_true",
                            help="validate the channel config (provider, allowed senders), then exit")
+    channel_p.add_argument("--config", default=None, metavar="PATH",
+                           help="TOML config file (see docs/writing-a-consumer.md); "
+                                "QAR_CONFIG_FILE also works. Environment variables always win over "
+                                "a value the file also sets.")
 
     # Legacy: flags directly on the root command (no subcommand given) stay working; also
     # documented on `poll` above. Kept visible (not argparse.SUPPRESS) so `-h` shows them.
@@ -748,6 +864,9 @@ def main(argv=None) -> int:
                         help="poll mode: one scan then exit (cron mode); same as 'poll --once'")
     parser.add_argument("--check", action="store_true",
                         help="poll mode: validate config + key, then exit; same as 'poll --check'")
+    parser.add_argument("--config", default=None, metavar="PATH",
+                        help="poll mode: TOML config file; same as 'poll --config'. "
+                             "QAR_CONFIG_FILE also works.")
 
     args = parser.parse_args(argv)
 
@@ -771,7 +890,7 @@ def main(argv=None) -> int:
             log.info("chat prerequisites OK")
             return 0
 
-        cfg = _config_from_env()
+        cfg = _config_from_env(getattr(args, "config", None))
         # chat only needs a model provider — Quest credentials and a retrieval
         # adapter are optional (no corpus = no grounding, but still works).
         _skip = {"quest", "retrieval adapter", "team_id"}
@@ -1229,7 +1348,7 @@ def main(argv=None) -> int:
 
     # --- channel: drive a live, two-way ChannelTransport ----------------------
     if args.command == "channel":
-        cfg = _config_from_env()
+        cfg = _config_from_env(getattr(args, "config", None))
         try:
             _apply_channel_env(cfg)
         except ValueError as e:
@@ -1264,7 +1383,7 @@ def main(argv=None) -> int:
         return 0
 
     # --- poll (default when no subcommand given) ------------------------------
-    cfg = _config_from_env()
+    cfg = _config_from_env(getattr(args, "config", None))
     problems = cfg.validate()
     if problems:
         for p in problems:

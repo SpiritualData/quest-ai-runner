@@ -27,7 +27,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from ..config import RunnerConfig, build_orchestrator, derive_capabilities
+from ..config import RunnerConfig, build_orchestrator, derive_capabilities, resolve_rep_sync_resolver
 from ..resources import ResourceGuard, ResourceLimits
 from .autopilot import (AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, AutopilotPass, cadence_due,
                         run_requested)
@@ -156,6 +156,11 @@ class Poller:
         if config.escalation is None and self.client.configured:
             config.escalation = QuestDecisionSink(
                 self.client, default_assignee_user_id=config.default_assignee_user_id)
+        # Personas (opt-in; see runner/personas.py + RunnerConfig.personas): compose a
+        # rep_sync_resolver from declarative config when the consumer did not already wire one by
+        # hand. Same in-place write-back style build_orchestrator uses for deep_runner — a consumer
+        # or test that reads config.rep_sync_resolver after construction sees the resolved callable.
+        config.rep_sync_resolver = resolve_rep_sync_resolver(config, quest_client=self.client)
         self.state = StateStore(state_path)
         self._orchestrator = None  # built lazily so an unconfigured poll degrades cleanly
         # Autopilot: built once (stateless other than the injected client/config) and handed to
