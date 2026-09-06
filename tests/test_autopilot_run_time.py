@@ -7,6 +7,11 @@ team-wide series is retired. These tests pin that, the schedule-correction sweep
 enough to cross UTC midnight), the catch-up formula, retirement, and duplicate handling -- all of
 it against ``FakeRunTimeClient``, a thin extension of ``test_autopilot_pass_task``'s
 ``FakePassClient`` that adds ``update_task`` and a 409 knob.
+
+Sections 13 and 14 pin the 2026-09-05 incident: a "Run now" on a quest whose pass had already run
+that morning could not move the series onto a date the series already occupied, so it was silently
+dropped. It now gets a one-off catch-up pass instead, and the two kinds of pass are told apart by
+whether they carry a recurrence at all.
 """
 from datetime import datetime, timezone
 
@@ -22,16 +27,28 @@ NOW = datetime(2026, 8, 20, 9, 0, 0, tzinfo=timezone.utc)  # a Thursday
 
 class FakeRunTimeClient(FakePassClient):
     """Adds ``update_task`` (retune/retire) and an optional error to raise from it, on top of
-    ``FakePassClient``'s create/list/state-read behaviour."""
+    ``FakePassClient``'s create/list/state-read behaviour.
 
-    def __init__(self, *, update_error=None, **kwargs):
+    ``date_conflict=True`` models the backend's real constraint rather than a blanket failure: a
+    series holds a unique index on (series_id, scheduled_date), so only a PATCH that MOVES the
+    date can 409, and it does so whenever the target date is already taken. A test that raised on
+    every PATCH could not tell the difference between "this date is spoken for" and "the API is
+    down", which is the distinction the catch-up path turns on.
+    """
+
+    def __init__(self, *, update_error=None, date_conflict=False, **kwargs):
         super().__init__(**kwargs)
         self.update_error = update_error
+        self.date_conflict = date_conflict
         self.task_updates = []  # (task_id, fields)
 
     def update_task(self, task_id, fields):
         if self.update_error:
             raise self.update_error
+        if self.date_conflict and "scheduled_date" in fields:
+            raise QuestApiError(
+                "Series ser_x already has a task scheduled on "
+                f"{fields['scheduled_date']} (task other_occurrence)", status=409)
         self.task_updates.append((task_id, dict(fields)))
         for t in self.tasks:
             if t.get("id") == task_id:
@@ -394,3 +411,162 @@ def test_a_run_request_never_starts_a_series_for_a_quest_whose_autopilot_is_off(
     )
     _poller_now(client, NOW)._ensure_autopilot_pass()
     assert client.created == []
+
+
+# --- 13: "Run now" when the series CANNOT move -- the one-off catch-up pass -------------------
+#
+# Live on 2026-09-05: a "Run now" on a quest whose pass had already run that morning did nothing
+# at all. The series' open occurrence was tomorrow's, the retune tried to move it onto today, and
+# the backend's unique index on (series_id, scheduled_date) refused -- today's slot was held by
+# the occurrence that ran and completed that morning. The retune logged the 409 and gave up, so
+# the request slipped a day. These pin the fix: the pending request gets its OWN one-off pass
+# instead, which respects the index rather than fighting it, and stays a one-off forever.
+
+# A pending request on a quest that ALREADY ran this morning: the exact live shape.
+RAN_THIS_MORNING = {"mode": "act", "run_time": "06:30", "cadence": "daily",
+                    "run_timezone": "America/Los_Angeles",
+                    "last_pass_at": "2026-08-20T08:40:00Z",
+                    "run_requested_at": "2026-08-20T08:55:00Z",
+                    "env_id": "env-x"}
+
+
+def _catchup_task(task_id, *, quest_id, status="queued", scheduled_date="2026-08-20",
+                  scheduled_time="02:00"):
+    """A one-off catch-up: the pass kind and the quest's ``goal_id``, but NO recurrence. That
+    absence is the whole of what makes it a one-off, so it is the whole of what these assert."""
+    return {"id": task_id, "task_kind": AUTOPILOT_PASS_KIND, "status": status,
+            "goal_id": quest_id, "scheduled_date": scheduled_date,
+            "scheduled_time": scheduled_time}
+
+
+def test_a_pending_run_the_series_cannot_move_gets_a_one_off_catchup_pass():
+    client = FakeRunTimeClient(
+        # Tomorrow's occurrence, because a pass already ran today. Moving it onto today is what
+        # the backend refuses.
+        tasks=[_pass_task("p1", quest_id="q1", scheduled_date="2026-08-21",
+                          scheduled_time="06:30", recurrence_time="06:30")],
+        quests=[{"quest_id": "q1"}],
+        autopilot_by_quest={"q1": dict(RAN_THIS_MORNING)},
+        date_conflict=True,
+    )
+    _poller_now(client, NOW)._ensure_autopilot_pass()
+    assert len(client.created) == 1
+    created = client.created[0]
+    assert created["task_kind"] == AUTOPILOT_PASS_KIND
+    assert created["goal_id"] == "q1"
+    assert created["env_id"] == "env-x"          # the quest's own env, like every other pass
+    assert "recurrence" not in created           # a one-off: no series, no next occurrence
+    # NOW is 02:00 in the quest's zone -- scheduled for now, so the next scan discovers it as due.
+    assert created["scheduled_date"] == "2026-08-20"
+    assert created["scheduled_time"] == "02:00"
+    assert client.task_updates == []             # the series' own schedule is left untouched
+
+
+def test_a_second_scan_creates_no_further_catchup_while_one_is_still_open():
+    """The request stays pending until a pass stamps ``last_pass_at``, so every scan in between
+    sees the same conflict. One catch-up is the answer; a pile of them is not."""
+    client = FakeRunTimeClient(
+        tasks=[_pass_task("p1", quest_id="q1", scheduled_date="2026-08-21",
+                          scheduled_time="06:30", recurrence_time="06:30"),
+               _catchup_task("c1", quest_id="q1")],
+        quests=[{"quest_id": "q1"}],
+        autopilot_by_quest={"q1": dict(RAN_THIS_MORNING)},
+        date_conflict=True,
+    )
+    _poller_now(client, NOW)._ensure_autopilot_pass()
+    assert client.created == []
+
+
+def test_a_catchup_is_never_retuned_and_never_gains_a_recurrence(caplog):
+    """Retuning one is what silently converted the hand-made catch-up into a second series: an
+    absent recurrence differs from the expected one, so the retune would stamp a daily one on it.
+    A quest in its quiet steady state with a stale catch-up beside it must write nothing at all,
+    and must not report the catch-up as a duplicate occurrence either."""
+    client = FakeRunTimeClient(
+        # last_pass_at is this morning and no request is pending, so the expected occurrence is
+        # tomorrow -- which is exactly where the series already sits. Nothing to retune.
+        tasks=[_pass_task("p1", quest_id="q1", scheduled_date="2026-08-21",
+                          scheduled_time="06:30", recurrence_time="06:30"),
+               _catchup_task("c1", quest_id="q1", scheduled_date="2026-08-19",
+                             scheduled_time="23:00")],
+        quests=[{"quest_id": "q1"}],
+        autopilot_by_quest={"q1": {"mode": "act", "run_time": "06:30", "cadence": "daily",
+                                   "run_timezone": "America/Los_Angeles",
+                                   "last_pass_at": "2026-08-20T08:40:00Z"}},
+    )
+    with caplog.at_level("WARNING"):
+        _poller_now(client, NOW)._ensure_autopilot_pass()
+    assert client.task_updates == []             # the catch-up was never PATCHed
+    assert client.created == []
+    assert "open pass occurrences" not in caplog.text
+
+
+def test_a_quest_whose_only_open_pass_is_a_catchup_still_gets_its_series_created():
+    """A catch-up never stands in for the series. Counting one as the quest's pass would leave the
+    quest with a single run and no producer the moment that run closed."""
+    client = FakeRunTimeClient(
+        tasks=[_catchup_task("c1", quest_id="q1")],
+        quests=[{"quest_id": "q1"}],
+        autopilot_by_quest={"q1": {"mode": "act", "run_time": "06:30",
+                                   "run_timezone": "America/Los_Angeles"}},
+    )
+    _poller_now(client, NOW)._ensure_autopilot_pass()
+    assert len(client.created) == 1
+    assert client.created[0]["goal_id"] == "q1"
+    assert client.created[0]["recurrence"] == {"frequency": "daily", "time": "06:30"}
+    assert client.task_updates == []             # and the catch-up itself is still untouched
+
+
+def test_a_date_conflict_with_no_pending_run_still_just_logs_and_changes_nothing():
+    """The catch-up is for an explicit request, not for every conflict. An ordinary late run has
+    the next sweep to re-evaluate it, and inventing an extra pass there would double the day."""
+    client = FakeRunTimeClient(
+        tasks=[_pass_task("p1", quest_id="q1", scheduled_date="2026-08-19",
+                          scheduled_time="06:30", recurrence_time="06:30")],
+        quests=[{"quest_id": "q1"}],
+        autopilot_by_quest={"q1": {"mode": "act", "run_time": "06:30", "cadence": "daily",
+                                   "run_timezone": "America/Los_Angeles",
+                                   "last_pass_at": "2026-08-19T10:00:00Z"}},
+        date_conflict=True,
+    )
+    _poller_now(client, NOW)._ensure_autopilot_pass()
+    assert client.created == []
+    assert client.task_updates == []
+
+
+def test_a_non_409_retune_failure_creates_no_catchup_even_with_a_pending_run():
+    """Only the date conflict has a second course of action. Any other failure is the next scan's
+    retry, and treating it as one would turn a transient API error into a stream of tasks."""
+    client = FakeRunTimeClient(
+        tasks=[_pass_task("p1", quest_id="q1", scheduled_date="2026-08-21",
+                          scheduled_time="06:30", recurrence_time="06:30")],
+        quests=[{"quest_id": "q1"}],
+        autopilot_by_quest={"q1": dict(RAN_THIS_MORNING)},
+        update_error=QuestApiError("upstream unavailable", status=503),
+    )
+    _poller_now(client, NOW)._ensure_autopilot_pass()      # must not raise
+    assert client.created == []
+    assert client.task_updates == []
+
+
+# --- 14: retirement can never re-spawn what it retired ------------------------------------------
+
+def test_retirement_never_issues_a_bare_status_patch_that_would_respawn_the_series():
+    """Pinned after 2026-09-05, when cancelling a recurring pass by status alone spawned its next
+    occurrence and the "retired" series came straight back. Clearing the recurrence in the SAME
+    PATCH as the status is what stops it, and it must hold for a catch-up too."""
+    client = FakeRunTimeClient(
+        tasks=[_pass_task("p1", quest_id="q1", scheduled_date="2026-08-20",
+                          scheduled_time="06:30", recurrence_time="06:30"),
+               _catchup_task("c1", quest_id="q1")],
+        quests=[{"quest_id": "q1"}],
+        autopilot_by_quest={"q1": {"mode": "off", "run_time": "06:30"}},
+    )
+    _poller_now(client, NOW)._ensure_autopilot_pass()
+    assert sorted(tid for tid, _f in client.task_updates) == ["c1", "p1"]
+    # Every PATCH that ends a task clears its recurrence in the same call. No exceptions, and no
+    # earlier status-only PATCH for a later one to "fix".
+    assert all(fields.get("recurrence") == "" for _tid, fields in client.task_updates
+               if "status" in fields)
+    assert all(fields == {"recurrence": "", "status": "cancelled"}
+               for _tid, fields in client.task_updates)

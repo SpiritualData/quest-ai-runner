@@ -684,7 +684,9 @@ class Poller:
         ``goal_id``) is retired on sight.
 
         Liveness: "exactly one open occurrence" per SERIES, keyed by ``goal_id``. Still ONE
-        ``list_tasks`` call per scan, grouped in memory -- no list call per quest.
+        ``list_tasks`` call per scan, grouped in memory -- no list call per quest. A quest's group
+        can also hold a one-off CATCH-UP pass (see ``_split_pass_occurrences``), which shares the
+        ``goal_id`` but is not part of the series and never stands in for it.
 
         Best-effort throughout: any failure is logged and retried next scan. A missing or
         out-of-tune pass task is a degraded feature, never a reason to skip the ordinary task
@@ -849,26 +851,77 @@ class Poller:
                 log.warning("autopilot: could not ensure quest %s's own pass (%s) — will retry "
                             "next scan", quest_id, e)
 
+    @staticmethod
+    def _split_pass_occurrences(
+            occurrences: List[Dict[str, Any]]
+    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        """Split a quest's open pass occurrences into ``(series, catch_ups)`` on the one fact that
+        actually tells them apart: a SERIES occurrence carries a ``recurrence``, a one-off
+        CATCH-UP carries none.
+
+        That test is structural rather than a label because the backend's spawner is structural:
+        it copies ``recurrence`` onto the next occurrence, so anything holding one is a link in a
+        repeating chain, and anything holding none is a single task that ends when it ends.
+
+        INCIDENT (2026-09-05) -- what happens without the split. Every open task of the pass kind
+        was grouped by ``goal_id`` alone, so a one-off pass created by hand to unblock a stuck
+        "Run now" was counted as one of the quest's series occurrences. Three consequences, in
+        order: the quest was reported as having "2 open pass occurrences"; ``_retune_quest_pass``
+        then stamped a daily ``recurrence`` onto that one-off (it writes a recurrence whenever the
+        current one differs from expected, and "absent" differs), converting it into a SECOND
+        series; and when it completed, the backend spawned its own next occurrence, leaving the
+        quest with two passes a day and an orphan chain that would have kept going. The structural
+        rule that follows, and the whole reason this function exists: a catch-up is never retuned
+        and never counted as the quest's pass, so it can never acquire a recurrence and can never
+        become a series.
+        """
+        series: List[Dict[str, Any]] = []
+        catch_ups: List[Dict[str, Any]] = []
+        for occ in occurrences:
+            recurrence = occ.get("recurrence")
+            # Free text ("daily") and the structured object are both real recurrences; an empty
+            # string is how a retirement CLEARS one, so it counts as none.
+            present = (bool(recurrence.strip()) if isinstance(recurrence, str)
+                       else bool(recurrence))
+            (series if present else catch_ups).append(occ)
+        return series, catch_ups
+
     def _ensure_one_quest_pass(self, quest_id: str, entry: Dict[str, Any],
                                occurrences: List[Dict[str, Any]]) -> None:
+        """Bring ONE quest's pass into line: its series exists and holds the expected schedule,
+        and a pending "Run now" the series cannot absorb gets a one-off catch-up instead.
+
+        Only the SERIES occurrences steer anything here (the duplicate warning, the retune, and
+        the create-when-missing all count those alone). The catch-ups are read for exactly one
+        purpose: to know whether a pending request already has a pass on the way, since a request
+        stays pending until a pass stamps ``last_pass_at`` and every scan in between would
+        otherwise create another one.
+        """
         mode = str(entry.get("mode") or "off")
         if mode not in ("suggest", "act"):
+            # Retire EVERYTHING open for this quest, catch-ups included: mode off means no pass of
+            # any shape should still be waiting to run.
             if occurrences:
                 self._retire_quest_pass(quest_id, occurrences, "mode off")
             return
 
-        if len(occurrences) > 1:
-            ids = [o.get("id") or o.get("task_id") for o in occurrences]
+        series, catch_ups = self._split_pass_occurrences(occurrences)
+        if len(series) > 1:
+            ids = [o.get("id") or o.get("task_id") for o in series]
             log.warning("autopilot: quest %s has %d open pass occurrences (%s) -- acting on the "
                         "earliest scheduled_date only, creating nothing", quest_id,
-                        len(occurrences), ids)
-            occurrences = sorted(occurrences, key=lambda o: str(o.get("scheduled_date") or ""))[:1]
+                        len(series), ids)
+            series = sorted(series, key=lambda o: str(o.get("scheduled_date") or ""))[:1]
 
         expected_date, expected_time = self._expected_quest_occurrence(entry)
-        if not occurrences:
+        if not series:
+            # An open catch-up is not a series and must not suppress this: the quest would be left
+            # with one run and no producer once that run closed.
             self._create_quest_pass(quest_id, entry, expected_date, expected_time)
             return
-        self._retune_quest_pass(quest_id, occurrences[0], expected_date, expected_time)
+        outcome = self._retune_quest_pass(quest_id, series[0], expected_date, expected_time)
+        if outcome == "date_conflict" and run_requested(entry) and not catch_ups:
+            self._create_quest_catchup_pass(quest_id, entry)
 
     def _create_quest_pass(self, quest_id: str, entry: Dict[str, Any], expected_date: str,
                            expected_time: str) -> None:
@@ -890,13 +943,74 @@ class Poller:
                  quest_id, expected_time, entry.get("run_timezone") or "runner-local",
                  expected_date)
 
+    def _create_quest_catchup_pass(self, quest_id: str, entry: Dict[str, Any]) -> None:
+        """A ONE-OFF pass for a pending "Run now" that the quest's series cannot absorb.
+
+        WHY THIS EXISTS (incident, 2026-09-05). "Run now" stamps ``run_requested_at``, and the
+        schedule side of honouring it is ``_expected_quest_occurrence`` returning TODAY so the
+        series' open occurrence moves onto today. That works right up until today's slot is
+        already taken: the backend holds a unique index on (series, scheduled_date), so a quest
+        whose pass already ran this morning cannot have a SECOND occurrence of the same series
+        dated today. The PATCH came back 409, the retune logged the conflict and gave up, and the
+        request was simply never honoured -- the run slipped to the series' next occurrence
+        tomorrow, or further on a roster where nobody is on duty tomorrow. That is precisely the
+        case the button exists for, so silently slipping it is the whole bug.
+
+        The two obvious implementations are both wrong. Moving the series onto today fights the
+        index and loses, every time, for as long as the request stays pending. Running the pass
+        inline from the poller would make the one run the person explicitly asked for the one run
+        nobody can see, pause, or audit. So the request gets a REAL task like every other pass:
+        same ``task_kind``, same quest, same env, scheduled for now in the quest's own zone, and
+        explicitly NO recurrence. That respects the index instead of fighting it and leaves the
+        series' own schedule exactly where it was.
+
+        Not creating a second one is the caller's job, and it is what ``_split_pass_occurrences``
+        buys it: a pending request stays pending until a pass stamps ``last_pass_at``, so without
+        that check every scan in between would add another catch-up.
+        """
+        zone = entry.get("run_timezone")
+        now_local = now_in_zone(zone, self._now())
+        env_id = entry.get("env_id") or self.cfg.env_id or None
+        self.client.create_task(
+            "Autopilot pass for this quest (requested run): work its current-scope goals and its "
+            "standing instructions.",
+            title="Autopilot pass (requested)",
+            team_id=self.cfg.team_id,
+            goal_id=quest_id,
+            source="chat",
+            task_kind=AUTOPILOT_PASS_KIND,
+            # No ``recurrence`` argument at all, deliberately: that absence is the ONLY thing
+            # keeping this a one-off rather than a second daily series, both for the backend's
+            # spawner and for ``_split_pass_occurrences`` on the next scan.
+            scheduled_date=now_local.date().isoformat(),
+            scheduled_time=now_local.strftime("%H:%M"),
+            env_id=env_id,
+        )
+        log.info("autopilot: quest %s's series cannot move onto today, so its pending run request "
+                 "gets a one-off catch-up pass (no recurrence) at %s %s", quest_id,
+                 now_local.strftime("%H:%M"), entry.get("run_timezone") or "runner-local")
+
     def _retune_quest_pass(self, quest_id: str, occurrence: Dict[str, Any], expected_date: str,
-                           expected_time: str) -> None:
+                           expected_time: str) -> str:
         """PATCH the quest's open occurrence to ``expected_date``/``expected_time`` when either
         differs from what it currently holds -- zero writes when they already match (the steady
         state must stay quiet). This is what makes a changed ``run_time`` take effect (the
         spawner inherits ``recurrence`` from the task document, so without this a change would
         never reach a future occurrence) AND what corrects the backend's UTC-dated spawn (A3).
+
+        Only ever call this on a SERIES occurrence. Retuning a one-off catch-up would stamp a
+        daily ``recurrence`` on it (an absent recurrence differs from the expected one, so it goes
+        into the diffs) and quietly promote it into a second series, which is exactly what
+        happened on 2026-09-05. ``_split_pass_occurrences`` is what keeps that call from being
+        made.
+
+        Returns what the caller has to branch on: ``"ok"`` when the occurrence now holds the
+        expected schedule (written, or already matching -- both are success), ``"date_conflict"``
+        when the backend refused the move because that date is already taken (409), and
+        ``"failed"`` for anything else. A bare boolean would not do the job: only the date
+        conflict has a second course of action open to it (a one-off catch-up for a pending run),
+        while any other failure is simply the next scan's retry, and collapsing the two would turn
+        a transient API error into a stream of catch-up tasks.
         """
         task_id = str(occurrence.get("id") or occurrence.get("task_id") or "")
         current_date = str(occurrence.get("scheduled_date") or "")
@@ -912,7 +1026,7 @@ class Poller:
         if current_recurrence_time != expected_time:
             diffs["recurrence"] = {"frequency": "daily", "time": expected_time}
         if not diffs:
-            return  # steady state -- must stay quiet, no write
+            return "ok"  # steady state -- must stay quiet, no write
 
         settings_changed = current_time != expected_time or current_recurrence_time != expected_time
         reason = "settings changed" if settings_changed else "spawn date corrected for timezone"
@@ -920,24 +1034,32 @@ class Poller:
             self.client.update_task(task_id, diffs)
             log.info("autopilot: retuned quest %s's pass %s %s -> %s %s (%s)",
                      quest_id, current_date, current_time, expected_date, expected_time, reason)
+            return "ok"
         except QuestApiError as e:
             if e.status == 409:
                 log.warning("autopilot: could not retune quest %s's pass -- schedule conflict "
-                            "(%s); leaving the occurrence alone, next sweep will re-evaluate",
-                            quest_id, e)
-            else:
-                log.warning("autopilot: could not retune quest %s's pass (%s) — will retry next "
-                            "scan", quest_id, e)
+                            "(%s); leaving the occurrence alone", quest_id, e)
+                return "date_conflict"
+            log.warning("autopilot: could not retune quest %s's pass (%s) -- will retry next "
+                        "scan", quest_id, e)
+            return "failed"
         except Exception as e:  # noqa: BLE001 -- one quest's retune failure never blocks another
-            log.warning("autopilot: could not retune quest %s's pass (%s) — will retry next scan",
+            log.warning("autopilot: could not retune quest %s's pass (%s) -- will retry next scan",
                         quest_id, e)
+            return "failed"
 
     def _retire_quest_pass(self, quest_id: str, occurrences: List[Dict[str, Any]],
                            reason: str) -> None:
         """Stop a quest's pass series in ONE PATCH per occurrence: ``recurrence`` cleared AND
         ``status`` cancelled together. Order matters, and it must be one call: a bare
         ``status: "cancelled"`` PATCH would still spawn one more occurrence off the just-cancelled
-        document (verified live behaviour, not theory -- see C4/C7 of the autopilot spec)."""
+        document (verified live behaviour, not theory -- see C4/C7 of the autopilot spec).
+
+        Re-verified by hand on 2026-09-05 and this is exactly right, so do not "simplify" it into
+        a status-only PATCH. The re-queue fires on ANY terminal status, cancelled included, so
+        cancelling a recurring occurrence spawns the next one and the series you just retired
+        comes straight back. Pausing the recurrence first and then retiring is what actually stops
+        it, and doing both in one call is what leaves no window in between."""
         for occ in occurrences:
             task_id = str(occ.get("id") or occ.get("task_id") or "")
             if not task_id:

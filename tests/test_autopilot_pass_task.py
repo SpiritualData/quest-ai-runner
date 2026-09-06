@@ -102,9 +102,14 @@ def test_an_open_pass_task_is_the_liveness_test_for_the_whole_series(status):
     method runs -- it needs to, to retune or retire a series -- so this is no longer a zero-read
     steady state. What stays true, and is still the point of this test: the ``list_tasks`` call
     for existing pass occurrences stays ONE call regardless of how many quests exist.
+
+    The occurrence carries a ``recurrence`` because a real one always does: the backend's spawner
+    copies the field onto the next occurrence, and it is what marks this as part of a SERIES
+    rather than a one-off catch-up pass (see ``Poller._split_pass_occurrences``).
     """
     client = FakePassClient(
-        tasks=[{"id": "p1", "task_kind": "autopilot", "status": status, "goal_id": "q1"}],
+        tasks=[{"id": "p1", "task_kind": "autopilot", "status": status, "goal_id": "q1",
+                "recurrence": {"frequency": "daily", "time": "07:00"}}],
         quests=[{"quest_id": "q1"}], autopilot_by_quest={"q1": {"mode": "act"}},
     )
     _poller(client)._ensure_autopilot_pass()

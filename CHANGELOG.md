@@ -103,6 +103,34 @@ All notable changes to this project are documented here. The format is based on
   `tests/test_autopilot_goal_ladder.py`.
 
 ### Fixed
+- **"Run now" did nothing on a day the quest's pass had already run** (`runner/poller.py`), which
+  is exactly the day the button exists for. Honouring a pending request means
+  `_expected_quest_occurrence` returning TODAY so the series' open occurrence moves onto today, but
+  the backend holds a unique partial index on (series_id, scheduled_date), and today's slot was
+  already held by the occurrence that ran and completed that morning. The PATCH came back 409, the
+  retune logged the conflict and gave up, and the run silently slipped to the series' next
+  occurrence tomorrow (further still on a roster with nobody on duty tomorrow). Now the two kinds
+  of pass task are told apart structurally, by the one fact that distinguishes them: a SERIES
+  occurrence carries a `recurrence` (the backend's spawner copies it forward, and
+  `_create_quest_pass` always sets one) and a one-off CATCH-UP carries none. New
+  `Poller._split_pass_occurrences` returns `(series, catch_ups)`, and `_ensure_one_quest_pass`
+  reasons about the series alone: the duplicate warning, the retune, and the create-when-missing
+  all count series occurrences only, so a quest whose only open pass is a catch-up still gets its
+  series created. `_retune_quest_pass` now returns `"ok"` / `"date_conflict"` / `"failed"` (a bare
+  boolean would conflate the one failure with a second course of action open to it and the ones
+  without), and on a date conflict with a run still pending, `_create_quest_catchup_pass` files a
+  real one-off pass instead: same `task_kind`, quest, and env, scheduled for now in the quest's own
+  zone, with NO recurrence at all. That respects the index rather than fighting it, keeps the run
+  auditable as a task like every other pass, and leaves the series' schedule untouched; an open
+  catch-up suppresses further ones until a pass stamps `last_pass_at` and spends the request.
+  Why a catch-up must never be retuned, learned the hard way while unblocking this by hand: the
+  retune writes a `recurrence` whenever the current one differs from expected, and "absent"
+  differs, so retuning a one-off promotes it into a second daily series whose occurrences then
+  spawn their own. `_retire_quest_pass` was checked for the same trap and is already correct (it
+  clears `recurrence` and cancels in ONE PATCH, because the re-queue fires on any terminal status
+  including cancelled, so a status-only cancel brings the series straight back). Tests:
+  `tests/test_autopilot_run_time.py` sections 13 and 14, against a fake that 409s only on a PATCH
+  that moves the date, the way the real index does.
 - **AI-proposed goals were silently never created** (`runner/autopilot.py`,
   `AutopilotPass._maybe_create_goal`). The call was
   `create_goal(quest_id, name=title, description=..., ai_help=True, created_by="ai")` against
