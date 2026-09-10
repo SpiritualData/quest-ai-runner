@@ -160,6 +160,24 @@ class Insight:
         return f"{head}\n      {self.text}"
 
 
+# The framing around a rendered capture list. Shared with ``runner.context_updates`` so captures
+# delivered per row through the engine's slot read exactly as the block always has.
+BLOCK_FOOTER = (
+    "Those are the person's own captures, not work items filed against this quest, and the "
+    "tags are how they label their own thinking rather than a routing rule. Judge for "
+    "yourself which of them (if any) bear on the goals above: one tagged for something else "
+    "can still matter here, and one whose tag looks like a match can be irrelevant. Where "
+    "an insight does apply, act on it and say so in your result. Pass over the rest without "
+    "comment.")
+
+
+def block_header(since: Optional[datetime], window_days: int = DEFAULT_WINDOW_DAYS) -> str:
+    when = (f"since {since.strftime('%Y-%m-%d')}" if since
+            else f"in the last {window_days} days")
+    return (f"Insights the person captured on Quest {when} and has not yet marked acted on, "
+            f"in their own words, with the category tags they chose:")
+
+
 @dataclass
 class InsightsContext:
     """The person's recent unacted insights, ready to render into a prompt.
@@ -213,18 +231,9 @@ class InsightsContext:
         """
         if not self.has_any():
             return ""
-        when = (f"since {self.since.strftime('%Y-%m-%d')}" if self.since
-                else f"in the last {self.window_days} days")
-        lines = [f"Insights the person captured on Quest {when} and has not yet marked acted on, "
-                 f"in their own words, with the category tags they chose:"]
+        lines = [block_header(self.since, self.window_days)]
         lines += [i.as_line() for i in self.insights]
-        lines.append(
-            "Those are the person's own captures, not work items filed against this quest, and the "
-            "tags are how they label their own thinking rather than a routing rule. Judge for "
-            "yourself which of them (if any) bear on the goals above: one tagged for something else "
-            "can still matter here, and one whose tag looks like a match can be irrelevant. Where "
-            "an insight does apply, act on it and say so in your result. Pass over the rest without "
-            "comment.")
+        lines.append(BLOCK_FOOTER)
         return "\n".join(lines)
 
     def one_line(self, limit: int = 220) -> str:

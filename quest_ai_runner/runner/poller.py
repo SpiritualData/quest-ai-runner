@@ -410,7 +410,8 @@ class Poller:
                                 quest_folder_map=getattr(self.cfg, "quest_folder_map", None),
                                 autopilot_pass=self._autopilot,
                                 quest_folder_zones=getattr(
-                                    self.cfg, "quest_folder_zones", True))
+                                    self.cfg, "quest_folder_zones", True),
+                                update_engine=self._update_engine)
         outcome = executor.execute(task, rep_preamble=rep_preamble)
         log.info("task %s -> %s", task_id, outcome.status)
         # Opt-in push-back: after the run, write the local skill file back up to Quest when the

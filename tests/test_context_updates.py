@@ -7,8 +7,10 @@ doc") to get it read.
 
 What this file pins down, beyond "the text shows up":
 
-  * A NARROWING SPEC NEVER DROPS ANYTHING. A card that names insight categories gets those captures
-    promoted to their own ref; the full unfiltered capture block still rides along.
+  * A TAG NEVER GATES DELIVERY. Every capture is its own row with its own ref; a card that names
+    insight categories only gets the captures tagged that way FLAGGED as waiting on an answer.
+    The one thing that sets a capture aside is the relevance judge, per capture, and any failure
+    of the judge keeps everything.
   * A WATERMARK ONLY MOVES WHEN THE MATERIAL WAS DELIVERED, and only for the sources that were
     actually readable. One API blip must not consume a person's comment on the way past.
   * ONE SOURCE FAILING COSTS THE OTHERS NOTHING, and the failure is reported rather than swallowed.
@@ -170,6 +172,43 @@ def test_an_unanswered_note_keeps_being_offered_even_past_the_watermark():
     assert "still open from before" in older.title
     newer = [u for u in bundle.updates if u.item_id == "new"][0]
     assert "still open from before" not in newer.title
+
+
+def test_a_note_that_arrived_mid_run_is_offered_once_even_though_a_summary_followed_it():
+    """The race this closes: a run starts, the person writes a note, the run posts its summary an
+    hour later. An assistant note now follows the person's note, but no run ever saw it. Newer
+    than the watermark means never delivered, so it is offered once, unflagged, and then it is
+    history once a run has had it."""
+    delivered_at = NOW - timedelta(hours=3)
+    client = NotesClient([
+        {"id": "mid", "text": "Actually use the survey lineage", "author_kind": "user",
+         "author_name": "the owner", "created_at": _iso(hours_ago=2)},
+        {"id": "summary", "text": "Run summary: drafted the method", "author_kind": "ai",
+         "created_at": _iso(hours_ago=1)},
+    ])
+    marks = Watermarks(None)
+    marks.set("q1", "quest_notes", delivered_at)
+    engine = _engine(client, watermarks=marks)
+
+    bundle = engine.collect({"context_sources": ["quest_notes"]}, card_id="q1")
+    assert [u.item_id for u in bundle.updates] == ["mid"]
+    assert bundle.updates[0].needs_response is False
+    assert "an assistant note followed it" in bundle.updates[0].title
+
+    bundle.mark_seen()                                       # a run has now had it
+    assert engine.collect({"context_sources": ["quest_notes"]}, card_id="q1").updates == []
+
+
+def test_a_first_look_never_reoffers_the_answered_notes_of_the_last_two_weeks():
+    """On a card nothing has read, "newer than the watermark" is just "recent". Live failure this
+    keeps fixed: a first look offered ten notes answered days earlier."""
+    client = NotesClient([
+        {"id": "asked", "text": "Do the method first", "author_kind": "user",
+         "created_at": _iso(days_ago=3)},
+        {"id": "answered", "text": "Done: method first", "author_kind": "ai",
+         "created_at": _iso(days_ago=2)},
+    ])
+    assert _engine(client).collect({"context_sources": ["quest_notes"]}, card_id="q1").updates == []
 
 
 def test_an_open_note_too_old_to_be_a_live_question_is_dropped():
@@ -394,19 +433,92 @@ def _capture(entry_id, text, categories):
             "fieldValues": {"insight": text, "acted_on": False, "categories": categories}}
 
 
-def test_a_category_spec_promotes_matching_captures_and_still_delivers_every_other_one():
+def test_every_capture_is_its_own_row_and_a_tag_only_flags_it():
+    """One row per capture, so the judge decides on each and the receipt answers for each.
+    A category the card names flags the captures tagged that way; it never gates the others."""
     client = InsightsClient([
         _capture("e1", "The method chapter has to come first", ["PhD"]),
         _capture("e2", "Batch the errands into one trip", ["home"]),
     ])
     bundle = _engine(client).collect(
         {"context_sources": [{"source": "insights", "categories": ["phd"]}]}, card_id="q1")
-    promoted = [u for u in bundle.updates if u.kind == "capture"]
-    assert [u.body for u in promoted] == ["The method chapter has to come first"]
-    assert promoted[0].needs_response is True
-    # The unfiltered channel still rides along, so the untagged/mistagged capture is never lost.
-    whole = [u for u in bundle.updates if u.kind == "captures"]
-    assert whole and "Batch the errands into one trip" in whole[0].body
+
+    rows = {u.item_id: u for u in bundle.updates}
+    assert set(rows) == {"e1", "e2"}                       # the untagged one is delivered too
+    assert rows["e1"].needs_response is True and "tagged this PhD" in rows["e1"].title
+    assert rows["e2"].needs_response is False
+    assert all(u.slot == "insights" and u.ref for u in bundle.updates)
+    # The slot reads as the block always did: the framing, then one ref-tagged row per capture.
+    from quest_ai_runner.runner.insights import BLOCK_FOOTER
+    slot = bundle.slot_text("insights")
+    assert slot.startswith("Insights the person captured on Quest")
+    assert slot.rstrip().endswith(BLOCK_FOOTER)
+    assert f"[{rows['e1'].ref}] [2026-09-09] tagged PhD" in slot
+    assert "(+1 more)" in bundle.slot_summary("insights")
+    # And the receipt lists each capture in the person's own words.
+    receipt = render_receipt(bundle.manifest(), {rows["e1"].ref: "folded into the plan"})
+    assert '"The method chapter has to come first" · needs an answer -> folded into the plan' in receipt
+    assert '"Batch the errands into one trip" -> no note from the run' in receipt
+
+
+def test_the_judge_sees_each_capture_on_its_own_and_only_the_kept_ones_reach_the_slot():
+    """A judge shown the captures as ONE block could only drop them all or pass them all."""
+    client = InsightsClient([
+        _capture("e1", "idea for the construct weighting", ["PhD"]),
+        _capture("e2", "collaboration tracking at Cornerstone", ["work"]),
+    ])
+    seen = {}
+
+    def judge(work, ctx, ups):
+        seen["items"] = [u.item_id for u in ups]
+        return {"e1"}
+
+    bundle = _engine(client, relevance_judge=judge).collect(
+        {"context_sources": ["insights"]}, card_id="q1")
+    assert seen["items"] == ["e1", "e2"]
+    assert [u.item_id for u in bundle.updates] == ["e1"]
+    assert "Cornerstone" not in bundle.slot_text("insights")
+    assert "insights (1, 1 not about this work)" in bundle.checked_line()
+
+
+def test_the_judge_is_given_the_whole_description_of_the_work():
+    """Clipping the assembled description to 400 characters cut it off before the description the
+    judge was given it for; verified live when a tagged capture was dropped on the outcome alone."""
+    from quest_ai_runner.runner.context_updates import llm_relevance_judge
+
+    prompts = []
+
+    class Provider:
+        def answer(self, messages, model=None):
+            prompts.append(messages[0]["content"])
+            return '{"relevant": [1]}'
+
+    judge = llm_relevance_judge(lambda: Provider())
+    description = "ITPP corpus, construct coding, " * 30 + "THE TAIL OF THE DESCRIPTION"
+    from quest_ai_runner.runner.context_updates import _describe_work
+    work = _describe_work({"outcome": "I've completed my dissertation", "description": description},
+                          "Dissertation")
+    keep = judge(work, "", [ContextUpdate(source="insights", item_id="e1", body="x")])
+    assert keep == {"e1"}
+    assert "Outcome: I've completed my dissertation" in prompts[0]
+    assert "THE TAIL OF THE DESCRIPTION"[:20] in prompts[0] or "Description:" in prompts[0]
+    assert len(work) > 400 and work[:400] in prompts[0]
+
+
+def test_the_user_scoped_cache_expires_so_an_afternoon_task_sees_the_mornings_captures():
+    """The poller keeps ONE engine for its whole life. Without an expiry the first pass's read of
+    the captures stood for every later pass and task until the next restart."""
+    from quest_ai_runner.runner.context_updates import CACHE_TTL_SECONDS
+
+    client = InsightsClient([_capture("e1", "One thought", ["PhD"])])
+    clock = {"now": NOW}
+    engine = UpdateEngine(client, always=(), now_fn=lambda: clock["now"])
+    engine.collect({"context_sources": ["insights"]}, card_id="q1")
+    engine.collect({"context_sources": ["insights"]}, card_id="q2")
+    assert client.entry_calls == 1                          # one pass, one read
+    clock["now"] = NOW + timedelta(seconds=CACHE_TTL_SECONDS + 1)
+    engine.collect({"context_sources": ["insights"]}, card_id="q1")
+    assert client.entry_calls == 2                          # later, read again
 
 
 def test_a_user_scoped_channel_is_read_once_per_engine_not_once_per_card():
@@ -467,6 +579,32 @@ def test_a_card_can_watch_every_doc_one_account_owns():
     assert "positive-only by design" in bundle.updates[0].body
     assert bundle.updates[0].needs_response
     assert "reply to comment c1 on file f1" in bundle.updates[0].how_to_respond
+
+
+def test_open_comment_threads_are_bounded_like_open_notes():
+    """A thread nobody can answer would otherwise ride in every bundle for good, and since open
+    items are never the ones the cap evicts, it would crowd everything else out with it."""
+    from quest_ai_runner.adapters.drive_comments import DriveComment
+    from quest_ai_runner.runner.context_updates import (MAX_OPEN_PER_SOURCE,
+                                                        OPEN_ITEM_MAX_AGE_DAYS)
+
+    threads = [DriveComment(file_id="f1", file_name="Chapter two", comment_id=f"c{i}",
+                            author="Ada", content=f"question {i}",
+                            created_at=NOW - timedelta(days=i))
+               for i in range(MAX_OPEN_PER_SOURCE + 4)]
+    threads.append(DriveComment(file_id="f1", file_name="Chapter two", comment_id="ancient",
+                                author="Ada", content="from last year",
+                                created_at=NOW - timedelta(days=OPEN_ITEM_MAX_AGE_DAYS + 30)))
+    bundle = _engine(sources=[__import__(
+        "quest_ai_runner.runner.context_updates", fromlist=["DriveCommentsSource"]
+    ).DriveCommentsSource(_OwnerComments(threads))]).collect(
+        {"context_sources": [{"source": "drive_comments", "owner": "assistant@example.org"}]},
+        card_id="q1")
+
+    ids = [u.raw["comment_id"] for u in bundle.updates]
+    assert len(ids) == MAX_OPEN_PER_SOURCE
+    assert "c0" in ids and "ancient" not in ids
+    assert f"c{MAX_OPEN_PER_SOURCE + 3}" not in ids            # the oldest of the burst let go
 
 
 def test_folder_and_owner_routes_do_not_double_report_the_same_file():
@@ -710,6 +848,24 @@ def test_a_card_can_watch_a_habit_by_its_name():
     assert bundle.updates[0].needs_response is False
 
 
+def test_a_week_of_habit_entries_is_one_update_not_seven():
+    """A log is one channel. Seven refs would be seven receipt lines each saying "noted", and
+    live they were the bulk of a bundle with the person's one capture at the bottom."""
+    from quest_ai_runner.runner.context_updates import UpdateEngine
+
+    client = _CollectionClient([
+        _habit_entry(f"e{d}", f"2026-09-0{d}", "started", 3600, 1) for d in range(3, 10)])
+    bundle = UpdateEngine(client, always=()).collect(
+        {"quest_id": "q1", "context_sources": [{"source": "collection", "collection_id": "coll_1"}]},
+        card_id="q1")
+
+    assert len(bundle.updates) == 1
+    row = bundle.updates[0]
+    assert row.body.count("started") == 7 and row.body.startswith("2026-09-09")   # newest first
+    assert row.excerpt == "7 entries, 2026-09-03 to 2026-09-09, 7h in all"
+    assert '"7 entries, 2026-09-03 to 2026-09-09, 7h in all"' in row.manifest_line()
+
+
 def test_a_habits_bookkeeping_fields_and_blanks_stay_out_of_the_brief():
     """Live render bug: a field the person left blank printed as "value_achieved: "."""
     from quest_ai_runner.runner.context_updates import UpdateEngine
@@ -743,7 +899,8 @@ def test_only_habit_entries_since_the_last_look_are_offered():
         {"quest_id": "q1", "context_sources": [{"source": "collection", "collection_id": "coll_1"}]},
         card_id="q1")
 
-    assert [u.item_id for u in bundle.updates] == ["new"]
+    assert len(bundle.updates) == 1
+    assert "2026-09-09" in bundle.updates[0].body and "2026-09-01" not in bundle.updates[0].body
 
 
 def test_a_habit_is_never_put_to_a_relevance_judgment():

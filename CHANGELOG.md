@@ -39,6 +39,47 @@ All notable changes to this project are documented here. The format is based on
   composing a brief without it will propose a plan for a day they already spent three hours on.
   Seconds are rendered as `2h 56m`; bookkeeping fields and blanks stay out.
 
+### Fixed
+- **Captures are judged, delivered and receipted one at a time** (`runner/context_updates.py`,
+  `runner/insights.py`). `InsightsSource` handed the whole captures block to the relevance judge
+  as ONE item (clipped to its first 300 characters), so the judge could only drop every capture
+  for a card or pass every one through; the fix in the previous entry held only for tag-promoted
+  duplicates. Every capture is now its own ref-tagged row (the framing of the block is shared
+  from `runner.insights.block_header` / `BLOCK_FOOTER`), a category the card names flags a row
+  instead of duplicating it, and the receipt answers for each capture in the person's own words.
+  The judge is also given the whole work description: `_describe_work` assembled it and the
+  prompt then clipped it to 400 characters, before the description it was assembled for.
+- **A delegated task asks the engine too** (`runner/executor.py`, `runner/poller.py`). Only the
+  autopilot pass asked it; a task delegated from chat still read the notes and the unjudged
+  captures itself, with no refs, no document comments, no watched collection and no receipt, so
+  "check the comments on the doc" still had to be typed into the prompt. The executor now takes
+  the poller's `update_engine`: the block goes into the task's context view beside the notes
+  thread, a batch whose text already carries a block is not collected again (and no unjudged
+  captures are fetched beside it), the watermark moves once the run returned, and the receipt is
+  rendered from the executor's own bundle when the task text carries no block.
+- **A note that arrived mid-run is not lost** (`runner/context_updates.py`). A note written while
+  a run was executing had the run's own summary note after it, so it read as answered although no
+  run had seen it. A note newer than the watermark is offered once, unflagged, even when an
+  assistant note follows it; not on a first look, where that would re-offer two weeks of answered
+  notes.
+- **Open comment threads are bounded like open notes** (`runner/context_updates.py`). The docs
+  said both channels were bounded by `OPEN_ITEM_MAX_AGE_DAYS` / `MAX_OPEN_PER_SOURCE`; only notes
+  were. An unanswerable thread, never evicted because open items are protected from the cap,
+  would have crowded every other update out for good.
+- **A watched collection is one update, not one per entry** (`runner/context_updates.py`). Seven
+  days of a habit timer arrived as seven refs, so a receipt carried seven lines each saying
+  "noted" and the person's one capture sat at the bottom of the bundle. One row per collection
+  now, newest entries first in its body, with a one-line excerpt ("7 entries, 2026-09-03 to
+  2026-09-09, 12h 40m in all") for the manifest and the receipt.
+- **The engine's user-scoped cache expires** (`CACHE_TTL_SECONDS`). The poller builds one engine
+  for its whole life, so the first pass's read of the reflection and the captures stood for every
+  later pass and task until the next restart.
+- **An `env_aliases` entry outranks a value an `env_files` file supplies under the library's own
+  name** (`config.apply_config_environment`). Two lanes share a fallback `.env`; the alias
+  (`QUEST_TEAM_ID = "CANTR_TEAM_ID"`) is the one line keeping their queues apart, and a shared file
+  that grew a `QUEST_TEAM_ID=` line would have silently pointed the second lane at the first
+  lane's team. Only a value the process itself held before any file was read beats an alias.
+
 ### Changed
 - **A person's note is open until an assistant ANSWERS it, not until a watermark passes**
   (`runner/context_updates.py`). Two live failures this replaces: a first look offered ten notes

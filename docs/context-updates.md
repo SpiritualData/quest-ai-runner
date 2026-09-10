@@ -62,11 +62,13 @@ while every document is readable. `{"source": "drive_comments", "owner": "assist
 is the query that works there, and unlike a `file_ids` list it keeps working as new documents are
 created. The three may be combined; a file reached by more than one route is reported once.
 
-**A narrowing spec never drops anything.** `{"source": "insights", "categories": ["PhD"]}` PROMOTES
-matching captures into this card's own refs; the full unfiltered capture block still flows exactly
-as before. The person's tag steers attention, it never gates delivery. A fixed string rule that
-gated delivery would silently lose every capture whose wording it did not anticipate, which is what
-hard rule #3 in `CLAUDE.md` forbids.
+**Every capture is its own row, and a tag never gates delivery.** The captures arrive one update
+each, each with its own ref, so the relevance judge decides on each one and the receipt answers
+for each one in the person's own words. `{"source": "insights", "categories": ["PhD"]}` FLAGS the
+captures the person tagged that way as waiting on an answer ("is this one yours?"); the others are
+delivered all the same. A fixed string rule that gated delivery would silently lose every capture
+whose wording it did not anticipate, which is what hard rule #3 in `CLAUDE.md` forbids. The only
+thing that sets a capture aside is the judge (below), and any failure of the judge keeps everything.
 
 ## The receipt
 
@@ -79,8 +81,10 @@ result:
 
 ```
 Context updates taken into account:
-[U1] 2026-09-08 · comment · Chapter two · needs an answer -> answered in the doc
-[U2] 2026-09-09 · note · this quest -> not used
+[U1] 2026-09-09 · reflection · Quest reflections -> steered the day's focus
+[U2] 2026-09-09 · capture · Quest insights · "idea for the construct weighting" · needs an answer -> folded into the method plan
+[U3] 2026-09-08 · comment · Chapter two · "cite this" · needs an answer -> answered in the doc
+[U4] 2026-09-09 · note · Dissertation · "do the survey lineage first" · needs an answer -> done first, as asked
 ```
 
 Every offered ref appears whether or not the run mentioned it, and a ref the run said nothing about
@@ -93,7 +97,11 @@ queue.
 
 ## Wiring
 
-On by default. The poller builds one engine per lane and hands it to the autopilot pass:
+On by default. The poller builds one engine per lane and hands it to BOTH the autopilot pass and
+the task executor, so a batch the pass composes and a task somebody delegated from chat are handed
+the same material: the block goes into the batch text in the first case and into the task's
+context view in the second (a batch whose text already carries a block is not collected again),
+the watermark moves once the run has had it, and the result carries the receipt either way.
 
 ```python
 engine = build_update_engine(cfg, quest_client, state_path="qar_state.json")
@@ -182,5 +190,16 @@ one.
 A person's note and a document comment stay open until an assistant *answers* them, not until a
 watermark passes them. The watermark only labels which are new. Two live failures drove this: a
 first look offered ten notes answered days earlier, all marked "needs an answer"; and time
-filtering lost an open question for good the moment one pass saw it and did nothing. Bounded at
-both ends by `OPEN_ITEM_MAX_AGE_DAYS` and `MAX_OPEN_PER_SOURCE`, so "open" cannot become a backlog.
+filtering lost an open question for good the moment one pass saw it and did nothing. Both channels
+are bounded at both ends by `OPEN_ITEM_MAX_AGE_DAYS` and `MAX_OPEN_PER_SOURCE`, so "open" cannot
+become a backlog.
+
+A note newer than the watermark is offered even when an assistant note follows it, once and
+unflagged. The watermark moves only when a run was handed the notes, so "newer than it" means no run
+has seen it: a run that started before the note arrived and posted its summary an hour later never
+read it, and treating that summary as the answer would lose the note for good. Not on a first look,
+where "newer than the watermark" is just "recent".
+
+The engine's user-scoped reads (the reflection, the captures) are cached for `CACHE_TTL_SECONDS`
+so one pass over every quest reads them once; the poller keeps one engine for its whole life, so
+without the expiry a task in the afternoon saw the captures as they stood at six in the morning.

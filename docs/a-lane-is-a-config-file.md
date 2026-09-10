@@ -25,8 +25,12 @@ ExecStart=/path/to/venv/bin/quest-ai-runner poll --config /path/to/qar.toml
 ## Precedence, top to bottom
 
 1. The **process environment** (a systemd unit's own `Environment=`) always wins.
-2. `env_files`, in the order listed: earlier files win, later ones are fallbacks.
-3. `env_aliases`, then `env`.
+2. `env_aliases`, resolved after the files are loaded. An alias outranks a file on purpose: two
+   lanes often share a fallback `.env`, and the alias (`QUEST_TEAM_ID = "CANTR_TEAM_ID"`) is the
+   one line keeping their queues apart. If the shared file ever grows a line under the library's
+   own name, the lane's alias still holds.
+3. `env_files`, in the order listed: earlier files win, later ones are fallbacks.
+4. `env`, plain defaults.
 4. The config file's own fields, for anything no environment variable set.
 
 Every step is **truthy**-checked, not presence-checked. A lane whose `.env` documents optional

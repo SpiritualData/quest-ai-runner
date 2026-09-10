@@ -654,14 +654,23 @@ def apply_config_environment(file_cfg: Optional[RunnerConfig]) -> None:
     had no file to live in, and every lane wrote it again slightly differently (one of them
     ``setdefault``, which silently kept a blank placeholder line and dropped the real value).
 
-    Order, and each step never overwrites a value already truthy in the environment, so a systemd
-    unit's own ``Environment=`` still wins over all of it:
-      1. ``env_files``, in order -- earlier files win, later ones are fallbacks.
-      2. ``env_aliases`` ({LIBRARY_VAR = "LANE_VAR"}), truthy-checked on both sides.
+    Order. A value the PROCESS already held (a systemd unit's own ``Environment=``, an operator's
+    shell) wins over all of it; below that:
+      1. ``env_aliases`` ({LIBRARY_VAR = "LANE_VAR"}), truthy-checked on both sides, resolved from
+         the environment AFTER the files are loaded.
+      2. ``env_files``, in order -- earlier files win, later ones are fallbacks.
       3. ``env`` ({VAR = "value"}), plain defaults.
+
+    An alias outranks a file on purpose. Two lanes commonly share a fallback ``.env`` (same person,
+    a second team), and the alias is the ONE line that keeps their queues apart
+    (``QUEST_TEAM_ID = "CANTR_TEAM_ID"`` against a shared file that names the personal team). If the
+    shared file ever grows a line under the library's own name, a file-first order would silently
+    point the lane at the other team; the alias is the lane's explicit statement and it holds.
     """
     if file_cfg is None:
         return
+    # What the process itself held before any file was read: the only thing an alias defers to.
+    preset = {k for k, v in os.environ.items() if v}
     for path in (file_cfg.env_files or []):
         _load_env_file_truthy(str(path))
 
@@ -669,7 +678,7 @@ def apply_config_environment(file_cfg: Optional[RunnerConfig]) -> None:
         # Truthy, not presence: an .env carrying a blank placeholder under the library's own name
         # would otherwise read as "already set" and the aliased value would never apply. That
         # exact bug is why one lane's bridge helper had a four-line comment explaining itself.
-        if os.environ.get(str(target)):
+        if str(target) in preset:
             continue
         value = os.environ.get(str(source), "")
         if value:

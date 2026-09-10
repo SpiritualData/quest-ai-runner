@@ -27,7 +27,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from ..core.adapters import Mode, ProgressEvent
 from ..core.orchestrator import Orchestrator, OrchestratorResult, _strip_future_context
-from .context_updates import (parse_manifest, parse_usage_notes, render_receipt,
+from .context_updates import (BLOCK_START, parse_manifest, parse_usage_notes, render_receipt,
                               strip_usage_block)
 
 log = logging.getLogger("quest-ai-runner.executor")
@@ -342,9 +342,19 @@ class TaskExecutor:
     def __init__(self, client, orchestrator: Orchestrator, *,
                 quest_folder_map: Optional[Dict[str, str]] = None,
                 autopilot_pass: Optional[Any] = None,
-                quest_folder_zones: bool = True):
+                quest_folder_zones: bool = True,
+                update_engine: Optional[Any] = None):
         self._client = client
         self._orch = orchestrator
+        # The consumer's ``UpdateEngine`` (runner/context_updates.py), wired by the poller. With
+        # one, a task's context view carries what changed on the quest's channels since a run last
+        # looked (notes, captures judged for this card, document comments, a watched collection),
+        # ref-tagged so the result can carry a receipt. None -> the context view reads the notes
+        # and captures itself, exactly as before the engine existed.
+        self._update_engine = update_engine
+        # The bundle this task was handed, kept so the run's result can carry its receipt and so
+        # the watermark can move once the run really had it. One executor serves one task.
+        self._context_bundle: Optional[Any] = None
         # Cache the retrieval adapter from the orchestrator so _build_context_view can fetch
         # conversation history when conv_id is present
         self._retrieval = getattr(orchestrator, "retrieval", None)
@@ -587,7 +597,11 @@ class TaskExecutor:
         # and the prior conversation that led to the task.
         context_view = self._build_context_view(
             goal_id, quest_id, conv_id, rep_id=task.get("assignee_rep_id"),
-            related_goal_id=related_goal_id)
+            related_goal_id=related_goal_id,
+            # A batch the autopilot pass composed already carries its own block, with its own
+            # refs; collecting again here would hand the run the same notes twice under two
+            # numberings.
+            with_updates=BLOCK_START not in text)
 
         # Route all orchestrator events (except raw streaming partials) to the task's live progress
         # stream so the task-detail SSE shows step-by-step what the AI is doing (plan, read, replan,
@@ -660,6 +674,11 @@ class TaskExecutor:
                             task_id=task_id, card_id=card_id)
             return ExecutionOutcome(task_id, "failed", msg)
 
+        # The run had the person's material in front of it, so the next look starts after it.
+        # After the run and not before: an orchestrator that raised before doing anything has not
+        # delivered it (see ``ContextUpdates.mark_seen``).
+        if self._context_bundle is not None:
+            self._safe(self._context_bundle.mark_seen)
         return self._report(task_id, result, conv_id, request_text=text,
                             rep_preamble=rep_preamble,
                             card_id=(task.get("card_id") or None))
@@ -734,8 +753,13 @@ class TaskExecutor:
     def _build_context_view(self, goal_id: Optional[str], quest_id: Optional[str],
                             conv_id: Optional[str] = None,
                             rep_id: Optional[str] = None,
-                            related_goal_id: Optional[str] = None) -> str:
+                            related_goal_id: Optional[str] = None,
+                            with_updates: bool = True) -> str:
         """Fetch goal + quest metadata + notes + conversation history from the Quest API.
+
+        ``with_updates`` is whether the context engine (when one is wired) is asked for what
+        changed on this quest; a caller whose task text already carries the engine's block passes
+        False.
 
         The context_view is passed to the orchestrator so the deep agent knows what goal/quest
         it's working on, what progress has been made, and the prior conversation that led to
@@ -785,11 +809,12 @@ class TaskExecutor:
         self._append_email_contract(parts, goal_id, quest_id, rep_id)
         self._append_folder_zones_contract(parts, goal_id, quest_id)
         # Fetch quest metadata if available
+        quest: Dict[str, Any] = {}
         if quest_id:
             get_quest = getattr(self._client, "get_quest", None)
             if callable(get_quest):
                 try:
-                    quest = get_quest(quest_id)
+                    quest = get_quest(quest_id) or {}
                     if quest:
                         outcome = quest.get("outcome", "")
                         if outcome:
@@ -831,16 +856,31 @@ class TaskExecutor:
         # The notes on the QUEST are the person's reply channel, so they are fetched whenever there
         # is a quest — with or without a goal on the task.
         if quest_id:
+            # The whole thread, both sides, attributed: what was said on this quest so far.
             notes_text = render_goal_notes(self._fetch_person_notes(quest_id, goal_id))
             if notes_text:
                 parts.append(notes_text)
 
-            # What the person captured on their phone and has not acted on yet. Autopilot passes
-            # already read these; an ordinary scheduled run did not, so the same capture steered a
-            # pass and was invisible to the daily task working the very quest it was about.
-            insights_text = self._fetch_person_captures()
-            if insights_text:
-                parts.append(insights_text)
+            updates_text = insights_text = ""
+            if self._update_engine is not None:
+                # What is NEW or still OPEN on this quest's channels, through the same engine an
+                # autopilot pass asks: the person's unanswered notes, their captures judged for
+                # this card, comments on its documents, a collection it watches. Each carries a
+                # ref, and the result closes with a receipt on every one. The engine owns the
+                # captures either way: a batch the pass composed already carries them, judged,
+                # in its own text, so nothing is fetched unjudged here beside them.
+                if with_updates:
+                    updates_text = self._collect_context_updates(quest, quest_id)
+                    if updates_text:
+                        parts.append(updates_text)
+            else:
+                # What the person captured on their phone and has not acted on yet. Autopilot
+                # passes already read these; an ordinary scheduled run did not, so the same
+                # capture steered a pass and was invisible to the daily task working the very
+                # quest it was about.
+                insights_text = self._fetch_person_captures()
+                if insights_text:
+                    parts.append(insights_text)
 
             history_text = render_run_history(self._fetch_run_history(quest_id))
             if history_text:
@@ -850,7 +890,7 @@ class TaskExecutor:
                 # that was never requested.
                 parts.append(NO_ASSUMED_PROGRESS_CONTRACT)
 
-            if notes_text or insights_text:
+            if notes_text or insights_text or updates_text:
                 parts.append(REPLY_LOOP_CONTRACT)
 
         # Applies to every run: hitting a blocker is normal, stopping because of one is not.
@@ -945,6 +985,23 @@ class TaskExecutor:
             return list(list_tasks(goal_id=quest_id) or [])
         except Exception:  # noqa: BLE001 — history is context, never a reason to fail a run
             return []
+
+    def _collect_context_updates(self, quest: Dict[str, Any], quest_id: str) -> str:
+        """The engine's block for this quest, or "" when nothing arrived or the engine failed.
+
+        Kept on the executor as ``_context_bundle`` so the result can carry the receipt and the
+        watermark can move once the run has had it. Best-effort: the engine reports its own
+        per-source failures, and an engine that raises outright costs the run nothing but the
+        block.
+        """
+        try:
+            bundle = self._update_engine.collect(quest or {}, card_id=quest_id, card_kind="quest")
+            self._context_bundle = bundle
+            return bundle.as_prompt_block() or ""
+        except Exception:  # noqa: BLE001 -- context is never worth failing a run over
+            log.warning("context updates unavailable for quest %s", quest_id, exc_info=True)
+            self._context_bundle = None
+            return ""
 
     def _fetch_person_captures(self) -> str:
         """The person's recent unacted captures, rendered, or "" when there are none."""
@@ -1085,17 +1142,21 @@ class TaskExecutor:
                               run_output: Optional[str] = None) -> str:
         """``reported`` with a context-updates receipt appended, when this task carried updates.
 
-        The task's OWN text is the record of what was offered (see
-        ``context_updates.parse_manifest``), which is what lets the receipt be rendered here
-        without a bundle object travelling with the task through the queue. Every offered ref is
-        listed, including the ones the run said nothing about: a person reads this to find out
-        whether what they wrote reached the work, and a silent ref is the answer they most need.
+        The task's OWN text is the record of what was offered when an autopilot pass composed it
+        (see ``context_updates.parse_manifest``), which is what lets the receipt be rendered here
+        without a bundle object travelling with the task through the queue; a task that asked the
+        engine itself has the bundle on this executor. Every offered ref is listed, including the
+        ones the run said nothing about: a person reads this to find out whether what they wrote
+        reached the work, and a silent ref is the answer they most need.
 
         ``run_output`` names where the run's own account is, when that is not the text being
         reported. A task that carried no updates gets its text back untouched.
         """
         try:
-            manifest = parse_manifest(request_text or "")
+            # The block is in the task's own text when an autopilot pass composed it, and in this
+            # executor's context view when this task asked the engine itself.
+            manifest = parse_manifest(request_text or "") or (
+                self._context_bundle.manifest() if self._context_bundle is not None else [])
             if not manifest:
                 return reported
             receipt = render_receipt(

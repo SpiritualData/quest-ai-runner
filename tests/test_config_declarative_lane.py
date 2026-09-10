@@ -72,6 +72,21 @@ def test_a_real_environment_value_still_wins_over_the_file(monkeypatch):
     assert os.environ["QUEST_TEAM_ID"] == "team_from_the_unit"
 
 
+def test_an_alias_outranks_a_fallback_file_that_names_the_librarys_own_variable(tmp_path):
+    """Two lanes share a fallback .env, and the alias is the one line keeping their queues apart.
+    If the shared file ever grows a line under the library's own name, the alias still holds."""
+    lane = tmp_path / "lane.env"
+    lane.write_text("LANE_TEAM=team_cantr\n")
+    shared = tmp_path / "shared.env"
+    shared.write_text("QUEST_TEAM_ID=team_personal\nQUEST_BASE_URL=https://shared.example.org\n")
+
+    apply_config_environment(RunnerConfig(env_files=[str(lane), str(shared)],
+                                          env_aliases={"QUEST_TEAM_ID": "LANE_TEAM"}))
+
+    assert os.environ["QUEST_TEAM_ID"] == "team_cantr"
+    assert os.environ["QUEST_BASE_URL"] == "https://shared.example.org"   # no alias: file fills it
+
+
 def test_env_table_reaches_the_knobs_no_toml_field_can_set(monkeypatch):
     """OrchestratorConfig is nested, so no top-level TOML field reaches it. Every lane pinned
     these through os.environ in Python; the [env] table is how a file does it."""

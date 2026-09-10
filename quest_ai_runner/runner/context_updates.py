@@ -27,12 +27,12 @@ JSON, and the vocabulary is discoverable via ``UpdateEngine.describe_sources()``
 module hardcodes that any particular card watches any particular thing, and an unknown source name
 degrades to a reported gap rather than an exception.
 
-A NARROWING SPEC NEVER DROPS ANYTHING. ``runner.insights`` refuses to match tags against quest
-names for a good reason (hard rule #3): a fixed string rule silently loses every capture whose
-wording it did not anticipate. So a ``categories`` spec here does NOT filter the insights channel.
-It PROMOTES the matching captures into this card's own updates, and the full unfiltered insights
-block still flows exactly as it did before. The person's tag steers attention; it never gates
-delivery.
+A TAG NEVER GATES DELIVERY. ``runner.insights`` refuses to match tags against quest names for a
+good reason (hard rule #3): a fixed string rule silently loses every capture whose wording it did
+not anticipate. So a ``categories`` spec here does not filter the captures. Every capture is its
+own update with its own ref; a tag match only FLAGS one as waiting on an answer. The only thing
+that sets a capture aside is the relevance judge, which is a model reading the card's subject
+matter, and any failure of the judge keeps everything.
 
 THE RECEIPT. Surfacing context is only half the loop: a person who leaves a comment or captures an
 insight has no way to know whether the run that followed actually used it, and "I read your note"
@@ -60,7 +60,7 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Sequence
+from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Sequence, Tuple
 
 log = logging.getLogger("quest-ai-runner.context_updates")
 
@@ -97,6 +97,12 @@ MAX_UPDATES = 20
 
 # Per-item body cap in the composed block.
 MAX_BODY_CHARS = 800
+
+# How long the engine's user-scoped reads (reflections, captures) stay cached. Long enough that one
+# pass over every quest, or one executor task's context view, reads each once; short enough that a
+# task at two in the afternoon does not see the captures as they stood at six in the morning. The
+# poller builds ONE engine for its whole life, so without this the cache never refreshed at all.
+CACHE_TTL_SECONDS = 120
 
 # The block delimiters. They are parsed back out of a composed task text (see ``parse_manifest``),
 # which is what lets a consumer render the receipt from the task it just ran without threading a
@@ -182,6 +188,10 @@ class ContextUpdate:
     excerpt: str = ""
     # One condensed line for an artifact that holds one line of context (the next-steps note).
     summary: str = ""
+    # (header, footer) around the rows of a slot, set by the source that fills it. The captures
+    # block carries a closing instruction that took work to get right; rendering the captures one
+    # row each must not cost it. ``slot_text`` uses the first frame it finds among the slot's rows.
+    slot_frame: Optional[Tuple[str, str]] = None
     raw: Dict[str, Any] = field(default_factory=dict)
 
     def manifest_line(self) -> str:
@@ -271,13 +281,20 @@ class ContextUpdates:
         rows = [u for u in self.updates if u.slot == slot and u.body]
         if not rows:
             return ""
-        return "\n\n".join(f"[{u.ref}] {u.body}" if u.ref else u.body for u in rows)
+        body = "\n\n".join(f"[{u.ref}] {u.body}" if u.ref else u.body for u in rows)
+        header, footer = next((u.slot_frame for u in rows if u.slot_frame), ("", ""))
+        return "\n".join(part for part in (header, body, footer) if part)
 
     def slot_summary(self, slot: str) -> str:
-        """The one-line summary of a slotted channel, for an artifact that holds one line."""
-        for u in self.updates:
-            if u.slot == slot and u.summary:
-                return u.summary
+        """The one-line summary of a slotted channel, for an artifact that holds one line.
+
+        The newest row's own summary, plus how many more rows the slot holds.
+        """
+        rows = [u for u in self.updates if u.slot == slot]
+        for u in rows:
+            if u.summary:
+                more = f" (+{len(rows) - 1} more)" if len(rows) > 1 else ""
+                return u.summary + more
         return ""
 
     def as_prompt_block(self, *, ask_for_receipt: bool = True,
@@ -455,11 +472,7 @@ def parse_usage_notes(text: str) -> Dict[str, str]:
     for line in body[idx + len(USAGE_HEADING):].splitlines():
         stripped = line.strip()
         if not stripped:
-            # A blank line inside the block is tolerated; two in a row ends it, since the run may
-            # keep writing after the receipt.
-            if out:
-                continue
-            continue
+            continue                   # blank lines inside the block are tolerated
         m = _REF_RE.match(stripped)
         if not m:
             if out:
@@ -626,14 +639,18 @@ class CollectRequest:
     card_label: str = ""
     spec: Dict[str, Any] = field(default_factory=dict)
     since: Optional[datetime] = None
+    # Whether ``since`` is a real "a run was last handed this" stamp (False) or the bounded
+    # first-look window for a card nothing has ever read (True). Sources that reason about what
+    # happened SINCE a delivery need the difference: on a first look nothing has been delivered.
+    first_look: bool = False
     now: datetime = field(default_factory=_utcnow)
     client: Any = None
-    # Shared across every source invoked by ONE ``UpdateEngine`` for its whole lifetime (see
+    # Shared across every source ONE ``UpdateEngine`` invokes within ``CACHE_TTL_SECONDS`` (see
     # ``UpdateEngine._cache``), not per call: a user-scoped source (reflections, insights) reads
     # once and every subsequent card in the same pass narrows the same read in memory instead of
     # re-fetching it. The default factory only matters for a ``CollectRequest`` built standalone
     # (a test, or a source called outside the engine); ``UpdateEngine.collect`` always passes its
-    # own persistent dict explicitly.
+    # own dict explicitly.
     cache: Dict[str, Any] = field(default_factory=dict)
 
     def opt(self, key: str, default: Any = None) -> Any:
@@ -693,12 +710,19 @@ class QuestNotesSource(_BaseSource):
     with real consequences here.
 
     OPEN UNTIL ANSWERED, same rule as ``DriveCommentsSource``. A person's note is answered once an
-    assistant note follows it on the quest: every run that writes one had the notes in front of it
-    (the executor's context view and the folder sync both carry them). A note with an assistant
-    note after it is history, not news, and a note with none is still waiting however old it is.
-    The watermark only labels which open notes are new. Two live failures this replaces: a first
-    look offered ten notes answered days earlier, every one marked "needs an answer"; and a
-    time-filtered note was lost for good the moment one pass saw it and did nothing.
+    assistant note follows it on the quest. A note with an assistant note after it is history, not
+    news, and a note with none is still waiting however old it is. Two live failures this
+    replaces: a first look offered ten notes answered days earlier, every one marked "needs an
+    answer"; and a time-filtered note was lost for good the moment one pass saw it and did nothing.
+
+    AND NEWER THAN THE WATERMARK, even when an assistant note follows it. The watermark moves only
+    when a run was handed the notes, so a note newer than it has never been in front of any run.
+    An assistant note after it does not change that: a run that started before the note arrived
+    and posted its summary an hour later never saw it, and treating that summary as the answer is
+    the one way this source could lose a note for good. Such a note is offered once, without the
+    "needs an answer" flag, so the run can see it was written and judge whether the note after it
+    actually answered it. Not on a first look: with no delivery on record, "newer than the
+    watermark" is just "recent", and the answered notes of the last two weeks are history.
     """
     name = "quest_notes"
     describes = "notes the person added to this quest that have no assistant reply yet"
@@ -711,14 +735,27 @@ class QuestNotesSource(_BaseSource):
             return []
         out: List[ContextUpdate] = []
         where = request.card_label or _card_label(request.card) or "this quest"
-        for note in self.unanswered(lister(quest_id) or [], now=request.now):
+        notes = lister(quest_id) or []
+        open_notes = self.open_notes(notes)
+        offered = _still_open(open_notes, request.now, lambda n: _as_utc(n.get("created_at")))
+        open_ids = {id(n) for n in offered}
+        if not request.first_look:
+            answered = [n for n in self.persons(notes) if id(n) not in {id(o) for o in open_notes}]
+            for n in answered:
+                when = _as_utc(n.get("created_at"))
+                if not (request.since and when and when <= request.since):
+                    offered.append(n)          # arrived after the last delivery: never seen
+        for note in offered:
             when = _as_utc(note.get("created_at"))
             is_new = not (request.since and when and when <= request.since)
+            is_open = id(note) in open_ids
             text = str(note.get("text") or "").strip()
             author = str(note.get("author_name") or "").strip()
             title = f"{author or 'The person'} wrote on the quest"
             if not is_new:
                 title += " (still open from before)"
+            elif not is_open:
+                title += " (an assistant note followed it; check that it was actually answered)"
             out.append(ContextUpdate(
                 source=self.name,
                 kind="note",
@@ -730,41 +767,57 @@ class QuestNotesSource(_BaseSource):
                 occurred_at=when,
                 location=where,
                 how_to_respond="add a note on this quest",
-                needs_response=True,
+                needs_response=is_open,
                 raw=dict(note or {}),
             ))
         return out
 
     @staticmethod
-    def unanswered(notes: Sequence[Dict[str, Any]],
-                   now: Optional[datetime] = None) -> List[Dict[str, Any]]:
-        """The person's notes with no assistant note after them, oldest first, BOUNDED.
+    def persons(notes: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """The person's own notes with text, oldest first (by ``created_at``, then list order)."""
+        return [n for n in _by_time(notes) if str(n.get("author_kind") or "").lower() == "user"]
 
-        Ordered by ``created_at`` rather than trusting list order, and a note without a readable
-        timestamp is placed by its position in the list, which is the backend's own order.
-        """
-        rows = []
-        for i, note in enumerate(notes or []):
-            if not isinstance(note, dict) or not str(note.get("text") or "").strip():
-                continue
-            rows.append((_as_utc(note.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc),
-                         i, note))
-        rows.sort(key=lambda r: (r[0], r[1]))
+    @staticmethod
+    def open_notes(notes: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """The person's notes with no assistant note after them, oldest first, unbounded."""
         open_notes: List[Dict[str, Any]] = []
-        for _, _, note in rows:
+        for note in _by_time(notes):
             kind = str(note.get("author_kind") or "").lower()
             if kind == "user":
                 open_notes.append(note)
             elif kind == "ai":
                 open_notes = []
-        if not open_notes:
-            return []
-        # Bounded at both ends (see OPEN_ITEM_MAX_AGE_DAYS / MAX_OPEN_PER_SOURCE): drop anything
-        # too old to still be a live question, then keep the newest few. Without this, one
-        # unanswered note from last year rides into every brief this quest ever produces.
-        floor = (now or _utcnow()) - timedelta(days=OPEN_ITEM_MAX_AGE_DAYS)
-        fresh = [n for n in open_notes if (_as_utc(n.get("created_at")) or floor) >= floor]
-        return fresh[-MAX_OPEN_PER_SOURCE:]
+        return open_notes
+
+    @classmethod
+    def unanswered(cls, notes: Sequence[Dict[str, Any]],
+                   now: Optional[datetime] = None) -> List[Dict[str, Any]]:
+        """``open_notes`` bounded to the ones still worth offering (see ``_still_open``)."""
+        return _still_open(cls.open_notes(notes), now, lambda n: _as_utc(n.get("created_at")))
+
+
+def _by_time(notes: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Notes with text, oldest first by ``created_at``; an unreadable timestamp keeps list order."""
+    rows = []
+    for i, note in enumerate(notes or []):
+        if not isinstance(note, dict) or not str(note.get("text") or "").strip():
+            continue
+        rows.append((_as_utc(note.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc),
+                     i, note))
+    rows.sort(key=lambda r: (r[0], r[1]))
+    return [n for _, _, n in rows]
+
+
+def _still_open(items: List[Any], now: Optional[datetime],
+                when_of: Callable[[Any], Optional[datetime]]) -> List[Any]:
+    """The open items still worth offering: none older than ``OPEN_ITEM_MAX_AGE_DAYS``, and at
+    most the newest ``MAX_OPEN_PER_SOURCE``. ``items`` oldest first; an undated item counts as
+    fresh. Without this, one unanswered note from last year rides into every brief forever."""
+    if not items:
+        return []
+    floor = (now or _utcnow()) - timedelta(days=OPEN_ITEM_MAX_AGE_DAYS)
+    fresh = [it for it in items if (when_of(it) or floor) >= floor]
+    return fresh[-MAX_OPEN_PER_SOURCE:]
 
 
 class ReflectionsSource(_BaseSource):
@@ -783,8 +836,7 @@ class ReflectionsSource(_BaseSource):
         from .reflections import collect_reflections, DEFAULT_PERIODS
         periods = tuple(request.opt("periods") or DEFAULT_PERIODS)
         # Reflections are USER-scoped, so a pass covering five quests would otherwise fetch the
-        # same two documents five times. Cached for the life of the engine, which every caller
-        # builds fresh per pass or per task.
+        # same two documents five times. Cached on the engine (see ``CACHE_TTL_SECONDS``).
         key = ("reflections", periods)
         ctx = request.cache.get(key)
         if ctx is None:
@@ -810,17 +862,22 @@ class ReflectionsSource(_BaseSource):
 
 
 class InsightsSource(_BaseSource):
-    """The person's unacted captures (``runner.insights``), optionally FOCUSED by category.
+    """The person's unacted captures (``runner.insights``), ONE UPDATE PER CAPTURE.
 
-    ``{"source": "insights", "categories": ["PhD"]}`` promotes captures the person tagged that way
-    into this card's own updates. It does NOT filter the insights channel: the unfiltered block
-    still reaches the run through its existing slot, so a capture tagged "thesis" (or tagged
-    nothing) on a card focused on "PhD" is still seen. Narrowing here is about what gets a ref and
-    an "is this yours?" question, never about what is delivered -- see the module docstring.
+    One row each, and that is the whole design: the relevance judge decides on each capture on its
+    own, the receipt answers for each capture in the person's own words, and a card that names
+    ``categories`` gets the captures the person tagged that way flagged as waiting on an answer
+    ("is this one yours?"). Delivered as one block, none of that is possible: a judge shown the
+    block as a single item either drops every capture for this card or passes every one through,
+    and a receipt line for "the captures" tells nobody whether THEIR capture reached the run.
+
+    The rows render through the composer's ``insights`` slot inside the same framing the block has
+    always carried (``runner.insights.block_header`` / ``BLOCK_FOOTER``), so a brief reads as it did.
 
     Category matching is case-insensitive and substring-based on the PERSON's own tags. That is a
     string rule, and it is allowed because it reads their words against their words: the card's
-    spec was written to match the tags they type. Nothing matches model output.
+    spec was written to match the tags they type. Nothing matches model output, and a tag never
+    gates delivery.
     """
     name = "insights"
     describes = "captures the person made and has not acted on (optionally by category)"
@@ -844,56 +901,43 @@ class InsightsSource(_BaseSource):
             ctx = collect_unacted_insights(request.client, now=request.now)
             request.cache["insights"] = ctx
         narrowed = ctx.narrow_to(request.since) if hasattr(ctx, "narrow_to") else ctx
+        rows = list(getattr(narrowed, "insights", None) or [])
+        if not rows:
+            return []
+        from .insights import BLOCK_FOOTER, block_header
+        frame = (block_header(getattr(narrowed, "since", None),
+                              getattr(narrowed, "window_days", 14)), BLOCK_FOOTER)
         out: List[ContextUpdate] = []
-
-        # 1. The whole unfiltered channel, in one slotted update: this is the block that has always
-        #    reached a brief, with its own framing, and it is delivered whether or not this card
-        #    declared any categories. A narrowing spec must never be able to hide a capture.
-        block = narrowed.as_text() if narrowed else ""
-        if block:
-            newest = (getattr(narrowed, "insights", None) or [None])[0]
-            out.append(ContextUpdate(
-                source=self.name,
-                kind="captures",
-                item_id="unacted",
-                title="What they captured and have not acted on",
-                body=block,
-                occurred_at=_as_utc(getattr(newest, "created_at", None)) or request.now,
-                location="Quest insights",
-                slot=self.slot,
-                how_to_respond="act on one and say so in your result, or pass over it",
-                needs_response=False,
-                summary=narrowed.one_line() if hasattr(narrowed, "one_line") else "",
-                raw={"count": len(getattr(narrowed, "insights", []) or [])},
-            ))
-
-        # 2. PROMOTION, not filtering. When the card names categories, the captures the person
-        #    tagged that way ALSO get their own ref and their own "is this one yours?" question,
-        #    because a card that watches a tag is asking to be asked. The block above still carries
-        #    every capture regardless, so a mistagged or untagged one is never lost -- which is the
-        #    difference between steering attention and gating delivery.
-        if not wanted:
-            return out
-        for row in getattr(narrowed, "insights", None) or []:
-            cats = [str(c) for c in (getattr(row, "categories", None) or [])]
-            low = [c.lower() for c in cats]
-            if not any(w in c or c in w for w in wanted for c in low):
-                continue
+        for row in rows:
             text = str(getattr(row, "text", "") or "").strip()
             if not text:
                 continue
+            cats = [str(c) for c in (getattr(row, "categories", None) or [])]
+            low = [c.lower() for c in cats]
+            tagged_for_this = bool(wanted) and any(w in c or c in w for w in wanted for c in low)
+            when = _as_utc(getattr(row, "created_at", None))
+            date = when.strftime("%Y-%m-%d") if when else "an unrecorded date"
+            tags = f" tagged {', '.join(cats)}" if cats else " (untagged)"
             out.append(ContextUpdate(
                 source=self.name,
                 kind="capture",
                 item_id=str(getattr(row, "entry_id", "") or ""),
-                title=f"They tagged this {', '.join(cats)} and have not acted on it",
-                body=text,
+                title=(f"They tagged this {', '.join(cats)} and have not acted on it"
+                       if tagged_for_this else "They captured this and have not acted on it"),
+                # The row as the block always rendered it (date, tags, their words), so the slot
+                # reads exactly as before with a ref in front of each row.
+                body=f"[{date}]{tags}\n      {text}",
                 excerpt=text,
-                occurred_at=_as_utc(getattr(row, "created_at", None)),
+                occurred_at=when,
                 location="Quest insights",
-                how_to_respond="act on it and say so, or say why it does not apply here",
-                needs_response=True,
-                raw={"categories": cats, "promoted_by": wanted},
+                slot=self.slot,
+                slot_frame=frame,
+                how_to_respond=("act on it and say so, or say why it does not apply here"
+                                if tagged_for_this else
+                                "act on it and say so in your result, or pass over it"),
+                needs_response=tagged_for_this,
+                summary=f"Unacted insight from {date}{tags}: {_clip(text, 220)}",
+                raw={"categories": cats, "promoted_by": wanted if tagged_for_this else []},
             ))
         return out
 
@@ -939,6 +983,11 @@ class CollectionEntriesSource(_BaseSource):
     NOT put to a relevance judgment, and that is deliberate: unlike a capture, which arrives from a
     space covering the person's whole life, a collection reaches a card only because the card NAMED
     it. It is card-scoped by construction, so judging it could only ever lose one.
+
+    ONE UPDATE PER COLLECTION, the new entries in its body, not one per entry. A log is one
+    channel: seven days of a habit timer are one thing to take into account, and seven refs would
+    be seven receipt lines each saying "noted" -- verified live, where a week of entries was the
+    bulk of a bundle and the person's one capture sat at the bottom of it.
     """
     name = "collection"
     describes = "new entries in a habit, timer or log collection this work tracks"
@@ -956,7 +1005,7 @@ class CollectionEntriesSource(_BaseSource):
         rows = entries.get("items") if isinstance(entries, dict) else entries
         if not isinstance(rows, list):
             return []
-        out: List[ContextUpdate] = []
+        kept = []                      # (when, rendered line, timer seconds, is a habit)
         for entry in rows:
             if not isinstance(entry, dict):
                 continue
@@ -965,24 +1014,41 @@ class CollectionEntriesSource(_BaseSource):
                     or _as_utc(entry.get("createdAt")) or _as_utc(entry.get("created_at")))
             if request.since and when and when <= request.since:
                 continue
-            body = self._render(values)
-            if not body:
+            line = self._render(values)
+            if not line:
                 continue
-            out.append(ContextUpdate(
-                source=self.name,
-                kind="habit" if str(entry.get("type") or "") == "habit" else "entry",
-                item_id=str(entry.get("id") or ""),
-                title=f"{label}, as they logged it",
-                body=body,
-                occurred_at=when,
-                location=label,
-                how_to_respond="",
-                needs_response=False,
-                raw={"collection_id": collection_id},
-            ))
-        out.sort(key=lambda u: u.occurred_at or datetime.min.replace(tzinfo=timezone.utc),
-                 reverse=True)
-        return out[:int(request.opt("max_entries") or 7)]
+            timer = values.get("habit_timer")
+            seconds = timer.get("value") if isinstance(timer, dict) else timer
+            try:
+                seconds = int(float(seconds))
+            except (TypeError, ValueError):
+                seconds = 0
+            kept.append((when or datetime.min.replace(tzinfo=timezone.utc), line, seconds,
+                         str(entry.get("type") or "") == "habit"))
+        if not kept:
+            return []
+        kept.sort(key=lambda k: k[0], reverse=True)
+        kept = kept[:int(request.opt("max_entries") or 7)]
+        newest, oldest = kept[0][0], kept[-1][0]
+        span = (newest.strftime("%Y-%m-%d") if len(kept) == 1 or oldest == newest
+                else f"{oldest.strftime('%Y-%m-%d')} to {newest.strftime('%Y-%m-%d')}")
+        total = _duration_label(sum(k[2] for k in kept))
+        excerpt = (f"{len(kept)} entr{'y' if len(kept) == 1 else 'ies'}, {span}"
+                   + (f", {total} in all" if total else ""))
+        return [ContextUpdate(
+            source=self.name,
+            kind="habit" if any(k[3] for k in kept) else "log",
+            item_id=collection_id,
+            title=f"{label}, as they logged it (newest first)",
+            body="\n".join(k[1] for k in kept),
+            excerpt=excerpt,
+            occurred_at=newest,
+            location=label,
+            how_to_respond="",
+            needs_response=False,
+            summary=f"{label}: {excerpt}",
+            raw={"collection_id": collection_id, "entries": len(kept)},
+        )]
 
     @staticmethod
     def _render(values: Dict[str, Any]) -> str:
@@ -1056,7 +1122,9 @@ class DriveCommentsSource(_BaseSource):
     happily do the filtering. A watermark answers "what is new"; an unanswered question is not news
     after the first day and it is still unanswered. Filtering by time would drop it forever the
     moment one run saw it and did nothing. The watermark is used to LABEL which threads are new,
-    and open threads keep their ref until they are answered or resolved.
+    and open threads keep their ref until they are answered or resolved -- bounded the same way
+    open notes are (``OPEN_ITEM_MAX_AGE_DAYS`` / ``MAX_OPEN_PER_SOURCE``), or a thread nobody can
+    answer would crowd every other update out of the bundle for good.
     """
     name = "drive_comments"
     describes = "comments people left on the documents this work owns"
@@ -1092,9 +1160,10 @@ class DriveCommentsSource(_BaseSource):
                 seen_files.add(fid)
                 comments.extend(client.comments_for_file(fid))
         out: List[ContextUpdate] = []
-        for c in comments:
-            if not c.needs_answer:
-                continue
+        open_threads = [c for c in comments if c.needs_answer]
+        open_threads.sort(key=lambda c: c.modified_at or c.created_at
+                          or datetime.min.replace(tzinfo=timezone.utc))
+        for c in _still_open(open_threads, request.now, lambda c: c.modified_at or c.created_at):
             when = c.modified_at or c.created_at
             is_new = not (request.since and when and when <= request.since)
             title = f'{c.author or "Someone"} commented on "{c.file_name or c.file_id}"'
@@ -1267,7 +1336,10 @@ def llm_relevance_judge(provider_fn: Callable[[], Any], tier: str = "balanced"
                 f"{i}. [{', '.join(u.raw.get('categories') or []) or 'untagged'}] "
                 f"{_clip(u.body or u.title, 300)}"
                 for i, u in enumerate(rows, 1))
-            prompt = _RELEVANCE_PROMPT.format(work=_clip(work, 400) or "unnamed work",
+            # The work description goes in whole: ``_describe_work`` already clips each field,
+            # and clipping the assembled text again cut it off before the description the judge
+            # was given it for.
+            prompt = _RELEVANCE_PROMPT.format(work=(work or "").strip() or "unnamed work",
                                               items=listed)
             raw = provider.answer([{"role": "user", "content": prompt}], model=model)
             text = raw if isinstance(raw, str) else str(getattr(raw, "text", raw) or "")
@@ -1406,10 +1478,10 @@ class UpdateEngine:
         for src in (sources or self._builtin_sources(drive_comments)):
             registry[src.name] = src
         self._sources = registry
-        # Engine-lifetime cache for user-scoped sources (reflections, insights), keyed by each
-        # source's own choice of key. Lives as long as this engine instance, which every caller
-        # builds fresh per pass or per task -- see ``ReflectionsSource``/``InsightsSource``.
+        # Cache for user-scoped sources (reflections, insights), keyed by each source's own choice
+        # of key, cleared once it is older than ``CACHE_TTL_SECONDS`` -- see ``collect``.
         self._cache: Dict[str, Any] = {}
+        self._cache_filled_at: Optional[datetime] = None
 
     @staticmethod
     def _builtin_sources(drive_comments: Any) -> List[ContextSource]:
@@ -1474,10 +1546,12 @@ class UpdateEngine:
             return
         if keep is None:
             return
+        # A judged row is kept under its item id, or under its 1-based position for a row with none.
+        position = {id(u): f"#{i}" for i, u in enumerate(judged, 1)}
         dropped_by_source: Dict[str, int] = {}
         kept: List[ContextUpdate] = []
         for u in bundle.updates:
-            if u in judged and (u.item_id or "") not in keep and f"#{judged.index(u) + 1}" not in keep:
+            if id(u) in position and (u.item_id or "") not in keep and position[id(u)] not in keep:
                 dropped_by_source[u.source] = dropped_by_source.get(u.source, 0) + 1
                 continue
             kept.append(u)
@@ -1505,6 +1579,10 @@ class UpdateEngine:
         One source failing never costs the others: it is reported and the pass continues.
         """
         now = self._now_fn()
+        if (self._cache_filled_at is None
+                or (now - self._cache_filled_at).total_seconds() > CACHE_TTL_SECONDS):
+            self._cache.clear()
+            self._cache_filled_at = now
         cid = str(card_id or card.get("quest_id") or card.get("id") or "")
         bundle = ContextUpdates(
             card_id=cid,
@@ -1524,13 +1602,14 @@ class UpdateEngine:
                     source=name, spec=spec, error="no such source is registered"))
                 log.warning("context updates: card %s asks for unknown source %r", cid, name)
                 continue
-            window = since or self._watermarks.get(cid, name) or (now - self._first_look)
+            last_look = since or self._watermarks.get(cid, name)
+            window = last_look or (now - self._first_look)
             report = SourceReport(source=name, spec=spec, since=window)
             try:
                 found = list(source.collect(CollectRequest(
                     card=card, card_id=cid, card_kind=card_kind, spec=spec,
-                    card_label=bundle.card_label, since=window, now=now,
-                    client=self._client, cache=self._cache)) or [])
+                    card_label=bundle.card_label, since=window, first_look=last_look is None,
+                    now=now, client=self._client, cache=self._cache)) or [])
             except Exception as e:  # noqa: BLE001 -- one channel never breaks the rest
                 report.error = f"{type(e).__name__}: {e}"
                 log.warning("context updates: source %s failed for card %s: %s", name, cid, e)

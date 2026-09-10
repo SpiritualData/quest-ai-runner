@@ -239,6 +239,82 @@ def test_a_task_that_carried_no_updates_reports_exactly_what_it_would_have_repor
     assert _ReceiptExecutor()._with_context_receipt("the work", "an ordinary task") == "the work"
 
 
+# --- a delegated task asks the same engine ------------------------------------------------------
+
+class _QuestNotesClient(NotingClient):
+    """The reads the executor's context view makes, on top of the autopilot fake."""
+
+    def get_quest(self, quest_id):
+        return {"quest_id": quest_id, "name": "Dissertation", "outcome": "ship the thing"}
+
+
+def _executor_with(engine, notes):
+    client = _QuestNotesClient(quests=[_watching_quest("q1")], notes=notes)
+    return TaskExecutor(client, None, update_engine=engine), client
+
+
+def test_a_delegated_task_is_handed_what_changed_and_its_result_carries_the_receipt():
+    """Not only a batch the pass composed: a task somebody delegated from chat asks the engine
+    too, so nobody has to write "check my notes" into the prompt."""
+    from quest_ai_runner.runner.executor import REPLY_LOOP_CONTRACT
+
+    marks = Watermarks(None)
+    engine = UpdateEngine(None, watermarks=marks, always=("quest_notes",), now_fn=_now)
+    ex, client = _executor_with(engine, [_note("The method chapter has to come first")])
+    engine._client = client
+
+    view = ex._build_context_view(goal_id=None, quest_id="q1")
+    assert BLOCK_START in view
+    assert '[U1] 2026-09-09 · note · Dissertation · "The method chapter has to come first"' in view
+    assert REPLY_LOOP_CONTRACT in view
+    assert "wrote on the quest" in view
+
+    reported = ex._with_context_receipt(
+        "Did the method chapter.\n\nContext used:\n  [U1] method first, as asked", "plain task text")
+    assert "Context updates taken into account:" in reported
+    assert "-> method first, as asked" in reported
+
+
+def test_a_batch_the_pass_composed_is_not_collected_a_second_time():
+    """The pass's block is already in the task text with its own refs; the context view must not
+    hand the run the same note again under a second numbering."""
+    engine = UpdateEngine(None, watermarks=Watermarks(None), always=("quest_notes",), now_fn=_now)
+    ex, client = _executor_with(engine, [_note("The method chapter has to come first")])
+    engine._client = client
+
+    view = ex._build_context_view(goal_id=None, quest_id="q1", with_updates=False)
+    assert BLOCK_START not in view
+    assert "The method chapter has to come first" in view       # the thread itself still renders
+    assert "Insights the person captured" not in view           # and no unjudged captures beside it
+
+
+def test_the_watermark_moves_once_the_delegated_run_has_had_the_material(tmp_path):
+    """End to end through execute(): the real executor, a capturing deep runner, and the engine.
+    Collecting alone must not consume the note; a finished run must."""
+    from tests.test_runner import MockQuestClient
+    from tests.test_working_dir_override import CapturingDeepRunner, _brain
+
+    class Client(MockQuestClient):
+        def get_quest(self, quest_id):
+            return {"quest_id": quest_id, "name": "Dissertation"}
+
+        def list_quest_notes(self, quest_id):
+            return [_note("The method chapter has to come first")]
+
+    client = Client([])
+    marks = Watermarks(str(tmp_path / "marks.json"))
+    engine = UpdateEngine(client, watermarks=marks, always=("quest_notes",), now_fn=_now)
+    deep = CapturingDeepRunner(output="drafted it\n\nContext used:\n  [U1] method first")
+    ex = TaskExecutor(client, _brain(deep), update_engine=engine)
+
+    ex.execute({"id": "t1", "text": "Work the dissertation", "quest_id": "q1"})
+
+    assert deep.calls, "the deep run never happened"
+    assert marks.get("q1", "quest_notes") == NOW
+    done = [r for r in client.reports if r[1] == "done"]
+    assert done and "-> method first" in done[0][2]
+
+
 # --- the consumer's switch ------------------------------------------------------------------------
 
 def test_the_library_default_is_on_and_a_consumer_can_switch_it_off():
