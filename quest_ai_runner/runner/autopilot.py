@@ -80,6 +80,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+from .context_updates import ContextUpdates, UpdateEngine
 from .insights import InsightsContext, collect_unacted_insights
 from .local_time import now_in_zone
 # The client's OWN period formats, borrowed rather than restated: a goal this module proposes is
@@ -1055,6 +1056,7 @@ def compose_batch_text(quest_outcome: str,
                        previous: Optional[Dict[str, Any]] = None,
                        reflection: Optional[str] = None,
                        insights: Optional[str] = None,
+                       context_updates: Optional[str] = None,
                        instructions: Optional[str] = None,
                        persona_instructions: Optional[str] = None,
                        default_quest_instructions: Optional[str] = None,
@@ -1115,6 +1117,15 @@ def compose_batch_text(quest_outcome: str,
     rather than work to do. It is THE ONLY WAY A GOAL REACHES A RUN: no goal is ever composed as
     an assignment here. Absent or empty, this emits nothing and composes byte-identically to before
     the parameter existed.
+
+    ``context_updates`` (from ``UpdateEngine.collect(...).as_prompt_block()``, see
+    ``runner/context_updates.py``) is what has changed on channels OTHER than the two above since
+    an assistant last looked at this quest -- a note the person added, a comment on a document this
+    work owns, a file that changed. It carries its own ref-tagged manifest and its own receipt gate
+    (``[U1]``, ``[U2]``, ...), so nothing here needs to render or explain it further; it is placed
+    after the reflection and insights so the run reads its own instructions and the person's
+    first-hand material first. A consumer that never builds an engine passes ``None``, and the
+    composed text is byte-identical to before this parameter existed.
 
     ``persona``, when resolved, is named in the text AS WELL AS stamped structurally in
     ``assignee_rep_id`` at creation. The structured field is authoritative; the prose is kept
@@ -1188,6 +1199,8 @@ def compose_batch_text(quest_outcome: str,
         # carries the "decide which of these apply" instruction, since that judgment belongs to the
         # reader and never to a tag match in this code.
         parts.append(insights)
+    if context_updates:
+        parts.append(context_updates)
     if previous:
         parts.append(_summarize_previous(previous))
     parts.append(_CONFIRMATION_RULE)
@@ -1466,6 +1479,16 @@ class AutopilotPass:
     canonical next-steps artifact: the pass reads the folder's standing answer into the batch it
     creates, and writes its own conclusion back over it (locally and on Quest). Without a map the
     pass behaves exactly as before.
+
+    ``update_engine`` (a ``runner.context_updates.UpdateEngine``, from ``RunnerConfig``) is what
+    checks the channels this class does NOT already hand-wire -- notes the person added to the
+    quest, comments on a document this work owns, a folder that changed. It is asked once per
+    quest, per pass, for exactly what has changed since it last looked (see
+    ``runner/context_updates.py``); the result rides into every batch this quest produces this
+    pass, as its own ref-tagged block, and the engine's watermark for this card only advances once
+    a batch carrying it was actually created (never on a dry run, and never merely because the
+    engine was asked). Left ``None``, a pass behaves exactly as it did before this existed: this
+    class still reads its own reflections and insights exactly as before, unaffected.
     """
 
     def __init__(self, client: Any, *, team_id: str = "",
@@ -1474,8 +1497,10 @@ class AutopilotPass:
                  backpressure: bool = False,
                  adopt_recurring_default: Optional[bool] = None,
                  quest_folder_map: Optional[Dict[str, str]] = None,
+                 update_engine: Optional[UpdateEngine] = None,
                  now: Optional[Callable[[], datetime]] = None):
         self._client = client
+        self._update_engine = update_engine
         self._team_id = team_id or ""
         self._persona_resolver = persona_resolver
         self._daily_budget = daily_budget if daily_budget and daily_budget > 0 else DEFAULT_TEAM_DAILY_BUDGET
@@ -1729,9 +1754,26 @@ class AutopilotPass:
         # user-scoped read, cached for the pass; the per-quest cutoff is applied in memory.
         insights = self._insights(autopilot_cfg)
         insights_text = insights.as_text() or None
-
         quest_label = _quest_label(quest, quest_id)
+        # Everything else that changed on this quest since an assistant last looked -- notes,
+        # document comments, folder edits -- through the one engine every caller of it asks the
+        # same question. Reflections/insights above are NOT re-collected through it: they already
+        # have their own tested caching and their own freshness anchor (this quest's own
+        # ``last_pass_at``, not a second watermark), and duplicating them here would be exactly the
+        # "two hand-wired paths" problem the engine exists to end, not repeat once more.
+        context_bundle: Optional[ContextUpdates] = None
+        context_updates_text: Optional[str] = None
+        if self._update_engine is not None:
+            context_bundle = self._update_engine.collect(
+                quest, card_id=quest_id, card_kind="quest", card_label=quest_label)
+            context_updates_text = context_bundle.as_prompt_block() or None
+
         produced = False
+        # Whether a batch CARRYING this pass's context updates was actually created. Separate from
+        # ``produced`` on purpose: a dry run, a goal proposal and a budget-starved pass all leave
+        # ``produced`` in a state that says nothing about whether the person's comment reached a
+        # run, and the watermark may only move when it did (see ``ContextUpdates.mark_seen``).
+        context_delivered = False
         # THE ALWAYS-WORK RULE, and it is now unconditional for a quest that reaches this point.
         # Every character on duty has an effective brief at BOTH levels -- what the person wrote
         # for that level, or the built-in default for it -- so every character on duty gets ONE
@@ -1791,6 +1833,7 @@ class AutopilotPass:
                                                   previous=previous,
                                                   reflection=reflection_text,
                                                   insights=insights_text,
+                                                  context_updates=context_updates_text,
                                                   instructions=instructions,
                                                   persona_instructions=persona_instructions,
                                                   default_quest_instructions=(
@@ -1808,7 +1851,14 @@ class AutopilotPass:
                     })
                     budget_used += 1
                     produced = True
+                    if context_updates_text:
+                        context_delivered = True
                     self._close_adopted(tasks, task_id, quest_id, result)
+            # The receipt for the person: what they wrote has now been handed to a real run, so
+            # the next pass will not offer it again. Only here -- never at collection time, never
+            # on a dry run, and never merely because the engine was asked.
+            if context_delivered and context_bundle is not None and not dry_run:
+                context_bundle.mark_seen()
             if produced and not dry_run:
                 self._refresh_next_steps(quest_id, current_goals, adopted, scope_label, previous,
                                          result, quest_label=quest_label,
@@ -2334,6 +2384,7 @@ class AutopilotPass:
                            previous: Optional[Dict[str, Any]] = None,
                            reflection: Optional[str] = None,
                            insights: Optional[str] = None,
+                           context_updates: Optional[str] = None,
                            instructions: Optional[str] = None,
                            persona_instructions: Optional[str] = None,
                            default_quest_instructions: Optional[str] = None,
@@ -2344,6 +2395,7 @@ class AutopilotPass:
                                   scope_label=scope_label, adopted_tasks=adopted_tasks,
                                   next_steps=next_steps, previous=previous,
                                   reflection=reflection, insights=insights,
+                                  context_updates=context_updates,
                                   instructions=instructions,
                                   persona_instructions=persona_instructions,
                                   default_quest_instructions=default_quest_instructions,

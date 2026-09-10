@@ -45,6 +45,65 @@ All notable changes to this project are documented here. The format is based on
   constant, and its own behavior is still covered by tests driving `_handle_proposal` directly.
 
 ### Added
+- **Automated context updates: one engine answering "what changed since an assistant last looked at
+  this card?"** (`runner/context_updates.py`, `adapters/drive_comments.py`; how-to in
+  [`docs/context-updates.md`](docs/context-updates.md)). Every context channel in this library was
+  built the same way and then wired by hand, twice: `runner.reflections` read what a person wrote,
+  `runner.insights` read what they captured, `executor._build_context_view` read a quest's notes and
+  run history, and `AutopilotPass` read two of those AGAIN with its own caching and its own slot in
+  the composed brief. Adding a third channel therefore meant writing a module, a fetch method on two
+  callers, a render function, a composer parameter, and a line in the prompt telling the run to look
+  at it, so people did the last part in the prompt instead: quests grew standing instructions like
+  "check the comments on the doc", a person hand-maintaining in prose the retrieval plan the context
+  engine was supposed to own. A `ContextSource` now answers one question (given a card and a
+  watermark, what arrived since?), `UpdateEngine` resolves which sources a card uses from data the
+  card itself carries, and a `ContextUpdates` bundle renders one block for the run. Built in:
+  `reflections`, `insights`, `quest_notes`, `drive_comments`, `drive_changes`; a consumer adds its
+  own with `engine.register(...)` and every caller sees it.
+- **A quest declares what it watches as data, and narrowing promotes rather than filters**
+  (`autopilot.context_sources`). A bare `"quest_notes"` or a spec like
+  `{"source": "insights", "categories": ["PhD"]}` decides what a card reads: no code names a source
+  for any particular quest, and `UpdateEngine.describe_sources()` publishes the vocabulary so an
+  assistant writing a spec can discover the names instead of guessing one that silently does
+  nothing. An unrecognized name is reported as a gap in the bundle, never raised. A `categories`
+  spec PROMOTES matching captures to their own refs while the full unfiltered block still ships, so
+  the person's tag steers attention and can never silently drop a capture whose wording the spec did
+  not anticipate.
+- **A receipt saying what the run actually did with each update** (`runner/context_updates.py`,
+  `runner/executor.py`). Surfacing context was only half the loop: somebody who leaves a comment had
+  no way to know whether the run that followed used it. Every offered update now carries a short ref
+  (`[U1]`), the composed block asks the run to close with one line per ref, and the executor folds
+  the run's OWN answer into a fixed `Context updates taken into account:` block on the result, for
+  both the shallow answer and the deep run whose fold-back rewrite would otherwise drop it. Every
+  offered ref appears whether or not the run mentioned it, and one it said nothing about reads as
+  `no note from the run`, since the run that used the material is the only thing that knows how it
+  used it.
+- **Per (card, source) watermarks that move only on delivery** (`Watermarks`, JSON-backed, atomic
+  write, monotonic, corrupt-file tolerant). Channels move at different speeds, so one stamp per pair
+  keeps them independent, and a card nothing has ever read looks back a bounded 14 days instead of
+  replaying its whole history. The stamp advances when the material reached a real created run:
+  never at collection time, never on a dry run, never on a budget-exhausted pass, and only for the
+  sources that were actually readable, so one API blip cannot consume a person's comment on the way
+  past. An empty bundle means "nothing new", never a failure: a source that raises is reported as a
+  failed source and the rest of the bundle is still delivered.
+- **A Drive comments and changes channel** (`adapters/drive_comments.py`, exported from
+  `quest_ai_runner.adapters`: `DriveComments`, `DriveComment`, `DriveFileChange`, `render_comments`,
+  `unanswered`). Stdlib `urllib` against the Drive v3 API with an injected `token_provider`, so the
+  library stays free of any one deployment's credential story. Reads are best effort and degrade to
+  nothing without a token; a reply or a resolve returns a result object and surfaces the API's own
+  message on a 403, because an assistant that believes it answered somebody when it did not is worse
+  than one that knows it failed. Open threads are fetched without a time filter, since a watermark
+  answers "what is new" and an unanswered question is not news after the first day but is still
+  unanswered. Each comment carries the passage it is anchored to, because comments are written as
+  deixis ("this is unclear", "cite here") and the quote is the subject.
+- **Wired into the autopilot pass, off by one flag** (`config.py`, `runner/poller.py`,
+  `runner/autopilot.py`, `cli.py`). `RunnerConfig` gains `context_updates` (default on),
+  `context_updates_state_path`, `context_updates_first_look_days` and `drive_comments`, mirrored by
+  `QAR_CONTEXT_UPDATES`, `QAR_CONTEXT_UPDATES_STATE_PATH` and
+  `QAR_CONTEXT_UPDATES_FIRST_LOOK_DAYS`. The poller builds one engine per lane and hands it to
+  `AutopilotPass`; with the flag off, or with no engine, the pass composes byte-for-byte what it
+  composed before this existed. The `reflection` and `insights` slots render through the composer's
+  existing sections and still get refs, so nothing is said twice.
 - **Personas are configuration now, not consumer code** (`runner/personas.py`, exported from
   `quest_ai_runner.runner`; how-to in `docs/personas.md`). `RunnerConfig.rep_sync_resolver` was a
   bare `task -> (id, skill_dir) | None` callable seam with nothing to build a resolver *with*, so

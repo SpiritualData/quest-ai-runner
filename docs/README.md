@@ -29,6 +29,10 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
   first write capability: how the opt-in works, what the write boundary guarantees (containment,
   secret refusal, backups), when it escalates to the full deep runner, and the vendored
   SEARCH/REPLACE matcher's attribution.
+- **[Automated context updates](context-updates.md)**: one engine answering "what changed since an
+  assistant last looked?" across notes, captures, reflections, and Drive comments: how a quest
+  declares what it watches as data, why a narrowing spec never drops anything, the per-source
+  watermarks, and the receipt a run writes about what it actually used.
 - **[Deployment](deployment.md)** — run the poller under cron or systemd.
 - **[Corpus playbooks](corpus-playbooks.md)** — distill a corpus's history into playbook files the
   shallow loop (context cards) and Claude Code deep runs both pick up automatically.

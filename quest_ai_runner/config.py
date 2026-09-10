@@ -110,6 +110,7 @@ _FILE_SCALAR_FIELDS = {
     "quest_folder_map", "quest_folder_sync_direction", "quest_folder_zones", "quest_goal_sync",
     "autopilot_ensure_pass_task", "autopilot_pass_time", "autopilot_daily_budget",
     "autopilot_settings_refresh_seconds", "autopilot_backpressure", "autopilot_adopt_recurring",
+    "context_updates", "context_updates_state_path", "context_updates_first_look_days",
     "extra",
 }
 # Special-cased NESTED tables: the TOML value is itself a table and becomes a specific dataclass
@@ -432,6 +433,29 @@ class RunnerConfig:
     # resolver over character domain cards) — the library stays ignorant of it. Left None ->
     # autopilot tasks with no explicit persona run as the plain assistant.
     autopilot_persona_resolver: Optional[Callable[[Dict[str, Any]], Optional[str]]] = None
+
+    # --- Automated context updates (see runner/context_updates.py) ---
+    # ON. Every autopilot pass asks ONE engine what has changed on this quest since an assistant
+    # last looked -- notes the person added, comments on a document the quest owns, files that
+    # moved -- and carries the answer into the brief it composes, ref-tagged, with the run asked to
+    # say in one line what it did with each. What a given quest watches is data the quest itself
+    # carries (``autopilot.context_sources``), so nothing here names a source for anybody. Off,
+    # a pass composes exactly what it composed before this existed.
+    context_updates: bool = True
+    # Where the per (quest, source) "an assistant last looked" stamps live. Left None, the poller
+    # puts them beside its own state file, so the default deployment persists them without being
+    # configured; a runner with no state file at all keeps them in memory for its lifetime, which
+    # re-offers recent items after a restart rather than losing them.
+    context_updates_state_path: Optional[str] = None
+    # How far back a source looks for a quest nothing has ever read. On a first run everything
+    # recent IS new, so this bounds what a newly opted-in quest is handed at once.
+    context_updates_first_look_days: int = 14
+    # The Drive comments channel (``adapters.drive_comments.DriveComments``), supplied by the
+    # consumer because only the consumer knows how its Google token is minted. Left None, the
+    # ``drive_comments`` and ``drive_changes`` sources contribute nothing and every other source
+    # runs exactly as before, so a quest that watches a folder simply sees no comments until a
+    # deployment wires this.
+    drive_comments: Any = None
 
     extra: Dict[str, Any] = field(default_factory=dict)
 

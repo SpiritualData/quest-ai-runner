@@ -31,6 +31,7 @@ from ..config import RunnerConfig, build_orchestrator, derive_capabilities, reso
 from ..resources import ResourceGuard, ResourceLimits
 from .autopilot import (AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, AutopilotPass, cadence_due,
                         run_requested)
+from .context_updates import build_update_engine
 from .executor import TaskExecutor
 from .local_time import now_in_zone, scheduled_moment, today_in_zone
 from .quest_client import QuestApiError, QuestClient, QuestDecisionSink, QuestNotConfigured
@@ -166,6 +167,10 @@ class Poller:
         # Autopilot: built once (stateless other than the injected client/config) and handed to
         # every TaskExecutor this poller builds, so a task with ``handler == "autopilot"`` routes
         # to it instead of a deep run. Inert unless such a task is ever discovered.
+        # Automated context updates (runner/context_updates.py): ONE engine per poller, shared by
+        # every pass it runs, because the engine caches the user-scoped reads (reflections,
+        # captures) for its lifetime -- a fresh engine per quest would re-read them per quest.
+        self._update_engine = build_update_engine(config, self.client, state_path=state_path)
         self._autopilot = AutopilotPass(
             self.client,
             team_id=config.team_id or "",
@@ -176,6 +181,9 @@ class Poller:
             # Same map the folder sync uses, so a quest whose folder is already synced also gets
             # its canonical next-steps artifact read and refreshed by each pass.
             quest_folder_map=config.quest_folder_map,
+            # What has changed on each quest since a run last looked at it, on every channel the
+            # quest itself asks for. None when the consumer switched it off.
+            update_engine=self._update_engine,
         )
         # Capabilities this runner can HONESTLY report, derived from the wired adapters
         # (corpus=FilesAdapter/corpus, code=deep-runner, web=deep-runner can browse via Claude

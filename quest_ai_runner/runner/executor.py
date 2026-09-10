@@ -27,6 +27,8 @@ from typing import Any, Callable, Dict, List, Optional
 
 from ..core.adapters import Mode, ProgressEvent
 from ..core.orchestrator import Orchestrator, OrchestratorResult
+from .context_updates import (parse_manifest, parse_usage_notes, render_receipt,
+                              strip_usage_block)
 
 log = logging.getLogger("quest-ai-runner.executor")
 
@@ -994,6 +996,7 @@ class TaskExecutor:
             elif exit_reason == "read_budget":
                 verdict_suffix = "\n\n---\nNote: this is a best-effort answer based on context gathered so far."
             done_text = text + verdict_suffix if verdict_suffix else text
+            done_text = self._with_context_receipt(done_text, request_text)
             self._report_progress(task_id, "done", text="Done.", output=done_text)
             self._safe(lambda: self._client.report_done(task_id, done_text))
             self._post_conv(conv_id, done_text, kind="done", task_id=task_id, card_id=card_id)
@@ -1021,6 +1024,10 @@ class TaskExecutor:
             # is CLAIM-CHECKED against the run's execution record before it replaces the raw
             # summary; any doubt keeps the raw (already goal-verified) output.
             done_report = self._compose_done_report(request_text, summary, result, rep_preamble)
+            # Read the usage lines from the RAW summary, not the fold-back: the receipt is the
+            # run's own account of what it did with the person's material, and the rewrite that
+            # makes a transcript tail read as a report is free to drop it.
+            done_report = self._with_context_receipt(done_report, request_text, run_output=summary)
             self._report_progress(task_id, "done", text="Done.", output=done_report)
             self._safe(lambda: self._client.report_done(task_id, done_report))
             self._post_conv(conv_id, done_report, kind="done", task_id=task_id,
@@ -1062,6 +1069,32 @@ class TaskExecutor:
         self._post_conv(conv_id, f"I couldn't complete this: {errs}", kind="failed", task_id=task_id,
                         card_id=card_id)
         return ExecutionOutcome(task_id, "failed", errs)
+
+    def _with_context_receipt(self, reported: str, request_text: Optional[str],
+                              run_output: Optional[str] = None) -> str:
+        """``reported`` with a context-updates receipt appended, when this task carried updates.
+
+        The task's OWN text is the record of what was offered (see
+        ``context_updates.parse_manifest``), which is what lets the receipt be rendered here
+        without a bundle object travelling with the task through the queue. Every offered ref is
+        listed, including the ones the run said nothing about: a person reads this to find out
+        whether what they wrote reached the work, and a silent ref is the answer they most need.
+
+        ``run_output`` names where the run's own account is, when that is not the text being
+        reported. A task that carried no updates gets its text back untouched.
+        """
+        try:
+            manifest = parse_manifest(request_text or "")
+            if not manifest:
+                return reported
+            receipt = render_receipt(
+                manifest, parse_usage_notes(reported if run_output is None else run_output))
+            if not receipt:
+                return reported
+            return strip_usage_block(reported).rstrip() + "\n\n" + receipt
+        except Exception:  # noqa: BLE001 -- a receipt never costs a finished run its result
+            log.warning("context-updates receipt could not be rendered", exc_info=True)
+            return reported
 
     def _compose_done_report(self, request_text: Optional[str], raw_summary: str,
                              result: OrchestratorResult,

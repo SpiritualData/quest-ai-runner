@@ -124,6 +124,15 @@ from .google_drive_adapter import (
     parse_drive_url,
     DEFAULT_DRIVE_SCOPES,
 )
+from .drive_comments import (
+    COMMENT_READ_SCOPES,
+    COMMENT_WRITE_SCOPES,
+    DriveComment,
+    DriveComments,
+    DriveFileChange,
+    render_comments,
+    unanswered,
+)
 from .composite_retrieval_adapter import CompositeRetrievalAdapter
 from .session_file_conversation_store import SessionFileConversationStore
 from .conversation_card_builder import ConversationCardBuilder
@@ -228,6 +237,13 @@ __all__ = [
     "GoogleDriveAdapter",
     "parse_drive_url",
     "DEFAULT_DRIVE_SCOPES",
+    "DriveComments",
+    "DriveComment",
+    "DriveFileChange",
+    "COMMENT_READ_SCOPES",
+    "COMMENT_WRITE_SCOPES",
+    "render_comments",
+    "unanswered",
     "SessionFileConversationStore",
     "QuestRetrievalAdapter",
     "WebSearchAdapter",

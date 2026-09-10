@@ -179,6 +179,15 @@ Env it reads:
                                                    matches. See RunnerConfig.quest_folder_map.
   QAR_QUEST_FOLDER_SYNC_DIRECTION (optional)  — "pull" (default), "push", or "both" for the map
                                                    above. See RunnerConfig.quest_folder_sync_direction.
+  QAR_CONTEXT_UPDATES (optional)              — "0"/"false" switches OFF the automated context
+                                                   updates every autopilot pass carries (notes,
+                                                   document comments, folder changes since a run
+                                                   last looked). On by default. See
+                                                   runner/context_updates.py.
+  QAR_CONTEXT_UPDATES_STATE_PATH (optional)   — where the per (quest, source) "last looked" stamps
+                                                   live (default: beside QAR_STATE_PATH).
+  QAR_CONTEXT_UPDATES_FIRST_LOOK_DAYS (opt.)  — how far back a source looks for a quest nothing has
+                                                   ever read (default 14).
 
 channel-specific env vars (all optional; read by the `channel` subcommand only, see
 docs/live-channels.md for the full picture including the OpenClaw operator checklist):
@@ -496,6 +505,20 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
                 "QAR_QUEST_FOLDER_MAP is not valid JSON (%s); ignoring", e)
     if os.getenv("QAR_QUEST_FOLDER_SYNC_DIRECTION"):
         cfg.quest_folder_sync_direction = os.environ["QAR_QUEST_FOLDER_SYNC_DIRECTION"].strip().lower()
+
+    # --- automated context updates (on by default; see runner/context_updates.py) ---------------
+    if os.getenv("QAR_CONTEXT_UPDATES"):
+        cfg.context_updates = os.environ["QAR_CONTEXT_UPDATES"].strip().lower() not in (
+            "0", "false", "no", "off")
+    if os.getenv("QAR_CONTEXT_UPDATES_STATE_PATH"):
+        cfg.context_updates_state_path = os.environ["QAR_CONTEXT_UPDATES_STATE_PATH"]
+    if os.getenv("QAR_CONTEXT_UPDATES_FIRST_LOOK_DAYS"):
+        try:
+            cfg.context_updates_first_look_days = int(
+                os.environ["QAR_CONTEXT_UPDATES_FIRST_LOOK_DAYS"])
+        except ValueError:
+            logging.getLogger("quest-ai-runner").warning(
+                "QAR_CONTEXT_UPDATES_FIRST_LOOK_DAYS is not an integer; using the default")
 
     # --- fast lane for real-time tasks (D2 revised: presence-aware push) -------------------------
     # QAR_WAIT_CHANNEL: "0"/"false"/"off" disables the long-poll wait channel, falling back to a
