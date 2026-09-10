@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -593,6 +594,26 @@ def card_activation(registry: PersonaRegistry, text: str, cards_dir: Path,
 
 # --- the resolver ---------------------------------------------------------------
 
+
+# WHICH persona the task on THIS worker thread resolved to, or None.
+#
+# Thread-local because the executor runs tasks on a pool and the resolver fires once per task, on
+# the same thread that then runs it. It is written on EVERY resolution attempt, including the
+# failures, so a task that resolves to nobody clears whatever the previous task on this thread
+# left behind -- without that, one task's persona leaks into the next one's context.
+_CURRENT_REP = threading.local()
+
+
+def current_rep() -> Optional[Dict[str, Any]]:
+    """The persona this thread's current task resolved to (``{task, user_id, skill_dir}``), or None.
+
+    The read side of what ``build_persona_resolver`` stashes. Anything that runs inside a task and
+    needs to know who it is running as reads it here rather than requiring the consumer to thread
+    an ``on_resolved`` callback into a thread-local of its own.
+    """
+    return getattr(_CURRENT_REP, "value", None)
+
+
 def build_persona_resolver(cfg: PersonaResolverConfig, *, provider: Any = None,
                            quest_client: Any = None, team_id: str = "",
                            on_resolved: Optional[Callable[[Optional[Dict[str, Any]]], None]] = None,
@@ -624,6 +645,12 @@ def build_persona_resolver(cfg: PersonaResolverConfig, *, provider: Any = None,
     use_cards = bool(cfg.card_activation and cards_dir is not None)
 
     def notify(payload: Optional[Dict[str, Any]]) -> None:
+        # Stashed FIRST, and unconditionally. Which persona a run is for is not one consumer's
+        # private business: anything downstream in the same task that needs to know (the rep-aware
+        # context assembler, most obviously) would otherwise need the consumer to wire a callback
+        # and keep a thread-local of its own, which is exactly the state one consumer was carrying
+        # and the only reason it had to hand-build this resolver instead of declaring `personas`.
+        _CURRENT_REP.value = payload
         if on_resolved is None:
             return
         try:

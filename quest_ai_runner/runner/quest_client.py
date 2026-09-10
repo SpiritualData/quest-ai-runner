@@ -38,6 +38,7 @@ Endpoints implemented (the contract from integration_library_design.md §3):
                Composed into one context block by ``runner.reflections``.
   Insights (the person's own captures; USER-scoped, no team or quest id):
                GET   /api/data/insights/collection             (get_insights_collection)
+               POST  /api/teams/{id}/members/{uid}/context-prefs (add_context_pref)
                GET   /api/data/collections                    (list_collections)
                GET   /api/data/collections/{id}/entries        (list_collection_entries)
                PATCH /api/data/insights/mark-acted-on          (mark_insight_acted_on)
@@ -1173,6 +1174,29 @@ class QuestClient:
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("get_insights_collection failed: %s", e)
             return {}
+
+    def add_context_pref(self, user_id: str, pref: str, *,
+                         team_id: Optional[str] = None, source: str = "auto") -> bool:
+        """POST /api/teams/{team_id}/members/{user_id}/context-prefs -- teach a rep where it works.
+
+        One short sentence naming what a run actually consulted ("Consults the funding spreadsheet
+        and donor list for this kind of task."), so the rep's next run starts where its last one
+        ended up. ``source: "auto"`` marks it as learned rather than typed by a person.
+
+        Returns True when it landed. Best-effort like every other write here: learning is worth
+        having and never worth failing a run over.
+        """
+        try:
+            self._require()
+            tid = team_id or self.team_id
+            if not (tid and user_id and str(pref or "").strip()):
+                return False
+            self._request("POST", f"/api/teams/{tid}/members/{user_id}/context-prefs",
+                          body={"pref": str(pref).strip(), "source": source})
+            return True
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("add_context_pref failed for %s: %s", user_id, e)
+            return False
 
     def list_collections(self) -> List[Dict[str, Any]]:
         """GET /api/data/collections -- every collection the caller owns.

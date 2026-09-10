@@ -7,6 +7,18 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **The last consumer-only machinery moved into the library, so a third lane needs no Python**
+  (`adapters/rep_context_assembler.py`, `runner/personas.py`, `config.py`). `RepContextAssembler`
+  (prepend the running rep's learned `context_prefs`, and push one back when a run consults a real
+  source) was ~210 lines living inside one consumer with nothing org-specific in any of it;
+  `runner.personas.current_rep()` now owns the per-thread "which rep is this run for", which is the
+  only reason that lane could not use the declarative `personas` config; and the Qdrant/Voyage
+  semantic arm, the read-only Drive MCP server and the doctrine on a rep-less preamble are
+  declarative (`rep_context_prefs`, `[vector_store]`, `[mcp_drive]`,
+  `context_preamble_doctrine`). `QuestClient.add_context_pref()` replaces a consumer reaching into
+  `client._request`. Verified by diffing both `RunnerConfig`s field by field: identical after
+  resolution, including a byte-identical composed preamble.
+
 - **Relevance is the engine's job, not the run's** (`runner/context_updates.py`). User-scoped
   captures are put to a model relevance judgment against the card's real subject matter before a
   run ever sees them (`llm_relevance_judge`, `context_updates_judge_relevance`,

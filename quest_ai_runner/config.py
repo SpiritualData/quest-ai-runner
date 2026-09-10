@@ -113,6 +113,7 @@ _FILE_SCALAR_FIELDS = {
     "autopilot_settings_refresh_seconds", "autopilot_backpressure", "autopilot_adopt_recurring",
     "context_updates", "context_updates_state_path", "context_updates_first_look_days",
     "context_updates_judge_relevance", "context_updates_relevance_tier",
+    "rep_context_prefs", "context_preamble_doctrine", "vector_store", "mcp_drive",
     "context_sources_map", "context_sources_file", "drive_comments_auth",
     "quest_folder_map_file",
     "state_path", "lane_label", "env_files", "env_aliases", "env",
@@ -462,6 +463,26 @@ class RunnerConfig:
     # engine's work showing up as the assistant's chatter. Off, or with no model provider,
     # everything is delivered exactly as before.
     context_updates_judge_relevance: bool = True
+    # Wrap whatever context assembler is configured with the per-rep one
+    # (``adapters.rep_context_assembler.RepContextAssembler``): prepend the running rep's learned
+    # ``context_prefs`` to the context view, and push one back when a run consults a real source.
+    # Needs a persona policy, since it is the persona resolver that says which rep a run is for.
+    rep_context_prefs: bool = False
+    # Prepend ``core.context_doctrine.DEEP_CONTEXT_DOCTRINE`` to ``context_preamble``.
+    # The library already composes the doctrine into the PER-REP preamble, but the static one a
+    # rep-less run uses gets nothing, so a lane wanting its rep-less runs held to the same
+    # discipline had to prepend it in Python. Default OFF: every existing lane's composed preamble
+    # stays byte-identical.
+    context_preamble_doctrine: bool = False
+    # Declarative semantic arm: {url, collection_prefix, vector_size, embedding_model} fused with
+    # the keyword/IDF store by a HybridContextAssembler. Assembling those four objects was the one
+    # reason a lane kept a Python consumer for its context stack. Absent, or with its dependencies
+    # or key missing, the keyword arm runs alone exactly as before.
+    vector_store: Optional[Dict[str, Any]] = None
+    # Declarative read-only Drive MCP server: {service_account_file, scopes, alias, allowed_tools}.
+    # Folded into ``mcp_servers`` only when the key file is actually on disk, so a lane whose key
+    # is not provisioned yet starts clean instead of failing.
+    mcp_drive: Optional[Dict[str, Any]] = None
     # Model tier for that judgment. "balanced" per this repo's tier guidance for filtering.
     context_updates_relevance_tier: str = "balanced"
     # {quest_id: [spec, ...]} the DEPLOYMENT supplies, merged under whatever each card declares
@@ -720,7 +741,124 @@ def resolve_config_objects(cfg: RunnerConfig) -> RunnerConfig:
     # already supplied a live client in Python -- an explicit object always beats a description.
     if cfg.drive_comments is None and cfg.drive_comments_auth:
         cfg.drive_comments = _build_drive_comments(cfg.drive_comments_auth)
+
+    if cfg.mcp_drive:
+        _add_drive_mcp_server(cfg)
+
+    if cfg.context_preamble_doctrine:
+        from .core.context_doctrine import DEEP_CONTEXT_DOCTRINE
+        own = (cfg.context_preamble or "").strip()
+        if DEEP_CONTEXT_DOCTRINE not in own:
+            cfg.context_preamble = DEEP_CONTEXT_DOCTRINE + ("\n" + own if own else "")
     return cfg
+
+
+def resolve_context_assembler_stack(base_or_cfg: Any, cfg: Optional[RunnerConfig] = None, *,
+                                    quest_client: Any = None) -> Any:
+    """Fuse the semantic arm and the per-rep wrapper onto whatever assembler is configured.
+
+    Called after the base assembler exists, because both of these WRAP it rather than replace it.
+    Each layer is independent and each is skipped silently when unconfigured or unavailable, so a
+    lane declaring both, one, or neither all work, and a missing optional dependency degrades to
+    the layer below instead of failing the lane.
+    """
+    # Called two ways: with a built base plus its cfg (the resolver path), or with a cfg alone
+    # (a consumer applying the layers to whatever it already put on cfg.context_assembler).
+    if isinstance(base_or_cfg, RunnerConfig):
+        cfg, base = base_or_cfg, base_or_cfg.context_assembler
+    else:
+        base = base_or_cfg
+    if cfg is None or base is None or base is _AUTO_CONTEXT:
+        return base
+    if cfg.vector_store:
+        base = _fuse_vector_arm(cfg, base)
+    if cfg.rep_context_prefs:
+        quest_client = quest_client or _quest_client_for(cfg)
+    if cfg.rep_context_prefs and quest_client is not None:
+        try:
+            from .adapters.rep_context_assembler import RepContextAssembler
+            base = RepContextAssembler(base, client=quest_client, team_id=cfg.team_id)
+            _log.info("context: per-rep context_prefs layer ON")
+        except Exception as e:  # noqa: BLE001 -- an optional layer never blocks a lane
+            _log.warning("rep_context_prefs unavailable (%s); continuing without it", e)
+    return base
+
+
+
+def _quest_client_for(cfg: RunnerConfig) -> Any:
+    """A QuestClient built from this config, or None when it is not configured to reach Quest."""
+    if not (cfg.quest_base_url and cfg.quest_api_key):
+        return None
+    try:
+        from .runner.quest_client import QuestClient
+        return QuestClient(cfg.quest_base_url, cfg.quest_api_key, team_id=cfg.team_id)
+    except Exception as e:  # noqa: BLE001
+        _log.warning("could not build a Quest client for the context stack (%s)", e)
+        return None
+
+
+def _fuse_vector_arm(cfg: RunnerConfig, keyword: Any) -> Any:
+    """Fuse a Qdrant/embedding semantic arm with the keyword arm, or return the keyword arm.
+
+    Guarded end to end and best-effort by design: the deps, the embedding key and the vector
+    database are each things a deployment may not have ready, and none of them is worth failing a
+    production lane over. A lane that cannot build the arm logs why and runs keyword-only.
+    """
+    spec = cfg.vector_store or {}
+    try:
+        from .adapters import HybridContextAssembler, VectorContextAssembler
+        from .adapters.qdrant_vector_store import QdrantVectorStore, make_voyage_embedder
+
+        store = QdrantVectorStore(
+            url=str(spec.get("url") or "http://localhost:6333"),
+            vector_size=int(spec.get("vector_size") or 1024),
+            embedder=make_voyage_embedder(input_type="document"),
+            query_embedder=make_voyage_embedder(input_type="query"),
+            collection_prefix=str(spec.get("collection_prefix") or "qar_ctx"),
+        )
+        vector = VectorContextAssembler(
+            store, provider=cfg.model_provider,
+            seed_source=getattr(keyword, "export_for_embedding", None))
+        _log.info("context: semantic vector arm ON (hybrid with the keyword arm)")
+        return HybridContextAssembler(keyword=keyword, vector=vector)
+    except Exception as e:  # noqa: BLE001 -- keyword-only is a correct lane, not a broken one
+        _log.info("context: vector arm disabled, keyword-only (%s: %s)", type(e).__name__, e)
+        return keyword
+
+
+def _add_drive_mcp_server(cfg: RunnerConfig) -> None:
+    """Fold a read-only Drive MCP server into ``cfg.mcp_servers`` when its key is on disk.
+
+    The key-present check is the whole gate. Whether the Cloud APIs behind it are enabled is a
+    separate ops step that may not be done: ``MCPClient`` degrades to a clean "could not connect"
+    observation per its own never-raise contract, so this only decides whether Drive MCP is
+    ATTEMPTED, on the one thing that is cheaply checkable here.
+    """
+    spec = cfg.mcp_drive or {}
+    key_file = str(spec.get("service_account_file") or "").strip()
+    if not key_file or not Path(key_file).is_file():
+        _log.info("Drive MCP not wired: no readable service-account key at %r", key_file)
+        return
+    try:
+        from .adapters.google_chat_adapter import service_account_token_provider
+        from .adapters.mcp_client import MCPServerSpec
+
+        alias = str(spec.get("alias") or "drive")
+        if any(getattr(s, "alias", "") == alias for s in (cfg.mcp_servers or [])):
+            return                          # already wired by a consumer; never a second copy
+        cfg.mcp_servers = list(cfg.mcp_servers or []) + [MCPServerSpec(
+            alias=alias,
+            transport="http",
+            url=str(spec.get("url") or ""),
+            allowed_tools=tuple(spec.get("allowed_tools") or ()),
+            token_provider=service_account_token_provider(
+                service_account_file=key_file,
+                subject=str(spec.get("subject") or "").strip() or None,
+                scopes=[str(x) for x in (spec.get("scopes") or ())] or None),
+        )]
+        _log.info("Drive MCP wired (alias %s, read-only)", alias)
+    except Exception as e:  # noqa: BLE001 -- optional wiring never breaks the lane
+        _log.warning("Drive MCP wiring skipped (%s), continuing", e)
 
 
 def _load_json_mapping(path: str, what: str) -> Dict[str, Any]:
@@ -1448,7 +1586,23 @@ def resolve_context_assembler(
     *,
     notify: Optional[Callable[[str], None]] = None,
 ):
-    """Resolve the context assembler from config — ON BY DEFAULT.
+    """Resolve the context assembler from config, then fuse on the declarative LAYERS.
+
+    Two steps, because the layers WRAP a base rather than replace it: build (or accept) the base
+    assembler, then apply ``vector_store`` and ``rep_context_prefs`` if the lane declared them.
+    Assembling those layers by hand was the last reason a lane needed a Python consumer for its
+    context stack. Each layer is skipped silently when unconfigured or unavailable.
+    """
+    return resolve_context_assembler_stack(
+        _resolve_context_assembler_base(cfg, notify=notify), cfg)
+
+
+def _resolve_context_assembler_base(
+    cfg: RunnerConfig,
+    *,
+    notify: Optional[Callable[[str], None]] = None,
+):
+    """The base assembler — ON BY DEFAULT.
 
     Tri-state on ``cfg.context_assembler``:
       * ``_AUTO_CONTEXT`` (the field default, i.e. the consumer left it unset) → build the default
