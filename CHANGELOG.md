@@ -13,7 +13,8 @@ All notable changes to this project are documented here. The format is based on
   `SubprocessGoalRunner.run_goal` gained `resume_session_id`, which launches the worker with
   `--resume <id>` instead of opening a fresh `--session-id`. The goal loop reads `limit_hit` and
   hands the next attempt the SAME session, a budget grown once per continuation
-  (`deep_max_turns * (n + 1)`), and a short continuation brief that tells the worker it was cut off
+  (`deep_max_turns * (n + 1)`, capped at `DEEP_CONTINUATION_TURN_MULTIPLIER_CAP`), and a short
+  continuation brief that tells the worker it was cut off
   rather than re-sending the cold-start augmentation it already holds; the model tier is not
   escalated, since running out of room says nothing about the model. The token budget still stops
   a continuation, and a runner that cannot resume (`AcpDeepRunner`, any older signature) keeps the

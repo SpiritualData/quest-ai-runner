@@ -176,10 +176,11 @@ PLAN = {"action": "deep", "goal": "Do the work",
 
 
 def _orch(provider, runner, **cfg):
+    cfg.setdefault("deep_goal_max_iterations", 3)
     return Orchestrator(
         retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider),
         deep_runner=runner,
-        config=OrchestratorConfig(deep_goal_max_iterations=3, deep_max_turns=30, **cfg),
+        config=OrchestratorConfig(deep_max_turns=30, **cfg),
     )
 
 
@@ -304,3 +305,22 @@ def test_a_run_that_falls_short_still_reports_what_it_did():
     assert "Wrote engine.py and wired the poller." in reported
     assert "unfinished" in reported            # never presented as done work
     assert "the tests were never written" in reported or "turn budget" in reported
+
+
+def test_the_grown_budget_is_capped():
+    """A worker going in circles must not talk its way into an unbounded run one continuation at a
+    time: the growth stops at the cap, it does not keep doubling."""
+    from quest_ai_runner.core.orchestrator import DEEP_CONTINUATION_TURN_MULTIPLIER_CAP as CAP
+
+    provider = ScriptedProvider(plans=[PLAN],
+                                verdicts=[{"met": False, "reason": "still not done"}] * 8)
+    runner = ResumableRunner([
+        DeepResult(met=False, output=f"pass {i}", limit_hit=True, session_id="sess-1")
+        for i in range(8)
+    ])
+
+    _orch(provider, runner, deep_goal_max_iterations=8).run("build X")
+
+    budgets = [c["max_turns"] for c in runner.calls]
+    assert budgets[:3] == [30, 60, 90]
+    assert max(budgets) == 30 * CAP

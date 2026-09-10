@@ -25,8 +25,10 @@ guess and the two cases call for opposite responses.
 
 - `resume_session_id` — the worker relaunches with `--resume <id>`, so it still holds everything it
   read, decided and changed. It does not open a second session.
-- a **larger budget** — `deep_max_turns * (n + 1)`, grown once per continuation, so a task that
-  simply needed more room gets it instead of meeting the same wall every attempt.
+- a **larger budget** — `deep_max_turns * (n + 1)`, grown once per continuation and capped at
+  `DEEP_CONTINUATION_TURN_MULTIPLIER_CAP` (4x), so a task that simply needed more room gets it
+  quickly, while a worker going in circles cannot talk its way into an unbounded run one
+  continuation at a time.
 - a **short continuation brief** (`Orchestrator._continuation_brief`) that says it was cut off and
   not that it failed, plus the verifier's next action when there is one. Deliberately short: the
   worker is resuming, so re-sending the cold-start augmentation would spend the fresh budget

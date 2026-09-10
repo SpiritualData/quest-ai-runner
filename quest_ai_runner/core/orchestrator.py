@@ -154,6 +154,11 @@ DEFAULT_MAX_PARALLEL = 8
 DEFAULT_MAX_SUBQUESTIONS = 4
 DEFAULT_MAX_DEEP_SUBTASKS = 4
 DEFAULT_DEEP_MAX_TURNS = 30
+# How far a CONTINUATION may grow one attempt's turn budget (see the goal loop's limit_hit branch).
+# Each continuation gets ``deep_max_turns * (n + 1)`` turns, capped here: a task that needed a bit
+# more room gets it quickly, while a worker that is genuinely going in circles cannot talk its way
+# into an unbounded run one continuation at a time.
+DEEP_CONTINUATION_TURN_MULTIPLIER_CAP = 4
 DEFAULT_MAX_GATHER_CHARS = 6000
 DEFAULT_MAX_CONSECUTIVE_READS = 20
 # Lean re-plan view: the planner is re-fed the WHOLE cumulative ``gathered`` each step, which
@@ -6076,7 +6081,8 @@ class Orchestrator:
                         break
                     continued += 1
                     resume_session = res.session_id
-                    attempt_turns = self.cfg.deep_max_turns * (continued + 1)
+                    attempt_turns = self.cfg.deep_max_turns * min(
+                        continued + 1, DEEP_CONTINUATION_TURN_MULTIPLIER_CAP)
                     current_brief = self._continuation_brief(base_brief, verdict)
                     if emit is not None:
                         emit.status("That run used all its turns before finishing; continuing the "
