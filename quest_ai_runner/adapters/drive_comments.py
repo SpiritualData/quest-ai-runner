@@ -38,6 +38,7 @@ knows it failed.
 """
 from __future__ import annotations
 
+import html
 import json
 import logging
 import urllib.error
@@ -78,6 +79,9 @@ _COMMENT_FIELDS = (
 
 _FILE_FIELDS = "id,name,mimeType,modifiedTime,webViewLink"
 
+# Comments are a Google Docs surface, so document discovery defaults to Docs.
+_MIME_GOOGLE_DOC = "application/vnd.google-apps.document"
+
 # Page sizes. Drive caps comments at 100/page; three pages of comment threads on one document is
 # already far more than a run can act on, and the cap keeps a pathological document from stalling
 # a pass.
@@ -91,8 +95,15 @@ MAX_QUOTE_CHARS = 400
 
 
 def _clip(text: Any, limit: int) -> str:
-    """A stripped string, truncated with an explicit marker so nothing silently disappears."""
-    s = " ".join(str(text or "").split())
+    """A stripped, HTML-unescaped string, truncated with an explicit marker.
+
+    The unescape is not cosmetic. Drive serves both ``content`` and ``quotedFileContent.value`` as
+    HTML-escaped text, so a comment on the phrase ``ITPP's corpus`` comes back quoting
+    ``ITPP&#39;s corpus``. Passed through unchanged, that entity reaches the model as the person's
+    own words, and any run trying to locate the quoted passage in the document searches for a
+    string that does not appear in it. Verified against live comments, 2026-09-10.
+    """
+    s = " ".join(html.unescape(str(text or "")).split())
     if len(s) <= limit:
         return s
     return s[:limit].rstrip() + " [...truncated]"
@@ -347,10 +358,41 @@ class DriveComments:
         untouched for a month can still have a comment added today), and as its own signal that
         the person edited something (``since`` set).
         """
-        token = self._token()
-        if not token or not folder_id:
+        if not folder_id:
             return []
-        q = f"'{folder_id}' in parents and trashed = false"
+        return self._list_files(f"'{folder_id}' in parents", since=since, max_files=max_files,
+                                what=f"folder {folder_id}")
+
+    def files_owned_by(self, owner: str, *, since: Optional[datetime] = None,
+                       max_files: int = 25,
+                       mime_type: str = _MIME_GOOGLE_DOC) -> List[DriveFileChange]:
+        """Files owned by one account, newest first. The companion route to ``files_in_folder``.
+
+        A folder listing only reaches files whose FOLDER this credential is on. That is often not
+        how the documents an assistant creates are shared: they are created by one account and
+        filed into a person's folder, so the credential ends up on each DOCUMENT and not on the
+        folder around them, and a folder listing returns nothing while every document is readable.
+        Owner is the handle that still works there, and it is the natural way to say "the documents
+        my assistant wrote", since that account owns exactly those.
+
+        ``mime_type`` defaults to Google Docs because comments are a Docs surface; pass "" for
+        every type.
+        """
+        if not owner:
+            return []
+        clause = f"'{owner}' in owners"
+        if mime_type:
+            clause += f" and mimeType = '{mime_type}'"
+        return self._list_files(clause, since=since, max_files=max_files,
+                                what=f"owner {owner}")
+
+    def _list_files(self, clause: str, *, since: Optional[datetime] = None,
+                    max_files: int = 25, what: str = "") -> List[DriveFileChange]:
+        """One ``files.list`` call behind a caller-supplied query clause. Never raises."""
+        token = self._token()
+        if not token:
+            return []
+        q = f"{clause} and trashed = false"
         if since is not None:
             q += f" and modifiedTime > '{_rfc3339(since)}'"
         params = {
@@ -364,11 +406,11 @@ class DriveComments:
         try:
             payload = self._request("GET", self._url("/files", params), token)
         except urllib.error.HTTPError as e:
-            log.warning("drive comments: folder list failed for %s: %s",
-                        folder_id, self._http_error_text(e))
+            log.warning("drive comments: file list failed for %s: %s",
+                        what or clause, self._http_error_text(e))
             return []
         except Exception as e:  # noqa: BLE001
-            log.warning("drive comments: folder list failed for %s: %s", folder_id, e)
+            log.warning("drive comments: file list failed for %s: %s", what or clause, e)
             return []
         out = []
         for row in payload.get("files") or []:

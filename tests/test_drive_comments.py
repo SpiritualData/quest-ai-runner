@@ -250,3 +250,27 @@ def test_rendered_comments_always_carry_the_address_to_answer_them_at(http):
 
 def test_nothing_to_show_renders_nothing(http):
     assert render_comments([]) == ""
+
+
+def test_html_entities_in_comment_and_quote_are_decoded():
+    """Drive serves comment text and the quoted passage HTML-escaped.
+
+    Live case (2026-09-10): a comment on the phrase "ITPP's corpus is positive-only by design"
+    came back quoting ``ITPP&#39;s corpus``. Left encoded, the entity reaches a model as the
+    person's own words, and a run trying to find the quoted passage in the document searches for
+    a string that is not in it.
+    """
+    from quest_ai_runner.adapters.drive_comments import DriveComments
+
+    dc = DriveComments(token_provider=lambda: "t")
+    comment = dc._parse_comment(
+        {
+            "id": "c1",
+            "content": "You said &quot;by design&quot; &amp; I never did",
+            "quotedFileContent": {"value": "ITPP&#39;s corpus is positive-only"},
+            "author": {"displayName": "Joshua Mathias"},
+        },
+        "f1", "A doc", "")
+
+    assert comment.content == 'You said "by design" & I never did'
+    assert comment.quoted_text == "ITPP's corpus is positive-only"

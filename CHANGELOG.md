@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Drive comment text is HTML-unescaped** (`adapters/drive_comments.py`). Drive serves both
+  `content` and `quotedFileContent.value` HTML-escaped, so a comment anchored to the phrase
+  `ITPP's corpus` came back quoting `ITPP&#39;s corpus`. The entity reached the model as the
+  person's own words, and any run trying to locate the quoted passage in the document searched for
+  a string that is not in it. Caught against live comments, 2026-09-10.
+
+### Added
+- **A card can watch every document one ACCOUNT owns, not only a folder**
+  (`adapters/drive_comments.py`, `runner/context_updates.py`). `DriveComments.files_owned_by()` and
+  a `{"source": "drive_comments", "owner": "..."}` spec key. A folder listing only reaches files
+  whose folder the credential sits on, and that is not how an assistant's own documents are usually
+  shared: they are created by the assistant account and filed into the person's folder, so the
+  credential is on each document and not the folder, and the folder query returns nothing while
+  every document is readable. Unlike a `file_ids` list, an owner query keeps working as new
+  documents are created. `folder_id`, `owner` and `file_ids` may be combined; a file reached twice
+  is reported once.
+
 ### Changed
 - **A deep run that runs out of TURNS is now CONTINUED in its own session, not started over**
   (`core/goal_runner.py`, `core/orchestrator.py`, `core/adapters.py`). `DeepResult` gained

@@ -789,9 +789,17 @@ class InsightsSource(_BaseSource):
 class DriveCommentsSource(_BaseSource):
     """Comments people left on the documents or folder this card owns.
 
-    Spec: ``{"source": "drive_comments", "folder_id": "..."}`` or ``{"file_ids": ["...", "..."]}``.
+    Spec: ``{"source": "drive_comments", "folder_id": "..."}``, ``{"file_ids": [...]}``, or
+    ``{"owner": "assistant@example.org"}`` -- any combination; their results are merged.
     Needs a Drive comments client, supplied once by the consumer (``UpdateEngine(drive_comments=)``)
     since minting a Google token is a deployment concern, not a card's.
+
+    ``owner`` exists because a folder is often the wrong handle. Documents an assistant creates for
+    a person are owned by the ASSISTANT's account and filed into the person's folder, so the
+    credential ends up on each document and not on the folder around them: the folder listing
+    returns nothing while every document is readable. "Every doc my assistant wrote" is then the
+    query that works, and it keeps working as new docs are created, which a ``file_ids`` list does
+    not.
 
     OPEN THREADS ARE FETCHED WITHOUT A TIME FILTER, on purpose, even though Drive's API would
     happily do the filtering. A watermark answers "what is new"; an unanswered question is not news
@@ -810,13 +818,28 @@ class DriveCommentsSource(_BaseSource):
         if client is None:
             return []
         folder_id = str(request.opt("folder_id") or "").strip()
+        owner = str(request.opt("owner") or "").strip()
         file_ids = [str(f).strip() for f in (request.opt("file_ids") or []) if str(f).strip()]
         max_files = int(request.opt("max_files") or 25)
         comments = []
+        seen_files = set()
         if folder_id:
             comments.extend(client.comments_for_folder(folder_id, max_files=max_files))
+            seen_files.update(c.file_id for c in comments)
+        if owner and hasattr(client, "files_owned_by"):
+            # No time filter on the file list: a document untouched for a month can still have a
+            # comment added today, so filtering the FILES by modification date would hide the
+            # comment that arrived on an old one.
+            for f in client.files_owned_by(owner, max_files=max_files):
+                if f.file_id in seen_files:
+                    continue
+                seen_files.add(f.file_id)
+                comments.extend(client.comments_for_file(
+                    f.file_id, file_name=f.file_name, file_url=f.file_url))
         for fid in file_ids:
-            comments.extend(client.comments_for_file(fid))
+            if fid not in seen_files:
+                seen_files.add(fid)
+                comments.extend(client.comments_for_file(fid))
         out: List[ContextUpdate] = []
         for c in comments:
             if not c.needs_answer:

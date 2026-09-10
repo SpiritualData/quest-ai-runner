@@ -379,3 +379,80 @@ def test_a_user_scoped_channel_is_read_once_per_engine_not_once_per_card():
     for quest_id in ("q1", "q2", "q3"):
         engine.collect({"context_sources": ["insights"]}, card_id=quest_id)
     assert client.entry_calls == 1
+
+
+class _OwnerComments:
+    """A Drive client whose FOLDER holds nothing but whose OWNER query finds the docs.
+
+    The real shape this exists for: an assistant's documents are owned by the assistant account and
+    filed into the person's folder, so the credential is on each document and not on the folder.
+    """
+
+    def __init__(self, comments):
+        self._comments = comments
+        self.folder_calls = 0
+
+    def comments_for_folder(self, folder_id, **kw):
+        self.folder_calls += 1
+        return []
+
+    def files_owned_by(self, owner, **kw):
+        from quest_ai_runner.adapters.drive_comments import DriveFileChange
+        return [DriveFileChange(file_id="f1", file_name="A summary doc", file_url="u")]
+
+    def comments_for_file(self, file_id, **kw):
+        return list(self._comments)
+
+    def files_in_folder(self, folder_id, **kw):
+        return []
+
+
+def test_a_card_can_watch_every_doc_one_account_owns():
+    from datetime import datetime, timezone
+
+    from quest_ai_runner.adapters.drive_comments import DriveComment
+    from quest_ai_runner.runner.context_updates import UpdateEngine
+
+    open_thread = DriveComment(
+        file_id="f1", file_name="A summary doc", comment_id="c1", author="Joshua",
+        content="not by design, I never said it is",
+        quoted_text="positive-only by design",
+        created_at=datetime(2026, 9, 8, tzinfo=timezone.utc),
+        modified_at=datetime(2026, 9, 8, tzinfo=timezone.utc))
+
+    client = _OwnerComments([open_thread])
+    engine = UpdateEngine(None, drive_comments=client, always=())
+    bundle = engine.collect(
+        {"quest_id": "q1",
+         "context_sources": [{"source": "drive_comments", "owner": "assistant@example.org"}]},
+        card_id="q1")
+
+    assert [u.kind for u in bundle.updates] == ["comment"]
+    assert "positive-only by design" in bundle.updates[0].body
+    assert bundle.updates[0].needs_response
+    assert "reply to comment c1 on file f1" in bundle.updates[0].how_to_respond
+
+
+def test_folder_and_owner_routes_do_not_double_report_the_same_file():
+    from datetime import datetime, timezone
+
+    from quest_ai_runner.adapters.drive_comments import DriveComment, DriveFileChange
+    from quest_ai_runner.runner.context_updates import UpdateEngine
+
+    thread = DriveComment(file_id="f1", file_name="doc", comment_id="c1", author="J",
+                          content="q?", created_at=datetime(2026, 9, 8, tzinfo=timezone.utc))
+
+    class Both(_OwnerComments):
+        def comments_for_folder(self, folder_id, **kw):
+            self.folder_calls += 1
+            return [thread]
+
+    client = Both([thread])
+    engine = UpdateEngine(None, drive_comments=client, always=())
+    bundle = engine.collect(
+        {"quest_id": "q1",
+         "context_sources": [{"source": "drive_comments", "folder_id": "F",
+                              "owner": "assistant@example.org"}]},
+        card_id="q1")
+
+    assert len(bundle.updates) == 1

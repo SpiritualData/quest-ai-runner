@@ -54,6 +54,14 @@ A bare string is shorthand for `{"source": "<name>"}`. `UpdateEngine.describe_so
 vocabulary, so an assistant writing a spec can discover the names instead of guessing one that
 silently does nothing. An unknown name is reported as a gap in the bundle, never raised.
 
+**Reaching the documents: `folder_id`, `owner`, or `file_ids`.** A folder listing only reaches files
+whose *folder* the credential is on, and that is often not how an assistant's documents are shared:
+they are created by the assistant's account and filed into the person's folder, so the credential
+ends up on each *document* and not on the folder around them. The folder query then returns nothing
+while every document is readable. `{"source": "drive_comments", "owner": "assistant@example.org"}`
+is the query that works there, and unlike a `file_ids` list it keeps working as new documents are
+created. The three may be combined; a file reached by more than one route is reported once.
+
 **A narrowing spec never drops anything.** `{"source": "insights", "categories": ["PhD"]}` PROMOTES
 matching captures into this card's own refs; the full unfiltered capture block still flows exactly
 as before. The person's tag steers attention, it never gates delivery. A fixed string rule that
