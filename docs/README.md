@@ -33,6 +33,10 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
   assistant last looked?" across notes, captures, reflections, and Drive comments: how a quest
   declares what it watches as data, why a narrowing spec never drops anything, the per-source
   watermarks, and the receipt a run writes about what it actually used.
+- **[Continuing a deep run that ran out of turns](deep-run-continuation.md)** — why a worker that
+  used its whole turn budget is continued in its own session with a bigger budget instead of being
+  re-run from a cold start, what still stops it (the verifier, the token budget), and how an
+  unfinished run reports the work it did.
 - **[Deployment](deployment.md)** — run the poller under cron or systemd.
 - **[Corpus playbooks](corpus-playbooks.md)** — distill a corpus's history into playbook files the
   shallow loop (context cards) and Claude Code deep runs both pick up automatically.

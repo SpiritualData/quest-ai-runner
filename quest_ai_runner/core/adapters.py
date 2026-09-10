@@ -263,6 +263,16 @@ class DeepResult:
     # consumer sees ``output`` it is the clean payload and this field is the only carrier. Either
     # way the card updater reads exactly one place: ``future_context``.
     future_context: str = ""
+    # HOW this run ended, when the runner can tell. ``limit_hit`` means the worker ran out of its
+    # TURN BUDGET mid-flight (Claude Code's ``error_max_turns``) rather than failing: its work up to
+    # that point is real and its session still holds everything it learned. The goal loop reads this
+    # to CONTINUE the same session with a bigger budget instead of re-running the goal from a cold
+    # start, which is what made a long task burn its whole budget again on rediscovery and still
+    # report a bare failure. A runner that cannot tell leaves it False, and behaves exactly as before.
+    limit_hit: bool = False
+    # The worker session this run used, when the runner has one (Claude Code's ``--session-id``).
+    # It is what a continuation resumes, so the follow-up attempt picks up the run's own context.
+    session_id: Optional[str] = None
 
 
 # The two ways a deep runner can hand its future-context bullets back. Declared per runner as

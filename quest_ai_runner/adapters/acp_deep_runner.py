@@ -960,13 +960,19 @@ class AcpDeepRunner(DeepRunnerBase):
                  emit: Optional[Callable[[ProgressEvent], None]] = None,
                  context_preamble: Optional[str] = None,
                  run_id: Optional[str] = None,
-                 working_dir: Optional[str] = None) -> DeepResult:
+                 working_dir: Optional[str] = None,
+                 resume_session_id: Optional[str] = None) -> DeepResult:
         """Run ``goal`` as one ACP turn. Signature matches ``SubprocessGoalRunner.run_goal`` exactly.
 
         ``max_turns`` is accepted for interface parity but is NOT enforceable over ACP today: the
         protocol has no turn budget and the Claude ACP agent exposes none. The run is bounded by the
         wall-clock timeout here and by the orchestrator's own goal loop (attempts + token budget),
         which is where the real bound lives for both runners anyway.
+
+        ``resume_session_id`` is accepted for the same parity reason and is likewise a no-op here.
+        The goal loop only ever offers a continuation to a run that reported ``limit_hit`` — the
+        worker's own "I ran out of turns" — and a runner with no turn budget never reports it, so
+        an ACP run is never asked to resume. Each ACP turn starts a fresh session, as before.
         """
         preamble = self.cfg.context_preamble if context_preamble is None else context_preamble
         prompt = compose_goal_prompt(goal, brief, preamble=preamble)

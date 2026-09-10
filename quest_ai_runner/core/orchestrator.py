@@ -3321,6 +3321,23 @@ def _run_goal_accepts_working_dir(deep_runner: Any) -> bool:
     return False
 
 
+def _run_goal_accepts_resume_session_id(deep_runner: Any) -> bool:
+    """Whether a DeepRunner's ``run_goal`` accepts a ``resume_session_id`` keyword (or **kwargs).
+
+    Same opt-in discipline as ``_run_goal_accepts_emit``. When accepted, an attempt that ran out of
+    its TURN BUDGET can be CONTINUED in the worker's own session rather than re-run from a cold
+    start. A runner without the kwarg keeps today's behaviour (a fresh run each attempt).
+    """
+    try:
+        sig = inspect.signature(deep_runner.run_goal)
+    except (ValueError, TypeError, AttributeError):
+        return False
+    for p in sig.parameters.values():
+        if p.name == "resume_session_id" or p.kind is inspect.Parameter.VAR_KEYWORD:
+            return True
+    return False
+
+
 def provider_call_accepts_layers(fn: Any) -> bool:
     """Whether a provider's ``plan``/``answer`` accepts the ``layers`` cache-hint kwarg (or **kwargs).
 
@@ -5238,6 +5255,32 @@ class Orchestrator:
             f"Do this now: {nxt}"
         )
 
+    @staticmethod
+    def _continuation_brief(base_brief: str, verdict: Optional[Dict[str, Any]] = None) -> str:
+        """The brief for CONTINUING a worker that ran out of turns, in its own resumed session.
+
+        Deliberately short. The worker is resuming: it already holds the brief, everything it read,
+        and every edit it made, so re-sending the full context (what ``_augment_brief`` does for a
+        cold re-run) would only spend its fresh budget re-reading what it already knows. What it
+        does not know is that it was cut off, so say that, and hand it the verifier's specific next
+        action when there is one."""
+        nxt = ((verdict or {}).get("next_action") or "").strip()
+        parts = [
+            "--- CONTINUE: YOU RAN OUT OF TURNS, YOU DID NOT FAIL ---",
+            "Your previous run ended because it used its whole turn budget, not because anything "
+            "went wrong. You are resuming that same session with a larger budget, so everything "
+            "you already read, decided and changed is still yours. Do not start over and do not "
+            "re-explore what you have already read: pick up exactly where you stopped.",
+        ]
+        if nxt:
+            parts.append(f"What still has to happen: {nxt}")
+        parts.append(
+            "Finish the remaining work, verify it yourself, and end with a concrete summary of "
+            "what you changed. If you cannot finish, say precisely what is left."
+        )
+        parts.append(f"For reference, the original task was:\n{base_brief.strip()[:1200]}")
+        return "\n\n".join(parts)
+
     # --- warm recent-context scoping (shared by the main turn and per-goal deep context) -----
 
     def _recent_scope_keys(self, ctx_meta: Optional[Dict[str, Any]]) -> List[str]:
@@ -5779,7 +5822,8 @@ class Orchestrator:
 
             def caps_for(runner: Any) -> Dict[str, bool]:
                 if runner is None:
-                    return {"emit": False, "run_id": False, "preamble": False, "working_dir": False}
+                    return {"emit": False, "run_id": False, "preamble": False,
+                            "working_dir": False, "resume": False}
                 cached = runner_caps.get(id(runner))
                 if cached is None:
                     cached = {
@@ -5787,6 +5831,7 @@ class Orchestrator:
                         "run_id": _run_goal_accepts_run_id(runner),
                         "preamble": _run_goal_accepts_context_preamble(runner),
                         "working_dir": _run_goal_accepts_working_dir(runner),
+                        "resume": _run_goal_accepts_resume_session_id(runner),
                     }
                     runner_caps[id(runner)] = cached
                 return cached
@@ -5823,13 +5868,20 @@ class Orchestrator:
                     emit.emit(ev)
 
             def _do_run(current_brief: str, run_model: Optional[str],
-                        active_runner: Any) -> DeepResult:
+                        active_runner: Any, *,
+                        resume_session_id: Optional[str] = None,
+                        max_turns: Optional[int] = None) -> DeepResult:
                 caps = caps_for(active_runner)
                 try:
                     if active_runner is None:
                         return DeepResult(met=False, error="no deep runner configured")
                     kwargs = dict(goal=goal, brief=current_brief, model=run_model,
-                                  max_turns=self.cfg.deep_max_turns)
+                                  max_turns=max_turns or self.cfg.deep_max_turns)
+                    # CONTINUATION of an attempt that ran out of turns: same session, so the worker
+                    # resumes with everything it already read and decided. Only for a runner that
+                    # accepts it; everyone else re-runs from scratch exactly as before.
+                    if resume_session_id and caps["resume"]:
+                        kwargs["resume_session_id"] = resume_session_id
                     if caps["emit"]:
                         kwargs["emit"] = _emit_one
                     if caps["run_id"]:
@@ -5899,6 +5951,13 @@ class Orchestrator:
             tier_idx = 0
             tokens_used = 0
             res = DeepResult(met=False)
+            # TURN-BUDGET CONTINUATION state. ``resume_session`` is set when the previous attempt
+            # ran out of turns and its worker session can be picked up again; ``attempt_turns`` is
+            # the budget for the next attempt, grown once per continuation so a task that simply
+            # needed more room gets it instead of hitting the same wall every attempt.
+            resume_session: Optional[str] = None
+            attempt_turns = self.cfg.deep_max_turns
+            continued = 0
             for attempt in range(1, max_iters + 1):
                 # Cooperative cancellation, checked before starting each new attempt (a retry can be
                 # a full agentic subprocess run, so this is the natural point to stop rather than
@@ -5920,7 +5979,9 @@ class Orchestrator:
                 # (the first attempt or a retry) acts on the latest input, not a stale request.
                 _new = self._drain_pending(pending_inputs)
                 run_brief = current_brief if not _new else (current_brief + "\n\n" + _new)
-                res = _do_run(run_brief, run_model, active_runner)
+                res = _do_run(run_brief, run_model, active_runner,
+                              resume_session_id=resume_session, max_turns=attempt_turns)
+                resume_session = None   # consumed: a continuation is offered per attempt, not sticky
                 tokens_used += max(0, getattr(res, "tokens", 0) or 0)
                 # ASYNC HAND-OFF: the runner queued the real run to finish out-of-band (its
                 # ``output`` is a "task #N launched"-style sentinel, not work product). Re-verifying
@@ -6000,6 +6061,28 @@ class Orchestrator:
                         emit.status("Goal not met: " + verdict.get("reason"))
                     else:
                         emit.status("Goal not met: " + reason)
+                # TURN-BUDGET CONTINUATION: the worker did not fail here, it ran out of room. Its
+                # session still holds everything it read and changed, so continuing THAT session
+                # with a bigger budget is both cheaper and far likelier to finish than re-running
+                # the goal cold, which pays for the same discovery again and tends to stop in the
+                # same place. (Without this, a long task burned attempt after attempt on the same
+                # wall and then reported a bare failure, with its real work left uncommitted.)
+                if (getattr(res, "limit_hit", False) and getattr(res, "session_id", None)
+                        and caps_for(active_runner)["resume"]):
+                    if budget is not None and tokens_used >= budget:
+                        if emit is not None:
+                            emit.status(f"Deep token budget reached ({tokens_used}/{budget}); "
+                                        "stopping without continuing the run.")
+                        break
+                    continued += 1
+                    resume_session = res.session_id
+                    attempt_turns = self.cfg.deep_max_turns * (continued + 1)
+                    current_brief = self._continuation_brief(base_brief, verdict)
+                    if emit is not None:
+                        emit.status("That run used all its turns before finishing; continuing the "
+                                    f"same session with a larger budget ({attempt_turns} turns)…")
+                    continue
+
                 # WIDEN: if the verifier says the worker lacked context, pull MORE for the next
                 # attempt (a fresh assembler read for the named missing context, wider conversation
                 # retrieval, and a targeted retrieval grep). The widening grows with each round so a

@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
 from ..core.adapters import Mode, ProgressEvent
-from ..core.orchestrator import Orchestrator, OrchestratorResult
+from ..core.orchestrator import Orchestrator, OrchestratorResult, _strip_future_context
 from .context_updates import (parse_manifest, parse_usage_notes, render_receipt,
                               strip_usage_block)
 
@@ -1064,11 +1064,22 @@ class TaskExecutor:
         errs = "; ".join(d.error for d in deep if d.error) or "the goal was not met"
         if not deep:                 # deep requested but no runner wired -> needs human/runner
             errs = "deep work required but no deep-runner is configured: " + "; ".join(result.goals)
-        self._report_progress(task_id, "error", text=errs)
-        self._safe(lambda: self._client.report_failed(task_id, errs))
-        self._post_conv(conv_id, f"I couldn't complete this: {errs}", kind="failed", task_id=task_id,
-                        card_id=card_id)
-        return ExecutionOutcome(task_id, "failed", errs)
+        # A run that fell short almost never did NOTHING: it read, edited, tested and left real work
+        # on disk before the turn budget or the verifier stopped it. Reporting the bare error threw
+        # that away, so the person saw "the task failed" with no way to find what had been done and
+        # no way to pick it up. The work account travels WITH the failure, under a heading that says
+        # plainly it is unfinished.
+        work = "\n\n".join(_strip_future_context(d.output).strip()
+                            for d in deep if (d.output or "").strip()).strip()
+        failed_text = errs
+        if work:
+            failed_text = (f"{errs}\n\n--- WHAT THE RUN DID BEFORE IT STOPPED (unfinished, not "
+                           f"verified) ---\n{work}")
+        self._report_progress(task_id, "error", text=errs, output=failed_text)
+        self._safe(lambda: self._client.report_failed(task_id, failed_text))
+        self._post_conv(conv_id, f"I couldn't complete this: {failed_text}", kind="failed",
+                        task_id=task_id, card_id=card_id)
+        return ExecutionOutcome(task_id, "failed", failed_text)
 
     def _with_context_receipt(self, reported: str, request_text: Optional[str],
                               run_output: Optional[str] = None) -> str:

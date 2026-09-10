@@ -177,6 +177,23 @@ def _run_goal_accepts_working_dir(runner: Any) -> bool:
             return True
     return False
 
+def _run_goal_accepts_resume_session_id(runner: Any) -> bool:
+    """Whether a DeepRunner's ``run_goal`` accepts a ``resume_session_id`` keyword (or **kwargs).
+
+    Same opt-in discipline as ``_run_goal_accepts_context_preamble``. A caller continuing an
+    attempt that ran out of turns forwards the worker's session id ONLY to a runner that can
+    resume it; everyone else runs the goal fresh, exactly as before.
+    """
+    try:
+        sig = inspect.signature(runner.run_goal)
+    except (ValueError, TypeError, AttributeError):
+        return False
+    for p in sig.parameters.values():
+        if p.name == "resume_session_id" or p.kind is inspect.Parameter.VAR_KEYWORD:
+            return True
+    return False
+
+
 # The escalation-marker contract: a spawned worker that raised a human decision mid-run (via
 # whatever escalation mechanism its consumer preamble gave it) reports the decision back to the
 # runner by printing, on its own line, ``QAR-ESCALATED: <decision_id>``. SubprocessGoalRunner
@@ -282,7 +299,8 @@ class GoalRunner:
     def run(self, *, goal: str, brief: str, model: Optional[str] = None,
             max_turns: Optional[int] = None,
             context_preamble: Optional[str] = None,
-            working_dir: Optional[str] = None) -> DeepResult:
+            working_dir: Optional[str] = None,
+            resume_session_id: Optional[str] = None) -> DeepResult:
         turns = max_turns if max_turns is not None else self._default_max_turns
         try:
             kwargs = dict(goal=goal, brief=brief, model=model, max_turns=turns)
@@ -294,6 +312,10 @@ class GoalRunner:
             # synced folder for THIS run only, falling back to the runner's configured default).
             if working_dir is not None and _run_goal_accepts_working_dir(self._runner):
                 kwargs["working_dir"] = working_dir
+            # Continuing a turn-budget-exhausted attempt in the worker's own session, same rule.
+            if (resume_session_id is not None
+                    and _run_goal_accepts_resume_session_id(self._runner)):
+                kwargs["resume_session_id"] = resume_session_id
             res = self._runner.run_goal(**kwargs)
         except Exception as e:  # noqa: BLE001 — the goal contract never raises to the caller
             return DeepResult(met=False, error=f"deep runner failed: {type(e).__name__}")
@@ -905,7 +927,8 @@ class SubprocessGoalRunner(DeepRunner):
                  emit: Optional[Callable[[ProgressEvent], None]] = None,
                  context_preamble: Optional[str] = None,
                  run_id: Optional[str] = None,
-                 working_dir: Optional[str] = None) -> DeepResult:
+                 working_dir: Optional[str] = None,
+                 resume_session_id: Optional[str] = None) -> DeepResult:
         # ``context_preamble`` is an OPTIONAL PER-CALL override of ``self.cfg.context_preamble``.
         # When the orchestrator forwards a per-task preamble (e.g. an AI rep's pulled persona), it
         # is used for THIS run only; otherwise the runner's configured base preamble applies, so
@@ -966,8 +989,18 @@ class SubprocessGoalRunner(DeepRunner):
         # pick one) so the progress monitor can watch EXACTLY this run's session file instead of
         # guessing from "any new jsonl" — a guess that can cross-attach to a concurrent session
         # (the parent conversation, or another deep run sharing the same project dir).
-        session_id = str(uuid.uuid4())
-        cmd += ["--session-id", session_id]
+        #
+        # CONTINUATION: ``resume_session_id`` is a session THIS goal already ran and did not get to
+        # finish (it ran out of turn budget). Resuming it means the worker continues with everything
+        # it already read and decided, instead of paying for that discovery a second time and very
+        # likely running out of room again at the same place. The id stays the same across the whole
+        # continuation, so the monitor and the transcript stay one thread of work.
+        if resume_session_id:
+            session_id = resume_session_id
+            cmd += ["--resume", session_id]
+        else:
+            session_id = str(uuid.uuid4())
+            cmd += ["--session-id", session_id]
 
         # The wall-clock cap for this run: the consumer's SubprocessConfig wins if set, otherwise
         # QAR_DEEP_TIMEOUT_SECONDS / the 1-hour default. Never truly untimed.
@@ -1036,6 +1069,7 @@ class SubprocessGoalRunner(DeepRunner):
                 monitor_thread.join(timeout=2)
             return DeepResult(
                 met=False,
+                session_id=session_id,
                 error=(
                     f"Deep run exceeded its wall-clock timeout: ran for {elapsed:.0f}s against a "
                     f"{effective_timeout:.0f}s limit. The worker process group was killed. "
@@ -1063,7 +1097,7 @@ class SubprocessGoalRunner(DeepRunner):
         decision_id = extract_escalation_id(out)
         if decision_id:
             return DeepResult(met=False, output=out, decision_id=decision_id,
-                              tokens=tokens, cost_usd=cost)
+                              tokens=tokens, cost_usd=cost, session_id=session_id)
         if proc.returncode == 0 and not json_is_error:
             # Safety net against a SILENT NO-OP: a real headless ``-p`` run always prints its final
             # result, so exit-0 with EMPTY output means the worker never actually ran the goal (the
@@ -1078,16 +1112,17 @@ class SubprocessGoalRunner(DeepRunner):
                                                      worker_output=out)
                 if activity:
                     return DeepResult(
-                        met=False, output=out, tokens=tokens, cost_usd=cost,
+                        met=False, output=out, tokens=tokens, cost_usd=cost, session_id=session_id,
                         error="worker exited cleanly but produced NO output, so the goal cannot be "
                               "confirmed to have run (one common cause: the worker did not run "
                               "headless, e.g. Claude Code needs -p).\n\n" + activity)
                 return DeepResult(
-                    met=False, output=out, tokens=tokens, cost_usd=cost,
+                    met=False, output=out, tokens=tokens, cost_usd=cost, session_id=session_id,
                     error="worker exited cleanly but produced NO output, so the goal did not "
                           "actually run (check that the worker runs headless, e.g. Claude Code "
                           "needs -p).")
-            return DeepResult(met=True, output=out, tokens=tokens, cost_usd=cost)
+            return DeepResult(met=True, output=out, tokens=tokens, cost_usd=cost,
+                              session_id=session_id)
         if not err:
             # No stderr to quote. Say exactly that rather than ASSERTING a cause: the old wording
             # ("likely hit the turn/budget limit") was a guess printed as fact, and it is the text
@@ -1120,4 +1155,7 @@ class SubprocessGoalRunner(DeepRunner):
                                                      worker_output=tail)
                 if activity:
                     err = f"{err}\n\n{activity}"
-        return DeepResult(met=False, output=out, error=err, tokens=tokens, cost_usd=cost)
+        # ``limit_hit`` is the worker's OWN statement that it ran out of turns (not our guess), so
+        # the goal loop can continue this session instead of starting the goal over.
+        return DeepResult(met=False, output=out, error=err, tokens=tokens, cost_usd=cost,
+                          session_id=session_id, limit_hit=(subtype == "error_max_turns"))

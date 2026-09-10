@@ -7,6 +7,26 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- **A deep run that runs out of TURNS is now CONTINUED in its own session, not started over**
+  (`core/goal_runner.py`, `core/orchestrator.py`, `core/adapters.py`). `DeepResult` gained
+  `limit_hit` (the worker's own `error_max_turns`, never a guess) and `session_id`, and
+  `SubprocessGoalRunner.run_goal` gained `resume_session_id`, which launches the worker with
+  `--resume <id>` instead of opening a fresh `--session-id`. The goal loop reads `limit_hit` and
+  hands the next attempt the SAME session, a budget grown once per continuation
+  (`deep_max_turns * (n + 1)`), and a short continuation brief that tells the worker it was cut off
+  rather than re-sending the cold-start augmentation it already holds; the model tier is not
+  escalated, since running out of room says nothing about the model. The token budget still stops
+  a continuation, and a runner that cannot resume (`AcpDeepRunner`, any older signature) keeps the
+  previous cold-retry behaviour exactly. Before this, a long task re-ran the whole goal from
+  scratch with the same budget every attempt, paid again for the discovery it had already done,
+  stopped in the same place, and reported a bare failure. (Live case, 2026-09-09: a task that had
+  written two working modules was reported to its owner as failed, with its work uncommitted and
+  unmentioned.)
+- **A deep task that falls short reports WHAT IT DID, not just why it stopped**
+  (`runner/executor.py`). The failure path joined the results' `error` strings and threw their
+  `output` away, so the person read "the task failed" with no account of the work and no way to
+  pick it up. The run's own output now travels with the failure under a heading that says plainly
+  it is unfinished and unverified.
 - **Goals are CONTEXT for autopilot, never assignments, and every character on duty now works to a
   brief** (`runner/autopilot.py`). Quest backends removed `ai_help` and `assignee_rep_id` from a
   goal outright, including from the `GET /api/teams/{team_id}/quests/{quest_id}/goals` grouping
