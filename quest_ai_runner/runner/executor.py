@@ -27,7 +27,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from ..core.adapters import Mode, ProgressEvent
 from ..core.orchestrator import Orchestrator, OrchestratorResult, _strip_future_context
-from .context_updates import (BLOCK_START, parse_manifest, parse_usage_notes, render_receipt,
+from .context_updates import (parse_manifest, parse_usage_notes, render_receipt,
                               strip_usage_block)
 
 log = logging.getLogger("quest-ai-runner.executor")
@@ -299,6 +299,30 @@ def _is_autopilot_pass(task: Dict[str, Any]) -> bool:
     if str(task.get("task_kind") or "").strip().lower() == AUTOPILOT_PASS_KIND:
         return True
     return str(task.get("handler") or "").strip().lower() == AUTOPILOT_PASS_KIND
+
+
+# The value the autopilot pass stamps on every batch/goal-proposal task it creates (see
+# ``runner.autopilot``). Duplicated locally for the same reason as ``AUTOPILOT_PASS_KIND`` above:
+# this module must not import ``runner.autopilot``, which is a consumer of this executor, not a
+# dependency of it.
+AUTOPILOT_WORK_KIND = "autopilot_work"
+
+
+def _autopilot_composed_text(task: Dict[str, Any]) -> bool:
+    """Whether this task's own text was composed by the autopilot pass (see ``compose_batch_text``).
+
+    This is the routing-metadata signal that replaces scanning the task's text for
+    ``BLOCK_START``. A text-substring test is unsound: the autopilot pass's context-updates block
+    is plain text, so it survives verbatim when someone pastes a prior run's brief into chat, and
+    the backend files that paste as its OWN, brand-new task. That task's ``task_kind`` is unset (or
+    something other than ``AUTOPILOT_WORK_KIND``), so it is correctly read here as ordinary text
+    that merely quotes a block, not as a batch this executor can trust to carry a live one.
+
+    ``task_kind`` is written once at task creation and never overwritten by the claim/status/
+    progress paths, so it reliably reflects what actually composed the text, unlike scanning that
+    text for a marker string which anyone's task can happen to contain.
+    """
+    return str(task.get("task_kind") or "").strip().lower() == AUTOPILOT_WORK_KIND
 
 
 @dataclass
@@ -595,13 +619,17 @@ class TaskExecutor:
         # Fetch goal + quest context + conversation history from Quest API if available, and build
         # a context_view for the orchestrator so the deep agent knows what goal/quest it's working on
         # and the prior conversation that led to the task.
+        # A batch the autopilot pass composed already carries its own context-updates block, with
+        # its own refs; collecting again here would hand the run the same notes twice under two
+        # numberings. Keyed on the task's routing metadata (task_kind), not on whether the text
+        # happens to contain the block's marker string: a task whose text merely QUOTES a prior
+        # brief (someone pasting a previous run's output into chat, which the backend files as its
+        # own task) is not autopilot-composed and must still get fresh context collected.
+        composed_by_autopilot = _autopilot_composed_text(task)
         context_view = self._build_context_view(
             goal_id, quest_id, conv_id, rep_id=task.get("assignee_rep_id"),
             related_goal_id=related_goal_id,
-            # A batch the autopilot pass composed already carries its own block, with its own
-            # refs; collecting again here would hand the run the same notes twice under two
-            # numberings.
-            with_updates=BLOCK_START not in text)
+            with_updates=not composed_by_autopilot)
 
         # Route all orchestrator events (except raw streaming partials) to the task's live progress
         # stream so the task-detail SSE shows step-by-step what the AI is doing (plan, read, replan,
@@ -681,13 +709,15 @@ class TaskExecutor:
             self._safe(self._context_bundle.mark_seen)
         return self._report(task_id, result, conv_id, request_text=text,
                             rep_preamble=rep_preamble,
-                            card_id=(task.get("card_id") or None))
+                            card_id=(task.get("card_id") or None),
+                            autopilot_composed=composed_by_autopilot)
 
     def report(self, task_id: str, result: OrchestratorResult,
                conv_id: Optional[str] = None, *,
                request_text: Optional[str] = None,
                rep_preamble: Optional[str] = None,
-               card_id: Optional[str] = None) -> ExecutionOutcome:
+               card_id: Optional[str] = None,
+               autopilot_composed: bool = False) -> ExecutionOutcome:
         """Public: map an ALREADY-PRODUCED OrchestratorResult onto the Quest callback + chat.
 
         ``execute()`` runs the brain and then reports; but an integrator whose deep run executes
@@ -701,9 +731,16 @@ class TaskExecutor:
         ``request_text`` (optional) is the task's original instruction text; when given, a fully
         met deep result's done message is folded through the report synthesis + claim check (see
         ``_compose_done_report``). ``rep_preamble`` rides into that synthesis. ``card_id``
-        (optional, reserved) is stamped on the conversation progress posts."""
+        (optional, reserved) is stamped on the conversation progress posts. ``autopilot_composed``
+        (default False) tells the context-updates receipt whether ``request_text`` is trustworthy
+        as the record of what was offered -- true only when the caller knows this task's text was
+        actually built by the autopilot pass (its ``task_kind``), never inferred from the text
+        itself. A caller with no such task to check defaults to False, the safe choice: the receipt
+        then falls back to this executor's own context bundle, when one is wired, rather than
+        risking a false receipt from text that merely quotes a prior brief."""
         return self._report(task_id, result, conv_id, request_text=request_text,
-                            rep_preamble=rep_preamble, card_id=card_id)
+                            rep_preamble=rep_preamble, card_id=card_id,
+                            autopilot_composed=autopilot_composed)
 
     def _on_milestone(self, task_id: str, conv_id: Optional[str], event: ProgressEvent,
                       card_id: Optional[str] = None) -> None:
@@ -1017,7 +1054,8 @@ class TaskExecutor:
                 conv_id: Optional[str] = None, *,
                 request_text: Optional[str] = None,
                 rep_preamble: Optional[str] = None,
-                card_id: Optional[str] = None) -> ExecutionOutcome:
+                card_id: Optional[str] = None,
+                autopilot_composed: bool = False) -> ExecutionOutcome:
         # Cooperative cancellation: ``result.kind == "cancelled"`` is the orchestrator's OWN
         # cooperative signal (its ``cancel_check`` returned True mid-run); the extra
         # ``_is_task_cancelled`` re-check covers the race where the run finished (or an async
@@ -1053,7 +1091,8 @@ class TaskExecutor:
             elif exit_reason == "read_budget":
                 verdict_suffix = "\n\n---\nNote: this is a best-effort answer based on context gathered so far."
             done_text = text + verdict_suffix if verdict_suffix else text
-            done_text = self._with_context_receipt(done_text, request_text)
+            done_text = self._with_context_receipt(done_text, request_text,
+                                                   autopilot_composed=autopilot_composed)
             self._report_progress(task_id, "done", text="Done.", output=done_text)
             self._safe(lambda: self._client.report_done(task_id, done_text))
             self._post_conv(conv_id, done_text, kind="done", task_id=task_id, card_id=card_id)
@@ -1084,7 +1123,8 @@ class TaskExecutor:
             # Read the usage lines from the RAW summary, not the fold-back: the receipt is the
             # run's own account of what it did with the person's material, and the rewrite that
             # makes a transcript tail read as a report is free to drop it.
-            done_report = self._with_context_receipt(done_report, request_text, run_output=summary)
+            done_report = self._with_context_receipt(done_report, request_text, run_output=summary,
+                                                      autopilot_composed=autopilot_composed)
             self._report_progress(task_id, "done", text="Done.", output=done_report)
             self._safe(lambda: self._client.report_done(task_id, done_report))
             self._post_conv(conv_id, done_report, kind="done", task_id=task_id,
@@ -1139,7 +1179,8 @@ class TaskExecutor:
         return ExecutionOutcome(task_id, "failed", failed_text)
 
     def _with_context_receipt(self, reported: str, request_text: Optional[str],
-                              run_output: Optional[str] = None) -> str:
+                              run_output: Optional[str] = None,
+                              autopilot_composed: bool = False) -> str:
         """``reported`` with a context-updates receipt appended, when this task carried updates.
 
         The task's OWN text is the record of what was offered when an autopilot pass composed it
@@ -1149,13 +1190,23 @@ class TaskExecutor:
         ones the run said nothing about: a person reads this to find out whether what they wrote
         reached the work, and a silent ref is the answer they most need.
 
+        ``autopilot_composed`` gates whether ``request_text`` is trusted as that record: only the
+        caller who knows (from the task's routing metadata, never from scanning the text itself)
+        that this task's text was actually built by the autopilot pass may pass True. Without it,
+        a task whose text merely QUOTES a prior brief -- someone pasting a previous run's output
+        into chat, which the backend files as its own, brand-new task -- would otherwise have its
+        stale, quoted block read as this run's own manifest, rendering a receipt for refs the run
+        never saw. A task that is not autopilot-composed falls back to this executor's own context
+        bundle (populated when this task asked the engine itself), same as before.
+
         ``run_output`` names where the run's own account is, when that is not the text being
         reported. A task that carried no updates gets its text back untouched.
         """
         try:
-            # The block is in the task's own text when an autopilot pass composed it, and in this
-            # executor's context view when this task asked the engine itself.
-            manifest = parse_manifest(request_text or "") or (
+            # Trust the task's own text only when the caller has confirmed (via routing metadata)
+            # that the autopilot pass actually composed it; otherwise go straight to this
+            # executor's own context view, exactly like a task with no updates at all.
+            manifest = (parse_manifest(request_text or "") if autopilot_composed else None) or (
                 self._context_bundle.manifest() if self._context_bundle is not None else [])
             if not manifest:
                 return reported

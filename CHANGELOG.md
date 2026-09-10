@@ -40,6 +40,16 @@ All notable changes to this project are documented here. The format is based on
   Seconds are rendered as `2h 56m`; bookkeeping fields and blanks stay out.
 
 ### Fixed
+- **A pasted brief is not mistaken for a batch the autopilot pass composed** (`runner/executor.py`).
+  `execute()` decided whether to collect fresh context with `BLOCK_START not in text`, a substring
+  test against the task's own text; a task that merely QUOTES a previous run's brief (someone
+  pasting it into chat, which the backend files as its own, brand-new task) still carries that
+  marker string, so the run got no fresh notes/captures/comments, and the receipt then rendered
+  from the stale, quoted manifest for refs this run never saw. The decision is now keyed on the
+  task's routing metadata (`task_kind == "autopilot_work"`, the flag the autopilot pass stamps on
+  every batch it creates, via the new `_autopilot_composed_text()`), never on text matching, and
+  the same flag gates `_with_context_receipt()`'s trust of `request_text` so both halves of the bug
+  close together.
 - **Captures are judged, delivered and receipted one at a time** (`runner/context_updates.py`,
   `runner/insights.py`). `InsightsSource` handed the whole captures block to the relevance judge
   as ONE item (clipped to its first 300 characters), so the judge could only drop every capture

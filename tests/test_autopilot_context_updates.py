@@ -217,7 +217,8 @@ def test_a_finished_run_reports_what_it_did_with_the_material_it_was_shown():
         source="quest_notes", kind="note", item_id="n1", body="method first",
         occurred_at=NOW, location="the quest"))
     reported = _ReceiptExecutor()._with_context_receipt(
-        "I rewrote the method section.\n\nContext used:\n  [U1] cited in the method", task_text)
+        "I rewrote the method section.\n\nContext used:\n  [U1] cited in the method", task_text,
+        autopilot_composed=True)
     assert "Context updates taken into account:" in reported
     assert "-> cited in the method" in reported
 
@@ -230,7 +231,8 @@ def test_the_receipt_reads_the_runs_own_words_not_the_report_they_were_folded_in
         occurred_at=NOW, location="the quest"))
     reported = _ReceiptExecutor()._with_context_receipt(
         "A tidy summary with no usage lines at all.", task_text,
-        run_output="raw transcript\n\nContext used:\n  [U1] answered in the doc")
+        run_output="raw transcript\n\nContext used:\n  [U1] answered in the doc",
+        autopilot_composed=True)
     assert "-> answered in the doc" in reported
     assert "A tidy summary with no usage lines at all." in reported
 
@@ -313,6 +315,50 @@ def test_the_watermark_moves_once_the_delegated_run_has_had_the_material(tmp_pat
     assert marks.get("q1", "quest_notes") == NOW
     done = [r for r in client.reports if r[1] == "done"]
     assert done and "-> method first" in done[0][2]
+
+
+def test_a_pasted_brief_is_not_mistaken_for_a_batch_the_pass_composed(tmp_path):
+    """A task whose text merely QUOTES a prior run's brief -- someone pasting a previous run's
+    output into chat, which the backend files as its own, brand-new task -- still carries the
+    context-updates block's marker string, but it was never composed by the autopilot pass (its
+    ``task_kind`` says so). Fresh context must still be collected, and the receipt must come from
+    what THIS run actually saw, never from the stale, quoted manifest."""
+    from tests.test_runner import MockQuestClient
+    from tests.test_working_dir_override import CapturingDeepRunner, _brain
+
+    class Client(MockQuestClient):
+        def get_quest(self, quest_id):
+            return {"quest_id": quest_id, "name": "Dissertation"}
+
+        def list_quest_notes(self, quest_id):
+            return [_note("The method chapter has to come first")]
+
+    client = Client([])
+    marks = Watermarks(str(tmp_path / "marks.json"))
+    engine = UpdateEngine(client, watermarks=marks, always=("quest_notes",), now_fn=_now)
+    deep = CapturingDeepRunner(output="drafted it\n\nContext used:\n  [U1] method first")
+    ex = TaskExecutor(client, _brain(deep), update_engine=engine)
+
+    stale_block = _task_text_with(ContextUpdate(
+        source="quest_notes", kind="note", item_id="stale", occurred_at=NOW,
+        location="the quest", excerpt="a stale, already-handled note"))
+    pasted_text = "Here is what a prior run told me:\n\n" + stale_block
+    # No task_kind: an ordinary task (e.g. a chat paste the backend filed as its own task), not a
+    # batch the autopilot pass composed -- even though its text still carries a real BLOCK_START.
+    task = {"id": "t1", "text": pasted_text, "quest_id": "q1"}
+
+    ex.execute(task)
+
+    assert deep.calls, "the deep run never happened"
+    # Fresh context WAS collected despite the quoted block, so the watermark moved.
+    assert marks.get("q1", "quest_notes") == NOW
+    done = [r for r in client.reports if r[1] == "done"]
+    assert done
+    reported = done[0][2]
+    # The receipt reflects the FRESH manifest (the real, current note)...
+    assert "-> method first" in reported
+    # ...never the stale, quoted one the pasted text happened to carry.
+    assert "a stale, already-handled note" not in reported
 
 
 # --- the consumer's switch ------------------------------------------------------------------------
