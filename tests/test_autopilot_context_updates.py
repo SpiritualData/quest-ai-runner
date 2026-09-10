@@ -141,13 +141,29 @@ def test_a_pass_that_creates_nothing_leaves_the_note_for_the_next_one():
     assert marks.get("q1", "quest_notes") is None
 
 
-def test_the_same_note_is_not_offered_twice_across_two_passes():
+def test_an_unanswered_note_is_still_offered_on_the_next_pass():
+    """A pass CREATING a task that carries the note has not answered it -- the run will.
+
+    Under "open until answered" the watermark says what is new, not what is handled, so the note
+    keeps riding into passes until an assistant note follows it on the quest. Time-filtering it
+    instead loses an open question for good the moment one pass sees it and does nothing.
+    """
     client = _one_quest_client([_note("The method chapter has to come first")])
     marks = Watermarks(None)
     _pass_with(client, _engine(client, marks)).run({"text": "autopilot pass"})
     client.created_tasks.clear()
     _pass_with(client, _engine(client, marks)).run({"text": "autopilot pass"})
-    assert BLOCK_START not in client.created_tasks[0]["text"]
+    assert "The method chapter has to come first" in client.created_tasks[0]["text"]
+
+
+def test_once_an_assistant_answers_on_the_quest_the_note_stops_being_offered():
+    client = _one_quest_client([
+        _note("The method chapter has to come first"),
+        {"id": "ai1", "text": "Did the method chapter", "author_kind": "ai",
+         "created_at": "2026-09-10T12:00:00Z"},
+    ])
+    _pass_with(client, _engine(client, Watermarks(None))).run({"text": "autopilot pass"})
+    assert "The method chapter has to come first" not in client.created_tasks[0]["text"]
 
 
 def test_one_engine_serves_every_quest_in_a_pass():

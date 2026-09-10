@@ -1746,27 +1746,34 @@ class AutopilotPass:
         # concluded (possibly an attended session's, more recent than any pass) rides into the
         # batch as the plan of record.
         standing_next_steps = self._read_next_steps(quest_id)
-        # What the person themselves last wrote about their work. USER-scoped and cached for the
-        # pass, so this is at most one extra pair of reads per pass, not per quest.
-        reflections = self._reflections(scope_label)
-        reflection_text = reflections.as_text() or None
-        # What they have captured and not yet acted on since this quest's own last pass. Same
-        # user-scoped read, cached for the pass; the per-quest cutoff is applied in memory.
-        insights = self._insights(autopilot_cfg)
-        insights_text = insights.as_text() or None
         quest_label = _quest_label(quest, quest_id)
-        # Everything else that changed on this quest since an assistant last looked -- notes,
-        # document comments, folder edits -- through the one engine every caller of it asks the
-        # same question. Reflections/insights above are NOT re-collected through it: they already
-        # have their own tested caching and their own freshness anchor (this quest's own
-        # ``last_pass_at``, not a second watermark), and duplicating them here would be exactly the
-        # "two hand-wired paths" problem the engine exists to end, not repeat once more.
         context_bundle: Optional[ContextUpdates] = None
         context_updates_text: Optional[str] = None
         if self._update_engine is not None:
+            # ONE read of everything the person said, through the engine. The reflection and the
+            # captures come back as SLOTTED updates: they render through the composer's own two
+            # slots below (ref-tagged, so the receipt accounts for them) and are excluded from the
+            # general block, which carries everything else -- notes, document comments, folder
+            # edits. Before this, the pass read the two slots itself AND the engine delivered them
+            # again in the block, so every brief carried the reflection twice.
             context_bundle = self._update_engine.collect(
-                quest, card_id=quest_id, card_kind="quest", card_label=quest_label)
-            context_updates_text = context_bundle.as_prompt_block() or None
+                quest, card_id=quest_id, card_kind="quest", card_label=quest_label,
+                options={"reflections": {"periods": self._reflection_periods(scope_label)}})
+            reflection_text = context_bundle.slot_text("reflection") or None
+            insights_text = context_bundle.slot_text("insights") or None
+            reflection_note = context_bundle.slot_summary("reflection")
+            insights_note = context_bundle.slot_summary("insights")
+            context_updates_text = context_bundle.as_prompt_block(
+                exclude_slots=("reflection", "insights")) or None
+        else:
+            # No engine: the two slots are read directly, exactly as before the engine existed.
+            # What the person themselves last wrote about their work (user-scoped, cached for the
+            # pass), and what they captured since this quest's own last pass.
+            reflections = self._reflections(scope_label)
+            reflection_text = reflections.as_text() or None
+            insights = self._insights(autopilot_cfg)
+            insights_text = insights.as_text() or None
+            reflection_note, insights_note = reflections.one_line(), insights.one_line()
 
         produced = False
         # Whether a batch CARRYING this pass's context updates was actually created. Separate from
@@ -1862,8 +1869,8 @@ class AutopilotPass:
             if produced and not dry_run:
                 self._refresh_next_steps(quest_id, current_goals, adopted, scope_label, previous,
                                          result, quest_label=quest_label,
-                                         reflection_note=reflections.one_line(),
-                                         insights_note=insights.one_line())
+                                         reflection_note=reflection_note,
+                                         insights_note=insights_note)
         # The goal-proposal path, kept and unchanged, and NOT currently reachable from here: a due
         # pass always has at least one character with an effective brief, so ``batches`` is never
         # empty by the time this runs. It stays because it is a real product surface rather than

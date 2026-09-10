@@ -112,6 +112,7 @@ _FILE_SCALAR_FIELDS = {
     "autopilot_ensure_pass_task", "autopilot_pass_time", "autopilot_daily_budget",
     "autopilot_settings_refresh_seconds", "autopilot_backpressure", "autopilot_adopt_recurring",
     "context_updates", "context_updates_state_path", "context_updates_first_look_days",
+    "context_updates_judge_relevance", "context_updates_relevance_tier",
     "context_sources_map", "context_sources_file", "drive_comments_auth",
     "quest_folder_map_file",
     "state_path", "lane_label", "env_files", "env_aliases", "env",
@@ -454,6 +455,15 @@ class RunnerConfig:
     # How far back a source looks for a quest nothing has ever read. On a first run everything
     # recent IS new, so this bounds what a newly opted-in quest is handed at once.
     context_updates_first_look_days: int = 14
+    # Whether the engine puts USER-SCOPED captures to a model relevance judgment before a
+    # run sees them (see runner/context_updates.llm_relevance_judge). On by default: without
+    # it every capture reaches every card and the RUN does the filtering out loud, in the
+    # output a person reads ("passed over: not this quest's domain"), which is the context
+    # engine's work showing up as the assistant's chatter. Off, or with no model provider,
+    # everything is delivered exactly as before.
+    context_updates_judge_relevance: bool = True
+    # Model tier for that judgment. "balanced" per this repo's tier guidance for filtering.
+    context_updates_relevance_tier: str = "balanced"
     # {quest_id: [spec, ...]} the DEPLOYMENT supplies, merged under whatever each card declares
     # for itself (the card always wins on a source both name). It exists because a card cannot
     # always carry its specs yet: a backend has to grow the field first, and until it does every

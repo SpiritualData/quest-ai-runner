@@ -7,6 +7,39 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Relevance is the engine's job, not the run's** (`runner/context_updates.py`). User-scoped
+  captures are put to a model relevance judgment against the card's real subject matter before a
+  run ever sees them (`llm_relevance_judge`, `context_updates_judge_relevance`,
+  `context_updates_relevance_tier`). Without it every capture reached every card and the RUN did
+  the filtering out loud, in the output a person reads: *"Passed over: the Cornerstone capture
+  (collaboration tracking) isn't this quest's domain."* A model judgment, never a tag match
+  against the card's name (hard rule #3). CARD-scoped channels -- a note on this quest, a comment
+  on this card's document, a collection the card named -- are never judged: they are relevant
+  because of where they were written. Any failure (no provider, timeout, unparsable JSON) keeps
+  everything, so the worst case is a noisier brief and never a silently emptier one.
+  Qualitatively verified against live captures: three captures routed to three different quests,
+  each to the right one.
+- **A card can watch a habit, timer or log collection** (`runner/context_updates.py`,
+  `runner/quest_client.py`). `{"source": "collection", "name": "Focus on PhD Dissertation"}`, plus
+  `QuestClient.list_collections()` so a card can name it in words rather than carry an opaque id.
+  A habit tracked against a piece of work IS a record of that work: the quest's own timer says
+  whether the person sat down to it yesterday, for how long, and in how many sittings, and a run
+  composing a brief without it will propose a plan for a day they already spent three hours on.
+  Seconds are rendered as `2h 56m`; bookkeeping fields and blanks stay out.
+
+### Changed
+- **A person's note is open until an assistant ANSWERS it, not until a watermark passes**
+  (`runner/context_updates.py`). Two live failures this replaces: a first look offered ten notes
+  answered days earlier, every one marked "needs an answer"; and time-filtering meant an open
+  question was lost for good the moment one pass saw it and did nothing. An assistant note
+  following the person's on the quest closes it. Bounded at both ends
+  (`OPEN_ITEM_MAX_AGE_DAYS`, `MAX_OPEN_PER_SOURCE`) so "open" cannot become an unbounded backlog.
+- **The autopilot pass reads everything the person said through ONE engine** (`runner/autopilot.py`).
+  The reflection and the captures come back as SLOTTED updates rendered through the composer's own
+  two slots (ref-tagged, so the receipt accounts for them) and excluded from the general block.
+  Before this the pass read those two itself AND the engine delivered them again, so every brief
+  carried them twice.
+
 - **A lane is a config file, not a program** (`config.py`, `cli.py`,
   [`docs/a-lane-is-a-config-file.md`](docs/a-lane-is-a-config-file.md)). New file-expressible
   fields: `env_files`, `env_aliases`, `env`, `quest_folder_map_file`, `context_sources_file`,

@@ -38,6 +38,7 @@ Endpoints implemented (the contract from integration_library_design.md §3):
                Composed into one context block by ``runner.reflections``.
   Insights (the person's own captures; USER-scoped, no team or quest id):
                GET   /api/data/insights/collection             (get_insights_collection)
+               GET   /api/data/collections                    (list_collections)
                GET   /api/data/collections/{id}/entries        (list_collection_entries)
                PATCH /api/data/insights/mark-acted-on          (mark_insight_acted_on)
                The entries route has NO server-side date or field filter; ``runner.insights``
@@ -1172,6 +1173,29 @@ class QuestClient:
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("get_insights_collection failed: %s", e)
             return {}
+
+    def list_collections(self) -> List[Dict[str, Any]]:
+        """GET /api/data/collections -- every collection the caller owns.
+
+        Needed to resolve a collection by NAME. A card that watches a habit is far more readable,
+        and far more durable across a rebuild, saying "Focus on PhD Dissertation" than carrying an
+        opaque id; this is what turns the one into the other. Returns [] on any error.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", "/api/data/collections") or {}
+            if isinstance(resp, list):
+                return resp
+            data = resp.get("data") if isinstance(resp, dict) else None
+            if isinstance(data, dict):
+                items = data.get("items")
+                if isinstance(items, list):
+                    return items
+            items = resp.get("items") if isinstance(resp, dict) else None
+            return items if isinstance(items, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_collections failed: %s", e)
+            return []
 
     def list_collection_entries(self, collection_id: str, *, page: int = 0,
                                 limit: int = 50) -> Dict[str, Any]:

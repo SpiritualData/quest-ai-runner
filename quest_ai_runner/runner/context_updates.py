@@ -81,6 +81,15 @@ FIRST_LOOK_DAYS = 14
 # to switch on is a reply channel that is off.
 DEFAULT_ALWAYS: Sequence[str] = ("reflections", "insights", "quest_notes")
 
+# "Open until answered" needs a floor and a cap, or it stops being a question and becomes a
+# backlog. A note nobody answered a year ago is not something the person is waiting on today, and
+# carrying it into every brief forever trains the reader to skim past all of them -- which is the
+# same failure the first-look bound exists to prevent at the other end.
+OPEN_ITEM_MAX_AGE_DAYS = 90
+# How many still-open items ONE source may carry. Newest first, so a burst of notes surfaces the
+# recent ones and lets the older tail go.
+MAX_OPEN_PER_SOURCE = 6
+
 # Hard cap on updates carried in one bundle, newest first. The brief already holds the goals, the
 # plan of record and the instruction; a comment spree must not push the actual work out of the
 # model's attention.
@@ -167,19 +176,26 @@ class ContextUpdate:
     # counted in the receipt here, but it renders through the composer's existing slot instead of
     # in the general block. Everything with no slot goes in the general block.
     slot: str = ""
+    # The first words of what the person wrote, for the manifest line. A receipt row that says only
+    # "note · Dissertation" does not tell the person WHICH note reached the run; the row has to
+    # carry enough of their own words to be recognised without opening the task.
+    excerpt: str = ""
+    # One condensed line for an artifact that holds one line of context (the next-steps note).
+    summary: str = ""
     raw: Dict[str, Any] = field(default_factory=dict)
 
     def manifest_line(self) -> str:
         """The one-line form used both in the offered block and in the receipt.
 
         Fixed field order, separated by a middle dot, so a person can scan a column of them and so
-        ``parse_manifest`` can read them back: ref, date, kind, who/where, and whether it is
-        waiting on an answer.
+        ``parse_manifest`` can read them back: ref, date, kind, who/where, their first words, and
+        whether it is waiting on an answer.
         """
         when = self.occurred_at.strftime("%Y-%m-%d") if self.occurred_at else "undated"
         where = self.location or self.author or self.source
+        said = f' · "{_clip(self.excerpt, 70)}"' if self.excerpt else ""
         flag = " · needs an answer" if self.needs_response else ""
-        return f"[{self.ref}] {when} · {self.kind or self.source} · {_clip(where, 60)}{flag}"
+        return f"[{self.ref}] {when} · {self.kind or self.source} · {_clip(where, 60)}{said}{flag}"
 
     def as_text(self) -> str:
         """The full item for the prompt: the manifest line, then what was actually said."""
@@ -205,6 +221,7 @@ class SourceReport:
     spec: Dict[str, Any] = field(default_factory=dict)
     since: Optional[datetime] = None
     found: int = 0
+    set_aside: int = 0          # collected, then judged not to bear on this card
     error: str = ""
 
     @property
@@ -227,13 +244,16 @@ class ContextUpdates:
         return bool(self.updates)
 
     def has_any(self) -> bool:
+        """Whether anything arrived. Named to match ``ReflectionContext``/``InsightsContext``, so a
+        caller holding any of the three asks the same question the same way."""
         return bool(self.updates)
+
+    def needing_response(self) -> List[ContextUpdate]:
+        """Just the items someone is actually waiting on an answer to."""
+        return [u for u in self.updates if u.needs_response]
 
     def by_source(self, source: str) -> List[ContextUpdate]:
         return [u for u in self.updates if u.source == source]
-
-    def needing_response(self) -> List[ContextUpdate]:
-        return [u for u in self.updates if u.needs_response]
 
     def refs(self) -> List[str]:
         """Every ref offered this run, in order, slotted ones included."""
@@ -252,6 +272,13 @@ class ContextUpdates:
         if not rows:
             return ""
         return "\n\n".join(f"[{u.ref}] {u.body}" if u.ref else u.body for u in rows)
+
+    def slot_summary(self, slot: str) -> str:
+        """The one-line summary of a slotted channel, for an artifact that holds one line."""
+        for u in self.updates:
+            if u.slot == slot and u.summary:
+                return u.summary
+        return ""
 
     def as_prompt_block(self, *, ask_for_receipt: bool = True,
                         exclude_slots: Sequence[str] = ()) -> str:
@@ -305,6 +332,8 @@ class ContextUpdates:
         for r in self.reports:
             if r.error:
                 bits.append(f"{r.source} (could not read: {r.error})")
+            elif r.found and r.set_aside:
+                bits.append(f"{r.source} ({r.found}, {r.set_aside} not about this work)")
             elif r.found:
                 bits.append(f"{r.source} ({r.found})")
             else:
@@ -315,10 +344,6 @@ class ContextUpdates:
 
     def manifest(self) -> List[str]:
         return [u.manifest_line() for u in self.updates]
-
-    def receipt(self, run_output: str) -> str:
-        """The fixed-format block appended to a run's result. See ``render_receipt``."""
-        return render_receipt(self.manifest(), parse_usage_notes(run_output))
 
     # --- bookkeeping --------------------------------------------------------------------------
 
@@ -383,10 +408,6 @@ def usage_receipt_gate(refs: Sequence[str] = ()) -> str:
         which = "one line per ref you were shown above, in order, none left out"
     return (f"BEFORE YOU FINISH, account for the context updates you were shown. End your result "
             f"with:\n\n{USAGE_HEADING}\n{example}\n\nThat is {which}. {_RECEIPT_RULES}")
-
-
-# The ref-less form, for a caller composing the gate without a bundle in hand.
-USAGE_RECEIPT_GATE = usage_receipt_gate()
 
 
 # ---------------------------------------------------------------------------------------------
@@ -496,21 +517,26 @@ def render_receipt(manifest_lines: Sequence[str], usage: Dict[str, str]) -> str:
     return "\n".join(out)
 
 
-def append_receipt(run_output: str, manifest_lines: Sequence[str]) -> str:
-    """``run_output`` with its raw usage lines replaced by the rendered receipt.
+def append_receipt(reported: str, manifest_lines: Sequence[str], *,
+                   run_output: Optional[str] = None) -> str:
+    """``reported`` with its raw usage lines replaced by the rendered receipt.
 
     The one call a consumer needs at the end of a run: it reads the run's own account, renders the
-    standard block, and returns the text to report. With no manifest it returns the output
+    standard block, and returns the text to report. With no manifest it returns the text
     unchanged, so wiring it in cannot alter a run that carried no updates.
+
+    ``run_output`` names where the run's own account is when that is not the text being reported:
+    a deep run's summary is rewritten into a report before it is sent, and that rewrite is free to
+    drop the usage lines, so they are read from the raw summary.
     """
     lines = list(manifest_lines or [])
     if not lines:
-        return run_output
-    usage = parse_usage_notes(run_output)
+        return reported
+    usage = parse_usage_notes(reported if run_output is None else run_output)
     receipt = render_receipt(lines, usage)
     if not receipt:
-        return run_output
-    return strip_usage_block(run_output).rstrip() + "\n\n" + receipt
+        return reported
+    return strip_usage_block(reported).rstrip() + "\n\n" + receipt
 
 
 # ---------------------------------------------------------------------------------------------
@@ -594,6 +620,10 @@ class CollectRequest:
     card: Dict[str, Any] = field(default_factory=dict)
     card_id: str = ""
     card_kind: str = "quest"
+    # The caller's own short label for this card. Passed through because the CALLER usually has a
+    # better one than the card row does: an autopilot pass already resolved a display label, while
+    # the quest state endpoint returns an outcome sentence and no name at all.
+    card_label: str = ""
     spec: Dict[str, Any] = field(default_factory=dict)
     since: Optional[datetime] = None
     now: datetime = field(default_factory=_utcnow)
@@ -639,22 +669,39 @@ class _BaseSource:
     """Shared plumbing: a name, a one-line description for ``describe_sources``."""
     name = ""
     describes = ""
+    # Whether this source's items should be put to a relevance judgment before they reach a run.
+    #
+    # The split is CARD-SCOPED vs USER-SCOPED, and it is the whole rule. A note on this quest, or a
+    # comment on a document this card owns, is addressed to this work by construction: it is
+    # relevant because of WHERE it was written, and no judgment is needed or wanted. A capture the
+    # person made on their phone is user-scoped -- it is about whatever was on their mind, which is
+    # usually some other part of their life -- so it arrives at every card equally and only some of
+    # it bears on any one of them.
+    judge_relevance = False
 
     def collect(self, request: CollectRequest) -> Sequence[ContextUpdate]:  # pragma: no cover
         raise NotImplementedError
 
 
 class QuestNotesSource(_BaseSource):
-    """Notes the PERSON added to this quest since an assistant last looked.
+    """Notes the PERSON added to this quest that no assistant has answered yet.
 
     Only the person's own notes, and that is the point: a quest an assistant writes a summary note
     to every day would otherwise report its own output back to itself as news. Attribution comes
     from the backend's ``author_kind``; a note with none is left out of the updates rather than
     guessed at, since asserting an unattributed note is the person's instruction is the one error
     with real consequences here.
+
+    OPEN UNTIL ANSWERED, same rule as ``DriveCommentsSource``. A person's note is answered once an
+    assistant note follows it on the quest: every run that writes one had the notes in front of it
+    (the executor's context view and the folder sync both carry them). A note with an assistant
+    note after it is history, not news, and a note with none is still waiting however old it is.
+    The watermark only labels which open notes are new. Two live failures this replaces: a first
+    look offered ten notes answered days earlier, every one marked "needs an answer"; and a
+    time-filtered note was lost for good the moment one pass saw it and did nothing.
     """
     name = "quest_notes"
-    describes = "notes the person added to this quest (their reply channel)"
+    describes = "notes the person added to this quest that have no assistant reply yet"
 
     def collect(self, request: CollectRequest) -> Sequence[ContextUpdate]:
         client = request.client
@@ -663,34 +710,61 @@ class QuestNotesSource(_BaseSource):
         if not callable(lister) or not quest_id:
             return []
         out: List[ContextUpdate] = []
-        for note in lister(quest_id) or []:
-            if str((note or {}).get("author_kind") or "").lower() != "user":
-                continue
+        where = request.card_label or _card_label(request.card) or "this quest"
+        for note in self.unanswered(lister(quest_id) or [], now=request.now):
             when = _as_utc(note.get("created_at"))
-            if request.since and when and when <= request.since:
-                continue
+            is_new = not (request.since and when and when <= request.since)
             text = str(note.get("text") or "").strip()
-            if not text:
-                continue
             author = str(note.get("author_name") or "").strip()
+            title = f"{author or 'The person'} wrote on the quest"
+            if not is_new:
+                title += " (still open from before)"
             out.append(ContextUpdate(
                 source=self.name,
                 kind="note",
                 item_id=str(note.get("id") or note.get("note_id") or ""),
-                title=f"{author or 'The person'} wrote on the quest",
+                title=title,
                 body=text,
+                excerpt=text,
                 author=author,
                 occurred_at=when,
-                # A short LABEL, never the quest's outcome. The outcome is a sentence about the
-                # future ("I've completed my dissertation and have a PhD"), and using it here put
-                # that sentence on every note line in the receipt, where the column is meant to
-                # say WHERE the note is so a person can scan it.
-                location=_card_label(request.card) or "this quest",
+                location=where,
                 how_to_respond="add a note on this quest",
                 needs_response=True,
                 raw=dict(note or {}),
             ))
         return out
+
+    @staticmethod
+    def unanswered(notes: Sequence[Dict[str, Any]],
+                   now: Optional[datetime] = None) -> List[Dict[str, Any]]:
+        """The person's notes with no assistant note after them, oldest first, BOUNDED.
+
+        Ordered by ``created_at`` rather than trusting list order, and a note without a readable
+        timestamp is placed by its position in the list, which is the backend's own order.
+        """
+        rows = []
+        for i, note in enumerate(notes or []):
+            if not isinstance(note, dict) or not str(note.get("text") or "").strip():
+                continue
+            rows.append((_as_utc(note.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc),
+                         i, note))
+        rows.sort(key=lambda r: (r[0], r[1]))
+        open_notes: List[Dict[str, Any]] = []
+        for _, _, note in rows:
+            kind = str(note.get("author_kind") or "").lower()
+            if kind == "user":
+                open_notes.append(note)
+            elif kind == "ai":
+                open_notes = []
+        if not open_notes:
+            return []
+        # Bounded at both ends (see OPEN_ITEM_MAX_AGE_DAYS / MAX_OPEN_PER_SOURCE): drop anything
+        # too old to still be a live question, then keep the newest few. Without this, one
+        # unanswered note from last year rides into every brief this quest ever produces.
+        floor = (now or _utcnow()) - timedelta(days=OPEN_ITEM_MAX_AGE_DAYS)
+        fresh = [n for n in open_notes if (_as_utc(n.get("created_at")) or floor) >= floor]
+        return fresh[-MAX_OPEN_PER_SOURCE:]
 
 
 class ReflectionsSource(_BaseSource):
@@ -730,6 +804,7 @@ class ReflectionsSource(_BaseSource):
             location="Quest reflections",
             slot=self.slot,
             needs_response=False,
+            summary=ctx.one_line(),
             raw={"period": ctx.period, "daily_date": ctx.daily_date},
         )]
 
@@ -749,6 +824,11 @@ class InsightsSource(_BaseSource):
     """
     name = "insights"
     describes = "captures the person made and has not acted on (optionally by category)"
+    # The one source that reaches every card with material about all the others. Reflections are
+    # exempt on purpose: there is exactly one, it is the person's steer for the day rather than an
+    # item to action, and asking a model whether someone's own reflection is "relevant" to their
+    # own work is a judgment with no upside.
+    judge_relevance = True
 
     slot = "insights"
 
@@ -783,6 +863,7 @@ class InsightsSource(_BaseSource):
                 slot=self.slot,
                 how_to_respond="act on one and say so in your result, or pass over it",
                 needs_response=False,
+                summary=narrowed.one_line() if hasattr(narrowed, "one_line") else "",
                 raw={"count": len(getattr(narrowed, "insights", []) or [])},
             ))
 
@@ -807,6 +888,7 @@ class InsightsSource(_BaseSource):
                 item_id=str(getattr(row, "entry_id", "") or ""),
                 title=f"They tagged this {', '.join(cats)} and have not acted on it",
                 body=text,
+                excerpt=text,
                 occurred_at=_as_utc(getattr(row, "created_at", None)),
                 location="Quest insights",
                 how_to_respond="act on it and say so, or say why it does not apply here",
@@ -814,6 +896,145 @@ class InsightsSource(_BaseSource):
                 raw={"categories": cats, "promoted_by": wanted},
             ))
         return out
+
+
+
+# Entry keys a habit/timer collection keeps for its own bookkeeping. Rendered, they are noise:
+# a run does not need to know a day entry's period bounds, only what the person did that day.
+_COLLECTION_INTERNAL_FIELDS = frozenset({
+    "period", "period_start", "period_end", "last_activity_date", "entry_date", "completed",
+    "sessions", "habit_timer", "completionType",
+})
+
+
+def _duration_label(seconds: Any) -> str:
+    """``10573`` -> ``"2h 56m"``. A habit timer's raw seconds mean nothing at a glance."""
+    try:
+        total = int(float(seconds))
+    except (TypeError, ValueError):
+        return ""
+    if total <= 0:
+        return ""
+    hours, rem = divmod(total, 3600)
+    minutes = rem // 60
+    if hours and minutes:
+        return f"{hours}h {minutes}m"
+    if hours:
+        return f"{hours}h"
+    return f"{minutes}m"
+
+
+class CollectionEntriesSource(_BaseSource):
+    """New entries in one of the person's own collections -- a habit, a timer, a log.
+
+    Spec: ``{"source": "collection", "name": "Focus on PhD Dissertation"}`` (resolved by name), or
+    ``{"collection_id": "coll_..."}`` when the id is known.
+
+    WHY A CARD WANTS THIS. A habit tracked against a piece of work IS a record of that work: the
+    dissertation quest's own timer says whether the person sat down to it yesterday, for how long,
+    and in how many sittings. A run composing today's brief without it is guessing at exactly the
+    thing the person already measured, and will cheerfully propose a plan for a day they already
+    spent three hours on.
+
+    NOT put to a relevance judgment, and that is deliberate: unlike a capture, which arrives from a
+    space covering the person's whole life, a collection reaches a card only because the card NAMED
+    it. It is card-scoped by construction, so judging it could only ever lose one.
+    """
+    name = "collection"
+    describes = "new entries in a habit, timer or log collection this work tracks"
+    judge_relevance = False
+
+    def collect(self, request: CollectRequest) -> Sequence[ContextUpdate]:
+        client = request.client
+        lister = getattr(client, "list_collection_entries", None)
+        if not callable(lister):
+            return []
+        collection_id, label = self._resolve(request)
+        if not collection_id:
+            return []
+        entries = lister(collection_id) or []
+        rows = entries.get("items") if isinstance(entries, dict) else entries
+        if not isinstance(rows, list):
+            return []
+        out: List[ContextUpdate] = []
+        for entry in rows:
+            if not isinstance(entry, dict):
+                continue
+            values = entry.get("fieldValues") or entry.get("field_values") or {}
+            when = (_as_utc(values.get("entry_date")) or _as_utc(values.get("last_activity_date"))
+                    or _as_utc(entry.get("createdAt")) or _as_utc(entry.get("created_at")))
+            if request.since and when and when <= request.since:
+                continue
+            body = self._render(values)
+            if not body:
+                continue
+            out.append(ContextUpdate(
+                source=self.name,
+                kind="habit" if str(entry.get("type") or "") == "habit" else "entry",
+                item_id=str(entry.get("id") or ""),
+                title=f"{label}, as they logged it",
+                body=body,
+                occurred_at=when,
+                location=label,
+                how_to_respond="",
+                needs_response=False,
+                raw={"collection_id": collection_id},
+            ))
+        out.sort(key=lambda u: u.occurred_at or datetime.min.replace(tzinfo=timezone.utc),
+                 reverse=True)
+        return out[:int(request.opt("max_entries") or 7)]
+
+    @staticmethod
+    def _render(values: Dict[str, Any]) -> str:
+        """One readable line for one entry: the date, what was done, how long, plus any own fields."""
+        parts: List[str] = []
+        date = str(values.get("entry_date") or "").strip()
+        if date:
+            parts.append(date)
+        completion = str(values.get("completionType") or "").strip()
+        if completion:
+            parts.append(completion)
+        timer = values.get("habit_timer")
+        seconds = timer.get("value") if isinstance(timer, dict) else timer
+        spent = _duration_label(seconds)
+        if spent:
+            sessions = values.get("sessions")
+            count = len(sessions) if isinstance(sessions, list) else 0
+            parts.append(f"{spent} over {count} session(s)" if count else spent)
+        for key, value in values.items():
+            if key in _COLLECTION_INTERNAL_FIELDS:
+                continue
+            # Emptiness has to be checked on the RENDERED value, not the raw one: a field the
+            # person left blank arrives as "", "  ", [] or a dict of empties depending on its type,
+            # and an un-normalized check let "value_achieved: " through on live data.
+            rendered = _clip(value, 120)
+            if not rendered or rendered in ("{}", "[]", "None"):
+                continue
+            parts.append(f"{key}: {rendered}")
+        return ", ".join(parts)
+
+    def _resolve(self, request: CollectRequest) -> tuple:
+        """(collection_id, label) from the spec, resolving a name against the person's own list."""
+        wanted_id = str(request.opt("collection_id") or "").strip()
+        wanted_name = str(request.opt("name") or request.opt("collection") or "").strip()
+        if wanted_id and not wanted_name:
+            return wanted_id, str(request.opt("label") or wanted_id)
+        lister = getattr(request.client, "list_collections", None)
+        if not callable(lister):
+            return wanted_id, str(request.opt("label") or wanted_name or wanted_id)
+        cached = request.cache.get("collections")
+        if cached is None:
+            cached = lister() or []
+            request.cache["collections"] = cached
+        for coll in cached:
+            if not isinstance(coll, dict):
+                continue
+            cid, cname = str(coll.get("id") or ""), str(coll.get("name") or "")
+            if (wanted_id and cid == wanted_id) or (
+                    wanted_name and cname.strip().lower() == wanted_name.lower()):
+                return cid, cname or wanted_name
+        log.warning("context updates: no collection named %r", wanted_name or wanted_id)
+        return "", wanted_name or wanted_id
 
 
 class DriveCommentsSource(_BaseSource):
@@ -882,12 +1103,19 @@ class DriveCommentsSource(_BaseSource):
             body = c.content
             if c.quoted_text:
                 body = f'on "{c.quoted_text}": {c.content}'
+            # Replies already on the thread, so a run does not answer a question a colleague
+            # answered yesterday. Only threads with no reply from this credential reach here, so
+            # every reply shown is someone else's.
+            for r in c.replies:
+                if r.content:
+                    body += f' | reply from {r.author or "someone"}: {r.content}'
             out.append(ContextUpdate(
                 source=self.name,
                 kind="comment",
                 item_id=f"{c.file_id}:{c.comment_id}",
                 title=title,
                 body=body,
+                excerpt=c.content,
                 author=c.author,
                 occurred_at=when,
                 location=c.file_name or c.file_id,
@@ -936,6 +1164,131 @@ class DriveChangesSource(_BaseSource):
                 raw={"mime_type": f.mime_type},
             ))
         return out
+
+
+
+# ---------------------------------------------------------------------------------------------
+# Relevance: the engine's job, not the run's
+# ---------------------------------------------------------------------------------------------
+
+_RELEVANCE_PROMPT = """\
+Someone is about to work on ONE piece of work. Below are things they captured recently. Captures
+come from a personal quick-capture space and are about ALL parts of their life, so most of them
+belong to some other piece of work.
+
+THE WORK:
+{work}
+
+THE CAPTURES (each with the category tags the person chose for it):
+{items}
+
+Which of these could plausibly bear on THIS work? Answer with JSON and nothing else:
+{{"relevant": [<numbers>]}}
+
+How to decide:
+  * Judge the SUBJECT MATTER of the work, not just its title. A one-line outcome names a
+    destination, not a topic: read the whole description above to learn what this work is actually
+    about, then ask whether the capture touches that.
+  * A capture whose TAG names this work, or names the field this work is in, is strong evidence
+    FOR it. The tags are the person's own labels for their own thinking, so a capture they filed
+    under this work's subject almost always belongs here.
+  * Material, contacts, observations and raw data in the work's subject area COUNT, even when the
+    capture does not say what to do with them. Gathering is part of the work.
+  * A capture about a different organization, a different job, or an unrelated part of their life
+    does not belong here, even when it shares a word with the work.
+
+WHEN IN DOUBT, INCLUDE IT. The costs are not symmetric: a capture shown that did not matter costs
+one line in a brief, while a capture withheld that did matter is the person's own thinking silently
+thrown away, and they will never know it happened. Exclude only what you are confident is about
+something else.\
+"""
+
+
+
+def _describe_work(card: Dict[str, Any], label: str) -> str:
+    """What this card is ABOUT, for a relevance judgment -- not just what it is called.
+
+    An outcome is a destination ("I've completed my dissertation and have a PhD") and says nothing
+    about the subject. Judged against that alone, a capture about the actual research topic reads
+    as unrelated: verified live on 2026-09-10, when a capture the person had tagged for this very
+    work was dropped from it. So everything the card knows about its own subject goes in.
+    """
+    parts = []
+    if label:
+        parts.append(f"Name: {label}")
+    for key, heading in (("outcome", "Outcome"), ("description", "Description"),
+                         ("current_state", "Current state"), ("instructions", "Standing brief")):
+        value = _clip((card or {}).get(key), 600)
+        if value:
+            parts.append(f"{heading}: {value}")
+    return "\n".join(parts) or label or "unnamed work"
+
+
+def llm_relevance_judge(provider_fn: Callable[[], Any], tier: str = "balanced"
+                        ) -> Callable[[str, str, Sequence[ContextUpdate]], Optional[set]]:
+    """A judge that asks a model which user-scoped captures bear on THIS card.
+
+    WHY THIS IS THE ENGINE'S JOB. Without it, every capture reaches every card and the RUN does the
+    filtering, out loud, in the output a person reads: "Passed over: the Cornerstone capture
+    (collaboration tracking) isn't this quest's domain." That line is the context engine's work
+    showing up as the assistant's chatter. The person asked for a context engine, and an engine
+    that hands over everything and lets the reader sort it out has not done the job.
+
+    Deliberately a MODEL judgment and not a tag match against the card's name, which is what hard
+    rule #3 in this repo's CLAUDE.md forbids and what ``runner/insights.py`` refuses to do: a fixed
+    string rule silently drops every capture whose wording it did not anticipate ("dissertation" vs
+    "thesis" vs no tag). Judging the subject is exactly the sanctioned alternative.
+
+    BIASED TOWARD INCLUSION, and returns None on ANY failure, which the caller reads as "keep
+    everything". A missing provider, an unroutable model, a timeout, or unparsable JSON must never
+    be able to consume a person's own thinking on the way past: the worst case has to be a slightly
+    noisier brief, never a silently emptier one.
+
+    ``provider_fn`` is a callable rather than a provider because the engine is built before the CLI
+    wraps ``cfg.model_provider`` with MultiProvider; resolving it at call time is what makes the
+    judge use the routed provider rather than a raw one that 404s on half the model ids.
+    """
+    def _judge(work: str, _card_context: str,
+               updates: Sequence[ContextUpdate]) -> Optional[set]:
+        rows = list(updates or [])
+        if not rows:
+            return set()
+        try:
+            provider = provider_fn()
+            if provider is None:
+                return None
+            from ..core.card_filter import _extract_json
+            from ..core.model_registry import ModelRegistry
+            try:
+                model = ModelRegistry(provider).resolve_tier(tier or "balanced")
+            except Exception:  # noqa: BLE001 -- an unresolvable registry must not stop the judge
+                model = tier or "balanced"
+            listed = "\n".join(
+                f"{i}. [{', '.join(u.raw.get('categories') or []) or 'untagged'}] "
+                f"{_clip(u.body or u.title, 300)}"
+                for i, u in enumerate(rows, 1))
+            prompt = _RELEVANCE_PROMPT.format(work=_clip(work, 400) or "unnamed work",
+                                              items=listed)
+            raw = provider.answer([{"role": "user", "content": prompt}], model=model)
+            text = raw if isinstance(raw, str) else str(getattr(raw, "text", raw) or "")
+            verdict = json.loads(_extract_json(text) or "{}")
+            wanted = verdict.get("relevant")
+            if not isinstance(wanted, list):
+                return None
+            keep = set()
+            for n in wanted:
+                try:
+                    idx = int(n)
+                except (TypeError, ValueError):
+                    continue
+                if 1 <= idx <= len(rows):
+                    keep.add(rows[idx - 1].item_id or f"#{idx}")
+            return keep
+        except Exception as e:  # noqa: BLE001 -- see the docstring: failure means keep everything
+            log.info("context updates: relevance judge unavailable (%s); keeping everything", e)
+            return None
+
+    return _judge
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1037,12 +1390,14 @@ class UpdateEngine:
                  sources: Optional[Sequence[ContextSource]] = None,
                  always: Sequence[str] = DEFAULT_ALWAYS,
                  spec_resolver: Optional[Callable[[Dict[str, Any]], List[Dict[str, Any]]]] = None,
+                 relevance_judge: Optional[Callable[..., Optional[set]]] = None,
                  first_look_days: int = FIRST_LOOK_DAYS,
                  max_updates: int = MAX_UPDATES,
                  now_fn: Optional[Callable[[], datetime]] = None) -> None:
         self._client = client
         self._watermarks = watermarks or Watermarks(None)
         self._spec_resolver = spec_resolver or default_spec_resolver
+        self._relevance_judge = relevance_judge
         self._always = tuple(always or ())
         self._first_look = timedelta(days=max(1, int(first_look_days)))
         self._max_updates = max(1, int(max_updates))
@@ -1062,6 +1417,7 @@ class UpdateEngine:
             ReflectionsSource(),
             InsightsSource(),
             QuestNotesSource(),
+            CollectionEntriesSource(),
             DriveCommentsSource(drive_comments),
             DriveChangesSource(drive_comments),
         ]
@@ -1092,9 +1448,49 @@ class UpdateEngine:
         specs.extend(declared)
         return specs
 
+
+    def _apply_relevance(self, bundle: ContextUpdates, card: Dict[str, Any]) -> None:
+        """Drop the user-scoped captures that do not bear on this card, before a run ever sees them.
+
+        Only sources that asked to be judged (``judge_relevance``) take part: a note on this quest
+        and a comment on this card's document are relevant because of where they were written, and
+        putting those to a judgment could only ever lose one.
+
+        Every failure mode keeps everything. A judge returning None (no provider, a timeout,
+        unparsable JSON) leaves the bundle exactly as collected, so switching this on can make a
+        brief noisier but never emptier.
+        """
+        if self._relevance_judge is None:
+            return
+        judged = [u for u in bundle.updates
+                  if getattr(self._sources.get(u.source), "judge_relevance", False)]
+        if not judged:
+            return
+        work = _describe_work(card, bundle.card_label)
+        try:
+            keep = self._relevance_judge(work, "", judged)
+        except Exception as e:  # noqa: BLE001 -- a broken judge never costs the person context
+            log.info("context updates: relevance judge failed (%s); keeping everything", e)
+            return
+        if keep is None:
+            return
+        dropped_by_source: Dict[str, int] = {}
+        kept: List[ContextUpdate] = []
+        for u in bundle.updates:
+            if u in judged and (u.item_id or "") not in keep and f"#{judged.index(u) + 1}" not in keep:
+                dropped_by_source[u.source] = dropped_by_source.get(u.source, 0) + 1
+                continue
+            kept.append(u)
+        bundle.updates = kept
+        for report in bundle.reports:
+            if report.source in dropped_by_source:
+                report.set_aside = dropped_by_source[report.source]
+                report.found = max(0, report.found - report.set_aside)
+
     def collect(self, card: Dict[str, Any], *, card_id: str = "", card_kind: str = "quest",
                 since: Optional[datetime] = None,
-                card_label: str = "") -> ContextUpdates:
+                card_label: str = "",
+                options: Optional[Dict[str, Dict[str, Any]]] = None) -> ContextUpdates:
         """Run every source this card watches and return one bundle.
 
         ``since`` overrides the stored watermark for EVERY source, which is what a caller with its
@@ -1102,18 +1498,26 @@ class UpdateEngine:
         None, each source uses its own stored watermark, falling back to the bounded first-look
         window for a card nothing has ever read.
 
+        ``options`` is ``{source_name: {spec key: value}}`` merged over each matching spec for this
+        call only: what the CALLER knows about this read that the card does not carry, such as
+        which reflection periods fit the scope it is composing for.
+
         One source failing never costs the others: it is reported and the pass continues.
         """
         now = self._now_fn()
         cid = str(card_id or card.get("quest_id") or card.get("id") or "")
         bundle = ContextUpdates(
             card_id=cid,
-            card_label=card_label or str(card.get("name") or card.get("outcome") or ""),
+            # _card_label, never the outcome: an outcome is a sentence about the future, and it
+            # ended up as the label on every note row of a live receipt.
+            card_label=card_label or _card_label(card),
             collected_at=now,
         )
         bundle._watermarks = self._watermarks
         for spec in self.specs_for(card):
             name = str(spec.get("source") or "")
+            if options and isinstance(options.get(name), dict):
+                spec = {**spec, **options[name]}
             source = self._sources.get(name)
             if source is None:
                 bundle.reports.append(SourceReport(
@@ -1125,7 +1529,8 @@ class UpdateEngine:
             try:
                 found = list(source.collect(CollectRequest(
                     card=card, card_id=cid, card_kind=card_kind, spec=spec,
-                    since=window, now=now, client=self._client, cache=self._cache)) or [])
+                    card_label=bundle.card_label, since=window, now=now,
+                    client=self._client, cache=self._cache)) or [])
             except Exception as e:  # noqa: BLE001 -- one channel never breaks the rest
                 report.error = f"{type(e).__name__}: {e}"
                 log.warning("context updates: source %s failed for card %s: %s", name, cid, e)
@@ -1134,6 +1539,8 @@ class UpdateEngine:
             report.found = len(found)
             bundle.reports.append(report)
             bundle.updates.extend(found)
+
+        self._apply_relevance(bundle, card)
 
         # Newest first, undated last: an undated row is almost always a standing item (a
         # reflection, an open comment with no timestamp), and it should not displace today's news.
@@ -1198,6 +1605,14 @@ def build_update_engine(cfg: Any = None, client: Any = None, *,
         watermarks=Watermarks(path),
         drive_comments=getattr(cfg, "drive_comments", None),
         spec_resolver=consumer_spec_resolver(getattr(cfg, "context_sources_map", None)),
+        # A callable, not a provider: this engine is built before the CLI wraps
+        # cfg.model_provider with MultiProvider, so resolving it at CALL time is what makes the
+        # judge use the routed provider instead of a raw one that 404s on half the model ids.
+        relevance_judge=(llm_relevance_judge(
+            lambda: getattr(cfg, "model_provider", None),
+            tier=str(getattr(cfg, "context_updates_relevance_tier", "balanced") or "balanced"))
+            if (cfg is not None and getattr(cfg, "context_updates_judge_relevance", True))
+            else None),
         first_look_days=int(getattr(cfg, "context_updates_first_look_days", FIRST_LOOK_DAYS) or
                             FIRST_LOOK_DAYS),
     )

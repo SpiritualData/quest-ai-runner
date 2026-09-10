@@ -125,21 +125,36 @@ def test_an_unknown_source_is_reported_as_a_gap_and_never_raises():
 
 # --- the sources -----------------------------------------------------------------------------
 
-def test_quest_notes_carries_the_persons_own_notes_and_leaves_the_assistants_alone():
+def test_a_note_the_assistant_already_answered_is_history_not_news():
+    """A person's note is answered once an assistant note follows it on the quest.
+
+    Every run that writes one had the notes in front of it. Live failure this replaces: a first
+    look offered ten notes answered days earlier, every one of them marked "needs an answer".
+    """
     client = NotesClient([
         {"id": "n1", "text": "Chapter two needs the method first", "author_kind": "user",
-         "author_name": "the owner", "created_at": _iso(hours_ago=2)},
+         "author_name": "the owner", "created_at": _iso(hours_ago=3)},
         {"id": "n2", "text": "Pass summary: did three things", "author_kind": "ai",
-         "created_at": _iso(hours_ago=1)},
-        {"id": "n3", "text": "unattributed", "created_at": _iso(hours_ago=1)},
+         "created_at": _iso(hours_ago=2)},
+        {"id": "n3", "text": "Actually do the survey lineage first", "author_kind": "user",
+         "author_name": "the owner", "created_at": _iso(hours_ago=1)},
+        {"id": "n4", "text": "unattributed", "created_at": _iso(hours_ago=1)},
     ])
     bundle = _engine(client).collect({"context_sources": ["quest_notes"]}, card_id="q1")
-    assert [u.item_id for u in bundle.updates] == ["n1"]
+
+    # n1 was answered by n2; n4 is unattributed and never asserted to be the person's instruction.
+    assert [u.item_id for u in bundle.updates] == ["n3"]
     assert bundle.updates[0].needs_response is True
     assert "add a note on this quest" in bundle.updates[0].how_to_respond
 
 
-def test_a_note_older_than_the_watermark_is_not_offered_again():
+def test_an_unanswered_note_keeps_being_offered_even_past_the_watermark():
+    """The watermark says what is NEW. It does not say what is answered.
+
+    Time-filtering an open question loses it for good the moment one pass sees it and does
+    nothing, which is the opposite of what a reply channel is for. The older one is still carried,
+    and only its LABEL says it is not new.
+    """
     client = NotesClient([
         {"id": "old", "text": "said days ago", "author_kind": "user", "created_at": _iso(days_ago=3)},
         {"id": "new", "text": "said this morning", "author_kind": "user",
@@ -147,18 +162,39 @@ def test_a_note_older_than_the_watermark_is_not_offered_again():
     ])
     marks = Watermarks(None)
     marks.set("q1", "quest_notes", NOW - timedelta(days=1))
-    engine = _engine(client, watermarks=marks)
-    bundle = engine.collect({"context_sources": ["quest_notes"]}, card_id="q1")
-    assert [u.item_id for u in bundle.updates] == ["new"]
+    bundle = _engine(client, watermarks=marks).collect(
+        {"context_sources": ["quest_notes"]}, card_id="q1")
+
+    assert sorted(u.item_id for u in bundle.updates) == ["new", "old"]
+    older = [u for u in bundle.updates if u.item_id == "old"][0]
+    assert "still open from before" in older.title
+    newer = [u for u in bundle.updates if u.item_id == "new"][0]
+    assert "still open from before" not in newer.title
 
 
-def test_a_card_nothing_has_ever_read_looks_back_a_bounded_window_not_forever():
+def test_an_open_note_too_old_to_be_a_live_question_is_dropped():
+    """Open until answered needs a floor, or it stops being a question and becomes a backlog."""
     client = NotesClient([
-        {"id": "ancient", "text": "last year", "author_kind": "user", "created_at": _iso(days_ago=400)},
-        {"id": "recent", "text": "this week", "author_kind": "user", "created_at": _iso(days_ago=2)},
+        {"id": "ancient", "text": "last year", "author_kind": "user",
+         "created_at": _iso(days_ago=400)},
+        {"id": "recent", "text": "this week", "author_kind": "user",
+         "created_at": _iso(days_ago=2)},
     ])
     bundle = _engine(client).collect({"context_sources": ["quest_notes"]}, card_id="q1")
     assert [u.item_id for u in bundle.updates] == ["recent"]
+
+
+def test_a_burst_of_open_notes_is_capped_at_the_newest_few():
+    from quest_ai_runner.runner.context_updates import MAX_OPEN_PER_SOURCE
+
+    client = NotesClient([
+        {"id": f"n{i}", "text": f"note {i}", "author_kind": "user",
+         "created_at": _iso(hours_ago=20 - i)} for i in range(12)
+    ])
+    bundle = _engine(client).collect({"context_sources": ["quest_notes"]}, card_id="q1")
+    assert len(bundle.updates) == MAX_OPEN_PER_SOURCE
+    assert "n11" in {u.item_id for u in bundle.updates}   # the newest survived
+    assert "n0" not in {u.item_id for u in bundle.updates}  # the oldest did not
 
 
 # --- one channel failing never costs the others ------------------------------------------------
@@ -524,3 +560,217 @@ def test_a_note_is_labelled_by_the_quests_name_not_its_outcome():
         {"quest_id": "q1", "name": "Dissertation",
          "outcome": "I've completed my dissertation and have a PhD"}, card_id="q1")
     assert "Dissertation" in named.updates[0].manifest_line()
+
+
+def test_the_callers_own_label_beats_whatever_the_card_row_carries():
+    """An autopilot pass has already resolved a display label; the quest state endpoint has not."""
+    from quest_ai_runner.runner.context_updates import UpdateEngine
+
+    class Client:
+        def list_quest_notes(self, quest_id):
+            return [{"id": "n1", "text": "do X", "author_kind": "user",
+                     "created_at": "2026-09-10T09:00:00Z"}]
+
+    bundle = UpdateEngine(Client(), always=("quest_notes",)).collect(
+        {"quest_id": "q1", "outcome": "I've completed my dissertation and have a PhD"},
+        card_id="q1", card_label="Dissertation")
+
+    assert "Dissertation" in bundle.updates[0].manifest_line()
+
+
+# --- relevance: the engine's job, not the run's ------------------------------------------------
+
+def _relevance_capture(item_id, body):
+    from datetime import datetime, timezone
+
+    from quest_ai_runner.runner.context_updates import ContextUpdate
+    return ContextUpdate(source="insights", kind="capture", item_id=item_id, body=body,
+                         occurred_at=datetime(2026, 9, 10, tzinfo=timezone.utc))
+
+
+class _Captures:
+    name = "insights"
+    describes = ""
+    judge_relevance = True
+    slot = ""
+
+    def __init__(self, rows):
+        self._rows = rows
+
+    def collect(self, request):
+        return list(self._rows)
+
+
+class _Notes:
+    name = "quest_notes"
+    describes = ""
+    judge_relevance = False
+    slot = ""
+
+    def collect(self, request):
+        from datetime import datetime, timezone
+
+        from quest_ai_runner.runner.context_updates import ContextUpdate
+        return [ContextUpdate(source="quest_notes", kind="note", item_id="n1",
+                              body="do the method chapter", needs_response=True,
+                              occurred_at=datetime(2026, 9, 10, tzinfo=timezone.utc))]
+
+
+def test_a_capture_about_other_work_never_reaches_the_run():
+    """Joshua, 2026-09-10, on a live brief: 'Passed over: the 9/10 Cornerstone capture
+    (collaboration tracking) isn't this quest's domain.' That line is the context engine's work
+    showing up as the assistant's chatter."""
+    from quest_ai_runner.runner.context_updates import UpdateEngine
+
+    rows = [_relevance_capture("cornerstone", "collaboration tracking at Cornerstone"),
+            _relevance_capture("method", "idea for the construct weighting")]
+    engine = UpdateEngine(None, sources=[_Captures(rows)], always=("insights",),
+                          relevance_judge=lambda work, ctx, ups: {"method"})
+
+    bundle = engine.collect({"quest_id": "q1", "name": "Dissertation"}, card_id="q1")
+
+    assert [u.item_id for u in bundle.updates] == ["method"]
+    assert "1 not about this work" in bundle.checked_line()
+
+
+def test_a_judge_that_fails_costs_nothing_and_keeps_everything():
+    """The worst case has to be a noisier brief, never a silently emptier one."""
+    from quest_ai_runner.runner.context_updates import UpdateEngine
+
+    rows = [_relevance_capture("a", "one"), _relevance_capture("b", "two")]
+    for judge in (lambda *a: None, lambda *a: (_ for _ in ()).throw(RuntimeError("boom"))):
+        engine = UpdateEngine(None, sources=[_Captures(rows)], always=("insights",),
+                              relevance_judge=judge)
+        bundle = engine.collect({"quest_id": "q1"}, card_id="q1")
+        assert {u.item_id for u in bundle.updates} == {"a", "b"}
+
+
+def test_a_card_scoped_channel_is_never_put_to_a_relevance_judgment():
+    """A note on this quest is relevant because of WHERE it was written. Judging it could only
+    ever lose one."""
+    from quest_ai_runner.runner.context_updates import UpdateEngine
+
+    seen = {}
+
+    def judge(work, ctx, ups):
+        seen["sources"] = {u.source for u in ups}
+        return set()                      # would drop everything it is given
+
+    engine = UpdateEngine(None, sources=[_Captures([_relevance_capture("a", "one")]), _Notes()],
+                          always=("insights", "quest_notes"), relevance_judge=judge)
+    bundle = engine.collect({"quest_id": "q1"}, card_id="q1")
+
+    assert seen["sources"] == {"insights"}                     # notes never offered to the judge
+    assert [u.source for u in bundle.updates] == ["quest_notes"]
+
+
+# --- a habit tracked against a card is a record of that card's work ----------------------------
+
+class _CollectionClient:
+    def __init__(self, entries):
+        self._entries = entries
+        self.collection_calls = 0
+
+    def list_collections(self):
+        self.collection_calls += 1
+        return [{"id": "coll_1", "name": "Focus on PhD Dissertation", "type": "habit"},
+                {"id": "coll_2", "name": "Track screen use", "type": "habit"}]
+
+    def list_collection_entries(self, collection_id, **kw):
+        return self._entries if collection_id == "coll_1" else []
+
+
+def _habit_entry(entry_id, date, completion, seconds, sessions, extra=None):
+    values = {"entry_date": date, "completionType": completion, "period": "day",
+              "period_start": date, "period_end": date, "completed": True,
+              "habit_timer": {"value": seconds, "unit": "seconds"},
+              "sessions": [{"start": f"{date}T1{i}:00:00Z"} for i in range(sessions)]}
+    values.update(extra or {})
+    return {"id": entry_id, "collectionId": "coll_1", "fieldValues": values}
+
+
+def test_a_card_can_watch_a_habit_by_its_name():
+    """The dissertation quest's own timer says whether the person sat down to it, and for how long.
+
+    A run composing a brief without it is guessing at exactly the thing they already measured.
+    """
+    from quest_ai_runner.runner.context_updates import UpdateEngine
+
+    client = _CollectionClient([_habit_entry("e1", "2026-09-09", "started", 10573, 10)])
+    bundle = UpdateEngine(client, always=()).collect(
+        {"quest_id": "q1",
+         "context_sources": [{"source": "collection", "name": "Focus on PhD Dissertation"}]},
+        card_id="q1")
+
+    assert len(bundle.updates) == 1
+    body = bundle.updates[0].body
+    assert "2026-09-09" in body and "started" in body
+    assert "2h 56m" in body                    # raw seconds mean nothing at a glance
+    assert "10 session(s)" in body
+    assert bundle.updates[0].needs_response is False
+
+
+def test_a_habits_bookkeeping_fields_and_blanks_stay_out_of_the_brief():
+    """Live render bug: a field the person left blank printed as "value_achieved: "."""
+    from quest_ai_runner.runner.context_updates import UpdateEngine
+
+    client = _CollectionClient([
+        _habit_entry("e1", "2026-09-09", "started", 600, 1,
+                     extra={"value_achieved": "   ", "notes": "read Ragin ch. 4"})])
+    body = UpdateEngine(client, always=()).collect(
+        {"quest_id": "q1", "context_sources": [{"source": "collection", "collection_id": "coll_1"}]},
+        card_id="q1").updates[0].body
+
+    assert "notes: read Ragin ch. 4" in body
+    assert "value_achieved" not in body
+    for internal in ("period_start", "period_end", "last_activity_date", "completed"):
+        assert internal not in body
+
+
+def test_only_habit_entries_since_the_last_look_are_offered():
+    from datetime import timedelta
+
+    from quest_ai_runner.runner.context_updates import UpdateEngine, Watermarks
+
+    client = _CollectionClient([
+        _habit_entry("old", "2026-09-01", "yes", 3600, 1),
+        _habit_entry("new", "2026-09-09", "started", 3600, 1),
+    ])
+    marks = Watermarks(None)
+    marks.set("q1", "collection", _as_utc_for_test("2026-09-05"))
+    bundle = UpdateEngine(client, watermarks=marks, always=(),
+                          now_fn=lambda: _as_utc_for_test("2026-09-10")).collect(
+        {"quest_id": "q1", "context_sources": [{"source": "collection", "collection_id": "coll_1"}]},
+        card_id="q1")
+
+    assert [u.item_id for u in bundle.updates] == ["new"]
+
+
+def test_a_habit_is_never_put_to_a_relevance_judgment():
+    """A collection reaches a card only because the card NAMED it: card-scoped by construction."""
+    from quest_ai_runner.runner.context_updates import UpdateEngine
+
+    client = _CollectionClient([_habit_entry("e1", "2026-09-09", "started", 600, 1)])
+    bundle = UpdateEngine(client, always=(),
+                          relevance_judge=lambda *a: set()).collect(
+        {"quest_id": "q1", "context_sources": [{"source": "collection", "collection_id": "coll_1"}]},
+        card_id="q1")
+
+    assert len(bundle.updates) == 1
+
+
+def test_a_collection_named_by_something_that_does_not_exist_is_a_reported_gap():
+    from quest_ai_runner.runner.context_updates import UpdateEngine
+
+    client = _CollectionClient([])
+    bundle = UpdateEngine(client, always=()).collect(
+        {"quest_id": "q1", "context_sources": [{"source": "collection", "name": "No Such Habit"}]},
+        card_id="q1")
+
+    assert bundle.updates == []
+    assert [r.source for r in bundle.reports] == ["collection"]
+
+
+def _as_utc_for_test(text):
+    from datetime import datetime, timezone
+    return datetime.fromisoformat(text).replace(tzinfo=timezone.utc)

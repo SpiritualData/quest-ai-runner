@@ -149,3 +149,38 @@ read-scoped token gets a clean error rather than a silent no-op.
 - [`tests/test_autopilot_context_updates.py`](../tests/test_autopilot_context_updates.py): the pass,
   the executor receipt, the poller/config wiring, and the byte-identical no-engine path.
 - [`tests/test_drive_comments.py`](../tests/test_drive_comments.py): the Drive channel, offline.
+
+
+## Relevance: the engine's job, not the run's
+
+Captures are user-scoped: they arrive from a space covering the person's whole life, so most of
+them belong to some other piece of work. Delivered unfiltered, the RUN ends up doing the filtering
+out loud, in the output the person reads:
+
+> Passed over: the 9/10 Cornerstone capture (collaboration tracking) isn't this quest's domain.
+
+That line is the context engine's work showing up as the assistant's chatter. So the engine judges
+first (`llm_relevance_judge`, on by default, `"balanced"` tier).
+
+**It is a model judgment, never a tag match against the card's name** -- that is hard rule #3, and
+the reason `runner/insights.py` refuses to do it in code. The judge is given the card's real
+subject matter (name, outcome, description, current state, standing brief) and each capture *with
+the person's own tags*, because a one-line outcome names a destination, not a topic. Verified
+live: against the outcome alone, a capture the person had tagged for this very work was dropped
+from it.
+
+**Card-scoped channels are never judged.** A note on this quest, a comment on a document this card
+owns, a collection the card named -- all relevant because of *where* they were written. Judging
+them could only ever lose one.
+
+**Every failure keeps everything.** No provider, a timeout, unparsable JSON: the bundle is
+delivered exactly as collected. The worst case has to be a noisier brief, never a silently emptier
+one.
+
+## Open until answered
+
+A person's note and a document comment stay open until an assistant *answers* them, not until a
+watermark passes them. The watermark only labels which are new. Two live failures drove this: a
+first look offered ten notes answered days earlier, all marked "needs an answer"; and time
+filtering lost an open question for good the moment one pass saw it and did nothing. Bounded at
+both ends by `OPEN_ITEM_MAX_AGE_DAYS` and `MAX_OPEN_PER_SOURCE`, so "open" cannot become a backlog.
