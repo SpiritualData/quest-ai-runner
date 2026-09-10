@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import dataclasses
 import fcntl
+import json
 import logging
 import os
 import threading
@@ -111,6 +112,9 @@ _FILE_SCALAR_FIELDS = {
     "autopilot_ensure_pass_task", "autopilot_pass_time", "autopilot_daily_budget",
     "autopilot_settings_refresh_seconds", "autopilot_backpressure", "autopilot_adopt_recurring",
     "context_updates", "context_updates_state_path", "context_updates_first_look_days",
+    "context_sources_map", "context_sources_file", "drive_comments_auth",
+    "quest_folder_map_file",
+    "state_path", "lane_label", "env_files", "env_aliases", "env",
     "extra",
 }
 # Special-cased NESTED tables: the TOML value is itself a table and becomes a specific dataclass
@@ -450,6 +454,44 @@ class RunnerConfig:
     # How far back a source looks for a quest nothing has ever read. On a first run everything
     # recent IS new, so this bounds what a newly opted-in quest is handed at once.
     context_updates_first_look_days: int = 14
+    # {quest_id: [spec, ...]} the DEPLOYMENT supplies, merged under whatever each card declares
+    # for itself (the card always wins on a source both name). It exists because a card cannot
+    # always carry its specs yet: a backend has to grow the field first, and until it does every
+    # deployment is blocked on a schema change in another service. Live case: quest-backend's
+    # autopilot settings reject an unknown key outright (422 extra_forbidden), so a quest could
+    # not name a folder to watch at all. Same escape hatch ``quest_folder_map`` already is.
+    context_sources_map: Optional[Dict[str, Any]] = None
+    # A JSON file holding that same map, for a deployment that grows it by hand over time (the
+    # shape ``quest_folder_map_file`` has). Merged under ``context_sources_map``.
+    context_sources_file: Optional[str] = None
+    # Declarative form of ``drive_comments``: {service_account_file=..., subject=..., scopes=[...]}
+    # A TOML file cannot hold a live client, and every deployment that wants one was otherwise
+    # forced to keep a Python consumer alive for this single object. Resolved into
+    # ``drive_comments`` by ``resolve_config_objects``.
+    drive_comments_auth: Optional[Dict[str, Any]] = None
+    # A JSON file holding {quest_id: folder}. ``quest_folder_map`` takes the dict itself and there
+    # was no pointer form, which is the one reason several lanes still read a JSON file in Python.
+    quest_folder_map_file: Optional[str] = None
+
+    # --- lane shape (so a lane is a config file, not a program) ---
+    # Where the exactly-once signature dedup store lives (``QAR_STATE_PATH``'s file form).
+    state_path: Optional[str] = None
+    # Short name for this lane in shared log lines ("personal", "cantr").
+    lane_label: str = ""
+    # ``KEY=VALUE`` files loaded into the environment before anything else is resolved, in order.
+    # Already-set process vars win, so a systemd unit's own Environment= still overrides. A lane
+    # whose credentials live in one file, with a fallback to a shared one, expresses that here
+    # instead of in code.
+    env_files: Optional[List[str]] = None
+    # {LIBRARY_VAR = "LANE_VAR"}: bridge a deployment's own env names onto this library's, for the
+    # very common case of an .env that predates these conventions. TRUTHY-checked in both
+    # directions, not presence-checked, because an .env with a blank placeholder line under the
+    # library's own name would otherwise count as "already set" and the real value never applies.
+    env_aliases: Optional[Dict[str, str]] = None
+    # {VAR = "value"} applied with setdefault semantics, after files and aliases. The general
+    # escape hatch: every ``QAR_*`` knob this library reads becomes file-expressible through it,
+    # including the nested OrchestratorConfig ones a TOML field cannot reach.
+    env: Optional[Dict[str, str]] = None
     # The Drive comments channel (``adapters.drive_comments.DriveComments``), supplied by the
     # consumer because only the consumer knows how its Google token is minted. Left None, the
     # ``drive_comments`` and ``drive_changes`` sources contribute nothing and every other source
@@ -564,6 +606,158 @@ class RunnerConfig:
             return cls(**kwargs)
         except TypeError as e:
             raise ConfigFileError(f"config file {p} could not build a RunnerConfig: {e}") from e
+
+
+def apply_config_environment(file_cfg: Optional[RunnerConfig]) -> None:
+    """Apply a config file's ``env_files`` / ``env_aliases`` / ``env`` to ``os.environ``.
+
+    Called BEFORE anything env-driven is resolved, which is the whole point: every ``QAR_*`` knob
+    this library reads then becomes reachable from the config file, including the nested
+    ``OrchestratorConfig`` ones (``QAR_MAX_PARALLEL``, ``QAR_DEEP_MAX_TURNS``, ``QAR_DEEP_MODELS``)
+    that no TOML field can set, and the multi-line ones best kept in their own file
+    (``QAR_CONTEXT_PREAMBLE_FILE``).
+
+    WHY THIS EXISTS. Three lanes on this pattern each kept a Python consumer alive for nothing but
+    this: read my ``.env``, rename three of its variables onto the library's names, set two
+    ``QAR_*`` defaults, then call ``load_config``. That is not business logic, it is config that
+    had no file to live in, and every lane wrote it again slightly differently (one of them
+    ``setdefault``, which silently kept a blank placeholder line and dropped the real value).
+
+    Order, and each step never overwrites a value already truthy in the environment, so a systemd
+    unit's own ``Environment=`` still wins over all of it:
+      1. ``env_files``, in order -- earlier files win, later ones are fallbacks.
+      2. ``env_aliases`` ({LIBRARY_VAR = "LANE_VAR"}), truthy-checked on both sides.
+      3. ``env`` ({VAR = "value"}), plain defaults.
+    """
+    if file_cfg is None:
+        return
+    for path in (file_cfg.env_files or []):
+        _load_env_file_truthy(str(path))
+
+    for target, source in (file_cfg.env_aliases or {}).items():
+        # Truthy, not presence: an .env carrying a blank placeholder under the library's own name
+        # would otherwise read as "already set" and the aliased value would never apply. That
+        # exact bug is why one lane's bridge helper had a four-line comment explaining itself.
+        if os.environ.get(str(target)):
+            continue
+        value = os.environ.get(str(source), "")
+        if value:
+            os.environ[str(target)] = value
+
+    for key, value in (file_cfg.env or {}).items():
+        if not os.environ.get(str(key)) and str(value):
+            os.environ[str(key)] = str(value)
+
+
+
+def _load_env_file_truthy(path: str) -> None:
+    """Load ``KEY=VALUE`` lines into ``os.environ``, treating a BLANK value as not set.
+
+    Deliberately truthy-checked rather than presence-checked, which is the one behavioural
+    difference from ``runner.lane.load_env_file``. A lane whose ``.env`` documents its optional
+    credentials as blank lines (``QUEST_API_KEY=``, meaning "fall back to the shared file") is a
+    real and reasonable shape, and a presence check reads those blanks as "already set", so the
+    fallback file never applies and the lane starts unconfigured with nothing in the log to say
+    why. That exact case is why one consumer carried a hand-written bridge helper with a four-line
+    comment explaining itself.
+
+    A missing file is a silent no-op: plenty of lanes read everything from the process environment.
+    """
+    p = Path(path)
+    if not p.exists():
+        return
+    try:
+        text = p.read_text()
+    except OSError as e:
+        _log.warning("config env_files: could not read %s: %s", path, e)
+        return
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, val = line.partition("=")
+        key = key.strip()
+        val = val.split("#", 1)[0].strip().strip('"').strip("'")
+        if key and val and not os.environ.get(key):
+            os.environ[key] = val
+
+
+def resolve_config_objects(cfg: RunnerConfig) -> RunnerConfig:
+    """Turn the file's declarative pointers into the live objects and maps they describe.
+
+    Each of these was, in every lane, a few lines of Python whose only job was to read a JSON file
+    or construct one client. Resolved here instead, so a lane can be a config file and nothing
+    else. Every step is best-effort and additive: a missing file or an unbuildable client logs and
+    leaves the field as it was, exactly as an unconfigured optional feature does elsewhere.
+    """
+    # {quest_id: folder} from a JSON file, merged UNDER an inline map (inline wins).
+    if cfg.quest_folder_map_file:
+        loaded = _load_json_mapping(cfg.quest_folder_map_file, "quest_folder_map_file")
+        if loaded:
+            merged = {str(k): str(v) for k, v in loaded.items()}
+            merged.update(cfg.quest_folder_map or {})
+            cfg.quest_folder_map = merged
+
+    # {quest_id: [spec, ...]} from a JSON file, same precedence.
+    if cfg.context_sources_file:
+        loaded = _load_json_mapping(cfg.context_sources_file, "context_sources_file")
+        if loaded:
+            merged = {str(k): v for k, v in loaded.items() if isinstance(v, list)}
+            merged.update(cfg.context_sources_map or {})
+            cfg.context_sources_map = merged
+
+    # The Drive comments client, from a service-account credential. Left alone when a consumer
+    # already supplied a live client in Python -- an explicit object always beats a description.
+    if cfg.drive_comments is None and cfg.drive_comments_auth:
+        cfg.drive_comments = _build_drive_comments(cfg.drive_comments_auth)
+    return cfg
+
+
+def _load_json_mapping(path: str, what: str) -> Dict[str, Any]:
+    """A ``{key: value}`` JSON file, or {} when it is absent or unusable. Never raises."""
+    p = Path(path)
+    if not p.exists():
+        _log.info("config %s: %s does not exist yet", what, path)
+        return {}
+    try:
+        data = json.loads(p.read_text())
+    except (OSError, ValueError) as e:
+        _log.warning("config %s: %s is not readable JSON (%s)", what, path, e)
+        return {}
+    if not isinstance(data, dict):
+        _log.warning("config %s: %s must hold a JSON object", what, path)
+        return {}
+    return data
+
+
+def _build_drive_comments(auth: Dict[str, Any]) -> Any:
+    """A ``DriveComments`` client from ``{service_account_file, subject, scopes}``, or None.
+
+    Read+write scope by default (``COMMENT_WRITE_SCOPES``): reading a person's question without
+    being able to answer it in the document is what makes them stop asking there.
+    """
+    try:
+        from .adapters.drive_comments import COMMENT_WRITE_SCOPES, DriveComments
+        from .adapters.google_chat_adapter import service_account_token_provider
+    except Exception as e:  # noqa: BLE001 -- an optional channel never blocks a lane starting
+        _log.warning("drive_comments_auth: channel unavailable (%s)", e)
+        return None
+
+    sa_file = str(auth.get("service_account_file") or "").strip()
+    if not sa_file:
+        _log.warning("drive_comments_auth: needs a service_account_file; channel off")
+        return None
+    if not Path(sa_file).exists():
+        _log.warning("drive_comments_auth: %s does not exist; channel off", sa_file)
+        return None
+    scopes = [str(x) for x in (auth.get("scopes") or COMMENT_WRITE_SCOPES)]
+    subject = str(auth.get("subject") or "").strip() or None
+    try:
+        return DriveComments(token_provider=service_account_token_provider(
+            service_account_file=sa_file, subject=subject, scopes=scopes))
+    except Exception as e:  # noqa: BLE001
+        _log.warning("drive_comments_auth: could not build the client (%s); channel off", e)
+        return None
 
 
 def apply_file_defaults(cfg: RunnerConfig, file_cfg: Optional[RunnerConfig]) -> RunnerConfig:

@@ -241,7 +241,8 @@ import shutil
 
 from .adapters import AnthropicProvider, ClaudeCliProvider, ClaudeConversationsAdapter, CompositeRetrievalAdapter, FilesAdapter, GeminiProvider, OpenAIProvider, WebSearchAdapter
 from .adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
-from .config import RunnerConfig, apply_file_defaults
+from .config import (RunnerConfig, apply_config_environment, apply_file_defaults,
+                     resolve_config_objects)
 from .core.adapters import ModelProvider
 from .pricing import estimate_bootstrap_cost, get_provider_and_model
 from .runner.channel_runner import ChannelRunner
@@ -367,6 +368,11 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     """
     config_path = config_path or os.getenv("QAR_CONFIG_FILE") or None
     file_cfg = RunnerConfig.from_file(config_path) if config_path else None
+    # BEFORE any env-driven resolution below: the file's own env_files/env_aliases/env populate
+    # os.environ, so a lane can express its credential files, its variable renames, and every
+    # QAR_* knob (including the nested OrchestratorConfig ones no TOML field reaches) in the same
+    # file as everything else, instead of in a Python consumer written once per lane.
+    apply_config_environment(file_cfg)
 
     corpus = os.getenv("QAR_CORPUS_ROOT") or (file_cfg.corpus_root if file_cfg else None)
     retrieval = FilesAdapter(corpus) if corpus else None
@@ -668,6 +674,9 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     # QAR_CONFIG_FILE (see RunnerConfig.from_file + config.apply_file_defaults). A field an env var
     # set always wins; this never overrides one.
     apply_file_defaults(cfg, file_cfg)
+    # Last: turn the file's declarative pointers (a JSON map, a service-account
+    # credential) into the live maps and clients they describe.
+    resolve_config_objects(cfg)
     return cfg
 
 
@@ -1407,13 +1416,17 @@ def main(argv=None) -> int:
 
     # --- poll (default when no subcommand given) ------------------------------
     cfg = _config_from_env(getattr(args, "config", None))
+    lane = cfg.lane_label or cfg.runner_label or "runner"
     problems = cfg.validate()
     if problems:
         for p in problems:
-            log.info("config incomplete: %s", p)
+            log.info("%s lane config incomplete: %s", lane, p)
         return 0
 
-    poller = Poller(cfg, state_path=os.getenv("QAR_STATE_PATH", "qar_state.json"))
+    # The config file's own state_path is the last resort BELOW the env var, matching every other
+    # field's precedence, so a unit can still relocate one lane's state without touching its file.
+    state_path = os.getenv("QAR_STATE_PATH") or cfg.state_path or "qar_state.json"
+    poller = Poller(cfg, state_path=state_path)
 
     once = args.once or (args.command == "poll" and getattr(args, "once", False))
     check = args.check or (args.command == "poll" and getattr(args, "check", False))
@@ -1421,10 +1434,10 @@ def main(argv=None) -> int:
     if check:
         try:
             who = poller.client.whoami()
-            log.info("key OK: %s", who)
+            log.info("%s key OK: %s", lane, who)
             return 0
         except Exception as e:  # noqa: BLE001
-            log.error("key check failed: %s", e)
+            log.error("%s key check failed: %s", lane, e)
             return 1
 
     if once:

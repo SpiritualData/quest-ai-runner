@@ -456,3 +456,71 @@ def test_folder_and_owner_routes_do_not_double_report_the_same_file():
         card_id="q1")
 
     assert len(bundle.updates) == 1
+
+
+def test_a_persons_note_on_the_quest_is_collected_without_the_card_asking():
+    """The reply channel is never opt-in.
+
+    Live failure, 2026-09-10: a run answered Joshua's emailed reply (which lands as a note on the
+    quest) and its receipt listed only the reflection and the captures. Notes were opt-in, and the
+    backend rejects the field a quest would declare them in, so the one channel he had just used
+    was the one channel the engine never looked at.
+    """
+    from quest_ai_runner.runner.context_updates import UpdateEngine
+
+    class Client:
+        def list_quest_notes(self, quest_id):
+            return [{"id": "n1", "text": "On 4 I don't want to decide this yet",
+                     "author_kind": "user", "author_name": "Joshua",
+                     "source": "email", "created_at": "2026-09-10T09:00:00Z"}]
+
+    # No context_sources on the card at all: the failing case exactly.
+    bundle = UpdateEngine(Client()).collect({"quest_id": "q1", "name": "Dissertation"},
+                                            card_id="q1")
+
+    notes = [u for u in bundle.updates if u.source == "quest_notes"]
+    assert len(notes) == 1
+    assert "don't want to decide this yet" in notes[0].body
+    assert notes[0].needs_response
+    assert "quest_notes" in {r.source for r in bundle.reports}
+
+
+def test_an_ai_note_is_not_reported_back_as_the_persons_news():
+    from quest_ai_runner.runner.context_updates import UpdateEngine
+
+    class Client:
+        def list_quest_notes(self, quest_id):
+            return [{"id": "n1", "text": "Run summary: did the reading", "author_kind": "ai",
+                     "created_at": "2026-09-10T09:00:00Z"}]
+
+    bundle = UpdateEngine(Client()).collect({"quest_id": "q1"}, card_id="q1")
+    assert [u for u in bundle.updates if u.source == "quest_notes"] == []
+
+
+def test_a_note_is_labelled_by_the_quests_name_not_its_outcome():
+    """The outcome is a sentence about the future, not a label.
+
+    Live output, 2026-09-10: every note line in the receipt read
+    "note · I've completed my dissertation and have a PhD", because the outcome was the fallback
+    label. That column exists to say WHERE the note is so a person can scan a column of them.
+    """
+    from quest_ai_runner.runner.context_updates import UpdateEngine
+
+    class Client:
+        def list_quest_notes(self, quest_id):
+            return [{"id": "n1", "text": "do X", "author_kind": "user",
+                     "created_at": "2026-09-10T09:00:00Z"}]
+
+    # The shape the Quest state endpoint returns: an outcome, no name.
+    bundle = UpdateEngine(Client(), always=("quest_notes",)).collect(
+        {"quest_id": "q1", "outcome": "I've completed my dissertation and have a PhD"},
+        card_id="q1")
+
+    line = bundle.updates[0].manifest_line()
+    assert "I've completed my dissertation" not in line
+    assert "this quest" in line
+
+    named = UpdateEngine(Client(), always=("quest_notes",)).collect(
+        {"quest_id": "q1", "name": "Dissertation",
+         "outcome": "I've completed my dissertation and have a PhD"}, card_id="q1")
+    assert "Dissertation" in named.updates[0].manifest_line()

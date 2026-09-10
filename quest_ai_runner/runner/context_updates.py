@@ -69,6 +69,18 @@ log = logging.getLogger("quest-ai-runner.context_updates")
 # entire history (no bound), and both are wrong.
 FIRST_LOOK_DAYS = 14
 
+# Sources every card gets whether or not it asked. These are not per-card interests, they are the
+# channels a person uses to talk to the assistant AT ALL, so making any of them opt-in means a
+# deployment can be blind to a direct reply and not know it.
+#
+# ``quest_notes`` is on this list because of a live failure (2026-09-10). A run answered a person's
+# emailed reply -- which lands as a note on the quest -- and its receipt listed only the reflection
+# and the captures, because notes were opt-in and the backend rejects the very field a quest would
+# declare them in (422 ``extra_forbidden``). So the one channel the person had actually just used
+# was the one channel the engine never looked at. A reply channel that a deployment has to remember
+# to switch on is a reply channel that is off.
+DEFAULT_ALWAYS: Sequence[str] = ("reflections", "insights", "quest_notes")
+
 # Hard cap on updates carried in one bundle, newest first. The brief already holds the goals, the
 # plan of record and the instruction; a comment spree must not push the actual work out of the
 # model's attention.
@@ -599,6 +611,20 @@ class CollectRequest:
         return self.spec.get(key, default)
 
 
+
+def _card_label(card: Dict[str, Any]) -> str:
+    """A short human label for a card: its name or title, never its outcome/description.
+
+    An outcome is a sentence about the future and a description is a paragraph; either one in a
+    one-line manifest column crowds out the information the column exists for.
+    """
+    for key in ("name", "title", "quest_name", "label"):
+        value = str((card or {}).get(key) or "").strip()
+        if value:
+            return value
+    return ""
+
+
 class ContextSource(Protocol):
     """One channel this engine can check. Implementations must never raise; the engine catches
     anyway, but a source that reports its own empty result can say WHY."""
@@ -655,7 +681,11 @@ class QuestNotesSource(_BaseSource):
                 body=text,
                 author=author,
                 occurred_at=when,
-                location=request.card.get("name") or request.card.get("outcome") or "this quest",
+                # A short LABEL, never the quest's outcome. The outcome is a sentence about the
+                # future ("I've completed my dissertation and have a PhD"), and using it here put
+                # that sentence on every note line in the receipt, where the column is meant to
+                # say WHERE the note is so a person can scan it.
+                location=_card_label(request.card) or "this quest",
                 how_to_respond="add a note on this quest",
                 needs_response=True,
                 raw=dict(note or {}),
@@ -933,13 +963,55 @@ def default_spec_resolver(card: Dict[str, Any]) -> List[Dict[str, Any]]:
             value = holder.get(key)
             if isinstance(value, list):
                 found.extend(value)
+    return _normalize_specs(found)
+
+
+def _normalize_specs(entries: Sequence[Any]) -> List[Dict[str, Any]]:
+    """``["quest_notes", {"source": "insights", ...}]`` -> a list of dicts, junk dropped."""
     specs: List[Dict[str, Any]] = []
-    for entry in found:
+    for entry in entries or []:
         if isinstance(entry, str) and entry.strip():
             specs.append({"source": entry.strip()})
         elif isinstance(entry, dict) and str(entry.get("source") or "").strip():
             specs.append(dict(entry))
     return specs
+
+
+def consumer_spec_resolver(
+        spec_map: Optional[Dict[str, List[Dict[str, Any]]]] = None
+) -> Callable[[Dict[str, Any]], List[Dict[str, Any]]]:
+    """A resolver that reads the card's own specs AND a consumer-supplied ``{card_id: specs}`` map.
+
+    The card carrying its own specs is the design (see the module docstring), and it stays the
+    design: the map is merged with whatever the card declares, not substituted for it.
+
+    The map exists because a card cannot always carry them YET. A backend has to grow the field
+    before a person can set it, and until it does, every deployment is blocked on a schema change
+    in another service to use any of this. Live case: quest-backend's autopilot settings reject an
+    unknown key outright (422 ``extra_forbidden``), so a quest could not name a folder to watch at
+    all. A consumer-side map unblocks that the same way ``quest_folder_map`` already does for a
+    quest's local folder, and it keeps working afterwards as a per-deployment default under the
+    card's own choices.
+
+    Precedence, when both name the same source: the CARD wins. What a person set on the thing
+    itself is more specific than what a deployment configured for it, and a config file quietly
+    overriding a person's own setting is the failure this ordering exists to prevent.
+    """
+    table: Dict[str, List[Dict[str, Any]]] = {}
+    for key, value in (spec_map or {}).items():
+        if isinstance(value, list):
+            table[str(key)] = [v for v in value if isinstance(v, (str, dict))]
+
+    def _resolve(card: Dict[str, Any]) -> List[Dict[str, Any]]:
+        own = default_spec_resolver(card)
+        if not table:
+            return own
+        card_id = str((card or {}).get("quest_id") or (card or {}).get("id") or "")
+        extra = _normalize_specs(table.get(card_id) or [])
+        named = {str(s.get("source")) for s in own}
+        return own + [s for s in extra if str(s.get("source")) not in named]
+
+    return _resolve
 
 
 class UpdateEngine:
@@ -963,7 +1035,7 @@ class UpdateEngine:
                  watermarks: Optional[Watermarks] = None,
                  drive_comments: Any = None,
                  sources: Optional[Sequence[ContextSource]] = None,
-                 always: Sequence[str] = ("reflections", "insights"),
+                 always: Sequence[str] = DEFAULT_ALWAYS,
                  spec_resolver: Optional[Callable[[Dict[str, Any]], List[Dict[str, Any]]]] = None,
                  first_look_days: int = FIRST_LOOK_DAYS,
                  max_updates: int = MAX_UPDATES,
@@ -1125,6 +1197,7 @@ def build_update_engine(cfg: Any = None, client: Any = None, *,
         client,
         watermarks=Watermarks(path),
         drive_comments=getattr(cfg, "drive_comments", None),
+        spec_resolver=consumer_spec_resolver(getattr(cfg, "context_sources_map", None)),
         first_look_days=int(getattr(cfg, "context_updates_first_look_days", FIRST_LOOK_DAYS) or
                             FIRST_LOOK_DAYS),
     )

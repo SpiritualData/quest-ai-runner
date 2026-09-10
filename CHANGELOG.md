@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **A lane is a config file, not a program** (`config.py`, `cli.py`,
+  [`docs/a-lane-is-a-config-file.md`](docs/a-lane-is-a-config-file.md)). New file-expressible
+  fields: `env_files`, `env_aliases`, `env`, `quest_folder_map_file`, `context_sources_file`,
+  `context_sources_map`, `drive_comments_auth`, `state_path`, `lane_label`.
+  `apply_config_environment()` populates `os.environ` from the file BEFORE anything env-driven
+  resolves, so every `QAR_*` knob becomes file-reachable including the nested `OrchestratorConfig`
+  ones (`QAR_MAX_PARALLEL`, `QAR_DEEP_MAX_TURNS`, `QAR_DEEP_MODELS`) that no top-level TOML field
+  can set; `resolve_config_objects()` turns the declarative pointers into the maps and clients
+  they describe. Three lanes on this pattern each kept a Python consumer alive for nothing but
+  this: rename three `.env` variables, pin two `QAR_*` defaults, read one JSON file, build one
+  client. Two of them are now `quest-ai-runner poll --config qar.toml` with no consumer file at
+  all. Env-file loading here is TRUTHY-checked, not presence-checked: a lane whose `.env`
+  documents optional credentials as blank lines (meaning "fall back to the shared file") was
+  otherwise read as already-set, the fallback never applied, and the lane started unconfigured
+  with nothing in the log to say why.
+
 ### Fixed
 - **Drive comment text is HTML-unescaped** (`adapters/drive_comments.py`). Drive serves both
   `content` and `quotedFileContent.value` HTML-escaped, so a comment anchored to the phrase
