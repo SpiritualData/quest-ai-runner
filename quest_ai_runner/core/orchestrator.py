@@ -88,6 +88,7 @@ from .context_doctrine import (
     CACHED_HINT_GATE,
     CARD_LIFECYCLE_GATE,
     CARD_THREAD_GATE,
+    EVIDENCE_GATE,
     MODEL_TIER_GATE,
     SPECIFICITY_GATE,
     SUFFICIENCY_GATE,
@@ -3186,8 +3187,11 @@ def grounding_context_layer(context_view: str) -> str:
     """
     answer_context_view = _strip_discovery_section(context_view)
     return "\n\n".join([
-        "--- GROUNDING CONTEXT (INTERNAL: answer FROM this; never quote it, never name its sources, "
-        "never mention that you read anything) ---",
+        "--- GROUNDING CONTEXT (INTERNAL: answer FROM this. Never quote or describe THIS SECTION "
+        "itself, its labels, or how it was assembled, and never say you 'read' or were 'given' "
+        "anything -- but DO name and quote the real items inside it (a title, a date, the person's "
+        "own words) when that is what backs up a claim; naming the thing itself is not the same as "
+        "exposing the retrieval mechanism) ---",
         answer_context_view or "(none)",
     ])
 
@@ -3237,6 +3241,7 @@ def grounding_answer_tail(gathered: List[Dict[str, Any]], partial: bool) -> str:
         "the date or age of any dated item you use rather than presenting an old document as the "
         "present state."
     )
+    parts.append(EVIDENCE_GATE)
     return "\n\n".join(parts)
 
 

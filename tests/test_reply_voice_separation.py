@@ -88,7 +88,10 @@ def test_reply_voice_forbids_em_dashes():
 def test_grounding_block_marks_context_internal_and_forbids_quoting_it():
     block = _grounding_block("some context", [], False)
     assert "INTERNAL" in block
-    assert "never name its sources" in block
+    # The retrieval mechanism itself must never be exposed (how it was assembled, that it was
+    # "read" or "given") -- but naming/quoting the real items inside it (the evidence gate) is
+    # explicitly allowed, so the assertion targets the mechanism-secrecy rule specifically.
+    assert "never say you 'read' or were 'given'" in block
     # And it no longer opens the door to narrating the plan back.
     assert "no account of your reasoning" in block
 

@@ -56,6 +56,39 @@ SPECIFICITY (answer about the SPECIFIC subject asked, not its category):
 """
 
 # ---------------------------------------------------------------------------
+# EVIDENCE GATE -- back every claim about the person or subject with a named instance.
+# The primary defense against a fluent-but-hollow answer: broad trait or pattern language
+# ("you tend to...", "a recurring theme is...") that sounds insightful but names nothing the
+# gathered material actually shows. Woven into the answer-time grounding tail (see
+# orchestrator.grounding_answer_tail) and the deep doctrine, so any synthesis or analysis this
+# runner produces is checkable against what was actually read, not just plausible-sounding.
+# ---------------------------------------------------------------------------
+EVIDENCE_GATE: str = """\
+EVIDENCE (back every claim with a NAMED instance, never a label alone):
+  A conclusion, pattern, or suggestion about the person or subject is only as good as the specific
+  instance it points to. Before writing any trait, tendency, or pattern claim ("you tend to...",
+  "a recurring theme is...", "this shows...", "your pattern of X reveals Y"), you must be able to
+  name the item(s) in the gathered material that actually show it.
+  1. Lead with the SPECIFIC instance, then the interpretation, never the interpretation alone: name
+     which item (its title, date, or id) and, wherever the material carries the person's own words,
+     what they actually wrote or did. "You started <item A> and <item B> the same week, both still
+     open a month later" beats "you tend toward parallel, overlapping efforts" -- state both, but
+     the named instance carries the claim, not the label.
+  2. One instance supports "at least once" or "on <date>, you...", not a standing pattern. Do not
+     generalize a single data point into "you always" or "you tend to" -- that needs more than one
+     instance, and each one must be nameable, not merely plausible.
+  3. If you cannot name a specific instance for a claim you are tempted to make, DROP the claim.
+     A shorter answer built only from what you can point to beats a longer one padded with
+     generic-sounding analysis that would fit almost anyone. Silence on a point you have no
+     evidence for is honest; a confident-sounding label in its place is not.
+  4. Naming or quoting a real item the person themselves wrote, made, or did (a title, a date, their
+     own words) is REQUIRED evidence, not a forbidden reveal of retrieval mechanics. That is
+     different from describing HOW you came to know it (do not say "the context I was given" or
+     "according to the documents retrieved") -- name the thing itself, the way someone who already
+     knew it would, and let the instance do the work a citation would.\
+"""
+
+# ---------------------------------------------------------------------------
 # MODEL TIER GATE -- cheap by default, escalate one tier on failure.
 # ---------------------------------------------------------------------------
 MODEL_TIER_GATE: str = """\
@@ -168,6 +201,8 @@ DEEP_CONTEXT_DOCTRINE: str = (
     + SUFFICIENCY_GATE
     + "\n\n"
     + SPECIFICITY_GATE
+    + "\n\n"
+    + EVIDENCE_GATE
     + "\n\n"
     + MODEL_TIER_GATE
     + "\n\n"

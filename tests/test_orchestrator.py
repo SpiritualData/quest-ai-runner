@@ -335,6 +335,35 @@ def test_specificity_gate_is_woven_into_planner_deep_and_grounding():
     assert "specifically about what was asked" in block
 
 
+def test_evidence_gate_is_woven_into_deep_and_grounding():
+    # Regression guard for the "fluent but hollow" failure: a trait/pattern claim about the person
+    # or subject ("you tend to...", "a recurring theme is...") with no specific instance behind it.
+    # The discipline lives in context_doctrine.EVIDENCE_GATE and must reach both the deep doctrine
+    # and the answer-time grounding block (where the ungrounded claim was actually produced).
+    from quest_ai_runner.core import context_doctrine as cd
+    from quest_ai_runner.core.orchestrator import _grounding_block
+
+    gate = cd.EVIDENCE_GATE
+    assert "named instance" in gate.lower() or "NAMED instance" in gate
+    assert "DROP the claim" in gate
+    # Gate carries no literal braces, so it never breaks a .format()-ed prompt.
+    assert "{" not in gate and "}" not in gate
+    assert "EVIDENCE" in cd.DEEP_CONTEXT_DOCTRINE
+
+    # The answer-time grounding block carries the same discipline, so a claim with no nameable
+    # instance behind it gets dropped instead of written as a confident-sounding generalization.
+    block = _grounding_block("ctx", [], False)
+    assert "NAMED instance" in block
+    assert "DROP the claim" in block
+
+    # The grounding-context header no longer blankly forbids quoting: it must still let the model
+    # name/quote the person's OWN words when that is the evidence for a claim, while still hiding
+    # the retrieval mechanism itself (never "I read" / "the context I was given").
+    from quest_ai_runner.core.orchestrator import grounding_context_layer
+    header = grounding_context_layer("some context")
+    assert "own words" in header
+
+
 class _GCard:
     def __init__(self, id, title, relevance, body):
         self.id, self.title, self.relevance, self.body = id, title, relevance, body
