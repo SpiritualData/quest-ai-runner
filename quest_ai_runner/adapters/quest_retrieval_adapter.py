@@ -18,11 +18,46 @@ Example:
 """
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Optional
 
 from quest_ai_runner.core.adapters import Observation, RetrievalAdapter
 from quest_ai_runner.runner.quest_client import QuestClient
 from quest_ai_runner.runner.reflections import DEFAULT_PERIODS, collect_reflections
+
+# Read-only QuestClient methods safe to call directly from a read step via
+# {"operation": "<name>", "args": {...}} -- the API-based counterpart to a consumer's own
+# in-process "standard functions" dispatch (e.g. a Quest deployment's code-execution engine).
+# Hand-curated: every name here was read to confirm it performs no write (no create/update/set/
+# add/mark/propose/resolve-type call) before being allow-listed -- this bypasses whatever
+# review/confirmation gate a write would otherwise go through, so do not add a name without the
+# same check. Write-capable QuestClient methods (create_goal, update_goal, mark_insight_acted_on,
+# add_quest_note, propose_field_change, ...) stay reachable only through a DeepRunner/confirm path,
+# never from a plain read.
+_READ_ONLY_OPERATIONS = frozenset({
+    "whoami",
+    "list_quests", "list_my_quests", "get_quest", "get_my_quest",
+    "list_quest_goals", "get_goal", "list_goal_notes", "list_quest_notes",
+    "list_context_entries",
+    "get_daily_reflection", "get_period_reflection",
+    "get_insights_collection", "list_collections", "list_collection_entries",
+    "get_task", "list_tasks",
+    "get_quest_autopilot", "get_ai_profile",
+})
+_OPERATION_KEY = "operation"
+_MAX_RENDER_BYTES = 6000
+
+
+def _render_result(obj: Any, *, max_bytes: int = _MAX_RENDER_BYTES) -> str:
+    """JSON-render an operation result for the planner, truncated to a fixed budget. Never raises."""
+    try:
+        text = json.dumps(obj, indent=2, default=str)
+    except TypeError:
+        text = repr(obj)
+    encoded = text.encode("utf-8")
+    if len(encoded) > max_bytes:
+        text = encoded[:max_bytes].decode("utf-8", errors="ignore") + "\n…[truncated]"
+    return text
 
 
 class QuestRetrievalAdapter(RetrievalAdapter):
@@ -73,7 +108,11 @@ class QuestRetrievalAdapter(RetrievalAdapter):
     def query(self, spec: Dict[str, Any]) -> Observation:
         """Structured lookup against Quest API.
 
-        Supports:
+        A spec naming an ``operation`` calls a read-only QuestClient method DIRECTLY (see
+        ``_READ_ONLY_OPERATIONS``) -- e.g. ``{"operation": "get_insights_collection"}`` -- for a
+        need none of the ``kind``s below cover, without inventing a new bespoke ``kind`` per method.
+
+        Otherwise, a spec naming a ``kind`` runs one of:
         - goal_context: fetch goal metadata, notes, related goals (requires goal_id + quest_id)
         - quest_context: fetch quest metadata and goals (requires quest_id)
         - reflection_context: fetch the person's own latest daily + period reflections (no ids)
@@ -84,16 +123,16 @@ class QuestRetrievalAdapter(RetrievalAdapter):
         When exact IDs aren't available, use list_sources() first to discover quests,
         then describe_source() to drill into a specific quest.
 
-        Spec format (example):
-            {
-                "kind": "goal_context",
-                "goal_id": "goal_123",
-                "quest_id": "quest_456",
-                "include_notes": true
-            }
+        Spec format (examples):
+            {"kind": "goal_context", "goal_id": "goal_123", "quest_id": "quest_456",
+             "include_notes": true}
+            {"operation": "list_collection_entries", "args": {"collection_id": "coll_123"}}
         """
         if not self.client.configured:
             return Observation(kind="error", error="Quest client not configured")
+
+        if spec.get(_OPERATION_KEY):
+            return self._call_operation(spec)
 
         kind = spec.get("kind", "")
         try:
@@ -114,6 +153,38 @@ class QuestRetrievalAdapter(RetrievalAdapter):
                 )
         except Exception as e:  # noqa: BLE001
             return Observation(kind="error", error=f"Quest query error: {type(e).__name__}: {e}")
+
+    def _call_operation(self, spec: Dict[str, Any]) -> Observation:
+        """Call a read-only QuestClient method by name (see ``_READ_ONLY_OPERATIONS``)."""
+        name = str(spec.get(_OPERATION_KEY) or "").strip()
+        if name not in _READ_ONLY_OPERATIONS:
+            return Observation(
+                kind="query", locator=f"operation={name!r}",
+                text=(
+                    f"'{name}' cannot be called from a read step (it either writes, or does not "
+                    f"exist). Read-only operations callable here: "
+                    f"{', '.join(sorted(_READ_ONLY_OPERATIONS))}. Call describe_operation(name) "
+                    "for its signature, or list_operations() for the full catalog -- a write needs "
+                    "a decision/confirm path, not a read."
+                ),
+            )
+        args = spec.get("args")
+        args = dict(args) if isinstance(args, dict) else {}
+        fn = getattr(self.client, name, None)
+        if fn is None:
+            return Observation(kind="error", locator=f"operation={name!r}",
+                               error=f"operation {name!r} is unavailable on this client")
+        try:
+            result = fn(**args)
+        except TypeError as e:
+            return Observation(
+                kind="query", locator=f"operation({name})",
+                text=f"call failed: {e}. Call describe_operation({name!r}) for its real signature."
+            )
+        except Exception as e:  # noqa: BLE001
+            return Observation(kind="error", locator=f"operation={name!r}",
+                               error=f"{type(e).__name__}: {e}")
+        return Observation(kind="query", locator=f"operation({name})", text=_render_result(result))
 
     def _query_goal_context(self, spec: Dict[str, Any]) -> Observation:
         """Fetch goal metadata, notes, and related context."""
@@ -412,6 +483,10 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             "week went, or what they said they want to focus on",
             "get_task: Read one task in full, including the result the person received. Use it "
             "when a goal note answers one of your emails and names the task it answers",
+            "",
+            "Read-only QuestClient methods, callable directly with "
+            '{"operation": "<name>", "args": {...}} (no need to route through the kinds above): '
+            + ", ".join(sorted(_READ_ONLY_OPERATIONS)),
         ]
         return Observation(kind="query", locator="list_operations", text="\n".join(lines))
 
@@ -442,4 +517,10 @@ class QuestRetrievalAdapter(RetrievalAdapter):
         desc = ops.get(name)
         if desc:
             return Observation(kind="query", text=desc)
+        if name in _READ_ONLY_OPERATIONS:
+            return Observation(
+                kind="query",
+                text=f'Read-only QuestClient method. Usage: query({{"operation": "{name}", '
+                     '"args": {...}}) -- args are that method\'s own keyword arguments.',
+            )
         return Observation(kind="error", error=f"Unknown operation: {name}")
