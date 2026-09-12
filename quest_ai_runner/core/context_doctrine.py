@@ -70,10 +70,10 @@ EVIDENCE (back every claim with a NAMED instance, never a label alone):
   "a recurring theme is...", "this shows...", "your pattern of X reveals Y"), you must be able to
   name the item(s) in the gathered material that actually show it.
   1. Lead with the SPECIFIC instance, then the interpretation, never the interpretation alone: name
-     which item (its title, date, or id) and, wherever the material carries the person's own words,
-     what they actually wrote or did. "You started <item A> and <item B> the same week, both still
-     open a month later" beats "you tend toward parallel, overlapping efforts" -- state both, but
-     the named instance carries the claim, not the label.
+     which item (by its title or date -- see point 5 on ids) and, wherever the material carries the
+     person's own words, what they actually wrote or did. "You started <item A> and <item B> the
+     same week, both still open a month later" beats "you tend toward parallel, overlapping
+     efforts" -- state both, but the named instance carries the claim, not the label.
   2. One instance supports "at least once" or "on <date>, you...", not a standing pattern. Do not
      generalize a single data point into "you always" or "you tend to" -- that needs more than one
      instance, and each one must be nameable, not merely plausible.
@@ -85,7 +85,15 @@ EVIDENCE (back every claim with a NAMED instance, never a label alone):
      own words) is REQUIRED evidence, not a forbidden reveal of retrieval mechanics. That is
      different from describing HOW you came to know it (do not say "the context I was given" or
      "according to the documents retrieved") -- name the thing itself, the way someone who already
-     knew it would, and let the instance do the work a citation would.\
+     knew it would, and let the instance do the work a citation would.
+  5. Cite the item the way a person would recognize it -- a title, a date, a name they gave
+     something -- never a raw internal id or reference token (anything like "conv_9f2a...",
+     "task_51b7...", a database key) even when that is the only handle the gathered material
+     shows. An id means nothing to the person and reads as an internal leak. When the material
+     gives you BOTH a human label and an id side by side, the id is there for YOUR OWN use this
+     turn (e.g. to re-read that exact item again) -- put only the label in the reply. If an item
+     truly carries no human-readable label at all, describe it by what it IS or what happened
+     ("a conversation from early last week about X") rather than pasting the raw id.\
 """
 
 # ---------------------------------------------------------------------------

@@ -337,15 +337,60 @@ def conversation_digest(conv: Any) -> str:
     return " ".join(parts) if parts else "empty conversation"
 
 
+def _coerce_timestamp(val: Any) -> Optional[float]:
+    """Best-effort epoch-seconds from a timestamp value of unknown shape.
+
+    A ``ConversationStore`` backed by a real database (Mongo, Postgres, ...) commonly hands back a
+    ``datetime`` object or an ISO-8601 string rather than a bare epoch number -- treating only
+    int/float as a timestamp silently zeroed recency ranking AND any date-only display for every
+    such backend. Returns None (not 0.0) for anything unparseable, so callers can tell "no
+    timestamp" apart from "epoch zero"."""
+    if isinstance(val, (int, float)):
+        return float(val)
+    if isinstance(val, datetime):
+        dt = val if val.tzinfo else val.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    if isinstance(val, str) and val.strip():
+        try:
+            dt = datetime.fromisoformat(val.strip().replace("Z", "+00:00"))
+        except (ValueError, TypeError):
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.timestamp()
+    return None
+
+
 def conversation_timestamp(conv: Any) -> float:
-    """Unix timestamp for recency sorting, or 0.0 if none is recorded."""
+    """Unix timestamp for recency sorting, or 0.0 if none is recorded/parseable."""
     if isinstance(conv, dict):
         for field in ("updated_at", "updatedAt", "createdAt", "created_at", "timestamp"):
             if field in conv:
-                val = conv[field]
-                if isinstance(val, (int, float)):
-                    return float(val)
+                ts = _coerce_timestamp(conv[field])
+                if ts is not None:
+                    return ts
     return 0.0
+
+
+def conversation_title(conv: Any) -> Optional[str]:
+    """A human-readable label for a conversation dict, or None if it doesn't carry one.
+
+    Reads a ``title`` field a ``ConversationStore`` backend may set (e.g. an auto-generated chat
+    title). Blank/whitespace-only titles count as absent. Generic so any backend that sets
+    ``title`` benefits, without this module knowing anything about who set it or how."""
+    if isinstance(conv, dict):
+        title = conv.get("title")
+        if isinstance(title, str) and title.strip():
+            return title.strip()
+    return None
+
+
+def format_conversation_date(conv: Any) -> Optional[str]:
+    """A short ``YYYY-MM-DD`` (UTC) date for a conversation, or None if it has no timestamp."""
+    ts = conversation_timestamp(conv)
+    if ts <= 0:
+        return None
+    return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
 
 
 def scan_conversation_files(
@@ -655,7 +700,9 @@ def select_related(
 
     Pure function: accepts a pre-filtered list of conversation dicts (scope filtering is the
     caller's responsibility) and returns ``(rendered_text, sources_list, truncated_flag)`` where
-    each source entry is ``{"conv_id": <id>, "label": "related conversation"}``.
+    each source entry is ``{"conv_id": <id>, "label": <title or "related conversation">}`` -- the
+    real conversation title when the backend set one, so a consumer surfacing sources (or a card)
+    shows something a person recognizes rather than an opaque id.
 
     Algorithm:
 
@@ -665,7 +712,11 @@ def select_related(
       resolved id is in ``must_include_ids`` (e.g. a caller's recency floor) are ADDITIONALLY
       rendered even when not ranked in, appended after the ranked winners.
     * Per conversation: a short slice (last 4 turns, rendered with AI compaction) or the digest
-      is used, formatted as ``=== Related conversation: {id} ===\\n{body}``.
+      is used, formatted as ``=== Related conversation: "{title}" ({date}) [ref: {id}] ===\\n{body}``
+      when the conversation carries a ``title`` (a date is added only when a timestamp is also
+      parseable), or ``=== Related conversation: {id} ===\\n{body}`` when it does not. The id is
+      always present (as a bracketed "ref" alongside a title) so the model can still re-read this
+      exact conversation later in the turn; only the human-facing label changes.
     * ``max_chars`` is respected: truncation stops adding blocks once the budget is hit, with a
       final hard cap on the joined text.
 
@@ -709,12 +760,25 @@ def select_related(
         msgs = conversation_messages(conv)
         tail = msgs[-4:] if msgs else []
         body = "\n".join(_render_turn(m) for m in tail) or conversation_digest(conv)
-        block = f"=== Related conversation: {conv_id} ===\n{body}"
+        # Prefer a HUMAN-READABLE header (title + date) over the bare internal id: a raw id like
+        # "conv_9f2a..." means nothing to the person being answered and reads as an internal leak
+        # if quoted back to them, but a title/date is exactly what they'd recognize. The id stays
+        # in the header too (as "ref:"), because it is still useful to the MODEL for its own
+        # bookkeeping this turn (e.g. re-reading this exact conversation via read_section(conv_id))
+        # -- it just isn't what should end up in a reply. See EVIDENCE_GATE in core/context_doctrine.
+        title = conversation_title(conv)
+        label = title or "related conversation"
+        if title:
+            date_str = format_conversation_date(conv)
+            head = f'"{title}"' + (f" ({date_str})" if date_str else "")
+            block = f"=== Related conversation: {head} [ref: {conv_id}] ===\n{body}"
+        else:
+            block = f"=== Related conversation: {conv_id} ===\n{body}"
         if used + len(block) > max_chars and parts:
             truncated = True
             break
         parts.append(block)
-        sources.append({"conv_id": conv_id, "label": "related conversation"})
+        sources.append({"conv_id": conv_id, "label": label})
         used += len(block)
 
     text = "\n\n".join(parts)
