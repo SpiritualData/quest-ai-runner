@@ -7,6 +7,45 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Autopilot REACTIVE mode: checks in on schedule, but only acts when something new is actually
+  asked of it** (`runner/autopilot.py`). A quest not ready to run fully unattended (`suggest`/`act`)
+  previously had only `off`, which means never checking in at all. `mode: "reactive"` runs on the
+  SAME cadence/`run_time` schedule as `suggest`/`act` (no new scheduling primitive needed), but a
+  scheduled pass is skipped with reason `"reactive: no new ask since the last pass"` unless
+  `has_new_ask_since` (a new pure helper, alongside `cadence_due`/`run_requested`) finds an ask on
+  the quest whose `occurred_at` postdates `last_pass_at` -- read via the new `QuestClient.list_asks`
+  (`GET /api/asks?quest_id=...&mine_only=false`). Deliberately keyed on the ASKS LEDGER rather than
+  on raw notes: an ask can arrive through any touchpoint the ledger captures (a note today, an
+  emailed reply, potentially others later), so gating on notes directly would need updating every
+  time a new touchpoint was added. An explicit "Run now" (`run_requested`) bypasses the check
+  entirely, the same override cadence itself already honors, and never even calls `list_asks`. A
+  skipped reactive pass never stamps `last_pass_at`, so the next scheduled check-in re-evaluates
+  against the same baseline rather than silently advancing past an ask nobody looked at.
+- **Bootstrap cost is measurable and controllable** (`cli.py`, `adapters/claude_cli_provider.py`).
+  Three things were wrong at once and each hid the next. The completion summary printed a MODELLED
+  estimate labelled "Cost" (one real run showed `$0.0270` for work that actually cost dollars); the
+  keyless provider reported no usage at all, so there was nothing truer to print; and `bootstrap`
+  resolved its model with `resolve_tier("balanced")` directly, bypassing the documented
+  `QAR_MODEL_*` overrides -- so the one dial that controls the cost of the most expensive command
+  in the tool was inert, and setting it looked like it had been ignored. Now: the provider
+  accumulates real usage, the summary prints the MEASURED cost with the token classes split out
+  (fresh input, cache creation and cache read bill at very different rates, so a single "input"
+  total cannot be turned back into a cost), the model line reports what actually ran rather than
+  what the estimator assumed, and `QAR_BOOTSTRAP_TIER` selects the tier. Measured on one corpus:
+  balanced $0.5577, fast $0.3135 for equivalent cards (100% named either way, 58% vs 64%
+  multi-file) -- **41% cheaper at no cost in quality**, because topic extraction is bulk
+  classification rather than reasoning.
+
+- **Cards name their files by number, not by copying the path back**
+  (`adapters/file_context_store.py`). Both prompts asked the model to echo each path verbatim,
+  spending generated tokens re-emitting strings the caller already holds: stage 1 alone measured
+  ~32,550 output tokens of nothing but paths, and stage 2 paid it again for every card it
+  proposed, including the ~52% that dedup discards. The file list is now numbered and cards answer
+  with indices (`_numbered_tree`, `_resolve_file_refs`), which the parser still accepts as literal
+  paths so a model answering the old way loses nothing. Honest note on impact: measured
+  end-to-end this did NOT reduce cost noticeably -- paths were only 22% of card content, against
+  48% for keywords -- so it is waste removed rather than the saving it was expected to be.
+
 - **Folder relevance review: deciding which folders are worth indexing at all**
   (`adapters/file_context_store.py`). Extension filtering decides whether a FILE is readable; it
   cannot decide whether a folder is knowledge. Measured on one real corpus of 81,464 "indexable"
@@ -45,6 +84,16 @@ All notable changes to this project are documented here. The format is based on
   at WARNING instead of leaving a partial store looking complete.
 
 ### Fixed
+- **A worker binary that is missing right now is retried, not fatal** (`adapters/retry_utils.py`).
+  `is_transient_error` did not classify `FileNotFoundError`, so a call spawning the worker failed
+  instantly. Within this decorator, which only wraps provider calls, that exception can only be the
+  executable we tried to spawn -- and its overwhelmingly common cause is an installer replacing it
+  in place, a window of a few seconds. Seen **three times in two days** on one machine; the worst
+  occurrence cost 101 of 107 topic-extraction calls in a single bootstrap and the run still
+  reported completion. Retrying costs seconds; a genuinely wrong path still exhausts its retries
+  and still names the file, so a real misconfiguration stays diagnosable. Complements the
+  re-resolution fix below, which cannot help when the binary is absent from every location at once.
+
 - **The worker binary is re-resolved, and verified, on every call**
   (`adapters/claude_cli_provider.py`). An absolute `claude_path` was trusted without checking it
   exists, so an installer replacing the binary in place turned every call in that window into a

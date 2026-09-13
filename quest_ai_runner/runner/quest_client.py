@@ -1447,6 +1447,30 @@ class QuestClient:
             tasks = [t for t in tasks if t.get("task_kind") == task_kind]
         return tasks
 
+    def list_asks(self, *, quest_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """GET /api/asks?quest_id=... -- every tracked ask on this quest, for Autopilot's
+        REACTIVE-mode gate (see ``autopilot.has_new_ask_since``): a quest in that mode makes its
+        scheduled pass only when something has actually been asked of it since the last one.
+
+        ``mine_only=false`` on purpose: the gate needs to see EVERY ask on the quest, not only
+        ones the calling account itself filed, since a request usually comes from the quest's
+        owner or a teammate, not from Autopilot's own account.
+
+        Returns ``[]`` on any failure or when the backend predates this endpoint. Never raises,
+        matching ``list_tasks``/``list_quests`` -- a read this method exists to gate a SKIP on
+        must never turn a transient error into a pass that silently never runs.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", "/api/asks",
+                                 params={"quest_id": quest_id, "mine_only": "false",
+                                         "limit": limit}) or {}
+            items = resp.get("items") if isinstance(resp, dict) else None
+            return items if isinstance(items, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_asks failed for quest %s: %s", quest_id, e)
+            return []
+
     # --- quest autopilot config -----------------------------------------------
 
     def get_quest_autopilot(self, quest_id: str) -> Dict[str, Any]:

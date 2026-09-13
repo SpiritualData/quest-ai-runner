@@ -4,8 +4,10 @@ Design of record: ``quest_autopilot_design.md`` (Part B). In one sentence: Autop
 recurring assistant task (``task_kind == "autopilot"``, routed by ``runner.executor`` before the
 normal deep-run path). Each pass:
 
-  1. Lists the team's quests; keeps the ones opted in (``autopilot.mode`` in ``suggest``/``act``).
-  2. Gates each, cheapest first: a team-wide daily budget, per-quest cadence, the roster's day
+  1. Lists the team's quests; keeps the ones opted in (``autopilot.mode`` in
+     ``suggest``/``act``/``reactive``).
+  2. Gates each, cheapest first: a team-wide daily budget, per-quest cadence, REACTIVE mode's own
+     "is there anything new to react to" check (see ``has_new_ask_since``), the roster's day
      rule (a quest whose roster names nobody for today does nothing at all today), and -- only
      where the deployment opts into backpressure -- an open autopilot-created task or an
      unresolved HOLD decision already sitting on the quest. By default neither of the last two
@@ -331,6 +333,33 @@ def run_requested(autopilot_cfg: Dict[str, Any]) -> bool:
         return False
     last_pass = _parse_dt(autopilot_cfg.get("last_pass_at"))
     return last_pass is None or requested > last_pass
+
+
+def has_new_ask_since(asks: List[Dict[str, Any]], last_pass_at: Optional[str]) -> bool:
+    """Whether any of ``asks`` (a quest's rows from ``QuestClient.list_asks``) landed AFTER
+    ``last_pass_at`` -- the whole predicate REACTIVE mode gates on (see ``_gate_quest``).
+
+    Never run before (no ``last_pass_at``) means anything at all counts as new: a reactive quest
+    that has never passed has nothing to compare against, and reads its first ask as due rather
+    than silently waiting for a second one to arrive.
+
+    Deliberately keyed on ``occurred_at`` (when the ask was actually made), not on the ledger's
+    bookkeeping fields (``state``, an internal update timestamp): the trigger this answers is "did
+    someone ask something new", and a person editing an old ask's classification or a run marking
+    one accepted is not that event. An ask with no parseable ``occurred_at`` is skipped rather than
+    treated as either always-new or never-new -- a malformed row must not itself decide the gate.
+
+    Pure and dependency-free like ``cadence_due``/``run_requested`` above, for the same reason:
+    directly unit-testable with no client or clock to fake.
+    """
+    since = _parse_dt(last_pass_at)
+    if since is None:
+        return bool(asks)
+    for ask in asks:
+        occurred = _parse_dt(ask.get("occurred_at"))
+        if occurred is not None and occurred > since:
+            return True
+    return False
 
 
 def _current_period_key(scope: str, now: datetime) -> Optional[str]:
@@ -1912,7 +1941,7 @@ class AutopilotPass:
         created) -> ``[]``, logged at INFO; the poller retires the now-orphaned pass on its next
         sweep, this method just declines to work it.
 
-        ``only_quest_id`` None: every opted-in quest (``autopilot.mode`` in suggest/act). A pass
+        ``only_quest_id`` None: every opted-in quest (``autopilot.mode`` in suggest/act/reactive). A pass
         created by this runner always names its quest, so this is the unscoped fallback -- what a
         pass with no quest id can still honestly mean -- not a second scheduling shape.
 
@@ -1929,7 +1958,7 @@ class AutopilotPass:
             state = self._quest_state(only_quest_id)
             autopilot_cfg = (state.get("autopilot") or {}) if state else {}
             mode = str(autopilot_cfg.get("mode") or "off")
-            if mode not in ("suggest", "act"):
+            if mode not in ("suggest", "act", "reactive"):
                 log.info("autopilot: quest %s mode=%r -- no longer opted in; this pass should be "
                         "retired", only_quest_id, mode)
                 return []
@@ -1948,7 +1977,7 @@ class AutopilotPass:
             state = self._quest_state(quest_id)
             autopilot_cfg = (state.get("autopilot") or {}) if state else {}
             mode = str(autopilot_cfg.get("mode") or "off")
-            if mode not in ("suggest", "act"):
+            if mode not in ("suggest", "act", "reactive"):
                 log.info("autopilot: quest %s mode=%r -- not opted in, skipping", quest_id, mode)
                 continue
             eligible.append({
@@ -2212,6 +2241,17 @@ class AutopilotPass:
         if (not cadence_due(autopilot_cfg, self._now(), tz=autopilot_cfg.get("run_timezone"))
                 and not run_requested(autopilot_cfg)):
             return "cadence not due yet"
+        # REACTIVE mode's own gate: the cadence/run_time above says WHEN this quest is allowed to
+        # check in, this says whether there is anything to check in ABOUT. Skipped entirely by an
+        # explicit "Run now" (run_requested), the same override cadence itself already respects --
+        # a person pressing the button gets a run regardless of whether Autopilot thinks anything
+        # is new. See ``has_new_ask_since`` for why this reads the asks ledger rather than notes
+        # directly: an ask can arrive through any touchpoint the ledger captures, not only a note.
+        if (str(autopilot_cfg.get("mode") or "off") == "reactive"
+                and not run_requested(autopilot_cfg)):
+            asks = self._client.list_asks(quest_id=quest_id)
+            if not has_new_ask_since(asks, autopilot_cfg.get("last_pass_at")):
+                return "reactive: no new ask since the last pass"
         # THE DAY RULE, as a gate. With a roster configured, a day nobody was rostered for is a day
         # this quest does no work at all -- config plus clock only, which is why it sits here with
         # the other cheap checks and before any goal fetch or model call.

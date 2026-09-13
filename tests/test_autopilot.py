@@ -23,6 +23,7 @@ from quest_ai_runner.runner.autopilot import (
     current_scope_label,
     default_persona_instructions_for,
     default_quest_instructions_for,
+    has_new_ask_since,
     run_requested,
     compose_batch_text,
     resolve_persona,
@@ -65,10 +66,12 @@ class FakeAutopilotClient:
     ACCEPTED_AUTOPILOT_FIELDS = {"mode", "planning", "cadence", "personas", "env_id"}
 
     def __init__(self, quests=None, goals_by_quest=None, tasks=None,
-                 accepts_bookkeeping=False):
+                 accepts_bookkeeping=False, asks_by_quest=None):
         self.quests = list(quests or [])            # full quest states, keyed for get_quest_autopilot
         self.goals_by_quest = dict(goals_by_quest or {})
         self.tasks = list(tasks or [])
+        self.asks_by_quest = dict(asks_by_quest or {})
+        self.list_asks_calls = []
         self.created_tasks = []
         # Every ``list_quest_goals`` call, in order. A gate that is meant to be cheap has to be
         # shown to run before the goal fetch, and this is the record that shows it.
@@ -121,6 +124,10 @@ class FakeAutopilotClient:
 
     def list_open_decisions_for_quest(self, quest_id):
         return [{"id": "dec_1", "status": "open"}] if self.open_decisions.get(quest_id) else []
+
+    def list_asks(self, *, quest_id, limit=50):
+        self.list_asks_calls.append(quest_id)
+        return list(self.asks_by_quest.get(quest_id, []))
 
     def create_task(self, text, **kwargs):
         # Mirrors the CURRENT real create route: it accepts an initial ``status`` (queued or
@@ -335,6 +342,96 @@ def test_gate_skips_quest_whose_cadence_is_not_due():
     assert result.created_task_ids == []
     assert result.skipped == [{"quest_id": "q1", "quest_label": "ship the thing",
                                "reason": "cadence not due yet"}]
+
+
+# --- has_new_ask_since (pure) ------------------------------------------------------------------
+
+def test_has_new_ask_since_true_when_never_run_and_something_exists():
+    assert has_new_ask_since([{"occurred_at": "2026-01-01T00:00:00Z"}], None) is True
+
+
+def test_has_new_ask_since_false_when_never_run_and_nothing_exists():
+    assert has_new_ask_since([], None) is False
+
+
+def test_has_new_ask_since_true_for_an_ask_after_the_last_pass():
+    asks = [{"occurred_at": "2026-07-05T00:00:00Z"}]
+    assert has_new_ask_since(asks, "2026-07-01T00:00:00Z") is True
+
+
+def test_has_new_ask_since_false_for_an_ask_before_the_last_pass():
+    asks = [{"occurred_at": "2026-06-20T00:00:00Z"}]
+    assert has_new_ask_since(asks, "2026-07-01T00:00:00Z") is False
+
+
+def test_has_new_ask_since_ignores_an_ask_with_no_parseable_timestamp():
+    asks = [{"occurred_at": None}, {"occurred_at": "not a date"}]
+    assert has_new_ask_since(asks, "2026-07-01T00:00:00Z") is False
+
+
+def test_has_new_ask_since_true_when_any_one_of_several_is_new():
+    asks = [{"occurred_at": "2026-06-01T00:00:00Z"}, {"occurred_at": "2026-07-10T00:00:00Z"}]
+    assert has_new_ask_since(asks, "2026-07-01T00:00:00Z") is True
+
+
+# --- gate: reactive mode ----------------------------------------------------------------------
+
+def test_reactive_gate_skips_when_no_new_ask_since_the_last_pass():
+    # weekly cadence, last pass in an earlier ISO week -> cadence itself is due; the only thing
+    # standing between this quest and a run is REACTIVE mode's own "anything new?" check.
+    q1 = _quest("q1", mode="reactive", last_pass_at="2026-07-01T09:00:00Z")
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))}
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals, asks_by_quest={"q1": []})
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+    result = passer.run({"text": "pass"})
+    assert result.created_task_ids == []
+    assert result.skipped == [{"quest_id": "q1", "quest_label": "ship the thing",
+                               "reason": "reactive: no new ask since the last pass"}]
+    assert client.list_asks_calls == ["q1"]
+
+
+def test_reactive_gate_runs_when_a_new_ask_landed_since_the_last_pass():
+    q1 = _quest("q1", mode="reactive", last_pass_at="2026-07-01T09:00:00Z")
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))}
+    asks = {"q1": [{"occurred_at": "2026-07-05T00:00:00Z"}]}  # after last_pass_at
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals, asks_by_quest=asks)
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+    result = passer.run({"text": "pass"})
+    assert len(result.created_task_ids) == 1
+    assert result.skipped == []
+
+
+def test_reactive_gate_ignores_an_ask_that_predates_the_last_pass():
+    q1 = _quest("q1", mode="reactive", last_pass_at="2026-07-01T09:00:00Z")
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))}
+    asks = {"q1": [{"occurred_at": "2026-06-20T00:00:00Z"}]}  # BEFORE last_pass_at
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals, asks_by_quest=asks)
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+    result = passer.run({"text": "pass"})
+    assert result.created_task_ids == []
+    assert any("reactive" in s["reason"] for s in result.skipped)
+
+
+def test_reactive_gate_is_bypassed_by_an_explicit_run_now():
+    """A person pressing 'Run now' gets a run regardless of whether Autopilot thinks anything is
+    new -- the same override cadence itself already honors."""
+    q1 = _quest("q1", mode="reactive", last_pass_at="2026-07-01T09:00:00Z",
+               run_requested_at="2026-07-11T09:00:00Z")
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))}
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals, asks_by_quest={"q1": []})
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+    result = passer.run({"text": "pass"})
+    assert len(result.created_task_ids) == 1
+    assert client.list_asks_calls == []  # never even asked -- the override short-circuits it
+
+
+def test_non_reactive_modes_never_call_list_asks():
+    q1 = _quest("q1", mode="act")
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))}
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals)
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+    passer.run({"text": "pass"})
+    assert client.list_asks_calls == []
 
 
 # --- gate: backpressure ---------------------------------------------------------------------
