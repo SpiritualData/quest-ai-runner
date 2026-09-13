@@ -115,6 +115,7 @@ _FILE_SCALAR_FIELDS = {
     "context_updates_judge_relevance", "context_updates_relevance_tier",
     "rep_context_prefs", "context_preamble_doctrine", "vector_store", "mcp_drive",
     "context_sources_map", "context_sources_file", "drive_comments_auth",
+    "feedback_ledger", "feedback_ledger_path",
     "quest_folder_map_file",
     "state_path", "lane_label", "env_files", "env_aliases", "env",
     "extra",
@@ -491,6 +492,13 @@ class RunnerConfig:
     # deployment is blocked on a schema change in another service. Live case: quest-backend's
     # autopilot settings reject an unknown key outright (422 extra_forbidden), so a quest could
     # not name a folder to watch at all. Same escape hatch ``quest_folder_map`` already is.
+    # The record of what became of each thing a person asked for (``runner/feedback_ledger.py``).
+    # On by default: without it, "handled" can only ever be inferred from timestamps, and a reply
+    # that arrives after a request is not the same as the request being done.
+    feedback_ledger: bool = True
+    # Where that record lives. Defaults to beside ``state_path``, same as the watermarks.
+    feedback_ledger_path: Optional[str] = None
+
     context_sources_map: Optional[Dict[str, Any]] = None
     # A JSON file holding that same map, for a deployment that grows it by hand over time (the
     # shape ``quest_folder_map_file`` has). Merged under ``context_sources_map``.

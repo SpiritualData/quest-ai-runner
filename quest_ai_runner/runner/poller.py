@@ -32,6 +32,24 @@ from ..resources import ResourceGuard, ResourceLimits
 from .autopilot import (AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, AutopilotPass, cadence_due,
                         run_requested)
 from .context_updates import build_update_engine
+
+
+def _guidance_manager_of(cfg: Any) -> Any:
+    """The card store a standing instruction should be written to, or None.
+
+    Duck-typed across the shapes a deployment may have wired: an explicit manager on the config, or
+    the one its guidance provider is already reading. A deployment with neither keeps tracking
+    standing rules in the ledger; they simply do not become retrievable cards.
+    """
+    manager = getattr(cfg, "guidance_manager", None)
+    if manager is not None:
+        return manager
+    provider = getattr(cfg, "guidance_provider", None)
+    for attr in ("manager", "cards", "card_manager"):
+        found = getattr(provider, attr, None) if provider is not None else None
+        if found is not None:
+            return found
+    return None
 from .executor import TaskExecutor
 from .local_time import now_in_zone, scheduled_moment, today_in_zone
 from .quest_client import QuestApiError, QuestClient, QuestDecisionSink, QuestNotConfigured
@@ -163,6 +181,8 @@ class Poller:
         # or test that reads config.rep_sync_resolver after construction sees the resolved callable.
         config.rep_sync_resolver = resolve_rep_sync_resolver(config, quest_client=self.client)
         self.state = StateStore(state_path)
+        # One-shot: abandoned claims are reconciled on this process's first scan (_recover_orphans).
+        self._orphans_reconciled = False
         self._orchestrator = None  # built lazily so an unconfigured poll degrades cleanly
         # Autopilot: built once (stateless other than the injected client/config) and handed to
         # every TaskExecutor this poller builds, so a task with ``handler == "autopilot"`` routes
@@ -214,6 +234,11 @@ class Poller:
         # even on a scan that finds no due tasks. Best-effort, like progress-posting: a failed
         # heartbeat is logged and never blocks discovery/execution.
         self._emit_heartbeat()
+        # Reconcile anything a PREVIOUS process claimed and never finished (it was killed). Runs
+        # once per process, before discovery, so recovered work is eligible in this very scan.
+        if not self._orphans_reconciled:
+            self._orphans_reconciled = True
+            self._recover_orphans()
         # Quest-folder periodic sync (opt-in, cfg.quest_folder_map) runs every scan regardless of
         # task pickup below — it's a light data sync, not new work, so it isn't gated by the
         # resource/token guards that protect against taking on MORE agentic work.
@@ -277,6 +302,50 @@ class Poller:
                 except Exception as e:  # noqa: BLE001 — one bad task never kills the scan
                     log.error("task handling crashed: %s", e)
         return handled
+
+    def _recover_orphans(self) -> None:
+        """Re-queue tasks a previous life of this runner claimed and never reported.
+
+        A claim PATCHes the row to ``in_progress``; that is what stops a second worker taking it.
+        If the worker then dies, the row still says someone is running it and nobody is. The only
+        thing that eventually moves it is a backend staleness sweeper, hours later, and it moves it
+        to ``failed`` -- which for an autopilot quest means the day produces no mail and no error,
+        because failed rows are deliberately not mailable. The work is not slow, it is gone, and
+        silently. This closes that gap from the side that actually knows: the runner remembers what
+        it was holding (``StateStore.claim_in_flight``), so a fresh process can hand it back.
+
+        Deliberately conservative. The row's CURRENT status is re-read first and only a still
+        ``in_progress`` row is touched -- a task that actually finished (or that another
+        environment has since taken) is left exactly as it is. Recovery is re-queueing rather than
+        failing, because nothing here knows whether the work was impossible or merely interrupted;
+        a queued row gets tried again, and a genuinely broken one fails on its own terms with a
+        real reason. Orphans are consumed once (see ``take_orphans``), so an unrecoverable id
+        cannot become a retry loop across restarts.
+        """
+        try:
+            orphans = self.state.take_orphans()
+        except Exception:  # noqa: BLE001 -- recovery must never stop a scan from happening
+            log.warning("could not read abandoned claims from the state store", exc_info=True)
+            return
+        if not orphans:
+            return
+        log.warning("recovery: %d task(s) were claimed by a previous run that did not finish "
+                    "(most likely it was killed) — reconciling: %s",
+                    len(orphans), ", ".join(sorted(orphans)))
+        for task_id, claimed_at in sorted(orphans.items()):
+            try:
+                current = self.client.get_task(task_id) or {}
+                status = str((current.get("task") or current).get("status") or "").strip().lower()
+                if status != "in_progress":
+                    log.info("recovery: task %s is %r now, not the abandoned in_progress — "
+                             "leaving it alone", task_id, status or "unknown")
+                    continue
+                self.client.update_task(task_id, {"status": "queued"})
+                log.warning("recovery: task %s was abandoned in_progress (claimed %s) and has "
+                            "been re-queued; it will run on a following scan", task_id, claimed_at)
+            except Exception as e:  # noqa: BLE001 -- one bad id never blocks the others
+                log.warning("recovery: could not reconcile abandoned task %s (%s) — it will be "
+                            "left for the backend's own staleness sweep", task_id, e)
 
     def _emit_heartbeat(self) -> None:
         """Best-effort env heartbeat: report this runner is live + its capabilities.
@@ -358,6 +427,7 @@ class Poller:
             return self._handle_one(task)
         finally:
             self._release_slot(task_id)
+            self.state.release_in_flight(task_id)
 
     def _handle_one(self, task: Dict[str, Any]) -> Optional[str]:
         # Context-request tasks never run the goal loop: a small, bounded, side-effect-free
@@ -394,6 +464,11 @@ class Poller:
             log.info("could not claim task %s — skipping (will be re-offered later)", task_id)
             return None
         self.state.mark(sig)
+        # Persist WHAT WE ARE HOLDING before running it. The claim above has already PATCHed the
+        # row to in_progress, so from here until a terminal report the backend believes this
+        # runner is on it -- and if this process is killed (OOM, SIGKILL) nothing else will ever
+        # notice. ``_recover_orphans`` reconciles this on the next start; see take_orphans().
+        self.state.claim_in_flight(task_id)
         # Opt-in: refresh this rep's skill file from its Quest profile right before running, so the
         # spawned agent reflects the latest persona + learned corrections. Best-effort: a sync
         # failure is logged and the task still runs (it just uses the last-synced skill file).
@@ -411,7 +486,8 @@ class Poller:
                                 autopilot_pass=self._autopilot,
                                 quest_folder_zones=getattr(
                                     self.cfg, "quest_folder_zones", True),
-                                update_engine=self._update_engine)
+                                update_engine=self._update_engine,
+                                guidance_manager=_guidance_manager_of(self.cfg))
         outcome = executor.execute(task, rep_preamble=rep_preamble)
         log.info("task %s -> %s", task_id, outcome.status)
         # Opt-in push-back: after the run, write the local skill file back up to Quest when the
@@ -1190,6 +1266,7 @@ class Poller:
             log.error("fast lane: handling task %s crashed", task_id, exc_info=True)
         finally:
             self._release_slot(task_id)
+            self.state.release_in_flight(task_id)
 
     def discovery_team_id(self) -> str:
         """The team scope BOTH discovery paths must use (background scan and fast lane).

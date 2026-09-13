@@ -60,7 +60,12 @@ they are created by the assistant's account and filed into the person's folder, 
 ends up on each *document* and not on the folder around them. The folder query then returns nothing
 while every document is readable. `{"source": "drive_comments", "owner": "assistant@example.org"}`
 is the query that works there, and unlike a `file_ids` list it keeps working as new documents are
-created. The three may be combined; a file reached by more than one route is reported once.
+created. The three may be combined; a file reached by more than one route is read once.
+
+**`owner` takes one address or a list of them**, because one person is several Google accounts: a
+work domain, an old personal address, a second one some document happened to be created under.
+Which address owns which document is not something anybody keeps track of, so a spec that could
+name only one made every document under the others invisible.
 
 **Every capture is its own row, and a tag never gates delivery.** The captures arrive one update
 each, each with its own ref, so the relevance judge decides on each one and the receipt answers
@@ -132,6 +137,87 @@ cfg.drive_comments = DriveComments(token_provider=service_account_token_provider
 
 Reading needs `drive.readonly`; posting a reply needs a write scope (`COMMENT_WRITE_SCOPES`), and a
 read-scoped token gets a clean error rather than a silent no-op.
+
+## Where an answer goes
+
+An item is only answered where the person actually reads. A quest with mail switched on sends the
+run's **result** to its people with a per-quest reply address, and their replies come back as notes:
+that round trip is the conversation, and a note nobody opens is not part of it. So each item's
+`how_to_respond` names the channel that reaches ITS reader:
+
+| the item | where the answer goes |
+| --- | --- |
+| a note, on a quest that mails | the run's result, which is what gets mailed; the note it also keeps is the record |
+| a note, on a quest that does not mail | a note on the quest |
+| a document comment | a reply on that comment thread, in the document |
+
+**And the same two places count as an answer.** A person's note stops being offered once an
+assistant note follows it on the quest **or** a run on that quest delivered its result after it
+(`DELIVERED_TASK_STATUSES`, and only a run that actually produced a result). Before that second
+half existed, every answer that went out by mail left the note it answered looking untouched, and
+the person was asked the same question the next morning, and the morning after.
+
+What a later run can see of its own past answers, which is what makes this work: the result on the
+task row (`_fetch_run_history`), the same text rolled onto the autopilot pass that created it, and
+the previous period's finished tasks (`_previous_period_summary`). Notes remain the assistant's
+durable record on the quest; they are simply no longer the only evidence that somebody was answered.
+
+## Saying what was read
+
+A source reports what it LOOKED at, not only what it offered: `SourceReport.considered` and
+`SourceReport.explanation`, set by the source through `CollectRequest.account(...)`. This is not
+bookkeeping. "0 found" and "two questions, both already answered in the document" are the same
+line to a reader, and the first reading sends somebody hunting a permissions bug that is not there,
+which is exactly what happened on 2026-09-12. The channel now says which:
+
+```
+drive_comments   0 found (2 thread(s) across 8 document(s), 2 already answered in the document)
+drive_comments   0 found (no comments on the 8 document(s) read)
+quest_notes      0 found (6 note(s), all already answered)
+```
+
+## Looking: `quest-ai-runner context <quest_id>`
+
+Everything above is about context being *delivered* to a run. Asking what a quest's context IS, right
+now, is a separate operation, and it is one call:
+
+```bash
+quest-ai-runner context quest_1625d9f47a06 --config qar.toml
+```
+
+```python
+from quest_ai_runner import load_config
+from quest_ai_runner.runner.context_updates import collect_quest_context
+
+bundle = collect_quest_context("quest_1625d9f47a06", cfg=load_config("qar.toml"))
+print(bundle.as_prompt_block())     # exactly the text a run on this quest would be handed
+```
+
+It exists because, before it, the only ways to see a quest's context were to run the thing that
+consumes it (an autopilot pass, an executor task) or to rebuild the engine's wiring by hand outside
+the library. The first has side effects and a cadence gate that makes it unavailable on the day
+somebody most wants to look; the second is a copy of library code living where it cannot be kept in
+step. Neither is a thing to hand somebody who wants to look at their own context.
+
+**It is a read, structurally.** The engine is built on a `Watermarks` store constructed with
+`read_only=True`, which cannot move a stamp whichever method is called on it, `mark_seen()`
+included. So the command has no effect on what the next real run is offered, and running it ten
+times is the same as running it once. That is a property of the object rather than a rule about
+which method to avoid, because "safe if you don't call the wrong thing" is not something the person
+reading the command can verify.
+
+| what you want | how |
+| --- | --- |
+| the whole picture, as a person reads it | `context <quest_id>` |
+| just the block a run receives | `context <quest_id> --block` |
+| a report, a dashboard, a test | `context <quest_id> --json` (`ContextUpdates.as_dict()`) |
+| a time period instead of "since last delivered" | `--days 7`, or `--since 2026-09-01T06:00:00Z` |
+| one channel only | `--source drive_comments` (repeatable) |
+| what a card is allowed to name | `context <quest_id> --sources` |
+
+The `--source` filter is how "is the Drive channel actually reaching these documents?" gets a
+straight answer: one channel, a window wide enough to contain something, and a per-source line
+saying found, set aside, or the error. The same narrowing is `sources=[...]` on `UpdateEngine.collect`.
 
 ## The rules that hold it together
 

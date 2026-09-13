@@ -193,7 +193,7 @@ def test_a_note_that_arrived_mid_run_is_offered_once_even_though_a_summary_follo
     bundle = engine.collect({"context_sources": ["quest_notes"]}, card_id="q1")
     assert [u.item_id for u in bundle.updates] == ["mid"]
     assert bundle.updates[0].needs_response is False
-    assert "an assistant note followed it" in bundle.updates[0].title
+    assert "an assistant has answered since" in bundle.updates[0].title
 
     bundle.mark_seen()                                       # a run has now had it
     assert engine.collect({"context_sources": ["quest_notes"]}, card_id="q1").updates == []
@@ -931,3 +931,286 @@ def test_a_collection_named_by_something_that_does_not_exist_is_a_reported_gap()
 def _as_utc_for_test(text):
     from datetime import datetime, timezone
     return datetime.fromisoformat(text).replace(tzinfo=timezone.utc)
+
+
+# --- looking at a card's context is an operation of its own -------------------------------------
+#
+# What these pin down: asking "what is the context for this quest" is a READ. It has no cadence
+# gate, no side effect, and no consumer to run first. Before it existed the only ways to see a
+# quest's context were to run the thing that consumes it (an autopilot pass, an executor task) or
+# to rebuild the engine's wiring outside the library, where it drifts from the library.
+
+def test_a_read_only_watermark_store_cannot_move_a_stamp(tmp_path):
+    """The guarantee is structural, not a convention about which method not to call."""
+    path = tmp_path / "wm.json"
+    Watermarks(str(path)).set("q1", "quest_notes", NOW)
+    before = path.read_text()
+
+    ro = Watermarks(str(path), read_only=True)
+    assert ro.read_only
+    assert ro.get("q1", "quest_notes") == NOW          # still reads the real stamps
+    ro.set("q1", "quest_notes", NOW + timedelta(days=1))
+
+    assert path.read_text() == before
+    assert Watermarks(str(path)).get("q1", "quest_notes") == NOW
+
+
+def test_marking_seen_on_a_read_only_engine_consumes_nothing(tmp_path):
+    """Even the method whose whole job is to advance the stamps cannot, on a read."""
+    class Client:
+        def list_quest_notes(self, quest_id):
+            return [{"id": "n1", "text": "do X", "author_kind": "user",
+                     "created_at": _iso(days_ago=1)}]
+
+    path = tmp_path / "wm.json"
+    engine = UpdateEngine(Client(), watermarks=Watermarks(str(path), read_only=True),
+                          always=("quest_notes",), now_fn=_now)
+    bundle = engine.collect({"quest_id": "q1", "name": "Dissertation"}, card_id="q1")
+    assert bundle.updates
+    bundle.mark_seen()
+
+    assert not path.exists()
+    assert engine.collect({"quest_id": "q1", "name": "Dissertation"},
+                          card_id="q1").updates, "a second look offers the same thing"
+
+
+class _ReadClient:
+    """A quest with one note and one capture, and the state endpoint a read starts from."""
+
+    def __init__(self):
+        self.quests_fetched = []
+
+    def get_quest(self, quest_id, **kwargs):
+        self.quests_fetched.append(quest_id)
+        return {"quest_id": quest_id, "name": "Dissertation",
+                "autopilot": {"context_sources": [{"source": "insights"}]}}
+
+    def list_quest_notes(self, quest_id):
+        return [{"id": "n1", "text": "do the survey lineage first", "author_kind": "user",
+                 "created_at": _iso(days_ago=1)}]
+
+    def list_insights(self, **kwargs):
+        return [{"id": "i1", "content": "idea for the construct weighting",
+                 "created_at": _iso(days_ago=2)}]
+
+
+def test_reading_a_quests_context_is_one_call_and_repeats_identically():
+    from quest_ai_runner.runner.context_updates import collect_quest_context
+
+    client = _ReadClient()
+    first = collect_quest_context("q1", client=client)
+    second = collect_quest_context("q1", client=client)
+
+    assert client.quests_fetched == ["q1", "q1"]
+    assert [u.item_id for u in first.updates] == [u.item_id for u in second.updates]
+    assert first.refs() == second.refs()
+
+
+def test_a_read_can_be_narrowed_to_one_channel():
+    from quest_ai_runner.runner.context_updates import collect_quest_context
+
+    bundle = collect_quest_context("q1", client=_ReadClient(), sources=["quest_notes"])
+
+    assert {r.source for r in bundle.reports} == {"quest_notes"}
+    assert {u.source for u in bundle.updates} == {"quest_notes"}
+
+
+def test_a_read_takes_a_time_period_instead_of_the_stored_stamp(tmp_path):
+    """``days`` is the question a person actually asks: what has this quest seen this week?"""
+    from quest_ai_runner.runner.context_updates import collect_quest_context
+
+    path = tmp_path / "wm.json"
+    Watermarks(str(path)).set("q1", "quest_notes", NOW)   # "already delivered everything"
+    state = tmp_path / "qar_state.json"
+
+    class Cfg:
+        state_path = str(state)
+        context_updates_state_path = str(path)
+        context_updates_judge_relevance = False
+
+    narrow = collect_quest_context("q1", cfg=Cfg(), client=_ReadClient())
+    wide = collect_quest_context("q1", cfg=Cfg(), client=_ReadClient(), days=30)
+
+    assert [r.since for r in narrow.reports if r.source == "quest_notes"] == [NOW]
+    wide_since = [r.since for r in wide.reports if r.source == "quest_notes"][0]
+    assert wide_since < NOW
+
+
+def test_a_read_needs_a_client_or_a_config_to_build_one_from():
+    from quest_ai_runner.runner.context_updates import collect_quest_context
+
+    try:
+        collect_quest_context("q1")
+    except ValueError as e:
+        assert "client" in str(e)
+    else:                                     # pragma: no cover -- the assertion is the failure
+        raise AssertionError("a read with nothing to read through must say so")
+
+
+def test_the_bundle_serialises_for_a_caller_that_is_not_a_prompt():
+    """A report, a dashboard or a test asks the bundle, not the prompt text it renders."""
+    from quest_ai_runner.runner.context_updates import collect_quest_context
+
+    payload = collect_quest_context("q1", client=_ReadClient()).as_dict()
+
+    assert payload["card_id"] == "q1"
+    assert payload["card_label"] == "Dissertation"
+    assert isinstance(payload["collected_at"], str)
+    note = [u for u in payload["updates"] if u["source"] == "quest_notes"][0]
+    assert note["ref"].startswith("U")
+    assert note["needs_response"] is True
+    assert "survey lineage" in note["body"]
+    assert isinstance(note["occurred_at"], str)
+    assert {"source", "spec", "found", "since", "error"} <= set(payload["reports"][0])
+    # Wiring is not content: the watermark store never appears in the serialised form.
+    assert "_watermarks" not in payload
+
+
+# --- where an answer goes, and saying what was read ---------------------------------------------
+#
+# Two live failures, same root: an answer that reaches the person does not always land where this
+# engine was looking, and a channel that says only "nothing new" cannot be told from a broken one.
+
+def _quest(mails: bool):
+    quest = {"quest_id": "q1", "name": "Dissertation", "context_sources": ["quest_notes"]}
+    if mails:
+        quest["autopilot"] = {"email": {"enabled": True}}
+    return quest
+
+
+class _NotesAndRuns:
+    """A quest with the person's note, and optionally a run that delivered a result after it."""
+
+    def __init__(self, delivered=None, status="done", result="Here is the answer."):
+        self.delivered = delivered
+        self.status = status
+        self.result = result
+
+    def list_quest_notes(self, quest_id):
+        return [{"id": "n1", "text": "do the survey lineage first", "author_kind": "user",
+                 "author_name": "the owner", "created_at": _iso(days_ago=2)}]
+
+    def list_tasks(self, **kwargs):
+        if not self.delivered:
+            return []
+        return [{"id": "atask_1", "status": self.status, "result": self.result,
+                 "worked_at": self.delivered}]
+
+
+def test_a_note_answered_in_a_runs_result_stops_being_asked_about():
+    """The answer went out by mail as the run's result; no note was ever written.
+
+    Before this, only an assistant NOTE closed a note, so every emailed answer left the note it
+    answered looking untouched and the person was asked the same question every morning.
+    """
+    engine = UpdateEngine(_NotesAndRuns(delivered=_iso(days_ago=1)),
+                          always=("quest_notes",), now_fn=_now)
+    bundle = engine.collect(_quest(mails=True), card_id="q1")
+
+    assert [u for u in bundle.updates if u.source == "quest_notes"] == []
+    report = [r for r in bundle.reports if r.source == "quest_notes"][0]
+    assert report.considered == 1
+    assert "already answered" in report.explanation
+
+
+def test_a_run_that_delivered_nothing_does_not_count_as_an_answer():
+    """A task row with no result answered nobody, whatever its status says."""
+    engine = UpdateEngine(_NotesAndRuns(delivered=_iso(days_ago=1), result=""),
+                          always=("quest_notes",), now_fn=_now)
+    bundle = engine.collect(_quest(mails=True), card_id="q1")
+
+    assert [u.item_id for u in bundle.updates] == ["n1"]
+    assert bundle.updates[0].needs_response
+
+
+def test_a_note_written_after_the_last_run_is_still_waiting():
+    engine = UpdateEngine(_NotesAndRuns(delivered=_iso(days_ago=3)),
+                          always=("quest_notes",), now_fn=_now)
+    bundle = engine.collect(_quest(mails=True), card_id="q1")
+
+    assert [u.item_id for u in bundle.updates] == ["n1"]
+    assert bundle.updates[0].needs_response
+
+
+def test_on_a_quest_that_mails_the_answer_belongs_in_the_result():
+    """A run told to answer in a channel the person never opens has not answered."""
+    engine = UpdateEngine(_NotesAndRuns(), always=("quest_notes",), now_fn=_now)
+
+    mailing = engine.collect(_quest(mails=True), card_id="q1").updates[0]
+    assert "result" in mailing.how_to_respond
+    assert "mailed" in mailing.how_to_respond
+
+    quiet = UpdateEngine(_NotesAndRuns(), always=("quest_notes",), now_fn=_now)
+    note_only = quiet.collect(_quest(mails=False), card_id="q1").updates[0]
+    assert note_only.how_to_respond == "add a note on this quest"
+
+
+class _AnsweredComments:
+    """Two threads the person opened, both already replied to by this credential."""
+
+    def __init__(self, answered=True):
+        self.answered = answered
+        self.owners_asked = []
+
+    def files_owned_by(self, owner, **kwargs):
+        self.owners_asked.append(owner)
+        from quest_ai_runner.adapters.drive_comments import DriveFileChange
+        return [DriveFileChange(file_id=f"f-{owner}", file_name=f"Doc for {owner}")]
+
+    def comments_for_file(self, file_id, **kwargs):
+        from quest_ai_runner.adapters.drive_comments import DriveComment, DriveReply
+        replies = [DriveReply(content="fixed", author_is_me=True)] if self.answered else []
+        return [DriveComment(file_id=file_id, file_name=kwargs.get("file_name", ""),
+                             comment_id="c1", author="The owner", content="this is wrong",
+                             quoted_text="the passage", created_at=NOW - timedelta(days=2),
+                             replies=replies)]
+
+    def comments_for_folder(self, folder_id, **kwargs):
+        return []
+
+
+def test_a_drive_channel_says_when_everything_it_found_was_already_answered():
+    """Live confusion, 2026-09-12: a quest watching two Drive routes read "0 found" for days while
+    both of the person's comments sat there, answered in the document exactly as designed. The
+    count was right and the report was unreadable."""
+    client = _AnsweredComments()
+    engine = UpdateEngine(None, drive_comments=client, always=(), now_fn=_now)
+
+    bundle = engine.collect(
+        {"quest_id": "q1", "name": "Dissertation",
+         "context_sources": [{"source": "drive_comments", "owner": "a@example.org"}]},
+        card_id="q1")
+
+    report = [r for r in bundle.reports if r.source == "drive_comments"][0]
+    assert report.found == 0
+    assert report.considered == 1
+    assert "already answered in the document" in report.explanation
+    assert "already answered in the document" in bundle.checked_line()
+
+
+def test_one_person_is_several_google_accounts():
+    """A spec that could name only one owner made every document under the others invisible."""
+    client = _AnsweredComments(answered=False)
+    engine = UpdateEngine(None, drive_comments=client, always=(), now_fn=_now)
+
+    bundle = engine.collect(
+        {"quest_id": "q1",
+         "context_sources": [{"source": "drive_comments",
+                              "owner": ["work@example.org", "old@gmail.com"]}]},
+        card_id="q1")
+
+    assert client.owners_asked == ["work@example.org", "old@gmail.com"]
+    assert len(bundle.updates) == 2
+    assert {u.location for u in bundle.updates} == {
+        "Doc for work@example.org", "Doc for old@gmail.com"}
+
+
+def test_a_bare_owner_string_still_works():
+    client = _AnsweredComments(answered=False)
+    engine = UpdateEngine(None, drive_comments=client, always=(), now_fn=_now)
+    bundle = engine.collect(
+        {"quest_id": "q1",
+         "context_sources": [{"source": "drive_comments", "owner": "solo@example.org"}]},
+        card_id="q1")
+    assert client.owners_asked == ["solo@example.org"]
+    assert len(bundle.updates) == 1

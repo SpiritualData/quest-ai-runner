@@ -512,6 +512,13 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     if os.getenv("QAR_QUEST_FOLDER_SYNC_DIRECTION"):
         cfg.quest_folder_sync_direction = os.environ["QAR_QUEST_FOLDER_SYNC_DIRECTION"].strip().lower()
 
+    # --- the feedback ledger (on by default; see runner/feedback_ledger.py) ---------------------
+    if os.getenv("QAR_FEEDBACK_LEDGER"):
+        cfg.feedback_ledger = os.environ["QAR_FEEDBACK_LEDGER"].strip().lower() not in (
+            "0", "false", "no", "off")
+    if os.getenv("QAR_FEEDBACK_LEDGER_PATH"):
+        cfg.feedback_ledger_path = os.environ["QAR_FEEDBACK_LEDGER_PATH"]
+
     # --- automated context updates (on by default; see runner/context_updates.py) ---------------
     if os.getenv("QAR_CONTEXT_UPDATES"):
         cfg.context_updates = os.environ["QAR_CONTEXT_UPDATES"].strip().lower() not in (
@@ -860,6 +867,32 @@ def main(argv=None) -> int:
     sc_p.add_argument("--no-llm", action="store_true",
                       help="skip LLM relevance filter, show raw IDF results only")
 
+    # --- context subcommand: what is the context for this quest right now --------
+    ctx_p = sub.add_parser(
+        "context",
+        help="show a quest's current context updates (a read: safe, repeatable, no side effects)")
+    ctx_p.add_argument("quest_id", help="the quest to read (e.g. quest_1625d9f47a06)")
+    ctx_p.add_argument("--days", type=float, default=None, metavar="N",
+                       help="look back N days instead of from the stored 'last looked' stamp")
+    ctx_p.add_argument("--since", default=None, metavar="WHEN",
+                       help="look back from this ISO-8601 timestamp (e.g. 2026-09-01 or "
+                            "2026-09-01T06:00:00Z) instead of the stored stamp")
+    ctx_p.add_argument("--source", action="append", default=None, metavar="NAME",
+                       help="only this source, repeatable (default: every source the quest "
+                            "watches). --sources lists the vocabulary.")
+    ctx_p.add_argument("--sources", action="store_true",
+                       help="list the source names a quest's context_sources can use, then exit")
+    ctx_p.add_argument("--tracked", action="store_true",
+                       help="list what has been asked for on this quest and where each one got "
+                            "to (the feedback ledger), then exit")
+    ctx_p.add_argument("--block", action="store_true",
+                       help="print ONLY the prompt block a run would be handed, nothing else")
+    ctx_p.add_argument("--json", action="store_true", dest="as_json",
+                       help="print the bundle as JSON (updates, per-source reports, the block)")
+    ctx_p.add_argument("--config", default=None, metavar="PATH",
+                       help="TOML config file (see docs/writing-a-consumer.md); QAR_CONFIG_FILE "
+                            "also works. Environment variables always win over the file.")
+
     # --- sync-quest-folder subcommand: pull/push a quest <-> a local folder --
     sync_p = sub.add_parser("sync-quest-folder",
                             help="sync a Quest quest's state/notes with a local folder's QUEST_SYNC.md")
@@ -1090,6 +1123,114 @@ def main(argv=None) -> int:
         where = f"on quest {args.quest_id}" if args.quest_id else "standalone (no quest)"
         print(f"Goal created {where}: {args.title}  "
               f"(period {period}, deadline {goal.get('deadline')}, id {goal_id})")
+        return 0
+
+    # --- context: what is the context for this quest right now ------------------
+    if args.command == "context":
+        import json as _json
+        from datetime import datetime, timedelta, timezone
+
+        from .config import build_orchestrator
+        from .runner.context_updates import build_update_engine, collect_quest_context
+
+        cfg = _config_from_env(getattr(args, "config", None))
+        # Per CLAUDE.md: wrap the provider with MultiProvider before any model call. The relevance
+        # judge is a model call, and unwrapped it 404s on half the model ids a deployment pins.
+        build_orchestrator(cfg)
+
+        if args.sources:
+            engine = build_update_engine(cfg, None, read_only=True)
+            if engine is None:
+                print("Context updates are switched off for this config "
+                      "(RunnerConfig.context_updates / QAR_CONTEXT_UPDATES).")
+                return 1
+            print("Source names a quest's autopilot.context_sources can use:")
+            for name, describes in engine.describe_sources().items():
+                print(f"  {name:<16} {describes}")
+            return 0
+
+        if args.tracked:
+            from .runner.feedback_ledger import build_ledger
+            ledger = build_ledger(cfg, state_path=cfg.state_path, read_only=True)
+            if ledger is None:
+                print("The feedback ledger is switched off for this config "
+                      "(RunnerConfig.feedback_ledger / QAR_FEEDBACK_LEDGER).")
+                return 1
+            rows = sorted(ledger.for_card(args.quest_id),
+                          key=lambda i: (not i.is_open, i.occurred_at or i.first_seen_at))
+            if not rows:
+                print(f"Nothing tracked yet on {args.quest_id}. Items are recorded when a run is "
+                      f"handed them, and moved when a run says what it did with them.")
+                return 0
+            owed = [i for i in rows if i.is_open]
+            print(f"{len(rows)} tracked on {args.quest_id}; {len(owed)} still owed.\n")
+            for item in rows:
+                mark = "OWED" if item.is_open else "    "
+                when = (item.occurred_at or item.first_seen_at)[:10] or "undated"
+                card = f"  guidance: {item.guidance_card_id}" if item.guidance_card_id else ""
+                print(f"  {mark}  {when}  {item.kind:<9} {item.status_line()}{card}")
+                print(f"        {' '.join(str(item.text or '').split())[:110]}")
+            return 0
+
+        since = None
+        if args.since:
+            raw = args.since.strip().replace("Z", "+00:00")
+            try:
+                since = datetime.fromisoformat(raw)
+            except ValueError:
+                log.error("--since %r is not an ISO-8601 timestamp (e.g. 2026-09-01 or "
+                          "2026-09-01T06:00:00Z)", args.since)
+                return 1
+            if since.tzinfo is None:
+                since = since.replace(tzinfo=timezone.utc)
+        elif args.days is not None:
+            # Resolved here rather than inside the call, so the line printed below names the
+            # window that was actually used instead of describing the default it replaced.
+            since = datetime.now(timezone.utc) - timedelta(days=args.days)
+
+        try:
+            bundle = collect_quest_context(args.quest_id, cfg=cfg, since=since,
+                                           sources=args.source)
+        except ValueError as e:
+            log.error("%s", e)
+            return 1
+
+        block = bundle.as_prompt_block()
+        if args.block:
+            print(block)
+            return 0
+        if args.as_json:
+            payload = bundle.as_dict()
+            payload["prompt_block"] = block
+            print(_json.dumps(payload, indent=2, sort_keys=False))
+            return 0
+
+        # A quest's state row often carries an outcome and no name, and ``_card_label`` skips the
+        # outcome on purpose (it is a sentence about the future, and it crowds out the manifest
+        # column it would sit in). So an unnamed quest is headed by its id ONCE, rather than by the
+        # id printed twice as though one of them were a name.
+        named = f"{bundle.card_label} ({args.quest_id})" if bundle.card_label else args.quest_id
+        window = (f"since {since.isoformat()}" if since
+                  else "since each source was last delivered to a run")
+        print(f"Context for {named}, read at {bundle.collected_at.isoformat()}, {window}.")
+        owed = [u for u in bundle.updates if u.kind == "still owed"]
+        owed_line = f", {len(owed)} carried over from before" if owed else ""
+        print(f"{len(bundle.updates)} update(s), {len(bundle.needing_response())} waiting on an "
+              f"answer{owed_line}. Nothing was marked as seen: this is a read.")
+        print()
+        for r in bundle.reports:
+            spec = {k: v for k, v in (r.spec or {}).items() if k != "source"}
+            detail = f"  {spec}" if spec else ""
+            state = f"ERROR {r.error}" if r.error else f"{r.found} found"
+            if getattr(r, "set_aside", 0):
+                state += f", {r.set_aside} set aside as not about this work"
+            # Why a channel came back empty, when it knows. "0 found" alone reads as broken to
+            # somebody who is certain they left a comment on that document yesterday.
+            if not r.error and not r.found and r.explanation:
+                state += f" ({r.explanation})"
+            print(f"  {r.source:<16} {state}{detail}")
+        print()
+        print(block or "(nothing new on any channel this quest watches)")
         return 0
 
     # --- sync-quest-folder ------------------------------------------------------

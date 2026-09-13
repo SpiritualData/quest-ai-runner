@@ -367,9 +367,15 @@ class TaskExecutor:
                 quest_folder_map: Optional[Dict[str, str]] = None,
                 autopilot_pass: Optional[Any] = None,
                 quest_folder_zones: bool = True,
-                update_engine: Optional[Any] = None):
+                update_engine: Optional[Any] = None,
+                guidance_manager: Optional[Any] = None):
         self._client = client
         self._orch = orchestrator
+        # Where a STANDING instruction goes so that future runs retrieve it (a
+        # ``GuidanceCardManager``-shaped object, or None). The ledger tracks whether a rule is
+        # being followed; guidance is what puts it in front of tomorrow's run. Neither does the
+        # other's job, and with no manager wired a standing item is still tracked, just not carded.
+        self._guidance_manager = guidance_manager
         # The consumer's ``UpdateEngine`` (runner/context_updates.py), wired by the poller. With
         # one, a task's context view carries what changed on the quest's channels since a run last
         # looked (notes, captures judged for this card, document comments, a watched collection),
@@ -1210,14 +1216,58 @@ class TaskExecutor:
                 self._context_bundle.manifest() if self._context_bundle is not None else [])
             if not manifest:
                 return reported
-            receipt = render_receipt(
-                manifest, parse_usage_notes(reported if run_output is None else run_output))
+            account = reported if run_output is None else run_output
+            receipt = render_receipt(manifest, parse_usage_notes(account))
+            # The run has just said what it did with each thing, in a listed vocabulary. Record it
+            # before rendering: the receipt shows the person this run's account, the ledger is what
+            # carries it to the NEXT run, which is the whole difference between an assistant that
+            # remembers being asked and one that starts every morning from nothing.
+            self._record_dispositions(account)
             if not receipt:
                 return reported
             return strip_usage_block(reported).rstrip() + "\n\n" + receipt
         except Exception:  # noqa: BLE001 -- a receipt never costs a finished run its result
             log.warning("context-updates receipt could not be rendered", exc_info=True)
             return reported
+
+    def _record_dispositions(self, account: str) -> None:
+        """Fold this run's own account into the ledger, so the next run inherits it.
+
+        Best-effort and silent on failure, like every other piece of bookkeeping around a finished
+        run: the work is done and reported either way, and a ledger that could not be written costs
+        a repeated question, never a lost result.
+        """
+        # getattr, not attribute access: this runs from the receipt path, which a consumer or a
+        # test may reach on an object that never went through this executor's own __init__.
+        bundle = getattr(self, "_context_bundle", None)
+        ledger = getattr(bundle, "_ledger", None) if bundle is not None else None
+        if bundle is None or ledger is None:
+            return
+        try:
+            from .context_updates import parse_dispositions
+            from .feedback_ledger import record_run_account
+            moved = record_run_account(
+                ledger, card_id=bundle.card_id, offered=bundle.offered_keys(),
+                dispositions=parse_dispositions(account),
+                guidance_writer=self._guidance_writer())
+            if moved:
+                log.info("feedback ledger: %d item(s) moved by this run (%s)", len(moved),
+                         ", ".join(f"{m.item_id}->{m.state}" for m in moved[:6]))
+        except Exception:  # noqa: BLE001 -- never cost a finished run its result
+            log.warning("feedback ledger: this run's account could not be recorded", exc_info=True)
+
+    def _guidance_writer(self):
+        """How a standing rule reaches future runs, or None when this deployment has nowhere.
+
+        A standing instruction belongs in guidance, which is the machinery that already puts the
+        few relevant rules in front of every run. Wired from whatever the deployment configured;
+        absent one, a standing item is still TRACKED, it just does not get a card.
+        """
+        manager = getattr(self, "_guidance_manager", None)
+        if manager is None:
+            return None
+        from .feedback_ledger import guidance_writer_for
+        return guidance_writer_for(manager)
 
     def _compose_done_report(self, request_text: Optional[str], raw_summary: str,
                              result: OrchestratorResult,

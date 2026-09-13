@@ -86,6 +86,11 @@ DEFAULT_ALWAYS: Sequence[str] = ("reflections", "insights", "quest_notes")
 # carrying it into every brief forever trains the reader to skim past all of them -- which is the
 # same failure the first-look bound exists to prevent at the other end.
 OPEN_ITEM_MAX_AGE_DAYS = 90
+# ``feedback_ledger.KIND_UNKNOWN``, restated rather than imported: that module imports nothing from
+# here and this one must not import it at module level either (the ledger is optional, and a
+# deployment that does not keep one should not pay an import for it). Held equal by a test.
+KIND_UNKNOWN_SENTINEL = "unknown"
+
 # How many still-open items ONE source may carry. Newest first, so a burst of notes surfaces the
 # recent ones and lets the older tail go.
 MAX_OPEN_PER_SOURCE = 6
@@ -233,10 +238,29 @@ class SourceReport:
     found: int = 0
     set_aside: int = 0          # collected, then judged not to bear on this card
     error: str = ""
+    # How many items the source LOOKED at before its own filtering, and one line on why fewer were
+    # offered. Without these, "0 found" is indistinguishable from "two questions, both already
+    # answered in the document" -- and the person reading the first one concludes the channel is
+    # broken. It cost a live round trip: a quest watching two Drive routes reported nothing new for
+    # days while both of the person's comments sat there, answered, exactly as designed.
+    considered: int = 0
+    explanation: str = ""
 
     @property
     def ok(self) -> bool:
         return not self.error
+
+    def one_line(self) -> str:
+        """What this source did, in the words a person would use."""
+        if self.error:
+            return f"{self.source} (could not read: {self.error})"
+        if self.found and self.set_aside:
+            return f"{self.source} ({self.found}, {self.set_aside} not about this work)"
+        if self.found:
+            return f"{self.source} ({self.found})"
+        if self.explanation:
+            return f"{self.source} ({self.explanation})"
+        return f"{self.source} (nothing new)"
 
 
 @dataclass
@@ -249,6 +273,16 @@ class ContextUpdates:
     collected_at: datetime = field(default_factory=_utcnow)
     # Set by the engine so ``mark_seen`` can advance exactly what was delivered.
     _watermarks: Optional["Watermarks"] = None
+    # The record of what became of things (``runner.feedback_ledger``), when one is kept. Written
+    # at the same moment as the watermarks and for the same reason: delivery is the only honest
+    # moment to say an item reached a run.
+    _ledger: Any = None
+    # The card this bundle was collected for, so an owed item can be rendered with the right
+    # reply channel without another fetch.
+    _card: Dict[str, Any] = field(default_factory=dict)
+    # The source names whose items are asks (see ``_BaseSource.tracks_asks``). Only these are
+    # entered in the ledger, so a person is never asked to answer their own reflection.
+    _ask_sources: frozenset = frozenset()
 
     def __bool__(self) -> bool:
         return bool(self.updates)
@@ -268,6 +302,14 @@ class ContextUpdates:
     def refs(self) -> List[str]:
         """Every ref offered this run, in order, slotted ones included."""
         return [u.ref for u in self.updates if u.ref]
+
+    def offered_keys(self) -> List[Tuple[str, str, str]]:
+        """``[(ref, source, item_id), ...]`` for everything offered that a ledger can track.
+
+        The handle between the receipt a run writes and the record of what became of each thing:
+        the run answers by ref, and this says which item each ref was.
+        """
+        return [(u.ref, u.source, u.item_id) for u in self.updates if u.ref and u.item_id]
 
     # --- what the run is shown --------------------------------------------------------------
 
@@ -345,16 +387,7 @@ class ContextUpdates:
         """
         if not self.reports:
             return ""
-        bits = []
-        for r in self.reports:
-            if r.error:
-                bits.append(f"{r.source} (could not read: {r.error})")
-            elif r.found and r.set_aside:
-                bits.append(f"{r.source} ({r.found}, {r.set_aside} not about this work)")
-            elif r.found:
-                bits.append(f"{r.source} ({r.found})")
-            else:
-                bits.append(f"{r.source} (nothing new)")
+        bits = [r.one_line() for r in self.reports]
         return "Context sources checked this run: " + ", ".join(bits) + "."
 
     # --- the receipt ------------------------------------------------------------------------
@@ -363,6 +396,42 @@ class ContextUpdates:
         return [u.manifest_line() for u in self.updates]
 
     # --- bookkeeping --------------------------------------------------------------------------
+
+    def as_dict(self) -> Dict[str, Any]:
+        """The whole bundle as plain JSON-able data, for a caller that is not a prompt.
+
+        Here rather than in whoever is printing it: the field list is this module's, and a consumer
+        rebuilding it by hand drifts from it the first time a field is added. Timestamps are
+        ISO-8601 strings; the watermark store is deliberately absent (it is wiring, not content).
+        """
+        return {
+            "card_id": self.card_id,
+            "card_label": self.card_label,
+            "collected_at": self.collected_at.isoformat() if self.collected_at else None,
+            "updates": [
+                {
+                    "ref": u.ref, "source": u.source, "kind": u.kind, "item_id": u.item_id,
+                    "title": u.title, "body": u.body, "author": u.author,
+                    "occurred_at": u.occurred_at.isoformat() if u.occurred_at else None,
+                    "location": u.location, "url": u.url,
+                    "how_to_respond": u.how_to_respond, "needs_response": u.needs_response,
+                    "slot": u.slot, "excerpt": u.excerpt, "summary": u.summary,
+                    "manifest_line": u.manifest_line(),
+                }
+                for u in self.updates
+            ],
+            "reports": [
+                {
+                    "source": r.source, "spec": r.spec, "found": r.found,
+                    "set_aside": getattr(r, "set_aside", 0),
+                    "considered": r.considered,
+                    "explanation": r.explanation,
+                    "since": r.since.isoformat() if r.since else None,
+                    "error": r.error,
+                }
+                for r in self.reports
+            ],
+        }
 
     def mark_seen(self, *, at: Optional[datetime] = None) -> None:
         """Advance each checked source's watermark for this card.
@@ -374,25 +443,69 @@ class ContextUpdates:
         Only sources that reported WITHOUT error advance. A source that could not be read has not
         been seen, and pretending otherwise turns one API blip into permanently lost context.
         """
-        if self._watermarks is None or not self.card_id:
+        if not self.card_id:
             return
         stamp = at or self.collected_at
-        for r in self.reports:
-            if r.ok:
-                self._watermarks.set(self.card_id, r.source, stamp)
+        if self._watermarks is not None:
+            for r in self.reports:
+                if r.ok:
+                    self._watermarks.set(self.card_id, r.source, stamp)
+        # The same moment, the same reason: this is when an item was actually put in front of a
+        # run, which is what "offered" means. It records existence and nothing else -- being shown
+        # something is not acting on it, and the ledger is careful about the difference.
+        if self._ledger is not None:
+            for u in self.updates:
+                if not u.item_id or u.source not in self._ask_sources:
+                    continue
+                try:
+                    self._ledger.observe(
+                        card_id=self.card_id, source=u.source, item_id=u.item_id,
+                        text=u.body or u.excerpt, author=u.author, location=u.location,
+                        url=u.url, occurred_at=u.occurred_at, at=stamp)
+                except Exception as e:  # noqa: BLE001 -- bookkeeping never breaks a delivery
+                    log.warning("feedback ledger: could not record %s (%s)", u.item_id, e)
 
 
 # ---------------------------------------------------------------------------------------------
 # Prompt text
 # ---------------------------------------------------------------------------------------------
 
+# "not only in your result" used to end this paragraph, from when a note's only answer channel was
+# a note. It is now false on any quest that mails, where the result IS the message the person
+# opens; each item says where its own answer goes, and that line is the one to follow.
 _OFFER_PREAMBLE = (
     "Things the people you work with have said or done since you last looked at this work, in "
     "their own words. This is not a task list: judge which of these bear on what you are doing "
     "now, act on those, and leave the rest. Anything marked \"needs an answer\" is a question "
-    "someone is waiting on -- answer it through the channel named under it, not only in your "
-    "result, or they will never see the answer."
+    "someone is waiting on -- answer it where the item's own \"to respond\" line says, because "
+    "that is the place they will actually read it."
 )
+
+# What a disposition is, and the whole list of them, said to the run that has to pick one.
+#
+# This is a CHOICE FROM A LIST, which is what makes reading it back legitimate: the run is asked
+# for a structured decision and its answer is recorded, rather than its prose being scanned for
+# words that look like completion. Anything outside the list records nothing at all, so an item
+# can only ever fail to move, never move wrongly.
+#
+# "done" on a standing instruction is the failure worth naming here, because it is the natural
+# thing to write on the day you comply with one, and it is how a rule stops being followed: the
+# record says finished, nothing raises it again, and the third report quietly drops it.
+def _disposition_rules() -> str:
+    from .feedback_ledger import disposition_vocabulary
+    return (
+        "Each line starts with a DISPOSITION, then a colon, then what you actually did. The "
+        "disposition is recorded and carried forward, so use one of these exactly:\n\n"
+        f"{disposition_vocabulary()}\n\n"
+        "The one that matters most: if what they wrote governs FUTURE work (\"from now on\", "
+        "\"in every report\", \"always\"), it is standing, never done, even on the day you follow "
+        "it. Marking a standing instruction done is how it stops being followed: nothing raises it "
+        "again and it quietly drops out of the next piece of work.\n"
+        "If one thing they wrote contains two asks (a fix to make now AND a rule from now on), "
+        "give both on the same line, separated by a semicolon, e.g.\n"
+        "  [U1] done: added the Status column; standing: report limitations work every time"
+    )
+
 
 # The receipt protocol, stated to the run that will produce the work. Kept here rather than in
 # ``core/context_doctrine`` because it is not a doctrine about how to think: it is the contract for
@@ -417,14 +530,16 @@ def usage_receipt_gate(refs: Sequence[str] = ()) -> str:
     listed = [str(r) for r in (refs or []) if str(r)]
     if listed:
         example = "\n".join(
-            f"  [{r}] " + ("<up to 5 words on how you used it, or: not used>" if i == 0 else "...")
+            f"  [{r}] " + ("<disposition>: <up to 8 words on what you did>" if i == 0 else "...")
             for i, r in enumerate(listed))
         which = f"one line for each of {', '.join(listed)}, in that order, none left out"
     else:
-        example = "  [U1] <up to 5 words on how you used it>\n  [U2] not used"
+        example = ("  [U1] done: added the Status column\n"
+                   "  [U2] not used")
         which = "one line per ref you were shown above, in order, none left out"
     return (f"BEFORE YOU FINISH, account for the context updates you were shown. End your result "
-            f"with:\n\n{USAGE_HEADING}\n{example}\n\nThat is {which}. {_RECEIPT_RULES}")
+            f"with:\n\n{USAGE_HEADING}\n{example}\n\nThat is {which}.\n\n"
+            f"{_disposition_rules()}\n\n{_RECEIPT_RULES}")
 
 
 # ---------------------------------------------------------------------------------------------
@@ -480,6 +595,40 @@ def parse_usage_notes(text: str) -> Dict[str, str]:
             continue
         ref, note = m.group(1), " ".join(m.group(2).split())
         out[ref] = note.strip(" .-")
+    return out
+
+
+def split_disposition(note: str) -> List[Tuple[str, str]]:
+    """One receipt line's ``"done: added the column; standing: report it every time"`` as pairs.
+
+    Returns ``[(disposition, words), ...]`` keeping only the parts whose disposition this library
+    knows. A line with no recognised disposition returns ``[]`` and therefore records nothing,
+    which is the safe failure: an unrecorded answer costs one repeated question, a misrecorded one
+    costs the request itself.
+    """
+    from .feedback_ledger import normalize_disposition
+    out: List[Tuple[str, str]] = []
+    for part in str(note or "").split(";"):
+        head, sep, tail = part.partition(":")
+        disposition = normalize_disposition(head if sep else part)
+        if not disposition:
+            continue
+        out.append((disposition, " ".join(tail.split()).strip(" .-")))
+    return out
+
+
+def parse_dispositions(text: str) -> Dict[str, List[Tuple[str, str]]]:
+    """Every receipt line's declared dispositions, as ``{"U1": [(disposition, words), ...]}``.
+
+    The machine-readable half of ``parse_usage_notes``, which keeps returning the whole line for
+    display. A ref the run wrote nothing recognisable for is absent rather than empty, so a caller
+    cannot mistake "said nothing" for "said nothing changed".
+    """
+    out: Dict[str, List[Tuple[str, str]]] = {}
+    for ref, note in parse_usage_notes(text).items():
+        pairs = split_disposition(note)
+        if pairs:
+            out[ref] = pairs
     return out
 
 
@@ -568,13 +717,24 @@ class Watermarks:
     A missing file, an unreadable one and a card never seen before all read as "never looked",
     which the engine turns into the bounded first-look window rather than into everything or
     nothing.
+
+    ``read_only`` is what makes LOOKING at a card's context a read. Collection never writes -- only
+    ``ContextUpdates.mark_seen`` does -- but "never call that one method" is a convention, and a
+    convention is not something a person reviewing a command can verify for themselves. A read-only
+    store cannot move a stamp whichever method is called on it, so an inspection can be run as
+    often as anyone likes without consuming somebody's comment on the way past.
     """
 
-    def __init__(self, path: Optional[str] = None) -> None:
+    def __init__(self, path: Optional[str] = None, *, read_only: bool = False) -> None:
         self._path = Path(path) if path else None
+        self._read_only = bool(read_only)
         self._data: Dict[str, str] = {}
         self._lock = threading.Lock()
         self._load()
+
+    @property
+    def read_only(self) -> bool:
+        return self._read_only
 
     @staticmethod
     def _key(card_id: str, source: str) -> str:
@@ -607,6 +767,8 @@ class Watermarks:
             return _as_utc(self._data.get(self._key(card_id, source)))
 
     def set(self, card_id: str, source: str, when: datetime) -> None:
+        if self._read_only:
+            return
         with self._lock:
             key = self._key(card_id, source)
             existing = _as_utc(self._data.get(key))
@@ -652,6 +814,27 @@ class CollectRequest:
     # (a test, or a source called outside the engine); ``UpdateEngine.collect`` always passes its
     # own dict explicitly.
     cache: Dict[str, Any] = field(default_factory=dict)
+    # What the source looked at, and why it offered fewer. A source that filters (an answered
+    # comment thread, a note a run already replied to) sets these; the engine copies them onto the
+    # ``SourceReport``, so an empty channel can say whether it was empty or merely quiet.
+    considered: int = 0
+    explanation: str = ""
+    # The record of what became of past items (``runner.feedback_ledger``), when the deployment
+    # keeps one. A source consults it so that STATUS decides whether something is still owed,
+    # rather than the circumstantial evidence it had to use before (a reply appearing under a
+    # comment, a run finishing later the same day).
+    ledger: Any = None
+
+    def recorded(self, item_id: str) -> Any:
+        """This item's ledger row, or None when nothing is tracked."""
+        if self.ledger is None or not item_id:
+            return None
+        return self.ledger.get(self.card_id, self.spec.get("source") or "", item_id)
+
+    def account(self, considered: int, explanation: str = "") -> None:
+        """Say what this read looked at, and in one line why fewer items came back."""
+        self.considered = int(considered)
+        self.explanation = explanation
 
     def opt(self, key: str, default: Any = None) -> Any:
         """One option from this card's spec for this source."""
@@ -695,9 +878,81 @@ class _BaseSource:
     # usually some other part of their life -- so it arrives at every card equally and only some of
     # it bears on any one of them.
     judge_relevance = False
+    # Whether this channel carries things somebody is ASKING FOR, as opposed to things they are
+    # recording. A note and a document comment are asks; a reflection, a habit log and a capture
+    # are a person writing down their own day, and nothing is owed on them.
+    #
+    # This decides what enters the feedback ledger. Getting it wrong is not cosmetic: a live run
+    # tracked the habit log and the daily reflection as asks, and the next morning both came back
+    # as "still owed, needs an answer", which is an assistant asking a person to answer their own
+    # diary.
+    tracks_asks = False
 
     def collect(self, request: CollectRequest) -> Sequence[ContextUpdate]:  # pragma: no cover
         raise NotImplementedError
+
+
+# A run that reached one of these has had its final say, and that say was delivered: it is on the
+# quest, rolled onto the pass that created it, and mailed where the quest mails. Mirrors
+# ``runner.autopilot``'s own set (``needs_you`` included: a question the run stopped on is exactly
+# what the person needs to read).
+DELIVERED_TASK_STATUSES = frozenset({"done", "needs_you", "failed"})
+
+
+def _reply_channel(card: Dict[str, Any]) -> str:
+    """Where an answer to this card's people actually reaches them, in one imperative phrase.
+
+    A quest that mails sends the run's RESULT to its people, with a reply address that comes back
+    as a note. So on those quests the result is the message, and "add a note on this quest" is
+    advice to write somewhere nobody is looking: notes are the record an assistant keeps, not the
+    thing a person opens. Where mail is off, the note IS the channel and the phrase says so.
+    """
+    email = ((card or {}).get("autopilot") or {}).get("email") or {}
+    if email.get("enabled"):
+        return ("answer it in your result, which is what gets mailed to them; "
+                "the note you keep on the quest is the record, not the reply")
+    return "add a note on this quest"
+
+
+def _runs_delivered(request: "CollectRequest") -> List[datetime]:
+    """When runs on this card last delivered their results, newest last.
+
+    Read through the shared per-engine cache, so one pass over many cards does not re-list a
+    card's tasks per source. A client without ``list_tasks`` degrades to "no deliveries", which is
+    exactly the behaviour that existed before answers could come from a result.
+    """
+    lister = getattr(request.client, "list_tasks", None)
+    if not callable(lister) or not request.card_id:
+        return []
+    key = f"tasks:{request.card_id}"
+    if key not in request.cache:
+        try:
+            request.cache[key] = list(lister(goal_id=request.card_id) or [])
+        except Exception as e:  # noqa: BLE001 -- history is context, never a reason to fail
+            log.info("context updates: could not read tasks for %s (%s)", request.card_id, e)
+            request.cache[key] = []
+    out = []
+    for t in request.cache[key]:
+        if str(t.get("status") or "").strip().lower() not in DELIVERED_TASK_STATUSES:
+            continue
+        if not str(t.get("result") or "").strip():
+            continue
+        when = _as_utc(t.get("worked_at") or t.get("updated_at") or t.get("created_at"))
+        if when:
+            out.append(when)
+    out.sort()
+    return out
+
+
+def _notes_explanation(persons: int, offered: int, open_now: int) -> str:
+    """Why fewer notes were offered than the person wrote."""
+    if not persons:
+        return ""
+    if offered:
+        return ""
+    if open_now:
+        return f"{persons} note(s), none new since the last delivery"
+    return f"{persons} note(s), all already answered"
 
 
 class QuestNotesSource(_BaseSource):
@@ -710,10 +965,20 @@ class QuestNotesSource(_BaseSource):
     with real consequences here.
 
     OPEN UNTIL ANSWERED, same rule as ``DriveCommentsSource``. A person's note is answered once an
-    assistant note follows it on the quest. A note with an assistant note after it is history, not
-    news, and a note with none is still waiting however old it is. Two live failures this
-    replaces: a first look offered ten notes answered days earlier, every one marked "needs an
-    answer"; and a time-filtered note was lost for good the moment one pass saw it and did nothing.
+    assistant note follows it on the quest, OR once a run on this quest delivered its result after
+    it. Both count, because they are the two places an assistant's answer actually lands, and
+    which one it lands in is not the person's concern. A note with neither after it is still
+    waiting however old it is. Three live failures this replaces: a first look offered ten notes
+    answered days earlier, every one marked "needs an answer"; a time-filtered note was lost for
+    good the moment one pass saw it and did nothing; and a note answered in a run's RESULT (the
+    text the person reads in their inbox, on a quest whose mail is on) stayed open forever,
+    because only a note on the quest counted and the answer was never written as one.
+
+    WHERE AN ANSWER GOES is the quest's own delivery setting, not this source's choice. On a quest
+    that mails, the run's result IS the message the person reads, so that is where an answer
+    belongs and a note is only the internal record. On a quest that does not mail, a note on the
+    quest is the channel. ``how_to_respond`` says whichever is true, because a run told to answer
+    somewhere the person never reads has not answered at all.
 
     AND NEWER THAN THE WATERMARK, even when an assistant note follows it. The watermark moves only
     when a run was handed the notes, so a note newer than it has never been in front of any run.
@@ -726,6 +991,7 @@ class QuestNotesSource(_BaseSource):
     """
     name = "quest_notes"
     describes = "notes the person added to this quest that have no assistant reply yet"
+    tracks_asks = True
 
     def collect(self, request: CollectRequest) -> Sequence[ContextUpdate]:
         client = request.client
@@ -736,26 +1002,39 @@ class QuestNotesSource(_BaseSource):
         out: List[ContextUpdate] = []
         where = request.card_label or _card_label(request.card) or "this quest"
         notes = lister(quest_id) or []
-        open_notes = self.open_notes(notes)
+        delivered = _runs_delivered(request)
+        answer_here = _reply_channel(request.card)
+        open_notes = self.open_notes(notes, delivered_at=delivered)
         offered = _still_open(open_notes, request.now, lambda n: _as_utc(n.get("created_at")))
         open_ids = {id(n) for n in offered}
+        persons = self.persons(notes)
         if not request.first_look:
-            answered = [n for n in self.persons(notes) if id(n) not in {id(o) for o in open_notes}]
+            answered = [n for n in persons if id(n) not in {id(o) for o in open_notes}]
             for n in answered:
                 when = _as_utc(n.get("created_at"))
                 if not (request.since and when and when <= request.since):
                     offered.append(n)          # arrived after the last delivery: never seen
+        request.account(len(persons), _notes_explanation(len(persons), len(offered),
+                                                         len(open_notes)))
         for note in offered:
             when = _as_utc(note.get("created_at"))
             is_new = not (request.since and when and when <= request.since)
             is_open = id(note) in open_ids
+            # A RECORDED status outranks the circumstantial reading. The inference above is doing
+            # its best from timestamps; the ledger holds what a run actually said it did, and
+            # "somebody replied afterwards" was never evidence that this was handled.
+            tracked = request.recorded(str(note.get("id") or note.get("note_id") or ""))
+            if tracked is not None and tracked.kind != KIND_UNKNOWN_SENTINEL:
+                is_open = tracked.is_open
             text = str(note.get("text") or "").strip()
             author = str(note.get("author_name") or "").strip()
             title = f"{author or 'The person'} wrote on the quest"
             if not is_new:
                 title += " (still open from before)"
             elif not is_open:
-                title += " (an assistant note followed it; check that it was actually answered)"
+                title += " (an assistant has answered since; check that it answered THIS)"
+            if tracked is not None and tracked.kind != KIND_UNKNOWN_SENTINEL:
+                title = f"{author or 'The person'} wrote on the quest ({tracked.status_line()})"
             out.append(ContextUpdate(
                 source=self.name,
                 kind="note",
@@ -766,7 +1045,7 @@ class QuestNotesSource(_BaseSource):
                 author=author,
                 occurred_at=when,
                 location=where,
-                how_to_respond="add a note on this quest",
+                how_to_respond=answer_here,
                 needs_response=is_open,
                 raw=dict(note or {}),
             ))
@@ -778,8 +1057,15 @@ class QuestNotesSource(_BaseSource):
         return [n for n in _by_time(notes) if str(n.get("author_kind") or "").lower() == "user"]
 
     @staticmethod
-    def open_notes(notes: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """The person's notes with no assistant note after them, oldest first, unbounded."""
+    def open_notes(notes: Sequence[Dict[str, Any]],
+                   delivered_at: Sequence[datetime] = ()) -> List[Dict[str, Any]]:
+        """The person's notes nothing has answered yet, oldest first, unbounded.
+
+        Answered means either of the two places an answer lands: an assistant NOTE after it on the
+        quest, or a RUN that delivered its result after it (``delivered_at``). The second is what
+        a quest with mail switched on actually does, and without it every emailed answer left the
+        note it answered looking untouched.
+        """
         open_notes: List[Dict[str, Any]] = []
         for note in _by_time(notes):
             kind = str(note.get("author_kind") or "").lower()
@@ -787,13 +1073,19 @@ class QuestNotesSource(_BaseSource):
                 open_notes.append(note)
             elif kind == "ai":
                 open_notes = []
-        return open_notes
+        if not delivered_at or not open_notes:
+            return open_notes
+        newest_delivery = max(delivered_at)
+        return [n for n in open_notes
+                if (_as_utc(n.get("created_at")) or newest_delivery) > newest_delivery]
 
     @classmethod
     def unanswered(cls, notes: Sequence[Dict[str, Any]],
-                   now: Optional[datetime] = None) -> List[Dict[str, Any]]:
+                   now: Optional[datetime] = None,
+                   delivered_at: Sequence[datetime] = ()) -> List[Dict[str, Any]]:
         """``open_notes`` bounded to the ones still worth offering (see ``_still_open``)."""
-        return _still_open(cls.open_notes(notes), now, lambda n: _as_utc(n.get("created_at")))
+        return _still_open(cls.open_notes(notes, delivered_at), now,
+                           lambda n: _as_utc(n.get("created_at")))
 
 
 def _by_time(notes: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -1103,11 +1395,44 @@ class CollectionEntriesSource(_BaseSource):
         return "", wanted_name or wanted_id
 
 
+def _as_list(value: Any) -> List[str]:
+    """One value or many, always a list of non-empty strings. A spec key that means "which
+    account" is the kind a person has several of, and a bare string must keep working."""
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple, set)):
+        return [str(v).strip() for v in value if str(v).strip()]
+    text = str(value).strip()
+    return [text] if text else []
+
+
+def _drive_explanation(comments: Sequence[Any], files_read: int) -> str:
+    """Why a Drive read offered fewer threads than it found, in a person's words."""
+    if not comments:
+        if not files_read:
+            return "no documents reached"
+        return f"no comments on the {files_read} document(s) read"
+    answered = sum(1 for c in comments if getattr(c, "answered_by_me", False))
+    resolved = sum(1 for c in comments if getattr(c, "resolved", False))
+    mine = sum(1 for c in comments if getattr(c, "author_is_me", False))
+    bits = []
+    if answered:
+        bits.append(f"{answered} already answered in the document")
+    if resolved:
+        bits.append(f"{resolved} resolved")
+    if mine:
+        bits.append(f"{mine} written by this assistant")
+    if not bits:
+        return ""
+    return f"{len(comments)} thread(s) across {files_read} document(s), " + ", ".join(bits)
+
+
 class DriveCommentsSource(_BaseSource):
     """Comments people left on the documents or folder this card owns.
 
     Spec: ``{"source": "drive_comments", "folder_id": "..."}``, ``{"file_ids": [...]}``, or
-    ``{"owner": "assistant@example.org"}`` -- any combination; their results are merged.
+    ``{"owner": "assistant@example.org"}`` (one address or a list of them) -- any combination;
+    their results are merged and a file reached twice is read once.
     Needs a Drive comments client, supplied once by the consumer (``UpdateEngine(drive_comments=)``)
     since minting a Google token is a deployment concern, not a card's.
 
@@ -1128,6 +1453,7 @@ class DriveCommentsSource(_BaseSource):
     """
     name = "drive_comments"
     describes = "comments people left on the documents this work owns"
+    tracks_asks = True
 
     def __init__(self, comments_client: Any = None) -> None:
         self._client = comments_client
@@ -1137,37 +1463,60 @@ class DriveCommentsSource(_BaseSource):
         if client is None:
             return []
         folder_id = str(request.opt("folder_id") or "").strip()
-        owner = str(request.opt("owner") or "").strip()
+        # One person is several Google accounts: a work domain, an old personal address, a second
+        # one a document happens to have been created under. A spec that could name only ONE of
+        # them made the others invisible, and which address owns which document is not something
+        # anybody keeps track of. A bare string still works.
+        owners = _as_list(request.opt("owner"))
         file_ids = [str(f).strip() for f in (request.opt("file_ids") or []) if str(f).strip()]
         max_files = int(request.opt("max_files") or 25)
         comments = []
         seen_files = set()
-        if folder_id:
-            comments.extend(client.comments_for_folder(folder_id, max_files=max_files))
-            seen_files.update(c.file_id for c in comments)
-        if owner and hasattr(client, "files_owned_by"):
-            # No time filter on the file list: a document untouched for a month can still have a
-            # comment added today, so filtering the FILES by modification date would hide the
-            # comment that arrived on an old one.
-            for f in client.files_owned_by(owner, max_files=max_files):
+        if folder_id and hasattr(client, "files_in_folder"):
+            # Listed then read file by file, rather than through ``comments_for_folder``, so the
+            # count of documents ACTUALLY READ is known. It was inferred from the comments before,
+            # which made a folder of eight uncommented documents report "no documents reached" --
+            # the one reading that sends somebody looking for a permissions problem.
+            for f in client.files_in_folder(folder_id, max_files=max_files):
                 if f.file_id in seen_files:
                     continue
                 seen_files.add(f.file_id)
                 comments.extend(client.comments_for_file(
                     f.file_id, file_name=f.file_name, file_url=f.file_url))
+        elif folder_id:
+            comments.extend(client.comments_for_folder(folder_id, max_files=max_files))
+            seen_files.update(c.file_id for c in comments)
+        if owners and hasattr(client, "files_owned_by"):
+            # No time filter on the file list: a document untouched for a month can still have a
+            # comment added today, so filtering the FILES by modification date would hide the
+            # comment that arrived on an old one.
+            for owner in owners:
+                for f in client.files_owned_by(owner, max_files=max_files):
+                    if f.file_id in seen_files:
+                        continue
+                    seen_files.add(f.file_id)
+                    comments.extend(client.comments_for_file(
+                        f.file_id, file_name=f.file_name, file_url=f.file_url))
         for fid in file_ids:
             if fid not in seen_files:
                 seen_files.add(fid)
                 comments.extend(client.comments_for_file(fid))
         out: List[ContextUpdate] = []
         open_threads = [c for c in comments if c.needs_answer]
+        # Say what was read, so an empty channel is not mistaken for a broken one. "0 found" and
+        # "two questions, both already answered in the document" look identical from outside, and
+        # the first reading is the one people act on.
+        request.account(len(comments), _drive_explanation(comments, len(seen_files)))
         open_threads.sort(key=lambda c: c.modified_at or c.created_at
                           or datetime.min.replace(tzinfo=timezone.utc))
         for c in _still_open(open_threads, request.now, lambda c: c.modified_at or c.created_at):
             when = c.modified_at or c.created_at
             is_new = not (request.since and when and when <= request.since)
+            tracked = request.recorded(f"{c.file_id}:{c.comment_id}")
             title = f'{c.author or "Someone"} commented on "{c.file_name or c.file_id}"'
-            if not is_new:
+            if tracked is not None and tracked.kind != KIND_UNKNOWN_SENTINEL:
+                title += f" ({tracked.status_line()})"
+            elif not is_new:
                 title += " (still open from before)"
             body = c.content
             if c.quoted_text:
@@ -1463,6 +1812,7 @@ class UpdateEngine:
                  always: Sequence[str] = DEFAULT_ALWAYS,
                  spec_resolver: Optional[Callable[[Dict[str, Any]], List[Dict[str, Any]]]] = None,
                  relevance_judge: Optional[Callable[..., Optional[set]]] = None,
+                 ledger: Any = None,
                  first_look_days: int = FIRST_LOOK_DAYS,
                  max_updates: int = MAX_UPDATES,
                  now_fn: Optional[Callable[[], datetime]] = None) -> None:
@@ -1470,6 +1820,7 @@ class UpdateEngine:
         self._watermarks = watermarks or Watermarks(None)
         self._spec_resolver = spec_resolver or default_spec_resolver
         self._relevance_judge = relevance_judge
+        self._ledger = ledger
         self._always = tuple(always or ())
         self._first_look = timedelta(days=max(1, int(first_look_days)))
         self._max_updates = max(1, int(max_updates))
@@ -1561,9 +1912,51 @@ class UpdateEngine:
                 report.set_aside = dropped_by_source[report.source]
                 report.found = max(0, report.found - report.set_aside)
 
+    def _add_owed(self, bundle: ContextUpdates, card_id: str,
+                  card: Optional[Dict[str, Any]] = None) -> None:
+        """Bring in what is still owed from before, as refs alongside today's news.
+
+        These are not updates in the "something arrived" sense, and they are deliberately carried
+        in the same list anyway: a ref is the only handle a run has for accounting for something,
+        so an owed item outside the refs is an owed item nothing can ever close. They are marked
+        as what they are, and a source's own fresh copy of the same item always wins (an item is
+        offered once, with today's wording, not twice).
+        """
+        if self._ledger is None or not card_id:
+            return
+        try:
+            owed = self._ledger.open_items(card_id)
+        except Exception as e:  # noqa: BLE001 -- the ledger never breaks a collection
+            log.warning("context updates: could not read the ledger for %s (%s)", card_id, e)
+            return
+        already = {(u.source, u.item_id) for u in bundle.updates if u.item_id}
+        for item in owed:
+            if (item.source, item.item_id) in already:
+                continue
+            if not str(item.text or "").strip():
+                continue
+            bundle.updates.append(ContextUpdate(
+                source=item.source,
+                kind="still owed",
+                item_id=item.item_id,
+                title=(f"{item.author or 'The person'} asked for this on "
+                       f"{(item.occurred_at or item.first_seen_at)[:10] or 'an earlier day'}; "
+                       f"{item.status_line()}"),
+                body=item.text,
+                excerpt=item.text,
+                author=item.author,
+                occurred_at=_as_utc(item.occurred_at),
+                location=item.location,
+                url=item.url,
+                how_to_respond=_reply_channel(card or {}),
+                needs_response=True,
+                raw={"tracked": True, "state": item.state, "kind": item.kind},
+            ))
+
     def collect(self, card: Dict[str, Any], *, card_id: str = "", card_kind: str = "quest",
                 since: Optional[datetime] = None,
                 card_label: str = "",
+                sources: Optional[Sequence[str]] = None,
                 options: Optional[Dict[str, Dict[str, Any]]] = None) -> ContextUpdates:
         """Run every source this card watches and return one bundle.
 
@@ -1575,6 +1968,11 @@ class UpdateEngine:
         ``options`` is ``{source_name: {spec key: value}}`` merged over each matching spec for this
         call only: what the CALLER knows about this read that the card does not carry, such as
         which reflection periods fit the scope it is composing for.
+
+        ``sources`` narrows the run to the named channels, leaving the card's own specs otherwise
+        untouched. For somebody inspecting one channel ("what is actually coming back from Drive
+        for this quest?"), which is a question the whole bundle answers slowly and one source
+        answers immediately. A name the card does not watch simply contributes nothing.
 
         One source failing never costs the others: it is reported and the pass continues.
         """
@@ -1592,8 +1990,15 @@ class UpdateEngine:
             collected_at=now,
         )
         bundle._watermarks = self._watermarks
+        bundle._ledger = self._ledger
+        bundle._card = card or {}
+        bundle._ask_sources = frozenset(
+            name for name, src in self._sources.items() if getattr(src, "tracks_asks", False))
+        wanted = {str(n) for n in sources} if sources else None
         for spec in self.specs_for(card):
             name = str(spec.get("source") or "")
+            if wanted is not None and name not in wanted:
+                continue
             if options and isinstance(options.get(name), dict):
                 spec = {**spec, **options[name]}
             source = self._sources.get(name)
@@ -1605,21 +2010,25 @@ class UpdateEngine:
             last_look = since or self._watermarks.get(cid, name)
             window = last_look or (now - self._first_look)
             report = SourceReport(source=name, spec=spec, since=window)
+            request = CollectRequest(
+                card=card, card_id=cid, card_kind=card_kind, spec=spec,
+                card_label=bundle.card_label, since=window, first_look=last_look is None,
+                now=now, client=self._client, cache=self._cache, ledger=self._ledger)
             try:
-                found = list(source.collect(CollectRequest(
-                    card=card, card_id=cid, card_kind=card_kind, spec=spec,
-                    card_label=bundle.card_label, since=window, first_look=last_look is None,
-                    now=now, client=self._client, cache=self._cache)) or [])
+                found = list(source.collect(request) or [])
             except Exception as e:  # noqa: BLE001 -- one channel never breaks the rest
                 report.error = f"{type(e).__name__}: {e}"
                 log.warning("context updates: source %s failed for card %s: %s", name, cid, e)
                 bundle.reports.append(report)
                 continue
             report.found = len(found)
+            report.considered = request.considered
+            report.explanation = request.explanation
             bundle.reports.append(report)
             bundle.updates.extend(found)
 
         self._apply_relevance(bundle, card)
+        self._add_owed(bundle, cid, card)
 
         # Newest first, undated last: an undated row is almost always a standing item (a
         # reflection, an open comment with no timestamp), and it should not displace today's news.
@@ -1665,7 +2074,8 @@ def watermark_path_for(configured: Optional[str] = None,
 
 
 def build_update_engine(cfg: Any = None, client: Any = None, *,
-                        state_path: Optional[str] = None) -> Optional[UpdateEngine]:
+                        state_path: Optional[str] = None,
+                        read_only: bool = False) -> Optional[UpdateEngine]:
     """The engine a consumer's config asks for, or None when it asked for none.
 
     Duck-typed on purpose (``getattr`` with defaults, no ``RunnerConfig`` import): this module is
@@ -1675,13 +2085,19 @@ def build_update_engine(cfg: Any = None, client: Any = None, *,
     Returns None -- not an inert engine -- when ``context_updates`` is off, because every caller
     already treats a missing engine as "compose exactly as before", and an engine that collects
     nothing would still cost a pass through every source.
+
+    ``read_only`` builds the engine on a watermark store that cannot be written (see
+    ``Watermarks``). An engine that is only ever asked what a card's context IS -- an inspection,
+    a preview, a report -- takes it, and is then safe to run as many times as anyone likes.
     """
     if cfg is not None and not getattr(cfg, "context_updates", True):
         return None
     path = watermark_path_for(getattr(cfg, "context_updates_state_path", None), state_path)
+    from .feedback_ledger import build_ledger
     return UpdateEngine(
         client,
-        watermarks=Watermarks(path),
+        watermarks=Watermarks(path, read_only=read_only),
+        ledger=build_ledger(cfg, state_path=state_path, read_only=read_only),
         drive_comments=getattr(cfg, "drive_comments", None),
         spec_resolver=consumer_spec_resolver(getattr(cfg, "context_sources_map", None)),
         # A callable, not a provider: this engine is built before the CLI wraps
@@ -1695,3 +2111,67 @@ def build_update_engine(cfg: Any = None, client: Any = None, *,
         first_look_days=int(getattr(cfg, "context_updates_first_look_days", FIRST_LOOK_DAYS) or
                             FIRST_LOOK_DAYS),
     )
+
+
+def collect_quest_context(quest_id: str, *, cfg: Any = None, client: Any = None,
+                          since: Optional[datetime] = None, days: Optional[float] = None,
+                          sources: Optional[Sequence[str]] = None,
+                          options: Optional[Dict[str, Dict[str, Any]]] = None,
+                          card_label: str = "",
+                          state_path: Optional[str] = None) -> ContextUpdates:
+    """**What is the context for this quest right now?** One call, a read, repeatable.
+
+    The whole of it::
+
+        bundle = collect_quest_context("quest_1625d9f47a06", cfg=load_config("qar.toml"))
+        print(bundle.as_prompt_block())      # exactly what a run on this quest would be handed
+
+    This exists because, before it, the only ways to see a quest's context were to run the thing
+    that consumes it (an autopilot pass, an executor task) or to rebuild the engine's wiring by
+    hand. The first has side effects and a cadence gate, and the second is a copy of library code
+    living outside the library, drifting from it. Neither is a thing to hand somebody who just
+    wants to look. Looking is a first-class operation, so it is one function.
+
+    It is a READ, by construction rather than by care: the engine is built on a read-only watermark
+    store (see ``Watermarks``), so nothing here can mark anybody's comment as seen, and running it
+    ten times in a row is the same as running it once. Automatic delivery is unaffected -- the next
+    real run still offers everything it would have offered.
+
+    Parameters, all optional but the quest:
+
+    - ``cfg``     a ``RunnerConfig`` (``quest_ai_runner.load_config``). Supplies the credentials,
+                  the watermark file, the quest -> context-sources map and the Drive client, so the
+                  read sees exactly what the deployment's own runs see.
+    - ``client``  an already-built ``QuestClient``, when the caller has one. Built from ``cfg``
+                  otherwise.
+    - ``since`` / ``days``   the time period: look back from this moment, instead of from the
+                  stored "an assistant last looked" stamp. ``days=7`` is ``since=now - 7 days``.
+                  Left out, each source uses its own watermark, which is what a run gets.
+    - ``sources`` only these channels ("drive_comments", "insights", ...), out of the ones the
+                  quest watches. ``UpdateEngine.describe_sources()`` lists the vocabulary.
+    - ``options`` ``{source: {spec key: value}}``, merged over the quest's own spec for this call
+                  (e.g. ``{"reflections": {"periods": ("week", "month")}}``).
+    - ``card_label``  how the quest is named in each row. Left out, the engine labels it the way it
+                  labels every card (its name, never its outcome). A caller reproducing a
+                  particular run's text passes that run's own label.
+    - ``state_path``  the lane's state file, when it is not ``cfg.state_path``; the watermarks sit
+                  beside it. Only read, never written.
+    """
+    if since is None and days is not None:
+        since = _utcnow() - timedelta(days=float(days))
+    if client is None:
+        if cfg is None:
+            raise ValueError("collect_quest_context needs a client, or a RunnerConfig to build "
+                             "one from (quest_ai_runner.load_config)")
+        from .quest_client import QuestClient   # local: this module is duck-typed on its client
+        client = QuestClient(cfg.quest_base_url, cfg.quest_api_key, team_id=cfg.team_id)
+    engine = build_update_engine(cfg, client,
+                                 state_path=state_path or getattr(cfg, "state_path", None),
+                                 read_only=True)
+    if engine is None:
+        raise ValueError("context updates are switched off for this config "
+                         "(RunnerConfig.context_updates / QAR_CONTEXT_UPDATES), so there is no "
+                         "engine to ask")
+    quest = client.get_quest(quest_id)
+    return engine.collect(quest, card_id=quest_id, card_kind="quest", card_label=card_label,
+                          since=since, sources=sources, options=options)

@@ -32,7 +32,14 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 - **[Automated context updates](context-updates.md)**: one engine answering "what changed since an
   assistant last looked?" across notes, captures, reflections, and Drive comments: how a quest
   declares what it watches as data, why a narrowing spec never drops anything, the per-source
-  watermarks, and the receipt a run writes about what it actually used.
+  watermarks, the receipt a run writes about what it actually used, and `quest-ai-runner context
+  <quest_id>` (`collect_quest_context`), the read that answers "what is this quest's context right
+  now" without running anything that consumes it.
+- **[The feedback ledger](feedback-ledger.md)**: what a person asked for and how far anybody got
+  with it, across every channel, as recorded statuses rather than circumstance. Why replying is not
+  doing, why a standing rule is never "done", how a run declares a disposition in its own receipt,
+  and how a standing rule becomes a guidance card while the ledger keeps score of whether it is
+  actually being followed.
 - **[Continuing a deep run that ran out of turns](deep-run-continuation.md)** — why a worker that
   used its whole turn budget is continued in its own session with a bigger budget instead of being
   re-run from a cold start, what still stops it (the verifier, the token budget), and how an

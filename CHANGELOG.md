@@ -7,6 +7,50 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **A status for every ask, so replying stops counting as doing**
+  (`runner/feedback_ledger.py`, `runner/context_updates.py`, `cli.py`, `docs/feedback-ledger.md`).
+  Every channel could say what had ARRIVED; none could say what became of it, so "handled" was
+  inferred from circumstance: a reply under a comment, a run finishing later the same afternoon. A
+  person who writes "from now on, put the page numbers in" had it marked handled forever on the
+  strength of a timestamp. The ledger records one row per ask, from any source, with a KIND
+  (`request` / `standing` / `context`) and a STATE (`open`, `in progress`, `done`, `in force`,
+  `partially applied`, `needs reapplying`, `declined`, `noted`, `superseded`), persisted beside the
+  lane's state file.
+
+  The run sets it, in the receipt it already writes: each line now opens with a DISPOSITION from a
+  listed vocabulary (`done`, `partial`, `standing`, `standing-partial`, `declined`, `noted`,
+  `not used`), which is a structured decision the run is asked to make rather than a scan of its
+  prose, and an unrecognised one moves nothing at all. A person's status is locked against any run.
+  A line carrying two dispositions splits one paragraph into two tracked asks, because people do
+  not write one ask per note: the live case that drove it holds a column to add now AND a rule for
+  every future report, and one verdict for the pair has to lose one of them.
+
+  **A standing rule is never done.** Marking it done the day it is honoured is exactly how it stops
+  being followed, so it stays in force and carries how far it has got. Everything still owed rides
+  into the next collection as refs alongside the day's news, carrying its state, because a ref is
+  the only handle a run has for closing anything. Only channels that carry asks are tracked: a
+  reflection and a habit log are a person recording their own day.
+
+  **Standing rules are guidance.** An item marked standing is written to the deployment's guidance
+  store in the person's own words (`guidance_writer_for`), so the card carries the rule into future
+  runs through retrieval while the ledger carries whether it is actually being followed. Neither can
+  do the other's job, and a one-off is never carded, which would make it policy forever.
+  `quest-ai-runner context <quest_id> --tracked` prints the lot.
+
+- **Looking at a quest's context is an operation, not a side effect of running one**
+  (`runner/context_updates.py`, `cli.py`, `docs/context-updates.md`).
+  `quest-ai-runner context <quest_id>` and `collect_quest_context(...)` answer "what is the context
+  for this quest, right now" in one call, with a time period (`--days` / `--since`), a channel
+  filter (`--source`, repeatable), and `--block` / `--json` output. There was no such call: seeing
+  a quest's context meant running the thing that consumes it (an autopilot pass, whose cadence gate
+  makes it unavailable on the day somebody most wants to look, and which creates tasks and closes
+  recurring ones) or rebuilding the engine's wiring outside the library, where it drifts. The read
+  is safe structurally rather than by convention: `Watermarks(..., read_only=True)` cannot move a
+  stamp whichever method is called on it, `mark_seen()` included, so the command has no effect on
+  what the next real run is offered and repeats identically. Also `UpdateEngine.collect(sources=...)`
+  to narrow a collection to named channels, and `ContextUpdates.as_dict()` for a caller that is not
+  a prompt.
+
 - **The last consumer-only machinery moved into the library, so a third lane needs no Python**
   (`adapters/rep_context_assembler.py`, `runner/personas.py`, `config.py`). `RepContextAssembler`
   (prepend the running rep's learned `context_prefs`, and push one back when a run consults a real
@@ -40,6 +84,36 @@ All notable changes to this project are documented here. The format is based on
   Seconds are rendered as `2h 56m`; bookkeeping fields and blanks stay out.
 
 ### Fixed
+- **An answer counts wherever it actually reached the person, and an item says where that is**
+  (`runner/context_updates.py`). A quest note's `how_to_respond` was always "add a note on this
+  quest". On a quest with mail switched on, the person never opens the quest: the run's RESULT is
+  what gets mailed to them, and their reply comes back as the next note. So runs were being told to
+  answer in the one place nobody was reading, and, worse, a note was only ever closed by another
+  NOTE, so every answer that went out by mail left the note it answered looking untouched and the
+  person was asked the same question the next morning. Now: `how_to_respond` names the channel that
+  reaches that item's reader (the result where the quest mails, a note where it does not, the
+  comment thread for a document comment), and a note is answered by an assistant note after it OR
+  by a run on that quest that delivered a result after it. The block's own preamble no longer says
+  "not only in your result", which was false on exactly the quests that mail.
+
+- **A context channel says what it read, so an empty one is not mistaken for a broken one**
+  (`runner/context_updates.py`, `cli.py`). `SourceReport` gains `considered` and `explanation`,
+  which a source sets through `CollectRequest.account(...)`. "0 found" and "two questions, both
+  already answered in the document" were the same line, and the first reading is the one people
+  act on: a live quest watching two Drive routes read as broken for days while both of the
+  person's comments sat there, answered, exactly as designed. Drive reads now say
+  `2 thread(s) across 8 document(s), 2 already answered in the document` or
+  `no comments on the 8 document(s) read`, and notes say `6 note(s), all already answered`. The
+  folder route also lists its files before reading them rather than inferring the count from the
+  comments it found, which previously reported a folder of eight uncommented documents as "no
+  documents reached".
+
+- **`drive_comments` watches all of a person's Google accounts, not one**
+  (`runner/context_updates.py`). `owner` now takes a list as well as a string. One person is a work
+  domain, an old personal address and whatever a given document happened to be created under; which
+  address owns which document is not something anybody tracks, and a spec that could name only one
+  made every document under the others invisible.
+
 - **A pasted brief is not mistaken for a batch the autopilot pass composed** (`runner/executor.py`).
   `execute()` decided whether to collect fresh context with `BLOCK_START not in text`, a substring
   test against the task's own text; a task that merely QUOTES a previous run's brief (someone
