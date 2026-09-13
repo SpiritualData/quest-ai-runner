@@ -7,6 +7,188 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Folder relevance review: deciding which folders are worth indexing at all**
+  (`adapters/file_context_store.py`). Extension filtering decides whether a FILE is readable; it
+  cannot decide whether a folder is knowledge. Measured on one real corpus of 81,464 "indexable"
+  files: **91% of it was dependency checkouts, generated data, build output, another tool's caches
+  and a folder of credentials.** Three layers decide it, cheapest first, because each catches what
+  the others cannot:
+  1. **Nested repositories** (`_nested_vcs_dirs`) — a directory with its own `.git`/`.hg`/`.svn` is
+     a separate project checked out in place. Deterministic, no model call, and it alone accounted
+     for 76,032 files across 32 repos. A nested repo that has its own card store is excluded
+     because the reuse path already imports it; one that has none is excluded but NAMED IN THE LOG,
+     so nothing disappears silently. `QAR_SKIP_NESTED_REPOS=0` opts out.
+  2. **Fuzzy duplicates** (`_duplicate_folders`) — sampled `(relpath, hash)` overlap, reported as a
+     percentage, because real duplicates are the same tree at different commits rather than
+     byte-identical copies (the pair that motivated this differed in 19,222 entries and was still
+     obviously one thing twice). The smaller of a pair is the one dropped.
+  3. **A batched model review** for what neither can see — that a folder is an export, a fixture,
+     an archive, or an agent's state store. Adaptive by depth: judge shallow, then open up only
+     folders that are large or judged `mixed`, which took 15,423 directories down to ~207
+     decisions in a handful of calls.
+
+  Two guards on the model, because its worst mistake is a confident SKIP high in the tree: a large
+  folder is never excluded on a shallow verdict alone (it is opened up and its children judged
+  individually), and a parent with any kept child cannot veto it. Without those, one corpus lost
+  its entire company workspace to a single "huge duplicate mirror" verdict. The presence of an
+  AI-orientation file (`CLAUDE.md`, `AGENTS.md`, `.cursorrules`, …) is passed to the model as
+  evidence a folder is curated knowledge — evidence and not proof, since a vendored clone carries
+  its upstream's instruction file too, which is why the deterministic layers run first and win.
+  Verdicts and reasons are cached in the cards dir for a human to read, edit or delete.
+  `QAR_FOLDER_REVIEW=0` disables it; corpora under 2,000 files skip it entirely.
+
+- **`bootstrap --yes` and a first-run confirmation for a large corpus** (`cli.py`). Indexing is the
+  one operation whose cost scales with something the user may never have looked at. This replaces
+  a hardcoded 10,000-file ceiling that was applied SILENTLY — a corpus of 81,465 files was walked
+  to the 10,000th and reported as done. `max_files`/`max_cards` now default to **no limit**
+  (`QAR_BOOTSTRAP_MAX_FILES`, `QAR_BOOTSTRAP_MAX_CARDS`), and a limit that actually bites says so
+  at WARNING instead of leaving a partial store looking complete.
+
+### Fixed
+- **The worker binary is re-resolved, and verified, on every call**
+  (`adapters/claude_cli_provider.py`). An absolute `claude_path` was trusted without checking it
+  exists, so an installer replacing the binary in place turned every call in that window into a
+  bare `FileNotFoundError`. Observed twice on one machine in a day; the second time it cost **101
+  of 107 topic-extraction calls in a single bootstrap**, and the run reported completion having
+  produced almost nothing. A configured path that is missing now falls through to the same
+  discovery a bare name gets.
+
+- **`bootstrap --prune-only`**: remove the cards a corpus no longer indexes and stop — no model
+  calls, nothing re-analysed. A store accumulates dead weight faster than anyone wants to re-index
+  a large corpus (a skip list grows, a vendored SDK lands, files are deleted), so making the
+  cleanup conditional on a full bootstrap means it never happens on exactly the corpora where it
+  matters most. On one real store this took **5,001 cards to 1,846 in seconds and at zero cost**,
+  moving it from 92% degenerate to 0% (8% named to 87%).
+
+- **The keyless CLI provider now reports what it spent** (`adapters/claude_cli_provider.py`).
+  Callers already read `tokens_in`/`tokens_out` off a provider to report a run's cost (`cli.py`
+  prints them after a bootstrap) and `ClaudeCliProvider` never set them, so every keyless
+  deployment reported its bootstrap as costing nothing — an absent answer dressed as a cheap one.
+  The CLI's own JSON envelope carries the token counts and the price it computed, so `_invoke` now
+  accumulates `tokens_in`, `tokens_out`, `cost_usd` and `call_count`. Cache-creation and cache-read
+  tokens are counted as input, because counting only `input_tokens` under-reports a harness-heavy
+  call by orders of magnitude (17,815 vs 9 on one measured call) and would make an expensive
+  configuration look free.
+
+### Fixed
+- **The card store forgets files the corpus no longer indexes**
+  (`adapters/file_context_store.py`). The index was append-only with respect to its own inclusion
+  rules: a card was written when a file was walked, and nothing removed it when that stopped being
+  true. Two ordinary ways that happens -- the file is deleted, or the skip list GROWS and the file
+  now sits inside an excluded directory (a vendored SDK, a build output). The stale card is not
+  merely useless, it is carried through every later pass: embedded on every vector seed (see the
+  batching fix above) and compared against every other card by the O(n^2) keyword clustering in
+  dedup. On one real corpus **3,107 of 5,018 cards (62%) pinned files inside a directory added to
+  the skip list long after they were written, and another 506 (10%) pinned files that no longer
+  existed -- 72% dead weight**, paid for on every run. `_bootstrap_inner` now drops a card when
+  its every pinned file is gone (`QAR_PRUNE_DEAD_CARDS=0` opts out). Deliberately narrow, because
+  the failure mode of over-pruning is silent data loss: a card with NO file entries (a
+  conversation card, or one recorded by a run) is never touched; "not in the current walk" is not
+  sufficient on its own, since a path can be absent for innocent reasons; and `Path.exists()` is
+  not used to decide, because it answers False for a merely UNREADABLE file exactly as it does for
+  a deleted one -- `stat()` is called and only a genuine `FileNotFoundError` counts as dead, so a
+  file owned by another user is kept rather than silently losing its card.
+
+  The same pass also drops DEGENERATE cards: no name, and a summary that merely restates the
+  card's own path (`summary: "batmanhq/api/__init__.py"`). These are written when topic extraction
+  yields nothing -- a provider that is down returns no areas, and the pass still records the files
+  it walked -- and they are actively harmful rather than merely useless, because the incremental
+  diff then counts those files as COVERED, so a later pass with a working provider never revisits
+  them and the corpus cannot heal itself. On one real corpus **1,388 of 1,457 surviving cards were
+  this shape**, pinning exactly the files a real bootstrap most needed to look at; re-running after
+  the prune produced named, multi-file topic cards for them. A card with a name is never
+  degenerate however thin its summary, and a card with no files is never judged (that is a
+  conversation/run card, whose summary legitimately is not about a path).
+
+- **Seeding a vector store no longer scales its memory with the corpus**
+  (`adapters/qdrant_vector_store.py`). `sync()` hands every new or changed item to `upsert()`,
+  which on a cold store is the whole corpus, and `upsert()` embedded all of it in a single call.
+  A transformer embedder's attention tensor is `batch x heads x seq^2 x 4` bytes, so at the
+  default model's 512-token window each text in flight costs on the order of 12MB -- and the ONNX
+  arena that serves those allocations grows to the high-water mark and does not give it back.
+  Seeding ~5,700 cards took a runner from ~40MB to **5.5GB in under a minute** and the kernel
+  OOM-killed it mid-task, three times, each caught with the same stack (`_maybe_seed` -> `sync` ->
+  `upsert` -> fastembed -> onnxruntime). The symptom was misleading in a way worth naming: because
+  the seed runs inside the VECTOR ARM of context assembly, what got logged was that arm "missing
+  the assembly deadline", which reads like slowness rather than the memory event it was. `upsert`
+  now embeds in bounded batches (`QAR_EMBED_BATCH`, default **16** -- measured, not guessed: at
+  128 a single attention allocation is 1.5GiB, at 32 it is 384MB, and 16 is the first size that
+  completes cleanly, at 797MB peak) and drops each batch's vectors before the next, and caps
+  per-text length for EMBEDDING only (`QAR_EMBED_MAX_CHARS`, default 8000) since the model
+  truncates at its context window anyway -- payloads keep the full text, so search is unchanged.
+
+- **An answer counts wherever it actually reached the person, and an item says where that is**
+  (`runner/context_updates.py`). A quest note's `how_to_respond` was always "add a note on this
+  quest". On a quest with mail switched on, the person never opens the quest: the run's RESULT is
+  what gets mailed to them, and their reply comes back as the next note. So runs were being told to
+  answer in the one place nobody was reading, and, worse, a note was only ever closed by another
+  NOTE, so every answer that went out by mail left the note it answered looking untouched and the
+  person was asked the same question the next morning. Now: `how_to_respond` names the channel that
+  reaches that item's reader (the result where the quest mails, a note where it does not, the
+  comment thread for a document comment), and a note is answered by an assistant note after it OR
+  by a run on that quest that delivered a result after it. The block's own preamble no longer says
+  "not only in your result", which was false on exactly the quests that mail.
+
+- **A context channel says what it read, so an empty one is not mistaken for a broken one**
+  (`runner/context_updates.py`, `cli.py`). `SourceReport` gains `considered` and `explanation`,
+  which a source sets through `CollectRequest.account(...)`. "0 found" and "two questions, both
+  already answered in the document" were the same line, and the first reading is the one people
+  act on: a live quest watching two Drive routes read as broken for days while both of the
+  person's comments sat there, answered, exactly as designed. Drive reads now say
+  `2 thread(s) across 8 document(s), 2 already answered in the document` or
+  `no comments on the 8 document(s) read`, and notes say `6 note(s), all already answered`. The
+  folder route also lists its files before reading them rather than inferring the count from the
+  comments it found, which previously reported a folder of eight uncommented documents as "no
+  documents reached".
+
+- **`drive_comments` watches all of a person's Google accounts, not one**
+  (`runner/context_updates.py`). `owner` now takes a list as well as a string. One person is a work
+  domain, an old personal address and whatever a given document happened to be created under; which
+  address owns which document is not something anybody tracks, and a spec that could name only one
+  made every document under the others invisible.
+
+- **Work a killed runner was holding is handed back, instead of vanishing**
+  (`runner/state_store.py`, `runner/poller.py`). Claiming a task PATCHes it to `in_progress`,
+  which is what stops a second worker taking it — and is exactly wrong once the worker dies: the
+  row says someone is running it and nobody is. Nothing on the runner side noticed, because the
+  code that would notice is the code that was killed. The row then sat until a backend staleness
+  sweeper timed it out hours later and marked it `failed`, and a failed row is deliberately not
+  mailable — so for an autopilot quest the day produced no output and no error anywhere the person
+  could see. Three consecutive days of a daily brief went missing that way before it was possible
+  to tell autopilot was even involved. The runner now persists what it has claimed
+  (`StateStore.claim_in_flight`, written through to disk because the case this exists for is the
+  one where no further code runs) and reconciles it on the next process's first scan
+  (`Poller._recover_orphans`). Conservative by construction: the row's current status is re-read
+  and only a still-`in_progress` row is touched, recovery is re-queueing rather than failing (the
+  runner cannot know whether the work was impossible or merely interrupted), and orphans are
+  consumed once so an unrecoverable id cannot become a retry loop across restarts.
+
+- **A keyless model call is a completion again, not a headless agent**
+  (`adapters/claude_cli_provider.py`). `ClaudeCliProvider` promised "a single-shot text
+  generation" but `claude -p` boots the whole Claude Code agent by default: its system prompt,
+  every built-in tool schema, the settings sources, the `CLAUDE.md` files above the working
+  directory, skills, plugins and any ambient MCP servers — on every planner, judge and indexing
+  call. Measured on one call answering with the single word "OK": **17,815 system tokens and
+  $0.0368**, versus **0 tokens and $0.0017** once the harness is dropped — a 22x cost difference,
+  and the same multiple in work done inside each spawned process. `_invoke` now passes
+  `--system-prompt` (which REPLACES the agent prompt, where `--append-system-prompt` kept it),
+  `--exclude-dynamic-system-prompt-sections`, `--setting-sources ""` and `--strict-mcp-config`.
+  `--disallowed-tools` is retained but is explicitly the belt and not the braces: it blocks tool
+  *use* while still shipping the schemas. Flags are probed once per binary from `--help`
+  (`_supported_flags`), so a deployment on an older CLI keeps its previous behaviour instead of
+  failing every call with a usage error.
+
+- **Index bootstrap fan-out honours the deployment's parallelism budget**
+  (`adapters/file_context_store.py`). `_BOOTSTRAP_WORKERS` was a hardcoded `8` that no config
+  reached, so a deployment that had lowered `QAR_MAX_PARALLEL` for its box still got eight
+  concurrent model calls during indexing — and for a subprocess-backed provider each one is a
+  child process, making this a memory figure rather than a concurrency one. On a loaded box that
+  is the difference between a bounded pass and an OOM kill part-way through, which strands the
+  task the runner had claimed (marked in-progress, nobody running it) until something reaps the
+  row. It now reads `QAR_BOOTSTRAP_WORKERS`, then `QAR_MAX_PARALLEL`, then falls back to 8, and
+  never returns less than 1.
+
+### Added
 - **A status for every ask, so replying stops counting as doing**
   (`runner/feedback_ledger.py`, `runner/context_updates.py`, `cli.py`, `docs/feedback-ledger.md`).
   Every channel could say what had ARRIVED; none could say what became of it, so "handled" was
@@ -36,6 +218,32 @@ All notable changes to this project are documented here. The format is based on
   runs through retrieval while the ledger carries whether it is actually being followed. Neither can
   do the other's job, and a one-off is never carded, which would make it policy forever.
   `quest-ai-runner context <quest_id> --tracked` prints the lot.
+
+- **The ledger's vocabulary widened for a live product surface, not just a lane** (same files as
+  above). Three additions, all additive and all off by default so an existing lane's behavior is
+  byte-identical. (1) `FeedbackLedger(..., requires_acceptance=True)`: a run's `done` disposition
+  from anyone but a person now lands in a new `awaiting acceptance` state instead of `done` -- still
+  owed, and the only way out is the new `accept()` method, which refuses to run for anyone but a
+  person. A claim of "finished" and a person's agreement that it is finished are different facts,
+  and a ledger whose asks come from people (a mailbox, a live chat) needs the difference. (2) Two
+  more dispositions, `asked` (a question put back to them; new state `awaiting answer`, new kind
+  `question`) and `blocked` (stuck on something outside the run's control; new state `blocked`,
+  kind left alone). `FeedbackItem.authorizes_execution` is `False` for `unknown`/`question` kinds
+  and for `awaiting acceptance`, so an untriaged capture, an unanswered question, or an unaccepted
+  claim can never read as an instruction on its own. (3) `set_state(..., kind=...)`, `evidence`
+  (kept as refs, never prose) and `run_id` on both write paths, and `all_items()` for a ledger
+  scoped by its own path (one per person, one per mailbox) rather than by card.
+
+- **A pluggable store, for a consumer whose durable record is a database** (`runner/feedback_ledger.py`,
+  `docs/feedback-ledger.md`, `tests/test_feedback_ledger_store.py`). Every ledger so far has been a
+  lane's own JSON file. `FeedbackLedger(store=...)` accepts anything satisfying the new
+  `FeedbackStore` protocol (`load()`/`save(payload)`, the same whole-document shape the file store
+  already speaks) instead of a path, for a live, in-process product surface whose rows belong next
+  to everything else its own database keeps. Two instances sharing one store see each other's
+  writes on the next read (the store's own write is the atomicity boundary, so the file store's OS
+  flock is skipped rather than reimplemented against something it cannot lock), and a store that
+  raises degrades exactly like a missing file: empty on read, logged and swallowed on write. `path`
+  and `store` are mutually exclusive; `store` wins when both are given.
 
 - **Looking at a quest's context is an operation, not a side effect of running one**
   (`runner/context_updates.py`, `cli.py`, `docs/context-updates.md`).
@@ -84,36 +292,6 @@ All notable changes to this project are documented here. The format is based on
   Seconds are rendered as `2h 56m`; bookkeeping fields and blanks stay out.
 
 ### Fixed
-- **An answer counts wherever it actually reached the person, and an item says where that is**
-  (`runner/context_updates.py`). A quest note's `how_to_respond` was always "add a note on this
-  quest". On a quest with mail switched on, the person never opens the quest: the run's RESULT is
-  what gets mailed to them, and their reply comes back as the next note. So runs were being told to
-  answer in the one place nobody was reading, and, worse, a note was only ever closed by another
-  NOTE, so every answer that went out by mail left the note it answered looking untouched and the
-  person was asked the same question the next morning. Now: `how_to_respond` names the channel that
-  reaches that item's reader (the result where the quest mails, a note where it does not, the
-  comment thread for a document comment), and a note is answered by an assistant note after it OR
-  by a run on that quest that delivered a result after it. The block's own preamble no longer says
-  "not only in your result", which was false on exactly the quests that mail.
-
-- **A context channel says what it read, so an empty one is not mistaken for a broken one**
-  (`runner/context_updates.py`, `cli.py`). `SourceReport` gains `considered` and `explanation`,
-  which a source sets through `CollectRequest.account(...)`. "0 found" and "two questions, both
-  already answered in the document" were the same line, and the first reading is the one people
-  act on: a live quest watching two Drive routes read as broken for days while both of the
-  person's comments sat there, answered, exactly as designed. Drive reads now say
-  `2 thread(s) across 8 document(s), 2 already answered in the document` or
-  `no comments on the 8 document(s) read`, and notes say `6 note(s), all already answered`. The
-  folder route also lists its files before reading them rather than inferring the count from the
-  comments it found, which previously reported a folder of eight uncommented documents as "no
-  documents reached".
-
-- **`drive_comments` watches all of a person's Google accounts, not one**
-  (`runner/context_updates.py`). `owner` now takes a list as well as a string. One person is a work
-  domain, an old personal address and whatever a given document happened to be created under; which
-  address owns which document is not something anybody tracks, and a spec that could name only one
-  made every document under the others invisible.
-
 - **A pasted brief is not mistaken for a batch the autopilot pass composed** (`runner/executor.py`).
   `execute()` decided whether to collect fresh context with `BLOCK_START not in text`, a substring
   test against the task's own text; a task that merely QUOTES a previous run's brief (someone

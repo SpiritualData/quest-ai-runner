@@ -58,13 +58,18 @@ Context used:
 
 | disposition | what it means | where it leaves the item |
 | --- | --- | --- |
-| `done` | a one-time request, and you finished it | done |
+| `done` | a one-time request, and you finished it | done, or **awaiting acceptance** on a ledger that requires it (below) |
 | `partial` | worked on, not finished | in progress, still owed |
 | `standing` | an instruction for future work; followed this time | in force, and written to guidance |
 | `standing-partial` | a rule you have only been able to follow in part | partially applied, still owed |
+| `asked` | you put a question back to them; you did NOT act on it | awaiting answer, still owed |
+| `blocked` | you started and are stuck on something outside your control | blocked, still owed |
 | `declined` | deliberately not doing it | declined |
 | `noted` | they were telling you something | noted |
 | `not used` | did not use it | unchanged |
+
+`blocked` leaves the item's kind alone -- a standing rule that is stuck is still a standing rule --
+because "blocked" says nothing about what KIND of ask this is, only that it is stuck.
 
 This is a **choice from a list**, which is what makes reading it back legitimate under hard rule #3:
 the run is asked for a structured decision and its answer is recorded, rather than its prose being
@@ -79,6 +84,44 @@ Otherwise the ledger is the assistant marking its own homework.
 splits the note into two tracked asks, sharing the words they came from, each with its own state
 from then on. Without it, a note holding a fix and a rule has to lose one of them: mark it done and
 the rule stops existing, mark it standing and the column never gets built.
+
+## A run's `done` is a claim, not a conclusion
+
+For a lane whose own recurring work is the ask, `done` meaning done is fine: the run and the work
+are the same party. It is not fine the moment the asks come from PEOPLE (a mailbox, a note, a
+comment) and a live product surface is what they read: an assistant that can mark its own homework
+finished is exactly the failure this module exists to end, one level up.
+
+So `FeedbackLedger(..., requires_acceptance=True)` changes exactly one thing: a run's `done`
+disposition, from anyone other than a person (`by != "person"`), lands the item in `awaiting
+acceptance` instead of `done`. Nothing else about the vocabulary moves -- `standing`, `partial`,
+`asked`, `blocked` all behave exactly as documented above -- because the claim/conclusion gap only
+exists for the disposition that means "finished."
+
+`awaiting acceptance` IS still owed (it is in `OPEN_STATES`), on purpose: a claim is not a
+conclusion, and an item that stops being owed on the strength of the claim is the assistant marking
+its own homework one step later. The ONLY way out is `accept()`, which refuses to run for anyone but
+a person (`by="person"`) and locks the item exactly like `set_state(..., by="person")` does, so a
+later run cannot reopen what a person already closed:
+
+```python
+ledger = FeedbackLedger(store=..., requires_acceptance=True)
+...
+ledger.accept(card_id=quest_id, source="quest_notes", item_id=note_id, note="looks right")
+```
+
+A ledger with the gate off (the default -- every existing lane) never produces `awaiting
+acceptance` at all; a run's `done` still means done, exactly as before this existed.
+
+Two more additions that came in alongside the gate, both in the same spirit of not overstating what
+happened: `set_state(..., kind=...)` is how a person turns an untriaged row (`unknown`, `open` -
+what an automatic capture creates) into a request, a standing rule, or a `question` -- classifying
+is a person's call, and `FeedbackItem.authorizes_execution` answers `False` for `unknown` and
+`question` kinds and for `awaiting acceptance` state, so a capture nobody has looked at, or a
+question nobody has answered, or a claim nobody has accepted, can never be read as an instruction
+to act on its own. And `apply_disposition`/`set_state` take an `evidence: Sequence[str]` (kept as
+refs -- a URL, a message id, a commit -- rather than prose a person cannot go and check) and a
+`run_id` naming which run made the claim, both surfaced back in `status_line()`.
 
 ## What the next run sees
 
@@ -132,6 +175,30 @@ to remember that somebody is still waiting.
 
 Env equivalents: `QAR_FEEDBACK_LEDGER`, `QAR_FEEDBACK_LEDGER_PATH`.
 
+### A consumer whose durable record is a database, not a file
+
+`FeedbackLedger(store=...)` swaps the JSON file for anything satisfying `FeedbackStore` (`load()`
+returning the same `{"items": {...}}` shape `_load` already parses, `save(payload)` persisting it):
+
+```python
+class MyDatabaseStore:
+    def load(self) -> dict: ...       # everything recorded for this scope, or {} for nothing yet
+    def save(self, payload: dict) -> None: ...   # replace this scope's record with `payload`
+
+ledger = FeedbackLedger(store=MyDatabaseStore(...), requires_acceptance=True)
+```
+
+This exists for exactly one reason: a live, in-process product surface (not a lane, not a poller)
+whose durable record already lives in its own database, where this ledger's rows have to sit next
+to everything else the product keeps rather than in a file the product cannot query. Two ledger
+instances sharing one store (two API workers, a live surface and a background lane) see each
+other's writes on the very next read, the same guarantee the file store's flock-and-reload gives
+two processes on one path -- a store's own write (a document replace, a transaction) is the
+atomicity boundary, so `_exclusive()` skips the OS lock entirely when a store is given. A store that
+raises degrades exactly like a missing file: empty on read, a logged and swallowed warning on
+write, never an exception into a caller that never expected a ledger call to fail. `path` and
+`store` are mutually exclusive; when both are given, `store` wins and `path` is never touched.
+
 ```bash
 quest-ai-runner context <quest_id> --tracked      # what was asked, and where each one got to
 ```
@@ -141,3 +208,9 @@ quest-ai-runner context <quest_id> --tracked      # what was asked, and where ea
 [`tests/test_feedback_ledger.py`](../tests/test_feedback_ledger.py): the vocabulary, the states, a
 standing rule that survives a run writing "done" on it, the person's lock, the two-asks split, the
 guidance bridge and its one-off exclusion, what the next run inherits, and the diary rule.
+
+[`tests/test_feedback_ledger_store.py`](../tests/test_feedback_ledger_store.py): the `FeedbackStore`
+seam -- a store round-trips items like a file would, two ledger instances sharing one store see
+each other's writes (including a run's `done` landing as `awaiting acceptance` for one instance and
+a person's `accept()` through the other closing it for both), a broken store degrades to empty
+reads and swallowed writes, and `store` wins when both `path` and `store` are given.

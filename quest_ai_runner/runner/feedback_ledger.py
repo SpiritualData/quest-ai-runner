@@ -59,7 +59,8 @@ from contextlib import contextmanager
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import (Any, Callable, Dict, Iterable, Iterator, List, Optional, Sequence, Tuple)
+from typing import (Any, Callable, Dict, Iterable, Iterator, List, Optional, Protocol, Sequence,
+                    Tuple, runtime_checkable)
 
 try:                                  # POSIX: the cross-process lock under a shared ledger file
     import fcntl
@@ -324,8 +325,32 @@ class FeedbackItem:
 # The store
 # ---------------------------------------------------------------------------------------------
 
+@runtime_checkable
+class FeedbackStore(Protocol):
+    """What a ledger needs from wherever it actually lives, whole-document in and out.
+
+    The default is a JSON file (below), because a lane should not need a database to remember
+    that somebody is still waiting on something. A consumer whose durable record IS a database --
+    a live, in-process product surface with its own storage, where this ledger's rows have to sit
+    next to everything else the product already keeps -- gives ``FeedbackLedger`` one of these
+    instead of a path, and gets the exact same vocabulary and state machine over its own record.
+
+    ``load`` returns the same shape ``_load`` already parses (``{"items": {key: {...row...}}}``,
+    or anything falsy/absent for "nothing yet"); ``save`` receives that same shape and persists it
+    however it needs to. Both are whole-document, matching the file store's own read/replace
+    pattern, not a per-row API -- a store backed by one queryable row per item is free to shard the
+    document internally, so long as a full ``load()`` reassembles it and a full ``save()`` commits
+    it. Never raise from either; a store that cannot be reached degrades to "nothing recorded yet"
+    on read and a logged, swallowed failure on write, exactly like a missing file does.
+    """
+
+    def load(self) -> Dict[str, Any]: ...
+
+    def save(self, payload: Dict[str, Any]) -> None: ...
+
+
 class FeedbackLedger:
-    """Every tracked item for this lane, JSON-backed.
+    """Every tracked item for this lane.
 
     Deliberately the same shape as ``Watermarks``: one small file beside the lane's state, written
     atomically, degrading to in-memory when given no path. A lane should not need a database to
@@ -333,8 +358,20 @@ class FeedbackLedger:
     """
 
     def __init__(self, path: Optional[str] = None, *, read_only: bool = False,
-                 requires_acceptance: bool = False) -> None:
-        self._path = Path(path) if path else None
+                 requires_acceptance: bool = False,
+                 store: Optional["FeedbackStore"] = None) -> None:
+        # ``store`` is the seam for a consumer whose durable record is not a file: a second
+        # deployment (a live, in-process product surface backed by its own database) needs the
+        # same vocabulary and the same state machine, not a second implementation of either. It
+        # duck-types on ``load()``/``save(dict)``, whole-document in and out -- the same shape
+        # ``_load``/``_save`` already speak -- so the file store below is just the reference
+        # implementation of the interface every other store also satisfies. When one is given,
+        # ``path`` is used only as the human-readable label in errors; nothing is opened on disk,
+        # and the OS file lock in ``_exclusive`` is skipped, because a real store's own write is
+        # already the atomicity boundary (a document write, a transaction) -- reintroducing a
+        # flock around it would protect nothing and could only ever block on it.
+        self._path = Path(path) if (path and store is None) else None
+        self._store = store
         self._read_only = bool(read_only)
         # Whether a run may finish something on its own say-so. A lane whose asks are its own work
         # leaves this False and behaves exactly as it always has. A consumer whose asks come from
@@ -381,8 +418,17 @@ class FeedbackLedger:
         anywhere. So a write takes an OS lock on a neighbouring lockfile and RE-READS the file
         inside it: read, modify, write, release, every time. It costs one small read per write, and
         it is the difference between a shared record and two processes overwriting each other.
+
+        A custom ``store`` needs none of this: its own write IS the atomicity boundary, so there is
+        nothing for an OS lock to add here except a chance to block on it for no reason. It still
+        re-reads before yielding, for the same reason a file does -- another process's write since
+        the last look must be seen before this one mutates on top of it.
         """
         with self._lock:
+            if self._store is not None:
+                self._reload_if_changed()
+                yield
+                return
             if self._path is None:
                 yield
                 return
@@ -415,7 +461,16 @@ class FeedbackLedger:
             yield
 
     def _reload_if_changed(self) -> None:
-        """Re-read the file when it has moved on. Call inside ``self._lock``."""
+        """Re-read when the record has moved on. Call inside ``self._lock``.
+
+        A custom store has no cheap mtime-style fingerprint to compare, so it is asked fresh every
+        time rather than trusted to say nothing changed -- one extra read per call, which is the
+        price of a store that can be written from more than one process at once.
+        """
+        if self._store is not None:
+            self._items = {}
+            self._load()
+            return
         if not self._path:
             return
         stamp = self._file_stamp()
@@ -425,14 +480,21 @@ class FeedbackLedger:
         self._load()
 
     def _load(self) -> None:
-        if not self._path or not self._path.exists():
-            return
-        self._stamp = self._file_stamp()
-        try:
-            payload = json.loads(self._path.read_text())
-        except (json.JSONDecodeError, OSError) as e:
-            log.warning("feedback ledger unreadable (%s); starting empty", e)
-            return
+        if self._store is not None:
+            try:
+                payload = self._store.load()
+            except Exception as e:          # a store that raises degrades to empty, never crashes
+                log.warning("feedback ledger store unreadable (%s); starting empty", e)
+                return
+        else:
+            if not self._path or not self._path.exists():
+                return
+            self._stamp = self._file_stamp()
+            try:
+                payload = json.loads(self._path.read_text())
+            except (json.JSONDecodeError, OSError) as e:
+                log.warning("feedback ledger unreadable (%s); starting empty", e)
+                return
         rows = payload.get("items") if isinstance(payload, dict) else None
         if not isinstance(rows, dict):
             return
@@ -447,14 +509,21 @@ class FeedbackLedger:
                 continue
 
     def _save(self) -> None:
-        if not self._path or self._read_only:
+        if self._read_only:
+            return
+        payload = {"items": {k: asdict(v) for k, v in sorted(self._items.items())}}
+        if self._store is not None:
+            try:
+                self._store.save(payload)
+            except Exception as e:
+                log.warning("could not persist the feedback ledger to its store: %s", e)
+            return
+        if not self._path:
             return
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             tmp = self._path.with_suffix(self._path.suffix + ".tmp")
-            tmp.write_text(json.dumps(
-                {"items": {k: asdict(v) for k, v in sorted(self._items.items())}},
-                indent=2, sort_keys=False))
+            tmp.write_text(json.dumps(payload, indent=2, sort_keys=False))
             os.replace(tmp, self._path)    # atomic: never a partial file after a crash
             # Our own write is not a reason to re-read on the next call.
             self._stamp = self._file_stamp()
