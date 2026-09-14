@@ -785,7 +785,16 @@ class TaskExecutor:
         progress-post body when the task carries one, for future per-idea threading; it is only
         forwarded when set, so clients without the parameter are untouched. Never raises and never
         affects the task's success/failure: if the conversation post fails (network, conversation
-        gone), the task still reports its result normally via PATCH."""
+        gone), the task still reports its result normally via PATCH.
+
+        ORDERING RULE: post the CLOSING message here BEFORE reporting the terminal status. A
+        consumer backend may run its own guaranteed-delivery net on the terminal-status update
+        (post the task's result into the chat if the runner never closed the loop itself), and
+        that net can only look at what is already stored. Reporting the status first therefore
+        made its check run too early every single time, so it posted the result and then this
+        call posted the identical text again: the same answer twice in one chat. Ordering is the
+        half of the fix that lives on this side; a consumer that needs to be safe against an older
+        runner has to make its own append idempotent per (task, kind) as well."""
         if not conv_id or not content:
             return
         post = getattr(self._client, "post_conversation_message", None)
@@ -1078,8 +1087,9 @@ class TaskExecutor:
             # from the read-budget cap, is still a legitimate informational answer and stays done.)
             if getattr(result, "claim_corrected", False):
                 self._report_progress(task_id, "done", text="Paused. Needs you.", output=text)
-                self._safe(lambda: self._client.report_needs_you(task_id, text, ""))
+                # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
                 self._post_conv(conv_id, text, kind="needs_you", task_id=task_id, card_id=card_id)
+                self._safe(lambda: self._client.report_needs_you(task_id, text, ""))
                 return ExecutionOutcome(task_id, "needs_you", text)
             # Append goal-verdict reasoning so the reader knows whether the goal was confirmed
             # met, hit max iterations unverified, or was a best-effort partial answer.
@@ -1100,8 +1110,9 @@ class TaskExecutor:
             done_text = self._with_context_receipt(done_text, request_text,
                                                    autopilot_composed=autopilot_composed)
             self._report_progress(task_id, "done", text="Done.", output=done_text)
-            self._safe(lambda: self._client.report_done(task_id, done_text))
+            # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
             self._post_conv(conv_id, done_text, kind="done", task_id=task_id, card_id=card_id)
+            self._safe(lambda: self._client.report_done(task_id, done_text))
             return ExecutionOutcome(task_id, "done", done_text)
 
         if result.kind == "confirm":
@@ -1132,9 +1143,10 @@ class TaskExecutor:
             done_report = self._with_context_receipt(done_report, request_text, run_output=summary,
                                                       autopilot_composed=autopilot_composed)
             self._report_progress(task_id, "done", text="Done.", output=done_report)
-            self._safe(lambda: self._client.report_done(task_id, done_report))
+            # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
             self._post_conv(conv_id, done_report, kind="done", task_id=task_id,
                             card_id=card_id)
+            self._safe(lambda: self._client.report_done(task_id, done_report))
             return ExecutionOutcome(task_id, "done", done_report)
         # A deep run that raised a human decision instead of finishing.
         decision_id = next((d.decision_id for d in deep if d.decision_id), None)
@@ -1143,9 +1155,10 @@ class TaskExecutor:
             # A confirm-before-act run carries the prepared output (e.g. the code awaiting review).
             chat_text = next((d.output for d in deep if d.output), None) or summary
             self._report_progress(task_id, "done", text=f"Paused, needs you: {summary}")
-            self._safe(lambda: self._client.report_needs_you(task_id, summary, decision_id))
+            # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
             self._post_conv(conv_id, chat_text, kind="decision", task_id=task_id,
                             card_id=card_id)
+            self._safe(lambda: self._client.report_needs_you(task_id, summary, decision_id))
             return ExecutionOutcome(task_id, "needs_you", summary, decision_id)
         # UNVERIFIED is never reported as done, and never as a bare failure either: the work RAN
         # but its verification could not (LLM outage, no verify tier, parse failure), so the
@@ -1160,8 +1173,9 @@ class TaskExecutor:
                           "it. It is not marked done.")
             msg = (work + "\n\n" + disclosure) if work else disclosure
             self._report_progress(task_id, "error", text=disclosure)
-            self._safe(lambda: self._client.report_failed(task_id, msg))
+            # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
             self._post_conv(conv_id, msg, kind="failed", task_id=task_id, card_id=card_id)
+            self._safe(lambda: self._client.report_failed(task_id, msg))
             return ExecutionOutcome(task_id, "failed", msg)
         # Otherwise the run hit a limit / errored.
         errs = "; ".join(d.error for d in deep if d.error) or "the goal was not met"
@@ -1179,9 +1193,10 @@ class TaskExecutor:
             failed_text = (f"{errs}\n\n--- WHAT THE RUN DID BEFORE IT STOPPED (unfinished, not "
                            f"verified) ---\n{work}")
         self._report_progress(task_id, "error", text=errs, output=failed_text)
-        self._safe(lambda: self._client.report_failed(task_id, failed_text))
+        # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
         self._post_conv(conv_id, f"I couldn't complete this: {failed_text}", kind="failed",
                         task_id=task_id, card_id=card_id)
+        self._safe(lambda: self._client.report_failed(task_id, failed_text))
         return ExecutionOutcome(task_id, "failed", failed_text)
 
     def _with_context_receipt(self, reported: str, request_text: Optional[str],

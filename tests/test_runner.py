@@ -1775,3 +1775,94 @@ def test_post_conversation_message_omits_task_id_when_absent(monkeypatch):
     client = QuestClient("http://quest.example", "qsk_test")
     client.post_conversation_message("qaconv_1", "hello", kind="progress")
     assert json.loads(captured["body"]) == {"content": "hello", "kind": "progress"}
+
+
+# --- closing-message ordering ---------------------------------------------------
+#
+# A consumer backend may run a guaranteed-delivery net on the terminal-status update: if the
+# runner never closed the loop in chat itself, post the task's result there. That net can only
+# see what is already stored, so the runner has to post its closing chat message BEFORE it
+# reports the terminal status. It used to do the opposite, which made the net's check run too
+# early every time: the net posted the result, then the runner posted the identical text again,
+# and the person read the same answer twice in one chat.
+
+class OrderRecordingClient(MockQuestClient):
+    """MockQuestClient that records chat posts and terminal reports on ONE ordered timeline."""
+
+    def __init__(self, due_tasks):
+        super().__init__(due_tasks)
+        self.timeline = []   # list of ("post", kind) / ("report", status)
+
+    def post_conversation_message(self, conv_id, content, *, kind="progress", task_id=None,
+                                  card_id=None):
+        if kind != "progress":
+            self.timeline.append(("post", kind))
+        return super().post_conversation_message(conv_id, content, kind=kind, task_id=task_id,
+                                                 card_id=card_id)
+
+    def report_done(self, task_id, result):
+        self.timeline.append(("report", "done"))
+        return super().report_done(task_id, result)
+
+    def report_needs_you(self, task_id, result, decision_id):
+        self.timeline.append(("report", "needs_you"))
+        return super().report_needs_you(task_id, result, decision_id)
+
+    def report_failed(self, task_id, result):
+        self.timeline.append(("report", "failed"))
+        return super().report_failed(task_id, result)
+
+
+def _closing_order(timeline):
+    """The timeline with the leading 'started' post dropped: just the closing pair."""
+    return [e for e in timeline if e != ("post", "started")]
+
+
+def test_answer_posts_into_chat_before_reporting_done():
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "ok"}])
+    client = OrderRecordingClient([])
+    ex = TaskExecutor(client, _brain(provider))
+    out = ex.execute({"id": "t_order_1", "text": "say hi", "conv_id": "qaconv_order"})
+    assert out.status == "done"
+    assert _closing_order(client.timeline) == [("post", "done"), ("report", "done")]
+
+
+def test_deep_run_posts_into_chat_before_reporting_done():
+    """The reported case: a deep run's report reached the chat twice."""
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "do the thing", "deep_brief": "x", "rationale": "big"},
+        {"met": True, "reason": "verified"},   # the goal loop's own verify verdict
+    ])
+    deep = StubDeepRunner(met=True, output="the deep answer")
+    client = OrderRecordingClient([])
+    ex = TaskExecutor(client, _brain(provider, deep_runner=deep))
+    out = ex.execute({"id": "t_order_2", "text": "do the thing", "conv_id": "qaconv_order"})
+    assert out.status == "done"
+    assert _closing_order(client.timeline) == [("post", "done"), ("report", "done")]
+    # Exactly one closing post, carrying the run's own report.
+    closing = [p for p in client.posts if p[2] == "done"]
+    assert len(closing) == 1
+
+
+def test_confirm_posts_decision_before_reporting_needs_you():
+    provider = StubProvider(decisions=[
+        {"action": "confirm", "confirm_question": "approve purchase?", "rationale": "money"},
+    ])
+    sink = StubEscalation(decision_id="dec_order")
+    client = OrderRecordingClient([])
+    ex = TaskExecutor(client, _brain(provider, escalation=sink))
+    out = ex.execute({"id": "t_order_3", "text": "buy thing", "conv_id": "qaconv_order"})
+    assert out.status == "needs_you"
+    assert _closing_order(client.timeline) == [("post", "decision"), ("report", "needs_you")]
+
+
+def test_failed_run_posts_into_chat_before_reporting_failed():
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "do the thing", "deep_brief": "x", "rationale": "big"},
+    ])
+    deep = StubDeepRunner(met=False, error="ran out of turns", output="")
+    client = OrderRecordingClient([])
+    ex = TaskExecutor(client, _brain(provider, deep_runner=deep))
+    out = ex.execute({"id": "t_order_4", "text": "do the thing", "conv_id": "qaconv_order"})
+    assert out.status == "failed"
+    assert _closing_order(client.timeline) == [("post", "failed"), ("report", "failed")]
