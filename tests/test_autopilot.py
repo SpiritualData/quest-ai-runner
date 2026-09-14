@@ -670,6 +670,16 @@ def test_a_quest_with_no_roster_gets_one_plain_assistant_batch():
     assert BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS in created["text"]
 
 
+def test_default_quest_instructions_tell_a_run_to_iterate_rather_than_fragment():
+    """A run should refine an existing source_of_truth/ (or otherwise established) document rather
+    than writing a new one-off, and file scratch/dated updates in their own subfolder. See
+    ``ai_driven/source_of_truth/`` in quest_folder_zones.py for the convention this reinforces."""
+    assert "source_of_truth" in BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
+    assert "rather than writing a new one" in BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
+    assert "subfolder" in BUNDLED_DEFAULT_QUEST_INSTRUCTIONS
+    assert "—" not in BUNDLED_DEFAULT_QUEST_INSTRUCTIONS  # no em dashes, matches the file's own rule
+
+
 # --- the two default briefs, each defaulting on its own -------------------------------------------
 # The quest-wide slot (how to work here and how to deliver) and the persona slot (what this
 # character works on) fall back INDEPENDENTLY: whatever the person wrote fills its own slot, the

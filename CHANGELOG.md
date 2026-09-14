@@ -18,6 +18,14 @@ All notable changes to this project are documented here. The format is based on
   rather than numbered ones so sections can be reordered without renumbering). Nested inside
   `ai_driven/`, not a new top-level zone — still AI workspace, still a proposal until the ledger
   says otherwise.
+- **Default quest instructions now tell a run to iterate on an existing document rather than
+  fragment into one-offs** (`runner/autopilot.py`'s `BUNDLED_DEFAULT_QUEST_INSTRUCTIONS`, matched
+  word-for-word in quest-backend's `DEFAULT_QUEST_INSTRUCTIONS` per their runner-contract test).
+  Reinforces the `source_of_truth/` convention above at the point every autopilot pass actually
+  reads: before writing a new file, check for one that already answers this and refine it in
+  place, and keep drafts/scratch/one-time updates in their own subfolder rather than loose beside
+  the standing documents. Every quest that has not overridden its own instructions gets this
+  automatically, no per-quest migration.
 - **Autopilot REACTIVE mode: checks in on schedule, but only acts when something new is actually
   asked of it** (`runner/autopilot.py`). A quest not ready to run fully unattended (`suggest`/`act`)
   previously had only `off`, which means never checking in at all. `mode: "reactive"` runs on the
