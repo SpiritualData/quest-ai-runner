@@ -959,6 +959,35 @@ class QuestClient:
             log.warning("get_my_quest failed for quest %s: %s", quest_id, e)
             return {}
 
+    def archive_quest(self, quest_id: str) -> bool:
+        """POST /api/quests/{quest_id}/archive — archive one of the caller's own quests.
+
+        Owner-only (the endpoint enforces it server-side): makes the quest inactive without
+        deleting it, freeing a slot within the account's quest limit. ``unarchive_quest`` reverses
+        it. Returns True only when the archive succeeded.
+        """
+        try:
+            self._require()
+            self._request("POST", f"/api/quests/{quest_id}/archive")
+            return True
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("archive_quest failed for quest %s: %s", quest_id, e)
+            return False
+
+    def unarchive_quest(self, quest_id: str) -> bool:
+        """POST /api/quests/{quest_id}/unarchive — restore an archived quest to active.
+
+        Owner-only; fails if the account has no room left within its quest limit. Returns True
+        only when the unarchive succeeded.
+        """
+        try:
+            self._require()
+            self._request("POST", f"/api/quests/{quest_id}/unarchive")
+            return True
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("unarchive_quest failed for quest %s: %s", quest_id, e)
+            return False
+
     def list_quest_notes(self, quest_id: str) -> List[Dict[str, Any]]:
         """GET /api/quests/{quest_id}/notes — the goal's freeform notes, oldest -> newest.
 

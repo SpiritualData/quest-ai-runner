@@ -137,6 +137,32 @@ def test_delete_goal_returns_false_on_failure():
     assert client.delete_goal("goal_1") is False
 
 
+# --- archive_quest / unarchive_quest ----------------------------------------------------------
+
+def test_archive_quest_posts_to_the_right_route_and_returns_true():
+    client, captured = client_capturing_call()
+    assert client.archive_quest("quest_1") is True
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/api/quests/quest_1/archive"
+
+
+def test_archive_quest_returns_false_on_failure():
+    client = client_failing_request()
+    assert client.archive_quest("quest_1") is False
+
+
+def test_unarchive_quest_posts_to_the_right_route_and_returns_true():
+    client, captured = client_capturing_call()
+    assert client.unarchive_quest("quest_1") is True
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/api/quests/quest_1/unarchive"
+
+
+def test_unarchive_quest_returns_false_on_failure():
+    client = client_failing_request()
+    assert client.unarchive_quest("quest_1") is False
+
+
 # --- list_team_reps ----------------------------------------------------------------------------
 
 def test_list_team_reps_uses_client_team_id_by_default():

@@ -7,6 +7,11 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **`QuestClient.archive_quest` / `unarchive_quest`**: generic wrappers for
+  `POST /api/quests/{quest_id}/archive` and `.../unarchive` (owner-only quest lifecycle actions).
+  Added per Hard Rule #4 so a consumer removing a stray/duplicate quest calls a library method
+  instead of hand-rolling a raw `_request`; `personal_quest.py`'s `PersonalQuest.archive_quest`/
+  `unarchive_quest` are thin facades over these, same shape as `delete_goal`.
 - **`ai_driven/source_of_truth/`: a place for the current answer, not another dated snapshot**
   (`runner/quest_folder_zones.py`). Folder zones already separated a person's own words
   (`human_context/`) from AI proposals (`ai_driven/`), but had no way to mark a document as THE
