@@ -66,11 +66,14 @@ class FakeAutopilotClient:
     ACCEPTED_AUTOPILOT_FIELDS = {"mode", "planning", "cadence", "personas", "env_id"}
 
     def __init__(self, quests=None, goals_by_quest=None, tasks=None,
-                 accepts_bookkeeping=False, asks_by_quest=None):
+                 accepts_bookkeeping=False, asks_by_quest=None, list_asks_fails_for=None):
         self.quests = list(quests or [])            # full quest states, keyed for get_quest_autopilot
         self.goals_by_quest = dict(goals_by_quest or {})
         self.tasks = list(tasks or [])
         self.asks_by_quest = dict(asks_by_quest or {})
+        # quest_ids for which list_asks should mimic a failed read (returns None), the same
+        # contract QuestClient.list_asks uses to distinguish a failed read from a real empty one.
+        self.list_asks_fails_for = set(list_asks_fails_for or ())
         self.list_asks_calls = []
         self.created_tasks = []
         # Every ``list_quest_goals`` call, in order. A gate that is meant to be cheap has to be
@@ -127,6 +130,8 @@ class FakeAutopilotClient:
 
     def list_asks(self, *, quest_id, limit=50):
         self.list_asks_calls.append(quest_id)
+        if quest_id in self.list_asks_fails_for:
+            return None
         return list(self.asks_by_quest.get(quest_id, []))
 
     def create_task(self, text, **kwargs):
@@ -423,6 +428,20 @@ def test_reactive_gate_is_bypassed_by_an_explicit_run_now():
     result = passer.run({"text": "pass"})
     assert len(result.created_task_ids) == 1
     assert client.list_asks_calls == []  # never even asked -- the override short-circuits it
+
+
+def test_reactive_gate_fails_open_when_the_asks_read_fails():
+    # QuestClient.list_asks returns None (never []) on a QuestApiError/QuestNotConfigured -- a
+    # transient backend blip or an expired key must run the pass, not be read as "nothing new"
+    # and silently wedge this quest shut forever.
+    q1 = _quest("q1", mode="reactive", last_pass_at="2026-07-01T09:00:00Z")
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))}
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals, list_asks_fails_for={"q1"})
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+    result = passer.run({"text": "pass"})
+    assert len(result.created_task_ids) == 1
+    assert result.skipped == []
+    assert client.list_asks_calls == ["q1"]
 
 
 def test_non_reactive_modes_never_call_list_asks():

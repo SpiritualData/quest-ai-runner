@@ -1,9 +1,10 @@
 """QuestClient.list_asks -- feeds Autopilot's REACTIVE-mode gate (see has_new_ask_since /
 _gate_quest in runner/autopilot.py): whether a quest has anything new to react to since its last
-pass. Must never raise -- a transient read failure here must never silently wedge a reactive
-quest as "always due" (it degrades to an empty list, which reads as "nothing new").
+pass. Must never raise. A failed read returns ``None``, kept distinct from a successful read of
+nothing (``[]``), so the gate can fail OPEN (run the pass) rather than reading a transient error
+as "nothing new" and silently wedging a reactive quest shut forever.
 """
-from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient, QuestNotConfigured
 
 
 def client_capturing_call():
@@ -38,14 +39,24 @@ def test_list_asks_passes_a_limit():
     assert captured["params"]["limit"] == 10
 
 
-def test_list_asks_degrades_to_empty_list_on_api_error():
+def test_list_asks_returns_none_on_api_error():
     client = QuestClient("https://quest.example", "test-api-key", team_id="team_1")
 
     def failing_request(method, path, *, params=None, body=None):
         raise QuestApiError("Quest API GET /api/asks -> 500")
 
     client._request = failing_request  # type: ignore[assignment]
-    assert client.list_asks(quest_id="quest_1") == []
+    assert client.list_asks(quest_id="quest_1") is None
+
+
+def test_list_asks_returns_none_when_not_configured():
+    client = QuestClient("https://quest.example", "test-api-key", team_id="team_1")
+
+    def unconfigured(method, path, *, params=None, body=None):
+        raise QuestNotConfigured("team_id is required")
+
+    client._request = unconfigured  # type: ignore[assignment]
+    assert client.list_asks(quest_id="quest_1") is None
 
 
 def test_list_asks_tolerates_a_malformed_response_shape():

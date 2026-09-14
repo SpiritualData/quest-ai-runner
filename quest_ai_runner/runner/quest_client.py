@@ -1608,7 +1608,7 @@ class QuestClient:
             tasks = [t for t in tasks if t.get("task_kind") == task_kind]
         return tasks
 
-    def list_asks(self, *, quest_id: str, limit: int = 50) -> List[Dict[str, Any]]:
+    def list_asks(self, *, quest_id: str, limit: int = 50) -> Optional[List[Dict[str, Any]]]:
         """GET /api/asks?quest_id=... -- every tracked ask on this quest, for Autopilot's
         REACTIVE-mode gate (see ``autopilot.has_new_ask_since``): a quest in that mode makes its
         scheduled pass only when something has actually been asked of it since the last one.
@@ -1617,9 +1617,12 @@ class QuestClient:
         ones the calling account itself filed, since a request usually comes from the quest's
         owner or a teammate, not from Autopilot's own account.
 
-        Returns ``[]`` on any failure or when the backend predates this endpoint. Never raises,
-        matching ``list_tasks``/``list_quests`` -- a read this method exists to gate a SKIP on
-        must never turn a transient error into a pass that silently never runs.
+        Returns ``[]`` when the read succeeded and there is genuinely nothing there (including a
+        malformed/empty response body -- the backend answered, so there is nothing to fail open
+        over). Returns ``None`` on ``QuestApiError``/``QuestNotConfigured`` -- a failed READ, kept
+        distinguishable from a successful read of nothing so the REACTIVE gate can fail OPEN
+        (run the pass) instead of reading the failure as "no new ask since the last pass". Never
+        raises, matching ``list_tasks``/``list_quests``.
         """
         try:
             self._require()
@@ -1630,7 +1633,7 @@ class QuestClient:
             return items if isinstance(items, list) else []
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("list_asks failed for quest %s: %s", quest_id, e)
-            return []
+            return None
 
     # --- quest autopilot config -----------------------------------------------
 

@@ -2258,7 +2258,14 @@ class AutopilotPass:
         if (str(autopilot_cfg.get("mode") or "off") == "reactive"
                 and not run_requested(autopilot_cfg)):
             asks = self._client.list_asks(quest_id=quest_id)
-            if not has_new_ask_since(asks, autopilot_cfg.get("last_pass_at")):
+            # ``None`` means the READ failed (see ``QuestClient.list_asks``), not that nothing is
+            # new -- a transient backend blip or an expired key must never be read as "no new ask
+            # since the last pass", or this gate quietly wedges a reactive quest shut forever.
+            # Fail OPEN: run the pass rather than skip on a read we could not actually perform.
+            if asks is None:
+                log.warning("autopilot: could not read asks for quest %s; reactive gate failing "
+                            "open (running the pass)", quest_id)
+            elif not has_new_ask_since(asks, autopilot_cfg.get("last_pass_at")):
                 return "reactive: no new ask since the last pass"
         # THE DAY RULE, as a gate. With a roster configured, a day nobody was rostered for is a day
         # this quest does no work at all -- config plus clock only, which is why it sits here with

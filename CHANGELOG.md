@@ -103,6 +103,16 @@ All notable changes to this project are documented here. The format is based on
   at WARNING instead of leaving a partial store looking complete.
 
 ### Fixed
+- **REACTIVE mode's gate now fails OPEN on a failed asks read, not skips** (`runner/quest_client.py`,
+  `runner/autopilot.py`). `QuestClient.list_asks` degraded any `QuestApiError`/`QuestNotConfigured`
+  to `[]`, the same shape a genuinely empty, successful read returns -- so `_gate_quest`'s reactive
+  branch could not tell "nothing new happened" from "the read failed", and read a transient backend
+  blip or an expired key as "reactive: no new ask since the last pass", the exact silent-never-runs
+  failure `has_new_ask_since`'s own docstring says this gate must not produce. `list_asks` now
+  returns `None` on a failed read, kept distinct from `[]` (a successful read of nothing), and
+  `_gate_quest` treats `None` as "could not check" and runs the pass instead of skipping it, logging
+  a warning rather than silently wedging the quest shut.
+
 - **A worker binary that is missing right now is retried, not fatal** (`adapters/retry_utils.py`).
   `is_transient_error` did not classify `FileNotFoundError`, so a call spawning the worker failed
   instantly. Within this decorator, which only wraps provider calls, that exception can only be the
