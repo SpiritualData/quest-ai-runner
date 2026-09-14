@@ -1273,6 +1273,167 @@ class QuestClient:
             log.warning("mark_insight_acted_on failed for entry %s: %s", entry_id, e)
             return False
 
+    # --- planning: goals/day-plan/habits (generic Quest planning surface) ------------------------
+
+    def list_current_goals(self) -> Dict[str, Any]:
+        """GET /api/planning/goals/current/all — every quest's CURRENT-period goals, grouped by quest.
+
+        Returns ``{"quests": [{"quest_id", "goals": [...], "current_periods": {...}}]}``. Each goal
+        carries ``id, name, completed, deadline, timeScope (day|week|month|quarter|year), period,
+        periodLabel, slipCount, aiHelp, assigneeRepId, description, criteria``. Contains NO day-scope
+        goals -- use ``get_day_plan`` for "what's on today". Returns {} on any error.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", "/api/planning/goals/current/all") or {}
+            return resp if isinstance(resp, dict) else {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_current_goals failed: %s", e)
+            return {}
+
+    def get_day_plan(self, *, date: Optional[str] = None) -> Dict[str, Any]:
+        """GET /api/daily-plan/yesterday-goals[?for_date=] — one day's actual goal/habit plan.
+
+        Despite the route's name, ``for_date`` returns THAT date's plan; omitting it returns
+        YESTERDAY's, not today's -- pass today's own date explicitly for "what's on today". This is
+        a different, richer surface than ``get_daily_reflection`` (which reads the written daily-plan
+        REFLECTION, not the goal list): returns ``{date, total, completed_count, goals: [...],
+        habit_stats: {...}}``, each goal carrying ``id, name, completed, quest_id, quest_name,
+        scheduled_time, is_carried_over``. Returns {} on any error.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", "/api/daily-plan/yesterday-goals",
+                                 params={"for_date": date} if date else None) or {}
+            return resp if isinstance(resp, dict) else {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("get_day_plan failed (date=%s): %s", date, e)
+            return {}
+
+    def list_all_plans(self) -> List[Dict[str, Any]]:
+        """GET /api/planning/plans/all — every goal across every quest and period (a full sweep).
+
+        For a full-portfolio review, not a daily/weekly question (use ``list_current_goals`` or
+        ``get_day_plan`` for those). Each item carries ``title`` and ``abandoned`` in addition to the
+        fields ``list_current_goals`` returns. Returns [] on any error or unexpected shape.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", "/api/planning/plans/all")
+            if isinstance(resp, list):
+                return resp
+            items = (resp.get("plans") or resp.get("items")) if isinstance(resp, dict) else None
+            return items if isinstance(items, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_all_plans failed: %s", e)
+            return []
+
+    def list_habits(self) -> List[Dict[str, Any]]:
+        """GET /api/planning/habits/all — every habit on the caller's account. Returns [] on error."""
+        try:
+            self._require()
+            resp = self._request("GET", "/api/planning/habits/all")
+            if isinstance(resp, list):
+                return resp
+            items = (resp.get("habits") or resp.get("items")) if isinstance(resp, dict) else None
+            return items if isinstance(items, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_habits failed: %s", e)
+            return []
+
+    def carry_over_day_plan(self) -> Dict[str, Any]:
+        """POST /api/daily-plan/carry-over — roll yesterday's unfinished goals into today's plan.
+
+        Returns the response dict. Returns {} on any error.
+        """
+        try:
+            self._require()
+            return self._request("POST", "/api/daily-plan/carry-over") or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("carry_over_day_plan failed: %s", e)
+            return {}
+
+    def delete_goal(self, goal_id: str) -> bool:
+        """DELETE /api/planning/goals/{goal_id} — permanently remove one goal.
+
+        Returns True only when the delete succeeded. Irreversible: a caller acting on a person's
+        behalf must have their explicit go-ahead before calling this.
+        """
+        try:
+            self._require()
+            self._request("DELETE", f"/api/planning/goals/{goal_id}")
+            return True
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("delete_goal failed for %s: %s", goal_id, e)
+            return False
+
+    # --- team AI-rep registry (list/create; see get_ai_profile/update_ai_profile for ONE rep) -----
+
+    def list_team_reps(self, *, team_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """GET /api/teams/{team_id}/reps — every AI rep registered on a team.
+
+        A "rep" is a first-class persona in the team's AI-rep registry (see ``create_rep``), keyed
+        by ``rep_id`` and (usually) a ``display_name``. Distinct from ``list_open_decisions_for_user``
+        and from a plain human team member. Returns [] on any error.
+        """
+        try:
+            self._require()
+            tid = team_id or self.team_id
+            if not tid:
+                raise QuestNotConfigured("team_id is required to list team reps")
+            resp = self._request("GET", f"/api/teams/{tid}/reps") or {}
+            reps = resp.get("reps") if isinstance(resp, dict) else None
+            return reps if isinstance(reps, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_team_reps failed: %s", e)
+            return []
+
+    def create_rep(self, display_name: str, *, team_id: Optional[str] = None,
+                   persona: Optional[str] = None, area: Optional[str] = None,
+                   owner_user_id: Optional[str] = None) -> Dict[str, Any]:
+        """POST /api/reps — register a new AI rep on a team.
+
+        Omit ``owner_user_id`` for a PERSON-LESS rep (a character/persona that represents no real
+        team member, just a named AI voice); pass it to attach the rep to a real person instead.
+        ``persona`` is the rep's seed instructions/voice; ``area`` is a short human label for what
+        it's for. Raises ``QuestApiError``/``QuestNotConfigured`` on failure rather than swallowing
+        it: a caller that stores the returned ``rep_id`` must know it actually exists.
+        """
+        self._require()
+        tid = team_id or self.team_id
+        if not tid:
+            raise QuestNotConfigured("team_id is required to create a rep")
+        body: Dict[str, Any] = {"display_name": display_name, "teams": [tid]}
+        if persona is not None:
+            body["persona"] = persona
+        if area is not None:
+            body["area"] = area
+        if owner_user_id is not None:
+            body["owner_user_id"] = owner_user_id
+        return self._request("POST", "/api/reps", body=body) or {}
+
+    def list_decisions_for_quest(self, quest_id: str, *,
+                                 status: Optional[str] = None) -> List[Dict[str, Any]]:
+        """GET /api/teams/decisions/for-quest?quest_id=... — ALL of a quest's decisions.
+
+        Unlike ``list_open_decisions_for_quest`` (which the autopilot HOLD gate uses and which
+        filters to open only), this returns open AND resolved rows by default -- the quest's full
+        decision history. Pass ``status`` to filter client-side (the backend has none) to one value
+        (e.g. "resolved"). Returns [] on any error.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", "/api/teams/decisions/for-quest",
+                                 params={"quest_id": quest_id})
+            rows = resp if isinstance(resp, list) else list((resp or {}).get("decisions") or [])
+            if status:
+                rows = [d for d in rows
+                        if str(d.get("status") or "").strip().lower() == status.lower()]
+            return rows
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_decisions_for_quest failed for quest %s: %s", quest_id, e)
+            return []
+
     # --- task creation (enqueue a new AI task) --------------------------------
 
     def create_task(self, text: str, *,
