@@ -7,6 +7,17 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **`ai_driven/source_of_truth/`: a place for the current answer, not another dated snapshot**
+  (`runner/quest_folder_zones.py`). Folder zones already separated a person's own words
+  (`human_context/`) from AI proposals (`ai_driven/`), but had no way to mark a document as THE
+  place to look for a topic, refined in place, versus a point-in-time research artifact — so the
+  same topic got re-researched into a new dated file run after run, and the working answer ended up
+  spread across a dozen files with no canonical one. `ensure_folder_zones` now also scaffolds
+  `ai_driven/source_of_truth/`; the folder's `CLAUDE.md` and `docs/quest-folder-zones.md` explain
+  the convention (no date in the filename, check here before starting new research, named headings
+  rather than numbered ones so sections can be reordered without renumbering). Nested inside
+  `ai_driven/`, not a new top-level zone — still AI workspace, still a proposal until the ledger
+  says otherwise.
 - **Autopilot REACTIVE mode: checks in on schedule, but only acts when something new is actually
   asked of it** (`runner/autopilot.py`). A quest not ready to run fully unattended (`suggest`/`act`)
   previously had only `off`, which means never checking in at all. `mode: "reactive"` runs on the

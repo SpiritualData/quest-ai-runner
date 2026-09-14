@@ -32,6 +32,20 @@ run may put on a row: ``ai_proposed`` (they have not seen it) -> ``surfaced`` (p
 them, no answer yet) -> ``approved`` / ``rejected`` / ``superseded``. Only ``approved`` is
 settled. A run that builds on anything else is doing what the failure above describes.
 
+A FIFTH piece, ``ai_driven/source_of_truth/``, answers a different recurring failure: nobody
+consolidates. A run researches a topic, writes a dated file. A later run researches the same topic
+again -- because nothing told it the earlier file existed, or because it did but a new dated file
+felt like the safe default -- and writes a second one. Repeat for months and the working answer to
+"what does X actually say" is spread across a dozen files, none of them current, none of them
+canonical. ``ai_driven/`` otherwise has no concept of "the current answer" as opposed to "a research
+artifact from a point in time"; this subfolder is that concept. A file placed here carries no date
+in its name -- that absence IS the signal that it is meant to be refined in place, not superseded.
+Everything else about the zone still applies: it is AI workspace, still a PROPOSAL until the ledger
+says otherwise, headings inside it should be named rather than numbered so sections can be
+reordered without renumbering. Before starting new research on a topic, a run should check this
+subfolder for an existing document to refine rather than writing a new dated one that fragments the
+picture again.
+
 Nothing here is enforced by the filesystem, and that is on purpose: a run can always write
 anywhere. What this module guarantees is that the rule is SCAFFOLDED (the directories exist, so
 the choice of where to put a file is a real one), STATED (in the folder's CLAUDE.md, and in the
@@ -53,6 +67,11 @@ log = logging.getLogger("quest-ai-runner.quest_folder_zones")
 
 AI_DRIVEN_DIR = "ai_driven"
 HUMAN_CONTEXT_DIR = "human_context"
+
+# Nested inside ai_driven/, not a fourth top-level zone: the subset of AI workspace meant to be
+# THE current answer on a topic, refined in place, rather than a point-in-time research artifact.
+# See the module docstring's "A FIFTH piece" paragraph for why this exists.
+SOURCE_OF_TRUTH_DIR = "source_of_truth"
 
 # Inbound human material captured from Quest lands in its own subfolder rather than loose in
 # human_context/, so the person's OWN files (things they wrote or dropped in themselves) never sit
@@ -92,6 +111,7 @@ class FolderZones:
     folder: str
     ai_driven: str
     human_context: str
+    source_of_truth: str
     ledger: str
     guide: str
     created: List[str]
@@ -128,6 +148,16 @@ Self-documentation, analyses you decided to run, scratch and temporary files, de
 asked for yet. Write here freely. Everything in this zone is a PROPOSAL until
 `{AI_DRIVEN_DIR}/{LEDGER_NAME}` records otherwise — including work that is finished, verified,
 and obviously correct. Finished is not the same as agreed.
+
+**`{AI_DRIVEN_DIR}/{SOURCE_OF_TRUTH_DIR}/` — the current answer, not a dated snapshot.**
+Still `{AI_DRIVEN_DIR}/`, still a proposal zone, but for one specific kind of file: a document
+meant to be THE place to look for something, refined in place as understanding changes, instead of
+superseded by a new dated file each time the same topic gets researched again. No date in the
+filename — that absence is the signal it's running, not a point-in-time artifact. Before starting
+new research on a topic, check here first; if a document already covers it, update that file (and
+any doc it mirrors) rather than writing a new one that fragments the picture again. Headings inside
+these documents should be named, not numbered, so sections can be reordered, split, or renamed
+without renumbering everything under them.
 
 **Everything else — the collaborative work product.**
 The document, the code, the plan: the thing the two of you are actually making. Files here carry
@@ -195,11 +225,12 @@ def ensure_folder_zones(folder: str) -> FolderZones:
     created: List[str] = []
     ai_dir = base / AI_DRIVEN_DIR
     human_dir = base / HUMAN_CONTEXT_DIR
+    source_of_truth_dir = ai_dir / SOURCE_OF_TRUTH_DIR
     ledger = ai_dir / LEDGER_NAME
     guide = base / GUIDE_FILE
 
     try:
-        for path in (ai_dir, human_dir, human_dir / INBOUND_DIR):
+        for path in (ai_dir, human_dir, human_dir / INBOUND_DIR, source_of_truth_dir):
             if not path.exists():
                 path.mkdir(parents=True, exist_ok=True)
                 created.append(str(path))
@@ -218,7 +249,8 @@ def ensure_folder_zones(folder: str) -> FolderZones:
         log.info("folder zones scaffolded in %s (%d path(s))", folder, len(created))
     return FolderZones(
         folder=str(base), ai_driven=str(ai_dir), human_context=str(human_dir),
-        ledger=str(ledger), guide=str(guide), created=created,
+        source_of_truth=str(source_of_truth_dir), ledger=str(ledger), guide=str(guide),
+        created=created,
     )
 
 

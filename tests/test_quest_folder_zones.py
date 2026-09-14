@@ -14,6 +14,7 @@ from quest_ai_runner.runner.quest_folder_zones import (
     INBOUND_DIR,
     LEDGER_NAME,
     LEDGER_STATUSES,
+    SOURCE_OF_TRUTH_DIR,
     capture_human_input,
     ensure_folder_zones,
     folder_zones_contract,
@@ -35,9 +36,18 @@ def test_ensure_creates_both_zones_the_ledger_and_the_guide(folder):
     assert (base / AI_DRIVEN_DIR).is_dir()
     assert (base / HUMAN_CONTEXT_DIR).is_dir()
     assert (base / HUMAN_CONTEXT_DIR / INBOUND_DIR).is_dir()
+    assert (base / AI_DRIVEN_DIR / SOURCE_OF_TRUTH_DIR).is_dir()
     assert (base / AI_DRIVEN_DIR / LEDGER_NAME).is_file()
     assert (base / GUIDE_FILE).is_file()
     assert zones.scaffolded
+    assert zones.source_of_truth == str(base / AI_DRIVEN_DIR / SOURCE_OF_TRUTH_DIR)
+
+
+def test_source_of_truth_is_nested_inside_ai_driven_not_a_new_top_level_zone(folder):
+    ensure_folder_zones(folder)
+    base = Path(folder)
+    assert not (base / SOURCE_OF_TRUTH_DIR).exists()
+    assert (base / AI_DRIVEN_DIR / SOURCE_OF_TRUTH_DIR).is_dir()
 
 
 def test_ensure_is_idempotent(folder):
@@ -75,6 +85,14 @@ def test_guide_states_only_approved_is_settled(folder):
     for status in LEDGER_STATUSES:
         assert status in guide
     assert "Only `approved` is settled." in guide
+
+
+def test_guide_describes_the_source_of_truth_convention(folder):
+    ensure_folder_zones(folder)
+    guide = (Path(folder) / GUIDE_FILE).read_text()
+    assert SOURCE_OF_TRUTH_DIR in guide
+    assert "No date in the filename" in guide or "No date" in guide
+    assert "check here first" in guide
 
 
 def test_ensure_survives_an_unwritable_folder():

@@ -55,6 +55,29 @@ Two decisions in that function are load-bearing:
 Note that `author_name` is never consulted: a note an AI run posts carries the account owner's
 display name, because the API key is theirs.
 
+## Source of truth documents
+
+A different failure from the one above: nobody consolidates. A run researches a topic and writes a
+dated file. Months later a later run researches the same topic again — because nothing told it the
+earlier file existed, or a new dated file just felt like the safe default — and writes a second one.
+Repeat long enough and the working answer to "what does X actually say" is spread across a dozen
+files, none of them current, none of them canonical.
+
+`ai_driven/` otherwise has no way to say "this is the current answer" as opposed to "a research
+artifact from a point in time." `ai_driven/source_of_truth/` is that distinction, scaffolded by the
+same `ensure_folder_zones` call. Everything about the `ai_driven/` zone still applies here — it's AI
+workspace, still a proposal until the ledger says otherwise — this is a nested convention, not a
+fourth top-level zone.
+
+- **No date in the filename.** That absence is the signal a document belongs here: it's meant to be
+  refined in place as understanding changes, not superseded by the next dated snapshot.
+- **Check here before researching.** Before writing a new file on a topic, a run should look here
+  first. If a document already covers it, update that file (and any doc it mirrors elsewhere, e.g.
+  a synced Google Doc) instead of starting a new one.
+- **Named headings, not numbered ones.** A document meant to be refined over time outlives whatever
+  numbering scheme fit it on day one. Heading size (`##`, `###`, `####`) carries the hierarchy, so
+  sections can be reordered, split, or renamed without renumbering everything under them.
+
 ## The ledger
 
 `ai_driven/provenance_ledger.md` answers the question the zones alone cannot. A folder can tell you
