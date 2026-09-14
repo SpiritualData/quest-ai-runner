@@ -754,7 +754,8 @@ class QuestClient:
             log.warning("set_goal_completed failed for %s: %s", goal_id, e)
             return {}
 
-    def edit_quest_field(self, quest_id: str, fields: Dict[str, Any]) -> Dict[str, Any]:
+    def edit_quest_field(self, quest_id: str, fields: Dict[str, Any], *,
+                         actor: str = "ai", user_requested: bool = False) -> Dict[str, Any]:
         """PATCH /api/quests/{quest_id}/field — owner-scoped edit of AI-determined quest fields.
 
         The OTHER write path, and the one to reach for when a field the team route refuses needs
@@ -774,17 +775,33 @@ class QuestClient:
 
         Prefer ``write_quest_fields`` when a team ROLE should govern the write (an AI service
         member must not silently rewrite intent). Use this when the caller is acting as the owner.
+
+        ``actor`` DECLARES WHO DECIDED THE VALUE, and defaults to ``"ai"`` because that is what a
+        runner is. These fields are the person's own account of their quest, so a backend that
+        supports the declaration may refuse to apply an AI-decided value and answer 202 with a
+        ``decision_id`` instead: the change becomes an ask the owner approves, rather than a
+        rewrite they find later. ``user_requested=True`` says the user's own message explicitly
+        asked for THIS field to change, which is a structured verdict the caller must already
+        hold; never derive it by reading words out of model output. Pass ``actor="human"`` only
+        when a person literally supplied this value. A backend that does not know the field
+        ignores it and behaves exactly as before.
         """
         result: Dict[str, Any] = {}
         for field_name, value in fields.items():
             try:
                 result = self._request(
                     "PATCH", f"/api/quests/{quest_id}/field",
-                    body={"field_name": field_name, "value": value}) or {}
+                    body={"field_name": field_name, "value": value,
+                          "actor": actor, "userRequested": bool(user_requested)}) or {}
             except (QuestApiError, QuestNotConfigured) as e:
                 log.warning("edit_quest_field failed for quest %s field %s: %s",
                            quest_id, field_name, e)
                 return {}
+            if isinstance(result, dict) and result.get("applied") is False:
+                log.info("edit_quest_field: %s on quest %s was not applied (%s); it is an ask for "
+                         "the owner to approve (decision %s)",
+                         field_name, quest_id, result.get("reason"), result.get("decision_id"))
+                return result
         return result
 
     def start_quest(self, *, category_id: str,

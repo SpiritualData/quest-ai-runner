@@ -107,6 +107,23 @@ All notable changes to this project are documented here. The format is based on
   (`QAR_BOOTSTRAP_MAX_FILES`, `QAR_BOOTSTRAP_MAX_CARDS`), and a limit that actually bites says so
   at WARNING instead of leaving a partial store looking complete.
 
+### Changed
+- **`QuestClient.edit_quest_field` now DECLARES the AI as the author of the value**
+  (`runner/quest_client.py`). The fields this method writes (`outcome`, `current_state`,
+  `preferences`, `purpose`, ...) are the person's own account of their quest, and a runner writing
+  one of them is a model's opinion, not something the person typed. The PATCH body now carries
+  `actor` (default `"ai"`) and `userRequested` (default `False`, a STRUCTURED verdict the caller
+  must already hold: did the user's own message explicitly ask for THIS field to change; never
+  derive it by reading words out of model output). A backend that supports the declaration may
+  answer `202` with `{"applied": false, "reason": ..., "decision_id": ...}`, meaning the change
+  became an ask its owner approves rather than a rewrite they find later; the method stops at that
+  point instead of writing the remaining fields, and returns that answer. Pass `actor="human"` only
+  when a person literally supplied the value. A backend that does not know the fields ignores them
+  and behaves exactly as before, so this is backward compatible in both directions. Motivated by a
+  live incident on the consumer side: a chat turn asking a practical training question had its
+  passing wording written over a quest's outcome twice in three minutes, on a quest with autopilot
+  off.
+
 ### Fixed
 - **REACTIVE mode's gate now fails OPEN on a failed asks read, not skips** (`runner/quest_client.py`,
   `runner/autopilot.py`). `QuestClient.list_asks` degraded any `QuestApiError`/`QuestNotConfigured`

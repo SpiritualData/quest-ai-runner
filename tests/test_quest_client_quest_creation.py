@@ -101,16 +101,46 @@ def test_edit_quest_field_sends_legacy_field_name_value_body():
     assert len(calls) == 1
     assert calls[0]["method"] == "PATCH"
     assert calls[0]["path"] == "/api/quests/quest_1/field"
-    assert calls[0]["body"] == {"field_name": "purpose", "value": "Help people develop psychic ability"}
+    assert calls[0]["body"]["field_name"] == "purpose"
+    assert calls[0]["body"]["value"] == "Help people develop psychic ability"
     # The old body shape must never be sent again -- the backend silently ignores it.
     assert "fields" not in calls[0]["body"]
+
+
+def test_edit_quest_field_declares_the_ai_as_the_actor_by_default():
+    """A runner writing one of the person's own fields says so, so the backend can decide whether
+    to apply it or turn it into an ask. Defaulting to "human" would let a model's opinion pass as
+    something the person typed, which is exactly the failure this declaration exists to stop."""
+    client, calls = client_capturing_calls()
+    client.edit_quest_field("quest_1", {"outcome": "New outcome"})
+    assert calls[0]["body"]["actor"] == "ai"
+    assert calls[0]["body"]["userRequested"] is False
+
+    client, calls = client_capturing_calls()
+    client.edit_quest_field("quest_1", {"outcome": "New outcome"}, user_requested=True)
+    assert calls[0]["body"]["userRequested"] is True
+
+
+def test_edit_quest_field_stops_when_the_backend_turns_a_write_into_an_ask():
+    """A 202 "not applied, here is the decision" answer is NOT a success to keep writing past."""
+    client = QuestClient("https://quest.example", "test-api-key", team_id="team_1")
+    seen = []
+
+    def held(method, path, *, params=None, body=None):
+        seen.append(body)
+        return {"applied": False, "reason": "autopilot_off", "decision_id": "teamdec_abc"}
+
+    client._request = held  # type: ignore[assignment]
+    result = client.edit_quest_field("quest_1", {"outcome": "A", "current_state": "B"})
+    assert len(seen) == 1
+    assert result["decision_id"] == "teamdec_abc"
 
 
 def test_edit_quest_field_sends_one_patch_per_field():
     client, calls = client_capturing_calls()
     client.edit_quest_field("quest_1", {"outcome": "New outcome", "current_state": "New state"})
     assert len(calls) == 2
-    bodies = [c["body"] for c in calls]
+    bodies = [{"field_name": c["body"]["field_name"], "value": c["body"]["value"]} for c in calls]
     assert {"field_name": "outcome", "value": "New outcome"} in bodies
     assert {"field_name": "current_state", "value": "New state"} in bodies
 
