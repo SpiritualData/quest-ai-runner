@@ -28,8 +28,16 @@ prose, the retrieval plan the context engine was supposed to own.
 - A **`Watermarks`** file holds one "last looked" stamp per *(card, source)* pair, so channels that
   move at different speeds stay independent.
 
-Built in: `reflections`, `insights`, `quest_notes`, `drive_comments`, `drive_changes`. A consumer
-adds its own with `engine.register(MySource())`, and every caller of the engine sees it.
+Built in: `reflections`, `insights`, `quest_notes`, `goal_updates`, `drive_comments`,
+`drive_changes`, `inbound_mail`. A consumer adds its own with `engine.register(MySource())`, and
+every caller of the engine sees it.
+
+`goal_updates` is the per-goal check-in thread: what the person wrote on ONE goal of this quest
+(what they read, did or found), as opposed to `quest_notes`, which is what they wrote to the
+quest as a whole. It is always on, like `reflections` and `insights`, because it is card-scoped
+by construction: an update lives on a goal of this quest, so it cannot carry another card's
+material and needs no relevance judgment. It does not track asks; a check-in is somebody saying
+where things stand, not a question owed an answer.
 
 ## What a card watches, as data
 
@@ -44,7 +52,8 @@ any particular quest:
       "quest_notes",
       {"source": "insights", "categories": ["PhD"]},
       {"source": "drive_comments", "folder_id": "1kEc..."},
-      {"source": "drive_changes", "folder_id": "1kEc..."}
+      {"source": "drive_changes", "folder_id": "1kEc..."},
+      {"source": "inbound_mail", "mailbox": "support@example.org"}
     ]
   }
 }
@@ -66,6 +75,17 @@ created. The three may be combined; a file reached by more than one route is rea
 work domain, an old personal address, a second one some document happened to be created under.
 Which address owns which document is not something anybody keeps track of, so a spec that could
 name only one made every document under the others invisible.
+
+**`{"source": "inbound_mail", "mailbox": "support@example.org"}`** reads what arrived at a
+mailbox since the watermark, one row per message, needing an `InboundMail` client supplied once by
+the consumer (`UpdateEngine(inbound_mail=...)`; declaratively, `RunnerConfig.inbound_mail_auth`,
+shaped like `drive_comments_auth`: a service-account file, the subject to impersonate, and the
+`allowed_addresses` this credential may actually read -- domain-wide delegation can otherwise
+impersonate any mailbox in the domain, so that list is the only code-side limit on which one gets
+read). It can never be pointed at a quest's own reply mailbox (`ai@...`, `ai+q-...@...`): that
+address is already polled by a consumer's own inbound-reply service on its own schedule, and a
+second poller on the same mailbox ingests every reply twice. A card naming it gets a reported
+source error instead, never a silent double-ingest (`adapters.inbound_mail.refuses_as_inbound_mailbox`).
 
 **Every capture is its own row, and a tag never gates delivery.** The captures arrive one update
 each, each with its own ref, so the relevance judge decides on each one and the receipt answers
@@ -123,10 +143,16 @@ bundle.mark_seen()
 | `context_updates` | `True` | off composes exactly what was composed before this existed |
 | `context_updates_state_path` | `None` | watermarks file; defaults to beside the lane's own state file |
 | `context_updates_first_look_days` | `14` | how far back a source looks for a card nothing has ever read |
+| `context_updates_judge_admission` | `True` | off skips the admission judgment; whatever cleared a source's own deterministic filter (e.g. `is_bulk_mail`) reaches a run and the asks record unfiltered |
+| `context_updates_admission_tier` | `"fast"` | model tier for the admission judgment (see below) |
+| `context_updates_relay_log_path` | `None` | "already relayed onto Quest" record; defaults to beside the lane's own state file |
 | `drive_comments` | `None` | a `DriveComments` client; without it the two Drive sources contribute nothing |
+| `inbound_mail` | `None` | an `InboundMail` client; without it `inbound_mail` contributes nothing |
+| `inbound_mail_auth` | `None` | declarative form: `{service_account_file, subject, allowed_addresses, scopes}`, resolved into `inbound_mail` by `resolve_config_objects` |
 
 Env equivalents: `QAR_CONTEXT_UPDATES`, `QAR_CONTEXT_UPDATES_STATE_PATH`,
-`QAR_CONTEXT_UPDATES_FIRST_LOOK_DAYS`.
+`QAR_CONTEXT_UPDATES_FIRST_LOOK_DAYS`. The rest are TOML-file fields only (no env var), the same
+convention `context_updates_judge_relevance`/`context_updates_relevance_tier` already follow.
 
 The Drive channel needs a token, and minting one is a deployment concern:
 
@@ -243,6 +269,9 @@ saying found, set aside, or the error. The same narrowing is `sources=[...]` on 
 - [`tests/test_autopilot_context_updates.py`](../tests/test_autopilot_context_updates.py): the pass,
   the executor receipt, the poller/config wiring, and the byte-identical no-engine path.
 - [`tests/test_drive_comments.py`](../tests/test_drive_comments.py): the Drive channel, offline.
+- [`tests/test_inbound_mail.py`](../tests/test_inbound_mail.py): the header pre-filter, the
+  admission judge (and its failure mode), idempotent relay, the watermark, and the reply-mailbox
+  refusal -- all offline.
 
 
 ## Relevance: the engine's job, not the run's
@@ -270,6 +299,65 @@ them could only ever lose one.
 **Every failure keeps everything.** No provider, a timeout, unparsable JSON: the bundle is
 delivered exactly as collected. The worst case has to be a noisier brief, never a silently emptier
 one.
+
+## Admission: a different question from relevance, never conflated with it
+
+Relevance asks *does this bear on this card*. Admission asks a question that comes BEFORE that
+one even applies: *is a real person writing to us at all*, as opposed to bulk or automated mail
+that cleared a deterministic header check. The two are kept structurally separate -- a different
+class attribute (`judge_admission`, alongside `judge_relevance`, on `_BaseSource`), a different
+judge callable (`llm_admission_judge`, alongside `llm_relevance_judge`), a different engine method
+(`UpdateEngine._apply_admission`, run before `_apply_relevance`) -- so a source can want one, the
+other, both, or neither, and so judging "is this spam" is never accidentally done by asking whether
+the mail happens to mention this quest's subject matter (a marketing email addressed to a real
+person's real interests can do that by accident; a genuine one-line request can fail to by never
+restating what it's about).
+
+`inbound_mail` is the first source to use it, and it is a two-step gate:
+
+1. **A deterministic header check, for free, before any model call**
+   (`adapters.inbound_mail.is_bulk_mail`): `List-Unsubscribe`, `List-Id`, `Precedence: bulk`,
+   `Auto-Submitted` and the other headers a mail SYSTEM sets about its own automated nature.
+   Header checks only -- never a keyword or subject-line rule, which is hard rule #3 exactly as it
+   is for the relevance judge: a fixed string list silently misses whatever wording it did not
+   anticipate. Mail caught here never becomes a `ContextUpdate` at all, so it is provably
+   impossible for it to have cost a model call.
+2. **The admission judgment** (`llm_admission_judge`, on by default, `"fast"` tier -- cheaper than
+   relevance's `"balanced"`, because the header check already narrowed what reaches it), over
+   whatever survived step 1.
+
+**Biased toward inclusion, exactly like the relevance judge, and for a sharper reason.** Any
+failure (no provider, a timeout, unparsable JSON) keeps everything, because the costs are not
+symmetric: an admitted item that turns out to be nothing costs one line somebody dismisses reading
+their asks; a real person's request that is dropped here is invisible, and nobody -- not the
+sender, not the account -- will ever know it happened.
+
+## Relaying an admitted item onto the quest
+
+Surfacing an admitted mail item to a run is only half the point: the asks ledger the Quest app
+reads ("What You Asked") is backed by quest-backend's own Mongo store, not this library's default
+JSON file, so an item a real person sent in has to reach the ACCOUNT's own record, not just one
+run's prompt. `ContextUpdate.relay_to_quest` (a class attribute, alongside `judge_admission`, so
+any source can opt in) marks a source's admitted items for this; `inbound_mail` is the first.
+
+`ContextUpdates.relay_admitted` posts each one through
+`QuestClient.add_quest_note(quest_id, text, relayed_author_email=sender_address)` -- the one write
+path that lets an API-key caller attribute a note to a real person's own address rather than to the
+AI. The note still records `author_kind: "ai"` (an API key did post it), but `author_name` becomes
+`"<email> (relayed)"` and, critically, the note enters the account's asks record under that
+address, exactly as an emailed reply to a quest's own mailbox already does.
+
+**Only at delivery, never at collection.** `relay_admitted` runs from `mark_seen`, the same moment
+the watermark moves and the local feedback ledger records an ask -- which is what keeps
+`quest-ai-runner context <quest_id>` (built on a read-only engine that never calls `mark_seen`) a
+genuine read: looking at a quest's context can never itself post a note onto it.
+
+**Idempotent, keyed by (card_id, source, item_id)** -- the same triple the feedback ledger keys its
+own rows by -- via `RelayedItems`, a small JSON-backed store beside the watermarks
+(`context_updates_relay_log_path`, defaulting next to the lane's state file). A relay is a WRITE
+with a real person's name on it, so unlike a watermark, where a re-offered line only costs a
+person's patience, losing this record on a restart would turn the same mail into a second note. A
+failed relay is logged and simply retried on the next pass (the log only records success).
 
 ## Open until answered
 

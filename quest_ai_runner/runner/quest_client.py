@@ -32,6 +32,13 @@ Endpoints implemented (the contract from integration_library_design.md §3):
                place, so a REFRESHING artifact belongs in an entry, not in a note.
   Goal (real, typed, period-scoped -- distinct from an assistant task):
                POST /api/planning/goals                (create_goal)
+  Goal updates (the per-goal check-in thread -- what ``list_goal_notes`` falls back to, since the
+               reference backend has no ``.../goals/{goal_id}/notes`` route):
+               GET    /api/planning/goals/{goal_id}/updates          (list_goal_updates)
+               POST   /api/planning/goals/{goal_id}/updates          (add_goal_update)
+               DELETE /api/planning/goals/{goal_id}/updates/{upd_id} (delete_goal_update)
+               GET    /api/planning/quests/{quest_id}/goal-updates   (list_quest_goal_updates;
+               bulk path, falls back to a per-goal fan-out when the route is not yet available)
   Reflections (the person's own words; USER-scoped, no team or quest id):
                GET  /api/daily-plan/today              (get_daily_reflection)
                GET  /api/period-review/{period}/current (get_period_reflection)
@@ -95,11 +102,19 @@ class QuestClient:
     """Thin urllib client for the Quest task + decision API. No third-party deps."""
 
     def __init__(self, base_url: str, api_key: str, *, team_id: Optional[str] = None,
-                 timeout: float = 30.0):
+                 timeout: float = 30.0,
+                 decision_assignees: Optional[Dict[str, str]] = None,
+                 default_assignee_user_id: Optional[str] = None):
         self.base_url = (base_url or "").rstrip("/")
         self.api_key = api_key or ""
         self.team_id = team_id or ""
         self.timeout = timeout
+        # {role name -> user id} for ``create_decision(assignee="...")``. WHO a decision goes to is
+        # deployment policy, not client logic: one deployment routes money to an owner and errands
+        # to an operator, another has a single approver. Naming the roles in config (RunnerConfig.
+        # decision_assignees) keeps that policy out of every call site and out of this library.
+        self.decision_assignees: Dict[str, str] = dict(decision_assignees or {})
+        self.default_assignee_user_id = default_assignee_user_id or ""
         # quest_id -> the team that actually owns it, resolved lazily by
         # owning_team_for and only when the configured team turns out not to. An entry is
         # dropped the moment the team it names fails to serve the quest, so a quest moved a
@@ -527,11 +542,37 @@ class QuestClient:
                         "target": {"type": target_type, "id": target_id},
                         "changes": list(changes)})
 
+    def assignee_id(self, assignee: Optional[str] = None) -> str:
+        """Resolve a configured ROLE NAME (``"owner"``, ``"operator"``, ...) to a user id.
+
+        Names come from ``decision_assignees`` (RunnerConfig / ``QAR_DECISION_ASSIGNEES``).
+        ``None`` yields ``default_assignee_user_id``. An unknown name raises rather than silently
+        routing an approval to the default person — sending a payment approval to the wrong human
+        because a role was misspelled is exactly the failure this lookup exists to prevent.
+        """
+        if assignee is None:
+            return self.default_assignee_user_id
+        key = str(assignee).strip()
+        if key in self.decision_assignees:
+            return self.decision_assignees[key]
+        known = ", ".join(sorted(self.decision_assignees)) or "(none configured)"
+        raise QuestNotConfigured(
+            f"unknown decision assignee {key!r}; configured roles: {known}. Add it to "
+            f"decision_assignees in your config file (or QAR_DECISION_ASSIGNEES).")
+
     def create_decision(self, summary: str, *, kind: str = "approve",
                         quest_id: Optional[str] = None, assignee_user_id: Optional[str] = None,
+                        assignee: Optional[str] = None,
                         default_on_silence: str = "hold",
                         team_id: Optional[str] = None,
                         executable: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        # ``assignee`` names a ROLE from config; ``assignee_user_id`` is the raw id. An explicit id
+        # wins, so an existing caller is unaffected. Resolution happens OUTSIDE the try/except
+        # below on purpose: a misspelled role must raise, not degrade into an unassigned decision.
+        if assignee is not None and not assignee_user_id:
+            assignee_user_id = self.assignee_id(assignee)
+        elif assignee_user_id is None and self.default_assignee_user_id:
+            assignee_user_id = self.default_assignee_user_id
         try:
             tid = team_id or self.team_id
             if not tid:
@@ -976,20 +1017,39 @@ class QuestClient:
 
     def get_goal(self, goal_id: str, *, quest_id: Optional[str] = None,
                  team_id: Optional[str] = None) -> Dict[str, Any]:
-        """GET /api/teams/{team_id}/quests/{quest_id}/goals/{goal_id} — fetch a single goal by ID.
+        """Fetch one goal's metadata: id, name, description, criteria, deadline, completed, ...
 
-        Returns goal metadata: id, name, description, deadline, completed, status, and other context.
-        Requires team_id and quest_id either as parameters or on the client instance.
-        Returns {} if not found.
+        Attempts ``GET /api/teams/{team_id}/quests/{quest_id}/goals/{goal_id}`` first, in case
+        some deployment serves it -- but THE REFERENCE BACKEND HAS NO SINGLE-GOAL ROUTE (verified
+        live: this call 404s on every call today). The real path, and the one that actually runs
+        in practice, is scanning ``list_quest_goals(quest_id)`` (the team's goals grouped by
+        period) for the matching id. That scan is where ``description`` (the goal's brief) comes
+        from, along with ``criteria``/``deadline``/``completed``/``parent_goal_id``.
+
+        Requires ``quest_id`` -- there is nothing to scan without it -- either as a parameter or
+        implied by ``list_quest_goals``' own team resolution; ``team_id`` is optional (only used
+        for the direct attempt, which the scan does not need). Returns {} when ``quest_id`` is
+        omitted, when the goal is genuinely not on that quest, or on any failure.
         """
         try:
             self._require()
-            tid = team_id or self.team_id
-            if not tid:
-                raise QuestNotConfigured("team_id is required to get a goal")
             if not quest_id:
-                raise QuestNotConfigured("quest_id is required to get a goal")
-            return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}/goals/{goal_id}") or {}
+                return {}
+            tid = team_id or self.team_id
+            if tid:
+                try:
+                    direct = self._request(
+                        "GET", f"/api/teams/{tid}/quests/{quest_id}/goals/{goal_id}")
+                    if direct:
+                        return direct
+                except QuestApiError as e:
+                    log.info("get_goal direct route unavailable for goal %s (%s); scanning "
+                             "list_quest_goals instead", goal_id, e)
+            for group in (self.list_quest_goals(quest_id, team_id=team_id).get("period_groups") or []):
+                for goal in (group.get("goals") or []):
+                    if str(goal.get("id")) == str(goal_id):
+                        return goal
+            return {}
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("get_goal failed for goal %s: %s", goal_id, e)
             return {}
@@ -998,25 +1058,162 @@ class QuestClient:
                         team_id: Optional[str] = None, limit: int = 10) -> List[Dict[str, Any]]:
         """GET /api/teams/{team_id}/quests/{quest_id}/goals/{goal_id}/notes — fetch recent notes.
 
-        Returns a list of note dicts (id, text, author, created_at, etc.). Useful for
-        understanding goal progress and context. Returns [] if not found or no notes.
+        LEGACY ROUTE: the reference backend has no ``.../goals/{goal_id}/notes`` endpoint either
+        (verified live, same situation as ``get_goal``'s single-goal route). The per-goal thread
+        it actually serves is ``goal_updates`` (see ``list_goal_updates``) -- new code should call
+        that directly instead of this method. This method still attempts the legacy route first
+        (in case some deployment serves it), and on failure falls back to ``list_goal_updates``,
+        mapping each update to the note-ish shape callers here expect: ``{"id": updateId, "text":
+        note, "author_name": userName, "created_at": createdAt}``. A goal update carries no
+        ``author_kind`` field, so none is invented on the mapped dict.
+
+        Returns [] if not found, no notes/updates, or on any failure.
+        """
+        tid = team_id or self.team_id
+        if tid and quest_id:
+            try:
+                self._require()
+                resp = self._request(
+                    "GET",
+                    f"/api/teams/{tid}/quests/{quest_id}/goals/{goal_id}/notes",
+                    params={"limit": limit}
+                )
+                return (list(resp.get("notes") or resp or []) if isinstance(resp, dict)
+                        else (list(resp) if isinstance(resp, list) else []))
+            except (QuestApiError, QuestNotConfigured) as e:
+                log.info("list_goal_notes legacy route unavailable for goal %s (%s); falling "
+                         "back to list_goal_updates", goal_id, e)
+        updates = self.list_goal_updates(goal_id, limit=limit)
+        return [
+            {
+                "id": u.get("updateId"),
+                "text": u.get("note"),
+                "author_name": u.get("userName"),
+                "created_at": u.get("createdAt"),
+            }
+            for u in updates
+        ]
+
+    # --- goal updates (the per-goal check-in thread) --------------------------
+    # A "goal update" is the per-goal check-in thread in the Quest product: the place a person
+    # (or this runner) writes what they did / found on ONE goal. See list_goal_notes above for
+    # why these, not "notes", are the real per-goal thread on the reference backend.
+
+    def list_goal_updates(self, goal_id: str, *, limit: int = 20,
+                          before: Optional[str] = None) -> List[Dict[str, Any]]:
+        """GET /api/planning/goals/{goal_id}/updates?limit=&before= — a goal's check-in thread.
+
+        Newest first. ``before`` pages backwards with an ISO timestamp (a prior update's
+        ``createdAt``); the server defaults to limit 20, caps at 100. Each item is ``{updateId,
+        goalId, userId, userName, note, shared, shareTarget, shareRefId, createdAt}``.
+
+        Accepts both the ``{"updates": [...]}`` envelope and a bare list (same tolerance as
+        ``discover_due``), so this keeps working against a mock or a future shape change. Returns
+        [] on any failure (unconfigured client, network, backend without the route).
         """
         try:
             self._require()
-            tid = team_id or self.team_id
-            if not tid:
-                raise QuestNotConfigured("team_id is required to list goal notes")
-            if not quest_id:
-                raise QuestNotConfigured("quest_id is required to list goal notes")
+            params: Dict[str, Any] = {"limit": limit}
+            if before:
+                params["before"] = before
             resp = self._request(
-                "GET",
-                f"/api/teams/{tid}/quests/{quest_id}/goals/{goal_id}/notes",
-                params={"limit": limit}
-            )
-            return list(resp.get("notes") or resp or []) if isinstance(resp, dict) else (list(resp) if isinstance(resp, list) else [])
+                "GET", f"/api/planning/goals/{goal_id}/updates", params=params)
+            if isinstance(resp, dict):
+                return list(resp.get("updates") or [])
+            return list(resp) if isinstance(resp, list) else []
         except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("list_goal_notes failed for goal %s: %s", goal_id, e)
+            log.warning("list_goal_updates failed for goal %s: %s", goal_id, e)
             return []
+
+    def add_goal_update(self, goal_id: str, note: str, *, shared: bool = False) -> Dict[str, Any]:
+        """POST /api/planning/goals/{goal_id}/updates {"note", "shared"} — write a check-in.
+
+        ``note`` must be 1..2000 non-blank characters; the server rejects a blank note (422/400)
+        or one over 2000 chars, not validated client-side here so the caller sees the real
+        backend error. ``shared`` marks the update visible beyond the goal owner (``shareTarget``/
+        ``shareRefId`` are server-set, not settable here). Returns the created update dict (same
+        wire shape as ``list_goal_updates``), or {} on failure.
+        """
+        try:
+            return self._request(
+                "POST", f"/api/planning/goals/{goal_id}/updates",
+                body={"note": note, "shared": bool(shared)}) or {}
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("add_goal_update failed for goal %s: %s", goal_id, e)
+            return {}
+
+    def delete_goal_update(self, goal_id: str, update_id: str) -> bool:
+        """DELETE /api/planning/goals/{goal_id}/updates/{update_id} — soft-delete one check-in.
+
+        Allowed for the update's own author or an admin of the goal's quest (server-enforced).
+        Returns True only on success; False on any failure (unconfigured client, network, not
+        permitted, already deleted).
+        """
+        try:
+            self._request("DELETE", f"/api/planning/goals/{goal_id}/updates/{update_id}")
+            return True
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("delete_goal_update failed for goal %s update %s: %s",
+                       goal_id, update_id, e)
+            return False
+
+    def list_quest_goal_updates(self, quest_id: str, *, limit_per_goal: int = 20,
+                                limit: int = 200,
+                                goal_ids: Optional[List[str]] = None
+                                ) -> Dict[str, List[Dict[str, Any]]]:
+        """Every goal update on a quest, grouped ``{goal_id: [update, ...]}``.
+
+        Saves a caller that wants a whole quest's check-ins from writing the fan-out itself. Two
+        paths, tried in order:
+
+        1. THE BULK PATH: one call to ``GET /api/planning/quests/{quest_id}/goal-updates?
+           limit_per_goal=<n>`` -- a route being added to the reference backend in parallel with
+           this client. It answers ``{"updates": [...]}`` with the SAME wire shape as
+           ``list_goal_updates``, each row carrying its own ``goalId``; this method groups them
+           by that field.
+        2. THE FALLBACK: the bulk route fails for ANY reason (a backend that does not have it yet
+           answers 404). Resolve the quest's goal ids -- via ``list_quest_goals(quest_id)`` (all
+           period groups flattened), or the caller's own ``goal_ids`` when given -- and call
+           ``list_goal_updates`` once per goal. A goal with no updates (or that itself fails) is
+           skipped rather than included as an empty list, so the result only ever names goals
+           that actually have something.
+
+        ``limit`` bounds the BULK path's total rows, and is sent explicitly because the two caps
+        compose: the server applies its overall limit FIRST and trims per goal afterwards, so
+        leaving it at the server default (50) would silently drop the oldest goals' check-ins on a
+        quest with many goals, whatever ``limit_per_goal`` said. 200 is the server's own maximum.
+        The fan-out path has no such cap: it asks each goal for ``limit_per_goal`` directly.
+
+        Returns {} when both paths come up empty (no goals, or every call failed).
+        """
+        try:
+            resp = self._request(
+                "GET", f"/api/planning/quests/{quest_id}/goal-updates",
+                params={"limit_per_goal": limit_per_goal, "limit": limit})
+            rows = resp.get("updates") if isinstance(resp, dict) else resp
+            grouped: Dict[str, List[Dict[str, Any]]] = {}
+            for row in (rows or []):
+                gid = str(row.get("goalId") or "")
+                if gid:
+                    grouped.setdefault(gid, []).append(row)
+            return grouped
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.info("list_quest_goal_updates bulk route unavailable for quest %s (%s); "
+                     "falling back to per-goal fan-out", quest_id, e)
+
+        ids = list(goal_ids) if goal_ids else [
+            str(goal.get("id") or "")
+            for group in (self.list_quest_goals(quest_id).get("period_groups") or [])
+            for goal in (group.get("goals") or [])
+        ]
+        grouped = {}
+        for gid in ids:
+            if not gid:
+                continue
+            updates = self.list_goal_updates(gid, limit=limit_per_goal)
+            if updates:
+                grouped[gid] = updates
+        return grouped
 
     # --- account-wide quests (single-user "goal is the hub" lane; NOT team-scoped) --
     # A person's own quests (dissertation, career, family, ...) live on their account, not
@@ -1097,7 +1294,8 @@ class QuestClient:
             return []
 
     def add_quest_note(self, quest_id: str, text: str,
-                       *, author_label: Optional[str] = None) -> List[Dict[str, Any]]:
+                       *, author_label: Optional[str] = None,
+                       relayed_author_email: Optional[str] = None) -> List[Dict[str, Any]]:
         """POST /api/quests/{quest_id}/notes — append a note; returns the updated notes list.
 
         Attribution is derived server-side from the caller: an API-key caller (this client) is
@@ -1108,12 +1306,25 @@ class QuestClient:
         assistant", so it can never be used to post as the person: the one name an AI note must not
         carry is the account owner's, since that is what made a run's own summaries indistinguishable
         from the person's replies.
+
+        ``relayed_author_email`` says this note carries a REAL PERSON's own words rather than the
+        AI's own summary -- someone who wrote in to a mailbox this account reads, say, and this
+        call is passing their message onto the quest it concerns (see
+        ``runner.context_updates.InboundMailSource``). ``author_kind`` still records ``"ai"`` (an
+        API key did post it), but the backend stores ``author_name`` as ``"<email> (relayed)"`` and,
+        critically, enters the note in the account's own asks record under this address -- an
+        ordinary API-key note is deliberately never tracked as an ask, and this is the one field
+        that says "track this one, and whose it is." Must be a real-looking address
+        (``local@domain.tld``); a non-blank value that fails that shape is rejected by the backend
+        (HTTP 400) with NOTHING saved, so pass a clean address or leave this None.
         """
         try:
             self._require()
             body: Dict[str, Any] = {"text": text}
             if author_label and str(author_label).strip():
                 body["author_label"] = str(author_label).strip()[:60]
+            if relayed_author_email and str(relayed_author_email).strip():
+                body["relayed_author_email"] = str(relayed_author_email).strip().lower()[:320]
             resp = self._request(
                 "POST", f"/api/quests/{quest_id}/notes", body=body) or []
             return resp if isinstance(resp, list) else []

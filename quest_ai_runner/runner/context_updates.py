@@ -79,7 +79,15 @@ FIRST_LOOK_DAYS = 14
 # declare them in (422 ``extra_forbidden``). So the one channel the person had actually just used
 # was the one channel the engine never looked at. A reply channel that a deployment has to remember
 # to switch on is a reply channel that is off.
-DEFAULT_ALWAYS: Sequence[str] = ("reflections", "insights", "quest_notes")
+#
+# ``goal_updates`` is on this list for the same shape of reason, minus the opt-in step ever having
+# existed: before ``GoalUpdatesSource``, nothing in this library read a goal update at all, on any
+# quest, so an autopilot pass never saw the one place a person writes what they did or found on a
+# single goal. Making it opt-in would just reproduce the ``quest_notes`` failure under a new name.
+# It is safe to default on precisely because it is card-scoped by construction (an update is
+# written ON a goal that belongs to THIS quest), so turning it on can never leak another card's
+# material the way a user-scoped channel could.
+DEFAULT_ALWAYS: Sequence[str] = ("reflections", "insights", "quest_notes", "goal_updates")
 
 # "Open until answered" needs a floor and a cap, or it stops being a question and becomes a
 # backlog. A note nobody answered a year ago is not something the person is waiting on today, and
@@ -100,8 +108,23 @@ MAX_OPEN_PER_SOURCE = 6
 # model's attention.
 MAX_UPDATES = 20
 
-# Per-item body cap in the composed block.
+# Per-item body cap in the composed block, for a body this module COMPOSED itself -- a rendered
+# habit log, a file-change line, a summary. Shortening one of those costs a run nothing.
 MAX_BODY_CHARS = 800
+
+# The cap for a body that is a PERSON'S OWN WORDS, which is a different thing entirely. At 800 a
+# 1,600-character reply asking for three changes reached a run cut mid-sentence, and the run told
+# its author "your message cut off there, tell me what part of it still needs a response": it read
+# our shortening as their typing, handed the failure back to them, and never saw the two asks that
+# sat past the cut. What a cap is FOR is one burst of material not swallowing the brief; a person
+# writing a long instruction is not the failure case. 12,000 matches the cap a mailed note already
+# passes through on the way in, so a note that reached the quest whole reaches the run whole.
+MAX_PERSON_BODY_CHARS = 12000
+
+# ...and a ceiling across ONE block, spent newest-first, so a pile of long notes still cannot push
+# the actual work out of the model's attention. Anything past the budget falls back to the short
+# cap -- with the marker below, which says the words are elsewhere rather than missing.
+PERSON_BODY_BUDGET = 24000
 
 # How long the engine's user-scoped reads (reflections, captures) stay cached. Long enough that one
 # pass over every quest, or one executor task's context view, reads each once; short enough that a
@@ -121,6 +144,11 @@ USAGE_HEADING = "Context used:"
 _REF_RE = re.compile(r"^\s*[-*]?\s*\[(U\d+)\]\s*(.*)$")
 
 
+# A sort key for an item with no timestamp: it goes last among the person's words, so a dated
+# note is never shortened in favour of an undated one.
+_OLDEST = datetime.min.replace(tzinfo=timezone.utc)
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -130,6 +158,38 @@ def _clip(text: Any, limit: int = MAX_BODY_CHARS) -> str:
     if len(s) <= limit:
         return s
     return s[:limit].rstrip() + " [...truncated]"
+
+
+def _preview(text: Any, limit: int) -> str:
+    """The first words of something, for an index line.
+
+    Ends in an ellipsis, not the truncation marker: an index line is openly a preview, while
+    "[...truncated]" sitting after someone's half-sentence reads as the sentence ending -- the
+    exact confusion the body cap below exists not to cause.
+    """
+    s = " ".join(str(text or "").split())
+    return s if len(s) <= limit else s[:limit].rstrip() + "\u2026"
+
+
+def _clip_body(text: Any, limit: int, *, verbatim: bool = False) -> str:
+    """One item's body for the block, shortened only if it has to be.
+
+    A bare "[...truncated]" is enough on a body this module composed. On a person's own words it
+    is not: the run cannot tell OUR cut from the end of what they wrote, and the one time it
+    matters -- a reply with instructions running past the cap -- it will answer the half it can
+    see and tell the person the rest of their message went missing. So the marker on their words
+    says who shortened it, how much is not shown, and that the whole thing is readable at source.
+    """
+    s = " ".join(str(text or "").split())
+    if len(s) <= limit:
+        return s
+    kept = s[:limit].rstrip()
+    if not verbatim:
+        return kept + " [...truncated]"
+    return kept + (f" [...{len(s) - len(kept)} more characters of their own words are not shown "
+                   "here. THIS LIST shortened them; their message did not end here and nothing "
+                   "they wrote was lost. Read the item in full at its source before answering "
+                   "it, and never tell them their message cut off.]")
 
 
 def _as_utc(value: Any) -> Optional[datetime]:
@@ -178,6 +238,9 @@ class ContextUpdate:
     url: str = ""
     how_to_respond: str = ""         # the channel back, in one imperative phrase
     needs_response: bool = False     # a question left open, as opposed to something to know
+    # The body is the person's OWN WORDS rather than something this module composed, so it is
+    # shown whole up to ``MAX_PERSON_BODY_CHARS`` instead of the short per-item cap.
+    verbatim: bool = False
     ref: str = ""                    # "U1" -- assigned at bundle time
     # A named position a composer already reserves for this channel, when it has one.
     # The reflection and the insights blocks were composed into a brief long before this engine
@@ -208,17 +271,27 @@ class ContextUpdate:
         """
         when = self.occurred_at.strftime("%Y-%m-%d") if self.occurred_at else "undated"
         where = self.location or self.author or self.source
-        said = f' · "{_clip(self.excerpt, 70)}"' if self.excerpt else ""
+        said = f' · "{_preview(self.excerpt, 70)}"' if self.excerpt else ""
         flag = " · needs an answer" if self.needs_response else ""
-        return f"[{self.ref}] {when} · {self.kind or self.source} · {_clip(where, 60)}{said}{flag}"
+        return (f"[{self.ref}] {when} · {self.kind or self.source} · "
+                f"{_preview(where, 60)}{said}{flag}")
 
-    def as_text(self) -> str:
-        """The full item for the prompt: the manifest line, then what was actually said."""
+    def body_limit(self) -> int:
+        """This item's own body cap, before any block-level budget narrows it."""
+        return MAX_PERSON_BODY_CHARS if self.verbatim else MAX_BODY_CHARS
+
+    def as_text(self, *, body_limit: Optional[int] = None) -> str:
+        """The full item for the prompt: the manifest line, then what was actually said.
+
+        ``body_limit`` is the block's say over this item (see ``ContextUpdates.body_limits``); on
+        its own the item uses its own cap.
+        """
         lines = [self.manifest_line()]
         if self.title:
             lines.append(f"    {self.title}")
         if self.body:
-            lines.append(f"    {_clip(self.body)}")
+            limit = self.body_limit() if body_limit is None else body_limit
+            lines.append(f"    {_clip_body(self.body, limit, verbatim=self.verbatim)}")
         if self.how_to_respond:
             lines.append(f"    to respond: {self.how_to_respond}")
         return "\n".join(lines)
@@ -268,6 +341,10 @@ class ContextUpdates:
     """Everything that arrived for one card, plus the record of what was checked to find it."""
     card_id: str = ""
     card_label: str = ""
+    # What KIND of thing card_id names ("quest", ...). Relaying (see relay_admitted) only ever
+    # posts a QUEST note, so this is what tells it whether card_id is even the right kind of id to
+    # post one against; a caller collecting against some other kind of card is unaffected.
+    card_kind: str = "quest"
     updates: List[ContextUpdate] = field(default_factory=list)
     reports: List[SourceReport] = field(default_factory=list)
     collected_at: datetime = field(default_factory=_utcnow)
@@ -283,6 +360,16 @@ class ContextUpdates:
     # The source names whose items are asks (see ``_BaseSource.tracks_asks``). Only these are
     # entered in the ledger, so a person is never asked to answer their own reflection.
     _ask_sources: frozenset = frozenset()
+    # The Quest API client, set by the engine, that relay_admitted posts a note through. None on
+    # any engine built with no client (an offline test, a stub) -- relaying is then simply skipped,
+    # the same "unconfigured means this contributes nothing" degrade every optional channel has.
+    relay_client: Any = None
+    # Where relay_admitted records "already posted", so a restart or a second collection of the
+    # same item never posts it twice. See RelayedItems.
+    relay_log: Any = None
+    # The source names whose admitted items get posted onto the quest (see
+    # ``_BaseSource.relay_to_quest``). Only these ever reach relay_admitted's loop.
+    relay_sources: frozenset = frozenset()
 
     def __bool__(self) -> bool:
         return bool(self.updates)
@@ -364,8 +451,9 @@ class ContextUpdates:
             suffix = "" if u.slot not in skip else "  (rendered in its own section of this brief)"
             lines.append(u.manifest_line() + suffix)
         lines.append("")
+        limits = self.body_limits(detailed)
         for u in detailed:
-            lines.append(u.as_text())
+            lines.append(u.as_text(body_limit=limits.get(id(u))))
             lines.append("")
         lines.append(BLOCK_END)
         # The receipt gate sits OUTSIDE the delimiters on purpose: it names example ref lines, and
@@ -377,6 +465,25 @@ class ContextUpdates:
                 lines.append("")
             lines.append(usage_receipt_gate(self.refs()))
         return "\n".join(lines)
+
+    @staticmethod
+    def body_limits(updates: Sequence["ContextUpdate"]) -> Dict[int, int]:
+        """``{id(update): body cap}`` for one block, spending ``PERSON_BODY_BUDGET`` newest-first.
+
+        Newest-first because the newest thing a person wrote is the one still waiting on an
+        answer; an older note that already had a reply is the one that can afford to be short.
+        Every item keeps at least ``MAX_BODY_CHARS`` however spent the budget is, so a long day
+        shortens the tail rather than blanking it.
+        """
+        limits: Dict[int, int] = {}
+        spent = 0
+        verbatim = sorted((u for u in updates if u.verbatim and u.body),
+                          key=lambda u: u.occurred_at or _OLDEST, reverse=True)
+        for u in verbatim:
+            room = max(MAX_BODY_CHARS, min(MAX_PERSON_BODY_CHARS, PERSON_BODY_BUDGET - spent))
+            limits[id(u)] = room
+            spent += min(len(" ".join(str(u.body).split())), room)
+        return limits
 
     def checked_line(self) -> str:
         """One line naming what was checked and what it held, for a run that got nothing.
@@ -464,6 +571,62 @@ class ContextUpdates:
                         url=u.url, occurred_at=u.occurred_at, at=stamp)
                 except Exception as e:  # noqa: BLE001 -- bookkeeping never breaks a delivery
                     log.warning("feedback ledger: could not record %s (%s)", u.item_id, e)
+        self.relay_admitted()
+
+    def relay_admitted(self) -> None:
+        """Post each admitted item from a ``relay_to_quest`` source onto the quest as a note.
+
+        Called from ``mark_seen`` -- the same "delivery is the only honest moment" reasoning as
+        the ledger's ``observe`` call just above, and for a stronger reason here: this is a WRITE
+        with a real person's own words and address on it, so it must happen exactly once a run has
+        actually been handed the material, never at collection time (which is what makes
+        ``quest-ai-runner context <quest_id>`` -- built on a read-only engine that never calls
+        ``mark_seen`` at all -- a genuine read: it cannot cause this side effect either).
+
+        Posts through ``QuestClient.add_quest_note(..., relayed_author_email=...)``, which is the
+        one write path that lets an API-key caller attribute a note to a real person's address
+        rather than to the AI (see that method's own docstring and ``docs/feedback-ledger.md`` on
+        why the account's own asks record -- not this library's local feedback ledger -- is what
+        the person's name has to reach). Idempotent by (card_id, source, item_id) via
+        ``relay_log``: a restart, or a "still owed" re-offer of the same mail item on a later pass,
+        must never turn into a second note under the same person's name.
+
+        Best-effort, like every write this engine treats as optional plumbing rather than the
+        thing itself: a relay failure is logged and the item is simply tried again next time
+        (``relay_log`` is only updated on success), and it never raises into a caller that only
+        expected watermarks and a ledger entry to move.
+        """
+        if (self.relay_client is None or not self.relay_sources or not self.card_id
+                or self.card_kind != "quest"):
+            return
+        add_note = getattr(self.relay_client, "add_quest_note", None)
+        if not callable(add_note):
+            return
+        for u in self.updates:
+            if u.source not in self.relay_sources or not u.item_id:
+                continue
+            author_email = (u.author or "").strip().lower()
+            text = (u.body or u.excerpt or "").strip()
+            if not author_email or not text:
+                continue
+            if self.relay_log is not None and self.relay_log.already_relayed(
+                    self.card_id, u.source, u.item_id):
+                continue
+            # A plain length cut with a bare marker, NOT ``_clip_body``'s verbatim wording: that
+            # marker is written for a prompt a run reads ("read the item in full at its source"),
+            # and this text is going into a stored NOTE, not a prompt block. The same marker
+            # quest-backend's own inbound-reply capture writes when IT truncates a long reply, so
+            # a note that hit this cap reads identically whichever path relayed it.
+            note_text = text if len(text) <= MAX_PERSON_BODY_CHARS else (
+                text[:MAX_PERSON_BODY_CHARS].rstrip() + "\n\n[truncated]")
+            try:
+                add_note(self.card_id, note_text, relayed_author_email=author_email)
+            except Exception as e:  # noqa: BLE001 -- a relay failure never breaks delivery
+                log.warning("context updates: could not relay %s:%s (%s)",
+                           u.source, u.item_id, e)
+                continue
+            if self.relay_log is not None:
+                self.relay_log.mark_relayed(self.card_id, u.source, u.item_id)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -780,6 +943,92 @@ class Watermarks:
             self._save()
 
 
+class RelayedItems:
+    """Which admitted items have already been posted onto Quest as a note, ever.
+
+    A relay is not a read like the rest of delivery -- it is a WRITE with a real person's name on
+    it, so unlike a watermark (which only says how far a read has gotten, and where a re-offered
+    line costs nothing but a person's patience), losing this record turns a restart or a second
+    pass over the same mail into a duplicate ask. Keyed by (card_id, source, item_id), the same
+    triple the feedback ledger keys its own rows by (see ``docs/feedback-ledger.md``), because
+    "have I done this already" and "what became of it" are the same identity asked two different
+    questions -- kept as a SEPARATE store anyway, since the local feedback ledger is optional
+    (``RunnerConfig.feedback_ledger``) and idempotent relay must hold regardless of whether a
+    deployment keeps one.
+
+    Same persistence discipline as ``Watermarks``: JSON-backed, atomic write (temp file + rename),
+    best-effort (an unreadable file starts fresh rather than raising), and a ``read_only`` mode
+    that cannot record a relay whichever method is called on it -- so a read-only engine (built for
+    ``quest-ai-runner context <quest_id>``, or a preview) can never cause the very side effect it
+    exists to avoid, even if something one day calls ``relay_admitted`` on it by mistake.
+    """
+
+    def __init__(self, path: Optional[str] = None, *, read_only: bool = False) -> None:
+        self._path = Path(path) if path else None
+        self._read_only = bool(read_only)
+        self._data: Dict[str, str] = {}
+        self._lock = threading.Lock()
+        self._load()
+
+    @property
+    def read_only(self) -> bool:
+        return self._read_only
+
+    @staticmethod
+    def _key(card_id: str, source: str, item_id: str) -> str:
+        return f"{card_id}:{source}:{item_id}"
+
+    def _load(self) -> None:
+        if not self._path or not self._path.exists():
+            return
+        try:
+            payload = json.loads(self._path.read_text())
+            relayed = payload.get("relayed") if isinstance(payload, dict) else None
+            if isinstance(relayed, dict):
+                self._data = {str(k): str(v) for k, v in relayed.items()}
+        except (json.JSONDecodeError, OSError) as e:
+            log.warning("relayed-items record unreadable (%s); starting fresh", e)
+
+    def _save(self) -> None:
+        if not self._path:
+            return
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self._path.with_suffix(self._path.suffix + ".tmp")
+            tmp.write_text(json.dumps({"relayed": self._data}, indent=2, sort_keys=True))
+            os.replace(tmp, self._path)   # atomic: never a partial file after a crash
+        except OSError as e:
+            log.warning("could not persist relayed-items record: %s", e)
+
+    def already_relayed(self, card_id: str, source: str, item_id: str) -> bool:
+        with self._lock:
+            return self._key(card_id, source, item_id) in self._data
+
+    def mark_relayed(self, card_id: str, source: str, item_id: str, note_id: str = "") -> None:
+        if self._read_only:
+            return
+        with self._lock:
+            self._data[self._key(card_id, source, item_id)] = note_id or "1"
+            self._save()
+
+
+def relay_log_path_for(configured: Optional[str] = None,
+                       state_path: Optional[str] = None) -> Optional[str]:
+    """Where this deployment's relay record lives: what it configured, else beside its state file.
+
+    Same derivation as ``watermark_path_for``/``feedback_ledger.ledger_path_for``, and for the same
+    reason: without a path the record lives in memory for one process, and a restart would forget
+    what it already posted, turning a re-offered mail item into a second note under the same
+    person's name.
+    """
+    if configured:
+        return configured
+    if not state_path:
+        return None
+    p = Path(state_path)
+    return str(p.with_name(p.stem + "_relayed_items.json"))
+
+
 # ---------------------------------------------------------------------------------------------
 # Sources
 # ---------------------------------------------------------------------------------------------
@@ -887,6 +1136,22 @@ class _BaseSource:
     # as "still owed, needs an answer", which is an assistant asking a person to answer their own
     # diary.
     tracks_asks = False
+    # Whether this source's items need an ADMISSION judgment before anything else sees them: is
+    # this a real person writing to us at all, as opposed to bulk or automated mail that cleared a
+    # deterministic header check. A DIFFERENT question from ``judge_relevance`` (which asks
+    # whether an item bears on THIS card) and never folded into it -- see
+    # ``runner.context_updates.llm_admission_judge`` for why conflating them is wrong. A class
+    # attribute, alongside ``judge_relevance``, so a source declares it rather than the engine
+    # hardcoding which one gets it: ``InboundMailSource`` is the first, and any future source that
+    # reads from a space where non-human senders are possible gets the same gate for free.
+    judge_admission = False
+    # Whether an admitted item from this source should be posted onto the card it arrived for, as
+    # a note, so the account's own asks record (not this library's local feedback ledger, which is
+    # a different thing -- see docs/feedback-ledger.md) sees it under the sender's own name. Only
+    # a source whose items are things a REAL PERSON outside the account sent in wants this: a
+    # quest note or a Drive comment already has its own answer channel and its own place in the
+    # product surface, and relaying it as a SECOND note would just be noise.
+    relay_to_quest = False
 
     def collect(self, request: CollectRequest) -> Sequence[ContextUpdate]:  # pragma: no cover
         raise NotImplementedError
@@ -1041,6 +1306,7 @@ class QuestNotesSource(_BaseSource):
                 item_id=str(note.get("id") or note.get("note_id") or ""),
                 title=title,
                 body=text,
+                verbatim=True,  # quest note: their own words
                 excerpt=text,
                 author=author,
                 occurred_at=when,
@@ -1112,6 +1378,160 @@ def _still_open(items: List[Any], now: Optional[datetime],
     return fresh[-MAX_OPEN_PER_SOURCE:]
 
 
+def _flatten_goal_titles(payload: Dict[str, Any]) -> Dict[str, str]:
+    """{goal_id: goal title}, out of ``list_quest_goals``'s period-grouped shape.
+
+    The endpoint groups goals by time scope (today, this week, this quarter, ...) for a person to
+    read; a goal update names one goal by id and does not care which group it lives in, so this
+    flattens the grouping away once, here, rather than in every caller that only wants a title.
+    """
+    titles: Dict[str, str] = {}
+    for group in (payload or {}).get("period_groups") or []:
+        for goal in (group or {}).get("goals") or []:
+            if not isinstance(goal, dict):
+                continue
+            goal_id = str(goal.get("id") or "").strip()
+            if goal_id:
+                titles[goal_id] = str(goal.get("name") or "").strip()
+    return titles
+
+
+def _goal_updates_explanation(total: int, offered: int) -> str:
+    """Why fewer updates were offered than were found, in a person's words."""
+    if not total or offered:
+        return ""
+    return f"{total} update(s), none new since the last look"
+
+
+class GoalUpdatesSource(_BaseSource):
+    """Check-ins the person wrote on individual goals of this quest, one row per update.
+
+    WHAT THIS FIXES. A goal update is the per-goal equivalent of a note on the quest as a whole: the
+    one place a person writes, on ONE goal, what they did or found. Before this source, nothing in
+    this library ever read one, on any quest, so an autopilot pass composing today's brief saw a
+    goal's name, deadline and done/not-done flag but never the person's own account of where it
+    actually stood -- and could cheerfully re-propose a plan their last check-in had already
+    overtaken.
+
+    CARD-SCOPED, SO NEVER JUDGED (``judge_relevance = False``). An update is written ON a goal that
+    belongs to THIS quest, the same reasoning that keeps ``QuestNotesSource`` out of the relevance
+    judge: relevance here comes from WHERE the words were written, not from a model's opinion of
+    them, and putting a card's own goal updates to a judgment could only ever lose one that plainly
+    belonged.
+
+    NOT AN ASK (``tracks_asks = False``). A check-in is the person recording where things stand for
+    their own record, not a question they left open for an assistant to close. See the comment on
+    ``_BaseSource.tracks_asks``: a live run once carried the habit log and the daily reflection as
+    asks, and the next morning both came back "still owed, needs an answer" -- an assistant asking a
+    person to answer their own diary. A goal update is the same shape of channel, so it is offered
+    as news the run should read and act on, never as something owed a reply.
+
+    A GOAL'S NAME COSTS A SECOND CALL. ``list_quest_goal_updates`` / ``list_goal_updates`` return a
+    bare ``goalId``; without the quest's own goal list, a row could only say "an update on goal
+    gl_xyz", which tells a run nothing it can act on. So this source reads ``list_quest_goals``
+    first and flattens its period-grouped goals into an id -> title map, used only to LABEL rows --
+    a goal missing from that map (renamed, deleted, or the method simply absent) still gets its
+    update offered, just under a generic label instead of a name.
+
+    ONE CALL WHERE THE BACKEND OFFERS IT, A FAN-OUT WHERE IT DOES NOT. ``list_quest_goal_updates``
+    returns every goal's updates for the quest in one round trip; a client too old to have it still
+    works, through ``list_goal_updates`` called once per goal id known from ``list_quest_goals``, at
+    the cost of one call per goal. A client with neither method is not an error, just a quest this
+    source cannot help yet: no rows, no exception.
+    """
+    name = "goal_updates"
+    describes = "check-ins the person wrote on this quest's individual goals"
+    judge_relevance = False
+    tracks_asks = False
+
+    def collect(self, request: CollectRequest) -> Sequence[ContextUpdate]:
+        client = request.client
+        quest_id = request.card_id
+        if not quest_id:
+            return []
+        bulk_lister = getattr(client, "list_quest_goal_updates", None)
+        per_goal_lister = getattr(client, "list_goal_updates", None)
+        if not callable(bulk_lister) and not callable(per_goal_lister):
+            return []
+        titles = self._goal_titles(request, quest_id)
+        updates_by_goal = self._updates_by_goal(
+            request, quest_id, titles, bulk_lister, per_goal_lister)
+        total = sum(len(v or []) for v in updates_by_goal.values())
+        out: List[ContextUpdate] = []
+        for goal_id, updates in updates_by_goal.items():
+            where = titles.get(goal_id) or "a goal on this quest"
+            for update in updates or []:
+                if not isinstance(update, dict):
+                    continue
+                when = _as_utc(update.get("createdAt"))
+                if request.since and when and when <= request.since:
+                    continue                   # not new: seen (or in scope) on an earlier look
+                text = str(update.get("note") or "").strip()
+                if not text:
+                    continue
+                author = str(update.get("userName") or "").strip()
+                out.append(ContextUpdate(
+                    source=self.name,
+                    kind="goal update",
+                    item_id=str(update.get("updateId") or ""),
+                    title=f'{author or "Someone"} wrote an update on the goal "{_clip(where, 100)}"',
+                    body=text,
+                    verbatim=True,  # goal update: their own words
+                    excerpt=text,
+                    author=author,
+                    occurred_at=when,
+                    location=where,
+                    needs_response=False,
+                    how_to_respond=("act on it in the work for this goal and say what you did in "
+                                    "your result; you can also reply by posting a goal update on "
+                                    "this goal"),
+                    raw=dict(update or {}),
+                ))
+        request.account(total, _goal_updates_explanation(total, len(out)))
+        return out
+
+    @staticmethod
+    def _goal_titles(request: CollectRequest, quest_id: str) -> Dict[str, str]:
+        """This quest's {goal_id: title}, read once per engine pass (see ``_runs_delivered``)."""
+        lister = getattr(request.client, "list_quest_goals", None)
+        if not callable(lister):
+            return {}
+        key = f"goal_updates:goals:{quest_id}"
+        if key not in request.cache:
+            try:
+                request.cache[key] = _flatten_goal_titles(lister(quest_id) or {})
+            except Exception as e:  # noqa: BLE001 -- a title is a nicety, never a reason to fail
+                log.info("context updates: could not read goals for %s (%s)", quest_id, e)
+                request.cache[key] = {}
+        return request.cache[key]
+
+    @staticmethod
+    def _updates_by_goal(request: CollectRequest, quest_id: str, titles: Dict[str, str],
+                         bulk_lister: Any, per_goal_lister: Any) -> Dict[str, List[Dict[str, Any]]]:
+        """{goal_id: [update, ...]}, via the one-call route when the client has it."""
+        key = f"goal_updates:updates:{quest_id}"
+        if key in request.cache:
+            return request.cache[key]
+        limit_per_goal = int(request.opt("limit_per_goal") or 20)
+        result: Dict[str, List[Dict[str, Any]]] = {}
+        if callable(bulk_lister):
+            try:
+                result = dict(bulk_lister(quest_id, limit_per_goal=limit_per_goal) or {})
+            except Exception as e:  # noqa: BLE001 -- one broken read never costs the rest
+                log.info("context updates: could not read goal updates for %s (%s)", quest_id, e)
+                result = {}
+        elif callable(per_goal_lister):
+            limit = int(request.opt("limit") or limit_per_goal)
+            for goal_id in titles:
+                try:
+                    result[goal_id] = list(per_goal_lister(goal_id, limit=limit) or [])
+                except Exception as e:  # noqa: BLE001 -- one goal's failure never costs the others
+                    log.info("context updates: could not read updates for goal %s (%s)",
+                            goal_id, e)
+        request.cache[key] = result
+        return result
+
+
 class ReflectionsSource(_BaseSource):
     """The person's latest daily/period reflection (``runner.reflections``).
 
@@ -1144,6 +1564,7 @@ class ReflectionsSource(_BaseSource):
             item_id=str(ctx.daily_date or ctx.period or "latest"),
             title="Their own reflection, most recent on record",
             body=text,
+            verbatim=True,  # their reflection, as they wrote it
             occurred_at=when,
             location="Quest reflections",
             slot=self.slot,
@@ -1219,6 +1640,7 @@ class InsightsSource(_BaseSource):
                 # The row as the block always rendered it (date, tags, their words), so the slot
                 # reads exactly as before with a ref in front of each row.
                 body=f"[{date}]{tags}\n      {text}",
+                verbatim=True,  # their capture, as they wrote it
                 excerpt=text,
                 occurred_at=when,
                 location="Quest insights",
@@ -1533,6 +1955,7 @@ class DriveCommentsSource(_BaseSource):
                 item_id=f"{c.file_id}:{c.comment_id}",
                 title=title,
                 body=body,
+                verbatim=True,  # their comment and the replies on it
                 excerpt=c.content,
                 author=c.author,
                 occurred_at=when,
@@ -1583,6 +2006,122 @@ class DriveChangesSource(_BaseSource):
             ))
         return out
 
+
+def _mail_explanation(total: int, bulk: int, kept: int) -> str:
+    """Why an inbound-mail read offered fewer messages than it fetched, in a person's words.
+
+    Same reasoning as ``_drive_explanation``/``_notes_explanation``: "0 found" and "found nine,
+    all newsletters" read identically from outside, and the first reading is the one that sends
+    somebody hunting a permissions bug that is not there.
+    """
+    if not total:
+        return "no messages arrived"
+    if not bulk:
+        return ""
+    if not kept:
+        return f"all {bulk} filtered as bulk or automated mail before any model call"
+    return f"{bulk} of {total} filtered as bulk or automated mail before any model call"
+
+
+class InboundMailSource(_BaseSource):
+    """Mail that arrived at a mailbox this card names, from a real person asking for something.
+
+    Spec: ``{"source": "inbound_mail", "mailbox": "support@example.org"}``. No code names a
+    mailbox for any particular quest -- it is data the card carries, exactly like a Drive
+    ``folder_id`` -- and needs a mail client supplied once by the consumer
+    (``UpdateEngine(inbound_mail=...)``), since minting a Workspace token is a deployment concern.
+
+    ONE ROW PER MESSAGE, for the same reason ``InsightsSource`` is one row per capture: an
+    admission judgment made over a whole mailbox's worth of mail as a single block either admits
+    everything or drops everything, and a receipt line for "the mail" tells the sender nothing
+    about whether THEIR message reached anyone.
+
+    TWO GATES, IN ORDER, NEITHER OF WHICH IS THE OTHER:
+
+    1. ``adapters.inbound_mail.is_bulk_mail`` -- a deterministic header check, applied here, before
+       a ``ContextUpdate`` is even built, so a newsletter never costs a model call and never
+       reaches the admission judge at all. Counted in ``considered``/the report's explanation, not
+       silently dropped.
+    2. The engine's admission judgment (``judge_admission = True`` below), applied AFTER this
+       method returns, over whatever survived the header check. That is a card-independent "is
+       anybody home" question, never a "does this bear on this card" one -- see
+       ``llm_admission_judge``'s own docstring for why the two must not be conflated.
+
+    CARD-SCOPED, SO NEVER PUT TO THE RELEVANCE JUDGE (``judge_relevance`` stays False, inherited):
+    mail that arrived at THIS card's own configured mailbox is relevant because of WHERE it
+    arrived, exactly like a note on this quest or a comment on a document this card owns -- see
+    ``_BaseSource.judge_relevance``.
+
+    TRACKS ASKS AND RELAYS: a real person writing to a mailbox is asking for something by
+    construction, so ``tracks_asks = True``, and because the reader of that ask is the sender, not
+    whoever reads this quest, ``relay_to_quest = True`` posts it onto the quest as a note bearing
+    their own address (``ContextUpdates.relay_admitted``) so the account's own asks record carries
+    it under their name rather than staying invisible outside this engine's own bundle.
+
+    THE SAFETY REFUSAL is enforced HERE, unconditionally, regardless of which mail client is
+    wired: ``adapters.inbound_mail.refuses_as_inbound_mailbox`` raises before any client is even
+    consulted, so a card that names a quest's own reply mailbox fails loudly as a reported source
+    error rather than silently double-ingesting what a consumer's own reply service already polls.
+    """
+    name = "inbound_mail"
+    describes = "mail that arrived at a mailbox this card watches, from real people (not bulk mail)"
+    tracks_asks = True
+    judge_admission = True
+    relay_to_quest = True
+
+    def __init__(self, mail_client: Any = None) -> None:
+        self._client = mail_client
+
+    def collect(self, request: CollectRequest) -> Sequence[ContextUpdate]:
+        from ..adapters.inbound_mail import is_bulk_mail, refuses_as_inbound_mailbox
+
+        mailbox = str(request.opt("mailbox") or "").strip().lower()
+        if not mailbox:
+            return []
+        refusal = refuses_as_inbound_mailbox(mailbox)
+        if refusal:
+            raise ValueError(f"inbound_mail: {refusal}")
+        client = self._client
+        if client is None:
+            return []
+        max_messages = int(request.opt("max_messages") or 25)
+        messages = list(client.messages_since(
+            mailbox, since=request.since, max_messages=max_messages) or [])
+        admitted = [m for m in messages if not is_bulk_mail(getattr(m, "headers", None) or {})]
+        bulk = len(messages) - len(admitted)
+        request.account(len(messages), _mail_explanation(len(messages), bulk, len(admitted)))
+        out: List[ContextUpdate] = []
+        for m in admitted:
+            message_id = str(getattr(m, "message_id", "") or "")
+            text = str(getattr(m, "body_text", "") or "").strip() or str(
+                getattr(m, "subject", "") or "").strip()
+            sender_email = str(getattr(m, "sender_email", "") or "").strip().lower()
+            if not message_id or not text or not sender_email:
+                continue
+            who = str(getattr(m, "sender_name", "") or "").strip() or sender_email
+            subject = str(getattr(m, "subject", "") or "").strip()
+            title = f"{who} wrote to {mailbox}"
+            if subject:
+                title += f': "{_clip(subject, 100)}"'
+            out.append(ContextUpdate(
+                source=self.name,
+                kind="email",
+                item_id=message_id,
+                title=title,
+                body=text,
+                verbatim=True,  # their email, as they wrote it
+                excerpt=text,
+                author=sender_email,
+                occurred_at=_as_utc(getattr(m, "received_at", None)),
+                location=mailbox,
+                url=str(getattr(m, "url", "") or ""),
+                how_to_respond=("reply to them directly; this message is relayed onto the quest "
+                                "as a note in their own name, so the account's own asks record "
+                                "carries it too"),
+                needs_response=True,
+                raw={"headers": dict(getattr(m, "headers", None) or {}), "subject": subject},
+            ))
+        return out
 
 
 # ---------------------------------------------------------------------------------------------
@@ -1713,6 +2252,108 @@ def llm_relevance_judge(provider_fn: Callable[[], Any], tier: str = "balanced"
 
 
 # ---------------------------------------------------------------------------------------------
+# Admission: is anybody home? -- a different question from relevance, never conflated with it
+# ---------------------------------------------------------------------------------------------
+
+_ADMISSION_PROMPT = """\
+A message reached a mailbox this assistant watches on somebody's behalf. It already survived a
+deterministic header check for bulk/automated mail (List-Unsubscribe, Precedence: bulk,
+Auto-Submitted and the like), so what remains is genuinely ambiguous: it might be a real person
+writing in, or it might be marketing copy, a newsletter, or a notification that simply carries no
+automation headers.
+
+THE MESSAGES:
+{items}
+
+Which of these are a REAL PERSON writing to make a request, ask a question, or say something to a
+human being -- as opposed to marketing, a newsletter, a product notification, or any other
+machine-generated or mass-sent mail? Answer with JSON and nothing else:
+{{"admit": [<numbers>]}}
+
+How to decide:
+  * A short personal note, a question, a reply, a request for something -- ADMIT it, even when it
+    is terse or the sender is unfamiliar.
+  * Marketing copy, a product announcement, a newsletter digest, a "see what's new" email, a
+    donation-ask campaign -- these are NOT admitted, even when personally addressed and even when
+    no header caught them.
+  * A notification FROM a product or service ("your invoice is ready", "your order shipped") is
+    not a person asking for anything and is not admitted.
+  * When the wording alone cannot tell -- a short message with no clear signal either way -- ADMIT
+    it. The costs are not symmetric: an admitted item that turns out to be nothing costs one line
+    somebody dismisses in a moment; a real person's request dropped here is invisible, and nobody
+    will ever know it happened, or that anyone was supposed to be reading this mailbox at all.\
+"""
+
+
+def llm_admission_judge(provider_fn: Callable[[], Any], tier: str = "fast"
+                        ) -> Callable[[Sequence[ContextUpdate]], Optional[set]]:
+    """A cheap judge asking a question relevance never asks: is this a real person, at all?
+
+    RELEVANCE AND ADMISSION ARE DIFFERENT QUESTIONS, AND THIS REPO KEEPS THEM SEPARATE ON PURPOSE.
+    ``llm_relevance_judge`` asks whether an item bears on THIS card's subject matter, once a card
+    is already in the picture. This asks whether a message is a human being writing to us AT ALL,
+    before any card enters the question. Conflating them would mean judging "is this spam" by
+    whether it happens to mention this quest's outcome -- which a marketing email addressed to a
+    real person's real interests can do by accident, and a genuine one-line request can fail to do
+    by never restating the subject it is about. They are asked by different callers of the same
+    shape (``UpdateEngine._apply_admission`` vs ``._apply_relevance``) against a class attribute
+    each source declares independently (``judge_admission`` alongside ``judge_relevance`` on
+    ``_BaseSource``), so a source can want one, the other, both, or neither.
+
+    A CHEAP TIER ON PURPOSE (``"fast"`` here, not ``"balanced"``): the deterministic header check
+    in ``adapters.inbound_mail.is_bulk_mail`` already removed whatever identified itself as bulk
+    mail for free, so what reaches this judge is an already-narrowed remainder, and "is this a
+    person" does not need the heavier tier a subject-matter judgment does.
+
+    BIASED TOWARD INCLUSION, exactly like ``llm_relevance_judge`` and for the identical structural
+    reason: returns None on ANY failure (no provider, an unroutable model, a timeout, unparsable
+    JSON), which the caller reads as "keep everything". The asymmetry is total -- a real person's
+    dropped request is invisible and nobody ever knows to ask again, while an admitted marketing
+    email is one line somebody dismisses reading their asks -- so the failure mode has to favor the
+    side that costs nothing.
+    """
+    def _judge(updates: Sequence[ContextUpdate]) -> Optional[set]:
+        rows = list(updates or [])
+        if not rows:
+            return set()
+        try:
+            provider = provider_fn()
+            if provider is None:
+                return None
+            from ..core.card_filter import _extract_json
+            from ..core.model_registry import ModelRegistry
+            try:
+                model = ModelRegistry(provider).resolve_tier(tier or "fast")
+            except Exception:  # noqa: BLE001 -- an unresolvable registry must not stop the judge
+                model = tier or "fast"
+            listed = "\n".join(
+                f"{i}. from {u.author or 'an unknown sender'}: {_clip(u.title, 120)}\n"
+                f"   {_clip(u.body or u.excerpt, 300)}"
+                for i, u in enumerate(rows, 1))
+            prompt = _ADMISSION_PROMPT.format(items=listed)
+            raw = provider.answer([{"role": "user", "content": prompt}], model=model)
+            text = raw if isinstance(raw, str) else str(getattr(raw, "text", raw) or "")
+            verdict = json.loads(_extract_json(text) or "{}")
+            wanted = verdict.get("admit")
+            if not isinstance(wanted, list):
+                return None
+            keep = set()
+            for n in wanted:
+                try:
+                    idx = int(n)
+                except (TypeError, ValueError):
+                    continue
+                if 1 <= idx <= len(rows):
+                    keep.add(rows[idx - 1].item_id or f"#{idx}")
+            return keep
+        except Exception as e:  # noqa: BLE001 -- see the docstring: failure means keep everything
+            log.info("context updates: admission judge unavailable (%s); keeping everything", e)
+            return None
+
+    return _judge
+
+
+# ---------------------------------------------------------------------------------------------
 # The engine
 # ---------------------------------------------------------------------------------------------
 
@@ -1808,11 +2449,15 @@ class UpdateEngine:
     def __init__(self, client: Any = None, *,
                  watermarks: Optional[Watermarks] = None,
                  drive_comments: Any = None,
+                 inbound_mail: Any = None,
                  sources: Optional[Sequence[ContextSource]] = None,
                  always: Sequence[str] = DEFAULT_ALWAYS,
                  spec_resolver: Optional[Callable[[Dict[str, Any]], List[Dict[str, Any]]]] = None,
                  relevance_judge: Optional[Callable[..., Optional[set]]] = None,
+                 admission_judge: Optional[Callable[[Sequence[ContextUpdate]],
+                                                    Optional[set]]] = None,
                  ledger: Any = None,
+                 relay_log: Any = None,
                  first_look_days: int = FIRST_LOOK_DAYS,
                  max_updates: int = MAX_UPDATES,
                  now_fn: Optional[Callable[[], datetime]] = None) -> None:
@@ -1820,13 +2465,15 @@ class UpdateEngine:
         self._watermarks = watermarks or Watermarks(None)
         self._spec_resolver = spec_resolver or default_spec_resolver
         self._relevance_judge = relevance_judge
+        self._admission_judge = admission_judge
         self._ledger = ledger
+        self._relay_log = relay_log
         self._always = tuple(always or ())
         self._first_look = timedelta(days=max(1, int(first_look_days)))
         self._max_updates = max(1, int(max_updates))
         self._now_fn = now_fn or _utcnow
         registry: Dict[str, ContextSource] = {}
-        for src in (sources or self._builtin_sources(drive_comments)):
+        for src in (sources or self._builtin_sources(drive_comments, inbound_mail)):
             registry[src.name] = src
         self._sources = registry
         # Cache for user-scoped sources (reflections, insights), keyed by each source's own choice
@@ -1835,14 +2482,16 @@ class UpdateEngine:
         self._cache_filled_at: Optional[datetime] = None
 
     @staticmethod
-    def _builtin_sources(drive_comments: Any) -> List[ContextSource]:
+    def _builtin_sources(drive_comments: Any, inbound_mail: Any = None) -> List[ContextSource]:
         return [
             ReflectionsSource(),
             InsightsSource(),
             QuestNotesSource(),
+            GoalUpdatesSource(),
             CollectionEntriesSource(),
             DriveCommentsSource(drive_comments),
             DriveChangesSource(drive_comments),
+            InboundMailSource(inbound_mail),
         ]
 
     def describe_sources(self) -> Dict[str, str]:
@@ -1912,6 +2561,45 @@ class UpdateEngine:
                 report.set_aside = dropped_by_source[report.source]
                 report.found = max(0, report.found - report.set_aside)
 
+    def _apply_admission(self, bundle: ContextUpdates, card: Dict[str, Any]) -> None:
+        """Drop items that failed "is a real person writing to us", before anything else sees them.
+
+        A SEPARATE gate from ``_apply_relevance``, over a SEPARATE class attribute
+        (``judge_admission``), and never folded into it: relevance asks whether an item bears on
+        THIS card, admission asks whether anybody is home at all, independent of any card, and a
+        source can want one, the other, both, or neither. Run BEFORE relevance, so an item that is
+        not even from a person is never spent on a subject-matter judgment either.
+
+        Every failure keeps everything, for the reason ``llm_admission_judge`` documents: a
+        dropped request from a real person is invisible, an admitted one is cheap to dismiss.
+        """
+        if self._admission_judge is None:
+            return
+        judged = [u for u in bundle.updates
+                  if getattr(self._sources.get(u.source), "judge_admission", False)]
+        if not judged:
+            return
+        try:
+            keep = self._admission_judge(judged)
+        except Exception as e:  # noqa: BLE001 -- a broken judge never costs a real person's ask
+            log.info("context updates: admission judge failed (%s); keeping everything", e)
+            return
+        if keep is None:
+            return
+        position = {id(u): f"#{i}" for i, u in enumerate(judged, 1)}
+        dropped_by_source: Dict[str, int] = {}
+        kept: List[ContextUpdate] = []
+        for u in bundle.updates:
+            if id(u) in position and (u.item_id or "") not in keep and position[id(u)] not in keep:
+                dropped_by_source[u.source] = dropped_by_source.get(u.source, 0) + 1
+                continue
+            kept.append(u)
+        bundle.updates = kept
+        for report in bundle.reports:
+            if report.source in dropped_by_source:
+                report.set_aside = report.set_aside + dropped_by_source[report.source]
+                report.found = max(0, report.found - dropped_by_source[report.source])
+
     def _add_owed(self, bundle: ContextUpdates, card_id: str,
                   card: Optional[Dict[str, Any]] = None) -> None:
         """Bring in what is still owed from before, as refs alongside today's news.
@@ -1943,6 +2631,7 @@ class UpdateEngine:
                        f"{(item.occurred_at or item.first_seen_at)[:10] or 'an earlier day'}; "
                        f"{item.status_line()}"),
                 body=item.text,
+                verbatim=True,  # the ask they wrote, re-offered
                 excerpt=item.text,
                 author=item.author,
                 occurred_at=_as_utc(item.occurred_at),
@@ -1989,11 +2678,16 @@ class UpdateEngine:
             card_label=card_label or _card_label(card),
             collected_at=now,
         )
+        bundle.card_kind = card_kind
         bundle._watermarks = self._watermarks
         bundle._ledger = self._ledger
         bundle._card = card or {}
         bundle._ask_sources = frozenset(
             name for name, src in self._sources.items() if getattr(src, "tracks_asks", False))
+        bundle.relay_client = self._client
+        bundle.relay_log = self._relay_log
+        bundle.relay_sources = frozenset(
+            name for name, src in self._sources.items() if getattr(src, "relay_to_quest", False))
         wanted = {str(n) for n in sources} if sources else None
         for spec in self.specs_for(card):
             name = str(spec.get("source") or "")
@@ -2027,6 +2721,7 @@ class UpdateEngine:
             bundle.reports.append(report)
             bundle.updates.extend(found)
 
+        self._apply_admission(bundle, card)
         self._apply_relevance(bundle, card)
         self._add_owed(bundle, cid, card)
 
@@ -2093,12 +2788,16 @@ def build_update_engine(cfg: Any = None, client: Any = None, *,
     if cfg is not None and not getattr(cfg, "context_updates", True):
         return None
     path = watermark_path_for(getattr(cfg, "context_updates_state_path", None), state_path)
+    relay_path = relay_log_path_for(
+        getattr(cfg, "context_updates_relay_log_path", None), state_path)
     from .feedback_ledger import build_ledger
     return UpdateEngine(
         client,
         watermarks=Watermarks(path, read_only=read_only),
         ledger=build_ledger(cfg, state_path=state_path, read_only=read_only),
+        relay_log=RelayedItems(relay_path, read_only=read_only),
         drive_comments=getattr(cfg, "drive_comments", None),
+        inbound_mail=getattr(cfg, "inbound_mail", None),
         spec_resolver=consumer_spec_resolver(getattr(cfg, "context_sources_map", None)),
         # A callable, not a provider: this engine is built before the CLI wraps
         # cfg.model_provider with MultiProvider, so resolving it at CALL time is what makes the
@@ -2107,6 +2806,15 @@ def build_update_engine(cfg: Any = None, client: Any = None, *,
             lambda: getattr(cfg, "model_provider", None),
             tier=str(getattr(cfg, "context_updates_relevance_tier", "balanced") or "balanced"))
             if (cfg is not None and getattr(cfg, "context_updates_judge_relevance", True))
+            else None),
+        # Same callable-not-provider reasoning as relevance_judge, and the same "on unless a
+        # consumer turned it off" default: without it, whatever cleared the deterministic header
+        # check in adapters.inbound_mail (or any other judge_admission source) reaches a run and
+        # the account's own asks record with no further filtering at all.
+        admission_judge=(llm_admission_judge(
+            lambda: getattr(cfg, "model_provider", None),
+            tier=str(getattr(cfg, "context_updates_admission_tier", "fast") or "fast"))
+            if (cfg is not None and getattr(cfg, "context_updates_judge_admission", True))
             else None),
         first_look_days=int(getattr(cfg, "context_updates_first_look_days", FIRST_LOOK_DAYS) or
                             FIRST_LOOK_DAYS),

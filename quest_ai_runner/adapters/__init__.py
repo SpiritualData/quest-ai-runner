@@ -133,6 +133,13 @@ from .drive_comments import (
     render_comments,
     unanswered,
 )
+from .inbound_mail import (
+    INBOUND_MAIL_READ_SCOPES,
+    InboundMail,
+    MailMessage,
+    is_bulk_mail,
+    refuses_as_inbound_mailbox,
+)
 from .composite_retrieval_adapter import CompositeRetrievalAdapter
 from .session_file_conversation_store import SessionFileConversationStore
 from .conversation_card_builder import ConversationCardBuilder
@@ -244,6 +251,11 @@ __all__ = [
     "COMMENT_WRITE_SCOPES",
     "render_comments",
     "unanswered",
+    "InboundMail",
+    "MailMessage",
+    "INBOUND_MAIL_READ_SCOPES",
+    "is_bulk_mail",
+    "refuses_as_inbound_mailbox",
     "SessionFileConversationStore",
     "QuestRetrievalAdapter",
     "WebSearchAdapter",

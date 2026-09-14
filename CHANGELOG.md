@@ -7,6 +7,111 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **A generic inbound-mail context source, plus an admission judge any source can use**
+  (`adapters/inbound_mail.py`, `runner/context_updates.py`, `runner/quest_client.py`,
+  `config.py`). A mailbox a card declares (`{"source": "inbound_mail", "mailbox":
+  "support@example.org"}`) is now a context source exactly like a Drive comment or a quest note:
+  what arrived is read through an injected `InboundMail` client (Workspace domain-wide delegation,
+  read-only, shaped like `drive_comments_auth`), a deterministic header check
+  (`is_bulk_mail` -- `List-Unsubscribe`, `Precedence: bulk`, `Auto-Submitted`) drops bulk/automated
+  mail before any model call, and a NEW admission judgment (`llm_admission_judge`, a cheap tier)
+  decides "is this a real person writing to us" -- a different question from the existing
+  relevance judge, never conflated with it, and available to any source via a new
+  `judge_admission` class attribute alongside `judge_relevance`. An admitted item is relayed onto
+  the quest it arrived for as a note under the sender's own address
+  (`QuestClient.add_quest_note(..., relayed_author_email=...)`, `ContextUpdates.relay_admitted`,
+  a new `relay_to_quest` class attribute), idempotently (`RelayedItems`, keyed by
+  card/source/item exactly like the watermarks and the feedback ledger), only at delivery
+  (`mark_seen`), never at collection time. A card cannot be pointed at a quest's own reply mailbox
+  (`refuses_as_inbound_mailbox`, mirroring quest-backend's `is_reply_address` without depending on
+  that package): that address is already polled by a consumer's own inbound-reply service, and a
+  second poller on it would double-ingest every reply.
+- **Goal updates are readable, everywhere a run looks** (`runner/quest_client.py`,
+  `runner/context_updates.py`, `runner/quest_goal_sync.py`, `runner/executor.py`,
+  `adapters/quest_retrieval_adapter.py`). A goal update is the per-goal check-in thread: where a
+  person writes, on ONE goal, what they read, did or found. Nothing in this library could read
+  them, so the newest word on a goal was invisible to every run while the goal's description (the
+  task as it was originally set) was treated as current.
+  - `QuestClient.list_goal_updates` / `add_goal_update` / `delete_goal_update` (the
+    `/api/planning/goals/{goal_id}/updates` thread) and `list_quest_goal_updates`, which returns a
+    whole quest's check-ins grouped by goal: one bulk call
+    (`/api/planning/quests/{quest_id}/goal-updates`) where the backend serves it, a per-goal
+    fan-out where it does not.
+  - A `goal_updates` context source, **always on** (`DEFAULT_ALWAYS`), so an autopilot pass sees a
+    person's goal check-ins the way it already sees their quest notes. Card-scoped by
+    construction, so it is never put to a relevance judgment, and `tracks_asks = False`: a
+    check-in is somebody recording where things stand, not an ask owed an answer.
+  - `GOALS.md` now carries, under each goal bullet, that goal's brief (its description) and its
+    most recent updates, as indented blockquote lines. `RunnerConfig.quest_goal_updates_per_goal`
+    (default 3, `0` renders descriptions only) bounds it. Pull-only rendering: every physical line
+    of a rendered detail, including each continuation line of a multi-line note, is prefixed so a
+    person's own words can never be read back as a hand-typed goal edit on the next push.
+  - The context a run is handed names the goal's own update thread as what the person wrote on
+    THIS goal, distinct from the description above it (`GOAL_UPDATE_CONTEXT_LIMIT`, default 5).
+
+### Fixed
+- **A person's own words are no longer cut at 800 characters in the context-updates block**
+  (`runner/context_updates.py`). Every item in the block shared one 800-character body cap, which
+  was written for the bodies this module composes itself (a rendered habit log, a file-change
+  line). Applied to a person's note it cut a ~1,600-character reply mid-sentence, and the run
+  answered its author by email with "your message cut off there, tell me what part of it still
+  needs a response" - it read our shortening as their typing, blamed them for it, and never saw
+  the standing instruction that sat past the cut.
+  - `ContextUpdate.verbatim` marks a body that is the person's own words (quest notes, goal
+    updates, reflections, captures, document comments, a re-offered ask). Those render whole up
+    to `MAX_PERSON_BODY_CHARS` (12,000, matching the cap a mailed note already passes through on
+    ingest), and `MAX_BODY_CHARS` keeps its 800 for composed bodies.
+  - `ContextUpdates.body_limits` spends a `PERSON_BODY_BUDGET` (24,000 characters) across one
+    block, newest-first, so a day's pile of long notes still cannot push the work out of the
+    model's attention; every item keeps at least `MAX_BODY_CHARS` however spent the budget is.
+  - When a person's words ARE shortened, the marker says so in those terms - how much is not
+    shown, that this list shortened it, that nothing they wrote was lost, and never to tell them
+    their message cut off - instead of a bare `[...truncated]` a run cannot tell from the end of
+    a sentence.
+  - The block's index lines preview an item's first words with an ellipsis rather than the
+    truncation marker, for the same reason: an index is openly a preview, `[...truncated]` after
+    half of someone's sentence is not.
+- **`QuestClient.get_goal` and `list_goal_notes` no longer 404 on every call.** Both pointed at
+  team-scoped per-goal routes the reference backend does not implement, so `get_goal` returned
+  `{}` every time (a run's `Goal description:` line has never once been populated in practice) and
+  `list_goal_notes` returned `[]`. `get_goal` still tries the direct route, then resolves the goal
+  out of `list_quest_goals` (which carries `description` and `criteria`); `list_goal_notes` falls
+  back to the goal's update thread, mapped to the note shape its callers expect.
+
+- **`quest_ai_runner.load_client()` — a `QuestClient` with no adapter stack** (`__init__.py`,
+  `config.quest_client_from_config` / `config.load_quest_client`). The scripting front door for
+  anything that is not a full lane: a script, a notebook, an agent's one-off lookup, a cron job.
+  `load_client("~/my-lane/qar.toml")` (or `QAR_CONFIG_FILE`) reads the same TOML file a lane uses,
+  applies its `env_files`/`env_aliases`/`env` tables, and builds just the API client — no model
+  provider, no vector store, no optional dependencies, so it starts instantly. Raises
+  `QuestNotConfigured` when the URL or key is missing rather than falling back to another
+  deployment's credentials. `config.quest_client_from_config(cfg)` is the same wiring for a caller
+  that already has a `RunnerConfig`; `config._quest_client_for` now delegates to it instead of
+  duplicating the construction.
+- **`quest-ai-runner quest <method>` — the Quest API from a shell, no Python** (`cli.py`). Calls
+  any `QuestClient` method by name against the configured account and prints the JSON result:
+  `quest-ai-runner quest whoami`, `quest-ai-runner quest get_task task_123`. Read-only methods
+  (`whoami`, `assignee_id`, and anything prefixed `get_`/`list_`/`is_`/`search_`/`discover_`/
+  `owning_`/`goals_from_`) run as-is; anything else needs `--write`, so a typo or an over-eager
+  agent cannot mutate Quest while "just checking" one. `--kw NAME=VALUE` passes keyword args
+  (JSON when the value parses as JSON, else a string); `--list` prints every callable method
+  tagged `read`/`WRITE`; `--compact` prints single-line JSON. Dispatches by method name off
+  `QuestClient` itself, so a method added there is callable here the same day, with no
+  per-endpoint subcommand to add.
+- **`RunnerConfig.decision_assignees` / `QAR_DECISION_ASSIGNEES`** (`config.py`,
+  `runner/quest_client.py`): named decision-routing roles (`{"owner": "user_...", "operator":
+  "user_..."}`), file-expressible under `[decision_assignees]` and settable via
+  `QAR_DECISION_ASSIGNEES` (a JSON object, or `name=id,name=id` pairs — `config.
+  parse_decision_assignees` parses either, raising `ConfigFileError` on anything else). `WHO`
+  approves what is deployment policy, so it lives in config; `QuestClient.assignee_id(name)`
+  resolves a role to a user id (raises `QuestNotConfigured` on an unknown name rather than
+  silently routing to the default person, `None` yields `default_assignee_user_id`), and
+  `create_decision(..., assignee="operator")` uses it — an explicit `assignee_user_id=` still
+  wins over a role name. Resolution happens outside `create_decision`'s error-swallowing `try`, on
+  purpose: a misspelled role raises instead of degrading into an unassigned decision.
+- **`RunnerConfig.from_file` now expands `~`** in the path it is given, so a documented
+  `~/my-lane/qar.toml` works the same from a script, a systemd unit, and a shell, instead of only
+  from whichever of them happened to expand it first.
 - **`QuestClient.archive_quest` / `unarchive_quest`**: generic wrappers for
   `POST /api/quests/{quest_id}/archive` and `.../unarchive` (owner-only quest lifecycle actions).
   Added per Hard Rule #4 so a consumer removing a stray/duplicate quest calls a library method

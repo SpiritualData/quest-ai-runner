@@ -105,16 +105,19 @@ _FILE_SCALAR_FIELDS = {
     "channel_turn_timeout_seconds", "channel_state_path",
     "corpus_root", "context_preamble",
     "poll_interval_seconds", "poll_lookahead_minutes", "max_concurrent_tasks",
-    "default_assignee_user_id",
+    "default_assignee_user_id", "decision_assignees",
     "wait_channel_enabled", "context_poll_seconds", "wait_timeout_seconds",
     "rep_sync_direction",
     "quest_folder_map", "quest_folder_sync_direction", "quest_folder_zones", "quest_goal_sync",
+    "quest_goal_updates_per_goal",
     "autopilot_ensure_pass_task", "autopilot_pass_time", "autopilot_daily_budget",
     "autopilot_settings_refresh_seconds", "autopilot_backpressure", "autopilot_adopt_recurring",
     "context_updates", "context_updates_state_path", "context_updates_first_look_days",
     "context_updates_judge_relevance", "context_updates_relevance_tier",
+    "context_updates_judge_admission", "context_updates_admission_tier",
+    "context_updates_relay_log_path",
     "rep_context_prefs", "context_preamble_doctrine", "vector_store", "mcp_drive",
-    "context_sources_map", "context_sources_file", "drive_comments_auth",
+    "context_sources_map", "context_sources_file", "drive_comments_auth", "inbound_mail_auth",
     "feedback_ledger", "feedback_ledger_path",
     "quest_folder_map_file",
     "state_path", "lane_label", "env_files", "env_aliases", "env",
@@ -294,6 +297,12 @@ class RunnerConfig:
     poll_lookahead_minutes: float = 30.0
     max_concurrent_tasks: int = 2
     default_assignee_user_id: Optional[str] = None   # decision routing default
+    # NAMED decision assignees: {role -> user id}, e.g. {"owner": "user_...", "operator":
+    # "user_..."}. Lets a caller write ``create_decision(..., assignee="operator")`` instead of
+    # threading a raw user id (and a lane's routing policy) through every call site. WHO approves
+    # what is deployment policy, so it belongs in config; the library only resolves the name.
+    # Env: ``QAR_DECISION_ASSIGNEES`` as a JSON object, or ``name=id`` pairs separated by commas.
+    decision_assignees: Dict[str, str] = field(default_factory=dict)
 
     # --- fast lane for REAL-TIME work (context-requests from a live chat turn) ---
     # The background scan above (poll_interval_seconds, default 900s) is the right cadence for
@@ -391,6 +400,12 @@ class RunnerConfig:
     # the PLAN, so without this the only local answer to "what are all my goals" is whatever
     # hand-maintained file the folder grew. Direction follows quest_folder_sync_direction.
     quest_goal_sync: bool = True
+    # How many of each goal's most recent updates a PULL renders under its bullet (newest first),
+    # alongside the goal's description -- the per-goal check-in thread where a person writes what
+    # they read/did/found on that one goal. Those notes otherwise never reach the local folder.
+    # 0 turns the update lines off; descriptions still render either way. Push is unaffected: this
+    # is pull-side rendering only (runner/quest_goal_sync.py).
+    quest_goal_updates_per_goal: int = 3
 
     # --- Autopilot (opt-in per QUEST; see runner/autopilot.py and quest_autopilot_design.md).
     # Autopilot runs as a recurring "autopilot pass" task carrying ``task_kind: "autopilot"``,
@@ -486,6 +501,22 @@ class RunnerConfig:
     mcp_drive: Optional[Dict[str, Any]] = None
     # Model tier for that judgment. "balanced" per this repo's tier guidance for filtering.
     context_updates_relevance_tier: str = "balanced"
+    # Whether the engine puts an ADMISSION-judged source's items (today: inbound_mail) through
+    # "is this a real person writing to us, not bulk or automated mail" before a run or the
+    # account's own asks record ever sees them (see runner/context_updates.llm_admission_judge).
+    # A DIFFERENT question from context_updates_judge_relevance above -- see that function's own
+    # docstring for why the two gates are kept separate rather than folded into one. On by
+    # default: without it, whatever cleared the deterministic header check
+    # (adapters.inbound_mail.is_bulk_mail) reaches a run, and the asks record, unfiltered.
+    context_updates_judge_admission: bool = True
+    # Model tier for the admission judgment. "fast", not "balanced": the header check already
+    # removed what identifies itself as bulk mail for free, so this judge sees an already-narrowed
+    # remainder and does not need the heavier tier a subject-matter judgment does.
+    context_updates_admission_tier: str = "fast"
+    # Where the "already relayed onto Quest" record lives (see
+    # runner/context_updates.RelayedItems). Left None, it sits beside state_path, same default the
+    # watermarks and the feedback ledger already use.
+    context_updates_relay_log_path: Optional[str] = None
     # {quest_id: [spec, ...]} the DEPLOYMENT supplies, merged under whatever each card declares
     # for itself (the card always wins on a source both name). It exists because a card cannot
     # always carry its specs yet: a backend has to grow the field first, and until it does every
@@ -508,6 +539,16 @@ class RunnerConfig:
     # forced to keep a Python consumer alive for this single object. Resolved into
     # ``drive_comments`` by ``resolve_config_objects``.
     drive_comments_auth: Optional[Dict[str, Any]] = None
+    # Declarative form of ``inbound_mail``: {service_account_file=..., subject=...,
+    # allowed_addresses=[...], scopes=[...]}. Shaped exactly like ``drive_comments_auth`` and
+    # resolved the same way (``resolve_config_objects`` -> ``_build_inbound_mail``), for the same
+    # reason: minting a Workspace token is a deployment concern, not a card's. ``subject`` is the
+    # identity this credential defaults to when ``allowed_addresses`` is left empty (it then
+    # becomes the sole allowed mailbox); ``allowed_addresses`` is the actual, and only, code-side
+    # limit on which mailbox a card's ``{"source": "inbound_mail", "mailbox": ...}`` spec may name
+    # -- domain-wide delegation can otherwise impersonate ANY mailbox in the domain. See
+    # ``adapters.inbound_mail`` for the read-only client this builds.
+    inbound_mail_auth: Optional[Dict[str, Any]] = None
     # A JSON file holding {quest_id: folder}. ``quest_folder_map`` takes the dict itself and there
     # was no pointer form, which is the one reason several lanes still read a JSON file in Python.
     quest_folder_map_file: Optional[str] = None
@@ -537,6 +578,10 @@ class RunnerConfig:
     # runs exactly as before, so a quest that watches a folder simply sees no comments until a
     # deployment wires this.
     drive_comments: Any = None
+    # The inbound-mail channel (``adapters.inbound_mail.InboundMail``), same reasoning as
+    # ``drive_comments`` above. Left None, ``inbound_mail`` contributes nothing until a deployment
+    # wires this (directly, or declaratively via ``inbound_mail_auth``).
+    inbound_mail: Any = None
 
     extra: Dict[str, Any] = field(default_factory=dict)
 
@@ -582,7 +627,9 @@ class RunnerConfig:
 
         Uses the stdlib ``tomllib`` (Python 3.11+; this repo targets 3.12) — no new dependency.
         """
-        p = Path(path)
+        # expanduser so a documented "~/..." path works from a script, a systemd unit and a shell
+        # alike, instead of only from whichever of them happened to expand it first.
+        p = Path(path).expanduser()
         try:
             text = p.read_text(encoding="utf-8")
         except OSError as e:
@@ -759,6 +806,10 @@ def resolve_config_objects(cfg: RunnerConfig) -> RunnerConfig:
     if cfg.drive_comments is None and cfg.drive_comments_auth:
         cfg.drive_comments = _build_drive_comments(cfg.drive_comments_auth)
 
+    # Same pattern, the inbound-mail client.
+    if cfg.inbound_mail is None and cfg.inbound_mail_auth:
+        cfg.inbound_mail = _build_inbound_mail(cfg.inbound_mail_auth)
+
     if cfg.mcp_drive:
         _add_drive_mcp_server(cfg)
 
@@ -802,13 +853,98 @@ def resolve_context_assembler_stack(base_or_cfg: Any, cfg: Optional[RunnerConfig
 
 
 
+def quest_client_from_config(cfg: RunnerConfig, *, timeout: float = 30.0) -> Any:
+    """Build a ``QuestClient`` from an already-built ``RunnerConfig``.
+
+    The one place the connection fields (+ decision routing) are turned into a client, so every
+    consumer gets the same wiring instead of re-deriving it. Raises ``QuestNotConfigured`` when
+    the URL or key is missing — see :func:`quest_ai_runner.load_client` for the config-file front
+    door most callers want.
+    """
+    from .runner.quest_client import QuestClient, QuestNotConfigured
+
+    if not (cfg.quest_base_url and cfg.quest_api_key):
+        raise QuestNotConfigured(
+            "quest_base_url and quest_api_key (qsk_...) are required. Set QUEST_BASE_URL and "
+            "QUEST_API_KEY, or point QAR_CONFIG_FILE at a config file that supplies them "
+            "(env_files/env_aliases map an existing .env onto those names).")
+    return QuestClient(
+        cfg.quest_base_url, cfg.quest_api_key, team_id=cfg.team_id, timeout=timeout,
+        decision_assignees=cfg.decision_assignees,
+        default_assignee_user_id=cfg.default_assignee_user_id,
+    )
+
+
+def load_quest_client(config_path: Optional[str] = None, *, timeout: float = 30.0) -> Any:
+    """A ``QuestClient`` from a config file layered under the environment — no adapter stack.
+
+    The lightweight sibling of :func:`quest_ai_runner.load_config`: it reads the same file (or
+    ``QAR_CONFIG_FILE``), applies its ``env_files`` / ``env_aliases`` / ``env`` tables, and builds
+    just the API client. Nothing here imports a model provider, a vector store or a context store,
+    so a script that only wants to read a task or add a note starts instantly and needs none of
+    the optional dependencies.
+
+    Exported as ``quest_ai_runner.load_client``; see that name for the documented usage.
+    """
+    path = config_path or os.getenv("QAR_CONFIG_FILE") or ""
+    file_cfg = RunnerConfig.from_file(path) if path else None
+    apply_config_environment(file_cfg)
+    base = file_cfg.quest_base_url if file_cfg else ""
+    key = file_cfg.quest_api_key if file_cfg else ""
+    team = file_cfg.team_id if file_cfg else ""
+    # The environment wins over the file on every field, exactly as it does for a full lane
+    # (cli._layer_file_defaults) — including the names apply_config_environment just populated
+    # from the file's own env_files/env_aliases, which is how a key that lives only in a chmod-600
+    # .env reaches a client whose config file holds no secret.
+    cfg = RunnerConfig(
+        quest_base_url=os.getenv("QUEST_BASE_URL") or base,
+        quest_api_key=os.getenv("QUEST_API_KEY") or key,
+        team_id=os.getenv("QUEST_TEAM_ID") or team,
+        default_assignee_user_id=(os.getenv("QAR_DECISION_ASSIGNEE")
+                                  or (file_cfg.default_assignee_user_id if file_cfg else None)),
+        decision_assignees=(parse_decision_assignees(os.getenv("QAR_DECISION_ASSIGNEES"))
+                            or (file_cfg.decision_assignees if file_cfg else {})),
+    )
+    return quest_client_from_config(cfg, timeout=timeout)
+
+
+def parse_decision_assignees(raw: Optional[str]) -> Dict[str, str]:
+    """Parse ``QAR_DECISION_ASSIGNEES`` — a JSON object, or ``name=id,name=id`` pairs.
+
+    Both spellings because this variable is written in two very different places: a JSON object is
+    natural in a systemd unit or a secrets manager, ``name=id`` pairs in a shell export. Returns
+    ``{}`` for an empty/absent value; raises ``ConfigFileError`` on a value that parses to
+    something other than a flat mapping, rather than dropping the routing silently.
+    """
+    text = (raw or "").strip()
+    if not text:
+        return {}
+    if text.startswith("{"):
+        try:
+            data = json.loads(text)
+        except ValueError as e:
+            raise ConfigFileError(f"QAR_DECISION_ASSIGNEES is not valid JSON: {e}") from e
+    else:
+        data = {}
+        for part in text.split(","):
+            name, sep, value = part.partition("=")
+            if not sep:
+                raise ConfigFileError(
+                    f"QAR_DECISION_ASSIGNEES entry {part.strip()!r} is not 'name=user_id' "
+                    f"(use a JSON object for anything more complex)")
+            data[name.strip()] = value.strip()
+    if not isinstance(data, dict) or any(not isinstance(v, str) for v in data.values()):
+        raise ConfigFileError(
+            "QAR_DECISION_ASSIGNEES must be a flat {role: user_id} mapping of strings")
+    return {str(k): str(v) for k, v in data.items()}
+
+
 def _quest_client_for(cfg: RunnerConfig) -> Any:
     """A QuestClient built from this config, or None when it is not configured to reach Quest."""
     if not (cfg.quest_base_url and cfg.quest_api_key):
         return None
     try:
-        from .runner.quest_client import QuestClient
-        return QuestClient(cfg.quest_base_url, cfg.quest_api_key, team_id=cfg.team_id)
+        return quest_client_from_config(cfg)
     except Exception as e:  # noqa: BLE001
         _log.warning("could not build a Quest client for the context stack (%s)", e)
         return None
@@ -922,6 +1058,50 @@ def _build_drive_comments(auth: Dict[str, Any]) -> Any:
             service_account_file=sa_file, subject=subject, scopes=scopes))
     except Exception as e:  # noqa: BLE001
         _log.warning("drive_comments_auth: could not build the client (%s); channel off", e)
+        return None
+
+
+def _build_inbound_mail(auth: Dict[str, Any]) -> Any:
+    """An ``InboundMail`` client from ``{service_account_file, subject, allowed_addresses,
+    scopes}``, or None.
+
+    Read-only scope by default (``INBOUND_MAIL_READ_SCOPES``): this channel only ever needs to SEE
+    what arrived, never to act on the mailbox, so a leaked key is bounded to reading, not sending
+    or deleting. ``allowed_addresses`` defaults to just ``[subject]`` when the deployment names a
+    subject but no explicit list -- domain-wide delegation can impersonate ANY mailbox in the
+    domain, so an unconfigured allowlist means "read nothing" (fail closed), never "read whatever a
+    card's spec happens to name."
+    """
+    try:
+        from .adapters.inbound_mail import INBOUND_MAIL_READ_SCOPES, InboundMail
+    except Exception as e:  # noqa: BLE001 -- an optional channel never blocks a lane starting
+        _log.warning("inbound_mail_auth: channel unavailable (%s)", e)
+        return None
+
+    sa_file = str(auth.get("service_account_file") or "").strip()
+    if not sa_file:
+        _log.warning("inbound_mail_auth: needs a service_account_file; channel off")
+        return None
+    if not Path(sa_file).exists():
+        _log.warning("inbound_mail_auth: %s does not exist; channel off", sa_file)
+        return None
+    scopes = [str(x) for x in (auth.get("scopes") or INBOUND_MAIL_READ_SCOPES)]
+    subject = str(auth.get("subject") or "").strip() or None
+    allowed = [str(a).strip().lower() for a in (auth.get("allowed_addresses") or [])
+              if str(a).strip()]
+    if not allowed and subject:
+        allowed = [subject.lower()]
+    if not allowed:
+        _log.warning(
+            "inbound_mail_auth: no allowed_addresses (and no subject to default from); channel "
+            "off -- domain-wide delegation can impersonate any mailbox, so a deployment must name "
+            "which ones this credential may actually read")
+        return None
+    try:
+        return InboundMail(
+            service_account_file=sa_file, scopes=scopes, allowed_addresses=allowed)
+    except Exception as e:  # noqa: BLE001
+        _log.warning("inbound_mail_auth: could not build the client (%s); channel off", e)
         return None
 
 
