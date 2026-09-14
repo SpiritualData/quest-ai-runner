@@ -760,19 +760,96 @@ class QuestClient:
         The OTHER write path, and the one to reach for when a field the team route refuses needs
         changing: this one is scoped to the quest's owner (or an active share) rather than to a
         team role, and it covers the fields the AI itself sets -- ``outcome``, ``current_state``,
-        ``preferences``, ``strategies``. ``current_state`` in particular is writable HERE and
-        nowhere in ``write_quest_fields``' role scopes, which is easy to mistake for "nothing can
-        write it".
+        ``preferences``, ``strategies``, ``purpose`` (there is no ``purpose`` field on
+        ``start_quest`` -- set it here after creating the quest). ``current_state`` in particular
+        is writable HERE and nowhere in ``write_quest_fields``' role scopes, which is easy to
+        mistake for "nothing can write it".
+
+        The backend route only accepts ONE field per call (a legacy ``{"field_name", "value"}``
+        body, not a batch -- an earlier version of this method sent ``{"fields": {...}}``, which
+        the handler silently never read, so every call through it wrote nothing). This method
+        sends one PATCH per entry in ``fields`` and returns the LAST response (each individual
+        PATCH returns the full updated quest). Returns {} the moment any field fails to write, so
+        a partial failure is never reported as a full success.
 
         Prefer ``write_quest_fields`` when a team ROLE should govern the write (an AI service
         member must not silently rewrite intent). Use this when the caller is acting as the owner.
         """
-        try:
-            return self._request("PATCH", f"/api/quests/{quest_id}/field",
-                                 body={"fields": dict(fields)}) or {}
-        except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("edit_quest_field failed for quest %s: %s", quest_id, e)
-            return {}
+        result: Dict[str, Any] = {}
+        for field_name, value in fields.items():
+            try:
+                result = self._request(
+                    "PATCH", f"/api/quests/{quest_id}/field",
+                    body={"field_name": field_name, "value": value}) or {}
+            except (QuestApiError, QuestNotConfigured) as e:
+                log.warning("edit_quest_field failed for quest %s field %s: %s",
+                           quest_id, field_name, e)
+                return {}
+        return result
+
+    def start_quest(self, *, category_id: str,
+                    outcome: Optional[str] = None,
+                    acceptance_criteria: Optional[str] = None,
+                    current_state: Optional[str] = None,
+                    subcategory_id: Optional[str] = None,
+                    linked_domain_ids: Optional[List[str]] = None,
+                    linked_collection_ids: Optional[List[str]] = None,
+                    preferences: Optional[str] = None,
+                    timeline_days: Optional[int] = None,
+                    start_date: Optional[str] = None,
+                    category_ids: Optional[List[str]] = None,
+                    creation_mode: str = "quick") -> Dict[str, Any]:
+        """POST /api/quests/start — create a brand-new top-level Quest under the caller's account.
+
+        ``category_id`` is required (a string like "cat_career"; no server-side enum enforced at
+        time of writing). Passing a non-empty ``outcome`` marks the quest ``is_quick_quest =
+        True``, which sets ``setup_complete = True`` immediately and leaves ``strategies``/
+        ``plan`` empty -- this is the way to create a quest with just context, no
+        strategy-generation or plan-generation phase. ``preferences`` is a single string (becomes
+        ``preferences.beliefs[0]`` server-side, NOT the same thing as the quest's ``purpose``
+        field -- there is no ``purpose`` field on this endpoint at all; set it afterward with
+        ``edit_quest_field(quest_id, {"purpose": ...})``). ``creation_mode`` is "quick" or
+        "ai_assisted" (subscription-gated); "quick" is the literal match for "just create it, no
+        AI-assisted flow".
+
+        The created quest is account-wide (no team), not yet on any team's board -- pair with
+        ``attach_quest_to_team`` to put it on one. Raises ``QuestApiError``/``QuestNotConfigured``
+        on failure rather than swallowing it: a caller that reports "quest created" must know it
+        was.
+        """
+        self._require()
+        body: Dict[str, Any] = {"category_id": category_id, "creation_mode": creation_mode}
+        if outcome is not None:
+            body["outcome"] = outcome
+        if acceptance_criteria is not None:
+            body["acceptance_criteria"] = acceptance_criteria
+        if current_state is not None:
+            body["current_state"] = current_state
+        if subcategory_id is not None:
+            body["subcategory_id"] = subcategory_id
+        if linked_domain_ids is not None:
+            body["linked_domain_ids"] = linked_domain_ids
+        if linked_collection_ids is not None:
+            body["linked_collection_ids"] = linked_collection_ids
+        if preferences is not None:
+            body["preferences"] = preferences
+        if timeline_days is not None:
+            body["timeline_days"] = timeline_days
+        if start_date is not None:
+            body["start_date"] = start_date
+        if category_ids is not None:
+            body["category_ids"] = category_ids
+        return self._request("POST", "/api/quests/start", body=body) or {}
+
+    def attach_quest_to_team(self, team_id: str, quest_id: str) -> Dict[str, Any]:
+        """POST /api/teams/{team_id}/quest — attach an account-wide quest to a team's board.
+
+        Requires the caller be that team's admin. Raises on failure (same contract as
+        ``start_quest``): a caller reporting "attached" must know it landed.
+        """
+        self._require()
+        return self._request("POST", f"/api/teams/{team_id}/quest",
+                             body={"quest_id": quest_id}) or {}
 
     def write_quest_fields(self, quest_id: str, fields: Dict[str, Any], *,
                            team_id: Optional[str] = None) -> Dict[str, Any]:
@@ -1697,15 +1774,22 @@ class QuestClient:
         the quest's current AutopilotSettings and overwrites only the fields present in the
         request, so a partial update cannot wipe sibling fields.
 
-        IMPORTANT -- the write path is currently NARROWER than the model. The endpoint's request
-        schema accepts only ``mode``, ``planning``, ``cadence``, ``personas``, and ``env_id``. The
-        scanner's own bookkeeping fields (``last_pass_at``, ``miss_streak``, ``helpful``,
-        ``unhelpful``) EXIST on the stored model but are not accepted by this endpoint, and an
-        unknown key is silently ignored by its Pydantic model -- so PATCHing them returns 200 and
-        persists NOTHING. The caller must therefore VERIFY, not assume (see
-        ``runner.autopilot._update_pass_bookkeeping``, which reads the echoed settings back and
-        reports loudly when a field it wrote did not stick, rather than letting the cadence gate
-        silently never advance).
+        The backend request model (``UpdateAutopilotRequest``, ``extra="forbid"``) accepts ``mode``
+        (one of ``off`` / ``suggest`` / ``act`` / ``reactive``), ``planning``, ``cadence``,
+        ``run_time``, ``run_timezone``, ``personas``, ``env_id``, ``model``, ``adopt_recurring``,
+        ``instructions``, ``last_pass_at``, ``miss_streak``, ``helpful``, ``unhelpful``, and a
+        nested ``email`` object (``UpdateAutopilotEmailRequest``): ``enabled`` (bool),
+        ``recipients`` (list of real addresses, max 5 -- an empty list falls back to the owner's
+        own account address), ``reply_label`` (auto-derived from the quest's outcome text when
+        omitted), ``regenerate_reply_token`` (bool). There is no client-settable ``reply_token``
+        field -- toggling ``email.enabled`` from off to on mints one server-side and builds the
+        quest's ``reply_address`` from it, returned in THIS call's own response body under
+        ``autopilot.email.reply_address``; it cannot be predicted in advance, only read back from
+        here. ``extra="forbid"`` means an unrecognized key now returns a 422, not a silent no-op --
+        the caller must still VERIFY the echoed settings for anything it cares landed (see
+        ``runner.autopilot._update_pass_bookkeeping``, which reads them back and reports loudly
+        when a field it wrote did not stick, rather than letting the cadence gate silently never
+        advance).
 
         Returns the endpoint's response (``{"quest_id": ..., "autopilot": {...}}``), or ``{}`` on
         failure. Never raises: a bookkeeping write failing must not break the pass that produced
