@@ -1408,7 +1408,9 @@ class _SlowRetrieval:
 def test_read_op_timeout_names_the_stalled_operation(monkeypatch):
     # WS1 fix: a single slow adapter member must not wedge the whole read step, and its timeout
     # must be a NAMED error (not an empty result indistinguishable from "nothing found"). The
-    # OTHER concurrent read in the same step must still succeed normally.
+    # OTHER concurrent read in the same step must still succeed normally. This adapter is slow on
+    # EVERY call, so the one retry (see the next two tests) also times out and the error still
+    # surfaces -- proving the retry doesn't just paper over a genuinely stuck read.
     monkeypatch.setenv("QAR_READ_OP_TIMEOUT_SECONDS", "0.05")
     retrieval = _SlowRetrieval(delay=0.3, files={"slow.md": "x", "fast.md": "fast content"})
     provider = StubProvider(decisions=[])
@@ -1421,8 +1423,60 @@ def test_read_op_timeout_names_the_stalled_operation(monkeypatch):
     assert slow_result["kind"] == "error"
     assert "slow.md" in slow_result["error"]
     assert "timed out" in slow_result["error"]
+    assert "retried once" in slow_result["error"]
     assert fast_result["kind"] == "read"
     assert fast_result["text"] == "fast content"
+
+
+class _FlakyOnceRetrieval:
+    """Slow on the FIRST call to ``flaky.md`` (past the per-op timeout), fast on every call after
+    -- the 2026-09-14 incident's actual shape: a transient stall (an index rebuild racing the turn
+    for disk/CPU), not a permanently broken read."""
+
+    def __init__(self, delay: float, files: Dict[str, str]):
+        import time as _t
+        self._time = _t
+        self.delay = delay
+        self.files = files
+        self.calls: Dict[str, int] = {}
+
+    def read_section(self, rel_path, *, start_line=None, end_line=None, heading=None, max_bytes=None):
+        from quest_ai_runner.core.adapters import Observation
+        n = self.calls[rel_path] = self.calls.get(rel_path, 0) + 1
+        if rel_path == "flaky.md" and n == 1:
+            self._time.sleep(self.delay)
+        if rel_path not in self.files:
+            return Observation(kind="error", rel_path=rel_path, error="not found")
+        return Observation(kind="read", rel_path=rel_path, locator="head", text=self.files[rel_path])
+
+    def grep(self, pattern, *, scope=None, max_hits=None):
+        from quest_ai_runner.core.adapters import Observation
+        return Observation(kind="grep", pattern=pattern, hits=[])
+
+    def query(self, spec):
+        from quest_ai_runner.core.adapters import Observation
+        return Observation(kind="error", error="query unsupported in stub")
+
+
+def test_a_read_that_times_out_once_succeeds_on_retry(monkeypatch):
+    """The 2026-09-14 fix: a read timing out once (contention, not a genuinely missing/stuck
+    file) must not turn into a permanent error the model has to hedge around -- it gets ONE
+    retry, and a transient stall that has already cleared by then just quietly succeeds."""
+    # Two specs: the multi-read ThreadPoolExecutor path is what carries the per-op timeout (and
+    # now the retry) at all -- a single-spec call bypasses timeout handling entirely.
+    monkeypatch.setenv("QAR_READ_OP_TIMEOUT_SECONDS", "0.05")
+    retrieval = _FlakyOnceRetrieval(
+        delay=0.3, files={"flaky.md": "the real content", "fast.md": "fast content"})
+    orch = _orch(StubProvider(decisions=[]), retrieval)
+
+    results = orch._do_reads([{"rel_path": "flaky.md"}, {"rel_path": "fast.md"}])
+
+    assert len(results) == 2
+    flaky_result, fast_result = results[0], results[1]
+    assert flaky_result["kind"] == "read"
+    assert flaky_result["text"] == "the real content"
+    assert retrieval.calls["flaky.md"] == 2, "the retry must have actually re-invoked the adapter"
+    assert fast_result["kind"] == "read" and fast_result["text"] == "fast content"
 
 
 def test_read_op_timeout_default_is_generous(monkeypatch):

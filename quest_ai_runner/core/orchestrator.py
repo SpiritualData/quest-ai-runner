@@ -4371,12 +4371,37 @@ class Orchestrator:
                     results[i] = fut.result(timeout=op_timeout)
                 except FuturesTimeoutError:
                     op_name = describe_read_spec(specs[i])
+                    # ONE retry before giving up: 2026-09-14's dissertation-brief incident showed a
+                    # single transient timeout (an index rebuild racing the turn for disk/CPU)
+                    # cascading into a run that reported "not reachable this run" for content it
+                    # never actually retried -- the model has no way to distinguish "genuinely
+                    # missing" from "the box was briefly loaded" from one named error alone. A local
+                    # read is idempotent and far cheaper to repeat than the `claude` subprocess
+                    # retries QAR_MAX_PARALLEL's own comment warns about (those pile on MORE
+                    # concurrent processes under load; this retries a plain file read on the same
+                    # pool), so the transient case now has a real chance to clear before the model
+                    # ever sees a failure. The abandoned first attempt's thread is left to finish on
+                    # its own, same as any other timed-out read here -- retrying never waits on it.
                     log.warning(
-                        "Read operation timed out: %s exceeded %.0fs "
+                        "Read operation timed out: %s exceeded %.0fs, retrying once "
                         "(QAR_READ_OP_TIMEOUT_SECONDS to adjust)", op_name, op_timeout)
-                    results[i] = Observation(
-                        kind="error",
-                        error=f"Operation '{op_name}' timed out after {op_timeout:.0f}s")
+                    try:
+                        retry_fut = pool.submit(
+                            self._exec_one_read, specs[i], guidance_selected_ids, card_context)
+                        results[i] = retry_fut.result(timeout=op_timeout)
+                        log.info("Read operation %s succeeded on retry", op_name)
+                    except FuturesTimeoutError:
+                        log.warning(
+                            "Read operation timed out again on retry: %s exceeded %.0fs twice "
+                            "(QAR_READ_OP_TIMEOUT_SECONDS to adjust)", op_name, op_timeout)
+                        results[i] = Observation(
+                            kind="error",
+                            error=f"Operation '{op_name}' timed out after {op_timeout:.0f}s "
+                                  f"(retried once, still timed out)")
+                    except Exception as e:  # noqa: BLE001
+                        log.warning(f"Read operation failed on retry: {type(e).__name__}: {e}",
+                                   exc_info=True)
+                        results[i] = Observation(kind="error", error=f"{type(e).__name__}: {e}")
                 except Exception as e:  # noqa: BLE001
                     log.warning(f"Read operation failed: {type(e).__name__}: {e}", exc_info=True)
                     results[i] = Observation(kind="error", error=f"{type(e).__name__}: {e}")
