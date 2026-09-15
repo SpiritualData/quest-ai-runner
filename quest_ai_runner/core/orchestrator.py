@@ -4378,8 +4378,9 @@ class Orchestrator:
                     # unlucky" from a single named error. CORRECTION, logged here rather than in a
                     # commit message that already shipped: the original commit attributed that
                     # read's stall to a context-index rebuild racing the task's claim. Adversarial
-                    # review of the actual timeline found the rebuild finished ~90s before the read
-                    # timeout fired, and the SAME process hit another context-assembly timeout plus
+                    # review of the actual timeline found the rebuild finished ~90s before the
+                    # context-assembly timeout and a full ~3 minutes before the read timeout
+                    # itself fired, and the SAME process hit another context-assembly timeout plus
                     # a guidance-selection timeout later that morning (08:07) with no rebuild
                     # anywhere nearby -- so this is a process that stalls repeatedly for a cause
                     # still unidentified, not a one-off race. What's actually verified: a local file
