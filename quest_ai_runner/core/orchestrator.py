@@ -4371,17 +4371,30 @@ class Orchestrator:
                     results[i] = fut.result(timeout=op_timeout)
                 except FuturesTimeoutError:
                     op_name = describe_read_spec(specs[i])
-                    # ONE retry before giving up: 2026-09-14's dissertation-brief incident showed a
-                    # single transient timeout (an index rebuild racing the turn for disk/CPU)
-                    # cascading into a run that reported "not reachable this run" for content it
-                    # never actually retried -- the model has no way to distinguish "genuinely
-                    # missing" from "the box was briefly loaded" from one named error alone. A local
-                    # read is idempotent and far cheaper to repeat than the `claude` subprocess
-                    # retries QAR_MAX_PARALLEL's own comment warns about (those pile on MORE
-                    # concurrent processes under load; this retries a plain file read on the same
-                    # pool), so the transient case now has a real chance to clear before the model
-                    # ever sees a failure. The abandoned first attempt's thread is left to finish on
-                    # its own, same as any other timed-out read here -- retrying never waits on it.
+                    # ONE retry before giving up. Motivating incident (2026-09-14, dissertation
+                    # brief): a run hit one context-assembly timeout and one read timeout, then
+                    # reported "not reachable this run" for content it never actually retried -- the
+                    # model has no way to distinguish "genuinely missing" from "this one attempt was
+                    # unlucky" from a single named error. CORRECTION, logged here rather than in a
+                    # commit message that already shipped: the original commit attributed that
+                    # read's stall to a context-index rebuild racing the task's claim. Adversarial
+                    # review of the actual timeline found the rebuild finished ~90s before the read
+                    # timeout fired, and the SAME process hit another context-assembly timeout plus
+                    # a guidance-selection timeout later that morning (08:07) with no rebuild
+                    # anywhere nearby -- so this is a process that stalls repeatedly for a cause
+                    # still unidentified, not a one-off race. What's actually verified: a local file
+                    # read stalling for 60s on Path.read_text of a small file is not explained by
+                    # disk speed, and is cheap and idempotent to retry regardless of the real cause
+                    # -- unlike the `claude` subprocess retries QAR_MAX_PARALLEL's own comment warns
+                    # about (those pile on MORE concurrent processes under load; this retries a plain
+                    # file read on the same pool). The retry below is a real mitigation for the
+                    # symptom that fired once in that incident; it does nothing for a context-
+                    # assembly timeout (the one that fired twice) and is not itself a diagnosis of
+                    # what blocks the thread. FOLLOW-UP NEEDED: find what actually holds a read
+                    # thread for 60s in this process, and decide whether context-assembly timeouts
+                    # deserve the same retry or a larger budget. The abandoned first attempt's thread
+                    # is left to finish on its own, same as any other timed-out read here --
+                    # retrying never waits on it.
                     log.warning(
                         "Read operation timed out: %s exceeded %.0fs, retrying once "
                         "(QAR_READ_OP_TIMEOUT_SECONDS to adjust)", op_name, op_timeout)
