@@ -168,6 +168,68 @@ SCENARIOS = [
                           "with message 'fix typo recieve -> receive'."),
             **_COMMON),
     ),
+    # CONTRAST PAIR 3: a QUESTION whose draft either answers it or substitutes an offer for the
+    # answer. The substitution failure is the most common real-world one and the cheapest to miss:
+    # the draft reads fluently, is on-topic, and still never answers. Wordings here deliberately
+    # avoid the prompt's own example phrasings (rule 1: no exemplar echo).
+    dict(
+        name="question answered with an offer instead of an answer",
+        want="redirect",
+        digest=build_digest(
+            user_message=("What does the term 'idempotent' actually mean, and how does it relate to "
+                          "the retry logic we already have?"),
+            step=2, plan_action="answer",
+            plan_goal="Reply about idempotency",
+            plan_rationale="the concept is well known",
+            operations=["[query] cards: retry policy -> 1 card"],
+            operations_total=1, tokens_in=2500, tokens_out=180,
+            elapsed_seconds=20, gathered_chars=3000, consecutive_reads=1,
+            draft_answer=("Idempotency is an important property for reliable systems, and it ties "
+                          "closely to how your retries behave. Want me to start tracking retry "
+                          "safety as a goal so we can keep an eye on it?"),
+            **_COMMON),
+    ),
+    dict(
+        name="same question, genuinely answered, with a brief offer only at the end",
+        want="proceed",
+        digest=build_digest(
+            user_message=("What does the term 'idempotent' actually mean, and how does it relate to "
+                          "the retry logic we already have?"),
+            step=2, plan_action="answer",
+            plan_goal="Explain idempotency and connect it to the retry policy",
+            plan_rationale="the concept plus the existing policy card answer it",
+            operations=["[query] cards: retry policy -> 1 card"],
+            operations_total=1, tokens_in=2500, tokens_out=400,
+            elapsed_seconds=22, gathered_chars=3000, consecutive_reads=1,
+            draft_answer=("An operation is idempotent when running it twice leaves the system in the "
+                          "same state as running it once, so a duplicate delivery is harmless. That "
+                          "is exactly what makes your retry policy safe: it retries on timeout, and "
+                          "a timeout cannot tell a lost request from a slow one, so the retry may "
+                          "duplicate a call that already succeeded. I can map which endpoints are "
+                          "not yet idempotent if that would help."),
+            **_COMMON),
+    ),
+    # The run has ALREADY failed this user once: the same miss a second time is not a proceed.
+    dict(
+        name="user said they were ignored; the new draft misses the same point again",
+        want="redirect",
+        digest=build_digest(
+            user_message=("I asked what the tradeoffs are, not how to configure it. What are the "
+                          "actual downsides of turning this on?"),
+            step=2, plan_action="answer",
+            plan_goal="Reply about the setting",
+            plan_rationale="the configuration steps are documented",
+            recent_conversation=[
+                "user: how does this setting affect latency and cost?",
+                "user: you did not answer my question, you just told me where the toggle is",
+            ],
+            operations=["[read] docs/settings.md -> configuration steps"],
+            operations_total=1, tokens_in=3000, tokens_out=220,
+            elapsed_seconds=25, gathered_chars=4000, consecutive_reads=1,
+            draft_answer=("You can enable it in docs/settings.md under the Advanced section; the "
+                          "toggle takes effect on the next restart."),
+            **_COMMON),
+    ),
     # CONTRAST PAIR 2: same wording, question vs instruction.
     dict(
         name="question that mentions an action verb, good explanatory draft",

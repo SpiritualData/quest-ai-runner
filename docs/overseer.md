@@ -16,13 +16,19 @@ points in a run, BOTH now non-blocking:
    polled at the **top of the next plan step**, before that step's planner runs, so a `redirect` can
    steer the plan we are about to make and `answer_now`/`escalate_deep`/`escalate_human` can end the
    loop. Applying the signal one step late is the deliberate tradeoff for never stalling the walk.
-2. **Hook B (answer checkpoint, non-blocking).** Once, with the draft answer included in the digest,
-   right before the answer is returned to the user. This is the *last* look, so unlike hook A there
-   is no later step to apply a correction one step late. It is still **non-blocking**: it submits,
-   does one quick non-blocking check (covers the rare already-resolved case), and if the consult has
-   not resolved yet, **ships the draft immediately** and hands the pending consult to a background
-   finisher rather than waiting on every single answer (see "Hook B's non-blocking design" below). A
-   fast-resolving consult still corrects the same answer before it ships, exactly as before.
+2. **Hook B (answer checkpoint, small bounded wait).** Once, with the draft answer included in the
+   digest, right before the answer is returned to the user. This is the *last* look, so unlike hook A
+   there is no later step to apply a correction one step late. It therefore waits its own
+   **`overseer_answer_checkpoint_timeout_seconds`** (default 2.5s) for the verdict, then gives up:
+   if the consult has not resolved by then it **ships the draft** and hands the pending consult to a
+   background finisher (see "Hook B's non-blocking design" below).
+
+   > **Why it is not fully non-blocking.** It was, briefly. Reusing hook A's `0.0` poll removed hook
+   > B's latency cost and, with it, its authority: no provider call resolves in zero seconds, so the
+   > draft always won the race and every verdict arrived too late to change the answer it was judging
+   > — a checkpoint that cannot stop anything. The bound is the compromise: a judge that answers in a
+   > beat corrects this turn, a slow one still cannot hang it. Set the timeout to `0.0` to restore
+   > the fully non-blocking behavior.
 
 A **cheap, non-LLM pre-filter gate** decides whether hook A submits at all (see "The hook-A gate"
 below): the overseer model is only woken when something cheap already suggests it is worth a look

@@ -1117,12 +1117,19 @@ class OrchestratorConfig:
     # consult; it always degrades to proceed (hook A) / ships the draft as-is (hook B) on timeout, so
     # it can never hang the run. Used mainly by tests to make the async apply deterministic.
     overseer_poll_timeout_seconds: float = 0.0
-    # Hook B (final answer checkpoint) used to WAIT synchronously up to a short bound before shipping
-    # the answer. It no longer does (Fix 11): it now does the SAME non-blocking check as hook A
-    # (``overseer_poll_timeout_seconds``) and, if the consult has not resolved yet, ships the draft
-    # immediately and hands the pending future to a BACKGROUND finisher instead of blocking every
-    # single answer. This bounds how long that background finisher will wait before giving up
-    # entirely (a late resolution past this point is simply dropped; nothing is waiting on it).
+    # Hook B (final answer checkpoint) is the LAST look before the draft reaches the user, so unlike
+    # hook A there is no later step to apply a correction one step late. Fix 11 made it fully
+    # non-blocking by reusing ``overseer_poll_timeout_seconds`` (0.0), which removed its latency cost
+    # but also removed its AUTHORITY: no provider call resolves in zero seconds, so in practice the
+    # draft always shipped first and the verdict landed in a background finisher that, by design,
+    # never touches the already-returned answer. A checkpoint that can never stop anything is not a
+    # checkpoint. Hook B therefore has its OWN small bounded wait: long enough for a quick judge to
+    # correct the same answer it is judging, short enough that a slow one still degrades to shipping
+    # the draft and finishing in the background. Hook A stays at 0.0 (never stall the walk).
+    # Set 0.0 to restore the fully non-blocking Fix-11 behavior.
+    overseer_answer_checkpoint_timeout_seconds: float = 2.5
+    # This bounds how long the BACKGROUND finisher will wait before giving up entirely (a late
+    # resolution past this point is simply dropped; nothing is waiting on it).
     overseer_background_finish_timeout_seconds: float = 30.0
     # CHEAP, NON-LLM PRE-FILTER GATE for hook A (Fix 12): submitting a consult to the expensive
     # overseer model on a blind fixed cadence wastes calls on runs that are obviously fine. Hook A
@@ -8896,14 +8903,16 @@ class Orchestrator:
         # real execution), escalate_human (a genuine human-only fork), or redirect (regenerate the
         # answer once with a one-line steering hint). proceed / answer_now accept the draft. Counted
         # against the same per-run cap as hook A. Wrapped so it can never break the turn (any failure
-        # degrades to accepting the draft). Off by default. Not gated by the Fix-12 cadence heuristic
+        # degrades to accepting the draft). ON by default. Not gated by the Fix-12 cadence heuristic
         # (``gate=False``): this is a one-time final check, not a cadence, so it always consults.
         #
-        # DESIGN NOTE (Fix 11, hook B non-blocking): hook B used to WAIT synchronously (up to a short
-        # bound) before shipping the answer, on EVERY turn -- real added latency even when nothing
-        # was wrong. It is now NON-BLOCKING like hook A: submit, do one quick non-blocking check
-        # (covers the rare already-resolved case), and if it has not resolved yet, SHIP THE DRAFT NOW
-        # and hand the pending consult to ``_finish_oversee_in_background`` instead of blocking. That
+        # DESIGN NOTE (hook B's bounded wait): hook B originally WAITED synchronously before shipping;
+        # Fix 11 made it fully non-blocking (reusing hook A's 0.0 poll), which cost it its authority
+        # -- no provider call resolves in zero seconds, so the draft always won the race and the
+        # verdict landed too late to change it. It now waits its OWN small bounded
+        # ``overseer_answer_checkpoint_timeout_seconds`` (0.0 restores the Fix-11 behavior): a quick
+        # judge corrects the same answer it is judging, and a slow one still SHIPS THE DRAFT NOW
+        # and hands the pending consult to ``_finish_oversee_in_background`` instead of blocking. That
         # background finisher raises a REAL decision-request for a late ``escalate_human`` (durable,
         # reaches the human regardless of the stream) and records a late ``EVENT_OVERSEER`` for
         # ``redirect``/``escalate_deep`` (best-effort telemetry for a consumer to fold into next
@@ -8929,7 +8938,7 @@ class Orchestrator:
                     overseer_submitted += 1
                     _collected = self._collect_oversee(
                         _bpending, signals=overseer_signals, emit=emit,
-                        timeout=cfg.overseer_poll_timeout_seconds)
+                        timeout=cfg.overseer_answer_checkpoint_timeout_seconds)
                     if _collected is not None:
                         _bsig = _collected
                     else:

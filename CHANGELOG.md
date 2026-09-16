@@ -7,6 +7,26 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- **The overseer's answer checkpoint (hook B) can stop a bad answer again.** New
+  `overseer_answer_checkpoint_timeout_seconds` (default `2.5`), used by hook B in place of hook A's
+  `overseer_poll_timeout_seconds` (which stays `0.0`, never stalling the plan loop). Making hook B
+  fully non-blocking had quietly removed its authority: no provider call resolves in zero seconds, so
+  the draft always won the race and the verdict landed in a background finisher that by design never
+  touches an already-returned answer. A last look that cannot stop anything is not a checkpoint. A
+  slow judge still ships the draft and finishes in the background; set the timeout to `0.0` to
+  restore the previous behavior. Covered by
+  `test_hook_b_now_catches_a_judge_that_is_merely_slow_not_instant`, which shows the same turn
+  ending in `confirm` with the bound and `answer` without it.
+- **The overseer now checks that a draft actually answered the question** (`OVERSEER_PROMPT`). Two
+  concrete failure shapes, both a `redirect`: a draft that substitutes an OFFER for the answer (a
+  little generality, then a proposal to create or track something), and a draft that answers an
+  adjacent question instead of the one asked. Plus: when recent conversation shows the user already
+  correcting the assistant ("you did not answer my question"), a second miss on the same point is a
+  redirect rather than a proceed. These are comparisons rather than open-ended judgment, so a
+  flash-class judge can make them: `evaluation/overseer_signals_eval.py` scores 14/14 on
+  `gemini-3.5-flash`, including a contrast pair that must NOT redirect when the question was
+  genuinely answered and an offer merely follows it.
+
 - **The minimal-intervention overseer is now ON by default** (`OrchestratorConfig.overseer`,
   `False` -> `True`). A run nobody is watching is the failure mode the overseer exists to prevent,
   so opting in was the wrong default: a consumer that never set the flag silently got no safety net

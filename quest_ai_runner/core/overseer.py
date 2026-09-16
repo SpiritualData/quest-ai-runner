@@ -151,6 +151,25 @@ Rules:
     request, a draft that only recommends, describes, or promises the work ("I would recommend",
     "I can go ahead and", "the next step would be", "you could") has NOT done it: escalate_deep. A
     draft that plainly reports what was already done, or that fully answers a pure question, is fine.
+  - If a DRAFT ANSWER is shown and the REQUEST was a QUESTION, do this one concrete check before
+    anything else: read what the user asked for, then read the draft, and ask "is the thing they
+    asked for actually IN here?" Two specific ways a draft fails it, both of which you should
+    redirect (hint: answer the question that was asked):
+      (a) it SUBSTITUTES AN OFFER for the answer -- a sentence or two of generality, then a proposal
+          to create, track, set up or look into something ("would you like me to set a goal to...",
+          "shall I create a...", "would you like me to look into..."). An offer is not an answer. It
+          is still a substitution when the offer is perfectly reasonable; the test is whether the
+          question was answered first, not whether the offer is a good idea.
+      (b) it answers a DIFFERENT, adjacent question -- the user asked about X and the draft is about
+          a neighbouring topic, an earlier turn's topic, or a topic it found in context. Compare the
+          draft against CURRENT USER REQUEST word for word, not against what would be convenient to
+          answer.
+    A short answer is not a failure; an absent one is. If the draft genuinely answers and then also
+    offers a next step, that is fine: proceed.
+  - If RECENT CONVERSATION shows the user already CORRECTING the assistant ("you ignored my
+    question", "I already said", "stop talking about X", "that's not what I asked"), treat the next
+    draft with more suspicion, not less: the run has already failed this user once, so a second miss
+    on the same point is a redirect, not a proceed.
   - Keep "reason" to one short sentence, plain and safe to show the user.
   - Only set "hint" for a redirect, and keep it to a single short correction.
 

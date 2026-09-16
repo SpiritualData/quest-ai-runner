@@ -683,30 +683,97 @@ def test_submit_oversee_is_non_blocking_and_late_signal_applies_on_next_poll():
 
 
 # ---------------------------------------------------------------------------
-# Fix 11: hook B is ALSO non-blocking. A slow overseer consult must NOT make the answer wait; the
-# run ships the draft promptly, and a late escalate_human is finished in the background (raising a
-# real decision-request via the escalation sink).
+# Hook B waits a SMALL BOUNDED amount and no more. Fix 11 made it fully non-blocking, which removed
+# its authority (no provider call resolves in 0.0s, so the draft always won the race). It now waits
+# ``overseer_answer_checkpoint_timeout_seconds``: long enough for a quick judge to correct the same
+# answer it is judging, short enough that a slow one still ships the draft and finishes in the
+# background (raising a real decision-request via the escalation sink for a late escalate_human).
 # ---------------------------------------------------------------------------
 
-def test_hook_b_ships_answer_without_waiting_for_slow_overseer():
+def test_hook_b_ships_answer_when_the_overseer_is_slower_than_its_bound():
     provider = _BlockingOverseerProvider(signal="proceed")
     escalation = StubEscalation()
     orch = _orch(
         provider, StubRetrieval(), escalation=escalation,
         config=OrchestratorConfig(
             overseer=True, answer_goal_max_iterations=1,
-            # Defaults: overseer_poll_timeout_seconds=0.0 (non-blocking quick check for hook B too).
+            overseer_answer_checkpoint_timeout_seconds=0.25,   # the bound under test
             overseer_background_finish_timeout_seconds=5.0,
         ),
     )
     t0 = time.monotonic()
     res = orch.run("explain X", sink=_CaptureSink())
     elapsed = time.monotonic() - t0
-    # The run must complete promptly (well under the 5s the overseer provider is blocked for),
-    # proving hook B did NOT wait for the slow consult.
+    # It waits its bound, then gives up and ships: nowhere near the 5s the provider is blocked for.
     assert elapsed < 2.0
     assert res.kind == "answer"
     provider.release.set()  # let the background thread's provider call finish; avoid leaking
+
+
+def test_hook_b_zero_timeout_restores_the_fully_non_blocking_behavior():
+    """The Fix-11 behavior is still one config away for a consumer that wants zero added latency."""
+    provider = _BlockingOverseerProvider(signal="proceed")
+    orch = _orch(
+        provider, StubRetrieval(), escalation=StubEscalation(),
+        config=OrchestratorConfig(
+            overseer=True, answer_goal_max_iterations=1,
+            overseer_answer_checkpoint_timeout_seconds=0.0,
+            overseer_background_finish_timeout_seconds=5.0,
+        ),
+    )
+    t0 = time.monotonic()
+    res = orch.run("explain X", sink=_CaptureSink())
+    elapsed = time.monotonic() - t0
+    assert elapsed < 1.0          # did not wait at all
+    assert res.kind == "answer"
+    provider.release.set()
+
+
+def test_hook_b_now_catches_a_judge_that_is_merely_slow_not_instant():
+    """The regression this bound exists for.
+
+    A real judge answers in a beat, not instantly. Under the 0.0 poll that beat was enough for the
+    draft to win the race every time, so hook B could never change an answer in production even
+    though it "always consults". With its own bound, a judge that takes a fraction of a second still
+    corrects the SAME answer it is judging.
+    """
+    class _SlowButNotBlocked(StubProvider):
+        def __init__(self, delay: float):
+            super().__init__(decisions=[{"action": "answer", "rationale": "drafted"}])
+            self._delay = delay
+            self.overseer_calls = 0
+
+        def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any]) -> Dict[str, Any]:
+            if _OVERSEER_MARK in prompt and "minimal-intervention" in prompt.lower():
+                self.overseer_calls += 1
+                time.sleep(self._delay)          # the beat a real model takes
+                return {"signal": "escalate_human", "reason": "only you can decide this"}
+            return super().plan(prompt, model=model, tool_schema=tool_schema)
+
+    def run_with(timeout: float):
+        provider = _SlowButNotBlocked(delay=0.15)
+        escalation = StubEscalation(decision_id="dec_bounded")
+        orch = _orch(
+            provider, StubRetrieval(), escalation=escalation,
+            config=OrchestratorConfig(
+                overseer=True, answer_goal_max_iterations=1,
+                overseer_answer_checkpoint_timeout_seconds=timeout,
+                overseer_background_finish_timeout_seconds=5.0,
+            ),
+        )
+        res = orch.run("should I close the account?", sink=_CaptureSink())
+        return provider, escalation, res
+
+    # Zero bound (the old behavior): the consult still happens, but too late to change this turn.
+    provider_old, escalation_old, res_old = run_with(0.0)
+    assert provider_old.overseer_calls == 1
+    assert res_old.kind == "answer"          # the draft shipped regardless of the verdict
+
+    # A bound larger than the judge's beat: the SAME turn is now steered by the verdict.
+    provider_new, escalation_new, res_new = run_with(2.0)
+    assert provider_new.overseer_calls == 1
+    assert res_new.kind == "confirm", "hook B's escalate_human must reach this turn, not the next"
+
 
 
 def test_hook_b_background_finish_raises_decision_for_late_escalate_human():
