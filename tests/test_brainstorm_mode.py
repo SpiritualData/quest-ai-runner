@@ -28,8 +28,14 @@ from .conftest import StubDeepRunner, StubEscalation, StubProvider, StubRetrieva
 
 
 def _orch(provider, retrieval, **kw):
+    # The overseer is ON by default in the library. These tests script an exact decision queue on a
+    # single StubProvider, so leaving it on would let its consults draw from that queue and starve
+    # the decisions the test is actually asserting on. test_overseer.py uses a splitting stub for
+    # exactly this reason; here we pin it off so brainstorm behavior is what is under test.
+    cfg = kw.pop("config", None) or OrchestratorConfig()
+    cfg.overseer = False
     return Orchestrator(retrieval=retrieval, provider=provider,
-                        registry=ModelRegistry(provider), **kw)
+                        registry=ModelRegistry(provider), config=cfg, **kw)
 
 
 class ReleaseJudgeProvider(StubProvider):

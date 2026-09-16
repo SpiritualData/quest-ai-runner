@@ -241,8 +241,8 @@ import shutil
 
 from .adapters import AnthropicProvider, ClaudeCliProvider, ClaudeConversationsAdapter, CompositeRetrievalAdapter, FilesAdapter, GeminiProvider, OpenAIProvider, WebSearchAdapter
 from .adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
-from .config import (RunnerConfig, apply_config_environment, apply_file_defaults,
-                     resolve_config_objects)
+from .config import (ConfigFileError, RunnerConfig, apply_config_environment, apply_file_defaults,
+                     load_quest_client, parse_decision_assignees, resolve_config_objects)
 from .core.adapters import ModelProvider
 from .pricing import estimate_bootstrap_cost, get_provider_and_model
 from .runner.channel_runner import ChannelRunner
@@ -449,6 +449,10 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
         # fallback assignee). Documented since custom_consumer.py/.env.example but never actually
         # wired into the stock CLI's env reading until now.
         default_assignee_user_id=os.getenv("QAR_DECISION_ASSIGNEE") or None,
+        # Named routing roles, e.g. QAR_DECISION_ASSIGNEES='{"owner":"user_a","operator":"user_b"}'
+        # — what lets a caller say create_decision(..., assignee="operator") instead of carrying
+        # the deployment's routing policy into every call site.
+        decision_assignees=parse_decision_assignees(os.getenv("QAR_DECISION_ASSIGNEES")),
     )
     if os.getenv("QAR_MAX_PARALLEL"):
         cfg.orchestrator.max_parallel = int(os.environ["QAR_MAX_PARALLEL"])
@@ -596,7 +600,7 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     elif _acu in ("1", "true", "on", "yes"):
         cfg.orchestrator.async_card_update = True
     # --- Minimal-intervention overseer (the simulated-conscious judge) -------------------------
-    # QAR_OVERSEER=1/true enables it (library default: off). A high-quality model reads a tiny
+    # QAR_OVERSEER=0/false disables it (library default: ON). A high-quality model reads a tiny
     # capped digest of the run and almost always stays silent; occasionally it sends ONE signal
     # (redirect / answer_now / escalate_deep / escalate_human). Consults are non-blocking (a
     # background thread polled without waiting), pre-filtered by a free heuristic gate, and capped
@@ -773,6 +777,125 @@ def _check_chat_prerequisites(env=None, which=shutil.which) -> List[str]:
     return problems
 
 
+# A corpus at or above this many indexable files gets a first-run confirmation: big enough that
+# the user probably wants to know before it runs, small enough that ordinary project roots do not
+# trip it.
+_LARGE_CORPUS_FILES = 5000
+
+
+def _count_indexable_files(corpus: str) -> int:
+    """How many files one bootstrap of ``corpus`` would index, using the real walk rules."""
+    from pathlib import Path as _Path
+    from .adapters._walk import effective_skip_dirs, prune_dirnames
+    from .adapters.file_context_store import _SOURCE_EXTS
+    root = _Path(corpus).resolve()
+    skip = effective_skip_dirs(root)
+    total = 0
+    for dirpath, dirnames, filenames in os.walk(root):
+        prune_dirnames(dirnames, current=_Path(dirpath), base_skip=skip)
+        for fn in filenames:
+            if _Path(fn).suffix.lower() in _SOURCE_EXTS:
+                total += 1
+    return total
+
+
+# Method-name prefixes that only READ from Quest. Everything else needs an explicit --write, so a
+# typo or an over-eager agent cannot delete a goal while "just checking" one. A prefix rule rather
+# than a hand-kept allowlist: QuestClient grows read methods regularly, and a list that drifts
+# would start refusing perfectly safe lookups (the failure that sends people back to ad-hoc
+# scripts). Write methods are the smaller, more deliberate set.
+_QUEST_READ_PREFIXES = ("get_", "list_", "is_", "search_", "discover_", "owning_", "goals_from_")
+_QUEST_READ_EXACT = frozenset({"whoami", "assignee_id"})
+
+
+def _quest_method_is_read_only(name: str) -> bool:
+    return name in _QUEST_READ_EXACT or name.startswith(_QUEST_READ_PREFIXES)
+
+
+def _quest_callable_methods() -> List[str]:
+    from .runner.quest_client import QuestClient
+
+    return sorted(n for n in dir(QuestClient)
+                  if not n.startswith("_") and callable(getattr(QuestClient, n, None)))
+
+
+def _parse_kw(pairs: List[str]) -> Dict[str, Any]:
+    """``NAME=VALUE`` pairs into kwargs, VALUE as JSON when it parses as JSON, else a string.
+
+    So ``--kw status=queued`` passes the string and ``--kw limit=5`` / ``--kw fields='{"a":1}'``
+    pass an int and a dict, with no per-argument type table to keep in sync with the client.
+    """
+    out: Dict[str, Any] = {}
+    for pair in pairs:
+        name, sep, raw = pair.partition("=")
+        if not sep:
+            raise ValueError(f"--kw {pair!r} is not NAME=VALUE")
+        try:
+            out[name.strip()] = json.loads(raw)
+        except ValueError:
+            out[name.strip()] = raw
+    return out
+
+
+def _run_quest_command(args) -> int:
+    """``quest-ai-runner quest <method> [args] [--kw k=v]`` — the Quest API from a shell.
+
+    The zero-Python path for the lookups that used to be written as throwaway scripts (what is
+    this task's status, what is this quest's autopilot config, what notes does this goal have).
+    Dispatching by method name rather than adding a subcommand per endpoint keeps this in step
+    with QuestClient for free: a method added there is callable here the day it lands.
+    """
+    from .runner.quest_client import QuestApiError, QuestNotConfigured
+
+    if args.list_methods:
+        for name in _quest_callable_methods():
+            print(f"{'read ' if _quest_method_is_read_only(name) else 'WRITE'}  {name}")
+        return 0
+    if not args.method:
+        print("usage: quest-ai-runner quest <method> [args...] [--kw NAME=VALUE]\n"
+              "       quest-ai-runner quest --list", file=sys.stderr)
+        return 2
+
+    method_name = args.method
+    if not _quest_method_is_read_only(method_name) and not args.write:
+        print(f"{method_name!r} can modify Quest; pass --write to allow it "
+              f"(`quest-ai-runner quest --list` marks which methods write).", file=sys.stderr)
+        return 2
+
+    try:
+        kwargs = _parse_kw(args.kw)
+    except ValueError as e:
+        print(str(e), file=sys.stderr)
+        return 2
+
+    try:
+        # The lightweight client path, not _config_from_env: a lookup must not pay for building a
+        # model provider and a context store, nor require their optional dependencies.
+        client = load_quest_client(getattr(args, "config", None))
+    except (QuestNotConfigured, ConfigFileError) as e:
+        print(str(e), file=sys.stderr)
+        return 1
+
+    method = getattr(client, method_name, None)
+    if method is None or method_name.startswith("_") or not callable(method):
+        print(f"no such QuestClient method {method_name!r}; "
+              f"try `quest-ai-runner quest --list`", file=sys.stderr)
+        return 2
+
+    try:
+        result = method(*args.args, **kwargs)
+    except TypeError as e:  # wrong arity/keyword — the method's own signature is the help text
+        import inspect
+        print(f"{method_name}{inspect.signature(method)}\n{e}", file=sys.stderr)
+        return 2
+    except (QuestApiError, QuestNotConfigured) as e:
+        print(str(e), file=sys.stderr)
+        return 1
+
+    print(json.dumps(result, indent=None if args.compact else 2, default=str))
+    return 0
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(prog="quest-ai-runner",
                                      description="Poll Quest for due AI tasks and execute them.")
@@ -800,6 +923,28 @@ def main(argv=None) -> int:
     chat_p.add_argument("--check", action="store_true",
                         help="validate chat prerequisites (model provider, context store) and exit, "
                              "without opening the terminal UI")
+
+    # --- quest subcommand: call the Quest API from the shell -------------------
+    quest_p = sub.add_parser(
+        "quest", help="call a QuestClient method and print the JSON result",
+        description="Call any QuestClient method by name against the configured Quest account "
+                    "and print the result as JSON. Read-only methods (whoami/get_*/list_*/...) "
+                    "run as-is; anything that writes needs --write.")
+    quest_p.add_argument("method", nargs="?", default=None,
+                         help="QuestClient method name, e.g. whoami, get_task, list_my_quests")
+    quest_p.add_argument("args", nargs="*", default=[],
+                         help="positional arguments for the method (strings)")
+    quest_p.add_argument("--kw", action="append", default=[], metavar="NAME=VALUE",
+                         help="keyword argument; VALUE is parsed as JSON when it looks like JSON, "
+                              "otherwise passed as a string (repeatable)")
+    quest_p.add_argument("--write", action="store_true",
+                         help="allow a method that modifies Quest (required for those)")
+    quest_p.add_argument("--list", action="store_true", dest="list_methods",
+                         help="list the callable methods and exit")
+    quest_p.add_argument("--config", default=None, metavar="PATH",
+                         help="TOML config file (QAR_CONFIG_FILE also works)")
+    quest_p.add_argument("--compact", action="store_true",
+                         help="one-line JSON instead of indented")
 
     # --- send subcommand: enqueue a new AI task -------------------------------
     send_p = sub.add_parser("send", help="enqueue a new AI task and print its id")
@@ -843,6 +988,12 @@ def main(argv=None) -> int:
                         help="delete all existing cards and bootstrap from scratch (forces re-index when algorithm changes)")
     boot_p.add_argument("--dry-run", action="store_true",
                         help="estimate tokens, cost, and time without running bootstrap")
+    boot_p.add_argument("--yes", "-y", action="store_true",
+                        help="skip the first-run confirmation for a large corpus")
+    boot_p.add_argument("--prune-only", action="store_true",
+                        help="remove cards the corpus no longer indexes (deleted files, files now "
+                             "inside a skipped directory, and cards that only restate their own "
+                             "path) and stop — no model calls, nothing re-analysed")
 
     # --- paste-context subcommand: save context to a card -----------------------
     paste_p = sub.add_parser("paste-context", help="save context to a context card (from args or stdin)")
@@ -1013,6 +1164,10 @@ def main(argv=None) -> int:
                                   verbosity=args.verbose, rep_specified=rep_specified,
                                   persona_specified=persona_specified)
         return 0
+
+    # --- quest ----------------------------------------------------------------
+    if args.command == "quest":
+        return _run_quest_command(args)
 
     # --- send -----------------------------------------------------------------
     if args.command == "send":
@@ -1356,14 +1511,67 @@ def main(argv=None) -> int:
 
         import time
 
+        # Prune-only: clean a store WITHOUT paying to re-analyse it. A store can accumulate dead
+        # weight faster than anyone wants to re-index a large corpus (a skip list grows, a vendored
+        # SDK lands, files are deleted), and making the cleanup conditional on a full bootstrap
+        # means it never happens on exactly the corpora where it matters most.
+        if args.prune_only:
+            store = FileContextStore(cards_dir, repo_root=corpus)
+            before = len(store._repo.load_all() or {})
+            removed, healed = store.prune_only(root=corpus)
+            after = len(store._repo.load_all() or {})
+            print()
+            print("Prune Complete")
+            print("=" * 50)
+            print(f"Corpus: {corpus}")
+            print(f"Cards before:     {before}")
+            print(f"Cards after:      {after}")
+            print(f"Removed:          {removed}")
+            print(f"Summaries healed: {healed}")
+            print()
+            return 0
+
+        # FIRST-RUN CONFIRMATION. Indexing is the one operation here whose cost scales with
+        # something the user may never have looked at: how many files sit under the root they
+        # pointed at. This used to be "handled" by a hardcoded 10,000-file ceiling applied
+        # SILENTLY, so a larger corpus was indexed in part and reported as done. Truncating
+        # without saying so is the worst of the options; the honest ones are to index everything
+        # or to ask. This asks -- once, and only when there is a person there to answer.
+        meta_path = os.path.join(cards_dir, "bootstrap_meta.json")
+        if (not os.path.exists(meta_path)) and not args.yes:
+            n_files = _count_indexable_files(corpus)
+            if n_files >= _LARGE_CORPUS_FILES:
+                est_min = max(1, round(n_files / 2500))
+                print()
+                print(f"First bootstrap of {corpus}")
+                print(f"  {n_files:,} indexable files - roughly {est_min} minute(s) of model calls.")
+                print("  Every file under this root is indexed. Narrow --corpus, or set")
+                print("  QAR_BOOTSTRAP_MAX_FILES, if that is more than you meant.")
+                if not sys.stdin.isatty():
+                    # Nobody to ask: proceed, but never silently - the scale is the whole point.
+                    log.warning("non-interactive: proceeding to index all %d file(s)", n_files)
+                else:
+                    try:
+                        reply = input("  Proceed? [y/N] ").strip().lower()
+                    except (EOFError, KeyboardInterrupt):
+                        reply = ""
+                    if reply not in ("y", "yes"):
+                        print("  Aborted. Nothing was indexed.")
+                        return 0
+
         provider = _model_provider_from_env()
         store = FileContextStore(cards_dir, repo_root=corpus)
         log.info("bootstrapping context store for %s", corpus)
 
-        # Resolve a model from the provider
+        # Resolve a model from the provider. QAR_MODEL_* is honoured HERE too, not only in
+        # _config_from_env: bootstrap is the most expensive command in the tool, so the tier knob
+        # silently doing nothing for it meant the one dial that controls that cost was inert.
+        # QAR_BOOTSTRAP_TIER picks which tier to use at all (topic extraction is bulk
+        # classification, so a deployment may reasonably run it on "fast").
         from .core.model_registry import ModelRegistry
         registry = ModelRegistry(provider)
-        model = registry.resolve_tier("balanced")
+        tier = os.getenv("QAR_BOOTSTRAP_TIER", "balanced").strip() or "balanced"
+        model = os.getenv(f"QAR_MODEL_{tier.upper()}") or registry.resolve_tier(tier)
 
         start_time = time.time()
         n = store.bootstrap(root=corpus, provider=provider, model=model)
@@ -1375,7 +1583,7 @@ def main(argv=None) -> int:
         corpus_abs = str(Path(corpus).resolve())
         tokens_in = getattr(provider, "tokens_in", 0)
         tokens_out = getattr(provider, "tokens_out", 0)
-        cost, prov, model = estimate_bootstrap_cost(tokens_in)
+        cost, prov, _estimator_model = estimate_bootstrap_cost(tokens_in)
 
         print()
         print("Bootstrap Complete")
@@ -1383,16 +1591,30 @@ def main(argv=None) -> int:
         print(f"Corpus: {corpus_abs}")
         print(f"Cards created: {n}")
         print()
+        # MEASURED usage first, and the token classes split out, because they bill at very
+        # different rates and a single "input" total cannot be turned back into a cost. The
+        # modelled estimate is still printed, clearly labelled, since not every provider reports
+        # usage -- but where a real number exists it is the one that leads.
+        measured = getattr(provider, "cost_usd", 0.0) or 0.0
+        calls = getattr(provider, "call_count", 0) or 0
         if tokens_in > 0:
-            print("Tokens used:")
-            print(f"  Input: {tokens_in:,}")
-            print(f"  Output: {tokens_out:,}")
+            print("Tokens used (measured):")
+            print(f"  Fresh input:    {getattr(provider, 'fresh_input_tokens', 0):,}")
+            print(f"  Cache creation: {getattr(provider, 'cache_creation_tokens', 0):,}")
+            print(f"  Cache read:     {getattr(provider, 'cache_read_tokens', 0):,}")
+            print(f"  Output:         {tokens_out:,}")
             print()
         print(f"Provider: {prov}")
+        # The model that ACTUALLY ran, not the one the cost estimator assumed. Printing the
+        # estimator's guess here made a --tier override look like it had been ignored.
         print(f"Model: {model}")
+        print(f"Tier: {tier}")
         print()
-        if tokens_in > 0:
-            print(f"Cost: ${cost:.4f}")
+        if measured > 0:
+            print(f"Cost (measured, reported by the provider): ${measured:.4f}"
+                  f"{f' over {calls:,} call(s)' if calls else ''}")
+        elif tokens_in > 0:
+            print(f"Cost (modelled estimate, provider reported none): ${cost:.4f}")
         print(f"Time: {elapsed_time:.0f}s (~{int(elapsed_time // 60)}m)")
         print()
 

@@ -158,7 +158,7 @@ def test_env_wiring_for_overseer_and_verify_tier(monkeypatch):
                 "QAR_VERIFY_TIER"):
         monkeypatch.delenv(var, raising=False)
     cfg = _config_from_env()
-    assert cfg.orchestrator.overseer is False          # library default: off
+    assert cfg.orchestrator.overseer is True           # library default: ON (the run's safety net)
     assert cfg.orchestrator.verify_tier == "best"      # library default: strong judge
 
     monkeypatch.setenv("QAR_OVERSEER", "true")

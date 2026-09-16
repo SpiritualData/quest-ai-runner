@@ -206,3 +206,81 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+# --- bootstrap fan-out is a memory budget, not just a speed knob -------------------------------
+
+
+def test_bootstrap_workers_follows_the_deployment_parallelism_budget(monkeypatch):
+    from quest_ai_runner.adapters.file_context_store import (
+        _BOOTSTRAP_WORKERS_DEFAULT, _bootstrap_workers,
+    )
+
+    # Each worker holds one model call open, and for the subprocess-backed (keyless) provider that
+    # is a child PROCESS. A deployment that has declared how many concurrent model calls its box
+    # fits has declared it about this fan-out too; ignoring it is how a bounded indexing pass
+    # becomes an OOM kill mid-run.
+    monkeypatch.delenv("QAR_BOOTSTRAP_WORKERS", raising=False)
+    monkeypatch.setenv("QAR_MAX_PARALLEL", "3")
+    assert _bootstrap_workers() == 3
+
+    # A stage-specific override still wins, for a deployment that wants the two to differ.
+    monkeypatch.setenv("QAR_BOOTSTRAP_WORKERS", "2")
+    assert _bootstrap_workers() == 2
+
+    # Unset -> the historical default; a garbage value is ignored rather than crashing indexing.
+    monkeypatch.delenv("QAR_BOOTSTRAP_WORKERS", raising=False)
+    monkeypatch.delenv("QAR_MAX_PARALLEL", raising=False)
+    assert _bootstrap_workers() == _BOOTSTRAP_WORKERS_DEFAULT
+    monkeypatch.setenv("QAR_MAX_PARALLEL", "not-a-number")
+    assert _bootstrap_workers() == _BOOTSTRAP_WORKERS_DEFAULT
+
+    # Never zero: a 0 would deadlock the semaphore rather than "disable" the stage.
+    monkeypatch.setenv("QAR_MAX_PARALLEL", "0")
+    assert _bootstrap_workers() == 1
+
+
+# --- card extractors must cost the same on a 1KB file and a 1GB one ---------------------------
+
+
+def test_head_extractors_read_a_prefix_not_the_whole_file(tmp_path):
+    from quest_ai_runner.adapters.file_context_store import (
+        _extract_leading_comment, _extract_text_description, _read_head,
+    )
+
+    # A corpus root can legitimately contain data dumps no name-based ignore rule excludes. These
+    # two extractors only ever inspect the TOP of a file, so their cost must not scale with its
+    # size: reading one 762MB .json whole cost 6.9GB resident and OOM-killed the runner mid-task.
+    marker = "MARKER_BEYOND_THE_CAP"
+    big = tmp_path / "dump.json"
+    big.write_text("// leading comment line\n" + ("x" * 64 + "\n") * 40_000 + marker + "\n")
+    assert big.stat().st_size > 2_000_000
+
+    # The prefix reader never returns more than it was asked for, whatever the file size.
+    assert len(_read_head(big, 8 * 1024)) <= 8 * 1024
+
+    # And nothing past the cap can reach the card, which is the observable proof it was not read.
+    assert marker not in _extract_leading_comment(big)
+    assert marker not in _extract_text_description(big)
+
+    # A missing/unreadable path is still "" rather than an exception.
+    assert _read_head(tmp_path / "nope.json", 1024) == ""
+
+
+def test_ast_extractors_skip_a_file_too_big_to_card(tmp_path):
+    from quest_ai_runner.adapters.file_context_store import (
+        _BOOTSTRAP_MAX_BYTES, _extract_symbols, _read_whole_if_small,
+    )
+
+    small = tmp_path / "small.py"
+    small.write_text("def alpha():\n    pass\n\nclass Beta:\n    pass\n")
+    assert "alpha" in _extract_symbols(small)
+    assert _read_whole_if_small(small)
+
+    # The AST path needs a complete source text, so oversize is SKIPPED rather than truncated --
+    # a truncated module is a SyntaxError, not a smaller card. Same limit the snippet path uses.
+    huge = tmp_path / "huge.py"
+    huge.write_text("def gamma():\n    pass\n" + "# pad\n" * (_BOOTSTRAP_MAX_BYTES // 6))
+    assert huge.stat().st_size > _BOOTSTRAP_MAX_BYTES
+    assert _read_whole_if_small(huge) == ""
+    assert _extract_symbols(huge) == []

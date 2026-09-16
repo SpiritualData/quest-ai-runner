@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **The minimal-intervention overseer is now ON by default** (`OrchestratorConfig.overseer`,
+  `False` -> `True`). A run nobody is watching is the failure mode the overseer exists to prevent,
+  so opting in was the wrong default: a consumer that never set the flag silently got no safety net
+  at all. Opting out is still one field (`overseer=False`, or `QAR_OVERSEER=0/false/off/no` for the
+  CLI consumers), and when off the run is byte-for-byte identical as before (zero overseer calls,
+  no events, no threads).
+
+  **Cost of the new default: one extra model call on a simple turn**, pinned by
+  `tests/test_turn_call_budget.py::test_the_on_by_default_overseer_costs_exactly_one_extra_call_on_a_simple_turn`.
+  Only hook B (the answer checkpoint, which always consults) fires on a one-step answer; hook A (the
+  in-loop watch) stays gated behind its free non-LLM pre-filter (consecutive reads, a repeated plan,
+  or budget pressure) and only spends calls on runs that actually drift, capped at
+  `overseer_max_signals`.
+
+  Tests that assert exact provider-call counts now pin `overseer=False` explicitly, so they keep
+  measuring the planner loop rather than the loop plus its watcher
+  (`test_orchestrator.py`, `test_brainstorm_mode.py`, `test_card_thread.py`,
+  `test_turn_call_budget.py`); the overseer's own behavior is covered by `test_overseer.py`.
+
 ### Added
 - **A generic inbound-mail context source, plus an admission judge any source can use**
   (`adapters/inbound_mail.py`, `runner/context_updates.py`, `runner/quest_client.py`,

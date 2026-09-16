@@ -15,7 +15,10 @@ So: one standard file, ``GOALS.md``, and real two-way sync.
 
 THE FILE. One managed block, the same HTML-comment markers the rest of this package uses, so
 prose outside it survives every re-render. Inside, goals are grouped by period and rendered as
-checkbox bullets carrying their id::
+checkbox bullets carrying their id. On PULL, each bullet also carries its description (labelled
+as its brief) and its most recent updates -- the per-goal check-in thread where a person writes
+what they read/did/found on that one goal -- newest first, each labelled with its date and
+author::
 
     <!-- QAR:MANAGED:goals START -->
     ## Goals
@@ -23,8 +26,16 @@ checkbox bullets carrying their id::
     ### Quarter
     **Q3 2026 (Jul - Sep)** <!-- period:2026_Q3 scope:quarter -->
     - [ ] <!-- id:goal_00c5922b --> Secure commitment from all committee members (due 2026-09-30)
+          > Brief: Get every committee member's written sign-off before the September vote.
+          > 2026-09-14 Joshua: Read the bylaws draft, two clauses need updating first.
     - [x] <!-- id:goal_bfeda075 --> Finish the concept paper
     <!-- QAR:MANAGED:goals END -->
+
+Every detail line -- brief or update, including every continuation line of a multi-line note --
+is rendered as an indented markdown blockquote. That is not decoration: it is what keeps a
+person's own words from ever being read back as a hand-typed edit (see ``_render_detail`` below).
+Detail lines are pull-only rendering; they carry nothing push reads, and how many updates render
+is controlled by ``updates_per_goal`` (0 turns them off; descriptions still render).
 
 THREE EDITS PUSH, and they were chosen because each is unambiguous on the page:
 
@@ -69,6 +80,14 @@ _GOAL_LINE_RE = re.compile(
 _PERIOD_RE = re.compile(
     r"^\*\*(?P<label>.*?)\*\*\s*<!--\s*period:(?P<period>\S+)(?:\s+scope:(?P<scope>\S+))?\s*-->\s*$")
 _DUE_RE = re.compile(r"\s*\(due\s+(?P<due>\d{4}-\d{2}-\d{2})\)\s*$")
+
+# Six spaces (aligns under "- [ ] ", itself six characters) plus a blockquote marker. Every
+# rendered detail line -- a goal's brief, one of its updates, and every continuation line of a
+# multi-line note -- gets exactly this prefix. That is what makes a detail line unparseable as a
+# goal edit: after ``parse_goal_edits`` calls ``raw.strip()``, the line still starts with ">", so
+# it can never match ``_GOAL_LINE_RE`` (needs a leading "-") or ``_PERIOD_RE`` (needs a leading
+# "**") no matter what text a person put inside their own note.
+_DETAIL_INDENT = "      > "
 
 
 class QuestGoalSyncError(RuntimeError):
@@ -122,13 +141,61 @@ def _render_goal_line(goal: Dict[str, Any]) -> Optional[str]:
     return f"- [{box}] {marker}{title}{f' (due {due})' if due else ''}"
 
 
-def render_goals_block(goal_data: Dict[str, Any]) -> str:
+def _render_detail(label: str, text: str) -> List[str]:
+    """One detail (a description, or a single update) as indented blockquote lines.
+
+    Every physical line gets its own ``_DETAIL_INDENT`` prefix -- the label line AND every
+    continuation line of a multi-line note. Prefixing only the first line would let a note whose
+    SECOND line happens to read like ``- [x] ...`` or ``**Q3 2026** <!-- period:... -->`` reach
+    the file unindented, where a push would read it as a real edit.
+    """
+    physical = (text or "").split("\n")
+    out = [f"{_DETAIL_INDENT}{label}{physical[0]}"]
+    out.extend(f"{_DETAIL_INDENT}{ln}" for ln in physical[1:])
+    return out
+
+
+def _format_update_label(update: Dict[str, Any]) -> str:
+    """Renders as ``YYYY-MM-DD Author: `` -- date first (it sorts/scans better than a name)."""
+    date = str(update.get("createdAt") or "").strip()[:10]
+    author = str(update.get("userName") or "").strip() or "unknown"
+    return f"{date} {author}: " if date else f"{author}: "
+
+
+def _render_goal_details(goal: Dict[str, Any], updates: List[Dict[str, Any]],
+                         updates_per_goal: int) -> List[str]:
+    """The lines under one goal bullet: its brief, then its updates, newest first.
+
+    ``updates`` is expected newest-first (the client contract); only the first ``updates_per_goal``
+    are rendered. Full text, never truncated -- these are a person's own words.
+    """
+    lines: List[str] = []
+    description = str(goal.get("description") or "").strip()
+    if description:
+        lines.extend(_render_detail("Brief: ", description))
+    if updates_per_goal > 0:
+        for update in updates[:updates_per_goal]:
+            note = str(update.get("note") or "")
+            if not note.strip():
+                continue
+            lines.extend(_render_detail(_format_update_label(update), note))
+    return lines
+
+
+def render_goals_block(goal_data: Dict[str, Any], *,
+                       updates_by_goal: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+                       updates_per_goal: int = 3) -> str:
     """The managed block: every goal, grouped by period, ids carried inline.
 
     Completed goals are kept and ticked rather than dropped. A plan that silently loses its
     finished rows reads, a quarter later, as though the work was never scheduled -- and it would
     also make the file disagree with Quest about what exists, which is what breaks push.
+
+    ``updates_by_goal`` (goal id -> that goal's updates, newest first) and ``updates_per_goal``
+    control the detail lines rendered under each bullet -- see ``_render_goal_details``. Both are
+    pull-only: push never calls this with anything but the defaults' worth of goal data.
     """
+    updates_by_goal = updates_by_goal or {}
     groups = goal_data.get("period_groups") or []
     lines = ["## Goals"]
     if not groups:
@@ -158,6 +225,9 @@ def render_goals_block(goal_data: Dict[str, Any]) -> str:
             line = _render_goal_line(goal)
             if line:
                 lines.append(line)
+                gid = str(goal.get("id") or goal.get("goal_id") or "").strip()
+                lines.extend(_render_goal_details(goal, updates_by_goal.get(gid) or [],
+                                                  updates_per_goal))
         lines.append("")
     return "\n".join(lines).rstrip()
 
@@ -168,10 +238,14 @@ def _ensure_frontmatter(existing: str, quest_id: str) -> str:
     return f"---\nquest_id: {quest_id}\n---\n\n{existing or ''}"
 
 
-def render_goals_file(existing: str, quest_id: str, goal_data: Dict[str, Any]) -> str:
+def render_goals_file(existing: str, quest_id: str, goal_data: Dict[str, Any], *,
+                      updates_by_goal: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+                      updates_per_goal: int = 3) -> str:
     """Render the managed block into the goals file, preserving everything else."""
     out = _ensure_frontmatter(existing or "", quest_id)
-    return replace_between(out, _GOALS_START, _GOALS_END, render_goals_block(goal_data))
+    block = render_goals_block(goal_data, updates_by_goal=updates_by_goal,
+                               updates_per_goal=updates_per_goal)
+    return replace_between(out, _GOALS_START, _GOALS_END, block)
 
 
 # --- parsing local edits -----------------------------------------------------
@@ -266,22 +340,58 @@ def _fetch_goals(client: Any, quest_id: str) -> Dict[str, Any]:
     return data
 
 
+def _fetch_goal_updates(client: Any, quest_id: str, known: Dict[str, Dict[str, Any]],
+                        limit_per_goal: int) -> Dict[str, List[Dict[str, Any]]]:
+    """Best-effort: each known goal's recent updates, duck-typed like ``_fetch_goals`` above.
+
+    Tries the bulk method first (one call for every goal), falls back to fanning the per-goal
+    method out one call per goal, and returns {} -- never raises -- when neither exists or either
+    fails. Updates are additive detail on top of the goal list; a fetch problem here (an older
+    backend, a permission gap, one bad goal) must never cost the person their goals.
+    """
+    if limit_per_goal <= 0 or not known:
+        return {}
+    bulk = getattr(client, "list_quest_goal_updates", None)
+    if callable(bulk):
+        try:
+            data = bulk(quest_id, limit_per_goal=limit_per_goal) or {}
+            return {str(gid): list(ups or []) for gid, ups in data.items()}
+        except Exception as e:  # noqa: BLE001 -- fall back to the per-goal method instead
+            log.info("bulk goal-updates fetch failed for quest %s (%s); trying per-goal",
+                     quest_id, e)
+    per_goal = getattr(client, "list_goal_updates", None)
+    if not callable(per_goal):
+        return {}
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    for gid in known:
+        try:
+            out[gid] = list(per_goal(gid, limit=limit_per_goal) or [])
+        except Exception as e:  # noqa: BLE001 -- one goal's updates failing never blocks the rest
+            log.info("goal-updates fetch failed for goal %s (%s)", gid, e)
+    return out
+
+
 # --- the three entry points --------------------------------------------------
 
 def pull_quest_goals(client: Any, quest_id: str, folder: str,
-                     *, filename: str = GOALS_FILE_NAME) -> GoalSyncResult:
+                     *, filename: str = GOALS_FILE_NAME,
+                     updates_per_goal: int = 3) -> GoalSyncResult:
     """Quest -> local: (re)render the folder's goals file from the quest's goal ladder.
 
     Idempotent: pulling unchanged goals leaves the file byte-identical. Prose outside the managed
-    markers is preserved.
+    markers is preserved. ``updates_per_goal`` caps how many of each goal's most recent updates
+    render under its bullet (0 renders descriptions only) -- see ``render_goals_block``.
     """
     goal_data = _fetch_goals(client, quest_id)
+    known = _known_goals(goal_data)
+    updates_by_goal = _fetch_goal_updates(client, quest_id, known, updates_per_goal)
     path = _goals_path(folder, filename)
     existing = _read(path)
-    rendered = render_goals_file(existing, quest_id, goal_data)
+    rendered = render_goals_file(existing, quest_id, goal_data,
+                                 updates_by_goal=updates_by_goal, updates_per_goal=updates_per_goal)
     if rendered != existing:
         _write(path, rendered)
-    count = len(_known_goals(goal_data))
+    count = len(known)
     log.info("pulled %d goal(s) for quest %s -> %s", count, quest_id, path)
     return GoalSyncResult(direction="pull", quest_id=quest_id, goals_path=str(path),
                           pulled=True, goals_rendered=count)
@@ -372,21 +482,26 @@ def _stamp_new_ids(text: str, new_ids: Dict[str, str]) -> str:
 
 
 def sync_quest_goals(client: Any, quest_id: str, folder: str, direction: str = "pull",
-                     *, filename: str = GOALS_FILE_NAME) -> GoalSyncResult:
+                     *, filename: str = GOALS_FILE_NAME,
+                     updates_per_goal: int = 3) -> GoalSyncResult:
     """The one entry point.
 
     ``"both"`` pushes BEFORE it pulls, unlike ``quest_folder_sync``. Local goal edits live inside
     the managed block, and a pull regenerates that block from Quest, so pulling first would erase
-    a tick before it was ever sent.
+    a tick before it was ever sent. ``updates_per_goal`` is pull-only (see ``pull_quest_goals``)
+    and defaults the same way a caller with no config object gets, so an existing call site that
+    never passes it keeps working unchanged.
     """
     direction = (direction or "pull").lower()
     if direction == "pull":
-        return pull_quest_goals(client, quest_id, folder, filename=filename)
+        return pull_quest_goals(client, quest_id, folder, filename=filename,
+                                updates_per_goal=updates_per_goal)
     if direction == "push":
         return push_goals_to_quest(client, quest_id, folder, filename=filename)
     if direction == "both":
         pushed = push_goals_to_quest(client, quest_id, folder, filename=filename)
-        pulled = pull_quest_goals(client, quest_id, folder, filename=filename)
+        pulled = pull_quest_goals(client, quest_id, folder, filename=filename,
+                                  updates_per_goal=updates_per_goal)
         return GoalSyncResult(
             direction="both", quest_id=quest_id, goals_path=pulled.goals_path,
             pulled=True, pushed=True, goals_rendered=pulled.goals_rendered,

@@ -5,6 +5,7 @@ network, no API key, and no CLI installed. They lock down the two things that ca
 the lenient JSON extraction (the CLI can't force tool_choice) and the tier->CLI-alias mapping.
 """
 from quest_ai_runner.adapters import ClaudeCliProvider
+from quest_ai_runner.adapters import claude_cli_provider as ccp
 from quest_ai_runner.adapters.claude_cli_provider import cli_model, extract_json_object
 from quest_ai_runner.core.goal_runner import _is_claude_model
 from quest_ai_runner.core.model_registry import ModelRegistry
@@ -186,3 +187,126 @@ def test_build_env_strips_billing_and_session_keys(monkeypatch):
     assert "ANTHROPIC_API_KEY" not in env
     assert "ANTHROPIC_AUTH_TOKEN" not in env
     assert "CLAUDECODE" not in env
+
+
+# --- one-shot hardening: the spawned process must be a completion, not an agent ---------------
+
+
+def _argv_for(monkeypatch, *, help_text, system=None):
+    """Build the argv ``_invoke`` would spawn, against a CLI advertising ``help_text``."""
+    class _Proc:
+        returncode = 0
+        stdout = b'{"result": "ok"}'
+        stderr = b""
+
+    seen = {}
+
+    def fake_run(cmd, **kwargs):
+        # The capability probe is itself a subprocess.run; answer it, then capture the real call.
+        if len(cmd) == 2 and cmd[1] == "--help":
+            return type("P", (), {"stdout": help_text.encode(), "returncode": 0})()
+        seen["cmd"] = cmd
+        return _Proc()
+
+    ccp._supported_flags.cache_clear()
+    monkeypatch.setattr(ccp.subprocess, "run", fake_run)
+    provider = ClaudeCliProvider(claude_path="/nonexistent/claude")
+    provider._invoke("hello", model="haiku", system=system)
+    ccp._supported_flags.cache_clear()
+    return seen["cmd"]
+
+
+FULL_HELP = ("--exclude-dynamic-system-prompt-sections --setting-sources "
+             "--strict-mcp-config --append-system-prompt")
+
+
+def test_invoke_strips_the_agent_harness_when_the_cli_supports_it(monkeypatch):
+    # The whole point of this provider is a single-shot completion. Left to its defaults the CLI
+    # ships its agent system prompt, every tool schema, the settings sources and the ambient MCP
+    # servers on EVERY call -- measured at 17,815 system tokens to answer with one word.
+    argv = _argv_for(monkeypatch, help_text=FULL_HELP, system="be terse")
+
+    # --system-prompt REPLACES the agent prompt; --append-system-prompt would have kept it.
+    assert "--system-prompt" in argv
+    assert argv[argv.index("--system-prompt") + 1] == "be terse"
+    assert "--append-system-prompt" not in argv
+
+    assert "--exclude-dynamic-system-prompt-sections" in argv
+    assert argv[argv.index("--setting-sources") + 1] == ""   # no CLAUDE.md, skills, hooks
+    assert "--strict-mcp-config" in argv                     # no ambient MCP servers
+    assert "--disallowed-tools" in argv                      # belt to the above braces
+
+
+def test_invoke_supplies_a_system_prompt_even_when_the_caller_gives_none(monkeypatch):
+    # --exclude-dynamic-system-prompt-sections is only honoured alongside --system-prompt, and an
+    # omitted one would restore the very agent prompt this is removing.
+    argv = _argv_for(monkeypatch, help_text=FULL_HELP, system=None)
+    assert argv[argv.index("--system-prompt") + 1] == ccp._PURE_COMPLETION_SYSTEM
+
+
+def test_invoke_falls_back_cleanly_on_an_older_cli(monkeypatch):
+    # A deployment whose `claude` predates these flags must keep working rather than fail every
+    # call with a usage error: we pass only what --help advertises.
+    argv = _argv_for(monkeypatch, help_text="--append-system-prompt --model", system="be terse")
+    assert "--append-system-prompt" in argv
+    assert "--system-prompt" not in argv
+    for flag in ("--exclude-dynamic-system-prompt-sections", "--setting-sources",
+                 "--strict-mcp-config"):
+        assert flag not in argv
+
+
+def test_a_vanished_configured_binary_falls_back_instead_of_failing(tmp_path, monkeypatch):
+    """An installer replacing the binary in place must be a blip, not a fatal window.
+
+    Observed twice on one machine in a day; the second time it cost 101 of 107 topic-extraction
+    calls in a single bootstrap, each a bare FileNotFoundError, and the run reported completion
+    having produced almost nothing.
+    """
+    real = tmp_path / "claude"
+    real.write_text("#!/bin/sh\necho hi\n")
+    real.chmod(0o755)
+    monkeypatch.setattr(ccp.shutil, "which", lambda name: str(real) if name == "claude" else None)
+
+    gone = ClaudeCliProvider(claude_path=str(tmp_path / "does-not-exist" / "claude"))
+    assert gone._resolve_binary() == str(real), "a missing configured path must fall back"
+
+    present = ClaudeCliProvider(claude_path=str(real))
+    assert present._resolve_binary() == str(real), "an existing configured path is used as-is"
+
+
+def test_a_missing_worker_binary_is_retried_not_fatal():
+    """An installer replacing the binary in place is a window of seconds, not a permanent fault.
+
+    Observed three times in two days; the worst cost 101 of 107 topic-extraction calls in one
+    bootstrap, each failing instantly, and the run reported completion having produced almost
+    nothing.
+    """
+    from quest_ai_runner.adapters.retry_utils import is_transient_error, retry_transient
+
+    assert is_transient_error(FileNotFoundError(2, "No such file or directory", "/x/claude")) is True
+
+    calls = {"n": 0}
+
+    @retry_transient(max_retries=2, base_delay=0.001)
+    def flaky():
+        calls["n"] += 1
+        if calls["n"] < 3:
+            raise FileNotFoundError(2, "No such file or directory", "/x/claude")
+        return "ok"
+
+    assert flaky() == "ok"
+    assert calls["n"] == 3, "it must actually retry, not just classify"
+
+
+def test_a_genuinely_wrong_path_still_fails_with_the_filename():
+    # Retrying must not turn a misconfiguration into a mystery: the final error still names it.
+    import pytest
+    from quest_ai_runner.adapters.retry_utils import retry_transient
+
+    @retry_transient(max_retries=1, base_delay=0.001)
+    def always_missing():
+        raise FileNotFoundError(2, "No such file or directory", "/nope/claude")
+
+    with pytest.raises(FileNotFoundError) as err:
+        always_missing()
+    assert "/nope/claude" in str(err.value.filename)

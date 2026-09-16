@@ -13,7 +13,10 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 ## How-to guides
 
 - **[Writing a consumer](writing-a-consumer.md)** — wire the generic library to *your* Quest
-  backend, corpus, and persona via `RunnerConfig`.
+  backend, corpus, and persona via `RunnerConfig`; also covers `decision_assignees` (named
+  decision-routing roles) and `load_client`, the lightweight sibling of `load_config` for a
+  script, notebook, or one-off lookup that only needs a `QuestClient` (see also the README's
+  "Scripting the Quest API" and the `quest-ai-runner quest <method>` CLI subcommand).
 - **[Implementing adapters](adapters.md)** — the four interfaces (`RetrievalAdapter`,
   `ModelProvider`, `DeepRunner`, `EscalationSink`) and how to build your own.
 - **[Personas](personas.md)** — run each task AS somebody without writing a resolver: the persona

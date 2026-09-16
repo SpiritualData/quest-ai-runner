@@ -21,3 +21,10 @@ runner_label = "minimal-lane-example"
 # [personas]
 # skills_root = "/path/to/skills"
 # registry_file = "/path/to/skills/registry.json"
+
+# Uncomment to name decision-routing roles, so a call site can write
+# create_decision(..., assignee="owner") instead of threading a raw user id through every caller.
+# QAR_DECISION_ASSIGNEES (env) sets the same thing and wins over this file when both are set.
+# [decision_assignees]
+# owner = "PLACEHOLDER_OWNER_USER_ID"
+# operator = "PLACEHOLDER_OPERATOR_USER_ID"

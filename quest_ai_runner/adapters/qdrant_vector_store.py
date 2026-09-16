@@ -218,6 +218,48 @@ def make_openai_embedder(
 _SCOPE_KEY = "_scope"
 
 
+# How many texts may be in the embedder at once. This is a MEMORY bound, not a throughput one.
+#
+# A transformer embedder's attention tensor is ``batch x heads x seq^2 x 4`` bytes, so at the
+# default model's 512-token window each text in flight costs on the order of 12MB -- and the ONNX
+# arena that serves those allocations grows to the high-water mark and does not give it back.
+# MEASURED here over 5,678 card-sized texts (peak RSS of the whole process):
+#     whole corpus in one call   5571MB in production, and an allocation failure under a 3GB cap
+#     batch 128                  a single 1.5GiB attention allocation -> failure
+#     batch 32                   a single 384MB attention allocation -> failure
+#     batch 16                   completed cleanly, 797MB
+# 16 is therefore the default: the first size whose largest single allocation fits comfortably,
+# chosen from measurement rather than from what looks like a reasonable round number. Raising it
+# trades memory headroom for fewer round trips; a deployment with more RAM can say so with
+# ``QAR_EMBED_BATCH``.
+_EMBED_BATCH_DEFAULT = 16
+# Per-text cap for EMBEDDING only (payloads keep the full text). The default model truncates at
+# its context window regardless, so anything beyond this costs tokenizer memory for tokens that
+# are then discarded.
+_EMBED_MAX_CHARS_DEFAULT = 8000
+
+
+def _positive_int_env(name: str, default: int) -> int:
+    """A positive integer from the environment, or ``default``. Never raises."""
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("%s=%r is not an integer — using %s", name, raw, default)
+        return default
+    return value if value > 0 else default
+
+
+def _embed_batch_size() -> int:
+    return _positive_int_env("QAR_EMBED_BATCH", _EMBED_BATCH_DEFAULT)
+
+
+def _embed_max_chars() -> int:
+    return _positive_int_env("QAR_EMBED_MAX_CHARS", _EMBED_MAX_CHARS_DEFAULT)
+
+
 def _scope_hash(scope: Optional[Dict[str, Any]]) -> Optional[str]:
     """Derive a stable short digest identifying a scope dict.
 
@@ -572,39 +614,71 @@ class QdrantVectorStore(VectorStoreBase):
         *,
         scope: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Embed item texts and upsert into the scope collection.  Never raises."""
+        """Embed item texts and upsert into the scope collection.  Never raises.
+
+        Embeds in BOUNDED BATCHES rather than one call per corpus, because the cost of an
+        embedding call is set by the batch handed to it, not by the number of calls. The embedder
+        is a local ONNX model (fastembed by default): its working set scales with how many texts
+        are in flight at once, and it does not shrink back between them.
+
+        INCIDENT (2026-09-12). ``sync()`` passes every new or changed item in a single call, which
+        on a cold store is the ENTIRE corpus. A seeding pass over ~5,700 cards took the runner from
+        ~40MB to 5.5GB in well under a minute -- reproduced three times, each caught in the act
+        with the same stack (``_maybe_seed`` -> ``sync`` -> ``upsert`` -> fastembed -> onnxruntime)
+        -- and the kernel OOM-killed the process mid-task. Because the seed runs inside the vector
+        ARM of context assembly, the visible symptom was the arm "missing the assembly deadline",
+        which reads like slowness rather than the memory event it actually was. And because the
+        runner was killed rather than raising, the task it had claimed was left marked in-progress
+        with nobody running it (see ``Poller._recover_orphans``).
+
+        Batch size is the memory knob: ``QAR_EMBED_BATCH`` (default 128). Per-text length is the
+        other one: a text far longer than the model's context window costs tokenizer memory to
+        produce tokens the model will truncate anyway, so each is capped at ``QAR_EMBED_MAX_CHARS``
+        (default 8000) for EMBEDDING only -- the payload keeps the full text, so what search
+        returns is unchanged.
+        """
         try:
             if not items:
                 return
             from qdrant_client.models import PointStruct
 
-            texts = [item.get("text", "") or "" for item in items]
-            vecs = self._embed_safe(texts)
-            if not vecs or len(vecs) != len(items):
-                return
-            self._adopt_embedding_dim(len(vecs[0]))
-            coll = self._collection_name()
-            self._ensure_collection(coll)
             digest = _scope_hash(scope)
-            points: List[PointStruct] = []
-            for item, vec in zip(items, vecs):
-                item_id = item["id"]
-                payload = dict(item.get("payload") or {})
-                fp = item.get("fingerprint")
-                if fp is not None:
-                    payload["_fingerprint"] = fp
-                payload["_text"] = item.get("text", "") or ""
-                # Preserve the caller's item id so search hits carry it back
-                # (the numeric point id is a hash, meaningless to consumers).
-                payload["_id"] = str(item_id)
-                if digest is not None:
-                    payload[_SCOPE_KEY] = digest
-                # Qdrant point ids must be unsigned int or uuid string; hash the
-                # (scope-namespaced) string id to a deterministic integer.
-                points.append(
-                    PointStruct(id=_point_id(item_id, digest), vector=vec, payload=payload)
-                )
-            self._client.upsert(collection_name=coll, points=points)
+            batch_size = _embed_batch_size()
+            max_chars = _embed_max_chars()
+            coll: Optional[str] = None
+            for start in range(0, len(items), batch_size):
+                chunk = items[start:start + batch_size]
+                # Cap only what is EMBEDDED. The payload below keeps the full text.
+                texts = [(item.get("text", "") or "")[:max_chars] for item in chunk]
+                vecs = self._embed_safe(texts)
+                if not vecs or len(vecs) != len(chunk):
+                    return
+                if coll is None:
+                    self._adopt_embedding_dim(len(vecs[0]))
+                    coll = self._collection_name()
+                    self._ensure_collection(coll)
+                points: List[PointStruct] = []
+                for item, vec in zip(chunk, vecs):
+                    item_id = item["id"]
+                    payload = dict(item.get("payload") or {})
+                    fp = item.get("fingerprint")
+                    if fp is not None:
+                        payload["_fingerprint"] = fp
+                    payload["_text"] = item.get("text", "") or ""
+                    # Preserve the caller's item id so search hits carry it back
+                    # (the numeric point id is a hash, meaningless to consumers).
+                    payload["_id"] = str(item_id)
+                    if digest is not None:
+                        payload[_SCOPE_KEY] = digest
+                    # Qdrant point ids must be unsigned int or uuid string; hash the
+                    # (scope-namespaced) string id to a deterministic integer.
+                    points.append(
+                        PointStruct(id=_point_id(item_id, digest), vector=vec, payload=payload)
+                    )
+                self._client.upsert(collection_name=coll, points=points)
+                # Drop this batch's vectors before the next one is embedded: holding them would
+                # reintroduce, one batch at a time, exactly the whole-corpus peak this avoids.
+                del vecs, points, texts
         except Exception:
             logger.debug("QdrantVectorStore.upsert failed", exc_info=True)
 

@@ -266,9 +266,12 @@ class _CollectSink:
 
 
 def _orch(provider, *, card_thread_enabled=False, assembler=None, max_steps=2, **cfg_kwargs):
+    # overseer off: these tests assert the card thread costs ZERO extra LLM calls, and the overseer
+    # (ON by default in the library) would add its own consults to those counts. Its behavior is
+    # covered in test_overseer.py.
     cfg = OrchestratorConfig(max_steps=max_steps, card_thread_enabled=card_thread_enabled,
                              instant_ack=False, narrate=False, verify_claims=False,
-                             answer_goal_max_iterations=1, **cfg_kwargs)
+                             answer_goal_max_iterations=1, overseer=False, **cfg_kwargs)
     return Orchestrator(retrieval=StubRetrieval({}), provider=provider,
                         registry=ModelRegistry(provider), config=cfg,
                         context_assembler=assembler)

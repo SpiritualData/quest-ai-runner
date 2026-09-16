@@ -95,6 +95,40 @@ To run the **executor** lane (poll Quest for due tasks and run them), see
 QUEST_BASE_URL=... QUEST_API_KEY=qsk_... QAR_CORPUS_ROOT=... quest-ai-runner --once
 ```
 
+## Scripting the Quest API
+
+Talking to the Quest API from a script, a notebook, or an agent's one-off lookup needs **no
+per-deployment client module and no `sys.path` surgery**. `pip install -e .`, then:
+
+```python
+from quest_ai_runner import load_client
+
+client = load_client("~/my-lane/qar.toml")      # or set QAR_CONFIG_FILE
+client.whoami()
+client.add_quest_note(quest_id, "findings ...")
+client.create_decision("Approve the $250 order", assignee="owner",
+                       default_on_silence="hold")
+```
+
+`load_client` reads the same TOML config file a lane built with `load_config` uses (including its
+`env_files`/`env_aliases` tables, so a key kept under a deployment's own variable names still
+reaches the client), and builds just the `QuestClient` — no model provider, no vector store, none
+of the optional dependencies, so it starts instantly. It raises `QuestNotConfigured` rather than
+falling back to another account's credentials.
+
+For a lookup that doesn't need Python at all, the same client is one shell command away:
+
+```bash
+quest-ai-runner quest whoami
+quest-ai-runner quest get_task task_123
+quest-ai-runner quest create_task "follow up with the vendor" --write
+quest-ai-runner quest --list                     # every callable method, tagged read/WRITE
+```
+
+`quest-ai-runner quest <method> [args...] [--kw NAME=VALUE]` calls any `QuestClient` method by
+name and prints the JSON result. Read-only methods (`whoami`, `get_*`, `list_*`, `is_*`,
+`search_*`, `discover_*`, ...) run as-is; anything that can modify Quest needs `--write`.
+
 ## Features
 
 - **Smart Context Selection (TF-DF-IDF sampling)** — Instead of reading all files or sampling randomly, the runner uses a linguistic heuristic to select the *most representative* items from each group. **62% fewer tokens** on typical codebases, zero external dependencies. See [TF-DF-IDF Sampling](docs/TF_DF_IDF_SAMPLING.md) for details.
@@ -103,7 +137,7 @@ QUEST_BASE_URL=... QUEST_API_KEY=qsk_... QAR_CORPUS_ROOT=... quest-ai-runner --o
 - **Streaming & live events** — LIVE mode streams partial results to the user; BACKGROUND mode runs detached and reports back. Handoff between the two is seamless.
 - **Extensible adapters** — Four clean interfaces (Retrieval, ModelProvider, DeepRunner, EscalationSink) are Protocol-based, so you implement only what you need.
 - **Discovery-driven planning** — The brain learns source structure at runtime, never needing a static schema blob in the prompt.
-- **Minimal-intervention overseer** — An optional, off-by-default watcher: a high-quality model reads a tiny capped digest of the run (never the full gathered text) and almost always says nothing, occasionally sending one small signal (redirect / answer now / escalate) that corrects course. Fails safe on any error. See [The minimal-intervention overseer](docs/overseer.md).
+- **Minimal-intervention overseer** — An **on-by-default** watcher (set `overseer=False` / `QAR_OVERSEER=false` to opt out): a high-quality model reads a tiny capped digest of the run (never the full gathered text) and almost always says nothing, occasionally sending one small signal (redirect / answer now / escalate) that corrects course. Fails safe on any error. See [The minimal-intervention overseer](docs/overseer.md).
 
 ## Documentation
 

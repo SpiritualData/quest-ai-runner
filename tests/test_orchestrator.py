@@ -14,8 +14,14 @@ from .conftest import StubDeepRunner, StubEscalation, StubProvider, StubRetrieva
 
 
 def _orch(provider, retrieval, **kw):
+    # These tests isolate the PLANNER LOOP and assert exact provider-call counts. The overseer is ON
+    # by default in the library (it is the run's safety net), but it has its own suite in
+    # test_overseer.py and its consults would add calls to every count below. Pin it off here so each
+    # test measures one thing; test_turn_call_budget.py is where the default's real cost is pinned.
+    cfg = kw.pop("config", None) or OrchestratorConfig()
+    cfg.overseer = False
     return Orchestrator(retrieval=retrieval, provider=provider,
-                        registry=ModelRegistry(provider), **kw)
+                        registry=ModelRegistry(provider), config=cfg, **kw)
 
 
 def test_plan_read_then_answer():
@@ -209,7 +215,7 @@ def test_cap_with_nothing_gathered_escalates_to_deep():
     runner = StubDeepRunner(met=True, output="did it")
     res = Orchestrator(
         retrieval=_EmptyRetrieval(), provider=provider, registry=ModelRegistry(provider),
-        deep_runner=runner, config=OrchestratorConfig(max_steps=2),
+        deep_runner=runner, config=OrchestratorConfig(max_steps=2, overseer=False),
     ).run("hard thing")
     assert res.kind == "deep"
     assert res.deep_results and res.deep_results[0].met is True
@@ -391,7 +397,7 @@ def test_answer_verified_against_goal_regenerates_when_not_met():
     )
     res = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider),
                        guidance=_StubGuidance([card]),
-                       config=OrchestratorConfig(answer_goal_max_iterations=2)).run("explain X")
+                       config=OrchestratorConfig(answer_goal_max_iterations=2, overseer=False)).run("explain X")
     assert res.kind == "answer"
     # +1 for Fix 13's always-on cheap goal-condition derivation call (STAGE 1), +1 real answer,
     # +1 regenerated after verify said not-met.
@@ -409,7 +415,7 @@ def test_answer_verified_met_no_regeneration():
     )
     res = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider),
                        guidance=_StubGuidance([card]),
-                       config=OrchestratorConfig(answer_goal_max_iterations=2)).run("explain X")
+                       config=OrchestratorConfig(answer_goal_max_iterations=2, overseer=False)).run("explain X")
     assert res.kind == "answer"
     # +1 for Fix 13's always-on cheap goal-condition derivation call (STAGE 1), +1 real answer
     # verified met on the first try, no wasted regeneration.
@@ -423,7 +429,7 @@ def test_answer_not_verified_without_a_quality_bar():
         answer_text="an answer",
     )
     res = _orch(provider, StubRetrieval(),
-                config=OrchestratorConfig(answer_goal_max_iterations=2)).run("explain X")
+                config=OrchestratorConfig(answer_goal_max_iterations=2, overseer=False)).run("explain X")
     assert res.kind == "answer"
     # +1 for Fix 13's always-on cheap goal-condition derivation call (STAGE 1), +1 real answer.
     assert provider.answer_calls == 2
@@ -445,7 +451,7 @@ def test_answer_goal_verifier_none_retries_not_silently_accepts():
     )
     res = Orchestrator(retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider),
                        guidance=_StubGuidance([card]),
-                       config=OrchestratorConfig(answer_goal_max_iterations=3)).run("what's the state?")
+                       config=OrchestratorConfig(answer_goal_max_iterations=3, overseer=False)).run("what's the state?")
     assert res.kind == "answer"
     # 1 plan call (action=answer) + 2 verify calls (None then met=True) = 3 total
     assert provider.plan_calls == 3

@@ -185,7 +185,7 @@ zero.
 ## What isn't claimed yet
 
 There is no production A/B data on redirect/escalate precision (false-positive rate, tokens saved
-per run) because the feature is new and off by default. A first labeled signal eval exists:
+per run) yet; the feature is new (on by default since the change below, previously opt-in). A first labeled signal eval exists:
 `evaluation/overseer_signals_eval.py` feeds 11 hand-labeled hook-A/hook-B digests through
 `oversee()` with a real model, including CONTRAST PAIRS (same fix-and-commit request with a
 describes-the-fix draft vs a reports-it-done-with-evidence draft; the same subject phrased as a
@@ -218,7 +218,7 @@ orch.cfg.overseer_gate_spend_fraction = 0.6                    # hook-A gate: ti
 Or from the environment (the CLI `poll`/`chat` consumers read these in `_config_from_env`):
 
 ```bash
-QAR_OVERSEER=true              # enable (off by default)
+QAR_OVERSEER=false             # disable (ON by default)
 QAR_OVERSEER_TIER=best         # the judge's model tier (default best)
 QAR_OVERSEER_MAX_SIGNALS=3     # hard cap on consultations per run
 ```

@@ -31,9 +31,23 @@ _3 goal(s) across 2 period(s); 1 completed._
 ### Quarter
 **Q3 2026 (Jul - Sep)** <!-- period:2026_Q3 scope:quarter -->
 - [ ] <!-- id:goal_00c5922b --> Secure commitment from all committee members (due 2026-09-30)
+      > Brief: Get every member's written sign-off before the September vote.
+      > 2026-09-14 Joshua: Read the bylaws draft, two clauses need updating first.
 - [x] <!-- id:goal_bfeda075 --> Finish the concept paper
 <!-- QAR:MANAGED:goals END -->
 ```
+
+The indented `>` lines under a bullet are pulled from Quest with the goal: `Brief:` is the
+goal's description (the task as it was set) and each dated line is one of its **updates**, the
+per-goal check-in thread where a person writes what they actually read, did or found. Read both:
+the updates are the newer word when the two disagree. They are pull-only rendering, so to add
+one, post it (`client.add_goal_update(goal_id, text)`) rather than typing it into the file.
+
+Every physical line of a detail, including each continuation line of a multi-line note, carries
+that same `>` prefix. That is not decoration: `parse_goal_edits` strips a line before matching
+it, so an unprefixed line inside somebody's own note reading `- [x] <!-- id:... -->` would be
+pushed back as a real completion. The prefix is what makes a person's words unparseable as an
+edit.
 
 The period key rides in a comment next to the human label because a bullet typed under that
 heading has to be creatable, and `Q3 2026 (Jul - Sep)` is not what the API takes.
@@ -102,6 +116,7 @@ RunnerConfig(
     quest_folder_map={"quest_abc123": "/path/to/folder"},
     quest_folder_sync_direction="both",   # goals follow this
     quest_goal_sync=True,                 # default
+    quest_goal_updates_per_goal=3,        # updates rendered under each goal; 0 = brief only
 )
 ```
 

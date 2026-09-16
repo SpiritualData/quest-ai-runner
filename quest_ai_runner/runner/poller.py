@@ -23,14 +23,14 @@ import logging
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..config import RunnerConfig, build_orchestrator, derive_capabilities, resolve_rep_sync_resolver
 from ..resources import ResourceGuard, ResourceLimits
 from .autopilot import (AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, AutopilotPass, cadence_due,
-                        run_requested)
+                        persona_entries_on_duty, run_requested)
 from .context_updates import build_update_engine
 
 
@@ -61,6 +61,60 @@ from .state_store import StateStore
 __all__ = ["Poller", "StateStore"]
 
 log = logging.getLogger("quest-ai-runner.poller")
+
+_DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+
+def _quest_pass_days(autopilot_cfg: Dict[str, Any], reference: date) -> Optional[List[str]]:
+    """The weekdays this quest's own pass series should ever fire on, or ``None`` for every day.
+
+    Mirrors ``AutopilotPass._gate_quest``'s day rule exactly, by calling the exact predicate the
+    gate itself uses (``persona_entries_on_duty``) once per weekday instead of restating its
+    logic: a roster with no entries, or with any entry that is on duty on every probed day (no
+    ``days`` restriction), passes the gate every day, so the series stays daily. Only when the
+    roster excludes at least one day is there anything to restrict -- scheduling the series to
+    fire only on the days it could possibly do something is what keeps a "nothing to do"
+    occurrence from ever being created, instead of being created and then reporting a skip (see
+    ``_create_quest_pass``).
+
+    ``reference`` only anchors the 7-day probe to a real calendar (for correct DST/weekday
+    arithmetic); any date works since a full week is walked either way.
+    """
+    if not (autopilot_cfg.get("personas") or []):
+        return None
+    on_duty: List[str] = []
+    for offset in range(7):
+        probe = reference + timedelta(days=offset)
+        if persona_entries_on_duty(autopilot_cfg, probe):
+            on_duty.append(probe.strftime("%a"))
+    if len(on_duty) >= 7:
+        return None  # on duty every day -- no restriction to apply
+    days = set(on_duty)
+    return [d for d in _DAY_ORDER if d in days] or None
+
+
+def _next_allowed_date(start: date, allowed_days: List[str]) -> date:
+    """The first date on/after ``start`` whose weekday is in ``allowed_days`` (``_DAY_ORDER``
+    abbreviations, matching Python's Monday=0..Sunday=6 ``date.weekday()``)."""
+    allowed_idx = {_DAY_ORDER.index(d) for d in allowed_days if d in _DAY_ORDER}
+    for offset in range(7):
+        candidate = start + timedelta(days=offset)
+        if candidate.weekday() in allowed_idx:
+            return candidate
+    return start  # unreachable: allowed_days is never empty when this is called
+
+
+def _quest_pass_recurrence(entry: Dict[str, Any], expected_time: str,
+                           reference: date) -> Dict[str, Any]:
+    """The ``recurrence`` a quest's own pass series should carry: ``weekly`` restricted to the
+    roster's on-duty days when ``_quest_pass_days`` finds a restriction, else the unrestricted
+    ``daily`` every quest had before the day rule existed. This is the one place that decides the
+    SHAPE of the series, used both to create it and to retune it, so the two can never disagree.
+    """
+    allowed_days = _quest_pass_days(entry, reference)
+    if allowed_days:
+        return {"frequency": "weekly", "days": allowed_days, "time": expected_time}
+    return {"frequency": "daily", "time": expected_time}
 
 
 def _task_signature(task: Dict[str, Any]) -> str:
@@ -876,6 +930,9 @@ class Poller:
                 "run_requested_at": autopilot_cfg.get("run_requested_at"),
                 "has_instructions": bool(instructions),
                 "env_id": autopilot_cfg.get("env_id"),
+                # The roster, so the schedule can skip days the day rule would gate anyway (see
+                # ``_quest_pass_days``). Not read anywhere else in the snapshot today.
+                "personas": autopilot_cfg.get("personas") or [],
             }
             if mode in ("suggest", "act"):
                 opted_in += 1
@@ -915,7 +972,17 @@ class Poller:
         and the time is pulled back to the current local time when ``run_time`` is still ahead of
         it, so the occurrence is due the moment the runner next looks instead of at a run_time
         that may be hours away (or already gone, which needs no pulling back). This is the whole
-        of "run now" on the schedule side -- the same series, the same occurrence, moved.
+        of "run now" on the schedule side -- the same series, the same occurrence, moved. A "Run
+        now" is a person's explicit request THIS moment, so it is not rolled past an excluded day
+        the way the ordinary cadence path below is -- the day rule still gates it once the pass
+        actually runs (nothing overrides that), so it is reported as a skip like any other, never
+        silently dropped.
+
+        Off a roster day nobody is rostered for, the ordinary (non-"Run now") date is rolled
+        forward to the next day the roster would actually let something happen -- see
+        ``_quest_pass_days``. Without this, a quest whose roster excludes a day still got a same-
+        day occurrence created and then immediately skipped once it ran, which is exactly the
+        no-op noise this schedule exists to avoid creating in the first place.
 
         Returns ``(expected_date "YYYY-MM-DD", expected_time "HH:MM")``.
         """
@@ -926,6 +993,9 @@ class Poller:
         if run_requested(entry):
             return today.isoformat(), min(run_time, now_in_zone(zone, now).strftime("%H:%M"))
         expected_date = today if cadence_due(entry, now, tz=zone) else today + timedelta(days=1)
+        allowed_days = _quest_pass_days(entry, expected_date)
+        if allowed_days:
+            expected_date = _next_allowed_date(expected_date, allowed_days)
         return expected_date.isoformat(), run_time
 
     def _ensure_quest_pass_tasks(self, open_by_series: Dict[str, List[Dict[str, Any]]],
@@ -1009,13 +1079,15 @@ class Poller:
             # with one run and no producer once that run closed.
             self._create_quest_pass(quest_id, entry, expected_date, expected_time)
             return
-        outcome = self._retune_quest_pass(quest_id, series[0], expected_date, expected_time)
+        outcome = self._retune_quest_pass(quest_id, entry, series[0], expected_date, expected_time)
         if outcome == "date_conflict" and run_requested(entry) and not catch_ups:
             self._create_quest_catchup_pass(quest_id, entry)
 
     def _create_quest_pass(self, quest_id: str, entry: Dict[str, Any], expected_date: str,
                            expected_time: str) -> None:
         env_id = entry.get("env_id") or self.cfg.env_id or None
+        recurrence = _quest_pass_recurrence(entry, expected_time,
+                                            date.fromisoformat(expected_date))
         created = self.client.create_task(
             "Autopilot pass for this quest: work its current-scope goals and its standing "
             "instructions.",
@@ -1024,14 +1096,14 @@ class Poller:
             goal_id=quest_id,
             source="chat",
             task_kind=AUTOPILOT_PASS_KIND,
-            recurrence={"frequency": "daily", "time": expected_time},
+            recurrence=recurrence,
             scheduled_date=expected_date,
             scheduled_time=expected_time,
             env_id=env_id,
         ) or {}
-        log.info("autopilot: created quest %s's own pass (daily at %s %s, first occurrence %s)",
-                 quest_id, expected_time, entry.get("run_timezone") or "runner-local",
-                 expected_date)
+        log.info("autopilot: created quest %s's own pass (%s at %s %s, first occurrence %s)",
+                 quest_id, recurrence["frequency"], expected_time,
+                 entry.get("run_timezone") or "runner-local", expected_date)
 
     def _create_quest_catchup_pass(self, quest_id: str, entry: Dict[str, Any]) -> None:
         """A ONE-OFF pass for a pending "Run now" that the quest's series cannot absorb.
@@ -1080,13 +1152,15 @@ class Poller:
                  "gets a one-off catch-up pass (no recurrence) at %s %s", quest_id,
                  now_local.strftime("%H:%M"), entry.get("run_timezone") or "runner-local")
 
-    def _retune_quest_pass(self, quest_id: str, occurrence: Dict[str, Any], expected_date: str,
+    def _retune_quest_pass(self, quest_id: str, entry: Dict[str, Any],
+                           occurrence: Dict[str, Any], expected_date: str,
                            expected_time: str) -> str:
-        """PATCH the quest's open occurrence to ``expected_date``/``expected_time`` when either
-        differs from what it currently holds -- zero writes when they already match (the steady
-        state must stay quiet). This is what makes a changed ``run_time`` take effect (the
-        spawner inherits ``recurrence`` from the task document, so without this a change would
-        never reach a future occurrence) AND what corrects the backend's UTC-dated spawn (A3).
+        """PATCH the quest's open occurrence to ``expected_date``/``expected_time``/the roster's
+        current recurrence shape when any of those differ from what it currently holds -- zero
+        writes when they already match (the steady state must stay quiet). This is what makes a
+        changed ``run_time`` (or a roster edit that adds/removes a day) take effect (the spawner
+        inherits ``recurrence`` from the task document, so without this a change would never reach
+        a future occurrence) AND what corrects the backend's UTC-dated spawn (A3).
 
         Only ever call this on a SERIES occurrence. Retuning a one-off catch-up would stamp a
         daily ``recurrence`` on it (an absent recurrence differs from the expected one, so it goes
@@ -1105,20 +1179,23 @@ class Poller:
         task_id = str(occurrence.get("id") or occurrence.get("task_id") or "")
         current_date = str(occurrence.get("scheduled_date") or "")
         current_time = str(occurrence.get("scheduled_time") or "")
-        recurrence = occurrence.get("recurrence")
-        current_recurrence_time = recurrence.get("time") if isinstance(recurrence, dict) else None
+        current_recurrence = occurrence.get("recurrence")
+        if not isinstance(current_recurrence, dict):
+            current_recurrence = {}
+        expected_recurrence = _quest_pass_recurrence(entry, expected_time,
+                                                      date.fromisoformat(expected_date))
 
         diffs: Dict[str, Any] = {}
         if current_date != expected_date:
             diffs["scheduled_date"] = expected_date
         if current_time != expected_time:
             diffs["scheduled_time"] = expected_time
-        if current_recurrence_time != expected_time:
-            diffs["recurrence"] = {"frequency": "daily", "time": expected_time}
+        if current_recurrence != expected_recurrence:
+            diffs["recurrence"] = expected_recurrence
         if not diffs:
             return "ok"  # steady state -- must stay quiet, no write
 
-        settings_changed = current_time != expected_time or current_recurrence_time != expected_time
+        settings_changed = current_time != expected_time or current_recurrence != expected_recurrence
         reason = "settings changed" if settings_changed else "spawn date corrected for timezone"
         try:
             self.client.update_task(task_id, diffs)
@@ -1197,7 +1274,12 @@ class Poller:
             return
         try:
             from .quest_goal_sync import sync_quest_goals
-            sync_quest_goals(self.client, quest_id, folder, direction=direction)
+            # How many of each goal's check-ins the pulled GOALS.md carries. Passed explicitly
+            # rather than left to the function default, or the config field would be dead: a
+            # deployment that set it to 0 (or to 10) would still get the default.
+            sync_quest_goals(self.client, quest_id, folder, direction=direction,
+                             updates_per_goal=int(
+                                 getattr(self.cfg, "quest_goal_updates_per_goal", 3) or 0))
         except Exception as e:  # noqa: BLE001 -- goals are additive; never block the scan
             log.info("goal sync for %s skipped (%s) — will retry next scan", quest_id, e)
 

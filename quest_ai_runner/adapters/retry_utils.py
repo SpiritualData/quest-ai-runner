@@ -124,6 +124,19 @@ def is_transient_error(exc: Exception) -> bool:
         if "429" in exc_str or "503" in exc_str:
             return True
 
+    # A worker binary that is not there RIGHT NOW. This decorator only wraps provider calls, so a
+    # FileNotFoundError here can only be the executable we tried to spawn -- and the overwhelmingly
+    # common reason for that is an installer replacing it in place, a window of a few seconds
+    # during which the path is genuinely empty.
+    #
+    # Observed three times in two days on one machine. The worst occurrence cost 101 of 107
+    # topic-extraction calls in a single bootstrap, each failing instantly, and the run reported
+    # completion having produced almost nothing. Retrying costs a few seconds and turns a fatal
+    # window into a blip; when the path is simply wrong instead, the retries still exhaust and the
+    # final error still names the file, so a real misconfiguration stays just as diagnosable.
+    if isinstance(exc, FileNotFoundError):
+        return True
+
     return False
 
 

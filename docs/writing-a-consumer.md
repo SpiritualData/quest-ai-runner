@@ -70,6 +70,7 @@ def build_config() -> RunnerConfig:
 | `personas` | a declarative alternative to writing `rep_sync_resolver` by hand — see [personas.md](personas.md) and [`runner/personas.py`](../quest_ai_runner/runner/personas.py). An explicit `rep_sync_resolver` always wins over this |
 | `rep_sync_direction` | `"pull"` (default) / `"push"` / `"both"`: controls Quest <-> skill-file sync for reps |
 | `default_assignee_user_id` | who human-only decisions route to by default |
+| `decision_assignees` | NAMED decision-routing roles, `{role: user_id}` (e.g. `{"owner": "user_...", "operator": "user_..."}`), so a call site writes `create_decision(..., assignee="operator")` instead of threading a raw user id + your routing policy through every caller. Env: `QAR_DECISION_ASSIGNEES` (a JSON object, or `name=id,name=id` pairs) |
 | `orchestrator`, `poll_interval_seconds`, `poll_lookahead_minutes`, `max_concurrent_tasks` | tuning (`orchestrator.deep_max_turns` is the hard per-attempt turn cap on the deep goal loop) |
 | `autopilot_pass_time`, `autopilot_adopt_recurring` | per-deployment defaults for opted-in quests that don't state their own (see `runner/autopilot.py`) |
 | `extra` | a free-form dict for your own needs |
@@ -225,6 +226,14 @@ The stock CLI layers this under your environment variables, never over them — 
 raises `config.ConfigFileError` (a `ValueError`) at startup — this repo has scar tissue about a
 config field that silently did nothing because nobody validated the key that set it, so a config
 file is refused rather than partially applied.
+
+`config.load_config(path)` is the full front door built on top of this (a `RunnerConfig`, adapter
+stack included, layered under the environment exactly as described above). When a caller only
+wants a `QuestClient` — no model provider, no vector store, none of the optional dependencies —
+`quest_ai_runner.load_client(path)` is its lightweight sibling: same file, same `env_files`/
+`env_aliases` layering, but it builds just the API client. See the README's "Scripting the Quest
+API" section, or the `quest-ai-runner quest <method>` CLI subcommand for a lookup that needs no
+Python at all.
 
 ## Capabilities are derived, not asserted
 

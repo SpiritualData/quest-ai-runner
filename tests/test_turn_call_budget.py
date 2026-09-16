@@ -22,7 +22,7 @@ from typing import Any, Dict, List
 
 from quest_ai_runner.core.adapters import AssembledContext
 from quest_ai_runner.core.model_registry import ModelRegistry
-from quest_ai_runner.core.orchestrator import Orchestrator
+from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -41,9 +41,13 @@ class OneCardAssembler:
         return None
 
 
-def _run_one_step_turn(provider: StubProvider):
+def _run_one_step_turn(provider: StubProvider, *, overseer: bool = False):
+    # overseer=False pins the LOOP budget the docstring above describes. The overseer is ON by
+    # default in the library; its own added cost is pinned separately by the last test in this file,
+    # so the two numbers stay independently visible instead of one hiding inside the other.
     orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider,
                         registry=ModelRegistry(provider),
+                        config=OrchestratorConfig(overseer=overseer),
                         context_assembler=OneCardAssembler())
     return orch.run("what should I do next")
 
@@ -90,3 +94,32 @@ def test_a_failed_verification_costs_one_extra_call_not_a_retry_storm():
     res = _run_one_step_turn(provider)
     assert res.kind == "answer"
     assert provider.plan_calls == 3   # 1 planner + 2 verify attempts, then it proceeds unverified
+
+
+def test_the_on_by_default_overseer_costs_exactly_one_extra_call_on_a_simple_turn():
+    """The overseer is ON by default, so its price belongs in this file's budget too.
+
+    On the simplest possible turn that price is ONE call, not three: hook A (the in-loop watch) is
+    gated by a free non-LLM pre-filter (consecutive reads, a repeated plan, or budget pressure) and
+    none of those trip on a one-step answer, so only hook B (the answer checkpoint, which always
+    consults) fires. Hook A's extra consults appear on the runs that actually drift, capped at
+    ``overseer_max_signals``. If this number grows, the default got more expensive for every turn.
+    """
+    from .test_overseer import OverseerStubProvider
+
+    def one_turn(overseer: bool):
+        provider = OverseerStubProvider(decisions=[
+            {"action": "answer", "model_tier": "sonnet", "rationale": "the context has it"},
+            {"met": True, "reason": "answered from the card"},
+        ])
+        res = _run_one_step_turn(provider, overseer=overseer)
+        assert res.kind == "answer"
+        return provider
+
+    off, on = one_turn(False), one_turn(True)
+
+    assert off.overseer_calls == 0          # opted out: byte-for-byte the old loop
+    assert on.overseer_calls == 1           # the default: one answer-checkpoint consult
+    # and it costs nothing anywhere else: the loop's own budget is untouched.
+    assert on.plan_calls == off.plan_calls == 2
+    assert on.answer_calls == off.answer_calls == 2

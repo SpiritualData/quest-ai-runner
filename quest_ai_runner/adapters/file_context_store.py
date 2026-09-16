@@ -202,7 +202,34 @@ def _write_bootstrap_meta(
 _CHUNK_SIZE = 150
 
 # Max parallel LLM workers for bootstrap (area discovery and topic extraction).
-_BOOTSTRAP_WORKERS = 8
+#
+# WHY THIS IS NOT A PLAIN CONSTANT. Each worker holds one ModelProvider call open, and for a
+# subprocess-backed provider (the keyless `claude` CLI) that is one CHILD PROCESS with its own
+# heap, not one thread. Eight workers is therefore eight concurrent CLI processes, which makes
+# this a MEMORY figure rather than a concurrency one. On a box already carrying other work it is
+# what takes a runner from comfortable to OOM-killed part-way through indexing -- and a poll
+# runner killed here leaves the task it had claimed marked in-progress with nobody running it,
+# so the work is not merely slow, it is silently lost until something reaps the row.
+#
+# So this reads the SAME budget the orchestrator's own fan-out reads (``QAR_MAX_PARALLEL``)
+# before falling back to 8: a deployment that has already said "this box fits N concurrent model
+# calls" has said it about this fan-out too, and having one stage quietly ignore that is how the
+# limit gets set, believed, and then exceeded anyway. ``QAR_BOOTSTRAP_WORKERS`` overrides just
+# this stage, for a deployment that genuinely wants the two to differ.
+_BOOTSTRAP_WORKERS_DEFAULT = 8
+
+
+def _bootstrap_workers() -> int:
+    """How many bootstrap chunks may hold a model call open at once (always >= 1)."""
+    for var in ("QAR_BOOTSTRAP_WORKERS", "QAR_MAX_PARALLEL"):
+        raw = os.getenv(var, "").strip()
+        if not raw:
+            continue
+        try:
+            return max(1, int(raw))
+        except ValueError:
+            _log.warning("context index: %s=%r is not an integer — ignoring it", var, raw)
+    return _BOOTSTRAP_WORKERS_DEFAULT
 
 # ---------------------------------------------------------------------------
 # Bootstrap constants
@@ -223,6 +250,468 @@ _SOURCE_EXTS: Set[str] = {
     ".c", ".cpp", ".h", ".hpp", ".cs", ".swift", ".kt", ".scala",
     ".html", ".css", ".scss", ".less", ".txt", ".rst",
 }
+
+# Whether a bootstrap/refresh removes cards the corpus no longer indexes. Default ON; set
+# ``QAR_PRUNE_DEAD_CARDS=0`` for a deployment that would rather keep a stale index than lose a
+# card. See ``_file_entry_is_dead`` for what "no longer indexes" means, precisely.
+# Optional ceilings on ONE bootstrap pass. Both default to NO LIMIT.
+#
+# They used to be hardcoded at 10,000 files and 5,000 cards, applied SILENTLY: a corpus of 81,455
+# indexable files was walked until the 10,000th and then simply stopped, and the run reported
+# success. Nothing in the output distinguished "indexed your corpus" from "indexed the first
+# eighth of it", so the store looked complete and the missing files were never revisited. A limit
+# nobody is told about is indistinguishable from a bug, and this one hid behind a healthy-looking
+# summary for as long as the store existed.
+#
+# So: no ceiling unless a deployment asks for one, and when one IS set and actually bites, it says
+# so at WARNING with the number it stopped at.
+def _bootstrap_max_files() -> Optional[int]:
+    return _optional_positive_int_env("QAR_BOOTSTRAP_MAX_FILES")
+
+
+def _bootstrap_max_cards() -> Optional[int]:
+    return _optional_positive_int_env("QAR_BOOTSTRAP_MAX_CARDS")
+
+
+def _optional_positive_int_env(name: str) -> Optional[int]:
+    """A positive int from the environment, or None for "no limit". Never raises."""
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        _log.warning("context index: %s=%r is not an integer — ignoring it (no limit)", name, raw)
+        return None
+    return value if value > 0 else None
+
+
+# ---------------------------------------------------------------------------
+# Folder relevance review: WHICH FOLDERS ARE WORTH INDEXING AT ALL
+# ---------------------------------------------------------------------------
+# Extension filtering decides whether a FILE is readable. It cannot decide whether a folder is
+# knowledge. Measured on one real corpus of 81,465 "indexable" files: 79% of it was a single
+# vendored tree present twice under different repos, and 66,000 of the files were .json/.yaml
+# generated data. Indexing that is not merely wasteful -- it drowns the cards that matter, and
+# every one of those files costs model calls to summarise and memory to embed.
+#
+# The unit of judgement is the FOLDER, not the file, because that is the unit a human would use
+# ("that is a downloaded SDK", "that is a data dump") and because it collapses the problem from
+# 15,423 directories to a few dozen decisions. The review is ADAPTIVE: shallow folders first, and
+# only a folder that is both kept AND large is opened up a level. On the same corpus that is ~124
+# folders reviewed in 3-4 batched calls, versus 15,423 directories.
+#
+# Verdicts are cached in the cards dir so the cost is paid once and a human can read, edit or
+# delete the file to override any decision. ``QAR_FOLDER_REVIEW=0`` turns the whole thing off.
+
+_FOLDER_REVIEW_FILE = "folder_review.json"
+_FOLDER_REVIEW_BATCH = 40        # folders per LLM call
+_FOLDER_REVIEW_MIN_FILES = 2000  # below this the skip list is enough; do not spend model calls
+_FOLDER_REVIEW_START_DEPTH = 2   # first level judged, relative to the corpus root
+_FOLDER_REVIEW_MAX_DEPTH = 6     # never descend past this
+_FOLDER_REVIEW_EXPAND_OVER = 400 # a kept folder with more files than this gets opened up a level
+
+_FOLDER_REVIEW_PROMPT = """You decide which folders of a knowledge corpus are worth indexing for
+semantic search. The index is used to recall context for work on this project.
+
+INDEX a folder when its files are things someone would want recalled: source the team writes,
+documentation, notes, plans, specs, or configuration that describes the project.
+
+SKIP a folder when its files are not knowledge:
+- generated or derived data (datasets, dumps, exports, fixtures, snapshots, caches)
+- third-party or vendored code the team did not write (downloaded packages, SDKs, plugin
+  marketplaces, bundled libraries, toolchains)
+- backups, archives, or a duplicate copy of another folder
+- build or compile output
+- another tool's internal state store
+
+A folder marked [contains CLAUDE.md] (or AGENTS.md, .cursorrules, and so on) has a file someone
+wrote to orient an assistant working there. Treat that as evidence the folder is curated knowledge
+and lean toward INDEX. It is evidence, not proof: a vendored copy of someone else's project
+carries their instruction file too, so it does not outweigh a folder that is plainly generated
+data or a dependency checkout.
+
+When a folder plainly holds BOTH kinds -- a workspace with real notes next to a vendored
+dependency, say -- do not guess. Answer "mixed": true and it will be opened up and its children
+judged individually. Prefer "mixed" over a confident SKIP whenever a folder is large and varied:
+excluding it wholesale throws away everything beneath it.
+
+Reply with ONLY a JSON array, one object per folder given, no prose:
+[{"folder": "<exact folder string>", "index": true, "mixed": false, "reason": "<at most 8 words>"}]
+"""
+
+
+# Files a human wrote to orient an AI assistant in a folder. Their presence is the strongest
+# cheap signal that a folder is CURATED KNOWLEDGE rather than incidental content: somebody cared
+# enough about this directory to explain it. Deliberately not tied to one vendor -- a corpus does
+# not stop being knowledge because the team uses a different assistant.
+#
+# It is a signal and NOT a verdict, which matters because the obvious failure is real: a vendored
+# dependency clone carries its upstream's CLAUDE.md too, and that file is orientation for THAT
+# project, not this corpus. So the deterministic safeguards (nested repository, fuzzy duplicate)
+# are applied BEFORE this is ever consulted, and an instruction file cannot rescue a folder they
+# have already excluded. What it does is tip the model toward keeping a folder it would otherwise
+# be unsure about, and mark the folder as one whose contents deserve priority.
+_AI_INSTRUCTION_FILES = (
+    "CLAUDE.md", "AGENTS.md", "GEMINI.md", "AGENT.md",
+    ".cursorrules", ".windsurfrules", "copilot-instructions.md", "llms.txt",
+)
+
+
+def _ai_instruction_files_in(walk_root: Path, folder: str, limit: int = 400) -> List[str]:
+    """Names of AI-orientation files at or under ``folder`` (deduped, capped). Never raises."""
+    found: List[str] = []
+    base = walk_root / folder if folder != "." else walk_root
+    seen = set()
+    try:
+        checked = 0
+        for dirpath, dirnames, filenames in os.walk(base):
+            dirnames[:] = [d for d in dirnames if d not in _NESTED_VCS_MARKERS
+                           and d != "__pycache__"]
+            for name in filenames:
+                if name in _AI_INSTRUCTION_FILES and name not in seen:
+                    seen.add(name)
+                    found.append(name)
+            checked += 1
+            if checked >= limit or len(found) >= 4:
+                break
+    except Exception:  # noqa: BLE001
+        pass
+    return found
+
+
+def _skip_nested_repos() -> bool:
+    """Whether a directory with its own VCS metadata is excluded automatically (default yes)."""
+    return os.getenv("QAR_SKIP_NESTED_REPOS", "1").strip().lower() not in ("0", "false", "no")
+
+
+def _folder_review_enabled() -> bool:
+    return os.getenv("QAR_FOLDER_REVIEW", "1").strip().lower() not in ("0", "false", "no")
+
+
+def _dir_file_counts(walk_root: Path, skip_dirs: Set[str]) -> Dict[str, int]:
+    """``{relative dir: indexable file count}`` for every dir holding indexable files."""
+    counts: Dict[str, int] = {}
+    for dirpath, dirnames, filenames in os.walk(walk_root):
+        prune_dirnames(dirnames, current=Path(dirpath), base_skip=skip_dirs)
+        n = sum(1 for fn in filenames if Path(fn).suffix.lower() in _SOURCE_EXTS)
+        if n:
+            try:
+                counts[Path(dirpath).relative_to(walk_root).as_posix()] = n
+            except ValueError:
+                continue
+    return counts
+
+
+def _roll_up_to_depth(counts: Dict[str, int], depth: int) -> Dict[str, int]:
+    """Aggregate per-directory counts onto their ancestor at ``depth`` path segments."""
+    rolled: Dict[str, int] = {}
+    for rel, n in counts.items():
+        parts = [p for p in rel.split("/") if p and p != "."]
+        key = "/".join(parts[:depth]) if parts else "."
+        rolled[key] = rolled.get(key, 0) + n
+    return rolled
+
+
+def _sample_filenames(walk_root: Path, folder: str, limit: int = 6) -> List[str]:
+    """A few filenames from ``folder``, to give the judgement something concrete. Never raises."""
+    names: List[str] = []
+    base = walk_root / folder if folder != "." else walk_root
+    try:
+        for dirpath, dirnames, filenames in os.walk(base):
+            for fn in filenames:
+                if Path(fn).suffix.lower() in _SOURCE_EXTS:
+                    names.append(fn)
+                    if len(names) >= limit:
+                        return names
+            if len(names) >= limit:
+                break
+    except Exception:  # noqa: BLE001
+        pass
+    return names
+
+
+def _review_folder_batch(batch: List[Tuple[str, int]], walk_root: Path, provider,
+                         model: Optional[str]) -> Dict[str, Dict[str, Any]]:
+    """One LLM call judging up to ``_FOLDER_REVIEW_BATCH`` folders. Never raises; {} on failure."""
+    lines = []
+    for folder, count in batch:
+        samples = ", ".join(_sample_filenames(walk_root, folder)) or "(none)"
+        guides = _ai_instruction_files_in(walk_root, folder)
+        hint = f" [contains {', '.join(guides)}]" if guides else ""
+        lines.append(f'- "{folder}" ({count} files){hint} e.g. {samples}')
+    prompt = _FOLDER_REVIEW_PROMPT + "\n\nFOLDERS:\n" + "\n".join(lines)
+    try:
+        raw = provider.answer([{"role": "user", "content": prompt}], model=model)
+    except Exception:  # noqa: BLE001 -- a review that fails must not stop the bootstrap
+        _log.info("context index: folder review call failed; those folders default to INDEXED",
+                  exc_info=True)
+        return {}
+    # _extract_json_array returns the array SUBSTRING (fences and prose stripped), not a value.
+    blob = _extract_json_array(raw) if raw else ""
+    try:
+        parsed = json.loads(blob) if blob else None
+    except (ValueError, TypeError):
+        parsed = None
+    if not isinstance(parsed, list):
+        _log.info("context index: folder review returned no usable JSON; those folders default "
+                  "to INDEXED")
+        return {}
+    out: Dict[str, Dict[str, Any]] = {}
+    for entry in parsed:
+        if not isinstance(entry, dict):
+            continue
+        folder = str(entry.get("folder") or "").strip()
+        if not folder:
+            continue
+        out[folder] = {"index": bool(entry.get("index", True)),
+                       "mixed": bool(entry.get("mixed", False)),
+                       "reason": str(entry.get("reason") or "")[:120]}
+    return out
+
+
+# --- Safeguard 1: a nested repository is a dependency checkout, not your knowledge -------------
+#
+# Deterministic and cheap. A directory inside the corpus that carries its OWN ``.git`` is a
+# separate repository someone checked out in place -- a vendored dependency, a sibling service, a
+# downloaded tool. Its contents belong to that project and are recoverable from its own remote, so
+# indexing them buries the corpus's real material under code nobody here wrote. This alone catches
+# the case that motivated the whole review: two clones of one dependency repo accounted for 79% of
+# a corpus, and neither was junk on disk -- both were working checkouts -- so no amount of "delete
+# the duplicate" advice would have helped. They simply are not knowledge.
+_NESTED_VCS_MARKERS = (".git", ".hg", ".svn")
+
+
+def _nested_vcs_dirs(walk_root: Path, skip_dirs: Set[str]) -> Dict[str, str]:
+    """``{relative dir: marker}`` for directories holding their own VCS metadata (root excluded)."""
+    found: Dict[str, str] = {}
+    for dirpath, dirnames, _filenames in os.walk(walk_root):
+        prune_dirnames(dirnames, current=Path(dirpath), base_skip=skip_dirs)
+        here = Path(dirpath)
+        if here.resolve() == walk_root.resolve():
+            continue
+        for marker in _NESTED_VCS_MARKERS:
+            if (here / marker).exists():
+                try:
+                    found[here.relative_to(walk_root).as_posix()] = marker
+                except ValueError:
+                    pass
+                # Do not descend into a repository we have already classified whole.
+                dirnames[:] = []
+                break
+    return found
+
+
+# --- Safeguard 2: fuzzy duplicate detection ---------------------------------------------------
+#
+# Also deterministic, and sampled so it stays cheap. Two folders are compared on a SAMPLE of
+# (relative path, content hash) pairs; the overlap is a percentage rather than a yes/no, because
+# real duplicates in a working tree are never byte-identical -- they are the same tree at
+# different commits, with different caches and generated files beside them. The pair that started
+# this measured 19,222 differing entries and was still, unmistakably, the same thing twice.
+_DUP_SAMPLE_FILES = 120
+_DUP_MIN_OVERLAP = 0.70
+
+
+def _folder_signature(walk_root: Path, folder: str, limit: int = _DUP_SAMPLE_FILES) -> Set[str]:
+    """A sampled ``{relpath:sha1-prefix}`` set identifying a folder's content. Never raises."""
+    import hashlib
+    base = walk_root / folder if folder != "." else walk_root
+    sig: Set[str] = set()
+    try:
+        for dirpath, dirnames, filenames in os.walk(base):
+            dirnames[:] = [d for d in dirnames if d not in _NESTED_VCS_MARKERS
+                           and d != "__pycache__"]
+            for fn in sorted(filenames):
+                if Path(fn).suffix.lower() not in _SOURCE_EXTS:
+                    continue
+                fp = Path(dirpath) / fn
+                try:
+                    if fp.stat().st_size > _BOOTSTRAP_MAX_BYTES:
+                        continue
+                    digest = hashlib.sha1(fp.read_bytes()).hexdigest()[:12]
+                except OSError:
+                    continue
+                sig.add(f"{fp.relative_to(base).as_posix()}:{digest}")
+                if len(sig) >= limit:
+                    return sig
+    except Exception:  # noqa: BLE001
+        pass
+    return sig
+
+
+def _duplicate_folders(walk_root: Path, folders: List[str],
+                       counts: Dict[str, int]) -> Dict[str, Tuple[str, float]]:
+    """``{folder: (duplicate_of, overlap)}`` for folders that mirror a larger sibling.
+
+    The SMALLER of a duplicate pair is the one reported, so the fuller copy survives. Never
+    raises; returns {} if signatures cannot be built.
+    """
+    sigs: Dict[str, Set[str]] = {}
+    for f in folders:
+        sig = _folder_signature(walk_root, f)
+        if len(sig) >= 20:          # too few files to judge similarity meaningfully
+            sigs[f] = sig
+    dupes: Dict[str, Tuple[str, float]] = {}
+    names = sorted(sigs, key=lambda f: -_folder_file_count(counts, f))
+    for i, a in enumerate(names):
+        for b in names[i + 1:]:
+            if b in dupes:
+                continue
+            inter = len(sigs[a] & sigs[b])
+            overlap = inter / max(1, min(len(sigs[a]), len(sigs[b])))
+            if overlap >= _DUP_MIN_OVERLAP:
+                dupes[b] = (a, overlap)
+    return dupes
+
+
+def _is_excluded_folder(rel: str, excluded: Set[str]) -> bool:
+    """Whether ``rel`` is, or sits under, an excluded folder. ``"."`` is never excluded here."""
+    if not rel or rel == ".":
+        return False
+    return any(rel == e or rel.startswith(e + "/") for e in excluded)
+
+
+def _folder_file_count(counts: Dict[str, int], folder: str) -> int:
+    """Indexable files at or under ``folder``."""
+    return sum(n for f, n in counts.items() if f == folder or f.startswith(folder + "/"))
+
+
+def _has_kept_child(verdicts: Dict[str, Dict[str, Any]], folder: str) -> bool:
+    """Whether any directly-judged descendant of ``folder`` was kept."""
+    prefix = folder + "/"
+    return any(f.startswith(prefix) and v.get("index", True) for f, v in verdicts.items())
+
+
+def _folder_review(walk_root: Path, skip_dirs: Set[str], provider, model: Optional[str],
+                   cards_dir: Path) -> Set[str]:
+    """Relative folders to EXCLUDE from indexing, judged by batched LLM review.
+
+    Adaptive: judge the shallow level, then open up only the folders that were kept AND are large
+    enough that their contents could still be mostly junk. Cached in the cards dir; delete or edit
+    that file to redo or override. Returns an empty set on any failure -- an unreviewable corpus is
+    indexed in full, exactly as before this existed.
+    """
+    cache_path = cards_dir / _FOLDER_REVIEW_FILE
+    verdicts: Dict[str, Dict[str, Any]] = {}
+    try:
+        if cache_path.exists():
+            loaded = json.loads(cache_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict) and isinstance(loaded.get("folders"), dict):
+                verdicts = loaded["folders"]
+    except Exception:  # noqa: BLE001
+        verdicts = {}
+
+    counts = _dir_file_counts(walk_root, skip_dirs)
+    if not counts:
+        return set()
+
+    # Only worth doing on a corpus big enough for the answer to matter. A small project root has
+    # nothing to prune that the skip list has not already caught, and spending model calls to
+    # confirm that would make every ordinary bootstrap slower and dearer for no gain. The problem
+    # this solves only appears at scale -- one corpus where 91% of 81,464 files were dependency
+    # checkouts, generated data and build output.
+    if sum(counts.values()) < _FOLDER_REVIEW_MIN_FILES:
+        return set()
+
+    # --- Safeguard 1: nested repositories, decided without a model call --------------------
+    # Recorded as verdicts so they are visible and editable in the cache file like any other.
+    if _skip_nested_repos():
+        unstored: List[str] = []
+        for rel, marker in _nested_vcs_dirs(walk_root, skip_dirs).items():
+            # A nested repo is a separate project with its own history. Two kinds, and the
+            # difference decides whether excluding it loses anything:
+            #   - it has its OWN card store -> already imported wholesale by the reuse path, so
+            #     excluding it from THIS walk costs nothing and avoids indexing it twice.
+            #   - it has none -> excluding it would make it vanish from the index entirely, which
+            #     is right for a vendored dependency and wrong for a project the person works in.
+            #     Those are named in the log rather than silently dropped, so the choice is
+            #     visible and a person can index them as their own corpus.
+            has_own_store = (walk_root / rel / ".quest-context" / "bootstrap_meta.json").exists()
+            verdicts.setdefault(rel, {
+                "index": False, "mixed": False,
+                "reason": (f"nested {marker} repository; its own card store is imported instead"
+                           if has_own_store
+                           else f"nested {marker} repository (separate project, not this corpus)"),
+            })
+            if not has_own_store:
+                unstored.append(rel)
+        if unstored:
+            _log.info(
+                "context index: %d nested repositor(ies) have no card store of their own and are "
+                "excluded from this corpus — bootstrap them separately to index them: %s",
+                len(unstored), ", ".join(sorted(unstored)[:8]),
+            )
+
+    # --- Safeguard 2: fuzzy duplicates, also without a model call --------------------------
+    # Only the biggest folders are compared: a duplicate small enough not to matter is not worth
+    # the hashing, and the pair that motivates this is always among the largest.
+    biggest = sorted(_roll_up_to_depth(counts, 4), key=lambda f: -_folder_file_count(counts, f))
+    for folder, (dup_of, overlap) in _duplicate_folders(walk_root, biggest[:40], counts).items():
+        verdicts.setdefault(folder, {
+            "index": False, "mixed": False,
+            "reason": f"{overlap:.0%} duplicate of {dup_of}",
+        })
+
+    # --- Safeguard 3: the model, for what the two above cannot see -------------------------
+    if provider is not None:
+        depth = _FOLDER_REVIEW_START_DEPTH
+        pending = [(f, n) for f, n in _roll_up_to_depth(counts, depth).items()
+                   if f not in verdicts]
+        while depth <= _FOLDER_REVIEW_MAX_DEPTH:
+            for i in range(0, len(pending), _FOLDER_REVIEW_BATCH):
+                verdicts.update(_review_folder_batch(pending[i:i + _FOLDER_REVIEW_BATCH],
+                                                     walk_root, provider, model))
+            # Descend only into folders that survived AND are big enough to still hide junk.
+            depth += 1
+            if depth > _FOLDER_REVIEW_MAX_DEPTH:
+                break
+            deeper = _roll_up_to_depth(counts, depth)
+            pending = []
+            for folder, n in deeper.items():
+                if folder in verdicts:
+                    continue
+                parent = "/".join(folder.split("/")[:-1])
+                parent_v = verdicts.get(parent)
+                if parent_v is None:
+                    continue
+                parent_big = _folder_file_count(counts, parent) > _FOLDER_REVIEW_EXPAND_OVER
+                if not parent_v.get("index", True):
+                    # A SKIP is final only for a SMALL folder. Excluding a large subtree on one
+                    # shallow judgement is the most damaging mistake this review can make -- one
+                    # real corpus had its entire company workspace called a "duplicate mirror"
+                    # because a vendored dependency clone sat inside it, which would have thrown
+                    # away every note and document under it. A big folder must earn its exclusion
+                    # at a finer grain, so we open it up and judge the children instead.
+                    if not (parent_big or parent_v.get("mixed")):
+                        continue
+                elif not (n > _FOLDER_REVIEW_EXPAND_OVER or parent_v.get("mixed")):
+                    continue
+                pending.append((folder, n))
+            if not pending:
+                break
+        try:
+            cards_dir.mkdir(parents=True, exist_ok=True)
+            cache_path.write_text(json.dumps({"folders": verdicts}, indent=2), encoding="utf-8")
+        except Exception:  # noqa: BLE001
+            pass
+
+    # A parent that was excluded but then opened up (see above) must not veto the children that
+    # were individually kept: its verdict has been superseded by the finer-grained ones.
+    expanded = {"/".join(f.split("/")[:-1]) for f in verdicts if "/" in f}
+    excluded = {f for f, v in verdicts.items()
+                if not v.get("index", True) and not (f in expanded and _has_kept_child(verdicts, f))}
+    if excluded:
+        skipped_files = sum(n for f, n in counts.items()
+                            if any(f == e or f.startswith(e + "/") for e in excluded))
+        _log.info("context index: folder review excluded %d folder(s) covering %d file(s); "
+                  "verdicts in %s", len(excluded), skipped_files, cache_path)
+    return excluded
+
+
+def _prune_dead_cards() -> bool:
+    return os.getenv("QAR_PRUNE_DEAD_CARDS", "1").strip().lower() not in ("0", "false", "no")
+
 
 # Max file size to fingerprint/parse during bootstrap (512 KB).
 _BOOTSTRAP_MAX_BYTES = 512 * 1024
@@ -408,6 +897,46 @@ def _trim_content_by_recency(
         return content[:max_items]
 
 
+def _read_head(file_path: Path, max_bytes: int) -> str:
+    """Read at most ``max_bytes`` from the FRONT of a file. Never raises; "" on any error.
+
+    For extractors that only ever look at the top of a file (a heading, a leading comment block).
+    ``Path.read_text()`` is the wrong tool for those no matter how the result is sliced afterwards:
+    it materialises the whole file as one str, and a following ``.splitlines()`` materialises it a
+    SECOND time as a list of str objects, each with its own ~49 bytes of object overhead.
+
+    INCIDENT (2026-09-12). A corpus root contained data dumps a walker has no reason to exclude by
+    name -- ``.json`` files of 762MB, 581MB, 486MB. Carding them called ``_extract_leading_comment``,
+    which read each one whole and split it, **to inspect ``lines[:20]``**. A single 762MB file cost
+    well over a gigabyte of resident memory; a handful of them took the runner to 7.6GB anon-rss and
+    the kernel OOM-killed it mid-run. Because the runner is killed rather than raising, the task it
+    had claimed stayed marked in-progress with nobody running it, and was only reaped as "failed"
+    two hours later -- and failed rows are never mailed, so the day's work vanished with no error
+    anywhere. Reading a bounded prefix is what makes the cost independent of file size.
+    """
+    try:
+        with open(file_path, "r", encoding="utf-8", errors="replace") as fh:
+            return fh.read(max_bytes)
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def _read_whole_if_small(file_path: Path) -> str:
+    """The whole file, but only when it is small enough to card. Never raises; "" on any error.
+
+    For the AST extractors, which genuinely need a complete, parseable source text and cannot work
+    from a prefix (a truncated module is a SyntaxError). The size gate is ``_BOOTSTRAP_MAX_BYTES``
+    -- the SAME limit ``_extract_file_snippet`` already applies -- so "too big to card" means one
+    thing across this module instead of depending on which extractor happened to be called.
+    """
+    try:
+        if file_path.stat().st_size > _BOOTSTRAP_MAX_BYTES:
+            return ""
+        return file_path.read_text(encoding="utf-8", errors="replace")
+    except Exception:  # noqa: BLE001
+        return ""
+
+
 def _extract_symbols(file_path: Path, max_symbols: int = 30) -> List[str]:
     """Extract top-level symbol names from a source file. Never raises.
 
@@ -418,7 +947,7 @@ def _extract_symbols(file_path: Path, max_symbols: int = 30) -> List[str]:
     """
     symbols: List[str] = []
     try:
-        text = file_path.read_text(encoding="utf-8", errors="replace")
+        text = _read_whole_if_small(file_path)
         if file_path.suffix == ".py":
             try:
                 tree = ast.parse(text, filename=str(file_path))
@@ -482,7 +1011,7 @@ def _extract_docstrings(file_path: Path) -> Dict[str, Any]:
     """
     result: Dict[str, Any] = {"module": "", "defs": []}
     try:
-        text = file_path.read_text(encoding="utf-8", errors="replace")
+        text = _read_whole_if_small(file_path)
         tree = ast.parse(text, filename=str(file_path))
         # Module docstring.
         mod_doc = ast.get_docstring(tree) or ""
@@ -505,7 +1034,8 @@ def _extract_text_description(file_path: Path) -> str:
     Returns a single-line blurb, or an empty string on failure.  Never raises.
     """
     try:
-        lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        # Heading + first paragraph live at the top; 16KB is far more than enough.
+        lines = _read_head(file_path, 16 * 1024).splitlines()
         heading = ""
         para_lines: List[str] = []
         in_para = False
@@ -549,7 +1079,8 @@ def _extract_leading_comment(file_path: Path) -> str:
     Returns a short blurb from the first comment block, or empty on failure.  Never raises.
     """
     try:
-        lines = file_path.read_text(encoding="utf-8", errors="replace").splitlines()
+        # Only lines[:20] are ever inspected below, so read a prefix, not the file.
+        lines = _read_head(file_path, 8 * 1024).splitlines()
         comment_lines: List[str] = []
         for line in lines[:20]:
             stripped = line.strip()
@@ -701,10 +1232,10 @@ cluster of files that work together. The number of areas should reflect what is 
 For each area produce:
   - name: a short label (2-5 words)
   - description: one sentence describing what this area does
-  - files: which of the given paths belong here (exact copies from the list above)
+  - files: the NUMBERS of the paths that belong here, from the numbered list above
 
 Respond with ONLY a JSON array, no prose, no markdown fences:
-[{{"name": "...", "description": "...", "files": ["path1", "path2"]}}]
+[{{"name": "...", "description": "...", "files": [1, 4, 7]}}]
 """
 
 # Prompt for stage 2: given an area with its files, extract topic cards.
@@ -724,13 +1255,56 @@ For each topic card produce:
   - name: a short human-readable name (3-6 words)
   - keywords: 5 to 12 lowercase keywords someone might use to find this topic
   - summary: one sentence describing what this group of files does
-  - files: which of the given paths belong here (exact copies from the list above)
+  - files: the NUMBERS of the paths that belong here, from the numbered list above
 
-A file may appear in multiple cards. Every path you list must be an exact copy from the list above.
+A file may appear in multiple cards.
 
 Respond with ONLY a JSON array, no prose, no markdown fences:
-[{{"id": "...", "name": "...", "keywords": ["..."], "summary": "...", "files": ["path"]}}]
+[{{"id": "...", "name": "...", "keywords": ["..."], "summary": "...", "files": [1, 4]}}]
 """
+
+
+def _numbered_tree(paths: List[str]) -> str:
+    """The file list as ``N. path`` lines, so a card can name files by NUMBER instead of copying
+    the path back.
+
+    WHY, measured: asking the model to echo each path verbatim spends generated tokens re-emitting
+    strings the caller already holds. Stage 1 alone was ~32,550 output tokens of nothing but paths
+    (14 chunks x 150 paths), and stage 2 pays it again for every card it proposes -- including the
+    52% of cards that dedup then discards. An index costs two or three tokens where a path costs
+    fifteen, and the grouping decision is identical, so this is pure waste removed rather than
+    quality traded away.
+    """
+    return "\n".join(f"{i + 1}. {p}" for i, p in enumerate(paths))
+
+
+def _resolve_file_refs(refs: Any, ordered: List[str], allowed: Set[str]) -> List[str]:
+    """Turn a card's ``files`` value into real paths.
+
+    Accepts NUMBERS (the current contract, 1-based into ``ordered``) and also literal path strings,
+    because a model will occasionally answer with the path anyway and there is no reason to throw
+    away an otherwise good card over the form of one field. Unknown numbers and paths outside
+    ``allowed`` are dropped rather than invented.
+    """
+    out: List[str] = []
+    for ref in refs if isinstance(refs, (list, tuple)) else []:
+        path = ""
+        if isinstance(ref, bool):
+            continue
+        if isinstance(ref, int):
+            if 1 <= ref <= len(ordered):
+                path = ordered[ref - 1]
+        elif isinstance(ref, str):
+            token = ref.strip()
+            if token.isdigit():
+                idx = int(token)
+                if 1 <= idx <= len(ordered):
+                    path = ordered[idx - 1]
+            elif not allowed or token in allowed:
+                path = token
+        if path and path not in out:
+            out.append(path)
+    return out
 
 
 def _parse_raw_entries(raw: str, allowed: Set[str]) -> List[Dict[str, Any]]:
@@ -755,15 +1329,15 @@ def _parse_raw_entries(raw: str, allowed: Set[str]) -> List[Dict[str, Any]]:
 def _discover_areas(chunk: List[str], provider, model) -> List[Dict[str, Any]]:
     """Stage 1: ask the LLM to identify top-level areas in ``chunk``. Never raises."""
     try:
-        file_tree = "\n".join(chunk)
-        prompt = _AREA_PROMPT.format(file_tree=file_tree)
+        ordered = list(chunk)
+        prompt = _AREA_PROMPT.format(file_tree=_numbered_tree(ordered))
         raw = provider.answer([{"role": "user", "content": prompt}], model=model)
         allowed = set(chunk)
         areas = []
         for entry in _parse_raw_entries(raw, allowed):
             name = entry.get("name", "").strip()
             desc = entry.get("description", "").strip()
-            files = [f for f in (entry.get("files") or []) if isinstance(f, str) and f in allowed]
+            files = _resolve_file_refs(entry.get("files"), ordered, allowed)
             if name and files:
                 areas.append({"name": name, "description": desc, "files": files})
         return areas
@@ -892,14 +1466,16 @@ def _extract_topic_cards(area: Dict[str, Any], allowed: Set[str], provider, mode
 
         # Extract snippets + summarize by length for each sampled file.
         file_entries: List[str] = []
+        ordered: List[str] = []
         for fpath in sampled_files:
+            ordered.append(fpath)
             snippet = _extract_file_snippet(fpath, walk_root=walk_root)
             if snippet:
                 summarized = _summarize_snippet(fpath, snippet)
-                file_entries.append(summarized)
+                file_entries.append(f"{len(ordered)}. {summarized}")
             else:
                 # Fallback: just the path if snippet extraction failed
-                file_entries.append(fpath)
+                file_entries.append(f"{len(ordered)}. {fpath}")
 
         file_tree = "\n---\n".join(file_entries)
         prompt = _TOPIC_PROMPT.format(
@@ -921,7 +1497,7 @@ def _extract_topic_cards(area: Dict[str, Any], allowed: Set[str], provider, mode
                 continue
             if not isinstance(files, list):
                 continue
-            kept = [f for f in files if isinstance(f, str) and f in allowed]
+            kept = _resolve_file_refs(files, ordered, allowed)
             if not kept:
                 continue
             cards.append({
@@ -946,6 +1522,10 @@ def _jaccard(a: Set[str], b: Set[str]) -> float:
 
 
 # Two cards are dedup CANDIDATES when they share at least this many keywords.
+# Ceiling on a merged card's keyword list. The prompt asks for 5-12 per card; merging unions
+# them, and repeated merges compound without this.
+_MAX_MERGED_KEYWORDS = 24
+
 _DEDUP_MIN_SHARED_KEYWORDS = 2
 
 # Auto-merge Jaccard threshold for the no-LLM fallback (lower than the old 0.7 so the keyword-
@@ -1013,20 +1593,93 @@ def _keyword_clusters(cards: List[Dict[str, Any]]) -> List[List[int]]:
     return uf.clusters()
 
 
+# Openers of an agent PREAMBLE: the instruction scaffolding a run is wrapped in, which is
+# identical across every run and says nothing about what any particular card is for.
+_PREAMBLE_OPENERS = (
+    "act as ", "you are ", "user's request", "quest outcome:", "scope:", "task:",
+    "system:", "role:", "context:", "instructions:",
+)
+
+
+def _is_prompt_echo(summary: str) -> bool:
+    """Whether a summary is the task PROMPT rather than a description of the card.
+
+    A card's summary is meant to say what the card is about. ``record()`` had nothing better to
+    hand and used the first 200 characters of the task text, which for a persona run is pure
+    scaffolding: "Act as Batman. Quest outcome: ... Scope: ...". Every such card carries the same
+    words, so the field does no work at all -- it cannot distinguish two cards, and it cannot help
+    retrieval pick between them.
+    """
+    head = (summary or "").strip().lower()
+    return any(head.startswith(opener) for opener in _PREAMBLE_OPENERS)
+
+
+def _first_substantive_line(text: Optional[str]) -> str:
+    """The first line of ``text`` that is not agent preamble. "" when there is none."""
+    for line in str(text or "").splitlines():
+        stripped = line.strip()
+        if stripped and not _is_prompt_echo(stripped):
+            return stripped
+    return ""
+
+
+def _record_summary(task_text: str, outcome: Dict[str, Any], name: str = "") -> str:
+    """The summary for a run-recorded card, preferring what HAPPENED over what was asked.
+
+    Ordered by how much each source actually distinguishes this card from the next one:
+    the run's own result first (it describes the work), then the task text with its preamble
+    skipped, then the card's name. The raw prompt is never used as-is.
+    """
+    for candidate in (outcome.get("response"), outcome.get("summary"), outcome.get("result")):
+        line = _first_substantive_line(candidate)
+        if line:
+            return line[:200]
+    line = _first_substantive_line(task_text)
+    if line:
+        return line[:200]
+    return (name or "").strip()[:200]
+
+
+def _card_file_paths(card: Dict[str, Any]) -> List[str]:
+    """A card's file entries as plain path strings, whichever shape they are stored in.
+
+    Two shapes exist and they MEET here. A freshly identified card carries plain paths (that is
+    what the model returns); a card loaded from disk carries dicts (``{"path", "sha256", ...}``),
+    because that is what gets persisted. Dedup combines new cards with existing ones -- that is the
+    whole point of it -- so any merge across that boundary produces a list holding both, and the
+    first place downstream that puts a file entry in a ``set`` raises ``TypeError: unhashable type:
+    'dict'``. That killed two consecutive full bootstraps after all their model work was done and
+    reported "Cards created: 0"; it only bites on a RE-bootstrap, because a first run has no
+    existing cards to merge with.
+    """
+    out: List[str] = []
+    for entry in card.get("files", []) or []:
+        path = entry.get("path", "") if isinstance(entry, dict) else entry
+        if path:
+            out.append(str(path))
+    return out
+
+
 def _merge_card_group(group: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Merge a group of cards into one. The first card keeps its id/name/summary; keywords and
-    files are unioned across the group (order-preserving)."""
+    files are unioned across the group (order-preserving, and normalised to path strings)."""
     rep = {**group[0]}
     keywords = list(rep.get("keywords", []))
-    files = list(rep.get("files", []))
+    files = _card_file_paths(rep)
     for card in group[1:]:
         for k in card.get("keywords", []):
             if k not in keywords:
                 keywords.append(k)
-        for f in card.get("files", []):
+        for f in _card_file_paths(card):
             if f not in files:
                 files.append(f)
-    rep["keywords"] = keywords
+    # A merged card's keyword list was unioned without any bound, and merges compound: one real
+    # store held a card with 2,174 keywords where the prompt asks for 5 to 12. That is not a
+    # richer card, it is a card that matches almost every query, and it crowds out the cards that
+    # genuinely answer one. The earliest keywords come from the representative card of the group,
+    # so truncating keeps the most on-topic ones and drops the accumulated tail. FILES are never
+    # truncated: a card must keep pointing at everything it covers.
+    rep["keywords"] = keywords[:_MAX_MERGED_KEYWORDS]
     rep["files"] = files
     return rep
 
@@ -1235,7 +1888,7 @@ def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None, walk
         areas: List[Dict[str, Any]] = []
         for result in _run_parallel(
             [lambda c=chunk: _discover_areas(c, provider, model) for chunk in chunks],
-            max_workers=_BOOTSTRAP_WORKERS,
+            max_workers=_bootstrap_workers(),
         ):
             if result:
                 areas.extend(result)
@@ -1250,7 +1903,7 @@ def _llm_topic_cards(file_paths, provider, model=None, existing_cards=None, walk
         walk_root_path = Path(walk_root).resolve() if walk_root else None
         for result in _run_parallel(
             [lambda a=area: _extract_topic_cards(a, allowed, provider, model, walk_root=walk_root_path) for area in areas],
-            max_workers=_BOOTSTRAP_WORKERS,
+            max_workers=_bootstrap_workers(),
         ):
             if result:
                 raw_cards.extend(result)
@@ -1717,6 +2370,11 @@ class FileContextStore(ContextAssemblerBase):
         try:
             n = self._bootstrap_inner(root=root, provider=provider, model=model)
         except Exception:  # noqa: BLE001
+            # Never silently: a bootstrap that dies here reports "0 cards" exactly like one that
+            # had nothing to do, and the difference matters enormously -- the first leaves the
+            # corpus permanently uncovered while looking finished. One real run identified 48
+            # topic cards, threw on the way to writing them, and printed "Cards created: 0".
+            _log.exception("context index: bootstrap failed before writing; no cards were saved")
             return 0
         if n > 0 and not self._dry_run:
             _write_bootstrap_meta(
@@ -1782,6 +2440,77 @@ class FileContextStore(ContextAssemblerBase):
         except Exception:  # noqa: BLE001
             pass
 
+    def prune_only(self, root: Optional[str] = None) -> Tuple[int, int]:
+        """Remove dead-weight cards and repair prompt-echo summaries. Returns ``(removed, healed)``.
+
+        A PRUNE and nothing else: no model calls, no imports, no new cards. That distinction is
+        the whole point of the entry point -- routing it through ``bootstrap(provider=None)``
+        looked equivalent and was not, because bootstrap also pulls in every nested and ancestor
+        store it can find. Used as a cleanup that way it GREW one store from 1,846 cards to 3,313
+        and re-imported into another exactly the dead weight it had just removed. A cleanup that
+        can add anything is not a cleanup.
+
+        Never raises.
+        """
+        removed = healed = 0
+        try:
+            walk_root = Path(root).resolve() if root else self._repo_root
+            if walk_root is None or not walk_root.is_dir():
+                return (0, 0)
+            skip_dirs = effective_skip_dirs(walk_root)
+            walked = set(_dir_file_counts(walk_root, skip_dirs))
+            walked_files: Set[str] = set()
+            for dirpath, dirnames, filenames in os.walk(walk_root):
+                prune_dirnames(dirnames, current=Path(dirpath), base_skip=skip_dirs)
+                for fn in filenames:
+                    if Path(fn).suffix.lower() in _SOURCE_EXTS:
+                        try:
+                            walked_files.add((Path(dirpath) / fn).relative_to(walk_root).as_posix())
+                        except ValueError:
+                            pass
+            for card in list((self._load_all() or {}).values()):
+                cid = card.get("id")
+                if not cid:
+                    continue
+                # Cap a keyword list that earlier unbounded merges let run away (see
+                # _merge_card_group). A card matching every query answers none of them.
+                kws = card.get("keywords") or []
+                if len(kws) > _MAX_MERGED_KEYWORDS:
+                    card["keywords"] = kws[:_MAX_MERGED_KEYWORDS]
+                    if not self._dry_run:
+                        try:
+                            self._repo.write(cid, card)
+                            healed += 1
+                        except Exception:  # noqa: BLE001
+                            pass
+                summary = (card.get("summary") or "").strip()
+                if summary and _is_prompt_echo(summary):
+                    replacement = _first_substantive_line(summary) or (card.get("name") or "").strip()
+                    if replacement and replacement != summary:
+                        card["summary"] = replacement[:200]
+                        if not self._dry_run:
+                            try:
+                                self._repo.write(cid, card)
+                                healed += 1
+                            except Exception:  # noqa: BLE001
+                                pass
+                if self._card_is_degenerate(card):
+                    dead = True
+                else:
+                    entries = _card_file_paths(card)
+                    dead = bool(entries) and all(
+                        self._file_entry_is_dead(e, walked_files, walk_root, skip_dirs)
+                        for e in entries)
+                if dead and not self._dry_run:
+                    try:
+                        self._repo.delete(cid)
+                        removed += 1
+                    except Exception:  # noqa: BLE001
+                        pass
+        except Exception:  # noqa: BLE001
+            _log.exception("context index: prune failed")
+        return (removed, healed)
+
     def refresh_stale(self, root: Optional[str] = None, *, provider=None, model: Optional[str] = None) -> int:
         """Re-index only files whose content changed since the last bootstrap.
 
@@ -1798,6 +2527,91 @@ class FileContextStore(ContextAssemblerBase):
             return self._bootstrap_inner(root=root, provider=provider, model=model, skip_unchanged=True)
         except Exception:  # noqa: BLE001
             return 0
+
+    @staticmethod
+    def _card_is_degenerate(card: Dict[str, Any]) -> bool:
+        """Whether a card carries nothing the file path does not already say.
+
+        A healthy topic card NAMES something and describes it. The degenerate shape is a card with
+        no name whose summary merely restates its own path -- ``summary: "batmanhq/api/__init__.py"``.
+        It is produced when topic extraction yields nothing (a provider that is down returns no
+        areas, and the pass still records the files it walked), and once written it is actively
+        HARMFUL rather than merely useless: the incremental diff treats those files as COVERED, so
+        a later pass with a working provider never revisits them and the corpus can never heal
+        itself. On one real corpus 1,417 of 1,457 surviving cards were this shape, pinning the
+        files a real bootstrap most needed to look at.
+
+        Deliberately narrow: a card with a NAME is never degenerate however thin its summary, and
+        a card with no files is never judged here at all (that is a conversation/run card, whose
+        summary legitimately is not about a path).
+        """
+        if (card.get("name") or "").strip():
+            return False
+        # Nothing identifies this card: no name, and a summary that is entirely agent scaffolding
+        # ("Act as X. Quest outcome: ... Scope: ...") with not one line of its own. Judged even
+        # when it pins files, unlike the path-echo case below, because here there is no
+        # description to salvage and no name to fall back on -- the repair pass above has already
+        # tried and declined rather than invent one. The files it pins are re-carded properly by
+        # the topic pass once this empty shell stops claiming them as covered.
+        summary_text = (card.get("summary") or "").strip()
+        if summary_text and _is_prompt_echo(summary_text) and not _first_substantive_line(summary_text):
+            return True
+        entries = [fe.get("path", "") if isinstance(fe, dict) else fe
+                   for fe in card.get("files", [])]
+        entries = [e for e in entries if e]
+        if not entries:
+            return False
+        summary = (card.get("summary") or "").strip()
+        if not summary:
+            return True
+        # "<path>" or "<path> -- <first line of the file>": in both cases the only thing the card
+        # asserts about the content is where it lives.
+        #
+        # Compared as SUFFIXES in both directions, not with a plain startswith, because the same
+        # file is spelled differently by stores rooted at different depths: an ancestor store
+        # rooted at ``~`` pins "hq/stories/x.py" while the summary it inherited was written by a
+        # store rooted at ``~/hq`` and says "stories/x.py". A prefix test silently answers False on
+        # every one of those, which is exactly the population that most needs catching -- 5,001
+        # such cards sat in one ancestor store and were re-imported into the corpus below it on
+        # every single bootstrap, undoing each prune.
+        head_tokens = summary.split(" -- ", 1)[0].strip().split()
+        head = head_tokens[0] if head_tokens else ""
+        if not head or ("/" not in head and "." not in head):
+            return False
+        return any(path == head or path.endswith("/" + head) or head.endswith("/" + path)
+                   for path in entries)
+
+    @staticmethod
+    def _file_entry_is_dead(rel_path: str, walked: Set[str], walk_root: Path,
+                            skip_dirs: Set[str]) -> bool:
+        """Whether one pinned path is something this corpus will never index again.
+
+        Deliberately NARROWER than "not in the current walk". A file can be absent from ``walked``
+        for innocent reasons -- an extension outside ``_SOURCE_EXTS``, a path recorded by a run
+        rather than discovered by the walk -- and deleting cards for those would throw away real
+        learning. So a path counts as dead only when it is positively gone: inside a skipped
+        directory, or absent from disk. Anything that still exists and is still reachable is kept,
+        whatever the walk happened to collect.
+        """
+        if rel_path in walked:
+            return False
+        try:
+            if any(segment in skip_dirs for segment in Path(rel_path).parts):
+                return True
+        except Exception:  # noqa: BLE001
+            return False
+        # ``Path.exists()`` is the WRONG test here: it answers False for a file that is merely
+        # unreadable (permission denied) or for a malformed path, exactly as it does for one that
+        # was deleted -- and this corpus really does contain directories owned by another user.
+        # Deleting a card because we lacked permission to see its file would be data loss caused
+        # by a missing bit. So stat() is called and only a genuine "not found" counts as dead.
+        try:
+            (walk_root / rel_path).stat()
+            return False
+        except FileNotFoundError:
+            return True
+        except Exception:  # noqa: BLE001 -- unreadable, malformed, or anything else: keep it
+            return False
 
     def _discover_nested_card_dirs(self, walk_root: Path, skip_dirs: Set[str]) -> List[Path]:
         """Find sub-corpora under ``walk_root`` that already have their OWN completed bootstrap.
@@ -1859,6 +2673,13 @@ class FileContextStore(ContextAssemblerBase):
                     if isinstance(fe, dict) and fe.get("path")
                 ]
                 if not files:
+                    continue
+                # Never import a card that carries nothing but its own path. Reuse is a
+                # shortcut past LLM work, not a licence to spread another store's dead weight:
+                # an ancestor store full of these re-seeded the corpus below it on every
+                # bootstrap, silently undoing each prune. Judged on the SOURCE card, before its
+                # paths are rewritten, so the summary and the path are still in the same terms.
+                if self._card_is_degenerate(card):
                     continue
                 cid = str(card.get("id") or "")
                 if not cid:
@@ -1950,6 +2771,13 @@ class FileContextStore(ContextAssemblerBase):
                     files.append(rel.as_posix())
                 if not files:
                     continue
+                # Never import a card that carries nothing but its own path. Reuse is a
+                # shortcut past LLM work, not a licence to spread another store's dead weight:
+                # an ancestor store full of these re-seeded the corpus below it on every
+                # bootstrap, silently undoing each prune. Judged on the SOURCE card, before its
+                # paths are rewritten, so the summary and the path are still in the same terms.
+                if self._card_is_degenerate(card):
+                    continue
                 cid = str(card.get("id") or "")
                 if not cid:
                     continue
@@ -1972,8 +2800,8 @@ class FileContextStore(ContextAssemblerBase):
         *,
         provider=None,
         model: Optional[str] = None,
-        max_files: int = 10000,
-        max_cards: int = 5000,
+        max_files: Optional[int] = None,
+        max_cards: Optional[int] = None,
         skip_unchanged: bool = False,
     ) -> int:
         """Actual bootstrap logic. May raise; callers wrap in try/except.
@@ -2009,10 +2837,29 @@ class FileContextStore(ContextAssemblerBase):
         skip_dirs = effective_skip_dirs(walk_root)
 
         # --- Pass 1: walk the tree and collect qualifying source file paths (flat list) ---
+        # Which folders are worth indexing AT ALL, decided before a single file is collected.
+        # Three layers, cheapest first: nested repositories and fuzzy duplicates are settled
+        # deterministically, and only what is left goes to the model. See _folder_review.
+        excluded_folders: Set[str] = set()
+        if _folder_review_enabled():
+            try:
+                excluded_folders = _folder_review(walk_root, skip_dirs, provider, model,
+                                                  self._cards_dir)
+            except Exception:  # noqa: BLE001 -- an unreviewable corpus is indexed in full
+                _log.info("context index: folder review failed; indexing everything",
+                          exc_info=True)
+                excluded_folders = set()
+
+        if max_files is None:
+            max_files = _bootstrap_max_files()
+        if max_cards is None:
+            max_cards = _bootstrap_max_cards()
         file_paths: List[str] = []
         file_count = 0
+        truncated = False
         for dirpath, dirnames, filenames in os.walk(walk_root):
-            if file_count >= max_files or self._closed.is_set():
+            if (max_files is not None and file_count >= max_files) or self._closed.is_set():
+                truncated = truncated or (max_files is not None and file_count >= max_files)
                 break
             current_dir = Path(dirpath).resolve()
             # Skip the cards directory itself to avoid indexing stored card JSON files.
@@ -2021,13 +2868,27 @@ class FileContextStore(ContextAssemblerBase):
                 continue
             # Prune skip dirs in-place so os.walk doesn't recurse into them.
             prune_dirnames(dirnames, current=current_dir, base_skip=skip_dirs)
+            # Drop folders the review excluded, before descending into them.
+            if excluded_folders:
+                try:
+                    here = current_dir.relative_to(walk_root).as_posix()
+                except ValueError:
+                    here = ""
+                if _is_excluded_folder(here, excluded_folders):
+                    dirnames[:] = []
+                    continue
+                dirnames[:] = [
+                    d for d in dirnames
+                    if not _is_excluded_folder(f"{here}/{d}".lstrip("/"), excluded_folders)
+                ]
             # Also exclude the cards dir itself (it's internal state, not source).
             dirnames[:] = [
                 d for d in dirnames
                 if (current_dir / d).resolve() != cards_dir_resolved
             ]
             for fname in filenames:
-                if file_count >= max_files:
+                if max_files is not None and file_count >= max_files:
+                    truncated = True
                     break
                 fpath = Path(dirpath) / fname
                 if fpath.suffix not in _SOURCE_EXTS:
@@ -2039,6 +2900,15 @@ class FileContextStore(ContextAssemblerBase):
                     continue
                 file_count += 1
                 file_paths.append(str(fpath.relative_to(walk_root)))
+
+        # Announced HERE, immediately after the walk, so no later early-return can skip it: a
+        # truncated corpus is the single most misleading state this function can be left in.
+        if truncated:
+            _log.warning(
+                "context index: stopped walking at %d file(s) — QAR_BOOTSTRAP_MAX_FILES limit "
+                "reached; files beyond it are NOT indexed and this store is INCOMPLETE",
+                file_count,
+            )
 
         if not file_paths or self._closed.is_set():
             return 0
@@ -2055,6 +2925,18 @@ class FileContextStore(ContextAssemblerBase):
         imported_covered: Set[str] = set()
         if self._reuse_nested_cards:
             for nested_root in self._discover_nested_card_dirs(walk_root, skip_dirs):
+                # A store inside a folder the review excluded is not a shortcut, it is the same
+                # dead weight arriving by another door. Backup snapshots are the clearest case:
+                # a daily copy of the corpus carries its own .quest-context, so reuse happily
+                # imported cards describing yesterday's copy of files that already exist here.
+                try:
+                    nested_rel = nested_root.resolve().relative_to(walk_root.resolve()).as_posix()
+                except ValueError:
+                    nested_rel = ""
+                if nested_rel and _is_excluded_folder(nested_rel, excluded_folders):
+                    _log.info("context index: not importing the card store under %s — that folder "
+                              "is excluded from this corpus", nested_rel)
+                    continue
                 for ic in self._import_nested_cards(nested_root, walk_root):
                     imported_cards.append(ic)
                     imported_covered.update(ic.get("files", []))
@@ -2098,6 +2980,94 @@ class FileContextStore(ContextAssemblerBase):
                 "topic cards can be identified (cards accumulate via record() instead)"
             )
             return 0
+
+        # Heal cards whose summary is a task prompt rather than a description. Their name and
+        # files are good; only the one field is scaffolding, so it is replaced from the card's own
+        # grounded fields rather than the card being thrown away.
+        if existing_cards:
+            healed = 0
+            for card in existing_cards:
+                summary = card.get("summary") or ""
+                if not _is_prompt_echo(summary):
+                    continue
+                replacement = _first_substantive_line(summary) or (card.get("name") or "").strip()
+                if not replacement or replacement == summary.strip():
+                    continue
+                card["summary"] = replacement[:200]
+                cid = card.get("id")
+                if cid and not self._dry_run:
+                    try:
+                        self._repo.write(cid, card)
+                        healed += 1
+                    except Exception:  # noqa: BLE001
+                        pass
+            if healed:
+                _log.info("context index: rewrote %d card summary(ies) that echoed a task prompt "
+                          "instead of describing the card", healed)
+
+        # --- Prune cards the corpus no longer indexes -------------------------------------
+        #
+        # The index was append-only with respect to its own inclusion rules: a card was written
+        # when a file was walked, and nothing removed it when that stopped being true. Two ways
+        # that happens, both ordinary: the file is DELETED, or the skip list GROWS and the file is
+        # now inside an excluded directory (a vendored SDK, a build output). The card then pins a
+        # path the corpus will never walk again, and it is not merely useless -- it is carried
+        # through every later pass: embedded on every vector seed (the memory bound, see
+        # QdrantVectorStore.upsert) and compared against every other card by the O(n^2) keyword
+        # clustering in dedup. MEASURED on one real corpus: 3,107 of 5,018 cards (62%) pinned
+        # files inside a directory added to the skip list long after they were written, and a
+        # further 506 (10%) pinned files that no longer existed -- 72% dead weight, all of it
+        # still being paid for on every run.
+        # ``--dry-run`` promises to estimate WITHOUT running the bootstrap, so it must not
+        # delete either: an estimate that mutates the thing it is estimating is not an estimate.
+        if _prune_dead_cards() and existing_cards and not self._dry_run:
+            walked_now = set(file_paths)
+            survivors: List[Dict[str, Any]] = []
+            dead_ids: List[str] = []
+            for card in existing_cards:
+                entries = [fe.get("path", "") if isinstance(fe, dict) else fe
+                           for fe in card.get("files", [])]
+                entries = [e for e in entries if e]
+                # A card with NO file entries is not file-derived at all (a conversation/turn
+                # card, or one recorded from a run). Nothing here can judge it, so it is never
+                # pruned -- this step only ever removes cards whose every pinned file is gone.
+                if not entries:
+                    survivors.append(card)
+                    continue
+                if all(self._file_entry_is_dead(e, walked_now, walk_root, skip_dirs)
+                       for e in entries) or self._card_is_degenerate(card):
+                    cid = card.get("id")
+                    if cid:
+                        dead_ids.append(cid)
+                        continue
+                survivors.append(card)
+            if dead_ids:
+                removed = 0
+                for cid in dead_ids:
+                    try:
+                        self._repo.delete(cid)
+                        removed += 1
+                    except Exception:  # noqa: BLE001 -- one undeletable card never stops the rest
+                        pass
+                _log.info(
+                    "context index: pruned %d card(s) that were dead weight — files the corpus no "
+                    "longer indexes, or cards that only restated their own path — %d card(s) "
+                    "remain", removed, len(survivors),
+                )
+                existing_cards = survivors
+        elif _prune_dead_cards() and existing_cards and self._dry_run:
+            walked_now = set(file_paths)
+            would = sum(
+                1 for card in existing_cards
+                if [e for e in ((fe.get("path", "") if isinstance(fe, dict) else fe)
+                                for fe in card.get("files", [])) if e]
+                and all(self._file_entry_is_dead(e, walked_now, walk_root, skip_dirs)
+                        for e in [x for x in ((fe.get("path", "") if isinstance(fe, dict) else fe)
+                                              for fe in card.get("files", [])) if x])
+            )
+            if would:
+                _log.info("context index: DRY RUN — %d card(s) would be pruned (files deleted, or "
+                          "inside a directory now skipped); nothing was deleted", would)
 
         # --- Incremental diff: what is uncovered (in no card) vs stale (covered but changed) ---
         covered: Set[str] = set()
@@ -2253,7 +3223,9 @@ class FileContextStore(ContextAssemblerBase):
         referenced: List[str] = []
         seen: Set[str] = set()
         for tc in topic_cards:
-            for rel in tc.get("files", []):
+            # Normalised rather than trusted: a card reaching here can have come from the model
+            # (plain paths) or from disk via a dedup merge (dicts). See _card_file_paths.
+            for rel in _card_file_paths(tc):
                 if rel not in seen:
                     seen.add(rel)
                     referenced.append(rel)
@@ -2324,7 +3296,12 @@ class FileContextStore(ContextAssemblerBase):
         _log.info("context index: stage 5 — writing %d card(s)", len(topic_cards))
         cards_written = 0
         for tc in topic_cards:
-            if cards_written >= max_cards:
+            if max_cards is not None and cards_written >= max_cards:
+                _log.warning(
+                    "context index: stopped after writing %d card(s) — QAR_BOOTSTRAP_MAX_CARDS "
+                    "limit reached with %d still to write; the store is INCOMPLETE",
+                    cards_written, len(topic_cards) - cards_written,
+                )
                 break
 
             card_id = tc["id"]
@@ -3180,7 +4157,9 @@ class FileContextStore(ContextAssemblerBase):
         # Ensure required fields exist.
         card.setdefault("id", card_id)
         card.setdefault("keywords", sorted(_tokenize(task_text)))
-        card.setdefault("summary", task_text[:200])
+        # NOT the raw task text: for a persona run its first 200 characters are scaffolding that
+        # is identical across every run (see _record_summary).
+        card.setdefault("summary", _record_summary(task_text, outcome, card.get("name", "")))
         card.setdefault("conventions", [])
         card.setdefault("usage_count", 0)
         card.setdefault("last_outcome", "unknown")

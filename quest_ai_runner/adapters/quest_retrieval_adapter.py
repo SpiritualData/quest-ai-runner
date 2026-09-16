@@ -142,15 +142,14 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             if completed is not None:
                 text_parts.append(f"Status: {'completed' if completed else 'in progress'}")
 
-        # Fetch recent notes
+        # Fetch the goal's own update thread -- the per-goal check-in feed the Quest product
+        # actually writes to (see ``_fetch_goal_updates`` for why this replaced a plain
+        # ``list_goal_notes`` call here).
         if include_notes:
-            notes = self.client.list_goal_notes(goal_id, quest_id=quest_id, limit=5)
-            if notes:
-                text_parts.append("\nRecent notes:")
-                for note in notes:
-                    text = note.get("text", "")
-                    if text:
-                        text_parts.append(f"  • {text}")
+            rows = self._render_goal_update_rows(self._fetch_goal_updates(goal_id, quest_id))
+            if rows:
+                text_parts.append("\nGoal updates (the person's own words on this goal, newest first):")
+                text_parts.extend(rows)
 
         # Could fetch related goals here if include_related=True
         # (requires additional API methods)
@@ -161,6 +160,50 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             text=text,
             rel_path=f"quest://goal/{goal_id}",
         )
+
+    def _fetch_goal_updates(self, goal_id: str, quest_id: Optional[str]) -> List[Dict[str, Any]]:
+        """This goal's own check-in thread, falling back to the older per-goal notes route.
+
+        ``list_goal_updates`` is the Quest product's per-goal update feed and what the reference
+        backend actually serves. ``list_goal_notes`` -- the ORIGINAL source both call sites below
+        used -- hits a route the reference backend has never implemented, so it always returned
+        nothing; it is kept only as a fallback for a deployment that does implement it. Duck-typed
+        via getattr, not called directly like the rest of this class's ``self.client.*`` calls,
+        because ``list_goal_updates`` is new enough that not every consumer's client carries it.
+        """
+        list_goal_updates = getattr(self.client, "list_goal_updates", None)
+        if callable(list_goal_updates):
+            try:
+                updates = list(list_goal_updates(goal_id, limit=5) or [])
+                if updates:
+                    return updates
+            except Exception:  # noqa: BLE001
+                pass  # API unavailable or error; fall through to the per-goal notes route
+        list_goal_notes = getattr(self.client, "list_goal_notes", None)
+        if callable(list_goal_notes):
+            try:
+                return list(list_goal_notes(goal_id, quest_id=quest_id, limit=5) or [])
+            except Exception:  # noqa: BLE001
+                pass  # API unavailable or error; continue with what we have
+        return []
+
+    def _render_goal_update_rows(self, updates: List[Dict[str, Any]]) -> List[str]:
+        """One bullet per update, tolerant of either source's shape: ``list_goal_updates`` gives
+        ``note``/``userName``/``createdAt``, the ``list_goal_notes`` fallback gives
+        ``text``/``author_name``/``created_at`` -- one renderer for either, so a caller never needs
+        to know which route actually answered.
+        """
+        lines = []
+        for update in updates:
+            text = update.get("note") or update.get("text") or ""
+            if not text:
+                continue
+            who = str(update.get("userName") or update.get("author_name") or "").strip()
+            when = str(update.get("createdAt") or update.get("created_at") or "")[:10]
+            stamp = f"[{when}] " if when else ""
+            prefix = f"({who}) " if who else ""
+            lines.append(f"  • {stamp}{prefix}{text}")
+        return lines
 
     def _query_quest_context(self, spec: Dict[str, Any]) -> Observation:
         """Fetch quest metadata and list its goals."""
@@ -389,6 +432,13 @@ class QuestRetrievalAdapter(RetrievalAdapter):
                     f"Status: {'completed' if goal.get('completed') else 'in progress'}",
                 ]
 
+                # Same update thread as _query_goal_context above, so describing a goal this way
+                # surfaces the same material a goal_context query would.
+                rows = self._render_goal_update_rows(self._fetch_goal_updates(source_id, quest_id))
+                if rows:
+                    lines.append("\nGoal updates (the person's own words on this goal, newest first):")
+                    lines.extend(rows)
+
                 return Observation(kind="query", text="\n".join(lines))
 
             else:
@@ -403,7 +453,8 @@ class QuestRetrievalAdapter(RetrievalAdapter):
         CompositeRetrievalAdapter.
         """
         lines = [
-            "get_goal_context: Fetch goal metadata and notes from Quest",
+            "get_goal_context: Fetch goal metadata and the goal's own update thread (the "
+            "person's check-in notes on that specific goal) from Quest",
             "query_quest: Query a specific quest for goals and metadata",
             "discover_goals: List goals available in a quest",
             "get_reflection_context: Fetch the person's own latest reflections from Quest (their "
@@ -418,7 +469,9 @@ class QuestRetrievalAdapter(RetrievalAdapter):
     def describe_operation(self, name: str) -> Observation:
         """DISCOVERY: full signature and usage for an operation."""
         ops = {
-            "get_goal_context": "Fetch goal metadata, notes, and deadline from Quest. Usage: query({kind: 'goal_context', goal_id: '...', quest_id: '...', include_notes: true})",
+            "get_goal_context": "Fetch goal metadata, deadline, and the goal's own update thread "
+            "(the person's check-in notes on that specific goal, newest first) from Quest. Usage: "
+            "query({kind: 'goal_context', goal_id: '...', quest_id: '...', include_notes: true})",
             "query_quest": "Query a specific quest for metadata and status. Usage: query({kind: 'goal_context', quest_id: '...'})",
             "discover_goals": "List goals within a quest. Usage: list_sources() to discover available quests, then query() with goal_id from context.",
             "get_task": (

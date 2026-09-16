@@ -249,6 +249,18 @@ QUESTION vs STATEMENT vs COMMAND -- DECIDE THIS FIRST, BEFORE ANYTHING ELSE:
   ANSWER (and you may offer to do the work, or use "confirm" to check before starting) --
   never silently turn a question or a statement into a task.
 
+CHECKING ON WORK ALREADY IN PROGRESS -- ANSWER, NEVER OPEN A SECOND TASK:
+  "is it done yet", "any update", "i am waiting for the result", "how's that coming along",
+  a bare "?", or simply repeating the same request a short time later are QUESTIONS about
+  EXISTING work, not a fresh instruction to redo it. Before choosing "deep", check the REAL
+  Task records in CONTEXT (see "REAL RECORDS" if present) for one already covering this same
+  goal that is QUEUED, IN_PROGRESS, or just finished -- if you find one, ANSWER with its actual
+  status/outcome from that record (e.g. "still running, it got interrupted by a restart and is
+  resuming now" or the real result if it already finished). Only choose "deep" when no matching
+  task is in flight, or the human is now asking for something genuinely different. Opening a
+  SECOND task for the same goal while the first is still running never gets the human an answer
+  faster -- it just leaves two competing runs and the human still waiting.
+
 CODE / FILE CHANGE COMMANDS (this rule applies ONLY AFTER the gate above has already
 resolved the message to COMMAND -- it never overrides that gate, and it is not a reason to
 read the message as a command in the first place):
@@ -1086,10 +1098,13 @@ class OrchestratorConfig:
     # always silent, occasionally sending one small course correction. It is consulted at two points
     # (inside the plan loop, and once at the answer checkpoint) and can redirect (nudge the next plan
     # with one hint), answer_now (stop reading and answer), escalate_deep (hand off to deep execution,
-    # routine AI-doable work) or escalate_human (a genuine human-only fork). OFF by default; when off
-    # the run is byte-for-byte identical (zero overseer calls, no events, no threads). The overseer
-    # NEVER raises: any failure degrades to "proceed" (do nothing).
-    overseer: bool = False
+    # routine AI-doable work) or escalate_human (a genuine human-only fork). ON by default: a run
+    # nobody is watching is the failure mode this exists to prevent, and every consult is pre-filtered
+    # by a free non-LLM gate, capped per run, and non-blocking, so the cost of leaving it on is small
+    # and bounded. Set ``overseer=False`` to opt out; when off the run is byte-for-byte identical
+    # (zero overseer calls, no events, no threads). The overseer NEVER raises: any failure degrades
+    # to "proceed" (do nothing).
+    overseer: bool = True
     overseer_tier: str = "best"          # the (high-quality) tier the overseer model resolves to
     overseer_every_steps: int = 1        # consult once every N plan steps (>= overseer_min_step)
     overseer_max_signals: int = 3        # hard cap on overseer consultations per run (both hooks)

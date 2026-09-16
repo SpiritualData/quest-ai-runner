@@ -43,6 +43,13 @@ CANCEL_CHECK_INTERVAL_SECONDS = 15.0
 NOTE_CONTEXT_LIMIT = 8
 PERSON_NOTE_FLOOR = 3
 
+# How many rows of a goal's OWN update thread (see ``render_goal_updates``) ride along as run
+# context. This is a separate channel from the quest-wide notes above -- a goal update is written
+# against one specific goal in the Quest product, so a person's reading notes / progress log on
+# that goal live here, not on the quest's notes -- and gets its own small cap rather than sharing
+# NOTE_CONTEXT_LIMIT, since it is a per-goal thread and typically much shorter.
+GOAL_UPDATE_CONTEXT_LIMIT = 5
+
 def email_contract(quest_id: str, rep_id: Optional[str] = None) -> str:
     """Told to a run whose quest has email switched on.
 
@@ -261,6 +268,40 @@ def describe_reply_target(note: Dict[str, Any]) -> str:
         # looking for something to fetch.
         return f' under the subject "{subject}" (the message itself is not linked):'
     return ""
+
+
+def render_goal_updates(updates: Optional[List[Dict[str, Any]]]) -> str:
+    """Render THIS goal's own update thread -- the person's check-in notes on this one goal.
+
+    A goal update is a different channel from ``render_goal_notes`` above: notes are the QUEST's
+    reply thread (both sides, whichever goal a note happens to be about, if any); an update is
+    written against exactly one goal in the Quest product, so it is where a person's reading notes
+    or progress log on THAT goal live. Nothing else in this library reads them, so a run working a
+    goal has never been able to see the person's own words about it -- only ``Goal description``,
+    which says what the goal IS, never what they've actually done or found. The header below says
+    so plainly, because a run that does not know this channel exists will keep relying on the
+    description alone.
+
+    Newest first, matching the client's own ordering (unlike the notes thread, which is
+    chronological) -- a person skimming a handful of their own check-ins wants the latest one
+    first. FULL text, never summarized or truncated: these are the person's own words, and a
+    summary here would be exactly the kind of afterthought this channel exists to avoid.
+    """
+    rows = [u for u in (updates or []) if (u or {}).get("note")]
+    if not rows:
+        return ""
+    rows = rows[:GOAL_UPDATE_CONTEXT_LIMIT]
+    lines = []
+    for update in rows:
+        when = str(update.get("createdAt") or "")[:10]
+        who = str(update.get("userName") or "").strip() or "the goal owner"
+        stamp = f"[{when}] " if when else ""
+        lines.append(f"  • {stamp}({who}) {update['note']}")
+    header = ("Goal updates -- what the person themselves wrote on THIS goal's own check-in "
+              "thread, newest first. This is not the goal description above: it is their own "
+              "account, in their own words, of what they actually did or found on this goal. "
+              "Read it the same way you would a note addressed to you.")
+    return f"{header}\n" + "\n".join(lines)
 
 # Same throttle, same reasoning, for the ``pending_inputs`` callable built by
 # ``_build_pending_inputs``: a human typing a mid-task steering message is rare and not
@@ -905,6 +946,13 @@ class TaskExecutor:
                 except Exception:  # noqa: BLE001
                     pass  # API unavailable or error; continue with what we have
 
+        # The goal's own update thread, independent of whether the get_goal call above succeeded
+        # (it hits a different endpoint): the person's check-in notes on this specific goal.
+        if _fetch_goal_id:
+            goal_updates_text = render_goal_updates(self._fetch_goal_updates(_fetch_goal_id))
+            if goal_updates_text:
+                parts.append(goal_updates_text)
+
         # The notes on the QUEST are the person's reply channel, so they are fetched whenever there
         # is a quest — with or without a goal on the task.
         if quest_id:
@@ -1023,6 +1071,20 @@ class TaskExecutor:
             except Exception:  # noqa: BLE001
                 pass  # API unavailable or error; continue with what we have
         return []
+
+    def _fetch_goal_updates(self, goal_id: str) -> List[Dict[str, Any]]:
+        """THIS goal's own check-in thread -- distinct from ``_fetch_person_notes`` above, which
+        reads the quest-wide reply channel. ``list_goal_updates`` is duck-typed via getattr like
+        every other client method here: it is a newer addition, and a consumer's ``QuestClient``
+        that does not carry it yet must not break the rest of this context, just skip this block.
+        """
+        list_goal_updates = getattr(self._client, "list_goal_updates", None)
+        if not callable(list_goal_updates):
+            return []
+        try:
+            return list(list_goal_updates(goal_id, limit=GOAL_UPDATE_CONTEXT_LIMIT) or [])
+        except Exception:  # noqa: BLE001
+            return []  # API unavailable or error; the goal metadata above still stands
 
     def _fetch_run_history(self, quest_id: str) -> List[Dict[str, Any]]:
         """Recent tasks on this quest, whatever their outcome.

@@ -36,6 +36,7 @@ import json
 import os
 import shutil
 import subprocess
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -50,6 +51,85 @@ _PURE_COMPLETION_DISALLOWED = (
     "Bash", "Read", "Edit", "Write", "Glob", "Grep",
     "WebSearch", "WebFetch", "Task", "NotebookEdit",
 )
+
+# The system prompt used when a caller supplies none. ``--system-prompt`` REPLACES Claude Code's
+# own agent system prompt rather than appending to it, so something must take its place.
+_PURE_COMPLETION_SYSTEM = (
+    "You are a precise assistant. Follow the user's instructions exactly "
+    "and reply with only what they ask for."
+)
+
+# WHAT MAKES THIS A COMPLETION RATHER THAN AN AGENT, and why each flag is load-bearing.
+#
+# ``claude -p`` is not an API call with a thin CLI around it: by default it boots the whole Claude
+# Code agent -- its system prompt, the schemas of every built-in tool, the settings sources, the
+# CLAUDE.md files above the working directory, skills and plugins -- and only then answers. That
+# default is right for the deep runner, which genuinely wants an agent. It is entirely wrong for
+# this class, whose whole contract (see the module docstring) is "a single-shot text generation"
+# used for planning, judging and indexing.
+#
+# MEASURED, on this CLI, asking only for the word "OK":
+#   default (--append-system-prompt)          17,815 system tokens   $0.0368
+#   + no settings / no MCP                      7,248 system tokens   $0.0159
+#   + these flags                                   0 system tokens   $0.0017
+# A 22x cost difference on every call, and the same multiple in work done inside each process.
+# Multiplied by a parallel fan-out it is also the difference between a bounded indexing pass and
+# one that pushes a loaded box into the OOM killer -- the harness, not the inference, is the cost.
+#
+#   --system-prompt                 REPLACE the agent prompt instead of appending to it, which is
+#                                   what ``--append-system-prompt`` does (it keeps the whole agent
+#                                   prompt and adds to it).
+#   --exclude-dynamic-system-prompt-sections
+#                                   drop the dynamically assembled sections (tool schemas, env
+#                                   preamble). This is the flag that takes the overhead to zero;
+#                                   it is only honoured alongside ``--system-prompt``.
+#   --setting-sources ""            load no user/project/local settings -- so no CLAUDE.md, no
+#                                   hooks, no skills, no plugins leak into an indexing call.
+#   --strict-mcp-config             ignore every ambient MCP configuration. Without it, a call
+#                                   spawns the operator's MCP servers too.
+#
+# ``--disallowed-tools`` is kept as well, but note what it is and is not: it blocks tool USE while
+# still shipping the schemas. It is the belt to these flags' braces, not a substitute for them.
+# Extended thinking is billed as OUTPUT, and for a call whose whole job is emitting a JSON array
+# it is pure overhead. Measured on one topic-extraction call: 3,891 output tokens of which 1,746
+# (45%) were thinking, to produce ~750 tokens of JSON. Across a full bootstrap output was 78% of
+# the bill, so the reasoning budget alone was roughly a third of the total. ``QAR_CLI_EFFORT``
+# passes the CLI's ``--effort`` through so a deployment can spend reasoning where it helps and not
+# where it does not; unset leaves the CLI's own default alone.
+_EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
+
+
+def _cli_effort() -> Optional[str]:
+    """The ``--effort`` level to request, or None to leave the CLI's default alone."""
+    raw = os.getenv("QAR_CLI_EFFORT", "").strip().lower()
+    return raw if raw in _EFFORT_LEVELS else None
+
+
+_ONE_SHOT_FLAGS: Dict[str, List[str]] = {
+    "--exclude-dynamic-system-prompt-sections": ["--exclude-dynamic-system-prompt-sections"],
+    "--setting-sources": ["--setting-sources", ""],
+    "--strict-mcp-config": ["--strict-mcp-config"],
+    "--effort": ["--effort"],          # presence-probed only; the value is appended in _invoke
+}
+
+
+@lru_cache(maxsize=8)
+def _supported_flags(binary: str) -> frozenset:
+    """Which of the one-shot flags THIS ``claude`` build accepts, probed once per binary.
+
+    The flags above are recent. A deployment on an older CLI must keep working rather than fail
+    every model call with a usage error, so we read ``--help`` once (cached for the life of the
+    process) and pass only what it advertises. An unreadable ``--help`` yields the empty set: the
+    call then runs exactly as it did before this hardening, which is degraded but never broken.
+    """
+    try:
+        proc = subprocess.run([binary, "--help"], stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, timeout=60)
+        help_text = (proc.stdout or b"").decode("utf-8", errors="replace")
+    except Exception:  # noqa: BLE001 -- probing must never break the call it is preparing
+        return frozenset()
+    return frozenset(flag for flag in _ONE_SHOT_FLAGS if flag in help_text)
+
 
 # The CLI accepts a family alias ("haiku"/"sonnet"/"opus"/"fable") that always points at the
 # latest model of that family — which is exactly what the ModelRegistry intends a tier to mean. We
@@ -243,6 +323,14 @@ class ClaudeCliProvider(ModelProviderBase):
             list(disallowed_tools) if disallowed_tools is not None
             else list(_PURE_COMPLETION_DISALLOWED)
         )
+        # Running totals, read by callers that report what a run cost (see _accumulate_usage).
+        self.tokens_in = 0
+        self.tokens_out = 0
+        self.fresh_input_tokens = 0
+        self.cache_creation_tokens = 0
+        self.cache_read_tokens = 0
+        self.cost_usd = 0.0
+        self.call_count = 0
 
     # --- subprocess plumbing -------------------------------------------------
 
@@ -263,20 +351,38 @@ class ClaudeCliProvider(ModelProviderBase):
         return env
 
     def _resolve_binary(self) -> str:
+        """The worker binary to spawn, re-resolved on EVERY call.
+
+        Re-resolved rather than cached, and the configured path is CHECKED rather than trusted,
+        because the binary is a moving target: an installer or auto-update replaces it in place,
+        and for a few seconds the path that was valid when this provider was constructed does not
+        exist. A long run walks straight into that window. Observed twice on one machine in a day
+        -- the second time it cost 101 of 107 topic-extraction calls in a single bootstrap, each
+        failing with a bare FileNotFoundError, and the run reported completion having produced
+        almost nothing. Falling back costs one stat() per call and turns a fatal window into a
+        blip.
+        """
         binary = self.claude_path
-        if os.path.sep not in binary:
-            resolved = shutil.which(binary)
-            if resolved:
-                return resolved
-            # Not on PATH (e.g. a service-manager environment without the launching shell's
-            # rc-file PATH additions) -- try the standard per-user install locations before
-            # giving up, so subprocess.run doesn't fail with a bare FileNotFoundError when the
-            # binary is genuinely installed, just not on THIS process's PATH.
-            for candidate in _FALLBACK_CLAUDE_LOCATIONS:
-                path = Path(candidate).expanduser()
-                if path.is_file() and os.access(path, os.X_OK):
-                    return str(path)
-        return binary
+        if os.path.sep in binary:
+            path = Path(binary).expanduser()
+            if path.is_file() and os.access(path, os.X_OK):
+                return str(path)
+            # The configured path is gone right now (mid-reinstall, or simply wrong). Fall through
+            # to the same discovery a bare name gets, rather than spawning something that is not
+            # there.
+            binary = path.name
+        resolved = shutil.which(binary)
+        if resolved:
+            return resolved
+        # Not on PATH (e.g. a service-manager environment without the launching shell's
+        # rc-file PATH additions) -- try the standard per-user install locations before
+        # giving up, so subprocess.run doesn't fail with a bare FileNotFoundError when the
+        # binary is genuinely installed, just not on THIS process's PATH.
+        for candidate in _FALLBACK_CLAUDE_LOCATIONS:
+            path = Path(candidate).expanduser()
+            if path.is_file() and os.access(path, os.X_OK):
+                return str(path)
+        return self.claude_path
 
     @retry_transient(max_retries=3, base_delay=1.0)
     def _invoke(self, prompt: str, *, model: Optional[str], system: Optional[str] = None) -> str:
@@ -290,12 +396,28 @@ class ClaudeCliProvider(ModelProviderBase):
         hit the OS ARG_MAX limit.
         """
         # Pass "-p" with no inline prompt — the CLI reads from stdin when no prompt arg follows.
-        cmd: List[str] = [self._resolve_binary(), "-p", "--output-format", "json"]
+        binary = self._resolve_binary()
+        cmd: List[str] = [binary, "-p", "--output-format", "json"]
         cli_m = cli_model(model)
         if cli_m:
             cmd += ["--model", cli_m]
-        if system:
+        # REPLACE the agent's system prompt rather than appending to it (see _ONE_SHOT_FLAGS).
+        # Always passed, because --exclude-dynamic-system-prompt-sections is only honoured
+        # alongside it, and because an absent system prompt would otherwise restore the agent's.
+        supported = _supported_flags(binary)
+        if "--exclude-dynamic-system-prompt-sections" in supported:
+            cmd += ["--system-prompt", system or _PURE_COMPLETION_SYSTEM]
+        elif system:
+            # Older CLI: no way to drop the agent prompt, so keep the previous append behaviour.
             cmd += ["--append-system-prompt", system]
+        for flag in _ONE_SHOT_FLAGS:
+            if flag == "--effort":
+                continue           # value-bearing, handled just below
+            if flag in supported:
+                cmd += _ONE_SHOT_FLAGS[flag]
+        effort = _cli_effort()
+        if effort and "--effort" in supported:
+            cmd += ["--effort", effort]
         if self.disallowed_tools:
             cmd += ["--disallowed-tools", ",".join(self.disallowed_tools)]
 
@@ -328,8 +450,46 @@ class ClaudeCliProvider(ModelProviderBase):
         if isinstance(envelope, dict):
             if envelope.get("is_error"):
                 raise RuntimeError(f"claude CLI reported an error: {envelope.get('result') or out[:200]}")
+            self._accumulate_usage(envelope)
             return envelope.get("result") or ""
         return ""
+
+    def _accumulate_usage(self, envelope: Dict[str, Any]) -> None:
+        """Add one call's reported usage to this provider's running totals. Never raises.
+
+        WHY THIS EXISTS. Callers already read ``tokens_in``/``tokens_out`` off a provider to report
+        what a run cost (``cli.py`` prints them after a bootstrap), and this provider never set
+        them -- so every keyless deployment reported its bootstrap as costing zero tokens and
+        nothing, which is not a cheap answer but an absent one. The CLI's own JSON envelope carries
+        both the token counts and the price it computed, so the honest number is already in hand
+        and only needed adding up.
+
+        ``cost_usd`` is what the CLI itself reports for the call. On a subscription login that is a
+        LIST-PRICE equivalent rather than money leaving an account, which is exactly the figure you
+        want when asking "would this be affordable if it were metered" -- and it is the only number
+        here that is measured rather than modelled.
+        """
+        try:
+            usage = envelope.get("usage") or {}
+            # Kept SEPARATE as well as summed, because the three bill at very different rates
+            # (cache reads at roughly a tenth of fresh input) and a single total cannot be turned
+            # back into a cost. A run reporting "1.6M input tokens" is somewhere between $0.50 and
+            # $4.85 of input depending purely on this split, which is the difference between
+            # affordable and not.
+            self.fresh_input_tokens += int(usage.get("input_tokens") or 0)
+            self.cache_creation_tokens += int(usage.get("cache_creation_input_tokens") or 0)
+            self.cache_read_tokens += int(usage.get("cache_read_input_tokens") or 0)
+            self.tokens_in += int(usage.get("input_tokens") or 0)
+            # Cache creation is real input the model had to read; counting only ``input_tokens``
+            # under-reports a harness-heavy call by orders of magnitude (17,815 vs 9 on one
+            # measured call), which would make an expensive configuration look free.
+            self.tokens_in += int(usage.get("cache_creation_input_tokens") or 0)
+            self.tokens_in += int(usage.get("cache_read_input_tokens") or 0)
+            self.tokens_out += int(usage.get("output_tokens") or 0)
+            self.cost_usd += float(envelope.get("total_cost_usd") or 0.0)
+            self.call_count += 1
+        except Exception:  # noqa: BLE001 -- accounting must never break the call it is measuring
+            pass
 
     # --- ModelProvider surface ----------------------------------------------
 
