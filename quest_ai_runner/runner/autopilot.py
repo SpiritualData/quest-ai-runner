@@ -158,6 +158,12 @@ _FINISHED_TASK_STATUSES = {"done", "failed", "needs_you"}
 # should not push its actual instructions out of the model's attention with old status lines.
 _MAX_PREVIOUS_TASKS = 8
 
+# How much of the previous run's own output rides into the next run's brief. Far larger than the
+# 280-character status line _summarize_previous gives a previous-period task, because this is not
+# a status line: it is the work itself, and a run that can only see a headline of what it produced
+# yesterday will redo it or contradict it.
+LAST_RUN_OUTPUT_MAX_CHARS = 2000
+
 # A quest's standing ``autopilot.instructions``, in characters. Mirrors the backend's own
 # ``AutopilotSettings.instructions`` cap (``max_length=8000``) so a value written before either
 # cap existed, or written through some other client, still gets truncated defensively here rather
@@ -930,6 +936,116 @@ def _summarize_previous(previous: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def select_last_run_output(tasks: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """The task whose result IS this quest's own last run, with no period window at all.
+
+    ``_previous_period_summary`` answers "what finished in the previous calendar period", which is
+    the wrong question for a quest whose scope label is coarser than a day: a week/month/quarter/
+    year-scoped quest's own PREVIOUS period is last week/month/quarter/year, so a pass that ran on
+    this quest YESTERDAY sits inside the CURRENT period and never appears there at all. An
+    unscoped quest fares worse: ``_previous_period_summary`` returns ``None`` outright, so it gets
+    no continuity whatsoever. This function answers a different, simpler question instead -- "what
+    is the most recent thing this quest's own runner output actually said", full stop, independent
+    of any period boundary -- which is answerable for every quest, scoped or not.
+
+    Selection, in order:
+
+      1. Only ``AUTOPILOT_PASS_KIND``/``AUTOPILOT_WORK_KIND`` rows with a non-empty stripped
+         ``result`` are candidates at all. Anything else (an ordinary deep-run task, a row that has
+         not finished yet) is not this quest's autopilot history.
+      2. A goal proposal is never a candidate. Its ``text`` (not its ``result``) starts with
+         ``PROPOSAL_TEXT_PREFIX``, and a proposal is a question waiting on the person, not a piece
+         of produced work -- carrying it forward as "what the last run produced" would hand the
+         next run its own unanswered question back as though it were an answer.
+      3. Recency is the ONLY ordering, by ``worked_at`` or ``updated_at`` or ``created_at``
+         (``_parse_dt``, same field precedence ``_previous_period_summary`` already uses, so the
+         two never disagree about when a task happened). A candidate with no parseable timestamp is
+         dropped rather than sorted arbitrarily.
+      4. If the most recent candidate is a WORK row, and its ``parent_task_id`` names a PASS row
+         that is ALSO present in ``tasks`` and ALSO carries a non-empty result, the PASS row is
+         returned instead of the WORK row. This is not a tie-break, it is recognizing the SAME
+         work under two names: quest-backend's ``autopilot_rollup.roll_up_onto_pass`` writes a
+         finished work task's output back onto its parent pass row once it reaches a terminal
+         status (see that module's docstring), specifically so the pass ends up holding the work
+         itself rather than its own "Created N task(s)" bookkeeping. Once that rollup has run, the
+         pass row is the more complete of the two -- a pass with several children carries ALL of
+         their outputs, not just the one that happens to have finished most recently -- so it is
+         preferred whenever it is available.
+
+    Returns ``None`` when nothing qualifies (a fresh quest, or a quest whose only rows are
+    proposals, empty, or unparseable).
+    """
+    by_id: Dict[str, Dict[str, Any]] = {}
+    dated: List[Tuple[datetime, Dict[str, Any]]] = []
+    for t in tasks:
+        task_id = str(t.get("id") or t.get("task_id") or "").strip()
+        if task_id:
+            by_id[task_id] = t
+        if t.get("task_kind") not in (AUTOPILOT_PASS_KIND, AUTOPILOT_WORK_KIND):
+            continue
+        if str(t.get("text") or "").lstrip().startswith(PROPOSAL_TEXT_PREFIX):
+            continue
+        if not str(t.get("result") or "").strip():
+            continue
+        when = _parse_dt(t.get("worked_at") or t.get("updated_at") or t.get("created_at"))
+        if when is None:
+            continue
+        dated.append((when, t))
+    if not dated:
+        return None
+    dated.sort(key=lambda pair: pair[0])
+    latest = dated[-1][1]
+    if latest.get("task_kind") == AUTOPILOT_WORK_KIND:
+        parent_id = str(latest.get("parent_task_id") or "").strip()
+        parent = by_id.get(parent_id) if parent_id else None
+        if (parent is not None and parent.get("task_kind") == AUTOPILOT_PASS_KIND
+                and str(parent.get("result") or "").strip()):
+            latest = parent
+    return latest
+
+
+def render_last_run_output(task: Dict[str, Any]) -> str:
+    """Render ``task`` (from ``select_last_run_output``) as the batch's last-run-output block.
+
+    The framing sentence says what this IS and what to do with it, on purpose: without it, a run
+    reading a block of unlabeled prior output has no way to tell whether it is looking at
+    instructions, at somebody else's work, or at its own quest's history, and the natural failure
+    mode is to treat it as more work to do on top of rather than a foundation to build on or
+    correct. So the sentence names it plainly (this is what the last run on this quest actually
+    produced), gives the instruction that follows from that (build on it, do not restart from
+    zero), and gives the escape hatch a continuity feature always needs (if it was wrong or has
+    been overtaken, say so in THIS run's own result rather than silently contradicting it, since a
+    silent contradiction reads to the person as the assistant not knowing what it said last time).
+
+    The date and status ride in the same sentence because they change what the block below means:
+    a run that ended ``done`` is a finished answer, while one that ended ``needs_you`` or
+    ``failed`` stopped short, and "build on this" means something different for each -- extend a
+    finished answer, but treat an unfinished one as an attempt rather than a settled conclusion.
+
+    Truncated at ``LAST_RUN_OUTPUT_MAX_CHARS`` with a visible marker when cut, so a reader (human
+    or model) never mistakes a truncated block for the complete output and never has to guess
+    whether more existed.
+    """
+    when = _parse_dt(task.get("worked_at") or task.get("updated_at") or task.get("created_at"))
+    date_str = when.strftime("%Y-%m-%d") if when else "an unknown date"
+    status = str(task.get("status") or "unknown")
+    status_note = ""
+    if status == "needs_you":
+        status_note = (" -- it stopped short, waiting on a person, so treat it as an attempt "
+                       "rather than a settled answer")
+    elif status == "failed":
+        status_note = (" -- it ended in failure, so treat it as an attempt rather than a settled "
+                       "answer")
+    result = str(task.get("result") or "").strip()
+    if len(result) > LAST_RUN_OUTPUT_MAX_CHARS:
+        result = (result[:LAST_RUN_OUTPUT_MAX_CHARS].rstrip()
+                  + "\n\n[... cut here at this brief's last-run budget; this is not all of it]")
+    return (f"What the last run on this quest actually produced ({date_str}, ended {status}"
+           f"{status_note}). Build on it rather than starting over: if it was wrong or has been "
+           f"overtaken, say so plainly in this run's own result instead of silently contradicting "
+           f"it.\n\n{result}")
+
+
 def next_steps_from_pass(current_goals: List[Dict[str, Any]],
                          adopted_tasks: Optional[List[Dict[str, Any]]] = None, *,
                          scope_label: str = "", updated: str = "",
@@ -1091,6 +1207,7 @@ def compose_batch_text(quest_outcome: str,
                        adopted_tasks: Optional[List[Dict[str, Any]]] = None,
                        next_steps: Optional[str] = None,
                        previous: Optional[Dict[str, Any]] = None,
+                       last_run: Optional[str] = None,
                        reflection: Optional[str] = None,
                        insights: Optional[str] = None,
                        context_updates: Optional[str] = None,
@@ -1163,6 +1280,36 @@ def compose_batch_text(quest_outcome: str,
     after the reflection and insights so the run reads its own instructions and the person's
     first-hand material first. A consumer that never builds an engine passes ``None``, and the
     composed text is byte-identical to before this parameter existed.
+
+    ``last_run`` (from ``AutopilotPass._last_run_output``, already rendered by
+    ``render_last_run_output``) is what this quest's own last run actually produced, with no
+    period window: the previous-period block below only ever covers a task that finished inside
+    the previous CALENDAR period, so a week/month/quarter/year-scoped quest cannot see its own run
+    from yesterday there (yesterday sits in the CURRENT period), and an unscoped quest gets no
+    previous-period view at all. This parameter is what makes "see the last run" true regardless
+    of scope. Emitted immediately BEFORE the previous-period block, and that order is deliberate:
+    the last run's actual output is more specific and more recent than the previous period's
+    280-character status lines, so it reads first, with the coarser period-level view following as
+    background. Absent, this emits nothing and the composed text is byte-identical to before this
+    parameter existed.
+
+    This is deliberately a PARAMETER here and not a registered source in
+    ``runner/context_updates.py``, even though that module's own docstring names "add a parameter
+    to the composer" as the anti-pattern it exists to kill. Two reasons, both specific to what this
+    carries: (1) a registered source is watermarked -- delivered once, until ``mark_seen()`` moves
+    the mark past it -- because it answers "what has arrived since an assistant last looked", and
+    the previous run's output has to be in front of EVERY pass, not delivered once and then dropped
+    the next time this quest runs (a quest passed twice in one day would otherwise start its
+    second pass cold, which is the exact failure this feature exists to fix). (2) the registry
+    models material that ARRIVED FROM A PERSON: ``QuestNotesSource``'s own docstring says outright
+    that it filters to the person's own notes "so a quest an assistant writes a summary note to
+    every day would [not] report its own output back to itself as news", and the receipt loop
+    every registered source carries ("say in one line how you used [U1]") presumes the material
+    came from somewhere outside the run reading it. ``last_run`` is the opposite: it is the
+    assistant's OWN previous output, carried forward for continuity, not "new since last looked"
+    and not something to acknowledge receipt of. The two are different questions -- what arrived,
+    versus what continuity means -- so this stays its own parameter. See ``DEFAULT_ALWAYS`` in
+    ``context_updates.py`` for the source-registry side of this same line.
 
     ``persona``, when resolved, is named in the text AS WELL AS stamped structurally in
     ``assignee_rep_id`` at creation. The structured field is authoritative; the prose is kept
@@ -1238,6 +1385,12 @@ def compose_batch_text(quest_outcome: str,
         parts.append(insights)
     if context_updates:
         parts.append(context_updates)
+    if last_run:
+        # BEFORE the previous-period block, not after: this is one specific run's actual output,
+        # already rendered and already more recent than anything the coarser period-level view
+        # below can offer, so it is the more useful thing to read first. See the docstring
+        # paragraph on ``last_run`` for why this exists as its own channel at all.
+        parts.append(last_run)
     if previous:
         parts.append(_summarize_previous(previous))
     parts.append(_CONFIRMATION_RULE)
@@ -1778,7 +1931,34 @@ class AutopilotPass:
                      quest_id, len(held_adopted),
                      [str(t.get("id") or t.get("task_id") or "?") for t in held_adopted],
                      self._now().strftime("%A"))
-        previous = self._previous_period_summary(quest_id, goals_payload, scope_label)
+        # Fetched ONCE and shared by both consumers below. Before this, ``_previous_period_summary``
+        # called ``list_tasks(goal_id=quest_id)`` (a task's ``goal_id`` holds the QUEST id, a
+        # historical misnomer this is not the place to fix) entirely on its own; adding a second
+        # consumer that needs the identical list is not a reason to add a second identical call.
+        # Approach (a) of the two considered: fetch here and hand the list to both
+        # ``_previous_period_summary`` (bounded to the previous calendar period) and
+        # ``_last_run_output`` (no period window, most-recent-only), rather than (b) one method
+        # doing both jobs and returning a pair. (a) keeps each method answering the ONE question
+        # its name says it answers, testable and readable on its own, and the two questions
+        # genuinely have different selection rules (a window vs. a pure recency-with-rollup-
+        # preference rule) that read worse interleaved in one body than side by side as two
+        # top-level calls. Best-effort exactly as before: a failed read degrades BOTH consumers
+        # the same way ``_previous_period_summary`` alone used to degrade on its own failed read
+        # (goals-only previous, and now also no last-run block) rather than losing anything or
+        # aborting the pass.
+        try:
+            quest_tasks: Optional[List[Dict[str, Any]]] = self._client.list_tasks(
+                team_id=self._team_id or None, goal_id=quest_id) or []
+        except Exception:  # noqa: BLE001 -- goals-only summary (no last-run block) beats no pass
+            log.info("autopilot: could not read prior tasks for quest %s", quest_id, exc_info=True)
+            quest_tasks = None
+        previous = self._previous_period_summary(quest_id, goals_payload, scope_label, quest_tasks)
+        # The previous run's own output, independent of any period boundary -- see
+        # ``select_last_run_output`` for why a period-scoped view alone cannot see it (a
+        # week/month/quarter/year-scoped quest's own last run sits inside its CURRENT period, and
+        # an unscoped quest gets no previous-period view at all). May mutate ``previous`` in place
+        # to drop a duplicate stub; see ``_last_run_output``'s own docstring.
+        last_run_text = self._last_run_output(quest_tasks or [], previous)
         # The standing artifact, read BEFORE this pass overwrites it: whatever the last refresh
         # concluded (possibly an attended session's, more recent than any pass) rides into the
         # batch as the plan of record.
@@ -1875,6 +2055,7 @@ class AutopilotPass:
                                                   scope_label=scope_label, adopted_tasks=tasks,
                                                   next_steps=standing_next_steps,
                                                   previous=previous,
+                                                  last_run=last_run_text,
                                                   reflection=reflection_text,
                                                   insights=insights_text,
                                                   context_updates=context_updates_text,
@@ -2197,11 +2378,18 @@ class AutopilotPass:
                  "detail": f"next-steps artifact written locally, but on Quest: {published.detail}"})
 
     def _previous_period_summary(self, quest_id: str, goals_payload: Dict[str, Any],
-                                 scope_label: str) -> Optional[Dict[str, Any]]:
+                                 scope_label: str,
+                                 tasks: Optional[List[Dict[str, Any]]]) -> Optional[Dict[str, Any]]:
         """Goals and finished tasks from the period before this one, for run-to-run continuity.
 
-        Returns None for an unscoped quest (there is no previous period to speak of). Best-effort:
-        a failure to read tasks degrades to goals-only rather than losing the whole summary."""
+        Returns None for an unscoped quest (there is no previous period to speak of).
+
+        ``tasks`` is this quest's task list, fetched ONCE by the caller (the per-quest pass body)
+        and shared with ``_last_run_output`` rather than each of them calling
+        ``list_tasks(goal_id=quest_id)`` for itself -- see the call site's own comment for why.
+        ``None`` here means that shared fetch failed, and this degrades to a goals-only summary
+        exactly as it did back when this method did its own fetching and catching: best-effort,
+        never losing the goals half over a tasks-side failure."""
         scope = (scope_label or "").split(":", 1)[0]
         if scope not in _SCOPE_ORDER:
             return None
@@ -2213,11 +2401,7 @@ class AutopilotPass:
             "goals": select_period_goals(goals_payload, scope, previous_key),
             "tasks": [],
         }
-        try:
-            tasks = self._client.list_tasks(
-                team_id=self._team_id or None, goal_id=quest_id) or []
-        except Exception:  # noqa: BLE001 -- goals-only is still a useful summary
-            log.info("autopilot: could not read prior tasks for quest %s", quest_id, exc_info=True)
+        if tasks is None:
             return summary
         bounds = previous_period_bounds(scope, self._now())
         if bounds is None:
@@ -2233,6 +2417,36 @@ class AutopilotPass:
             finished.append(t)
         summary["tasks"] = finished[-_MAX_PREVIOUS_TASKS:]
         return summary
+
+    def _last_run_output(self, tasks: List[Dict[str, Any]],
+                         previous: Optional[Dict[str, Any]]) -> Optional[str]:
+        """The rendered last-run-output block for this quest's batch text, or None.
+
+        Thin orchestration over the two module-level pure functions: ``select_last_run_output``
+        picks the task (its own docstring has the selection rules -- no period window, most recent
+        wins, a rolled-up pass row is preferred over its own child), ``render_last_run_output``
+        renders it. The one thing done HERE, rather than in either pure function, is de-duplicating
+        against ``previous``: the SAME task can be both "the most recent thing this quest ever
+        produced" (selected here) and "a task that finished inside the previous calendar period"
+        (already sitting in ``previous["tasks"]``, put there by ``_previous_period_summary`` --
+        this is the common case for a quest running at least as often as it looks back, since the
+        previous period's most recent finished task and the quest's most recent finished task are
+        often the same row). Left alone, that task would print TWICE in one batch: once here in
+        full, and once again a few lines later as its own 280-character stub in
+        ``_summarize_previous``'s per-task line. Dropping it from ``previous["tasks"]`` (mutating
+        the dict in place; the caller still needs the rest of it) is cheaper and more honest than
+        shortening either block to paper over the overlap: the reader sees the work once, in full,
+        exactly where the more specific of the two blocks puts it.
+        """
+        task = select_last_run_output(tasks)
+        if task is None:
+            return None
+        if previous is not None:
+            task_id = str(task.get("id") or task.get("task_id") or "")
+            if task_id:
+                previous["tasks"] = [t for t in previous.get("tasks") or []
+                                     if str(t.get("id") or t.get("task_id") or "") != task_id]
+        return render_last_run_output(task)
 
     def _gate_quest(self, quest: Dict[str, Any], quest_id: str) -> Optional[str]:
         """Per-quest gates, cheapest first. Returns a skip reason, or None if the quest passes."""
@@ -2444,6 +2658,7 @@ class AutopilotPass:
                            adopted_tasks: Optional[List[Dict[str, Any]]] = None,
                            next_steps: Optional[str] = None,
                            previous: Optional[Dict[str, Any]] = None,
+                           last_run: Optional[str] = None,
                            reflection: Optional[str] = None,
                            insights: Optional[str] = None,
                            context_updates: Optional[str] = None,
@@ -2456,6 +2671,7 @@ class AutopilotPass:
                                   self._persona_label(persona),
                                   scope_label=scope_label, adopted_tasks=adopted_tasks,
                                   next_steps=next_steps, previous=previous,
+                                  last_run=last_run,
                                   reflection=reflection, insights=insights,
                                   context_updates=context_updates,
                                   instructions=instructions,

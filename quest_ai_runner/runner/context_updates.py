@@ -89,6 +89,15 @@ FIRST_LOOK_DAYS = 14
 # material the way a user-scoped channel could.
 DEFAULT_ALWAYS: Sequence[str] = ("reflections", "insights", "quest_notes", "goal_updates")
 
+# Looking for where the previous AUTOPILOT RUN's own output comes from? It is NOT a source here.
+# ``runner/autopilot.py``'s ``compose_batch_text`` carries it as its own ``last_run`` parameter,
+# deliberately outside this registry: a source here is watermarked (delivered once, until
+# ``mark_seen()`` moves past it) because it answers "what has arrived since an assistant last
+# looked", and the previous run's output has to be in front of EVERY pass, not delivered once and
+# then withheld from the very next one. It is also the assistant's OWN prior output, not material
+# that arrived FROM a person, which is what every source in this registry models (see
+# ``QuestNotesSource`` above). See ``compose_batch_text``'s docstring for the full reasoning.
+
 # "Open until answered" needs a floor and a cap, or it stops being a question and becomes a
 # backlog. A note nobody answered a year ago is not something the person is waiting on today, and
 # carrying it into every brief forever trains the reader to skim past all of them -- which is the
