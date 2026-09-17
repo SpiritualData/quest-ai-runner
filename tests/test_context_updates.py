@@ -835,7 +835,11 @@ def test_a_card_can_watch_a_habit_by_its_name():
     from quest_ai_runner.runner.context_updates import UpdateEngine
 
     client = _CollectionClient([_habit_entry("e1", "2026-09-09", "started", 10573, 10)])
-    bundle = UpdateEngine(client, always=()).collect(
+    # Clock pinned, like test_only_habit_entries_since_the_last_look_are_offered below. These
+    # entry dates are absolute, and a first look reaches back FIRST_LOOK_DAYS from NOW, so on the
+    # real clock this test quietly stops seeing its own fixture as that window walks past it.
+    bundle = UpdateEngine(client, always=(),
+                          now_fn=lambda: _as_utc_for_test("2026-09-10")).collect(
         {"quest_id": "q1",
          "context_sources": [{"source": "collection", "name": "Focus on PhD Dissertation"}]},
         card_id="q1")
@@ -855,7 +859,11 @@ def test_a_week_of_habit_entries_is_one_update_not_seven():
 
     client = _CollectionClient([
         _habit_entry(f"e{d}", f"2026-09-0{d}", "started", 3600, 1) for d in range(3, 10)])
-    bundle = UpdateEngine(client, always=()).collect(
+    # Clock pinned. Without this the oldest of the seven falls out of the first-look window as
+    # soon as the real clock passes 2026-09-17, and the test starts asserting 7 against 6: the
+    # engine is behaving correctly and the fixture has simply aged out from under it.
+    bundle = UpdateEngine(client, always=(),
+                          now_fn=lambda: _as_utc_for_test("2026-09-10")).collect(
         {"quest_id": "q1", "context_sources": [{"source": "collection", "collection_id": "coll_1"}]},
         card_id="q1")
 
@@ -873,7 +881,10 @@ def test_a_habits_bookkeeping_fields_and_blanks_stay_out_of_the_brief():
     client = _CollectionClient([
         _habit_entry("e1", "2026-09-09", "started", 600, 1,
                      extra={"value_achieved": "   ", "notes": "read Ragin ch. 4"})])
-    body = UpdateEngine(client, always=()).collect(
+    # Clock pinned, same reason as the two tests above: an absolute fixture date against a
+    # window measured from now.
+    body = UpdateEngine(client, always=(),
+                        now_fn=lambda: _as_utc_for_test("2026-09-10")).collect(
         {"quest_id": "q1", "context_sources": [{"source": "collection", "collection_id": "coll_1"}]},
         card_id="q1").updates[0].body
 
