@@ -87,7 +87,19 @@ FIRST_LOOK_DAYS = 14
 # It is safe to default on precisely because it is card-scoped by construction (an update is
 # written ON a goal that belongs to THIS quest), so turning it on can never leak another card's
 # material the way a user-scoped channel could.
-DEFAULT_ALWAYS: Sequence[str] = ("reflections", "insights", "quest_notes", "goal_updates")
+#
+# ``quest_events`` is on this list for the identical reason as ``goal_updates``, one level up: a
+# quest-lifecycle change (the outcome rewritten, a milestone completed, the deadline moved) is
+# recorded against THIS quest's own id by construction (see ``QuestEventsSource``'s ``collect``,
+# which asks the backend for exactly this quest's rows), so defaulting it on can never surface
+# another card's activity. It is also the one channel that lets an autopilot pass find out a
+# person acted WITHOUT writing anything down anywhere -- completing a milestone or editing a
+# field leaves no note and no goal update, so a pass that only read those two channels would see
+# nothing at all and re-propose work the person had already done. Making it opt-in would
+# reproduce the exact ``quest_notes`` failure above under a new name: a signal that exists but
+# that a deployment has to remember to switch on is a signal that is effectively off.
+DEFAULT_ALWAYS: Sequence[str] = ("reflections", "insights", "quest_notes", "goal_updates",
+                                "quest_events")
 
 # Looking for where the previous AUTOPILOT RUN's own output comes from? It is NOT a source here.
 # ``runner/autopilot.py``'s ``compose_batch_text`` carries it as its own ``last_run`` parameter,
@@ -97,6 +109,14 @@ DEFAULT_ALWAYS: Sequence[str] = ("reflections", "insights", "quest_notes", "goal
 # then withheld from the very next one. It is also the assistant's OWN prior output, not material
 # that arrived FROM a person, which is what every source in this registry models (see
 # ``QuestNotesSource`` above). See ``compose_batch_text``'s docstring for the full reasoning.
+#
+# ``QuestEventsSource`` below is the opposite call, on purpose, not an oversight of this rule.
+# "What arrived since I last looked" is EXACTLY the question a quest's own lifecycle events
+# answer -- a milestone completed, an outcome rewritten -- so watermarking them is the correct
+# semantics here, the same way it is for ``QuestNotesSource`` and ``GoalUpdatesSource``, not the
+# mistake it would be for the previous run's own output above. And the material is not this
+# assistant's own prior output either: it is filtered to ``actor == "app"`` precisely so it only
+# ever carries something a PERSON did, which is what belongs in this registry in the first place.
 
 # "Open until answered" needs a floor and a cap, or it stops being a question and becomes a
 # backlog. A note nobody answered a year ago is not something the person is waiting on today, and
@@ -1541,6 +1561,165 @@ class GoalUpdatesSource(_BaseSource):
         return result
 
 
+def render_quest_event(event: Dict[str, Any]) -> str:
+    """One ``analytics_events`` row's ``event_data`` as a short line saying what changed.
+
+    ``quest_updated`` is the one that has to be handled with care: quest-backend's
+    ``AnalyticsService.track_quest_updated`` (and ``QuestManager.update_quest_field``, its single
+    sink) puts every field write under this ONE ``event_type``, distinguished only by
+    ``event_data["updated_fields"]``. So "they changed the outcome" and "they changed the current
+    state" are literally the same event name and only differ in this field -- reporting the bare
+    event_type here ("the quest was updated") would lose exactly the distinction this source
+    exists to carry, since a rewritten outcome and a moved current-state read as identical news.
+
+    Every other event type carries its own small, already-named payload (a milestone's id and
+    name, an old/new duration), so those just get pulled straight out.  An event_type this
+    function does not recognise still renders (as its own name with underscores turned to
+    spaces) rather than being dropped, so a future event added to quest-backend's vocabulary
+    shows up as SOMETHING rather than silently disappearing until this function is updated to
+    know about it.
+    """
+    event_type = str(event.get("event_type") or "").strip()
+    data = event.get("event_data") or {}
+    if event_type == "quest_updated":
+        fields = [str(f) for f in (data.get("updated_fields") or []) if f]
+        if fields:
+            return f"Changed the {', '.join(fields)} field{'s' if len(fields) > 1 else ''}"
+        return "Updated the quest"
+    if event_type == "quest_created":
+        outcome = data.get("outcome")
+        return f'Created the quest: "{_clip(outcome, 100)}"' if outcome else "Created the quest"
+    if event_type == "quest_completed":
+        return "Marked the quest complete"
+    if event_type == "quest_deleted":
+        return "Deleted the quest"
+    if event_type == "quest_archived":
+        return "Archived the quest"
+    if event_type == "quest_milestone_completed":
+        name = data.get("milestone_name")
+        return f'Completed the milestone "{_clip(name, 80)}"' if name else "Completed a milestone"
+    if event_type == "quest_duration_updated":
+        old_days, new_days = data.get("old_duration_days"), data.get("new_duration_days")
+        if old_days is not None and new_days is not None:
+            return f"Changed the quest duration from {old_days} to {new_days} day(s)"
+        return "Changed the quest duration"
+    return event_type.replace("_", " ").strip() or "quest activity"
+
+
+class QuestEventsSource(_BaseSource):
+    """What the quest's PERSON actually did to it since an assistant last looked.
+
+    THE GAP THIS FILLS. ``QuestNotesSource`` sees a person's words and ``GoalUpdatesSource`` sees
+    their check-ins, but neither sees a person just... doing the thing: ticking a milestone done
+    in the app, rewriting the outcome, moving the deadline. None of that writes a note or an
+    update, so an autopilot pass reading only those two channels sees nothing and can cheerfully
+    re-propose work, or re-ask about a milestone, the person already finished themselves. This is
+    the channel that lets a pass notice "they completed the milestone themselves" without being
+    told -- reading quest-backend's ``analytics_events`` (quest-backend commit 55ad92be made the
+    business layer actually emit ``quest_created``/``quest_updated``/``quest_completed``/
+    ``quest_deleted``/``quest_milestone_completed``/``quest_duration_updated``/``quest_archived``
+    from its single choke points, so an API-key write, an AI task and the app all produce the
+    same event) through the read endpoint added alongside this source
+    (``QuestClient.list_quest_events``, ``GET /api/quests/{quest_id}/events``).
+
+    WATERMARKING IS CORRECT HERE, not a mistake. See the block comment just above
+    ``DEFAULT_ALWAYS`` on why the previous AUTOPILOT RUN's own output (``runner/autopilot.py``'s
+    ``last_run``) is deliberately kept OUT of this registry: it has to be in front of every pass,
+    not delivered once and withheld from the next. A quest event is the opposite shape of thing.
+    "What changed since I last looked" is exactly what it answers, the events are the PERSON's
+    (see the actor filter below, not this assistant's own prior output), and re-showing an old
+    one forever would be exactly the fatigue the first-look bound and the other caps in this
+    module exist to prevent. Delivered once, like every other source here.
+
+    CARD-SCOPED, SO NEVER JUDGED (``judge_relevance = False``). ``collect`` asks the backend for
+    THIS quest's own id; the same reasoning ``QuestNotesSource`` states for itself applies letter
+    for letter -- relevance comes from WHERE (which quest) the event happened, not from a model's
+    opinion of it, and there is nothing here a relevance judge could do except occasionally lose
+    an event that plainly belongs.
+
+    NOT AN ASK (``tracks_asks = False``). Read ``_BaseSource.tracks_asks``'s own comment before
+    ever flipping this: a live run once tracked the habit log and the daily reflection as asks,
+    and the next morning both came back "still owed, needs an answer" -- an assistant asking a
+    person to answer their own diary. A quest event is the same shape of trap wearing a new name:
+    it is a RECORD of something that already happened, not a question anyone is waiting on an
+    answer to, so nothing here is owed a reply and nothing here belongs in the feedback ledger.
+
+    THE ACTOR FILTER IS THE WHOLE POINT, and it is conservative on purpose. ``analytics_events``
+    rows are written from the SAME business-layer choke points regardless of who or what caused
+    the change -- the app, an API-key caller (an AI task, autopilot, this very runner), or a
+    person signed in -- so ``user_id`` alone can never distinguish "the person did this" from
+    "their assistant did this on their behalf," and reading the latter back as the former is
+    exactly the self-observation loop quest-backend's own commit message for the ``actor`` field
+    (1dbb1871) names. ``collect`` therefore always asks the endpoint for ``actor="app"`` only.
+    ``api_key`` is deliberately NOT folded into "human" or into "AI" either: an API key
+    authenticates AS the account owner, which proves only that the write did NOT come from the
+    app, never that a model made it (a person's own script, a Zapier hook, or a future
+    integration could just as easily be behind it). Treating ``api_key`` as human would risk
+    showing a run its own prior write, or another AI's, back to it as if the person had done it;
+    treating it as AI would risk hiding a real integration-driven change a person set up
+    themselves. Excluding it is the conservative reading either way: this source can UNDER-report
+    (an ``api_key`` change a person genuinely made by hand through some other tool never surfaces
+    here) but it can never INVENT a person's action out of a write nobody can attribute to them,
+    which is the only direction of error this channel cannot afford.
+
+    RENDERED AS A SHORT LINE, not a raw dict (``render_quest_event``). A ``quest_updated`` row's
+    ``event_data`` only ever carries ``updated_fields``, so this is what turns "the quest was
+    updated" into "they changed the outcome" -- the distinction the whole point of this source
+    rests on. The event's own timestamp becomes ``occurred_at``, so the "and when" half of "what
+    changed and when" comes from the manifest line's own date column rather than being repeated
+    in the body.
+
+    CAPPED like ``QuestNotesSource``/``GoalUpdatesSource`` at ``MAX_OPEN_PER_SOURCE`` -- passed
+    straight to the endpoint's own ``limit``, so a quest edited thirty times in a day costs one
+    small request and never a page the model has to skim past to find the actual instructions.
+
+    NO DEDICATED ITEM ID. The read endpoint's response is exactly ``{event_type, event_data,
+    timestamp, user_id, actor}`` -- there is no event id to key off, so ``item_id`` is composed
+    from ``event_type`` and the row's own timestamp. That is unique enough for this source's own
+    purposes (nothing here enters the feedback ledger or the relay path, both of which are the
+    only things that lean on ``item_id`` for real identity), and good enough to dedupe the rare
+    case of the same card being collected twice in one pass via the engine's cache.
+    """
+    name = "quest_events"
+    describes = "quest lifecycle changes (outcome, deadline, milestones) the person made themselves"
+    judge_relevance = False
+    tracks_asks = False
+
+    def collect(self, request: CollectRequest) -> Sequence[ContextUpdate]:
+        client = request.client
+        quest_id = request.card_id
+        lister = getattr(client, "list_quest_events", None)
+        if not callable(lister) or not quest_id:
+            return []
+        since_iso = request.since.isoformat() if request.since else None
+        try:
+            events = list(lister(quest_id, since=since_iso, limit=MAX_OPEN_PER_SOURCE,
+                                 actor="app") or [])
+        except Exception as e:  # noqa: BLE001 -- one broken read never costs the rest of a bundle
+            log.info("context updates: could not read quest events for %s (%s)", quest_id, e)
+            return []
+        where = request.card_label or _card_label(request.card) or "this quest"
+        out: List[ContextUpdate] = []
+        for event in events:
+            if not isinstance(event, dict):
+                continue
+            summary = render_quest_event(event)
+            event_type = str(event.get("event_type") or "quest_event")
+            out.append(ContextUpdate(
+                source=self.name,
+                kind="quest event",
+                item_id=f"{event_type}:{event.get('timestamp')}",
+                body=summary,
+                excerpt=summary,
+                occurred_at=_as_utc(event.get("timestamp")),
+                location=where,
+                needs_response=False,
+                raw=dict(event),
+            ))
+        request.account(len(events))
+        return out
+
+
 class ReflectionsSource(_BaseSource):
     """The person's latest daily/period reflection (``runner.reflections``).
 
@@ -2497,6 +2676,7 @@ class UpdateEngine:
             InsightsSource(),
             QuestNotesSource(),
             GoalUpdatesSource(),
+            QuestEventsSource(),
             CollectionEntriesSource(),
             DriveCommentsSource(drive_comments),
             DriveChangesSource(drive_comments),

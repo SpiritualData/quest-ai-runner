@@ -25,6 +25,8 @@ Endpoints implemented (the contract from integration_library_design.md §3):
                GET  /api/quests/{quest_id}/state       (get_my_quest)
                GET  /api/quests/{quest_id}/notes       (list_quest_notes)
                POST /api/quests/{quest_id}/notes       (add_quest_note)
+               GET  /api/quests/{quest_id}/events      (list_quest_events; quest lifecycle
+               analytics events -- what the PERSON/AI/API changed, actor-attributed)
                GET  /api/quests/{quest_id}/context-entries            (list_context_entries)
                POST /api/quests/{quest_id}/context-entries            (create_context_entry)
                PUT  /api/quests/{quest_id}/context-entries/{entry_id} (update_context_entry)
@@ -1330,6 +1332,38 @@ class QuestClient:
             return resp if isinstance(resp, list) else []
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("add_quest_note failed for quest %s: %s", quest_id, e)
+            return []
+
+    def list_quest_events(self, quest_id: str, *, since: Optional[str] = None,
+                          limit: int = 20, actor: Optional[str] = None) -> List[Dict[str, Any]]:
+        """GET /api/quests/{quest_id}/events?since=&limit=&actor= — this quest's lifecycle
+        analytics events (quest_created, quest_updated, quest_completed, quest_deleted,
+        quest_milestone_completed, quest_duration_updated, quest_archived), newest first.
+
+        Each row is ``{event_type, event_data, timestamp, user_id, actor}``. ``since`` is an
+        ISO-8601 timestamp; only events strictly after it come back, the same watermark
+        semantics ``runner.context_updates.QuestEventsSource`` needs from every source it reads.
+        ``actor`` narrows to one value -- the source always passes ``"app"``, because an API-key
+        write (an AI task, autopilot, this very runner) authenticates AS the quest owner and
+        would otherwise be indistinguishable from one the person made themselves; see that
+        class's docstring for why that filter, not the endpoint, is where the honesty lives.
+
+        Returns [] on any failure: unconfigured client, network, or a backend old enough not to
+        have this route yet. That last case is not hypothetical -- this endpoint and the
+        ``actor`` field it depends on both landed the same day this method did, so a lane still
+        pointed at an older deployment must degrade to "no events" rather than raise.
+        """
+        try:
+            self._require()
+            params: Dict[str, Any] = {"limit": limit}
+            if since:
+                params["since"] = since
+            if actor:
+                params["actor"] = actor
+            resp = self._request("GET", f"/api/quests/{quest_id}/events", params=params) or []
+            return resp if isinstance(resp, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_quest_events failed for quest %s: %s", quest_id, e)
             return []
 
     def send_quest_email(self, quest_id: str, *, subject: str, body: str,
