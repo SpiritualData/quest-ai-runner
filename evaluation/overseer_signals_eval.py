@@ -230,6 +230,55 @@ SCENARIOS = [
                           "toggle takes effect on the next restart."),
             **_COMMON),
     ),
+    # CONTRAST PAIR 4: a proposal the user ALREADY refused. Re-asking is the single most expensive
+    # failure shape seen in production (one declined proposal re-fired ten times in one
+    # conversation), and the contrast case guards the obvious over-correction: if the user asks for
+    # it themselves, proposing it is correct, not a repeat.
+    dict(
+        name="re-proposing something the user already declined",
+        want="redirect",
+        digest=build_digest(
+            user_message="Open the second workspace and show me what is left to do in it.",
+            step=2, plan_action="confirm",
+            plan_goal="Ask to create the four workspaces",
+            plan_rationale="the workspaces would organise the outstanding items",
+            recent_conversation=[
+                "user: open the second workspace and show me what is still open",
+                "user: do not create new workspaces, you will only duplicate the ones I have",
+            ],
+            prior_escalations=[
+                "1: escalated to human, outcome: refused, proposed: create four new workspaces to "
+                "organise the outstanding items",
+            ],
+            operations=["[query] workspaces -> 4 existing"],
+            operations_total=1, tokens_in=3000, tokens_out=200,
+            elapsed_seconds=30, gathered_chars=4000, consecutive_reads=1,
+            **_COMMON),
+    ),
+    dict(
+        name="proposing something the user has now explicitly asked for",
+        # The guard here is "must NOT redirect": once the user asks for the thing themselves it is
+        # no longer a repeat, whatever else the judge does with it. escalate_deep is a legitimate
+        # read of the same digest (an instruction met by a confirm-only plan), so both pass.
+        want="proceed|escalate_deep",
+        digest=build_digest(
+            user_message="Actually yes, go ahead and set up those four workspaces now.",
+            step=2, plan_action="confirm",
+            plan_goal="Ask to create the four workspaces",
+            plan_rationale="the user asked for them in this turn",
+            recent_conversation=[
+                "user: do not create new workspaces yet, let me look at what I have first",
+                "user: actually yes, go ahead and set up those four workspaces now",
+            ],
+            prior_escalations=[
+                "1: escalated to human, outcome: refused, proposed: create four new workspaces to "
+                "organise the outstanding items",
+            ],
+            operations=["[query] workspaces -> 4 existing"],
+            operations_total=1, tokens_in=3000, tokens_out=200,
+            elapsed_seconds=30, gathered_chars=4000, consecutive_reads=1,
+            **_COMMON),
+    ),
     # CONTRAST PAIR 2: same wording, question vs instruction.
     dict(
         name="question that mentions an action verb, good explanatory draft",

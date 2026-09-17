@@ -2997,7 +2997,14 @@ def _recent_conversation_turns(conv_ctx_text: str, *, exclude: Optional[List[str
 def _prior_escalation_lines(prior_escalations: Optional[List[Dict[str, Any]]]) -> List[str]:
     """Format the caller-supplied ``prior_escalations`` history (Fix 7) into one-line strings for
     the digest's PRIOR ESCALATIONS THIS CONVERSATION section, e.g. "1: escalated to deep, outcome:
-    deep_met". Tolerant of missing/odd keys. Never raises."""
+    deep_met". Tolerant of missing/odd keys. Never raises.
+
+    An optional ``summary`` (what was actually proposed) is appended when the caller supplies it:
+    "2: escalated to human, outcome: refused, proposed: <summary>". Without it a refusal is invisible
+    as a REPEAT -- the digest said something was declined but not what, so nothing downstream could
+    tell that the run was about to propose the very same thing again. A real conversation re-fired
+    one declined proposal ten times across seventy-two messages for exactly this reason, twice
+    immediately after the user said "don't create these, you'll just make duplicates"."""
     try:
         lines: List[str] = []
         for i, e in enumerate(prior_escalations or [], start=1):
@@ -3005,7 +3012,11 @@ def _prior_escalation_lines(prior_escalations: Optional[List[Dict[str, Any]]]) -
                 continue
             kind = str(e.get("kind") or "unknown")
             outcome = str(e.get("outcome") or e.get("exit_reason") or "unknown")
-            lines.append(f"{i}: escalated to {kind}, outcome: {outcome}")
+            line = f"{i}: escalated to {kind}, outcome: {outcome}"
+            summary = e.get("summary") or e.get("proposal")
+            if summary and str(summary).strip():
+                line += f", proposed: {str(summary).strip()}"
+            lines.append(line)
         return lines
     except Exception:  # noqa: BLE001
         return []

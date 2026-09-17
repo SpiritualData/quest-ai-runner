@@ -545,6 +545,29 @@ def test_prior_escalation_lines_formats_and_numbers():
     assert _prior_escalation_lines([]) == []
 
 
+def test_prior_escalation_lines_carry_what_was_proposed():
+    """A refusal the digest cannot NAME is invisible as a repeat.
+
+    Without the proposal text the digest says something was declined but not what, so nothing
+    downstream can tell the run is about to put the very same proposal up again -- the shape that
+    let one declined proposal re-fire ten times in a single conversation.
+    """
+    lines = _prior_escalation_lines([
+        {"kind": "human", "outcome": "refused",
+         "summary": "create four new quests to organise the meeting actions"},
+        {"kind": "human", "outcome": "refused", "proposal": "same four quests, re-titled"},
+        {"kind": "deep", "outcome": "deep_met"},                      # no summary: unchanged
+        {"kind": "human", "outcome": "refused", "summary": "   "},    # blank: unchanged
+    ])
+    assert lines == [
+        "1: escalated to human, outcome: refused, proposed: create four new quests to organise the "
+        "meeting actions",
+        "2: escalated to human, outcome: refused, proposed: same four quests, re-titled",
+        "3: escalated to deep, outcome: deep_met",
+        "4: escalated to human, outcome: refused",
+    ]
+
+
 def test_digest_prior_escalations_section_default_and_populated():
     d_empty = build_digest(user_message="q", step=1, max_steps=3)
     # Fix 7: unlike other optional sections, this one ALWAYS appears (even "none yet").

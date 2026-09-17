@@ -170,6 +170,16 @@ Rules:
     question", "I already said", "stop talking about X", "that's not what I asked"), treat the next
     draft with more suspicion, not less: the run has already failed this user once, so a second miss
     on the same point is a redirect, not a proceed.
+  - A REFUSAL IS AN ANSWER. If PRIOR ESCALATIONS THIS CONVERSATION shows a proposal was already
+    refused, declined or rejected ("outcome: refused, proposed: ..."), and the CURRENT PLAN or DRAFT
+    ANSWER is about to put substantially THE SAME proposal to the user again, that is a redirect
+    (hint: they already declined this; do what they asked instead of re-asking). Compare it against
+    what was refused, not against the exact wording: the same action on the same objects is the same
+    proposal even if it is re-phrased, re-ordered, split up or re-titled. The user declining
+    something is information the run must carry forward, not a question to ask again in a new form.
+    Re-proposing it once the user has ALSO said so in words ("do not create these", "stop asking")
+    is the clearest redirect there is. Only treat it as new if the user themselves asked for it
+    again, or the underlying request genuinely changed.
   - Keep "reason" to one short sentence, plain and safe to show the user.
   - Only set "hint" for a redirect, and keep it to a single short correction.
 
