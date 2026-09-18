@@ -217,6 +217,56 @@ class GeminiProvider(ModelProviderBase):
                 break
         return {"answer": answer, "results": results}
 
+    def supports_url_fetch(self, model=None) -> bool:
+        """Gemini can fetch specific URLs via its url_context tool; needs only the API key."""
+        return bool(self._api_key)
+
+    @retry_transient(max_retries=2, base_delay=1.0)
+    def fetch_url(self, url: str, *, model: str, instruction: Optional[str] = None) -> Dict[str, Any]:
+        """Fetch ONE page's content via Gemini's url_context tool (no extra key, no scraper).
+
+        Google retrieves the page server-side, so this works where a plain HTTP GET from this
+        machine is blocked, rate-limited, or returns a JavaScript shell instead of content.
+
+        Returns ``{"text": <page content as text>, "url": url, "status": <retrieval status>}``.
+        Raises when the page could not be retrieved, so callers can fall back to a direct GET.
+        """
+        client = self._get_client()
+        from google.genai import types
+
+        ask = instruction or (
+            "Return the full visible text content of this page, verbatim and complete, as plain "
+            "text with its structure preserved. Do not summarize, comment, or add anything."
+        )
+        self.call_count += 1
+        response = client.models.generate_content(
+            model=model,
+            contents=f"{ask}\n\n{url}",
+            config=types.GenerateContentConfig(tools=[types.Tool(url_context=types.UrlContext())]),
+        )
+        meta = getattr(response, "usage_metadata", None)
+        if meta:
+            self.tokens_in += getattr(meta, "prompt_token_count", 0) or 0
+            self.tokens_out += getattr(meta, "candidates_token_count", 0) or 0
+
+        status = ""
+        retrieved = url
+        for cand in (getattr(response, "candidates", None) or []):
+            um = getattr(cand, "url_context_metadata", None)
+            for entry in (getattr(um, "url_metadata", None) or []):
+                status = str(getattr(entry, "url_retrieval_status", "") or "")
+                retrieved = getattr(entry, "retrieved_url", "") or retrieved
+                break
+            if status:
+                break
+
+        text = getattr(response, "text", "") or ""
+        if status and "SUCCESS" not in status.upper():
+            raise RuntimeError(f"url_context could not retrieve {url}: {status}")
+        if not text.strip():
+            raise RuntimeError(f"url_context returned no content for {url}")
+        return {"text": text, "url": retrieved, "status": status or "URL_RETRIEVAL_STATUS_SUCCESS"}
+
     @retry_transient(max_retries=2, base_delay=1.0)
     def _list_models_api(self) -> List[str]:
         """Call Gemini API to list models; wrapped by list_models() for caching."""

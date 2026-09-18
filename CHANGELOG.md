@@ -6,7 +6,28 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **`GeminiProvider.fetch_url()` / `supports_url_fetch()`** (`adapters/gemini_provider.py`): fetch
+  ONE page's content via Gemini's `url_context` tool, so Google retrieves the page server-side
+  instead of this machine making a direct HTTP GET (useful where a direct fetch is blocked,
+  rate-limited, or returns a JavaScript shell instead of content). `supports_url_fetch()` needs
+  only the API key, same as the existing `supports_web_search()`. `fetch_url()` returns
+  `{"text", "url", "status"}` and raises a `RuntimeError` when the tool's own retrieval-status
+  metadata reports anything other than SUCCESS, or when the response text comes back empty, so a
+  caller can fall back to a direct fetch instead of silently treating a failed retrieval as
+  content. Tests: `tests/test_gemini_url_fetch.py`.
+
 ### Fixed
+- **`CompositeRetrievalAdapter.list_sources()` / `list_operations()` corrupted any merged line
+  whose first colon fell inside its own content rather than at the intended name/description
+  boundary.** Both methods split each line on its first `:` to dedupe across adapters, then
+  REBUILT the line as `f"{name}: {desc}"` -- for a line that is itself an example call containing
+  a URL, e.g. `read_section("https://example.com/page")`, the line's first colon is the one in
+  `"https:"`, so the old code split there and rejoined it as
+  `read_section("https: //example.com/page")`: a space inserted after the scheme that was never in
+  the source line. Fixed by keeping each merged line VERBATIM; only the text before its first
+  colon is used as the dedup key, never rebuilt into the output. Tests:
+  `tests/test_composite_retrieval_verbatim_lines.py`.
 - **Autopilot created a duplicate pass series on every scan for a quest it does not own** (and on
   any failed listing). Two independent causes, both fixed in `Poller._ensure_autopilot_pass`:
   - The liveness check ("does this quest already have an open pass?") read ONE team-wide

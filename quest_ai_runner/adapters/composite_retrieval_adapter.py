@@ -166,8 +166,11 @@ class CompositeRetrievalAdapter:
         """List sources from all adapters, deduplicated."""
         results = self._run_all("list_sources")
 
-        # Combine all source listings
-        all_sources: Dict[str, str] = {}  # name -> description
+        # Combine all source listings. The leading "name:" is only used to DEDUPE across adapters;
+        # the line itself is kept verbatim, because rebuilding it as f"{name}: {desc}" corrupted any
+        # line whose first colon was inside its content (a "https://..." example came back as
+        # "https: //...").
+        all_sources: Dict[str, str] = {}  # name -> original line
 
         for adapter, obs in results:
             if obs.kind == "error":
@@ -180,14 +183,13 @@ class CompositeRetrievalAdapter:
                     parts = line.split(":", 1)
                     if len(parts) == 2:
                         name = parts[0].strip()
-                        desc = parts[1].strip()
                         if name not in all_sources:
-                            all_sources[name] = desc
+                            all_sources[name] = line.rstrip()
 
         if not all_sources:
             return Observation(kind="error", error="no sources found in any adapter")
 
-        combined = "\n".join(f"{name}: {desc}" for name, desc in sorted(all_sources.items()))
+        combined = "\n".join(line for _, line in sorted(all_sources.items()))
         return Observation(kind="query", text=combined)
 
     def describe_source(self, name: str, *, path: Optional[str] = None) -> Observation:
@@ -206,7 +208,7 @@ class CompositeRetrievalAdapter:
         """List operations from all adapters, deduplicated."""
         results = self._run_all("list_operations")
 
-        all_ops: Dict[str, str] = {}  # name -> description
+        all_ops: Dict[str, str] = {}  # name -> original line (kept verbatim, see list_sources)
 
         for adapter, obs in results:
             if obs.kind == "error":
@@ -218,14 +220,13 @@ class CompositeRetrievalAdapter:
                     parts = line.split(":", 1)
                     if len(parts) == 2:
                         name = parts[0].strip()
-                        desc = parts[1].strip()
                         if name not in all_ops:
-                            all_ops[name] = desc
+                            all_ops[name] = line.rstrip()
 
         if not all_ops:
             return Observation(kind="error", error="no operations found in any adapter")
 
-        combined = "\n".join(f"{name}: {desc}" for name, desc in sorted(all_ops.items()))
+        combined = "\n".join(line for _, line in sorted(all_ops.items()))
         return Observation(kind="query", text=combined)
 
     def describe_operation(self, name: str) -> Observation:
