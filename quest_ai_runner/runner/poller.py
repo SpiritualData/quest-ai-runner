@@ -1145,9 +1145,19 @@ class Poller:
         """Bring ONE quest's pass into line: its series exists and holds the expected schedule,
         and a pending "Run now" the series cannot absorb gets a one-off catch-up instead.
 
-        An occurrence owned by ANOTHER account is counted for liveness and nothing else: it is
-        real work that exists, so it must never be answered with a second pass, but no write this
-        lane makes against it can land (see ``_unwritable_pass_occurrences``).
+        An occurrence owned by ANOTHER account is INERT and is excluded from every decision here.
+        It cannot run: task discovery is scoped to the caller's own ``user_id``
+        (quest-backend ``assistant_task_storage.list_assistant_tasks`` builds
+        ``query = {"user_id": ...}`` and only narrows from there), and no lane authenticates as
+        that owner. It cannot be retuned, retired or cancelled either, because the task PATCH is
+        owner-scoped and 404s. So it is a dead row, and counting it as proof that the quest's pass
+        exists is what leaves the quest with NO runnable pass at all, forever, silently.
+
+        It is still logged every scan, because a human can clear it in the app and the ids are what
+        they need. The trade this accepts: if a second lane ever ran as that other account, the
+        quest would briefly have two live series. Nothing does that today (one app account per
+        lane), and the alternative failure, a quest whose autopilot never runs again, is worse and
+        harder to see.
 
         Only the SERIES occurrences steer anything here (the duplicate warning, the retune, and
         the create-when-missing all count those alone). The catch-ups are read for exactly one
@@ -1160,9 +1170,10 @@ class Poller:
         if foreign:
             log.warning("autopilot: quest %s has %d open pass occurrence(s) owned by another "
                         "account (%s) -- this lane can neither run nor cancel them (an "
-                        "owner-scoped PATCH 404s), so it is leaving them alone and creating "
-                        "nothing. A human has to cancel them in the app; passes created from now "
-                        "on are assigned to this lane's own account.",
+                        "owner-scoped PATCH 404s), and nothing can run them, so they are ignored "
+                        "for liveness and this lane keeps its own pass. Clear them in the app when "
+                        "convenient; passes created from now on are assigned to this lane's own "
+                        "account.",
                         quest_id, len(foreign),
                         [o.get("id") or o.get("task_id") for o in foreign])
         writable = [o for o in occurrences if o not in foreign]
@@ -1175,7 +1186,9 @@ class Poller:
                 self._retire_quest_pass(quest_id, writable, "mode off")
             return
 
-        series, catch_ups = self._split_pass_occurrences(occurrences)
+        # WRITABLE only: a foreign-owned occurrence is inert (see this method's docstring), so it
+        # neither stands in for the series nor counts toward the duplicate warning.
+        series, catch_ups = self._split_pass_occurrences(writable)
         if len(series) > 1:
             ids = [o.get("id") or o.get("task_id") for o in series]
             log.warning("autopilot: quest %s has %d open pass occurrences (%s) -- acting on the "

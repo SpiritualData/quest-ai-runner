@@ -280,14 +280,15 @@ def test_no_assignee_is_sent_when_the_lane_does_not_know_its_own_account():
     assert "assignee_user_id" not in client.created[0]
 
 
-def test_a_pass_owned_by_someone_else_is_reported_and_left_alone(caplog):
-    """The trap the fix creates, pinned.
+def test_a_pass_owned_by_someone_else_is_reported_and_replaced(caplog):
+    """A foreign-owned pass is INERT, so it must not stand in for the quest's series.
 
-    Passes created BEFORE this change are owned by the quest's human owner, and the task PATCH
-    route is owner-scoped, so the lane can neither run them nor cancel them: a retune or a retire
-    is a 404, every scan, forever. The one thing it must NOT do is answer that by creating another
-    pass, since the occurrence is alive. So it names the task ids and stops, and a human cancels
-    them in the app.
+    Passes created BEFORE the assignee fix are owned by the quest's human owner. The lane can
+    neither run them (discovery is scoped to the caller's own user_id) nor cancel them (the task
+    PATCH is owner-scoped and 404s). Treating one as "the series exists" therefore leaves the quest
+    with no runnable pass at all, forever and silently, which is exactly the failure this whole
+    area keeps producing. So the lane ignores it for liveness and creates its own, while still
+    naming the id every scan so a human can clear the dead row when convenient.
     """
     foreign = {"id": "p_old", "task_kind": "autopilot", "status": "queued", "goal_id": "q1",
                "user_id": "human_owner", "created_by": FakePassClient.user_id,
@@ -301,6 +302,7 @@ def test_a_pass_owned_by_someone_else_is_reported_and_left_alone(caplog):
     with caplog.at_level("WARNING"):
         _poller(client, lane_user_id=FakePassClient.user_id)._ensure_autopilot_pass()
 
-    assert client.created == []        # never answer an unusable pass with another pass
+    assert len(client.created) == 1    # the quest gets a pass this lane can actually run
+    assert client.created[0]["assignee_user_id"] == FakePassClient.user_id
     assert client.update_calls == []   # and never retry a PATCH that can only 404
-    assert "p_old" in caplog.text      # the human needs the id to cancel it
+    assert "p_old" in caplog.text      # the human still gets the id, to clear the dead row
