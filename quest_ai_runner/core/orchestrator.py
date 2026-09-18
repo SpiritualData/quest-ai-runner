@@ -5720,7 +5720,14 @@ class Orchestrator:
                   ctx_meta: Optional[Dict[str, Any]] = None,
                   cancel_check: Optional[Callable[[], bool]] = None,
                   runner_override: Optional[Any] = None,
-                  working_dir_override: Optional[str] = None) -> OrchestratorResult:
+                  working_dir_override: Optional[str] = None,
+                  resume_session_id: Optional[str] = None) -> OrchestratorResult:
+        # ``resume_session_id``: a session left behind by an EARLIER RUN of this thread (see
+        # ``Orchestrator.run``). The first attempt of a SINGLE-goal deep run picks it up through
+        # the same ``resume_session`` variable the within-run turn-budget continuation uses, so
+        # there is exactly one resume path. It is deliberately NOT applied to a fanned-out
+        # multi-subgoal run: those subgoals run concurrently, and pointing several workers at one
+        # session would interleave them in a single transcript. None = a cold start, as before.
         # ``runner_override``: PIN a specific runner for every goal of this call, bypassing the
         # named-runner classifier. Used by the deferred_deep hand-off in a queued deployment
         # (OrchestratorConfig.deferred_deep_queued) so deferred work always reaches the consumer's
@@ -6037,7 +6044,11 @@ class Orchestrator:
             # ran out of turns and its worker session can be picked up again; ``attempt_turns`` is
             # the budget for the next attempt, grown once per continuation so a task that simply
             # needed more room gets it instead of hitting the same wall every attempt.
-            resume_session: Optional[str] = None
+            # ...and it is ALSO where an ACROSS-RUN resume enters: a session a previous run of this
+            # thread left behind (``resume_session_id``) is simply the value this starts at, so the
+            # first attempt continues it exactly as a continuation attempt would. Single-goal runs
+            # only: see the note on the parameter for why a fan-out never resumes.
+            resume_session: Optional[str] = None if multi else (resume_session_id or None)
             attempt_turns = self.cfg.deep_max_turns
             continued = 0
             for attempt in range(1, max_iters + 1):
@@ -7277,6 +7288,7 @@ class Orchestrator:
             prior_narration: Optional[List[str]] = None,
             anticipated_id: Optional[str] = None,
             message_is_user_turn: bool = True,
+            resume_session_id: Optional[str] = None,
             now: Optional[str] = None) -> OrchestratorResult:
         """Run the bounded loop for one request and return a terminal OrchestratorResult.
 
@@ -7372,6 +7384,17 @@ class Orchestrator:
                             PREVIOUS turn(s), capped by the caller to a handful of lines. Feeds the
                             narrator's repeat-detector and its ack/relay prompts (see ``Narrator``).
                             Absent/None means "no cross-turn memory" (today's behavior).
+        * ``resume_session_id`` -- optional id of a deep-worker session an EARLIER run (a previous
+                            run of the same task/thread, hours or days ago) left behind. When set,
+                            the FIRST deep attempt of this turn resumes that session instead of
+                            opening a fresh one, so it starts holding what that run read and
+                            decided. It rides the same plumbing as the within-run turn-budget
+                            continuation (see ``_run_deep``) rather than a second resume path, and
+                            it is consumed ONCE per turn: a later deep call in the same turn starts
+                            cold, since the thread has one session to continue, not several.
+                            Best effort by contract: a runner that cannot resume ignores it, and a
+                            session the worker no longer holds degrades to a cold start rather than
+                            failing the run. Absent/None means exactly today's behavior.
         * ``now``          -- optional ISO date/datetime string, the CALLER's notion of "now". Fed
                             into goal-condition/constraint derivation (see ``_derive_goal_condition``)
                             so a relative date in the message ("Wednesday", "last week") resolves
@@ -7421,6 +7444,19 @@ class Orchestrator:
         exec_record = ExecutionRecord()
         started = time.monotonic()
         cfg = self.cfg
+
+        # ACROSS-RUN SESSION CONTINUITY, consumed ONCE. ``resume_session_id`` names the session a
+        # previous RUN of this thread left behind; a turn can reach deep execution by more than one
+        # route (the main deep path, a deferred hand-off, an escalation from the answer turn), and
+        # only the first of them may pick that session up. A thread has one session to continue, so
+        # handing the same id to a second deep call would put two workers in one transcript.
+        pending_resume: Dict[str, Optional[str]] = {
+            "id": (resume_session_id or "").strip() or None}
+
+        def take_resume_session() -> Optional[str]:
+            sid = pending_resume["id"]
+            pending_resume["id"] = None
+            return sid
 
         # --- EXECUTION MODE (brainstorm latch, consumer-owned) --------------------------------
         # ``brainstorm_active`` gates every path that could ACT this turn (deep, confirm, and the
@@ -8858,7 +8894,8 @@ class Orchestrator:
                                  gathered=gathered, quality_standards=quality_standards,
                                  pending_inputs=pending_inputs, model_hint=model_hint,
                                  ctx_meta=_ctx_meta, cancel_check=cancel_check,
-                                 working_dir_override=working_dir_override)
+                                 working_dir_override=working_dir_override,
+                                 resume_session_id=take_resume_session())
             if res.kind == "cancelled":
                 return finish(res)
             res.exit_reason = "deep_met" if (res.deep_results and all(d.met for d in res.deep_results)) else "deep_not_met"
@@ -8976,7 +9013,8 @@ class Orchestrator:
                         gathered=gathered, quality_standards=quality_standards,
                         pending_inputs=pending_inputs, model_hint=model_hint,
                         ctx_meta=_ctx_meta, cancel_check=cancel_check,
-                        working_dir_override=working_dir_override)
+                        working_dir_override=working_dir_override,
+                        resume_session_id=take_resume_session())
                     if _ov_res.kind == "cancelled":
                         return finish(_ov_res)
                     _ov_res.exit_reason = "overseer_escalated_deep"
@@ -9143,7 +9181,8 @@ class Orchestrator:
                                          pending_inputs=pending_inputs, model_hint=model_hint,
                                          ctx_meta=_ctx_meta, cancel_check=cancel_check,
                                          runner_override=_deferred_runner,
-                                         working_dir_override=working_dir_override)
+                                         working_dir_override=working_dir_override,
+                                         resume_session_id=take_resume_session())
                 if deep_res.kind == "cancelled":
                     return finish(deep_res)
                 # WHAT ACTUALLY CAME BACK? Three outcomes, and the reply must match the one that
@@ -9362,7 +9401,8 @@ class Orchestrator:
                                                       pending_inputs=pending_inputs,
                                                       model_hint=model_hint, ctx_meta=_ctx_meta,
                                                       cancel_check=cancel_check,
-                                                      working_dir_override=working_dir_override)
+                                                      working_dir_override=working_dir_override,
+                                                      resume_session_id=take_resume_session())
                             if _rem_res.kind == "cancelled":
                                 return finish(_rem_res)
                             _rem_out = ""
@@ -9422,7 +9462,8 @@ class Orchestrator:
                             gathered=gathered, quality_standards=quality_standards,
                             pending_inputs=pending_inputs, model_hint=model_hint,
                             ctx_meta=_ctx_meta, cancel_check=cancel_check,
-                            working_dir_override=working_dir_override)
+                            working_dir_override=working_dir_override,
+                            resume_session_id=take_resume_session())
                         if _esc_res.kind == "cancelled":
                             return finish(_esc_res)
                         _esc_res.exit_reason = "escalated_deep"

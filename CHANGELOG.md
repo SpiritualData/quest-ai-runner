@@ -7,6 +7,34 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Session continuity ACROSS runs**, so one thread of work can be continued by a run that starts
+  hours or days later (spec: `one_thread_many_runs`). Until now a deep worker's Claude session lived
+  and died inside a single call: the goal loop could continue it while that call lasted, and the id
+  was discarded when the call returned, so a reply or a recurring run started cold and paid again
+  for everything the last run had read and decided. Two additive halves, both optional on the wire:
+  - **Outbound**: a run reports the session it leaves behind alongside its terminal status.
+    `TaskExecutor` reads it from the run's deep results (`terminal_session_id`) and `QuestClient`'s
+    `report_done` / `report_needs_you` / `report_failed` / `report_done_with_data` send it as
+    `session_id`. Only when there IS one: a run with no session (a plain answer, a crash, a
+    non-subprocess deep runner) sends nothing rather than an empty string, so a backend that knows
+    nothing about the field receives exactly the body it received before. A client whose report
+    methods do not accept `session_id` is called exactly as it always was. Reported on a FAILED run
+    too, since that is the run a person is most likely to reply to.
+  - **Inbound**: a task carrying `resume_session_id` opens its first deep attempt with
+    `--resume <id>` instead of a fresh `--session-id`, via `Orchestrator.run(resume_session_id=...)`
+    and the SAME `resume_session` plumbing the within-run turn-budget continuation already uses (one
+    resume path, not two). It is consumed once per turn, and a fanned-out multi-subgoal run never
+    resumes, because a thread has one session to continue and several concurrent workers cannot
+    share one transcript. A deep runner that does not accept `resume_session_id` simply never
+    resumes.
+  - **Resume is best effort.** Measured against the real binary: `claude -p --resume <unknown-id>`
+    exits 1 with empty stdout and "No conversation found with session ID: ..." on stderr. Sessions
+    are pruned over time, so an across-run resume meets this routinely. `SubprocessGoalRunner` now
+    recognises exactly that case (`resume_target_missing`: non-zero exit AND no output AND that
+    stderr) and runs the goal once more from a cold start, which is what the run would have been
+    had no session been offered. Any other failure of a resumed run is reported as the failure it
+    is. Tests: `tests/test_session_continuity_across_runs.py`. Docs:
+    `docs/deep-run-continuation.md`.
 - **`GeminiProvider.fetch_url()` / `supports_url_fetch()`** (`adapters/gemini_provider.py`): fetch
   ONE page's content via Gemini's `url_context` tool, so Google retrieves the page server-side
   instead of this machine making a direct HTTP GET (useful where a direct fetch is blocked,

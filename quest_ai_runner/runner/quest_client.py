@@ -324,32 +324,60 @@ class QuestClient:
             log.warning("claim failed for task %s: %s", task_id, e)
             return None
 
-    def report_done(self, task_id: str, result: str) -> Dict[str, Any]:
+    @staticmethod
+    def _with_session(body: Dict[str, Any], session_id: Optional[str]) -> Dict[str, Any]:
+        """Add the run's ``session_id`` to a terminal report body, when there is one.
+
+        THE THREAD'S IDENTITY OUTSIDE ONE PROCESS. A deep run's Claude session used to live and die
+        inside one call: the id existed on the ``DeepResult`` and was never told to anyone, so a run
+        tomorrow could not pick up the session a run today left behind. Reporting it here is what
+        lets a backend store it on the thread and hand it back as ``resume_session_id`` on the next
+        run (see ``TaskExecutor.execute``).
+
+        Additive and optional in both directions: an empty/missing id sends NOTHING (never an empty
+        string), so a backend that knows nothing about the field receives byte-for-byte the body it
+        received before, and a backend that does know about it simply learns nothing new from a run
+        that had no session (a crash, a non-subprocess deep runner, a plain answer turn).
+        """
+        sid = (session_id or "").strip()
+        if sid:
+            body["session_id"] = sid
+        return body
+
+    def report_done(self, task_id: str, result: str,
+                    session_id: Optional[str] = None) -> Dict[str, Any]:
         try:
             return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
-                                 body={"status": "done", "result": result})
+                                 body=self._with_session(
+                                     {"status": "done", "result": result}, session_id))
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("report_done failed for task %s: %s", task_id, e)
             return {}
 
-    def report_needs_you(self, task_id: str, result: str, decision_id: str) -> Dict[str, Any]:
+    def report_needs_you(self, task_id: str, result: str, decision_id: str,
+                         session_id: Optional[str] = None) -> Dict[str, Any]:
         try:
             return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
-                                 body={"status": "needs_you", "result": result, "decision_id": decision_id})
+                                 body=self._with_session(
+                                     {"status": "needs_you", "result": result,
+                                      "decision_id": decision_id}, session_id))
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("report_needs_you failed for task %s: %s", task_id, e)
             return {}
 
-    def report_failed(self, task_id: str, result: str) -> Dict[str, Any]:
+    def report_failed(self, task_id: str, result: str,
+                      session_id: Optional[str] = None) -> Dict[str, Any]:
         try:
             return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
-                                 body={"status": "failed", "result": result})
+                                 body=self._with_session(
+                                     {"status": "failed", "result": result}, session_id))
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("report_failed for task %s: %s", task_id, e)
             return {}
 
     def report_done_with_data(self, task_id: str, result: str,
-                              result_data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                              result_data: Optional[Dict[str, Any]] = None,
+                              session_id: Optional[str] = None) -> Dict[str, Any]:
         """PATCH done with an OPTIONAL structured ``result_data`` payload alongside the plain text.
 
         Used by the context-request fast path (see ``poller._handle_context_request``) to carry
@@ -357,7 +385,7 @@ class QuestClient:
         ``result`` field, which every other caller still reads/renders as-is. Omitting
         ``result_data`` (or passing an empty dict/list) is IDENTICAL to plain ``report_done``.
         """
-        body: Dict[str, Any] = {"status": "done", "result": result}
+        body: Dict[str, Any] = self._with_session({"status": "done", "result": result}, session_id)
         if result_data:
             body["result_data"] = result_data
         try:

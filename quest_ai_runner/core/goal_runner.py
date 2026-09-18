@@ -216,6 +216,29 @@ def extract_escalation_id(output: str) -> Optional[str]:
     return decision_id
 
 
+# What Claude Code says, on stderr, when asked to resume a session it no longer holds. Measured,
+# not assumed (2026-09-18): `claude -p --output-format json --resume <unknown-uuid>` exits 1, prints
+# NOTHING on stdout, and writes exactly "No conversation found with session ID: <id>" on stderr.
+# Sessions are per project directory and are pruned over time, so an across-run resume of a session
+# from days ago meets this routinely; it is an ordinary outcome, not an error the person should see.
+RESUME_TARGET_MISSING_MARKERS = ("no conversation found", "no session found")
+
+
+def resume_target_missing(returncode: int, output: str, stderr: Optional[str]) -> bool:
+    """Whether this failure is "the session to resume is gone", and nothing else.
+
+    Deliberately narrow, because the response to it (throw the run away and start it again cold) is
+    the WRONG response to any other failure. All three must hold: the worker exited non-zero, it
+    produced no result text at all (it never got as far as running the goal), and its own stderr
+    says the conversation was not found. A run that resumed fine and then failed has output, a
+    different error, or both, so it is never mistaken for this.
+    """
+    if returncode == 0 or (output or "").strip():
+        return False
+    low = (stderr or "").strip().lower()
+    return any(marker in low for marker in RESUME_TARGET_MISSING_MARKERS)
+
+
 def _parse_worker_output(raw: str) -> tuple:
     """Parse Claude Code's ``--output-format json`` envelope into
     (result_text, tokens, cost, is_error, subtype).
@@ -1089,6 +1112,24 @@ class SubprocessGoalRunner(DeepRunner):
         # result; ``tokens``/``cost`` feed the goal loop's overall token budget. If parsing fails
         # (older worker, plain text), fall back to treating stdout as the result with no usage.
         out, tokens, cost, json_is_error, subtype = _parse_worker_output(raw)
+
+        # RESUME IS BEST EFFORT. The session we were asked to continue is gone (pruned, another
+        # machine, a different project directory), so the worker refused before doing anything at
+        # all. Continuity is an optimisation; the WORK is the point. Run the goal once more from a
+        # cold start, which is precisely what this run would have been had no session been offered.
+        # One retry only, because the retry passes ``resume_session_id=None`` and so can never come
+        # back here. Any other resume failure is left alone and reported as the failure it is.
+        if resume_session_id and resume_target_missing(proc.returncode, out, err):
+            _log.info("resume target %s is no longer available; running this goal from a cold "
+                      "start instead", resume_session_id)
+            if emit is not None:
+                emit(ProgressEvent(
+                    type=EVENT_EXEC,
+                    text="The earlier session is no longer available, so this run starts fresh.",
+                    data={"run_id": run_id, "phase": "resume_unavailable"}))
+            return self.run_goal(goal=goal, brief=brief, model=model, max_turns=max_turns,
+                                 emit=emit, context_preamble=context_preamble, run_id=run_id,
+                                 working_dir=working_dir, resume_session_id=None)
 
         # The escalation-marker contract: the worker raised a human decision mid-run and printed
         # ``QAR-ESCALATED: <decision_id>``. That overrides met-vs-limit — the run is PAUSED on a

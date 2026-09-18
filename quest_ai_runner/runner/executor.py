@@ -20,6 +20,7 @@ it can be unit-tested against a mock Quest client + stub brain with no network.
 """
 from __future__ import annotations
 
+import inspect
 import logging
 import time
 from dataclasses import dataclass
@@ -366,6 +367,46 @@ def _autopilot_composed_text(task: Dict[str, Any]) -> bool:
     return str(task.get("task_kind") or "").strip().lower() == AUTOPILOT_WORK_KIND
 
 
+def terminal_session_id(result: OrchestratorResult) -> Optional[str]:
+    """The session id THIS run leaves behind for the next run on the same thread, or None.
+
+    A turn can produce several deep results (one per fanned-out subgoal), and only one id can be
+    the thread's. We take the LAST one that carries a session, because that is the session holding
+    the most recent state: the subgoals run in order, so the last worker to open a session is the
+    one whose transcript ends nearest to where a follow-up would pick up. It is a choice, not a
+    fact about which session is "best" -- a fan-out genuinely has several live sessions and the
+    thread can only continue one of them. (Within-run continuation is unaffected: a continued
+    attempt keeps its OWN session id, so the id reported here is still that subgoal's one thread.)
+
+    None when nothing produced a session: a plain answer turn, a crash before the worker launched,
+    or a deep runner that is not a subprocess. Reporting nothing is deliberate, since an empty
+    string would claim a session exists and make the next run try to resume it.
+    """
+    for deep in reversed(list(getattr(result, "deep_results", None) or [])):
+        sid = (getattr(deep, "session_id", None) or "").strip()
+        if sid:
+            return sid
+    return None
+
+
+def client_accepts_session_id(fn: Any) -> bool:
+    """Whether a client's report method takes a ``session_id`` keyword (or ``**kwargs``).
+
+    Same opt-in discipline the orchestrator applies to a deep runner's ``run_goal`` kwargs: an
+    older client (or a consumer's own, or a test double) that has never heard of session continuity
+    keeps being called with exactly the arguments it has always been called with. Unresolvable
+    signatures answer False, so the safe, unchanged call is the default.
+    """
+    try:
+        params = inspect.signature(fn).parameters
+    except (TypeError, ValueError):  # builtins, C callables, exotic mocks
+        return False
+    for p in params.values():
+        if p.name == "session_id" or p.kind is inspect.Parameter.VAR_KEYWORD:
+            return True
+    return False
+
+
 @dataclass
 class ExecutionOutcome:
     task_id: str
@@ -627,6 +668,14 @@ class TaskExecutor:
         # document (e.g. "opus", or any string the consumer's ModelRegistry understands).
         # Threaded into the orchestrator so the registry can honor it. None = default behavior.
         model_hint: Optional[str] = task.get("model") or None
+        # resume_session_id (optional, additive): the Claude session a PREVIOUS run on this same
+        # thread left behind, handed back by the backend so this run opens holding what that run
+        # read and decided instead of rediscovering it. Absent on a first run, on a backend that
+        # does not track sessions, and on any older task document -- all of which mean a cold start,
+        # exactly as every run behaved before this existed. Resume is best effort throughout: a
+        # session Claude Code no longer holds degrades to a cold start inside the deep runner and
+        # the run still completes (see ``SubprocessGoalRunner.run_goal``).
+        resume_session_id: Optional[str] = str(task.get("resume_session_id") or "").strip() or None
         if not text:
             self._report_progress(task_id, "error", text="task had no instruction text to run")
             self._safe_report_failed(task_id, "task had no text/description to run")
@@ -731,6 +780,11 @@ class TaskExecutor:
                 context_meta=context_meta, working_dir_override=working_dir_override,
                 conv_id=conv_id, conv_scope=conv_scope or None, cancel_check=cancel_check,
                 pending_inputs=pending_inputs,
+                # ACROSS-RUN CONTINUITY: the thread's previous session, if the backend sent one.
+                # It rides the SAME plumbing as the within-run turn-budget continuation (the deep
+                # loop's ``resume_session``, forwarded to a runner that accepts it), so there is one
+                # resume path, not two. None = today's cold start, byte-for-byte.
+                resume_session_id=resume_session_id,
                 # This text is a QUEUED TASK's brief, not something the human typed at us this
                 # turn, so the user-veto gate must not read it. See the no-action gate in
                 # Orchestrator.run: a work brief full of legitimate instructions ("stop asking",
@@ -1140,6 +1194,13 @@ class TaskExecutor:
         # task, before we PATCH a terminal status that would just 409 anyway.
         if result.kind == "cancelled" or self._is_task_cancelled(task_id):
             return self._quiet_cancelled(task_id, result)
+        # THE THREAD'S SESSION, reported with whatever terminal status this run lands on (done,
+        # needs_you or failed). Reporting it on a failure matters as much as on a success: a run
+        # that fell short is exactly the one a person replies to, and that reply should resume the
+        # session holding the half-finished work rather than start cold. None when this run opened
+        # no session at all, in which case nothing about a session is sent (see
+        # ``terminal_session_id`` and ``QuestClient._with_session``).
+        session_id = terminal_session_id(result)
         if result.kind == "answer":
             text = result.text or "(no answer produced)"
             # BROKEN-PROMISE GUARD: if the orchestrator rewrote this answer to be honest about a
@@ -1151,7 +1212,8 @@ class TaskExecutor:
                 self._report_progress(task_id, "done", text="Paused. Needs you.", output=text)
                 # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
                 self._post_conv(conv_id, text, kind="needs_you", task_id=task_id, card_id=card_id)
-                self._safe(lambda: self._client.report_needs_you(task_id, text, ""))
+                self.dispatch_report("report_needs_you", task_id, text, "",
+                                     session_id=session_id)
                 return ExecutionOutcome(task_id, "needs_you", text)
             # Append goal-verdict reasoning so the reader knows whether the goal was confirmed
             # met, hit max iterations unverified, or was a best-effort partial answer.
@@ -1174,7 +1236,7 @@ class TaskExecutor:
             self._report_progress(task_id, "done", text="Done.", output=done_text)
             # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
             self._post_conv(conv_id, done_text, kind="done", task_id=task_id, card_id=card_id)
-            self._safe(lambda: self._client.report_done(task_id, done_text))
+            self.dispatch_report("report_done", task_id, done_text, session_id=session_id)
             return ExecutionOutcome(task_id, "done", done_text)
 
         if result.kind == "confirm":
@@ -1184,10 +1246,12 @@ class TaskExecutor:
             self._report_progress(task_id, "done", text=f"Paused, needs you: {summary}")
             self._post_conv(conv_id, summary, kind="decision", task_id=task_id, card_id=card_id)
             if result.decision_id:
-                self._safe(lambda: self._client.report_needs_you(task_id, summary, result.decision_id))
+                self.dispatch_report("report_needs_you", task_id, summary, result.decision_id,
+                                     session_id=session_id)
                 return ExecutionOutcome(task_id, "needs_you", summary, result.decision_id)
             # No decision id (no escalation sink wired) — surface as needs_you without an id.
-            self._safe(lambda: self._client.report_needs_you(task_id, summary, ""))
+            self.dispatch_report("report_needs_you", task_id, summary, "",
+                                 session_id=session_id)
             return ExecutionOutcome(task_id, "needs_you", summary)
 
         # deep
@@ -1208,7 +1272,7 @@ class TaskExecutor:
             # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
             self._post_conv(conv_id, done_report, kind="done", task_id=task_id,
                             card_id=card_id)
-            self._safe(lambda: self._client.report_done(task_id, done_report))
+            self.dispatch_report("report_done", task_id, done_report, session_id=session_id)
             return ExecutionOutcome(task_id, "done", done_report)
         # A deep run that raised a human decision instead of finishing.
         decision_id = next((d.decision_id for d in deep if d.decision_id), None)
@@ -1220,7 +1284,8 @@ class TaskExecutor:
             # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
             self._post_conv(conv_id, chat_text, kind="decision", task_id=task_id,
                             card_id=card_id)
-            self._safe(lambda: self._client.report_needs_you(task_id, summary, decision_id))
+            self.dispatch_report("report_needs_you", task_id, summary, decision_id,
+                                 session_id=session_id)
             return ExecutionOutcome(task_id, "needs_you", summary, decision_id)
         # UNVERIFIED is never reported as done, and never as a bare failure either: the work RAN
         # but its verification could not (LLM outage, no verify tier, parse failure), so the
@@ -1237,7 +1302,7 @@ class TaskExecutor:
             self._report_progress(task_id, "error", text=disclosure)
             # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
             self._post_conv(conv_id, msg, kind="failed", task_id=task_id, card_id=card_id)
-            self._safe(lambda: self._client.report_failed(task_id, msg))
+            self.dispatch_report("report_failed", task_id, msg, session_id=session_id)
             return ExecutionOutcome(task_id, "failed", msg)
         # Otherwise the run hit a limit / errored.
         errs = "; ".join(d.error for d in deep if d.error) or "the goal was not met"
@@ -1258,7 +1323,7 @@ class TaskExecutor:
         # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
         self._post_conv(conv_id, f"I couldn't complete this: {failed_text}", kind="failed",
                         task_id=task_id, card_id=card_id)
-        self._safe(lambda: self._client.report_failed(task_id, failed_text))
+        self.dispatch_report("report_failed", task_id, failed_text, session_id=session_id)
         return ExecutionOutcome(task_id, "failed", failed_text)
 
     def _with_context_receipt(self, reported: str, request_text: Optional[str],
@@ -1426,6 +1491,25 @@ class TaskExecutor:
             return ExecutionOutcome(task_id, "failed", msg)
 
     # --- safety wrappers (reporting must not crash the poller) ---------------
+
+    def dispatch_report(self, method_name: str, task_id: str, *args,
+                        session_id: Optional[str] = None) -> None:
+        """Call one of the client's TERMINAL report methods, carrying this run's session id.
+
+        One place decides how the session id travels, so every terminal status reports it the same
+        way. The id is added only when there IS one and only when the client's method accepts it
+        (see ``client_accepts_session_id``), so a consumer's older client, or a test double written
+        before session continuity existed, is called with exactly the arguments it always was.
+        Wrapped in ``_safe`` exactly like the direct calls it replaces: a reporting failure is
+        logged, never raised at the poller.
+        """
+        fn = getattr(self._client, method_name, None)
+        if not callable(fn):
+            return
+        kwargs: Dict[str, Any] = {}
+        if session_id and client_accepts_session_id(fn):
+            kwargs["session_id"] = session_id
+        self._safe(lambda: fn(task_id, *args, **kwargs))
 
     def _safe(self, fn):
         try:
