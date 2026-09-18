@@ -201,9 +201,14 @@ MAX_INSTRUCTIONS_CHARS = 8000
 # HOW to work and how to deliver. The default for the QUEST-WIDE ``instructions`` slot, so it
 # applies to every character the quest puts on duty.
 BUNDLED_DEFAULT_QUEST_INSTRUCTIONS = (
-    "Ground every claim about where things stand in this quest's own outcome, goals, notes and "
-    "files, never in this prompt. If the plan has slipped, say so plainly and say what you would "
-    "change.\n\n"
+    "Everything you do here works toward this quest's outcome as the person wrote it, which is "
+    "their vision statement for this quest, and toward its measurable outcomes. That is the test "
+    "for what is worth doing and what is worth telling them: work that does not move the outcome "
+    "does not belong in this run, however loud it is. Where the quest names measurable outcomes, "
+    "say which one a piece of work moves.\n\n"
+    "Ground every claim about where things stand in this quest's own outcome, measurable "
+    "outcomes, goals, notes and files, never in this prompt. If the plan has slipped, say so "
+    "plainly and say what you would change.\n\n"
     "Before writing a new file into the quest's working folder, check whether one already answers "
     "this: a running document meant to be the standing answer on a topic (an `ai_driven/"
     "source_of_truth/` file if the folder has one), or any other document or code the person has "
