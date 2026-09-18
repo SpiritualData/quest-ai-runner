@@ -827,10 +827,31 @@ class Poller:
         one kind of pass and one path that makes it. Any surviving team-wide series (no
         ``goal_id``) is retired on sight.
 
-        Liveness: "exactly one open occurrence" per SERIES, keyed by ``goal_id``. Still ONE
-        ``list_tasks`` call per scan, grouped in memory -- no list call per quest. A quest's group
+        Liveness: "exactly one open occurrence" per SERIES, keyed by ``goal_id``. A quest's group
         can also hold a one-off CATCH-UP pass (see ``_split_pass_occurrences``), which shares the
         ``goal_id`` but is not part of the series and never stands in for it.
+
+        THE LIVENESS READ IS PER QUEST, and used to be one team-wide list (incident, 2026-09-17).
+        This method used to advertise "still ONE ``list_tasks`` call per scan, no list call per
+        quest" as a deliberate property. It was wrong, and quietly so. The team-wide listing is
+        OWNER-SCOPED by the backend (``list_assistant_tasks`` filters on the authenticated
+        ``user_id``; ``team_id`` narrows that set, it does not widen it), while a pass created
+        against a quest is owned by the QUEST's owner, with the creating account recorded only as
+        ``created_by``. So on any quest whose owner is not the lane's own account, the team-wide
+        list never returned the pass the lane itself had created: the liveness check read "no open
+        pass" on every single scan and created another recurring series each time. Measured live:
+        three series, each a weekly recurrence, created for one quest inside six minutes, which
+        would have meant three briefs a day. It went unnoticed for as long as it did because the
+        one lane anybody watched happened to run a quest owned by its own account. The per-quest
+        listing (``goal_id=<quest>``) is answered by ``list_assistant_tasks_for_goal``, which is
+        scoped to the quest rather than to a user, so it returns the pass whoever owns it. The
+        cost is one extra list call per OPTED-IN quest per scan, and that is the right trade: the
+        saved call was buying a liveness answer that was not true.
+
+        A FAILED read never creates. ``list_tasks`` returns ``[]`` on any error, which is
+        indistinguishable from "no pass exists" and is what turned a rate-limit burst into
+        duplicate series. The reads here go through ``list_tasks_or_none``, and a ``None`` (the
+        read failed) skips that quest entirely until the next scan.
 
         Best-effort throughout: any failure is logged and retried next scan. A missing or
         out-of-tune pass task is a degraded feature, never a reason to skip the ordinary task
@@ -841,19 +862,22 @@ class Poller:
         if not self.client.configured or not self.cfg.team_id:
             return
         try:
-            existing = self.client.list_tasks(
-                team_id=self.cfg.team_id, task_kind=AUTOPILOT_PASS_KIND)
-            # A recurring series always has exactly one occurrence outstanding: the backend spawns
-            # the next one when the current reaches a terminal status. So "an open occurrence
-            # exists" is the correct liveness test for a series. Only if a series was cancelled or
-            # never created does nothing open remain for it -- and then we make one.
+            # The team-wide read still happens, for ONE purpose: retiring a surviving team-wide
+            # series, which carries no ``goal_id`` and so cannot be found by any per-quest read.
+            # A legacy team pass was created by this lane's own account, so owner scoping does
+            # not hide it.
+            existing = self._list_pass_tasks(team_id=self.cfg.team_id)
             open_by_series: Dict[str, List[Dict[str, Any]]] = {}
-            for t in existing:
+            for t in (existing or []):
                 if str(t.get("status", "")).strip().lower() not in OPEN_TASK_STATUSES:
                     continue
                 open_by_series.setdefault(str(t.get("goal_id") or ""), []).append(t)
             snapshot = self._quest_schedule_snapshot()
-            self._retire_team_pass(open_by_series.get("", []))
+            if existing is None:
+                log.warning("autopilot: the team-wide pass listing failed -- not retiring "
+                            "anything this scan")
+            else:
+                self._retire_team_pass(open_by_series.get("", []))
             self._ensure_quest_pass_tasks(open_by_series, snapshot)
         except Exception as e:  # noqa: BLE001 -- never let this block the scan
             log.warning("autopilot: could not ensure the recurring pass task(s) (%s) — "
@@ -998,15 +1022,63 @@ class Poller:
             expected_date = _next_allowed_date(expected_date, allowed_days)
         return expected_date.isoformat(), run_time
 
+    def _list_pass_tasks(self, *, team_id: Optional[str] = None,
+                         goal_id: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
+        """Read pass-kind tasks, returning ``None`` when the READ ITSELF failed.
+
+        The whole point is that None and ``[]`` are different answers here: every caller's next
+        move on an empty list is a create, and a create on a failed read is how one rate-limited
+        half hour produced three duplicate pass series (2026-09-17). A client too old to offer
+        ``list_tasks_or_none`` degrades to the swallowing ``list_tasks``, which is the old
+        behaviour and no worse than it.
+        """
+        strict = getattr(self.client, "list_tasks_or_none", None)
+        if callable(strict):
+            return strict(team_id=team_id, goal_id=goal_id, task_kind=AUTOPILOT_PASS_KIND)
+        return self.client.list_tasks(team_id=team_id, goal_id=goal_id,
+                                      task_kind=AUTOPILOT_PASS_KIND)
+
+    def _open_quest_pass_occurrences(self, quest_id: str) -> Optional[List[Dict[str, Any]]]:
+        """This quest's OPEN pass occurrences, read per quest so ownership cannot hide them.
+
+        ``goal_id=<quest>`` is answered by the backend's quest-scoped listing rather than the
+        caller's own task list, so a pass owned by the quest's human owner comes back even though
+        the lane's account merely created it. Returns ``None`` when the read failed (never an
+        empty list, which a caller would act on by creating).
+        """
+        rows = self._list_pass_tasks(goal_id=quest_id)
+        if rows is None:
+            return None
+        return [t for t in rows
+                if str(t.get("status", "")).strip().lower() in OPEN_TASK_STATUSES
+                and str(t.get("goal_id") or "") == quest_id]
+
     def _ensure_quest_pass_tasks(self, open_by_series: Dict[str, List[Dict[str, Any]]],
                                  snapshot: Dict[str, Dict[str, Any]]) -> None:
         """One recurring pass series PER opted-in quest that has set its own ``run_time``: created
         when missing, retuned when its open occurrence drifts from what the quest now says,
         retired when the quest is no longer eligible. Each quest is isolated from the others --
-        one quest's failure here never blocks another's."""
+        one quest's failure here never blocks another's.
+
+        An opted-in quest's occurrences are read per quest (see ``_open_quest_pass_occurrences``),
+        because the team-wide grouping passed in is owner-scoped and silently misses a pass owned
+        by someone else. A quest that is NOT opted in is handled from the team-wide grouping
+        alone: the only thing left to do for it is retire what is open, and a pass this account
+        cannot even see is one it cannot cancel either (an owner-scoped PATCH on it 404s), so
+        reading per quest there would buy a call per scan and a warning per scan and no outcome.
+        """
         for quest_id, entry in snapshot.items():
             try:
-                self._ensure_one_quest_pass(quest_id, entry, open_by_series.get(quest_id, []))
+                team_wide = open_by_series.get(quest_id, [])
+                if str(entry.get("mode") or "off") in ("suggest", "act"):
+                    occurrences = self._open_quest_pass_occurrences(quest_id)
+                    if occurrences is None:
+                        log.warning("autopilot: could not read quest %s's open pass occurrences "
+                                    "-- creating nothing for it this scan", quest_id)
+                        continue
+                else:
+                    occurrences = team_wide
+                self._ensure_one_quest_pass(quest_id, entry, occurrences)
             except Exception as e:  # noqa: BLE001 -- one quest's pass never blocks another's
                 log.warning("autopilot: could not ensure quest %s's own pass (%s) — will retry "
                             "next scan", quest_id, e)

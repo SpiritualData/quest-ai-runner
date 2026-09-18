@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Autopilot created a duplicate pass series on every scan for a quest it does not own** (and on
+  any failed listing). Two independent causes, both fixed in `Poller._ensure_autopilot_pass`:
+  - The liveness check ("does this quest already have an open pass?") read ONE team-wide
+    `list_tasks` per scan and grouped it by `goal_id`. That listing is owner-scoped by the backend
+    (`list_assistant_tasks` filters on the authenticated user; `team_id` narrows, it does not
+    widen), while a pass created against a quest is owned by the QUEST's owner and only records
+    the creating account as `created_by`. So on a quest owned by someone else the lane never saw
+    the pass it had itself created, and made another one every scan: three weekly-recurring series
+    for one quest inside six minutes, live. The read is now per opted-in quest
+    (`goal_id=<quest>`), which the backend answers quest-scoped rather than owner-scoped, so a
+    pass is seen whoever owns it. It costs one extra list call per opted-in quest per scan; the
+    call it saved was buying an answer that was not true.
+  - `list_tasks` returns `[]` on any failure, so a rate-limited scan (429) was indistinguishable
+    from "no pass exists" and created one. New `QuestClient.list_tasks_or_none` returns `None`
+    when the read itself failed, `[]` only for a genuine empty result, and the pass check creates
+    nothing on `None`. Any caller whose next move on an empty list is a write should use it.
+
 ### Changed
 - **The overseer's answer checkpoint (hook B) can stop a bad answer again.** New
   `overseer_answer_checkpoint_timeout_seconds` (default `2.5`), used by hook B in place of hook A's

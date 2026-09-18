@@ -1954,7 +1954,41 @@ class QuestClient:
         does whatever the backend won't. (``goal_id`` on a task IS the quest id -- see
         ``create_task`` -- so filtering by a quest means passing that quest id as ``goal_id``.)
 
-        Returns ``[]`` on any failure. Never raises.
+        OWNER SCOPING, and why ``goal_id`` is not just a filter (2026-09-17). Without
+        ``goal_id`` the route answers from the caller's OWN task list: the backend's
+        ``list_assistant_tasks`` scopes on the authenticated ``user_id``, and ``team_id``
+        NARROWS that set rather than widening it. With ``goal_id`` it answers from
+        ``list_assistant_tasks_for_goal``, which is not scoped to any user at all (access is
+        checked once, as owner-or-live-team-member). That matters because a task created against
+        a quest is OWNED by the quest's owner while ``created_by`` records the submitter: an app
+        account that creates work on a human's quest cannot see that work again in the team-wide
+        list, only in the per-quest one. So a "does this quest already have X" question MUST pass
+        ``goal_id``; the team-wide list can only answer it for quests the calling account owns.
+
+        Returns ``[]`` on any failure. Never raises. When the caller has to tell a real empty
+        list from a failed read (anything that CREATES on an empty answer), call
+        ``list_tasks_or_none`` instead.
+        """
+        return self.list_tasks_or_none(team_id=team_id, status=status, goal_id=goal_id,
+                                       source=source, task_kind=task_kind) or []
+
+    def list_tasks_or_none(self, *, team_id: Optional[str] = None,
+                           status: Optional[str] = None,
+                           goal_id: Optional[str] = None,
+                           source: Optional[str] = None,
+                           task_kind: Optional[str] = None) -> Optional[List[Dict[str, Any]]]:
+        """``list_tasks``, but a FAILED read is reported instead of swallowed.
+
+        Same filters and the same owner-scoping contract as ``list_tasks`` (read its docstring
+        first). The only difference is the failure value: ``None`` on
+        ``QuestApiError``/``QuestNotConfigured``, ``[]`` when the read genuinely succeeded and
+        matched nothing. Never raises, matching ``list_tasks``/``list_asks``.
+
+        WHY (incident, 2026-09-17): the autopilot pass liveness check read an empty list as "no
+        pass exists" and created one. Under a rate-limit burst (429s, hundreds in half an hour)
+        every scan read an empty list, so every scan created another recurring pass series. Any
+        caller whose next move on an empty answer is a WRITE has to use this method: "nothing is
+        there" and "I could not look" must never be the same value in front of a create.
         """
         tid = team_id if team_id is not None else self.team_id
         params: Dict[str, Any] = {}
@@ -1969,7 +2003,7 @@ class QuestClient:
             tasks = _as_task_list(resp)
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("list_tasks failed: %s", e)
-            return []
+            return None
         if source is not None:
             tasks = [t for t in tasks if t.get("source") == source]
         if task_kind is not None:
