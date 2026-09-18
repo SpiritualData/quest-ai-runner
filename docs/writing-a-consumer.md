@@ -70,6 +70,7 @@ def build_config() -> RunnerConfig:
 | `personas` | a declarative alternative to writing `rep_sync_resolver` by hand — see [personas.md](personas.md) and [`runner/personas.py`](../quest_ai_runner/runner/personas.py). An explicit `rep_sync_resolver` always wins over this |
 | `rep_sync_direction` | `"pull"` (default) / `"push"` / `"both"`: controls Quest <-> skill-file sync for reps |
 | `default_assignee_user_id` | who human-only decisions route to by default |
+| `lane_user_id` | the Quest user id this lane's API key authenticates AS (env `QAR_LANE_USER_ID`). Work the lane creates on a quest somebody ELSE owns is assigned to this account, so the lane owns it and can discover it (discovery is owner-scoped, and a goal-linked task otherwise belongs to the quest's owner). Configured, not discovered: an API key cannot ask the backend who it is |
 | `decision_assignees` | NAMED decision-routing roles, `{role: user_id}` (e.g. `{"owner": "user_...", "operator": "user_..."}`), so a call site writes `create_decision(..., assignee="operator")` instead of threading a raw user id + your routing policy through every caller. Env: `QAR_DECISION_ASSIGNEES` (a JSON object, or `name=id,name=id` pairs) |
 | `orchestrator`, `poll_interval_seconds`, `poll_lookahead_minutes`, `max_concurrent_tasks` | tuning (`orchestrator.deep_max_turns` is the hard per-attempt turn cap on the deep goal loop) |
 | `autopilot_pass_time`, `autopilot_adopt_recurring` | per-deployment defaults for opted-in quests that don't state their own (see `runner/autopilot.py`) |

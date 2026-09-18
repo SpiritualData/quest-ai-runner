@@ -23,6 +23,21 @@ All notable changes to this project are documented here. The format is based on
     from "no pass exists" and created one. New `QuestClient.list_tasks_or_none` returns `None`
     when the read itself failed, `[]` only for a genuine empty result, and the pass check creates
     nothing on `None`. Any caller whose next move on an empty list is a write should use it.
+- **An autopilot pass on a quest the lane does not own never RAN.** The other half of the same
+  ownership asymmetry: task discovery is owner-scoped too, so a pass created against a human-owned
+  quest (the backend makes the quest's OWNER the executor of a goal-linked task) is invisible to
+  every lane and sits queued forever. Verified live: `discover_due` returned 0 tasks with three
+  queued passes on the quest. A pass is now created with `assignee_user_id` set to the lane's own
+  account, which the backend stores as the task's owner, so the lane that ensures the pass exists
+  is the lane that runs it. That account comes from the new `RunnerConfig.lane_user_id` /
+  `QAR_LANE_USER_ID`: it must be configured because an API key cannot ask the backend who it is
+  (`/api/auth/me` answers 401 for one). Unset, nothing changes for an existing deployment.
+  `QuestClient.create_task` gained the matching `assignee_user_id` argument.
+  A pass created BEFORE this, owned by the human, can never be claimed, retuned or retired by the
+  lane (an owner-scoped PATCH 404s), so `_ensure_one_quest_pass` now names those task ids in a
+  warning once per quest per scan and leaves them alone, rather than retrying a write that cannot
+  land. It never answers one with another pass: the occurrence is alive, it just belongs to
+  somebody else, and a human has to cancel it in the app.
 
 ### Changed
 - **The overseer's answer checkpoint (hook B) can stop a bad answer again.** New

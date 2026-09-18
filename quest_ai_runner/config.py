@@ -98,7 +98,7 @@ class ConfigFileError(ValueError):
 # loudly, instead. Keep this in sync when a new plain-data field is added to ``RunnerConfig``.
 _FILE_SCALAR_FIELDS = {
     "quest_base_url", "quest_api_key", "team_id", "discovery_team_id", "org_id",
-    "runner_label", "env_id",
+    "runner_label", "env_id", "lane_user_id",
     "model_fallback", "model_provider_overrides",
     "context_cards_dir",
     "channel_allowed_senders", "channel_ack_after_seconds", "channel_progress_min_seconds",
@@ -146,6 +146,22 @@ class RunnerConfig:
     # where the environment heartbeat/registration lands.
     org_id: str = ""
     runner_label: Optional[str] = None       # human-readable tag sent on the env heartbeat (optional)
+    # The Quest user id this lane's API key authenticates AS (the app/service account behind
+    # QUEST_API_KEY), from QAR_LANE_USER_ID. Unset = every behaviour below is exactly as before.
+    #
+    # It must be CONFIGURED rather than discovered: GET /api/auth/me answers 401 for an API key
+    # (that route is for a signed-in human session), so the lane has no way to ask the backend who
+    # it is. The operator who issued the key is the only party that knows.
+    #
+    # What it buys (2026-09-17): a task created against a quest is OWNED by that quest's owner,
+    # and the task listing a lane discovers work from is owner-scoped, so a pass the lane creates
+    # on a HUMAN-owned quest is invisible to the lane and never runs. Passing this id as the
+    # created task's assignee_user_id makes the lane's own account the executor, which is what
+    # discovery scopes on. The lane that ensures a pass exists is the lane that should run it, so
+    # this is right in every case; on a quest the lane's account already owns it changes nothing.
+    # It is also what lets the poller recognise a pass it can NEVER write to (one created before
+    # this existed, owned by the human) instead of retrying an owner-scoped PATCH that 404s.
+    lane_user_id: Optional[str] = None
     env_id: Optional[str] = None             # which of the team's environments this runner is
                                              # (omit = the team's default env; set it when a team
                                              # attaches SEVERAL runners so each is its own env)

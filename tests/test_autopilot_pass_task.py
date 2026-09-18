@@ -41,9 +41,9 @@ class FakePassClient:
         Two properties are load-bearing and a stub that ignored them would pass tests the real
         API fails (2026-09-17). First, ``goal_id`` is answered by the quest-scoped listing, so a
         row is returned whoever owns it; the team-wide listing (no ``goal_id``) is owner-scoped,
-        so a row owned by anyone but the caller is INVISIBLE there. ``owner`` on a fake task is
-        that row's owner, and a fake client's own identity is ``self.user_id``. Second, a failed
-        read is ``None``, not ``[]``.
+        so a row owned by anyone but the caller is INVISIBLE there. A row's own ``user_id`` is
+        its owner (the field name the API really returns), and a fake client's own identity is
+        ``self.user_id``. Second, a failed read is ``None``, not ``[]``.
         """
         self.list_tasks_calls.append({"team_id": team_id, "goal_id": goal_id,
                                       "task_kind": task_kind})
@@ -53,7 +53,7 @@ class FakePassClient:
                 if task_kind is None or t.get("task_kind") == task_kind]
         if goal_id is not None:
             return [t for t in rows if t.get("goal_id") == goal_id]
-        return [t for t in rows if t.get("owner", self.user_id) == self.user_id]
+        return [t for t in rows if t.get("user_id", self.user_id) == self.user_id]
 
     def list_tasks(self, *, team_id=None, status=None, goal_id=None, source=None, task_kind=None):
         return self.list_tasks_or_none(team_id=team_id, status=status, goal_id=goal_id,
@@ -70,7 +70,10 @@ class FakePassClient:
     def create_task(self, text, **kwargs):
         if self.create_error:
             raise self.create_error
-        record = {"id": f"pass_{len(self.created) + 1}", "text": text, **kwargs}
+        # A None argument is dropped, exactly as the real client drops it from the POST body, so
+        # "the lane sent no assignee" and "the lane sent None" cannot look the same in a test.
+        sent = {k: v for k, v in kwargs.items() if v is not None}
+        record = {"id": f"pass_{len(self.created) + 1}", "text": text, **sent}
         self.created.append(record)
         return record
 
@@ -207,7 +210,7 @@ def test_a_pass_owned_by_the_quests_human_owner_is_still_seen_so_no_duplicate_is
     test comes out right.
     """
     pass_row = {"id": "p1", "task_kind": "autopilot", "status": "queued", "goal_id": "q1",
-                "owner": "human_owner", "created_by": FakePassClient.user_id,
+                "user_id": "human_owner", "created_by": FakePassClient.user_id,
                 "recurrence": {"frequency": "daily", "time": "07:00"},
                 "scheduled_time": "07:00"}
     client = FakePassClient(tasks=[pass_row], quests=[{"quest_id": "q1"}],
@@ -248,3 +251,56 @@ def test_a_failed_listing_does_not_retire_the_team_wide_pass_either():
     client.update_task = lambda task_id, fields: client.update_calls.append((task_id, fields))
     _poller(client)._ensure_autopilot_pass()
     assert client.update_calls == []
+
+
+# --- who the pass is created FOR (2026-09-17, the other half of the ownership fix) --------------
+
+def test_a_pass_is_created_assigned_to_the_lanes_own_account():
+    """Seeing the pass was only half of it: it still had to RUN.
+
+    The backend makes the linked quest's OWNER the executor of a goal-linked task, and task
+    discovery is owner-scoped, so on a human-owned quest the pass this lane created sat queued
+    forever and no lane ever discovered it (verified live: discover_due returned 0 tasks while
+    three queued passes sat on the quest). Sending the lane's own account as ``assignee_user_id``
+    makes that account the executor, which is what discovery scopes on.
+    """
+    client = FakePassClient(quests=[{"quest_id": "q1"}],
+                            autopilot_by_quest={"q1": {"mode": "act"}})
+    _poller(client, lane_user_id=FakePassClient.user_id)._ensure_autopilot_pass()
+    assert client.created[0]["assignee_user_id"] == FakePassClient.user_id
+
+
+def test_no_assignee_is_sent_when_the_lane_does_not_know_its_own_account():
+    """``lane_user_id`` is operator config (an API key cannot ask /api/auth/me who it is), so an
+    existing deployment that never sets it must behave byte-for-byte as before: no assignee field,
+    the backend's default executor stands."""
+    client = FakePassClient(quests=[{"quest_id": "q1"}],
+                            autopilot_by_quest={"q1": {"mode": "act"}})
+    _poller(client)._ensure_autopilot_pass()
+    assert "assignee_user_id" not in client.created[0]
+
+
+def test_a_pass_owned_by_someone_else_is_reported_and_left_alone(caplog):
+    """The trap the fix creates, pinned.
+
+    Passes created BEFORE this change are owned by the quest's human owner, and the task PATCH
+    route is owner-scoped, so the lane can neither run them nor cancel them: a retune or a retire
+    is a 404, every scan, forever. The one thing it must NOT do is answer that by creating another
+    pass, since the occurrence is alive. So it names the task ids and stops, and a human cancels
+    them in the app.
+    """
+    foreign = {"id": "p_old", "task_kind": "autopilot", "status": "queued", "goal_id": "q1",
+               "user_id": "human_owner", "created_by": FakePassClient.user_id,
+               "recurrence": {"frequency": "daily", "time": "07:00"},
+               "scheduled_date": "2026-09-17", "scheduled_time": "07:00"}
+    client = FakePassClient(tasks=[foreign], quests=[{"quest_id": "q1"}],
+                            autopilot_by_quest={"q1": {"mode": "act"}})
+    client.update_calls = []
+    client.update_task = lambda task_id, fields: client.update_calls.append((task_id, fields))
+
+    with caplog.at_level("WARNING"):
+        _poller(client, lane_user_id=FakePassClient.user_id)._ensure_autopilot_pass()
+
+    assert client.created == []        # never answer an unusable pass with another pass
+    assert client.update_calls == []   # and never retry a PATCH that can only 404
+    assert "p_old" in caplog.text      # the human needs the id to cancel it

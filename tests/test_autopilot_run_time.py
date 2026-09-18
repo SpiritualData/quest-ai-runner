@@ -462,6 +462,21 @@ def test_a_pending_run_the_series_cannot_move_gets_a_one_off_catchup_pass():
     assert client.task_updates == []             # the series' own schedule is left untouched
 
 
+def test_a_catchup_pass_is_also_assigned_to_the_lanes_own_account():
+    """A catch-up runs the same way every other pass does, so it needs the same executor. Left to
+    the backend's default the quest's human owner would own it and no lane would ever discover
+    it, which for the "Run now" button means the one run somebody explicitly asked for."""
+    client = FakeRunTimeClient(
+        tasks=[_pass_task("p1", quest_id="q1", scheduled_date="2026-08-21",
+                          scheduled_time="06:30", recurrence_time="06:30")],
+        quests=[{"quest_id": "q1"}],
+        autopilot_by_quest={"q1": dict(RAN_THIS_MORNING)},
+        date_conflict=True,
+    )
+    _poller_now(client, NOW, lane_user_id=FakePassClient.user_id)._ensure_autopilot_pass()
+    assert client.created[0]["assignee_user_id"] == FakePassClient.user_id
+
+
 def test_a_second_scan_creates_no_further_catchup_while_one_is_still_open():
     """The request stays pending until a pass stamps ``last_pass_at``, so every scan in between
     sees the same conflict. One catch-up is the answer; a pile of them is not."""

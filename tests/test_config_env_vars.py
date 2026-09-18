@@ -168,3 +168,21 @@ def test_context_preamble_reaches_the_auto_built_deep_runner(monkeypatch, tmp_pa
     runner = resolve_deep_runner(cfg)
     assert runner is not None
     assert runner.cfg.context_preamble == "Ground on the corpus."
+
+
+# --- lane_user_id (QAR_LANE_USER_ID) ----------------------------------------
+
+def test_lane_user_id_unset_stays_none(monkeypatch):
+    _base_env(monkeypatch)
+    monkeypatch.delenv("QAR_LANE_USER_ID", raising=False)
+    cfg = cli._config_from_env()
+    assert cfg.lane_user_id is None
+
+
+def test_lane_user_id_from_env(monkeypatch):
+    """The account the lane's API key authenticates as. It has to be configured because an API key
+    cannot ask the backend who it is (/api/auth/me answers 401 for one)."""
+    _base_env(monkeypatch)
+    monkeypatch.setenv("QAR_LANE_USER_ID", "acct_app")
+    cfg = cli._config_from_env()
+    assert cfg.lane_user_id == "acct_app"

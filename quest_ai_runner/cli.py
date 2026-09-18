@@ -31,6 +31,14 @@ Env it reads:
   QAR_ENV_ID (optional)                          — which of the team's environments this runner is
                                                    (omit = the team's default env; set a distinct id
                                                    per runner when a team attaches SEVERAL)
+  QAR_LANE_USER_ID (optional)                    - the Quest user id QUEST_API_KEY authenticates
+                                                   as (RunnerConfig.lane_user_id). Must be
+                                                   configured, not discovered: /api/auth/me answers
+                                                   401 for an API key. Set it so work this lane
+                                                   creates on a quest somebody ELSE owns is
+                                                   assigned to this lane's own account, since task
+                                                   discovery is owner-scoped and would otherwise
+                                                   never return it
   QAR_CONFIG_FILE (optional)                     — path to a TOML config file (RunnerConfig.from_file);
                                                    the `poll`/`chat`/`channel` subcommands' `--config`
                                                    flag does the same thing. File values are a
@@ -445,6 +453,7 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
         corpus_root=corpus,
         runner_label=os.getenv("QAR_RUNNER_LABEL") or None,
         env_id=os.getenv("QAR_ENV_ID") or None,
+        lane_user_id=os.getenv("QAR_LANE_USER_ID") or None,
         # Who human-only confirm/decision requests route to by default (QuestDecisionSink's
         # fallback assignee). Documented since custom_consumer.py/.env.example but never actually
         # wired into the stock CLI's env reading until now.

@@ -69,3 +69,19 @@ def test_create_task_omits_card_ids_when_empty_list():
     client, captured = client_capturing_body()
     client.create_task("t", card_ids=[])
     assert "card_ids" not in captured["body"]
+
+
+def test_create_task_sends_assignee_user_id_when_given():
+    """``assignee_user_id`` sets the task's EXECUTOR (its owner), which is what task discovery
+    scopes on. Without it the backend picks the linked quest's owner, so an app account's work on
+    a human-owned quest is created into a lane that will never look for it."""
+    client, captured = client_capturing_body()
+    client.create_task("t", goal_id="quest_1", assignee_user_id="acct_app")
+    assert captured["body"]["assignee_user_id"] == "acct_app"
+
+
+def test_create_task_omits_assignee_user_id_when_not_given():
+    """The field must be absent, not null: omitted, the backend keeps its own default executor."""
+    client, captured = client_capturing_body()
+    client.create_task("t")
+    assert "assignee_user_id" not in captured["body"]

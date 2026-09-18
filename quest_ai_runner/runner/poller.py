@@ -1118,10 +1118,36 @@ class Poller:
             (series if present else catch_ups).append(occ)
         return series, catch_ups
 
+    def _unwritable_pass_occurrences(
+            self, occurrences: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """The occurrences this lane can SEE but can never write to, because another account owns
+        them.
+
+        A task's PATCH route is owner-scoped, so a retune or a retire aimed at a pass owned by
+        somebody else comes back 404 no matter how often it is retried. That is the state every
+        pass created before passes carried ``assignee_user_id`` is in: created by this account on
+        a quest a human owns, therefore owned by that human. The lane must recognise it instead of
+        looping on it, and above all must not answer it by creating yet another pass (the
+        occurrence is real and alive, it simply belongs to someone else).
+
+        Answering needs ``cfg.lane_user_id``, since nothing else tells the lane which account it
+        authenticates as. Unset, or a row that carries no owner at all, means "assume our own" and
+        behave exactly as before.
+        """
+        lane = (self.cfg.lane_user_id or "").strip()
+        if not lane:
+            return []
+        return [o for o in occurrences
+                if (str(o.get("user_id") or "").strip() or lane) != lane]
+
     def _ensure_one_quest_pass(self, quest_id: str, entry: Dict[str, Any],
                                occurrences: List[Dict[str, Any]]) -> None:
         """Bring ONE quest's pass into line: its series exists and holds the expected schedule,
         and a pending "Run now" the series cannot absorb gets a one-off catch-up instead.
+
+        An occurrence owned by ANOTHER account is counted for liveness and nothing else: it is
+        real work that exists, so it must never be answered with a second pass, but no write this
+        lane makes against it can land (see ``_unwritable_pass_occurrences``).
 
         Only the SERIES occurrences steer anything here (the duplicate warning, the retune, and
         the create-when-missing all count those alone). The catch-ups are read for exactly one
@@ -1130,11 +1156,23 @@ class Poller:
         otherwise create another one.
         """
         mode = str(entry.get("mode") or "off")
+        foreign = self._unwritable_pass_occurrences(occurrences)
+        if foreign:
+            log.warning("autopilot: quest %s has %d open pass occurrence(s) owned by another "
+                        "account (%s) -- this lane can neither run nor cancel them (an "
+                        "owner-scoped PATCH 404s), so it is leaving them alone and creating "
+                        "nothing. A human has to cancel them in the app; passes created from now "
+                        "on are assigned to this lane's own account.",
+                        quest_id, len(foreign),
+                        [o.get("id") or o.get("task_id") for o in foreign])
+        writable = [o for o in occurrences if o not in foreign]
+
         if mode not in ("suggest", "act"):
             # Retire EVERYTHING open for this quest, catch-ups included: mode off means no pass of
-            # any shape should still be waiting to run.
-            if occurrences:
-                self._retire_quest_pass(quest_id, occurrences, "mode off")
+            # any shape should still be waiting to run. Only the ones this lane owns, though: the
+            # rest would be a 404 per occurrence per scan and no outcome.
+            if writable:
+                self._retire_quest_pass(quest_id, writable, "mode off")
             return
 
         series, catch_ups = self._split_pass_occurrences(occurrences)
@@ -1150,6 +1188,9 @@ class Poller:
             # An open catch-up is not a series and must not suppress this: the quest would be left
             # with one run and no producer once that run closed.
             self._create_quest_pass(quest_id, entry, expected_date, expected_time)
+            return
+        if series[0] in foreign:
+            # Alive, so nothing to create; unwritable, so nothing to retune. Already logged above.
             return
         outcome = self._retune_quest_pass(quest_id, entry, series[0], expected_date, expected_time)
         if outcome == "date_conflict" and run_requested(entry) and not catch_ups:
@@ -1172,6 +1213,11 @@ class Poller:
             scheduled_date=expected_date,
             scheduled_time=expected_time,
             env_id=env_id,
+            # The lane that ensures this pass exists is the lane that runs it. Without this the
+            # backend makes the QUEST'S OWNER the executor, and since discovery is owner-scoped,
+            # a pass on a human-owned quest would sit queued forever, invisible to every lane
+            # (see RunnerConfig.lane_user_id). None keeps the old default-executor behaviour.
+            assignee_user_id=self.cfg.lane_user_id or None,
         ) or {}
         log.info("autopilot: created quest %s's own pass (%s at %s %s, first occurrence %s)",
                  quest_id, recurrence["frequency"], expected_time,
@@ -1219,6 +1265,9 @@ class Poller:
             scheduled_date=now_local.date().isoformat(),
             scheduled_time=now_local.strftime("%H:%M"),
             env_id=env_id,
+            # Same reason as the series pass: this lane has to be the executor or discovery never
+            # returns the task it just created (see RunnerConfig.lane_user_id).
+            assignee_user_id=self.cfg.lane_user_id or None,
         )
         log.info("autopilot: quest %s's series cannot move onto today, so its pending run request "
                  "gets a one-off catch-up pass (no recurrence) at %s %s", quest_id,

@@ -1817,6 +1817,7 @@ class QuestClient:
                     status: Optional[str] = None,
                     recurrence: Optional[Any] = None,
                     assignee_rep_id: Optional[str] = None,
+                    assignee_user_id: Optional[str] = None,
                     parent_task_id: Optional[str] = None,
                     card_ids: Optional[List[str]] = None,
                     model: Optional[str] = None) -> Dict[str, Any]:
@@ -1878,6 +1879,16 @@ class QuestClient:
         task -- that is the quest owner / ``assignee_user_id`` -- it states which character voice
         should carry it, so a consumer's resolver reads a field instead of parsing prose.
 
+        ``assignee_user_id`` is the other half of that pair and the one with teeth: it sets the
+        task's EXECUTOR, which the backend stores as the task's own ``user_id`` (its owner), in
+        place of the default executor (the linked quest's OWNER, or the caller for a personal
+        task). That matters because task discovery is owner-scoped: a lane only ever sees tasks its
+        own account owns, so work an app account creates on a quest a HUMAN owns is invisible to
+        that lane and never runs unless the account assigns the task to itself. The backend
+        requires a team (the quest's team, or ``team_id`` on a personal task) and that the assignee
+        is a live member of it: a non-member is a 403, no team at all is a 400. Omit it to keep the
+        default executor.
+
         Returns the created task dict (includes its ``id``).
 
         Raises ``QuestApiError`` / ``QuestNotConfigured`` on failure instead of swallowing it:
@@ -1912,6 +1923,8 @@ class QuestClient:
             body["recurrence"] = recurrence
         if assignee_rep_id is not None:
             body["assignee_rep_id"] = assignee_rep_id
+        if assignee_user_id is not None:
+            body["assignee_user_id"] = assignee_user_id
         if parent_task_id is not None:
             body["parent_task_id"] = parent_task_id
         if card_ids:
