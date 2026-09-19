@@ -83,7 +83,7 @@ from typing import Any, Dict, List, Optional, Protocol, Tuple, Union, runtime_ch
 
 from quest_ai_runner.adapters.conversation_format import parse_date_bound, timestamp_in_range
 from quest_ai_runner.adapters.tfdfidf_sampling import keywords_from_text
-from quest_ai_runner.core.scope_tags import scope_tags_allow
+from quest_ai_runner.core.scope_tags import scope_tags_allow, scope_tags_from_keys
 
 log = logging.getLogger("quest-ai-runner.recent_context")
 
@@ -415,7 +415,7 @@ class FileRecentContextStore:
         if not keys:
             return []
         try:
-            requested_quest_tags = [k for k in keys if _scope_of(k) == "quest"]
+            requested_quest_tags = scope_tags_from_keys(keys)
             precedence = {"conv": 0, "quest": 1, "global": 2}
             ordered_keys = sorted(keys, key=lambda k: precedence.get(_scope_of(k), 0))
             out: List[Dict[str, Any]] = []
@@ -539,7 +539,7 @@ class FileRecentContextStore:
         if not keys or not cards:
             return
         ts = _now_iso()
-        scope_tags = [k for k in keys if _scope_of(k) == "quest"]
+        scope_tags = scope_tags_from_keys(keys)
         for key in keys:
             try:
                 self._record_one_scope(key, cards, user_text, ts=ts, scope_tags=scope_tags)

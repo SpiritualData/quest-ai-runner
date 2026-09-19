@@ -127,6 +127,40 @@ builds the list narrowest-first (conv, then quest, then global) from the turn's 
 consumer that never passes `conv_id`/`quest_id` still gets cross-conversation learning for free via
 the always-present `"global"` scope.
 
+## Cross-quest scope-tag fence
+
+The `"global"` scope is in scope on EVERY turn, regardless of which quest is active, so a bundle
+precomputed while quest X is active and stored under `"global"` would otherwise be servable to a
+later turn scoped to a completely different quest Y (keyword matching alone has no notion of "this
+prediction is ABOUT quest X"). `core.anticipation` closes this the same way `core.recent_context`
+closes the identical problem for its own warm store, via the shared `core.scope_tags` predicate:
+
+- `Anticipator.plan_next(scope_keys, ...)` computes `turn_tags = scope_tags_from_keys(scope_keys)`
+  (the quest-kind keys among `scope_keys`, e.g. `["conv:a", "quest:x", "global"]` → `["quest:x"]`)
+  once per call, and stamps it onto `Prediction.scope_tags` for every prediction planned that call,
+  in every scope file it writes to.
+- `Anticipator.observe(actual_text, scope_keys, ...)` computes the requesting turn's own
+  `turn_tags` and only matches/serves/scores predictions whose `scope_tags` pass
+  `scope_tags_allow(pred.scope_tags, turn_tags)`. A fenced prediction (tagged for a different
+  quest) is invisible to this turn: not matched, not served (even via an exact `anticipated_id`
+  tap), not scored/logged, and its source pattern's EMA weight is untouched. It is left otherwise
+  unmodified (it still belongs to its own quest's later turn); the scope's live prediction set is
+  still cleared at the end of the turn regardless, since `plan_next` replaces it wholesale anyway.
+- `Anticipator.chips_for_now` and `Anticipator.refresh` apply the same fence to whichever
+  predictions they consult, for consistency.
+- A prediction with no `scope_tags` (legacy data, or planned with no quest key in scope at all)
+  stays visible everywhere -- untagged is never hidden, per the shared fence rule -- so a consumer
+  with no quest concept sees byte-for-byte the same behavior as before this fence existed.
+
+The precompute call itself threads `turn_tags` through the assembler via
+`assemble_with_scope_tags(assembler, text, scope_tags)`, which calls
+`assembler.assemble(text, meta={"scope_tags": scope_tags})` when there are tags to pass and falls
+back to the plain positional `assembler.assemble(text)` call for an assembler whose `assemble`
+does not accept a `meta` keyword at all, or when there are no tags to pass. Any consumer
+precomputing bundles outside the `Anticipator` class (e.g. a consumer's own chip-precompute path,
+see quest-backend's `precompute_chip_bundles`) should reuse this same helper rather than
+re-deriving the fallback.
+
 ## File layout
 
 `FilePredictionStore` (rooted at `context_cards_dir`, same root the card/recent-context stores use)

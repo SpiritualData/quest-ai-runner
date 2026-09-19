@@ -71,6 +71,36 @@ All notable changes to this project are documented here. The format is based on
   `"https:"`, so the old code split there and rejoined it as
   `read_section("https: //example.com/page")`: a space inserted after the scheme that was never in
   the source line. Fixed by keeping each merged line VERBATIM; only the text before its first
+- **Scope tags: the anticipation engine gets the same cross-quest fence** (`core/anticipation.py`).
+  The scope-tags fence above closed the leak for pre-flight context assembly, but the anticipation
+  engine (`core/anticipation.py`, opt-in, see `docs/anticipation.md`) is a separate turn-end
+  learning/precompute subsystem with the identical leak shape: a context bundle precomputed for a
+  predicted next ask while quest X is active is stored under the always-present `"global"` scope
+  (in scope on every turn regardless of which quest is active), so it could be served to a LATER
+  turn scoped to a completely different quest Y, verified live on dev -- a `MongoPredictionStore`
+  document held a bundle containing a fact from one quest's conversation, keyed under `global` and
+  under the OTHER quest's own scope. `core/scope_tags.py` gains `scope_tags_from_keys(scope_keys,
+  kinds=("quest",))`, centralizing what `core/recent_context.py` and this module each used to
+  derive with their own inline scope-key comprehension (`recent_context.py`'s `record()`/`load()`
+  now call it too, byte-for-byte the same result). `Prediction` gains `scope_tags: List[str]`
+  (round-trips through `FilePredictionStore`/any consumer store built on `asdict`/
+  `prediction_from_dict`, e.g. quest-backend's `MongoPredictionStore`, with no store-side change
+  needed). `Anticipator.plan_next` computes `turn_tags = scope_tags_from_keys(scope_keys)` once per
+  call and stamps it onto every prediction planned that call, in every scope it writes to,
+  including `"global"`; the precompute call threads `turn_tags` through the assembler via the new
+  `assemble_with_scope_tags(assembler, text, scope_tags)` helper (`meta={"scope_tags": ...}` when
+  there are tags to pass, falling back to the old positional-only call for an assembler whose
+  `assemble` does not accept `meta`, or when there are none). `Anticipator.observe` computes the
+  requesting turn's own `turn_tags` and splits each scope's loaded predictions into ALLOWED
+  (`scope_tags_allow(pred.scope_tags, turn_tags)`) and FENCED: only allowed predictions may match,
+  be served (keyword match or exact `anticipated_id` tap), or be scored/logged into their source
+  pattern's EMA; fenced predictions are left untouched (they still belong to their own quest's
+  later turn) and the scope's live set is still cleared at the end of the turn regardless, since
+  `plan_next` replaces it wholesale anyway. `chips_for_now` and `refresh` apply the same fence, for
+  consistency. Untagged predictions (legacy data, or planned with no quest key in scope at all)
+  stay visible everywhere, so a consumer with no quest concept is unaffected. Docs:
+  `docs/anticipation.md`, `docs/context-assembly.md`. Tests: `tests/test_anticipation.py`
+  (including new `scope_tags_from_keys` unit cases).
   colon is used as the dedup key, never rebuilt into the output. Tests:
   `tests/test_composite_retrieval_verbatim_lines.py`.
 - **Autopilot created a duplicate pass series on every scan for a quest it does not own** (and on

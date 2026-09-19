@@ -680,6 +680,15 @@ reaches every arm that reads or writes a card/hit:
   overwrite), so a card touched from two quests becomes visible to both -- additions are exactly
   what `managed_fields`/`managed_items` (see `docs/card-schema.md`) already leave unblocked for a
   consumer-managed card.
+- **Anticipation engine** (`core/anticipation.py`, see `docs/anticipation.md`): a different
+  subsystem (turn-end learning/precompute, not part of pre-flight assembly), but the same leak
+  shape -- a bundle precomputed while one quest is active and stored under the always-present
+  `"global"` scope must not be served to a later turn scoped to a different quest.
+  `Anticipator.plan_next` derives `turn_tags` from its OWN scope keys the same way
+  (`scope_tags_from_keys`, not this section's `_ctx_meta` path) and stamps them onto each planned
+  `Prediction.scope_tags`; `Anticipator.observe` (and, for consistency, `chips_for_now`/`refresh`)
+  fence with the same `scope_tags_allow` predicate before a prediction may match, serve, or be
+  scored.
 
 ## User Input Understanding (Step 1) and the `ConversationStore`
 

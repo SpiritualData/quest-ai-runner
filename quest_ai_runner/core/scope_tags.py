@@ -71,6 +71,31 @@ def scope_tags_allow(item_tags: ScopeTags, turn_tags: ScopeTags) -> bool:
         return True
 
 
+def scope_tags_from_keys(scope_keys: ScopeTags, kinds: Sequence[str] = ("quest",)) -> List[str]:
+    """The keys among ``scope_keys`` whose kind (the text before the first ``":"``) is in
+    ``kinds``, in order, deduped. A bare key with no ``":"`` (e.g. ``"global"``, or a bare
+    conversation id passed directly) has no kind and never becomes a tag. Default ``kinds``
+    is ``("quest",)``, the kind this fence exists to isolate.
+
+    This is the single, shared way every scope-key-consuming module derives its ``scope_tags``
+    (the quest-kind keys "in scope this turn") from a list of scope keys such as ``["conv:a",
+    "quest:x", "global"]`` -> ``["quest:x"]`` -- centralizing what ``core.recent_context`` and
+    ``core.anticipation`` each used to compute with their own inline comprehension. Never raises.
+    """
+    out: List[str] = []
+    try:
+        kind_set = set(kinds or ())
+        for key in as_tag_list(scope_keys):
+            if ":" not in key:
+                continue
+            kind = key.split(":", 1)[0]
+            if kind in kind_set and key not in out:
+                out.append(key)
+    except Exception:  # noqa: BLE001
+        return out
+    return out
+
+
 def union_scope_tags(*tag_sources: ScopeTags) -> List[str]:
     """Union several scope-tag sources into one deduped list, preserving first-seen order. Any
     falsy/malformed source contributes nothing. Never raises."""

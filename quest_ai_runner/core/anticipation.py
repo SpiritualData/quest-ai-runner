@@ -53,6 +53,33 @@ V2 SEMANTICS (durable patterns, read-time chips):
     never rewritten. An optional one-LLM-per-turn refresh (see ``apply_refresh`` +
     ``Anticipator.refresh``) fills ``display_text``, drops predictions the conversation obsoleted,
     and adds a few conversational follow-up predictions.
+
+SCOPE TAGS (cross-quest fence)
+-------------------------------
+A precomputed prediction is a discardable HINT stored under whatever scope key it was planned
+under (see ``core.recent_context``'s own SCOPE TAGS section for the identical problem in the warm
+recent-context store) -- including ``"global"``, which is in scope on every turn regardless of
+which quest is active. Without a fence, a bundle precomputed while quest X was active and stored
+under ``"global"`` is later served to a turn scoped to a completely different quest Y, since
+keyword matching alone has no notion of "this prediction is ABOUT quest X". ``core.scope_tags``
+closes that gap the same way it closes it for recent-context and the vector/card arms:
+
+  * ``Anticipator.plan_next(scope_keys, ...)`` computes ``turn_tags = scope_tags_from_keys(scope_keys)``
+    once per call (the quest-kind keys active this turn) and stamps it onto ``scope_tags`` for
+    EVERY prediction planned this call, in every scope file it writes to -- so a "global"-scoped
+    precompute slot still remembers which quest(s) were active when it was made.
+  * ``Anticipator.observe(actual_text, scope_keys, ...)`` computes the requesting turn's own
+    ``turn_tags`` the same way and only matches/serves/scores predictions whose ``scope_tags``
+    pass ``scope_tags_allow(pred.scope_tags, turn_tags)``. A fenced prediction (tagged for a
+    different quest) is invisible to this turn: not matched, not scored, not fed to the source
+    pattern's EMA update.
+  * A prediction with NO ``scope_tags`` (legacy data, or planned with no quest key in scope at
+    all) stays visible everywhere, per the shared fence rule -- untagged is never hidden.
+
+This is opt-in and inert by construction when no quest key is ever in scope: ``scope_tags_from_keys``
+returns ``[]`` for a plain ``["conv:<id>", "global"]`` turn, and ``scope_tags_allow`` treats "the
+turn has no tags" as "hide nothing", so a consumer with no quest concept sees byte-for-byte the
+same behavior as before this fence existed.
 """
 from __future__ import annotations
 
@@ -70,6 +97,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 from quest_ai_runner.adapters.tfdfidf_sampling import keywords_from_text
 
 from .adapters import AssembledContext
+from .scope_tags import scope_tags_allow, scope_tags_from_keys
 
 log = logging.getLogger("quest-ai-runner.anticipation")
 
@@ -175,6 +203,12 @@ class Prediction:
     # a tap should send this prediction's id (see ``Anticipator.observe(anticipated_id=...)``)
     # rather than rely on keyword matching the display text back to the prediction.
     display_text: str = ""
+    # The quest-kind scope keys active when this prediction was PLANNED (see the module
+    # docstring's SCOPE TAGS section and ``core.scope_tags``), e.g. ``["quest:x"]``. Empty means
+    # untagged (legacy data, or planned with no quest key in scope at all) -- always visible, per
+    # the shared fence rule. Stamped by ``Anticipator.plan_next``; consulted by
+    # ``Anticipator.observe`` to fence a prediction out of a turn scoped to a different quest.
+    scope_tags: List[str] = field(default_factory=list)
 
 
 # --- Pure functions (no file I/O, no LLM calls, no hidden state) --------------------------------
@@ -679,6 +713,7 @@ def prediction_from_dict(d: Dict[str, Any]) -> Optional[Prediction]:
             context_card_ids=[str(x) for x in (d.get("context_card_ids") or [])],
             draft_answer=d.get("draft_answer"),
             display_text=str(d.get("display_text") or ""),
+            scope_tags=[str(x) for x in (d.get("scope_tags") or [])],
         )
     except Exception:  # noqa: BLE001
         return None
@@ -688,6 +723,28 @@ def prediction_from_dict(d: Dict[str, Any]) -> Optional[Prediction]:
 # version keeps importing. Remove after the next release; use the public names above.
 _pattern_from_dict = pattern_from_dict
 _prediction_from_dict = prediction_from_dict
+
+
+def assemble_with_scope_tags(assembler: Any, text: str, scope_tags: List[str]) -> Any:
+    """Precompute one bundle via ``assembler.assemble``, threading ``scope_tags`` through
+    ``meta`` (see the module docstring's SCOPE TAGS section) when there are any to thread.
+
+    Calls ``assembler.assemble(text, meta={"scope_tags": scope_tags})`` when ``scope_tags`` is
+    non-empty; falls back to the plain ``assembler.assemble(text)`` call when ``scope_tags`` is
+    empty OR the assembler's ``assemble`` does not accept a ``meta`` keyword at all (a ``TypeError``
+    on the call, not on anything the assembler does internally). This is the ONE place both
+    ``Anticipator.plan_next`` (below) and any consumer precomputing bundles OUTSIDE the Anticipator
+    (e.g. a consumer's own chip-precompute path) get this assembler-compatibility fallback, so it
+    is written once (hard rule #4: a second consumer's need belongs in the library). Callers are
+    expected to wrap this in their own try/except for a genuinely failed precompute; this helper
+    itself does not swallow anything other than the meta-keyword TypeError.
+    """
+    if scope_tags:
+        try:
+            return assembler.assemble(text, meta={"scope_tags": list(scope_tags)})
+        except TypeError:
+            return assembler.assemble(text)
+    return assembler.assemble(text)
 
 
 class FilePredictionStore:
@@ -896,54 +953,71 @@ class Anticipator:
         Scope keys are consulted in the order given (pass narrowest first: conv, quest, global);
         on a score tie the earlier key wins. Never raises: any failure returns an empty
         ``MatchResult`` and the turn proceeds on the normal path.
+
+        SCOPE TAGS (see the module docstring): this turn's own ``turn_tags`` (the quest-kind keys
+        among ``scope_keys``) is computed once, and each scope's loaded predictions are split into
+        ALLOWED (``scope_tags_allow(p.scope_tags, turn_tags)``) and FENCED. Only allowed
+        predictions may match, be served (keyword match OR exact ``anticipated_id``), or be
+        scored/logged as an outcome and folded into their source pattern's EMA -- a fenced
+        prediction was planned for a DIFFERENT quest than this turn's, so this turn must not learn
+        from it or be answered by it. Fenced predictions are left otherwise untouched (they still
+        belong to their own quest's later turn); the scope's live set is still cleared at the end
+        of the key's block exactly as before, since the turn happened either way and ``plan_next``
+        replaces the set wholesale at turn end regardless.
         """
         result = MatchResult()
         served_exact = False
         try:
             now_ts = (now or datetime.now()).timestamp()
-            for key in _as_key_list(scope_keys):
+            keys = _as_key_list(scope_keys)
+            turn_tags = scope_tags_from_keys(keys)
+            for key in keys:
                 preds = self.store.load_predictions(key)
                 if not preds:
                     continue
-                best, best_score, outcomes = match_actual(preds, actual_text)
-                # EXACT-ID SERVE: honor the id the client tapped, regardless of keyword score.
-                # Match a stored slot by its own id OR by its stable chip id, since a chip
-                # returned by ``chips_for_now`` carries ``chip_id(scope, text)``, not the id
-                # ``plan_next`` stored the precompute slot under.
-                if anticipated_id and not served_exact:
-                    exact = next(
-                        (p for p in preds
-                         if p.prediction_id == anticipated_id
-                         or chip_id(key, p.text) == anticipated_id), None)
-                    if exact is not None:
-                        view = self.store.load_view(key, exact.prediction_id)
-                        result.matched = exact
-                        result.score = score_outcome(exact.text, actual_text)
+                allowed = [p for p in preds if scope_tags_allow(p.scope_tags, turn_tags)]
+                if allowed:
+                    best, best_score, outcomes = match_actual(allowed, actual_text)
+                    # EXACT-ID SERVE: honor the id the client tapped, regardless of keyword score.
+                    # Match a stored slot by its own id OR by its stable chip id, since a chip
+                    # returned by ``chips_for_now`` carries ``chip_id(scope, text)``, not the id
+                    # ``plan_next`` stored the precompute slot under. Only searched among ALLOWED
+                    # predictions: a tapped id resolving to a fenced (different-quest) slot must
+                    # not be served.
+                    if anticipated_id and not served_exact:
+                        exact = next(
+                            (p for p in allowed
+                             if p.prediction_id == anticipated_id
+                             or chip_id(key, p.text) == anticipated_id), None)
+                        if exact is not None:
+                            view = self.store.load_view(key, exact.prediction_id)
+                            result.matched = exact
+                            result.score = score_outcome(exact.text, actual_text)
+                            result.precomputed = (
+                                AssembledContext(context_view=view,
+                                                 card_ids=list(exact.context_card_ids))
+                                if view else None
+                            )
+                            served_exact = True
+                    if not served_exact and best is not None and best_score > result.score:
+                        view = self.store.load_view(key, best.prediction_id)
+                        result.matched = best
+                        result.score = best_score
                         result.precomputed = (
                             AssembledContext(context_view=view,
-                                             card_ids=list(exact.context_card_ids))
+                                             card_ids=list(best.context_card_ids))
                             if view else None
                         )
-                        served_exact = True
-                if not served_exact and best is not None and best_score > result.score:
-                    view = self.store.load_view(key, best.prediction_id)
-                    result.matched = best
-                    result.score = best_score
-                    result.precomputed = (
-                        AssembledContext(context_view=view,
-                                         card_ids=list(best.context_card_ids))
-                        if view else None
-                    )
-                self._apply_outcomes(key, preds, outcomes)
-                for pid, s in outcomes:
-                    self.store.append_log({
-                        "ts": now_ts,
-                        "event": "outcome",
-                        "scope_key": key,
-                        "prediction_id": pid,
-                        "score": round(s, 4),
-                        "matched": s >= MATCH_SERVE,
-                    })
+                    self._apply_outcomes(key, allowed, outcomes)
+                    for pid, s in outcomes:
+                        self.store.append_log({
+                            "ts": now_ts,
+                            "event": "outcome",
+                            "scope_key": key,
+                            "prediction_id": pid,
+                            "score": round(s, 4),
+                            "matched": s >= MATCH_SERVE,
+                        })
                 self.store.clear_predictions(key)
         except Exception:  # noqa: BLE001 -- anticipation must never break a turn
             log.debug("Anticipator.observe failed", exc_info=True)
@@ -962,15 +1036,26 @@ class Anticipator:
         on stored live predictions or their TTL, so a pattern learned days ago at this hour still
         surfaces. Returns ``{scope_key: [Prediction, ...]}`` with only the scopes that produced
         chips; each chip carries the stable ``chip_id(scope, text)`` a later tap can send back as
-        ``observe(anticipated_id=...)``. Never raises ({} on any failure)."""
+        ``observe(anticipated_id=...)``. Never raises ({} on any failure).
+
+        SCOPE TAGS (see the module docstring): the same ``scope_tags_allow`` fence used by
+        ``observe`` is applied here too, over each chip's own ``scope_tags`` against this call's
+        ``turn_tags``, for consistency -- a chip is untagged by default (patterns carry no
+        scope_tags of their own, so a freshly generated chip inherits none), which is always
+        visible per the shared fence rule, so this is a no-op today and simply keeps this method
+        wired the same way should a future chip ever carry one.
+        """
         out: Dict[str, List[Prediction]] = {}
         try:
             now_dt = now or datetime.now()
-            for key in _as_key_list(scope_keys):
+            keys = _as_key_list(scope_keys)
+            turn_tags = scope_tags_from_keys(keys)
+            for key in keys:
                 patterns = self.store.load_patterns(key)
                 if not patterns:
                     continue
                 chips = chips_for_now(patterns, now_dt, list(recent_texts or []), k=k)
+                chips = [c for c in chips if scope_tags_allow(c.scope_tags, turn_tags)]
                 if chips:
                     out[key] = chips
         except Exception:  # noqa: BLE001 -- a read-time chip failure is just no chips
@@ -1038,12 +1123,24 @@ class Anticipator:
         (``assembler.assemble(predicted_text)``: the bundle's context_view is stored as the
         prediction's sidecar view, its card ids on ``context_card_ids``). Replaces each scope's
         previous live set. Returns everything planned (all scopes). Checks ``close()`` between
-        bundles so a joining shutdown never waits on a long precompute chain. Never raises."""
+        bundles so a joining shutdown never waits on a long precompute chain. Never raises.
+
+        SCOPE TAGS (see the module docstring): ``turn_tags`` (the quest-kind keys among
+        ``scope_keys``) is computed ONCE for the whole call and stamped onto ``scope_tags`` for
+        EVERY prediction planned this call, in every scope it is saved to -- including a
+        ``"global"``-scoped one, which is exactly how a bundle precomputed while one quest is
+        active stays fenced out of a later turn scoped to a different quest (see
+        ``Anticipator.observe``). The precompute call threads ``turn_tags`` through the assembler's
+        ``meta`` via ``assemble_with_scope_tags`` (falls back to the old positional-only call for
+        an assembler whose ``assemble`` does not accept ``meta`` at all).
+        """
         planned: List[Prediction] = []
         try:
             now_dt = now or datetime.now()
             seed_text = " ".join((recent_texts or [])[-3:])
-            for key in _as_key_list(scope_keys):
+            keys = _as_key_list(scope_keys)
+            turn_tags = scope_tags_from_keys(keys)
+            for key in keys:
                 if self._closed:
                     break
                 patterns = self.store.load_patterns(key)
@@ -1054,13 +1151,15 @@ class Anticipator:
                 if not preds:
                     self.store.clear_predictions(key)
                     continue
+                for p in preds:
+                    p.scope_tags = list(turn_tags)
                 views: Dict[str, str] = {}
                 if self.assembler is not None:
                     for p in preds:
                         if self._closed:
                             break
                         try:
-                            assembled = self.assembler.assemble(p.text)
+                            assembled = assemble_with_scope_tags(self.assembler, p.text, turn_tags)
                             view = (getattr(assembled, "context_view", "") or "").strip()
                             if view:
                                 views[p.prediction_id] = view
@@ -1089,20 +1188,31 @@ class Anticipator:
         create no pattern). Existing precomputed bundles are preserved. Call AFTER ``plan_next`` in
         the same turn-end background thread, so it stays off the response path and single-flight.
         Never raises: any refiner failure leaves the planned predictions exactly as ``plan_next``
-        left them."""
+        left them.
+
+        SCOPE TAGS (see the module docstring): the same fence ``observe`` applies is applied here
+        to which predictions are gathered as refiner candidates and which get refreshed. Each
+        scope's loaded predictions are split into ALLOWED (``scope_tags_allow(p.scope_tags,
+        turn_tags)``) and FENCED; only allowed predictions become refiner candidates or get
+        refined/dropped/have follow-ups added via ``apply_refresh``. Fenced predictions (planned
+        for a different quest than this call's) are carried through UNCHANGED into the re-save, so
+        this refresh never drops or rewrites a slot that belongs to another quest's turn."""
         if self.refiner is None:
             return
         try:
             now_ts = (now or datetime.now()).timestamp()
             keys = _as_key_list(scope_keys)
-            scope_state: Dict[str, Tuple[List[Pattern], List[Prediction]]] = {}
+            turn_tags = scope_tags_from_keys(keys)
+            scope_state: Dict[str, Tuple[List[Pattern], List[Prediction], List[Prediction]]] = {}
             candidates: List[str] = []
             seen: set = set()
             for key in keys:
                 patterns = self.store.load_patterns(key)
                 preds = self.store.load_predictions(key)
-                scope_state[key] = (patterns, preds)
-                for p in preds:
+                allowed = [p for p in preds if scope_tags_allow(p.scope_tags, turn_tags)]
+                fenced = [p for p in preds if not scope_tags_allow(p.scope_tags, turn_tags)]
+                scope_state[key] = (patterns, allowed, fenced)
+                for p in allowed:
                     if p.text not in seen:
                         seen.add(p.text)
                         candidates.append(p.text)
@@ -1115,11 +1225,12 @@ class Anticipator:
             for i, key in enumerate(keys):
                 if self._closed:
                     break
-                patterns, preds = scope_state[key]
+                patterns, allowed, fenced = scope_state[key]
                 # Follow-ups are conversational, so they belong only to the narrowest scope.
                 scope_followups = followups if i == 0 else []
-                new_patterns, new_preds = apply_refresh(
-                    patterns, preds, refinements, drops, scope_followups, now_ts)
+                new_patterns, new_allowed = apply_refresh(
+                    patterns, allowed, refinements, drops, scope_followups, now_ts)
+                new_preds = new_allowed + fenced
                 # Preserve each surviving prediction's precomputed bundle across the re-save.
                 views: Dict[str, str] = {}
                 for p in new_preds:

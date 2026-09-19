@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from quest_ai_runner.config import resolve_anticipator, shutdown_background_index, RunnerConfig
 from quest_ai_runner.core.anticipation import (
@@ -31,6 +31,7 @@ from quest_ai_runner.core.anticipation import (
     Pattern,
     Prediction,
     apply_refresh,
+    assemble_with_scope_tags,
     chips_for_now,
     extract_features,
     generate_predictions,
@@ -44,6 +45,7 @@ from quest_ai_runner.core.anticipation import (
 )
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import Orchestrator, OrchestratorConfig
+from quest_ai_runner.core.scope_tags import scope_tags_from_keys
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -538,6 +540,18 @@ class _StubAssembler:
 
     def assemble(self, text: str) -> _StubAssembledContext:
         self.calls.append(text)
+        return _StubAssembledContext(context_view=f"BUNDLE FOR: {text}", card_ids=[f"card-{text[:8]}"])
+
+
+class _MetaAwareStubAssembler:
+    """A ContextAssembler-shaped stub that DOES accept ``meta``, recording every call's
+    ``(text, meta)`` pair so a test can assert exactly what ``plan_next`` threaded through."""
+
+    def __init__(self):
+        self.calls: List[Tuple[str, Optional[Dict[str, Any]]]] = []
+
+    def assemble(self, text: str, *, meta: Optional[Dict[str, Any]] = None) -> _StubAssembledContext:
+        self.calls.append((text, meta))
         return _StubAssembledContext(context_view=f"BUNDLE FOR: {text}", card_ids=[f"card-{text[:8]}"])
 
 
@@ -1111,3 +1125,235 @@ def test_anticipator_refresh_applies_refiner_output_and_preserves_views(tmp_path
     assert by_text["what is next"].source == "followup"
     # The existing precomputed bundle survived the re-save.
     assert store.load_view("global", "pr1") == "the bundle"
+
+
+# =================================================================================================
+# Scope tags: the cross-quest fence (see the module docstring's SCOPE TAGS section)
+# =================================================================================================
+
+
+def test_scope_tags_from_keys_extracts_quest_kind_only():
+    assert scope_tags_from_keys(["conv:a", "quest:x", "global"]) == ["quest:x"]
+
+
+def test_scope_tags_from_keys_multiple_quests_dedup_order_preserved():
+    assert scope_tags_from_keys(
+        ["quest:x", "conv:a", "quest:y", "quest:x"]) == ["quest:x", "quest:y"]
+
+
+def test_scope_tags_from_keys_bare_global_never_becomes_a_tag():
+    assert scope_tags_from_keys(["global"]) == []
+
+
+def test_scope_tags_from_keys_accepts_bare_string():
+    assert scope_tags_from_keys("quest:x") == ["quest:x"]
+
+
+def test_scope_tags_from_keys_no_keys_returns_empty():
+    assert scope_tags_from_keys([]) == []
+    assert scope_tags_from_keys(None) == []
+
+
+def test_scope_tags_from_keys_custom_kinds():
+    assert scope_tags_from_keys(["conv:a", "quest:x"], kinds=("conv",)) == ["conv:a"]
+
+
+def test_plan_next_stamps_scope_tags_on_every_planned_prediction_and_passes_meta(tmp_path):
+    store = FilePredictionStore(str(tmp_path))
+    assembler = _MetaAwareStubAssembler()
+    anticipator = Anticipator(store, assembler=assembler)
+    now = datetime(2026, 7, 20, 9, 0, 0)
+    p = _pattern(scope="global", canonical_text="what tile did I pick", keywords=["tile", "pick"],
+                weight=0.9, hour_bucket=1, dow=0)
+    store.save_patterns("global", [p])
+
+    planned = anticipator.plan_next(
+        ["conv:a", "quest:x", "global"], recent_texts=["what tile did I pick"], now=now)
+
+    assert len(planned) == 1
+    assert planned[0].scope_tags == ["quest:x"]
+    assert assembler.calls == [("what tile did I pick", {"scope_tags": ["quest:x"]})]
+
+    # The stamped scope_tags round-trip through the store too.
+    live = store.load_predictions("global")
+    assert len(live) == 1
+    assert live[0].scope_tags == ["quest:x"]
+
+
+def test_plan_next_no_quest_key_in_scope_passes_no_meta(tmp_path):
+    """With no quest key in the scope keys, turn_tags is [] and the OLD positional-only call is
+    made, byte-for-byte -- an assembler with no ``meta`` support is never even asked for it."""
+    store = FilePredictionStore(str(tmp_path))
+    assembler = _MetaAwareStubAssembler()
+    anticipator = Anticipator(store, assembler=assembler)
+    now = datetime(2026, 7, 20, 9, 0, 0)
+    p = _pattern(scope="global", canonical_text="what is our roadmap", keywords=["roadmap"],
+                weight=0.9, hour_bucket=1, dow=0)
+    store.save_patterns("global", [p])
+
+    planned = anticipator.plan_next(
+        ["conv:a", "global"], recent_texts=["what is our roadmap"], now=now)
+
+    assert len(planned) == 1
+    assert planned[0].scope_tags == []
+    assert assembler.calls == [("what is our roadmap", None)]
+
+
+def test_plan_next_falls_back_when_assembler_rejects_meta_kwarg(tmp_path):
+    """An assembler whose ``assemble`` accepts only ``text`` (no ``meta`` keyword at all) still
+    gets called and still produces a stored bundle: the TypeError from the meta-kwarg call is
+    caught and the plain positional call is made instead."""
+    store = FilePredictionStore(str(tmp_path))
+    assembler = _StubAssembler()  # assemble(self, text) -- no meta parameter
+    anticipator = Anticipator(store, assembler=assembler)
+    now = datetime(2026, 7, 20, 9, 0, 0)
+    p = _pattern(scope="global", canonical_text="what tile did I pick", keywords=["tile", "pick"],
+                weight=0.9, hour_bucket=1, dow=0)
+    store.save_patterns("global", [p])
+
+    planned = anticipator.plan_next(
+        ["conv:a", "quest:x", "global"], recent_texts=["what tile did I pick"], now=now)
+
+    assert len(planned) == 1
+    assert planned[0].scope_tags == ["quest:x"]
+    assert assembler.calls == ["what tile did I pick"]  # still called, positionally
+    live = store.load_predictions("global")
+    view = store.load_view("global", live[0].prediction_id)
+    assert view == "BUNDLE FOR: what tile did I pick"
+
+
+def test_assemble_with_scope_tags_no_tags_is_the_old_positional_call():
+    assembler = _MetaAwareStubAssembler()
+    assemble_with_scope_tags(assembler, "hello", [])
+    assert assembler.calls == [("hello", None)]
+
+
+def test_assemble_with_scope_tags_falls_back_on_type_error():
+    assembler = _StubAssembler()
+    result = assemble_with_scope_tags(assembler, "hello", ["quest:x"])
+    assert assembler.calls == ["hello"]
+    assert result.context_view == "BUNDLE FOR: hello"
+
+
+def test_observe_fences_out_a_prediction_tagged_for_a_different_quest_even_on_exact_text_match(
+    tmp_path,
+):
+    store = FilePredictionStore(str(tmp_path))
+    anticipator = Anticipator(store, assembler=None)
+    # Planned while quest X was active, stored under the always-in-scope "global" file.
+    tagged_for_x = Prediction(
+        prediction_id="pr_x", text="what tile did I pick", confidence=0.8,
+        created_ts=1000.0, expires_ts=time_far_future(), scope_tags=["quest:x"])
+    store.save_predictions("global", [tagged_for_x], views={"pr_x": "quest X's tile fact"})
+
+    # A turn scoped to a DIFFERENT quest asks the exact same words.
+    result = anticipator.observe(
+        "what tile did I pick", ["conv:b", "quest:y", "global"])
+
+    assert result.matched is None
+    assert result.precomputed is None
+    assert result.score == 0.0
+    # The turn happened regardless, so the live set is still cleared.
+    assert store.load_predictions("global") == []
+    # The fenced prediction's outcome was never logged (no learning from a different quest's ask).
+    assert not store.log_path.exists()
+
+
+def test_observe_serves_an_untagged_global_prediction_across_quests(tmp_path):
+    store = FilePredictionStore(str(tmp_path))
+    anticipator = Anticipator(store, assembler=None)
+    untagged = Prediction(
+        prediction_id="pr_untagged", text="what tile did I pick", confidence=0.8,
+        created_ts=1000.0, expires_ts=time_far_future(), scope_tags=[])
+    store.save_predictions("global", [untagged], views={"pr_untagged": "untagged bundle"})
+
+    result = anticipator.observe(
+        "what tile did I pick", ["conv:b", "quest:y", "global"])
+
+    assert result.matched is not None
+    assert result.matched.prediction_id == "pr_untagged"
+    assert result.precomputed is not None
+    assert result.precomputed.context_view == "untagged bundle"
+
+
+def test_observe_serves_a_prediction_tagged_for_the_same_quest_as_the_turn(tmp_path):
+    store = FilePredictionStore(str(tmp_path))
+    anticipator = Anticipator(store, assembler=None)
+    tagged_for_y = Prediction(
+        prediction_id="pr_y", text="what tile did I pick", confidence=0.8,
+        created_ts=1000.0, expires_ts=time_far_future(), scope_tags=["quest:y"])
+    store.save_predictions("global", [tagged_for_y], views={"pr_y": "quest Y bundle"})
+
+    result = anticipator.observe(
+        "what tile did I pick", ["conv:b", "quest:y", "global"])
+
+    assert result.matched is not None
+    assert result.matched.prediction_id == "pr_y"
+    assert result.precomputed is not None
+    assert result.precomputed.context_view == "quest Y bundle"
+
+
+def test_observe_exact_id_tap_does_not_serve_a_fenced_prediction(tmp_path):
+    """Even an explicit tapped id must not resurface a prediction fenced for another quest."""
+    store = FilePredictionStore(str(tmp_path))
+    anticipator = Anticipator(store, assembler=None)
+    tagged_for_x = Prediction(
+        prediction_id="pr_x", text="what tile did I pick", confidence=0.8,
+        created_ts=1000.0, expires_ts=time_far_future(), scope_tags=["quest:x"])
+    store.save_predictions("global", [tagged_for_x], views={"pr_x": "quest X's tile fact"})
+
+    result = anticipator.observe(
+        "totally different phrasing", ["conv:b", "quest:y", "global"], anticipated_id="pr_x")
+
+    assert result.matched is None
+    assert result.precomputed is None
+
+
+def test_observe_does_not_apply_ema_from_a_fenced_prediction_to_its_source_pattern(tmp_path):
+    store = FilePredictionStore(str(tmp_path))
+    anticipator = Anticipator(store, assembler=None)
+    p = _pattern(pattern_id="src", scope="global", canonical_text="what tile did I pick",
+                weight=0.5, hits=0, misses=0)
+    store.save_patterns("global", [p])
+    tagged_for_x = Prediction(
+        prediction_id="pr_x", text="what tile did I pick", confidence=0.8,
+        created_ts=1000.0, expires_ts=time_far_future(), scope_tags=["quest:x"])
+    store.save_predictions("global", [tagged_for_x])
+
+    anticipator.observe("what tile did I pick", ["conv:b", "quest:y", "global"])
+
+    # The pattern's weight/hits/misses are untouched: a different quest's turn must not learn
+    # from an ask it was fenced away from.
+    unchanged = store.load_patterns("global")
+    assert len(unchanged) == 1
+    assert unchanged[0].weight == 0.5
+    assert unchanged[0].hits == 0
+    assert unchanged[0].misses == 0
+
+
+def test_prediction_scope_tags_round_trip_through_file_store(tmp_path):
+    store = FilePredictionStore(str(tmp_path))
+    pred = Prediction(
+        prediction_id="pr1", text="what tile did I pick", confidence=0.8,
+        created_ts=1000.0, expires_ts=time_far_future(), scope_tags=["quest:x"])
+    store.save_predictions("global", [pred])
+
+    loaded = store.load_predictions("global")
+    assert len(loaded) == 1
+    assert loaded[0].scope_tags == ["quest:x"]
+
+
+def test_prediction_scope_tags_defaults_to_empty_list_when_absent_from_a_stored_record(tmp_path):
+    """A record written before ``scope_tags`` existed loads as ``[]`` (untagged, always visible),
+    never raising."""
+    store = FilePredictionStore(str(tmp_path))
+    path = store._path("global")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"predictions": [{
+        "prediction_id": "legacy1", "text": "an old prediction", "confidence": 0.5,
+        "created_ts": 1000.0, "expires_ts": time_far_future(),
+    }]}), encoding="utf-8")
+
+    loaded = store.load_predictions("global")
+    assert len(loaded) == 1
+    assert loaded[0].scope_tags == []
