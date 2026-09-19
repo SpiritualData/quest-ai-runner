@@ -7,6 +7,68 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **The built-in default assistant is a roster entry you can point at: `DEFAULT_ASSISTANT_REP_ID`**
+  (`runner/autopilot.py`). A quest with an EMPTY roster has always produced one plain-assistant
+  batch per due pass, which is the right work and nothing the person can point at: days and a
+  standing brief live on a roster ENTRY, so "run this quest on Mondays and Thursdays" was
+  unsayable until you had AI reps to tick, and a personal quest never has any. A roster entry
+  naming `default_assistant` is that same fallback written down. It goes on duty by the ordinary
+  day rule and carries its own instructions, and every path that would otherwise hand the id out
+  as a character resolves it back to the fallback first: `AutopilotPass._batch_persona` before the
+  task is created (so nothing is ever filed against a rep that does not exist), `resolve_persona`
+  via its new `unnamed()` step 4/5 closure, and `personas_on_duty`, which filters it out so an
+  attended session hears "nobody in particular" rather than an id it cannot look up. A roster of
+  nothing but the marker still yields `PERSONA_HELD` on a day it does not name: the person said
+  which days this quest runs. Only WHEN and WITH WHAT changes, never WHO. quest-frontend declares
+  the same literal as `DEFAULT_PERSONA_REP_ID` in `src/components/quest/AutopilotPanel.tsx` and
+  renders it as a built-in row on every quest, so the two are one contract.
+- **One lane, several teams: `RunnerConfig.team_ids` / `QUEST_TEAM_IDS`** (`config.py`, `cli.py`,
+  `runner/quest_client.py`, `runner/poller.py`, `runner/autopilot.py`). A runner could discover
+  work for exactly ONE team, so an org running four teams ran four processes that differed only in
+  which single team each polled -- identical account, identical corpus, identical everything else.
+  The justification recorded in `discover_due` was that two teams sharing one lane "would race",
+  and it was aimed at the wrong thing: the real hazard is two separate PROCESSES racing one shared
+  owner-scoped queue (the claim-before-run PATCH to `in_progress` is an unconditional set, not a
+  status-guarded find-and-update, so both can genuinely double-claim), not one process serving
+  several teams sequentially, where each task is claimed once and carries its own `team_id`. The
+  new field is the set of teams a lane discovers from; `team_id` keeps its existing, separate
+  meaning as the lane's HOME team (environment heartbeat, escalation default, `QuestClient`
+  instance default), and `discovery_team_id` -- including an explicit `""` for owner-scoped --
+  still wins over it, so no existing deployment changes behaviour. Empty (the default) is exactly
+  today's single-team path.
+  The fan-out is ONE request carrying a comma-joined `team_id` param (`QuestClient.team_param`,
+  threaded through `discover_due`, `list_interactive_due` and `wait_for_interactive`), never N
+  requests. That is not an optimization: `wait_for_interactive` is a blocking long-poll that
+  returns exactly one FIFO-oldest task for the scope it was given, so a lane that polled per team
+  and filtered client-side would discard another team's task on every reconnect and spin while it
+  sat at the head of the queue. `",".join(["t"]) == "t"`, so a one-team set and a bare team id are
+  indistinguishable on the wire -- the guarantee that makes routing every call through the helper
+  a provable no-op for single-team lanes (`tests/test_multi_team_discovery.py`, and the two
+  pre-existing backward-compatibility tests in `tests/test_runner.py` left untouched).
+  Most per-task work already resolved from the task's own `team_id`/`quest_id` (persona
+  resolution, `RepContextAssembler`, the quest folder map) and is unchanged. Two places did not,
+  and both were real correctness bugs for a multi-team lane. First, autopilot pass creation:
+  `_create_quest_pass`/`_create_quest_catchup_pass` hardcoded the lane's home team, which files
+  team B's quest's pass on team A -- a task team B's own people cannot see, pause or audit. The
+  schedule snapshot now merges every team's quest listing into one map and REMEMBERS which team
+  each quest came from, and the pass is created there. Second, escalation: `QuestDecisionSink`
+  defaulted a decision-request to the client's home team, so a question about another team's quest
+  went in front of the wrong people; it now resolves the quest's own team via the cached
+  `owning_team_for`. `AutopilotPass` takes a `team_resolver` callable rather than per-run mutable
+  state, because one instance is shared across the poller's thread pool and a mutable "current
+  team" would be a race that files one quest's work on another quest's team. The autopilot daily
+  budget is deliberately kept PER TEAM: a lane serving three teams is a deployment efficiency and
+  must not silently third each team's allowance with nothing to explain why. `_ensure_autopilot_pass`'s
+  legacy team-wide sweep reads every team and keeps its all-or-nothing contract exactly (any
+  failed read voids the whole merged answer as `None`, never a partial list treated as complete --
+  the 2026-09-17 duplicate-series incident's failure mode). `list_quest_goals` and `get_quest` gain
+  a cache-first owning-team lookup (and `get_quest` a cross-team retry it never had, having
+  silently returned `{}` for any quest outside the client's team). Heartbeats now fire once per
+  team in the union of home team and discovery set, since a team that never hears from the lane
+  shows it as absent and routes nothing to it. Docs: `docs/deployment.md`,
+  `docs/quest-api-contract.md`, `.env.example`. Tests: `tests/test_multi_team_discovery.py`,
+  `tests/test_autopilot_pass_task.py`, `tests/test_autopilot.py`, `tests/test_config_env_vars.py`,
+  `tests/test_config_from_file.py`.
 - **Scope tags: a generic cross-quest fence for every retrieval arm** (`core/scope_tags.py`). A
   consumer running one assistant across many "quests" needs a fact learned inside quest X to stay
   out of an answer given inside quest Y; the conversation-history arm already fenced by quest, but

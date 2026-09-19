@@ -144,6 +144,21 @@ OPEN_TASK_STATUSES = {"queued", "in_progress", "needs_you", "suggested"}
 # constant, so change both sides together and it will say so.
 PROPOSAL_TEXT_PREFIX = "Proposed goal:"
 
+# The roster id standing for the BUILT-IN default assistant, rather than for any real AI rep.
+#
+# A quest with an EMPTY roster has always produced one plain-assistant batch per due pass, which is
+# the right behaviour for an unconfigured quest but leaves the person nothing to point at: days live
+# on a roster entry, so "run this quest on Mondays and Thursdays" was unsayable until you had reps
+# to pick from, and a personal quest never has any. An entry carrying this id is that same fallback
+# written down: it goes on duty by the ordinary day rule, it can carry its own standing
+# instructions, and every place that would otherwise hand the id to the consumer as a character
+# resolves it back to the fallback (``_batch_persona``). Nothing is ever ASSIGNED to a rep by this
+# name, because no such rep exists.
+#
+# quest-frontend declares the same literal as DEFAULT_PERSONA_REP_ID in
+# src/components/quest/AutopilotPanel.tsx; the two are one contract, so change them together.
+DEFAULT_ASSISTANT_REP_ID = "default_assistant"
+
 # Time-scope granularities recognized in a quest's ``list_quest_goals`` period grouping, checked
 # FINEST first (day) so "today" wins over a same-quarter month/quarter/year group that also
 # happens to be current.
@@ -688,6 +703,10 @@ def resolve_persona(autopilot_cfg: Dict[str, Any], now: datetime,
          ``fallback_context`` (the item being routed, or ``{}`` when there is none).
       5. ``None`` -- the plain assistant persona (no character voice).
 
+    An entry naming DEFAULT_ASSISTANT_REP_ID is on duty and takes work by rules 1 and 2 like any
+    other, but resolves to steps 4/5 rather than to itself: it is the person writing the fallback
+    down so it can carry days and a brief, not a character anybody can look up.
+
     Steps 4 and 5 are reachable ONLY when the roster names no work-routing character at all, which
     is every quest that never configured one. Those quests behave exactly as they always have.
 
@@ -704,6 +723,18 @@ def resolve_persona(autopilot_cfg: Dict[str, Any], now: datetime,
     is only the FIRST statement: the character is on duty and works their own standing
     instructions, and routing behaves as though they were not in the roster at all.
     """
+    def unnamed() -> ResolvedPersona:
+        """Steps 4 and 5: the consumer's fallback, else the plain assistant."""
+        if fallback_resolver is not None:
+            try:
+                resolved = fallback_resolver(dict(fallback_context or {}))
+                if resolved:
+                    return str(resolved)
+            except Exception:  # noqa: BLE001 -- a bad fallback must never break a pass
+                log.info("autopilot: persona fallback_resolver raised; treating as no match",
+                         exc_info=True)
+        return None
+
     routing_entries = _work_routing_entries(autopilot_cfg)
     today = _weekday_abbrev(now)
     for persona in routing_entries:
@@ -711,23 +742,21 @@ def resolve_persona(autopilot_cfg: Dict[str, Any], now: datetime,
         if days and today in days:
             rep_id = persona.get("rep_id")
             if rep_id:
-                return str(rep_id)
+                # The default-assistant entry is on duty today and takes the work, but it names
+                # no character: routing to it IS routing to nobody in particular, so it answers
+                # with the same plain assistant an unrostered quest gets. Returning the marker
+                # would hand a consumer an id it cannot look up.
+                return unnamed() if str(rep_id) == DEFAULT_ASSISTANT_REP_ID else str(rep_id)
     for persona in routing_entries:
         if not persona.get("days"):
             rep_id = persona.get("rep_id")
             if rep_id:
-                return str(rep_id)
+                return unnamed() if str(rep_id) == DEFAULT_ASSISTANT_REP_ID else str(rep_id)
     if any(p.get("rep_id") for p in routing_entries):
+        # Including a roster of nothing but the default assistant on days it does not name: the
+        # person said which days this quest runs, and "held" is what honouring that looks like.
         return PERSONA_HELD
-    if fallback_resolver is not None:
-        try:
-            resolved = fallback_resolver(dict(fallback_context or {}))
-            if resolved:
-                return str(resolved)
-        except Exception:  # noqa: BLE001 -- a bad fallback must never break a pass
-            log.info("autopilot: persona fallback_resolver raised; treating as no match",
-                     exc_info=True)
-    return None
+    return unnamed()
 
 
 def resolve_task_persona(task: Dict[str, Any], autopilot_cfg: Dict[str, Any], now: datetime,
@@ -797,6 +826,9 @@ def personas_on_duty(autopilot_cfg: Dict[str, Any], now: datetime) -> List[str]:
     Day-restricted entries that name today come before unrestricted ones, matching
     ``resolve_persona``'s precedence: an explicit "Bailey on Mondays" outranks a catch-all.
 
+    The DEFAULT-ASSISTANT marker is filtered out: it names no character, so a quest rostered only
+    to it answers "nobody in particular", which is what an attended session should hear.
+
     This is what lets an ATTENDED session speak as the same character that would work the quest
     autonomously. Opening a chat inside a quest and getting a generic assistant, while its
     autopilot runs as a named character with that character's accumulated corrections, makes the
@@ -806,7 +838,8 @@ def personas_on_duty(autopilot_cfg: Dict[str, Any], now: datetime) -> List[str]:
     does not take the quest's GOALS, not that they are absent: they are on duty, working their own
     standing instructions, and a person opening a chat on the quest should be able to reach them.
     """
-    return [str(entry.get("rep_id")) for entry in persona_entries_on_duty(autopilot_cfg, now)]
+    return [str(entry.get("rep_id")) for entry in persona_entries_on_duty(autopilot_cfg, now)
+            if str(entry.get("rep_id")) != DEFAULT_ASSISTANT_REP_ID]
 
 
 def persona_instructions_for(autopilot_cfg: Dict[str, Any], rep_id: Optional[str]) -> Optional[str]:
@@ -2031,6 +2064,14 @@ class AutopilotPass:
                 # on duty -- a day-restricted entry carrying the brief plus a catch-all, say -- so
                 # reading the whole roster is what makes which entry irrelevant.
                 persona_instructions = persona_instructions_for(autopilot_cfg, persona)
+                # The roster key is not always a character. A quest rostered to the built-in
+                # default assistant carries DEFAULT_ASSISTANT_REP_ID, which is read for its days
+                # and its instructions above (both of which are the person's own words) and then
+                # resolved HERE to whoever the consumer's fallback names, or to nobody. Everything
+                # downstream -- the task's persona, its label, a dry run's report -- must see that
+                # resolved value, never the marker, or the pass would file work against a rep that
+                # does not exist.
+                persona = self._batch_persona(persona)
                 # Titled from what the PERSON wrote, composed from what actually governs the run.
                 # A default is identical on every unconfigured quest, so titling from one would
                 # name every task and every mail subject after the same built-in first line.
@@ -2233,7 +2274,11 @@ class AutopilotPass:
         character out of the routing that hands an UNASSIGNED recurring task to somebody.
 
         A quest with NO roster gets exactly ONE batch, for whoever the consumer's fallback resolver
-        names, or for the plain assistant when it names nobody. That is the unconfigured quest, and
+        names, or for the plain assistant when it names nobody. A quest rostered to
+        DEFAULT_ASSISTANT_REP_ID gets that same batch by the ordinary route, which is the point of
+        that marker: it makes the fallback a roster entry, so it can carry days and a brief like
+        any other. The caller resolves the marker to the fallback (``_batch_persona``) before the
+        batch is created. That is the unconfigured quest, and
         it still does its default briefs rather than nothing. (An empty on-duty list can only mean
         an empty roster here: ``_gate_quest``'s day rule has already skipped a quest whose roster
         names people but puts none of them on duty today.)
@@ -2268,6 +2313,17 @@ class AutopilotPass:
                 continue
             slot(str(persona) if persona else None).append(task)
         return [(persona, merged[persona]) for persona in order]
+
+    def _batch_persona(self, persona: Optional[str]) -> Optional[str]:
+        """The character a batch actually runs as, given the roster key it was slotted under.
+
+        Only DEFAULT_ASSISTANT_REP_ID is translated: it is the person having written down the
+        fallback this quest would have had anyway, so it resolves to exactly that and to nothing
+        else. Every other key is a real rep_id and passes through.
+        """
+        if persona == DEFAULT_ASSISTANT_REP_ID:
+            return self._fallback_persona()
+        return persona
 
     def _fallback_persona(self) -> Optional[str]:
         """The consumer's own answer to "who is this quest's character", or None.

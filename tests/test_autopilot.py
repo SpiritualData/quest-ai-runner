@@ -16,6 +16,7 @@ from quest_ai_runner.runner.autopilot import (
     AUTOPILOT_WORK_KIND,
     BUNDLED_DEFAULT_PERSONA_INSTRUCTIONS,
     BUNDLED_DEFAULT_QUEST_INSTRUCTIONS,
+    DEFAULT_ASSISTANT_REP_ID,
     DEFAULT_TEAM_DAILY_BUDGET,
     PERSONA_HELD,
     AutopilotPass,
@@ -26,6 +27,8 @@ from quest_ai_runner.runner.autopilot import (
     has_new_ask_since,
     run_requested,
     compose_batch_text,
+    persona_instructions_for,
+    personas_on_duty,
     resolve_persona,
     resolve_task_persona,
 )
@@ -927,6 +930,73 @@ def test_a_client_whose_create_task_rejects_model_still_gets_its_task_created():
     result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
     assert len(result.created_task_ids) == 1
     assert "model" not in client.created_tasks[0]
+
+
+# --- the built-in default assistant as a roster entry ------------------------------------------
+#
+# A quest with an empty roster has always produced one plain-assistant batch per due pass. That is
+# the right work but nothing the person can point at: days and a brief live on a roster ENTRY, so
+# neither was sayable on a quest with no AI reps to pick from (every personal quest). An entry
+# naming DEFAULT_ASSISTANT_REP_ID is that same fallback written down, and these pin that writing it
+# down changes WHEN and WITH WHAT it runs, never WHO runs it.
+
+
+def test_the_default_assistant_entry_runs_as_the_plain_assistant():
+    """Same batch an unrostered quest gets: no rep is stamped, because no such rep exists."""
+    q1 = _quest("q1", personas=[{"rep_id": DEFAULT_ASSISTANT_REP_ID}])
+    client = FakeAutopilotClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
+    result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+    assert len(result.created_task_ids) == 1
+    assert "assignee_rep_id" not in client.created_tasks[0]
+    assert DEFAULT_ASSISTANT_REP_ID not in client.created_tasks[0]["text"]
+
+
+def test_the_default_assistants_days_are_honoured_like_any_other_entry():
+    """The whole point of the entry: a quest with no reps can still say which days it runs."""
+    monday_only = _quest("q1", personas=[{"rep_id": DEFAULT_ASSISTANT_REP_ID, "days": ["Mon"]}])
+    client = FakeAutopilotClient(
+        quests=[monday_only],
+        goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
+    result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})  # a Sunday
+    assert result.created_task_ids == []
+    assert any(s["quest_id"] == "q1" for s in result.skipped)
+
+    on_monday = AutopilotPass(client, team_id="team1", now=lambda: MONDAY).run({"text": "pass"})
+    assert len(on_monday.created_task_ids) == 1
+
+
+def test_the_default_assistant_entry_carries_its_own_standing_brief():
+    q1 = _quest("q1", personas=[{"rep_id": DEFAULT_ASSISTANT_REP_ID,
+                                 "instructions": "Write the weekly digest."}])
+    client = FakeAutopilotClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
+    AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
+    assert "Write the weekly digest." in client.created_tasks[0]["text"]
+    assert persona_instructions_for(q1["autopilot"], DEFAULT_ASSISTANT_REP_ID) \
+        == "Write the weekly digest."
+
+
+def test_the_default_assistant_is_never_offered_as_a_character_to_speak_as():
+    """It names nobody, so routing and an attended session both answer "nobody in particular"
+    rather than handing out an id no consumer can look up."""
+    cfg = {"personas": [{"rep_id": DEFAULT_ASSISTANT_REP_ID}]}
+    assert personas_on_duty(cfg, NOW) == []
+    assert resolve_persona(cfg, NOW) is None
+    # A consumer fallback still gets its say, exactly as on an unrostered quest.
+    assert resolve_persona(cfg, NOW, lambda ctx: "rep_voted") == "rep_voted"
+    # And on a day the entry does not name, the work waits rather than running unrostered.
+    monday_only = {"personas": [{"rep_id": DEFAULT_ASSISTANT_REP_ID, "days": ["Mon"]}]}
+    assert resolve_persona(monday_only, NOW) is PERSONA_HELD
+
+
+def test_a_real_rep_alongside_the_default_assistant_still_gets_its_own_batch():
+    q1 = _quest("q1", personas=[{"rep_id": DEFAULT_ASSISTANT_REP_ID}, {"rep_id": "rep_a"}])
+    client = FakeAutopilotClient(
+        quests=[q1], goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))})
+    result = AutopilotPass(client, team_id="team1", daily_budget=5, now=_now).run({"text": "pass"})
+    assert len(result.created_task_ids) == 2
+    assert [t.get("assignee_rep_id") for t in client.created_tasks] == [None, "rep_a"]
 
 
 def test_resolved_persona_is_stamped_structurally_not_only_in_the_prose():
