@@ -632,6 +632,20 @@ There is real work in this message that you are ready to start. Say briefly that
 started it, and that you will as soon as they say the word.
 """
 
+# The closing instruction of ``declined_proposals_block`` (see beside ``_prior_escalation_lines``
+# below), kept as its own constant so the wording lives in one place. Written for a PLANNER and a
+# grounded ANSWER, not just the overseer digest: today a caller-supplied refusal only ever reached
+# the overseer, which is off by default, so the planner never learned a proposal had already been
+# turned down and kept re-proposing it on its own initiative. No em dashes: this steers text a
+# model reads and may echo.
+DECLINED_PROPOSALS_NOTE = """\
+A decline is an answer and it stands for the rest of this conversation. Never propose, confirm,
+start, or offer any of these again on your own initiative, and never fold them into a broader
+proposal. The one exception: the user's CURRENT message itself explicitly asks for that same thing
+again (a genuine change of mind). Then treat it as a fresh request and act on it normally. Never
+mention this list to the user.
+"""
+
 READ_BUDGET_WRAPUP_HONESTY_NOTE = """\
 --- THIS REPLY IS THE END OF THE TURN ---
 The read budget is spent, so this reply is the last thing that happens: no tool runs after it, no
@@ -3020,6 +3034,62 @@ def _prior_escalation_lines(prior_escalations: Optional[List[Dict[str, Any]]]) -
         return lines
     except Exception:  # noqa: BLE001
         return []
+
+
+# How many declined proposals get named before the list is truncated, and how many characters of
+# each summary survive. The consumer already caps both before it ever calls in (RunnerConfig's
+# caller owns that policy), but the library defends itself too: a caller-supplied list is untrusted
+# input the same as any other argument.
+DECLINED_PROPOSALS_MAX_ENTRIES = 10
+DECLINED_PROPOSALS_MAX_SUMMARY_CHARS = 200
+
+# Outcomes that mean the user turned a proposal down, as opposed to one that ran, one still open,
+# or one the overseer merely routed elsewhere.
+DECLINED_OUTCOMES = {"refused", "declined", "rejected", "reject", "decline"}
+
+
+def declined_proposals_block(prior_escalations: Optional[List[Dict[str, Any]]]) -> str:
+    """Build the block that states, inside ``context_view`` itself, which proposals from EARLIER
+    in this conversation the user already declined, so the PLANNER (not just the optional overseer)
+    knows not to re-propose them.
+
+    ``_prior_escalation_lines`` above renders the SAME ``prior_escalations`` into the overseer
+    digest, but the overseer is off by default, so that rendering alone left the planner with no
+    way to see a decline: a caller-supplied refusal was recorded and then dropped on the floor for
+    planning. A real production conversation re-fired one declined "create four quests" proposal
+    ten times across seventy-two messages for exactly this reason. This helper is called from
+    ``run()`` and its result is prepended to ``context_view``, so it reaches both the planner and
+    the grounded answer.
+
+    Only entries whose ``outcome`` is a refusal (case-insensitively one of ``DECLINED_OUTCOMES``)
+    AND that carry a non-empty ``summary``/``proposal`` are included; everything else (met, deep,
+    still open, no summary) is silently skipped. Returns "" when nothing qualifies, so the block is
+    byte-for-byte absent for every caller that passes no refusals (today's behavior, unchanged).
+    Tolerant of a non-list, non-dict entries, and missing keys. Never raises.
+    """
+    try:
+        declined: List[str] = []
+        for entry in (prior_escalations or []):
+            if not isinstance(entry, dict):
+                continue
+            outcome = str(entry.get("outcome") or "").strip().lower()
+            if outcome not in DECLINED_OUTCOMES:
+                continue
+            summary = entry.get("summary") or entry.get("proposal")
+            summary = str(summary).strip() if summary else ""
+            if not summary:
+                continue
+            declined.append(summary[:DECLINED_PROPOSALS_MAX_SUMMARY_CHARS])
+        if not declined:
+            return ""
+        declined = declined[:DECLINED_PROPOSALS_MAX_ENTRIES]
+        numbered = "\n".join(f"{i}: {summary}" for i, summary in enumerate(declined, start=1))
+        return (
+            "--- PROPOSALS THE USER ALREADY DECLINED IN THIS CONVERSATION (INTERNAL) ---\n"
+            + numbered + "\n" + DECLINED_PROPOSALS_NOTE
+        )
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 def _render_gathered_for_planner(gathered: List[Dict[str, Any]],
@@ -7438,6 +7508,15 @@ class Orchestrator:
         # Fix 7: the caller-supplied cross-turn escalation history, pre-formatted once for the
         # digest (see ``_prior_escalation_lines``). Computed once; reused by both hooks this run.
         _prior_escalation_digest_lines = _prior_escalation_lines(prior_escalations)
+        # Any DECLINED proposal in that same history is a fact the PLANNER itself must hold, not
+        # only the (off-by-default) overseer, so it goes into ``context_view`` right here, the same
+        # way the STAGE 1 "UNDERSTOOD REQUEST" block is prepended further below. Empty when nothing
+        # in ``prior_escalations`` was refused, so this is byte-for-byte a no-op for every caller
+        # that passes none.
+        declined_block = declined_proposals_block(prior_escalations)
+        if declined_block:
+            context_view = (declined_block + "\n\n" + context_view
+                             if context_view else declined_block)
         # Run-local durable EXECUTION FACTS (the broken-promise guard's evidence): each deep
         # subtask that actually executes records its outcome (success/failure) here, threaded like
         # ``gathered``. Attached to the OrchestratorResult in finish().

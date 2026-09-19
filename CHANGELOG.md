@@ -87,6 +87,16 @@ All notable changes to this project are documented here. The format is based on
   warning once per quest per scan and leaves them alone, rather than retrying a write that cannot
   land. It never answers one with another pass: the occurrence is alive, it just belongs to
   somebody else, and a human has to cancel it in the app.
+- **A declined proposal from earlier in the conversation only ever reached the (off-by-default)
+  overseer digest, never the planner itself, so the assistant kept re-proposing something the user
+  had already turned down.** `_prior_escalation_lines` rendered `prior_escalations` refusals into
+  the overseer's digest only; a caller with no overseer wired had no way to surface a decline at
+  all, and a real conversation re-fired one declined "create four quests" proposal ten times across
+  seventy-two messages. `run()` now also builds a `declined_proposals_block()` from any entry whose
+  `outcome` is a refusal and carries a `summary`/`proposal`, and prepends it to `context_view`
+  itself (capped at 10 entries, 200 characters each), so both the planner and the grounded answer
+  see it directly. Absent when nothing was declined, so behavior is unchanged for callers that pass
+  no refusals. Tests: `tests/test_declined_proposals.py`.
 
 ### Changed
 - **The overseer's answer checkpoint (hook B) can stop a bad answer again.** New
