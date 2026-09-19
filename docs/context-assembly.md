@@ -527,6 +527,34 @@ and structured content `items` (see below); a card with no structured items fall
 whole-card preview capped at 500 characters -- not the full rendered card, since a consumer wanting
 a fresh render gets one on the next turn's normal assembly path anyway.
 
+### Scope tags: fencing one quest's memory from another's
+
+A consumer that runs one assistant across many "quests" (or projects, workspaces, ...) needs a fact
+learned while working on quest X to stay OUT of an answer given inside quest Y. The scopes above stop
+a card from leaking out of its own conversation/quest FILES, but `quest`/`global` reads are
+deliberately cross-conversation, so nothing about a plain scope key says "this record is ABOUT quest
+X" versus "this record merely happened while a quest-X key was active". `scope_tags` (`core/
+scope_tags.py`, shared by this store, `VectorContextAssembler`, and `FileContextStore`) closes that
+gap with one generic rule:
+
+```
+scope_tags_allow(item_tags, turn_tags) -> bool
+```
+
+True when the item has NO tags, or the turn has NO tags, or the two tag sets intersect. Untagged
+stays visible everywhere (legacy data, general knowledge); tagging is opt-in.
+
+- `record(scope_keys, cards, user_text)` stamps every processed record with `scope_tags` = the
+  QUEST-kind keys among `scope_keys` (`quest:<id>`, never `conv:<id>` -- a conversation's own
+  history is always in scope for itself; tags exist to fence across DIFFERENT quests).
+- `load(scope_keys)` drops a record whose stored `scope_tags` is non-empty and disjoint from the
+  quest keys in the REQUESTED `scope_keys`, but only when the request itself carries at least one
+  quest key -- a bare global lookup with no quest in scope applies no such filtering.
+
+A consumer opts in simply by passing `context_meta={"quest_id": ...}` or `{"quest_ids": [...]}` to
+`Orchestrator.run()`: the brain derives `scope_tags` from it automatically (see "Scope tags reach
+every arm" below) and every wired arm honors the same rule with no extra wiring.
+
 ### Item-level usage memory: not just which cards, but which parts of a card
 
 Beyond remembering WHICH cards were used, each card record now remembers WHICH of its content
@@ -629,6 +657,29 @@ recent-context store wired. `QAR_RECENT_CONTEXT_MAX_CARDS` overrides the per-tur
 the store via `resolve_recent_context_store`, rooted alongside the card store
 (`<cards_dir>/recent`) and wired independently of which `ContextAssembler` (if any) a consumer
 chose, since it is keyed purely by `conv_id`/`quest_id`.
+
+### Scope tags reach every retrieval arm, not just recent-context
+
+`Orchestrator.run()` composes `context_meta` into its internal `_ctx_meta` early: when the caller's
+meta carries `quest_id` and/or `quest_ids` (a list, for a conversation scoped to several quests at
+once) and no `scope_tags` of its own, `_ctx_meta.setdefault("scope_tags", [quest_scope_key(q) for
+q in quest_ids])` derives them automatically. From there `_ctx_meta` (or its per-goal equivalent)
+reaches every arm that reads or writes a card/hit:
+
+- **Recent-context** (`core/recent_context.py`, above): fences at both `record()` and `load()`.
+- **Vector card arm** (`adapters/vector_context_assembler.py`'s `VectorContextAssembler`, backed by
+  `adapters/qdrant_card_repository.py`'s `QdrantCardVectorStore`): a hit's own `scope_tags` payload
+  field (passed through from the stored card) is checked against `meta["scope_tags"]` AFTER the
+  vector search returns, before ranking/rendering -- a post-filter on the hit, never the store's own
+  `scope` payload filter (that stays an exact-match tenant partition, e.g. per-user isolation).
+- **Keyword card arm** (`adapters/file_context_store.py`'s `FileContextStore`): candidates are
+  filtered by the same rule immediately after they are loaded (covers both the native
+  `search_cards` path and the in-app `_load_all()` scan in one place), before scoring/the LLM filter
+  ever sees them. On the WRITE side, `record()`'s `outcome["scope_tags"]` and the async card
+  updater's `update_card(..., scope_tags=...)` UNION new tags onto a card's existing ones (never
+  overwrite), so a card touched from two quests becomes visible to both -- additions are exactly
+  what `managed_fields`/`managed_items` (see `docs/card-schema.md`) already leave unblocked for a
+  consumer-managed card.
 
 ## User Input Understanding (Step 1) and the `ConversationStore`
 

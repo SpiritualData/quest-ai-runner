@@ -302,6 +302,29 @@ def test_recent_scope_keys_include_conv_quest_and_global_by_default():
     assert keys == [conv_scope_key("c1"), quest_scope_key("q1"), "global"]
 
 
+def test_recent_scope_keys_honors_quest_ids_list():
+    # A conversation scoped to several quests at once (meta["quest_ids"]) gets one quest:<id> key
+    # per quest, deduped with quest_id when both are present.
+    orch = Orchestrator(
+        retrieval=StubRetrieval(), provider=_one_answer_provider(),
+        registry=ModelRegistry(_one_answer_provider()),
+    )
+    keys = orch._recent_scope_keys({"quest_ids": ["a", "b"]})
+    assert keys == [quest_scope_key("a"), quest_scope_key("b"), "global"]
+
+    keys_with_dupe = orch._recent_scope_keys({"quest_id": "a", "quest_ids": ["a", "b"]})
+    assert keys_with_dupe == [quest_scope_key("a"), quest_scope_key("b"), "global"]
+
+
+def test_anticipation_scope_keys_honors_quest_ids_list():
+    orch = Orchestrator(
+        retrieval=StubRetrieval(), provider=_one_answer_provider(),
+        registry=ModelRegistry(_one_answer_provider()),
+    )
+    keys = orch._anticipation_scope_keys({"quest_ids": ["a", "b"]})
+    assert keys == [quest_scope_key("a"), quest_scope_key("b"), "global"]
+
+
 def test_recent_scope_keys_global_only_when_no_conv_or_quest_id():
     orch = Orchestrator(
         retrieval=StubRetrieval(), provider=_one_answer_provider(),
@@ -452,6 +475,68 @@ def test_assemble_for_goal_no_hint_key_when_nothing_recent(tmp_path):
 
     assert assembler.last_meta is not None
     assert "recent_item_usage" not in assembler.last_meta
+
+
+# ---------------------------------------------------------------------------
+# scope_tags derived onto _ctx_meta from quest_id/quest_ids (see core/scope_tags.py).
+# ---------------------------------------------------------------------------
+
+
+def test_run_derives_scope_tags_from_quest_id(tmp_path):
+    assembler = _CapturingMetaAssembler()
+    provider = _one_answer_provider()
+    orch = Orchestrator(
+        retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider),
+        context_assembler=assembler,
+    )
+
+    orch.run("what's the status", quest_id="quest-scope-1")
+
+    assert assembler.last_meta is not None
+    assert assembler.last_meta.get("scope_tags") == [quest_scope_key("quest-scope-1")]
+
+
+def test_run_derives_scope_tags_from_quest_ids_list():
+    assembler = _CapturingMetaAssembler()
+    provider = _one_answer_provider()
+    orch = Orchestrator(
+        retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider),
+        context_assembler=assembler,
+    )
+
+    orch.run("what's the status", context_meta={"quest_ids": ["a", "b"]})
+
+    assert assembler.last_meta is not None
+    assert assembler.last_meta.get("scope_tags") == [quest_scope_key("a"), quest_scope_key("b")]
+
+
+def test_run_never_overrides_caller_supplied_scope_tags():
+    assembler = _CapturingMetaAssembler()
+    provider = _one_answer_provider()
+    orch = Orchestrator(
+        retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider),
+        context_assembler=assembler,
+    )
+
+    orch.run("what's the status", quest_id="quest-scope-2",
+             context_meta={"scope_tags": ["custom:tag"]})
+
+    assert assembler.last_meta is not None
+    assert assembler.last_meta.get("scope_tags") == ["custom:tag"]
+
+
+def test_run_no_scope_tags_key_when_no_quest_in_scope():
+    assembler = _CapturingMetaAssembler()
+    provider = _one_answer_provider()
+    orch = Orchestrator(
+        retrieval=StubRetrieval(), provider=provider, registry=ModelRegistry(provider),
+        context_assembler=assembler,
+    )
+
+    orch.run("what's the status")
+
+    assert assembler.last_meta is not None
+    assert "scope_tags" not in assembler.last_meta
 
 
 def test_assemble_for_goal_returns_empty_when_nothing_wired():

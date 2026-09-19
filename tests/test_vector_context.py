@@ -418,6 +418,57 @@ class TestVectorContextAssemblerNoProvider:
 
 
 # ---------------------------------------------------------------------------
+# Scope tags: a generic cross-quest fence (see core/scope_tags.py). Uses a fixed-hits store
+# (ignores ``scope``) so this exercises ONLY the scope_tags post-filter, independent of the
+# store's own tenant-scoping mechanism.
+# ---------------------------------------------------------------------------
+
+
+class _FixedHitsStore(VectorStoreBase):
+    def __init__(self, hits: List[VectorHit]) -> None:
+        self._hits = hits
+
+    def search(self, query, *, scope=None, top_k=8):
+        return list(self._hits)
+
+    def upsert(self, items, *, scope=None):
+        return None
+
+    def sync(self, items, *, scope=None):
+        return 0
+
+
+class TestScopeTagsFence:
+    def test_meta_scope_tags_keeps_only_the_untagged_hit(self):
+        hits = [
+            VectorHit(id="tagged", score=0.9, text="billing", payload={"scope_tags": ["quest:q1"]}),
+            VectorHit(id="untagged", score=0.9, text="billing", payload={}),
+        ]
+        asm = VectorContextAssembler(_FixedHitsStore(hits), confidence_min_score=0.0)
+
+        # Turn scoped to a DIFFERENT quest: the quest:q1-tagged hit is fenced out.
+        ac = asm.assemble("billing", meta={"scope_tags": ["quest:q2"]})
+        assert ac.card_ids == ["untagged"]
+
+    def test_no_meta_scope_tags_keeps_both_hits(self):
+        hits = [
+            VectorHit(id="tagged", score=0.9, text="billing", payload={"scope_tags": ["quest:q1"]}),
+            VectorHit(id="untagged", score=0.9, text="billing", payload={}),
+        ]
+        asm = VectorContextAssembler(_FixedHitsStore(hits), confidence_min_score=0.0)
+
+        ac = asm.assemble("billing")
+        assert set(ac.card_ids) == {"tagged", "untagged"}
+
+    def test_meta_scope_tags_matching_the_hit_keeps_it(self):
+        hits = [VectorHit(id="tagged", score=0.9, text="billing", payload={"scope_tags": ["quest:q1"]})]
+        asm = VectorContextAssembler(_FixedHitsStore(hits), confidence_min_score=0.0)
+
+        ac = asm.assemble("billing", meta={"scope_tags": ["quest:q1"]})
+        assert ac.card_ids == ["tagged"]
+
+
+# ---------------------------------------------------------------------------
 # VectorContextAssembler: with provider (query-gen + LLM review)
 # ---------------------------------------------------------------------------
 

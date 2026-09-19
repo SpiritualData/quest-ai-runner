@@ -372,6 +372,48 @@ class TestFileContextStoreAssemble:
 
 
 # ---------------------------------------------------------------------------
+# FileContextStore: scope_tags fence at SELECTION time (see core/scope_tags.py).
+# ---------------------------------------------------------------------------
+
+class TestFileContextStoreScopeTagsSelection:
+    def test_card_not_selected_for_a_turn_scoped_to_a_different_quest(self, tmp_path):
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        card = _make_card("scoped-card", ["contractor", "orlando", "vasquez"],
+                          summary="The contractor is Orlando Vasquez.")
+        card["scope_tags"] = ["quest:q1"]
+        _write_card(cards_dir, card)
+        store = FileContextStore(str(cards_dir), confidence_threshold=0.0)
+
+        ac = store.assemble("who is the contractor?", meta={"scope_tags": ["quest:q2"]})
+        assert "scoped-card" not in ac.card_ids
+
+    def test_card_selected_for_a_turn_scoped_to_the_same_quest(self, tmp_path):
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        card = _make_card("scoped-card", ["contractor", "orlando", "vasquez"],
+                          summary="The contractor is Orlando Vasquez.")
+        card["scope_tags"] = ["quest:q1"]
+        _write_card(cards_dir, card)
+        store = FileContextStore(str(cards_dir), confidence_threshold=0.0)
+
+        ac = store.assemble("who is the contractor?", meta={"scope_tags": ["quest:q1"]})
+        assert "scoped-card" in ac.card_ids
+
+    def test_card_selected_for_a_turn_with_no_scope_tags(self, tmp_path):
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        card = _make_card("scoped-card", ["contractor", "orlando", "vasquez"],
+                          summary="The contractor is Orlando Vasquez.")
+        card["scope_tags"] = ["quest:q1"]
+        _write_card(cards_dir, card)
+        store = FileContextStore(str(cards_dir), confidence_threshold=0.0)
+
+        ac = store.assemble("who is the contractor?")
+        assert "scoped-card" in ac.card_ids
+
+
+# ---------------------------------------------------------------------------
 # FileContextStore: record()
 # ---------------------------------------------------------------------------
 
@@ -469,6 +511,48 @@ class TestFileContextStoreRecord:
         # Card should be rewritten fresh
         card = json.loads((cards_dir / f"{slug}.json").read_text())
         assert card["id"] == slug
+
+
+# ---------------------------------------------------------------------------
+# FileContextStore: scope_tags UNION at WRITE time (see core/scope_tags.py).
+# ---------------------------------------------------------------------------
+
+class TestFileContextStoreScopeTagsWrite:
+    def test_record_unions_scope_tags_onto_a_fresh_card(self, tmp_path):
+        store = FileContextStore(str(tmp_path / "cards"))
+        task = "who is the contractor"
+        store.record(task, {"kind": "answer", "scope_tags": ["quest:q2"]})
+        (card_file,) = (tmp_path / "cards").glob("*.json")
+        card = json.loads(card_file.read_text())
+        assert card["scope_tags"] == ["quest:q2"]
+
+    def test_record_unions_scope_tags_onto_an_existing_card_without_dropping_prior_tags(
+        self, tmp_path,
+    ):
+        store = FileContextStore(str(tmp_path / "cards"))
+        task = "who is the contractor"
+        store.record(task, {"kind": "answer", "scope_tags": ["quest:q1"]})
+        store.record(task, {"kind": "answer", "scope_tags": ["quest:q2"]})
+        (card_file,) = (tmp_path / "cards").glob("*.json")
+        card = json.loads(card_file.read_text())
+        assert card["scope_tags"] == ["quest:q1", "quest:q2"]
+
+    def test_record_with_no_scope_tags_leaves_existing_tags_untouched(self, tmp_path):
+        store = FileContextStore(str(tmp_path / "cards"))
+        task = "who is the contractor"
+        store.record(task, {"kind": "answer", "scope_tags": ["quest:q1"]})
+        store.record(task, {"kind": "answer"})  # no scope_tags this time
+        (card_file,) = (tmp_path / "cards").glob("*.json")
+        card = json.loads(card_file.read_text())
+        assert card["scope_tags"] == ["quest:q1"]
+
+    def test_update_card_unions_scope_tags(self, tmp_path):
+        store = FileContextStore(str(tmp_path / "cards"))
+        store.add_content("some-card", {"type": "note", "locator": {"text": "a fact"}},
+                          scope_tags=["quest:q1"])
+        store.update_card("some-card", fields={"name": "Some card"}, scope_tags=["quest:q2"])
+        card = store.get_card("some-card")
+        assert card["scope_tags"] == ["quest:q1", "quest:q2"]
 
 
 # ---------------------------------------------------------------------------

@@ -58,6 +58,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase
+from ..core.scope_tags import scope_tags_allow, union_scope_tags
 from ._walk import effective_skip_dirs, prune_dirnames
 from .card_content_render import (
     MAX_CARD_CONTENT_ITEMS as _MAX_CARD_CONTENT_ITEMS,
@@ -2199,30 +2200,38 @@ class FileContextStore(ContextAssemblerBase):
     # Card-update API: read-modify-write a card's source-agnostic content.
     # ------------------------------------------------------------------
 
-    def add_content(self, card_id: str, item: Dict[str, Any]) -> bool:
+    def add_content(
+        self, card_id: str, item: Dict[str, Any], *, scope_tags: Optional[List[str]] = None,
+    ) -> bool:
         """Append ONE content item to ``card_id`` (creating the card if absent). Never raises.
 
         Safe read-modify-write: loads the card, normalizes + appends the item, applies the recency
         trim, and persists atomically. Returns True on a successful write, False otherwise. The item
         is normalized (type defaults to ``note``, ``ts`` coerced, ``id`` synthesized when missing),
         so a caller may pass a partial dict. An async LLM updater will use this; the API + tests are
-        built now, the updater later.
+        built now, the updater later. ``scope_tags`` (see ``core/scope_tags.py``), when given, are
+        UNIONED onto the card's existing ``scope_tags`` -- never overwritten.
         """
         try:
-            return self._update_card_inner(card_id, add=[item])
+            return self._update_card_inner(card_id, add=[item], scope_tags=scope_tags)
         except Exception:  # noqa: BLE001
             return False
 
-    def update_content(self, card_id: str, item_id: str, new_item: Dict[str, Any]) -> bool:
+    def update_content(
+        self, card_id: str, item_id: str, new_item: Dict[str, Any], *,
+        scope_tags: Optional[List[str]] = None,
+    ) -> bool:
         """Correct/replace the content item ``item_id`` on ``card_id`` with ``new_item``. Never raises.
 
         Read-modify-write: the matching item is replaced in place (keeping ``item_id`` unless
         ``new_item`` supplies its own ``id``); if no item matches, ``new_item`` is appended instead.
         Returns True on a successful write. This is how a correction lands without rewriting the
-        whole card.
+        whole card. ``scope_tags`` (see ``core/scope_tags.py``), when given, are UNIONED onto the
+        card's existing ``scope_tags`` -- never overwritten.
         """
         try:
-            return self._update_card_inner(card_id, replace=[(item_id, new_item)])
+            return self._update_card_inner(
+                card_id, replace=[(item_id, new_item)], scope_tags=scope_tags)
         except Exception:  # noqa: BLE001
             return False
 
@@ -2245,6 +2254,7 @@ class FileContextStore(ContextAssemblerBase):
         replace: Optional[List[Tuple[str, Dict[str, Any]]]] = None,
         remove: Optional[List[str]] = None,
         fields: Optional[Dict[str, Any]] = None,
+        scope_tags: Optional[List[str]] = None,
     ) -> bool:
         """Apply a batch of edits to ``card_id`` in ONE read-modify-write. Never raises.
 
@@ -2253,10 +2263,13 @@ class FileContextStore(ContextAssemblerBase):
         a list of item ids to drop. All are applied to the same loaded card, the recency trim runs
         once, and the card is written atomically. Returns True on success. Editing ``name``/
         ``description``/``summary`` re-fingerprints the card so the vector store re-embeds it.
+        ``scope_tags`` (see ``core/scope_tags.py``), when given, are UNIONED onto the card's
+        existing ``scope_tags`` -- never overwritten, so a card touched from two quests becomes
+        visible to both.
         """
         try:
             return self._update_card_inner(card_id, add=add, replace=replace, remove=remove,
-                                           fields=fields)
+                                           fields=fields, scope_tags=scope_tags)
         except Exception:  # noqa: BLE001
             return False
 
@@ -3547,6 +3560,18 @@ class FileContextStore(ContextAssemblerBase):
         if not cards:
             return AssembledContext()
 
+        # Cross-quest fence (see core/scope_tags.py): drop any candidate whose OWN scope_tags are
+        # non-empty and disjoint from this turn's scope_tags, before scoring/the LLM filter ever see
+        # it -- covers BOTH candidate-loading paths above (native search_cards and the in-app
+        # _load_all() scan) in one place. Untagged cards and turns with no scope_tags are unaffected.
+        turn_scope_tags = (meta or {}).get("scope_tags")
+        cards = {
+            cid: c for cid, c in cards.items()
+            if scope_tags_allow(c.get("scope_tags"), turn_scope_tags)
+        }
+        if not cards:
+            return AssembledContext()
+
         # ---- Field-weighted TF-IDF scoring ----
         # Each card has a term->weight map (keywords=3, summary+filename=2,
         # symbols=1, dir components=0.5, extensions dropped). DF is computed
@@ -4054,6 +4079,7 @@ class FileContextStore(ContextAssemblerBase):
         replace: Optional[List[Tuple[str, Dict[str, Any]]]] = None,
         remove: Optional[List[str]] = None,
         fields: Optional[Dict[str, Any]] = None,
+        scope_tags: Optional[List[str]] = None,
     ) -> bool:
         """Read-modify-write a card's ``content`` and embedded ``fields``: apply field edits +
         add/replace/remove, trim, persist.
@@ -4077,10 +4103,16 @@ class FileContextStore(ContextAssemblerBase):
         (which is the point of putting them on the same card) while the consumer-owned digest and its
         live reference stay exactly as the consumer wrote them. A card that declares neither key
         behaves exactly as before.
+
+        ``scope_tags`` (see ``core/scope_tags.py``), when given, are UNIONED onto the card's existing
+        ``scope_tags`` -- a pure addition, so it is safe even for a managed card (nothing is ever
+        removed): a card touched from a turn scoped to a new quest becomes visible to that quest too.
         """
         loaded = self._repo.read(card_id)
         card: Dict[str, Any] = loaded if isinstance(loaded, dict) else {}
         card.setdefault("id", card_id)
+        if scope_tags:
+            card["scope_tags"] = union_scope_tags(card.get("scope_tags"), scope_tags)
 
         # The card's own declaration of what its WRITER owns (see the docstring). Read from the
         # loaded card, so only a card that opted in is protected and every other card is untouched.
@@ -4217,6 +4249,15 @@ class FileContextStore(ContextAssemblerBase):
             # so re-recording the same source on a card merges instead of accumulating copies.
             existing_content = _dedupe_content(existing_content)
             card["content"] = _trim_content_by_recency(existing_content)
+
+        # SCOPE TAGS (see core/scope_tags.py): a turn's outcome may carry ``scope_tags`` (derived by
+        # the orchestrator from the quest(s) it is scoped to). UNION them onto the card's own
+        # scope_tags rather than overwrite, so a card touched from two different quests becomes
+        # visible to both -- never removes a tag a card already had, so this is safe even for a
+        # consumer-managed card (managed_fields/managed_items above are about content, not tags).
+        outcome_scope_tags = outcome.get("scope_tags")
+        if outcome_scope_tags:
+            card["scope_tags"] = union_scope_tags(card.get("scope_tags"), outcome_scope_tags)
 
         # Persist via the repository (skip if dry-run mode). Re-raise on failure so the outer
         # try/except in record() catches it; the cache is invalidated so assemble() sees the card.

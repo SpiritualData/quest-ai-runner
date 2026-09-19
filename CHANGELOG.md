@@ -7,6 +7,23 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Scope tags: a generic cross-quest fence for every retrieval arm** (`core/scope_tags.py`). A
+  consumer running one assistant across many "quests" needs a fact learned inside quest X to stay
+  out of an answer given inside quest Y; the conversation-history arm already fenced by quest, but
+  two other arms this library owns did not (visible live in an answer's `used.cards` explanation: a
+  `vector` hit and a `recent` record both leaked across quests). One pure predicate,
+  `scope_tags_allow(item_tags, turn_tags)` (true when either side has no tags, or they intersect),
+  now applies to every arm: `core/recent_context.py`'s `FileRecentContextStore` stamps `scope_tags`
+  on write and fences on `load()`; `adapters/vector_context_assembler.py`'s
+  `VectorContextAssembler` post-filters hits (via `scope_tags` threaded through
+  `adapters/qdrant_card_repository.py`'s `QdrantCardVectorStore`); `adapters/file_context_store.py`'s
+  `FileContextStore` fences card selection at load time and UNIONS `scope_tags` onto a card at write
+  time (`record()` and the async card updater's `update_card(..., scope_tags=...)`), never
+  overwriting. `Orchestrator.run()` derives `scope_tags` automatically from `context_meta`'s
+  `quest_id`/`quest_ids` (a list, for multi-quest conversations) when the caller doesn't supply its
+  own. Untagged items stay visible everywhere (legacy data, general knowledge); opt-in only. Docs:
+  `docs/context-assembly.md`. Tests: `tests/test_recent_context.py`, `tests/test_vector_context.py`,
+  `tests/test_context_assembler.py`, `tests/test_orchestrator.py`.
 - **Session continuity ACROSS runs**, so one thread of work can be continued by a run that starts
   hours or days later (spec: `one_thread_many_runs`). Until now a deep worker's Claude session lived
   and died inside a single call: the goal loop could continue it while that call lasted, and the id

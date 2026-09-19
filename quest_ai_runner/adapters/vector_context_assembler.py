@@ -54,6 +54,12 @@ MULTI-TENANT SCOPING
 The ``meta`` dict passed to ``assemble(task_text, meta=...)`` is forwarded as
 ``scope`` to the vector store, so searches are automatically scoped to the
 relevant org / team / quest.
+
+``meta["scope_tags"]`` is a SEPARATE, optional fence (see ``core/scope_tags.py``): after the vector
+store returns its (already tenant-scoped) hits, any hit whose OWN ``scope_tags`` payload field is
+non-empty and disjoint from the turn's ``scope_tags`` is dropped before ranking/rendering. This lets
+one tenant's shared card collection still keep quest-scoped content out of a turn scoped to a
+different quest, without a second collection or a second embedding.
 """
 from __future__ import annotations
 
@@ -64,6 +70,7 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase, VectorHit, VectorStore
+from ..core.scope_tags import scope_tags_allow
 from .card_content_render import (
     MAX_CARD_REF_CHARS,
     MAX_CARD_REFS,
@@ -670,6 +677,17 @@ class VectorContextAssembler(ContextAssemblerBase):
 
         # Step b: vector-search all queries IN PARALLEL; dedupe.
         candidates = self._search_parallel(all_queries, scope)
+
+        # Step b.5: cross-quest fence (see core/scope_tags.py) -- a hit carrying scope_tags for a
+        # different quest than this turn's own scope_tags is dropped BEFORE ranking/rendering ever
+        # sees it. This is a POST-filter on the hit, never the ``scope`` payload filter above (that
+        # stays an exact-match tenant partition); untagged hits and turns with no scope_tags are
+        # unaffected.
+        turn_scope_tags = (meta or {}).get("scope_tags")
+        candidates = [
+            h for h in candidates
+            if scope_tags_allow((h.payload or {}).get("scope_tags"), turn_scope_tags)
+        ]
 
         if not candidates:
             return AssembledContext()

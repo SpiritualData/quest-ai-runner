@@ -21,6 +21,26 @@ Each scope is its own small file (same ``<root>/recent/<sha1(key)[:16]>.json`` l
 loading merges the scopes with narrower-wins-on-conflict precedence (conv > quest > global) so a
 card recorded in more than one scope keeps its most specific record.
 
+SCOPE TAGS (cross-quest fence)
+-------------------------------
+The scopes above stop a card from leaking OUT of its own conversation/quest files, but the
+``"global"`` scope (and quest/global reads that intentionally cross conversations) will still surface
+a card recorded while working on a DIFFERENT quest -- there is nothing about a plain scope key that
+says "this content is ABOUT quest X" as opposed to "this content was merely recorded while a
+quest-X-scoped key happened to be active". ``scope_tags`` closes that gap (see ``core.scope_tags``
+for the generic predicate shared with the vector and keyword card arms):
+
+  * ``record(scope_keys, cards, user_text)`` stamps every processed record with ``scope_tags`` = the
+    QUEST-kind keys among ``scope_keys`` (i.e. the ``"quest:<id>"`` ones; a ``"conv:<id>"`` key is
+    never a tag -- a conversation's own records are always in scope for that same conversation, tags
+    exist to fence across DIFFERENT quests, not within one conversation's own history).
+  * ``load(scope_keys)`` drops any record whose stored ``scope_tags`` is non-empty and disjoint from
+    the quest-kind keys in the REQUESTED ``scope_keys`` -- but only when the request itself carries at
+    least one quest key. A load with no quest key in scope (e.g. a bare global lookup with no quest
+    context at all) applies no scope_tags filtering, so existing untagged callers are unaffected.
+  * A record with NO ``scope_tags`` (legacy data, or a record made with no quest key at all) is
+    returned for any quest -- untagged always stays visible, per the shared fence rule.
+
 ITEM-LEVEL MEMORY
 ------------------
 Beyond remembering WHICH cards were used, each card record now remembers WHICH of its content
@@ -63,6 +83,7 @@ from typing import Any, Dict, List, Optional, Protocol, Tuple, Union, runtime_ch
 
 from quest_ai_runner.adapters.conversation_format import parse_date_bound, timestamp_in_range
 from quest_ai_runner.adapters.tfdfidf_sampling import keywords_from_text
+from quest_ai_runner.core.scope_tags import scope_tags_allow
 
 log = logging.getLogger("quest-ai-runner.recent_context")
 
@@ -382,11 +403,19 @@ class FileRecentContextStore:
         deduped by card id. When the SAME card id shows up under more than one scope, the
         NARROWEST scope's record wins whole (conv > quest > global) -- it is stamped with that
         scope's own ``scope`` ("conv"|"quest"|"global") and ``turn_index``. Never raises; returns
-        [] on any failure or when no key resolves to anything."""
+        [] on any failure or when no key resolves to anything.
+
+        SCOPE TAGS: when ``scope_keys`` carries at least one quest-kind key, a record whose stored
+        ``scope_tags`` is non-empty and disjoint from those requested quest keys is dropped (see the
+        module docstring's SCOPE TAGS section and ``core.scope_tags.scope_tags_allow``). A request
+        with NO quest key applies no such filtering -- existing callers that never pass a quest key
+        see byte-for-byte the same result as before.
+        """
         keys = _as_key_list(scope_keys)
         if not keys:
             return []
         try:
+            requested_quest_tags = [k for k in keys if _scope_of(k) == "quest"]
             precedence = {"conv": 0, "quest": 1, "global": 2}
             ordered_keys = sorted(keys, key=lambda k: precedence.get(_scope_of(k), 0))
             out: List[Dict[str, Any]] = []
@@ -397,6 +426,10 @@ class FileRecentContextStore:
                     cid = rec.get("id")
                     if not cid or cid in seen_ids:
                         continue
+                    if requested_quest_tags and not scope_tags_allow(
+                        rec.get("scope_tags"), requested_quest_tags
+                    ):
+                        continue
                     seen_ids.add(cid)
                     rec["scope"] = scope
                     out.append(rec)
@@ -405,9 +438,13 @@ class FileRecentContextStore:
             log.debug("FileRecentContextStore.load failed for keys %r", keys, exc_info=True)
             return []
 
-    def _build_processed_card(self, card: Dict[str, Any], *, ts: str, user_text: str) -> Optional[Dict[str, Any]]:
+    def _build_processed_card(
+        self, card: Dict[str, Any], *, ts: str, user_text: str, scope_tags: List[str],
+    ) -> Optional[Dict[str, Any]]:
         """One card's persistable record for THIS turn (see class docstring for the shape). None
-        when the card has no usable id."""
+        when the card has no usable id. ``scope_tags`` are the quest-kind keys this ``record()``
+        call was made under (see the module docstring's SCOPE TAGS section); stamped verbatim so
+        ``load()`` can fence a later cross-quest read."""
         cid = card.get("id")
         if not cid:
             return None
@@ -440,15 +477,19 @@ class FileRecentContextStore:
             "items": items,
             "ts": ts,
             "turn_user_text": user_text,
+            "scope_tags": list(scope_tags),
         }
 
-    def _record_one_scope(self, key: str, cards: List[Dict[str, Any]], user_text: str, *, ts: str) -> None:
+    def _record_one_scope(
+        self, key: str, cards: List[Dict[str, Any]], user_text: str, *, ts: str,
+        scope_tags: List[str],
+    ) -> None:
         max_turns, max_cards, max_age = self._caps_for(key)
         processed: List[Dict[str, Any]] = []
         for card in cards:
             if not isinstance(card, dict):
                 continue
-            built = self._build_processed_card(card, ts=ts, user_text=user_text)
+            built = self._build_processed_card(card, ts=ts, user_text=user_text, scope_tags=scope_tags)
             if built is not None:
                 processed.append(built)
         if not processed:
@@ -488,14 +529,20 @@ class FileRecentContextStore:
     ) -> None:
         """Persist this turn's selected ``cards`` under EVERY key in ``scope_keys`` (the SAME turn
         record is written to each scope's file, with that scope's own caps/TTL). Best-effort,
-        never raises."""
+        never raises.
+
+        Each processed card is stamped with ``scope_tags`` = the quest-kind keys among
+        ``scope_keys`` (see the module docstring's SCOPE TAGS section), so a later cross-quest
+        ``load()`` can fence it out of a turn scoped to a different quest.
+        """
         keys = _as_key_list(scope_keys)
         if not keys or not cards:
             return
         ts = _now_iso()
+        scope_tags = [k for k in keys if _scope_of(k) == "quest"]
         for key in keys:
             try:
-                self._record_one_scope(key, cards, user_text, ts=ts)
+                self._record_one_scope(key, cards, user_text, ts=ts, scope_tags=scope_tags)
             except Exception:  # noqa: BLE001
                 log.debug("FileRecentContextStore.record failed for key %r", key, exc_info=True)
 

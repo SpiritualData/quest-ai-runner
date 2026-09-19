@@ -355,6 +355,58 @@ def test_global_scope_has_its_own_longer_ttl(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# Scope tags: a generic cross-quest fence (see core/scope_tags.py).
+# ---------------------------------------------------------------------------
+
+
+def test_scope_tags_fence_cross_quest_read(tmp_path):
+    store = FileRecentContextStore(root_dir=str(tmp_path))
+    card = {"id": "card-1", "title": "Contractor is Orlando Vasquez"}
+    # Recorded while scoped to quest q1 (plus its own conversation and global).
+    store.record(
+        [conv_scope_key("c1"), quest_scope_key("q1"), "global"], [card], "who is the contractor?"
+    )
+
+    # A read scoped to a DIFFERENT quest (q2) must not see it, even though "global" is requested.
+    leaked = store.load([conv_scope_key("c2"), quest_scope_key("q2"), "global"])
+    assert leaked == []
+
+    # A read scoped to the SAME quest (q1) still sees it.
+    same_quest = store.load([quest_scope_key("q1"), "global"])
+    assert [r["id"] for r in same_quest] == ["card-1"]
+
+
+def test_scope_tags_untagged_record_visible_to_any_quest(tmp_path):
+    store = FileRecentContextStore(root_dir=str(tmp_path))
+    # Recorded with NO quest key at all -- never tagged.
+    store.record([conv_scope_key("c1"), "global"], [{"id": "general", "title": "General fact"}], "q")
+
+    for requested in ([quest_scope_key("q1"), "global"], [quest_scope_key("q2"), "global"]):
+        loaded = store.load(requested)
+        assert [r["id"] for r in loaded] == ["general"]
+
+
+def test_scope_tags_no_quest_key_in_request_applies_no_fence(tmp_path):
+    store = FileRecentContextStore(root_dir=str(tmp_path))
+    store.record([quest_scope_key("q1"), "global"], [{"id": "card-1", "title": "Q1 fact"}], "q")
+
+    # Requesting only "global" (no quest key at all) is not a quest-scoped read: the quest-tagged
+    # record still surfaces, matching today's behavior for any caller that never passes a quest key.
+    loaded = store.load(["global"])
+    assert [r["id"] for r in loaded] == ["card-1"]
+
+
+def test_scope_tags_stamped_on_processed_record(tmp_path):
+    store = FileRecentContextStore(root_dir=str(tmp_path))
+    store.record(
+        [conv_scope_key("c1"), quest_scope_key("q1"), "global"],
+        [{"id": "card-1", "title": "T"}], "q",
+    )
+    rec = store.load([quest_scope_key("q1"), "global"])[0]
+    assert rec["scope_tags"] == [quest_scope_key("q1")]
+
+
+# ---------------------------------------------------------------------------
 # filter_relevant
 # ---------------------------------------------------------------------------
 

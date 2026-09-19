@@ -5435,21 +5435,37 @@ class Orchestrator:
 
     # --- warm recent-context scoping (shared by the main turn and per-goal deep context) -----
 
+    @staticmethod
+    def _meta_quest_ids(meta: Dict[str, Any]) -> List[str]:
+        """The deduped quest ids in scope for ``meta``: a single ``quest_id`` plus any list of
+        ``quest_ids`` (a conversation scoped to several quests at once). Never raises."""
+        ids: List[str] = []
+        try:
+            single = meta.get("quest_id")
+            if single:
+                ids.append(single)
+            for qid in (meta.get("quest_ids") or []):
+                if qid and qid not in ids:
+                    ids.append(qid)
+        except Exception:  # noqa: BLE001
+            return ids
+        return ids
+
     def _recent_scope_keys(self, ctx_meta: Optional[Dict[str, Any]]) -> List[str]:
         """The WARM recent-context scope keys for this run/goal (see core/recent_context.py):
-        ``conv:<conv_id>`` when a conversation id is in scope, ``quest:<quest_id>`` when a quest id
-        is in scope, PLUS always ``"global"`` (everything recently selected anywhere), unless the
-        consumer turned cross-conversation memory off via ``cfg.recent_context_global_enabled``. A
-        turn/goal with neither a conv_id nor a quest_id in scope still reads/records global (as
-        long as global is enabled). Never raises; [] when recent-context is off entirely."""
+        ``conv:<conv_id>`` when a conversation id is in scope, ``quest:<quest_id>`` for every quest
+        id in scope (``quest_id`` and/or the list ``quest_ids``), PLUS always ``"global"``
+        (everything recently selected anywhere), unless the consumer turned cross-conversation
+        memory off via ``cfg.recent_context_global_enabled``. A turn/goal with no quest id in scope
+        still reads/records global (as long as global is enabled). Never raises; [] when
+        recent-context is off entirely."""
         keys: List[str] = []
         try:
             meta = ctx_meta or {}
             conv_id = meta.get("conv_id")
-            quest_id = meta.get("quest_id")
             if conv_id:
                 keys.append(conv_scope_key(conv_id))
-            if quest_id:
+            for quest_id in self._meta_quest_ids(meta):
                 keys.append(quest_scope_key(quest_id))
             if self.cfg.recent_context_global_enabled:
                 keys.append(GLOBAL_SCOPE_KEY)
@@ -5459,18 +5475,18 @@ class Orchestrator:
 
     def _anticipation_scope_keys(self, ctx_meta: Optional[Dict[str, Any]]) -> List[str]:
         """The ANTICIPATION engine's scope keys for this run (see core/anticipation.py):
-        ``conv:<conv_id>`` when a conversation id is in scope, ``quest:<quest_id>`` when a quest
-        id is in scope, plus always ``"global"`` -- narrowest first, which is the precedence
-        ``Anticipator.observe`` honors on a score tie. Same key vocabulary as the warm
-        recent-context store (``core.recent_context``). Never raises; [] on any failure."""
+        ``conv:<conv_id>`` when a conversation id is in scope, ``quest:<quest_id>`` for every quest
+        id in scope (``quest_id`` and/or the list ``quest_ids``), plus always ``"global"`` --
+        narrowest first, which is the precedence ``Anticipator.observe`` honors on a score tie. Same
+        key vocabulary as the warm recent-context store (``core.recent_context``). Never raises; []
+        on any failure."""
         keys: List[str] = []
         try:
             meta = ctx_meta or {}
             conv_id = meta.get("conv_id")
-            quest_id = meta.get("quest_id")
             if conv_id:
                 keys.append(conv_scope_key(conv_id))
-            if quest_id:
+            for quest_id in self._meta_quest_ids(meta):
                 keys.append(quest_scope_key(quest_id))
             keys.append(GLOBAL_SCOPE_KEY)
         except Exception:  # noqa: BLE001
@@ -6479,7 +6495,9 @@ class Orchestrator:
                 edits = self._call_card_updater(prompt, model)
             if not edits:
                 return 0
-            return self._apply_card_edits(store, edits, user_id, known_card_ids=known_ids)
+            scope_tags = (ctx_meta or {}).get("scope_tags")
+            return self._apply_card_edits(
+                store, edits, user_id, known_card_ids=known_ids, scope_tags=scope_tags)
         except Exception:  # noqa: BLE001 — the updater must never affect the run
             log.debug("post-deep card update failed", exc_info=True)
             return 0
@@ -6509,9 +6527,15 @@ class Orchestrator:
 
     def _apply_card_edits(self, store: Any, edits: List[Dict[str, Any]],
                           user_id: Optional[str],
-                          known_card_ids: Optional[set] = None) -> int:
+                          known_card_ids: Optional[set] = None,
+                          scope_tags: Optional[List[str]] = None) -> int:
         """Apply parsed card edits via the card-update API, user-scoped + bounded. Returns the count
         of cards written. Never raises (each card edit is independently guarded).
+
+        ``scope_tags`` (see ``core/scope_tags.py``), when given, are passed to every
+        ``store.update_card`` call so a card this turn touches is UNIONED with the quest(s) this
+        turn is scoped to (never overwritten) -- a card learned while working on quest X, then
+        touched again from quest Y, becomes visible to both.
 
         SEMANTIC CARD-MERGE (item 3): for an edit that would CREATE a new card (its user-scoped id is
         NOT one of ``known_card_ids`` -- the cards the updater was actually shown, the only ids it can
@@ -6588,6 +6612,7 @@ class Orchestrator:
                     replace=replace_pairs or None,
                     remove=remove_ids or None,
                     fields=fields or None,
+                    scope_tags=scope_tags or None,
                 )
                 if ok:
                     written += 1
@@ -7677,6 +7702,17 @@ class Orchestrator:
         # every existing assembler.
         if card_thread_ctx is not None and card_thread_ctx.active_card_id:
             _ctx_meta.setdefault("thread_card_id", card_thread_ctx.active_card_id)
+
+        # SCOPE TAGS (see core/scope_tags.py): when this turn is scoped to one or more quests and
+        # the caller didn't already supply its own ``scope_tags``, derive them from quest_id/
+        # quest_ids so every downstream assembler/store can read ONE field to fence cross-quest
+        # leakage (a card/vector-hit/recent-context record tagged for a different quest never
+        # surfaces here). A caller that already set scope_tags explicitly is left untouched.
+        _scope_tag_quest_ids = self._meta_quest_ids(_ctx_meta)
+        if _scope_tag_quest_ids:
+            _ctx_meta.setdefault(
+                "scope_tags", [quest_scope_key(q) for q in _scope_tag_quest_ids]
+            )
 
         # --- Mid-run user messages: auto-drain a wired inbox for THIS conversation ----------------
         # If the caller didn't pass an explicit ``pending_inputs`` but an ``input_inbox`` is wired,

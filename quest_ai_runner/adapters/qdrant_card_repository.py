@@ -619,6 +619,10 @@ class QdrantCardVectorStore(VectorStoreBase):
                     # the live collection / conversation data the card points at.
                     "content": payload.get("content") or [],
                     "card_id": card_id,
+                    # The card's own scope_tags (see core/scope_tags.py), passed through verbatim
+                    # so VectorContextAssembler can fence a hit written for one quest out of a
+                    # search scoped to a different one. Empty/absent when the card carries none.
+                    "scope_tags": payload.get("scope_tags") or [],
                 }
                 hits.append(VectorHit(id=f"card:{card_id}", score=float(r.score), text=text, payload=hit_payload))
             return hits
