@@ -97,7 +97,7 @@ class ConfigFileError(ValueError):
 # deep inside whatever first calls that field. ``RunnerConfig.from_file`` rejects those BY NAME,
 # loudly, instead. Keep this in sync when a new plain-data field is added to ``RunnerConfig``.
 _FILE_SCALAR_FIELDS = {
-    "quest_base_url", "quest_api_key", "team_id", "discovery_team_id", "org_id",
+    "quest_base_url", "quest_api_key", "team_id", "discovery_team_id", "team_ids", "org_id",
     "runner_label", "env_id", "lane_user_id",
     "model_fallback", "model_provider_overrides",
     "context_cards_dir",
@@ -138,6 +138,24 @@ class RunnerConfig:
     # owner-scoped discovery (picks up null-team tasks) while still using team_id for heartbeat
     # and escalation — needed for personal/single-user lanes where tasks are owner-scoped.
     discovery_team_id: Optional[str] = None
+    # The SET of teams this ONE lane discovers work from (QUEST_TEAM_IDS, comma-separated).
+    #
+    # Empty (the default) is single-team mode, byte-identical to everything before this field
+    # existed: discovery is scoped by ``discovery_team_id``/``team_id`` exactly as documented
+    # above, and every call the runner makes carries a single bare team value.
+    #
+    # Non-empty: this lane discovers from EVERY listed team in ONE request (the team query param
+    # becomes a comma-joined list, which the backend's assistant-task listing accepts), rather
+    # than needing one process per team. ``team_id`` keeps its existing, separate meaning -- the
+    # lane's HOME team, used for the environment heartbeat, the escalation/decision default, and
+    # the QuestClient instance default -- so a multi-team lane still has exactly one home.
+    # Per-task work (persona resolution, rep context, the quest folder map) already resolves from
+    # the task's own ``team_id``/``quest_id``, so it follows the task, not the home team.
+    #
+    # Precedence: ``discovery_team_id`` still WINS over this when it is set at all, INCLUDING an
+    # explicit ``""`` (owner-scoped discovery). Setting both is a contradiction; the narrower,
+    # older, more explicit knob is honoured so no existing deployment changes behaviour.
+    team_ids: List[str] = field(default_factory=list)
     # Optional org-scoped registration for the environment heartbeat, loaded from QUEST_ORG_ID.
     # When set, the poller's heartbeat POSTs to /api/orgs/{org_id}/environment/heartbeat instead
     # of the team-scoped endpoint, registering this runner as available to EVERY team in that

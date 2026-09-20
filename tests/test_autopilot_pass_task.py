@@ -306,3 +306,125 @@ def test_a_pass_owned_by_someone_else_is_reported_and_replaced(caplog):
     assert client.created[0]["assignee_user_id"] == FakePassClient.user_id
     assert client.update_calls == []   # and never retry a PATCH that can only 404
     assert "p_old" in caplog.text      # the human still gets the id, to clear the dead row
+
+
+# --- one lane, several teams (RunnerConfig.team_ids) --------------------------------------------
+
+class MultiTeamPassClient(FakePassClient):
+    """A pass client whose quest listing is actually TEAM-SCOPED, like the real route.
+
+    ``FakePassClient`` returns the same quests for every team, which cannot tell a pass created on
+    the right team apart from one created on the wrong team. Here each quest belongs to exactly
+    one team, and a team whose id is in ``fail_list_for_teams`` fails its pass listing the way a
+    rate-limited lane does (``None``, never ``[]``).
+    """
+
+    def __init__(self, *, quests_by_team=None, fail_list_for_teams=(), **kw):
+        super().__init__(**kw)
+        self.quests_by_team = dict(quests_by_team or {})
+        self.fail_list_for_teams = set(fail_list_for_teams)
+        self.quest_list_teams = []
+
+    def list_quests(self, team_id=None):
+        self.quest_list_teams.append(team_id)
+        return [dict(q) for q in self.quests_by_team.get(team_id, [])]
+
+    def list_tasks_or_none(self, *, team_id=None, status=None, goal_id=None, source=None,
+                           task_kind=None):
+        if team_id in self.fail_list_for_teams:
+            self.list_tasks_calls.append({"team_id": team_id, "goal_id": goal_id,
+                                          "task_kind": task_kind})
+            return None
+        return super().list_tasks_or_none(team_id=team_id, status=status, goal_id=goal_id,
+                                          source=source, task_kind=task_kind)
+
+
+def test_a_quests_pass_is_created_on_that_quests_own_team():
+    """THE correctness fix this whole change turns on.
+
+    ``_create_quest_pass`` used to hardcode the lane's home team. On a lane serving several teams
+    that files team2's quest's pass on team1 -- a task team2's own people cannot see, pause or
+    audit, attached to a quest that is not on that team at all. The schedule snapshot records
+    which team each quest was listed under; the pass must be created there.
+    """
+    client = MultiTeamPassClient(
+        quests_by_team={"team1": [{"quest_id": "q_home"}], "team2": [{"quest_id": "q_away"}]},
+        autopilot_by_quest={"q_home": {"mode": "act"}, "q_away": {"mode": "act"}},
+    )
+    _poller(client, team_ids=["team1", "team2"])._ensure_autopilot_pass()
+
+    by_quest = {c["goal_id"]: c for c in client.created}
+    assert by_quest["q_home"]["team_id"] == "team1"
+    assert by_quest["q_away"]["team_id"] == "team2"   # NOT the lane's home team
+
+
+def test_a_catchup_pass_also_lands_on_the_quests_own_team():
+    """The "Run now" one-off goes through a second creation path, and an inconsistency between
+    the two would be invisible until somebody pressed the button."""
+    client = MultiTeamPassClient(
+        quests_by_team={"team1": [], "team2": [{"quest_id": "q_away"}]},
+        autopilot_by_quest={"q_away": {"mode": "act"}},
+    )
+    poller = _poller(client, team_ids=["team1", "team2"])
+    entry = poller._quest_schedule_snapshot()["q_away"]
+    poller._create_quest_catchup_pass("q_away", entry)
+    assert client.created[0]["team_id"] == "team2"
+
+
+def test_the_schedule_snapshot_merges_every_team_and_remembers_whose_quest_is_whose():
+    client = MultiTeamPassClient(
+        quests_by_team={"team1": [{"quest_id": "q1"}],
+                        "team2": [{"quest_id": "q2"}],
+                        "team3": [{"quest_id": "q3"}]},
+        autopilot_by_quest={"q1": {"mode": "act"}, "q2": {"mode": "suggest"},
+                            "q3": {"mode": "off"}},
+    )
+    snapshot = _poller(client, team_ids=["team1", "team2", "team3"])._quest_schedule_snapshot()
+
+    assert set(snapshot) == {"q1", "q2", "q3"}          # every team's quests, one map
+    assert snapshot["q1"]["team_id"] == "team1"
+    assert snapshot["q2"]["team_id"] == "team2"
+    assert snapshot["q3"]["team_id"] == "team3"         # recorded even for a quest not opted in
+    assert client.quest_list_teams == ["team1", "team2", "team3"]
+
+
+def test_a_single_team_lane_lists_quests_exactly_as_before():
+    """No ``team_ids``: one listing, on the home team, with the home team recorded. This is the
+    no-op proof for the snapshot half of the change."""
+    client = MultiTeamPassClient(
+        quests_by_team={"team1": [{"quest_id": "q1"}]},
+        autopilot_by_quest={"q1": {"mode": "act"}},
+    )
+    snapshot = _poller(client)._quest_schedule_snapshot()
+    assert client.quest_list_teams == ["team1"]
+    assert snapshot["q1"]["team_id"] == "team1"
+
+
+def test_one_teams_failed_pass_listing_voids_the_whole_merged_read():
+    """A failed read is not an empty one (incident, 2026-09-17).
+
+    The merged team-wide listing drives RETIREMENT. A partial list read as complete would retire
+    a live series that merely sat on the team whose read failed. So any failure makes the whole
+    answer ``None``, the sweep declines to retire anything, and the lane retries next scan.
+    """
+    client = MultiTeamPassClient(
+        quests_by_team={"team1": [{"quest_id": "q1"}], "team2": [{"quest_id": "q2"}]},
+        autopilot_by_quest={"q1": {"mode": "act"}, "q2": {"mode": "act"}},
+        fail_list_for_teams=["team2"],
+    )
+    poller = _poller(client, team_ids=["team1", "team2"])
+    assert poller._list_legacy_pass_tasks() is None
+
+
+def test_a_failed_team_read_does_not_stop_the_other_teams_quests_getting_a_pass(caplog):
+    """The ``None`` is about RETIRING, not about creating: each quest's own liveness read is
+    per-quest and unaffected, so the teams that answered still converge this scan."""
+    client = MultiTeamPassClient(
+        quests_by_team={"team1": [{"quest_id": "q1"}], "team2": [{"quest_id": "q2"}]},
+        autopilot_by_quest={"q1": {"mode": "act"}, "q2": {"mode": "act"}},
+        fail_list_for_teams=["team2"],
+    )
+    with caplog.at_level("WARNING"):
+        _poller(client, team_ids=["team1", "team2"])._ensure_autopilot_pass()
+    assert {c["goal_id"] for c in client.created} == {"q1", "q2"}
+    assert "not retiring anything" in caplog.text

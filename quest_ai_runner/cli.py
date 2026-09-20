@@ -50,6 +50,13 @@ Env it reads:
                                                    Unset = fall back to QUEST_TEAM_ID; set to "" for
                                                    OWNER-scoped discovery (a personal/single-user
                                                    lane whose tasks are created with no team_id).
+  QUEST_TEAM_IDS (optional)                      — comma-separated team ids this ONE lane
+                                                   discovers work from (e.g. "team_a,team_b").
+                                                   Unset/empty = single-team mode, unchanged.
+                                                   QUEST_TEAM_ID stays the lane's HOME team
+                                                   (heartbeat, escalation, client default) and is
+                                                   still required. QAR_DISCOVERY_TEAM_ID, when set
+                                                   at all (including ""), WINS over this.
   QAR_DECISION_ASSIGNEE (optional)               — user id that human-only confirm/decision
                                                    requests route to by default (RunnerConfig.
                                                    default_assignee_user_id / QuestDecisionSink's
@@ -362,6 +369,26 @@ def _apply_channel_env(cfg: RunnerConfig) -> None:
         cfg.channel_state_path = os.environ["QAR_CHANNEL_STATE_PATH"]
 
 
+def _team_ids_from_env(raw: Optional[str]) -> List[str]:
+    """Parse ``QUEST_TEAM_IDS`` ("a, b ,,a") into an ordered, de-duplicated list (``["a", "b"]``).
+
+    Unset, empty, or nothing but separators gives ``[]`` -- the dataclass default, which is what
+    keeps single-team mode byte-identical and lets a config file's own ``team_ids`` still win
+    (``apply_file_defaults`` only fills fields still sitting at their default).
+
+    Order is preserved on first sight rather than sorted: the list becomes a comma-joined query
+    param, and an operator reading a request log should see the teams in the order they wrote
+    them. Duplicates are dropped because a repeated id would only widen the param string, never
+    the result.
+    """
+    ids: List[str] = []
+    for part in (raw or "").split(","):
+        team = part.strip()
+        if team and team not in ids:
+            ids.append(team)
+    return ids
+
+
 def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     """Build a ``RunnerConfig`` from the environment (see the module docstring for the full list),
     optionally layered on top of a TOML config file.
@@ -447,6 +474,11 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
         # three-way distinction. A personal/single-user lane whose tasks are created owner-scoped
         # (null team_id) needs QAR_DISCOVERY_TEAM_ID="" for exactly this reason.
         discovery_team_id=os.environ.get("QAR_DISCOVERY_TEAM_ID"),
+        # The SET of teams ONE lane discovers from. Unset/empty leaves the dataclass default
+        # ([]), which is single-team mode exactly as before -- and leaving it AT the default is
+        # also what lets a config file's own ``team_ids`` win here (apply_file_defaults only
+        # fills fields no env var moved off their default).
+        team_ids=_team_ids_from_env(os.getenv("QUEST_TEAM_IDS")),
         retrieval=retrieval,
         model_provider=_model_provider_from_env(),
         model_fallback=model_fallback or None,

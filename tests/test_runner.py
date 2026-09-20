@@ -36,31 +36,51 @@ class MockQuestClient:
         self.post_card_ids = []    # parallel to ``posts``: the reserved card_id (or None) each carried
         self.progress = []         # list of (task_id, kind, text, output) — live task-detail stream
         self.heartbeats = []       # list of (team_id, capabilities, runner_label)
-        self.discover_team_ids = []  # records the team_id each discovery scoped to
+        self.discover_team_ids = []  # records the team_id PARAM each discovery scoped to
+        self.wait_calls = []       # records the team_id param of each wait_for_interactive call
         self.discover_env_ids = []   # records the env_id each discovery scoped to
         self.result_data_reports = []  # list of (task_id, result, result_data) -- report_done_with_data calls
 
-    def discover_due(self, *, now=None, status="queued", team_id=None, env_id=None):
+    @staticmethod
+    def team_param(team_id=None, team_ids=None):
+        """The same collapse the real client does: a team SET becomes one comma-joined value, and
+        an empty/absent set leaves the single ``team_id`` exactly as it was. Mirrored here so the
+        mock records the string that would actually go on the wire."""
+        if team_ids:
+            return ",".join(team_ids)
+        return team_id
+
+    def discover_due(self, *, now=None, status="queued", team_id=None, team_ids=None,
+                     env_id=None):
         now = now or datetime.now(timezone.utc)
+        team_id = self.team_param(team_id, team_ids)
+        # What the request would carry: a single id, "" / None for owner-scoped, or the joined
+        # set. ``discover_team_ids`` is the name it has always had (it records the team_id PARAM
+        # per discovery call), so a single-team lane's recorded value is unchanged.
         self.discover_team_ids.append(team_id)
         self.discover_env_ids.append(env_id)
+        # The backend accepts a comma-separated list as "any of these teams"; match that here so
+        # a multi-team lane's discovery can be tested for what it actually returns.
+        wanted = set(str(team_id).split(",")) if team_id else set()
         out = []
         for t in self._due:
             due_at = t.get("due_at")
             if due_at and _parse_iso(due_at) > now:
                 continue
-            if team_id and t.get("team_id") != team_id:
+            if wanted and t.get("team_id") not in wanted:
                 continue
             if env_id and t.get("env_id") not in (env_id, None):
                 continue
             out.append(t)
         return out
 
-    def list_interactive_due(self, *, team_id=None, env_id=None):
-        return [t for t in self.discover_due(team_id=team_id, env_id=env_id) if t.get("real_time")]
+    def list_interactive_due(self, *, team_id=None, team_ids=None, env_id=None):
+        return [t for t in self.discover_due(team_id=team_id, team_ids=team_ids, env_id=env_id)
+                if t.get("real_time")]
 
-    def wait_for_interactive(self, *, team_id=None, env_id=None, timeout=25.0):
-        tasks = self.list_interactive_due(team_id=team_id, env_id=env_id)
+    def wait_for_interactive(self, *, team_id=None, team_ids=None, env_id=None, timeout=25.0):
+        self.wait_calls.append(self.team_param(team_id, team_ids))
+        tasks = self.list_interactive_due(team_id=team_id, team_ids=team_ids, env_id=env_id)
         return tasks[0] if tasks else None
 
     def claim(self, task_id, handler=None):

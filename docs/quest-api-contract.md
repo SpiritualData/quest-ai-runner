@@ -59,6 +59,12 @@ optional but the instruction text):
 | `status`, `updated_at`, `scheduled_time` | dedup signature |
 | `team_id`, `user_id`, `env_id` | scoping (team lane, related-conversation search, environment pinning) |
 
+On the task LISTING and WAIT routes, the `team_id` query param takes either a single team id or a
+comma-separated list of them (`team_id=team_a,team_b`), which matches any of those teams. That is
+what lets ONE lane serve several teams (`RunnerConfig.team_ids` / `QUEST_TEAM_IDS`) with one
+request rather than one process per team. A single value's query string is unchanged, so a
+single-team lane is byte-identical to before the list form existed.
+
 `rep_preamble` is a **fallback persona supplied by whoever queued the task**: a cache-stable
 persona/system prompt string. The runner uses it as the deep run's persona, and therefore as the
 voice of the fold-back done report, only when no AI rep is resolved for the task (a resolved rep's

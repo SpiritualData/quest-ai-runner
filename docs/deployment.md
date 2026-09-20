@@ -12,7 +12,8 @@ All configuration is environment-driven (see [`.env.example`](../.env.example)):
 |---|---|---|
 | `QUEST_BASE_URL` | yes | Quest API base URL |
 | `QUEST_API_KEY` | yes | executor identity (`qsk_...`) — keep secret |
-| `QUEST_TEAM_ID` | yes | the team this lane serves (task claiming/escalation, always required) |
+| `QUEST_TEAM_ID` | yes | the lane's HOME team (task claiming/escalation, the environment heartbeat, always required) |
+| `QUEST_TEAM_IDS` | optional | comma-separated team ids this ONE lane discovers work from (`team_a,team_b,team_c`). Unset = single-team mode, unchanged. See [One lane, several teams](#one-lane-several-teams) |
 | `QUEST_ORG_ID` | optional | when set, the environment heartbeat registers at ORG scope instead of team scope, making this runner available to every team in the org, not just `QUEST_TEAM_ID` |
 | `ANTHROPIC_API_KEY` | yes (for the reference provider) | model calls |
 | `QAR_CORPUS_ROOT` | optional | file root for the `FilesAdapter` |
@@ -87,6 +88,39 @@ There is no separate scheduling plumbing. The poller discovers via
 
 So the timing layer is Quest; the runner is timing-agnostic. See
 [quest-api-contract.md](quest-api-contract.md).
+
+## One lane, several teams
+
+A lane used to discover work for exactly one team, so an org with four teams ran four processes
+that differed only in which single team each polled. `QUEST_TEAM_IDS` removes that duplication:
+
+```bash
+QUEST_TEAM_ID=team_a                 # the HOME team: heartbeat, escalation default, client default
+QUEST_TEAM_IDS=team_a,team_b,team_c  # the teams this ONE lane discovers work from
+```
+
+- **Unset `QUEST_TEAM_IDS` changes nothing.** A single-team lane sends the same single team value
+  it always sent; this is additive and backward compatible by construction.
+- **One request, not one per team.** The set goes into the `team_id` query param as a
+  comma-separated list, which the Quest assistant-task listing accepts. This matters most for the
+  real-time long-poll (`/api/assistant-tasks/wait`), which returns one oldest task for the scope it
+  was given: polling per team and filtering client-side would silently drop another team's task on
+  every reconnect.
+- **Per-task work follows the task.** Persona resolution, rep context, the quest folder map, and
+  the autopilot work a pass creates all resolve from the task's or quest's own team, not the home
+  team. Autopilot's daily budget stays **per team**, so a shared lane does not shrink each team's
+  allowance.
+- **`QUEST_TEAM_ID` is still required**, and still means the home team. Include it in
+  `QUEST_TEAM_IDS` too if the lane should also run that team's work.
+- **`QAR_DISCOVERY_TEAM_ID` wins** over `QUEST_TEAM_IDS` whenever it is set at all, including the
+  explicit empty value that means owner-scoped discovery. Setting both is a contradiction; the
+  narrower knob is honoured.
+- **Still one process per QUEUE.** The hazard that made per-team lanes look necessary is two
+  separate processes racing one shared owner-scoped queue (the claim PATCH is an unconditional
+  set, not a guarded find-and-update, so both can claim the same task). One process serving
+  several teams is not that: each task is claimed once, by one process.
+
+The same thing in a [config file](a-lane-is-a-config-file.md): `team_ids = ["team_a", "team_b"]`.
 
 ## Resource-aware throttling (overload protection)
 

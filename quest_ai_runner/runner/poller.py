@@ -248,6 +248,11 @@ class Poller:
         self._autopilot = AutopilotPass(
             self.client,
             team_id=config.team_id or "",
+            # Which team each quest's autopilot work belongs on, for a lane serving several. The
+            # pass object is shared across the poller's thread pool, so this is a pure function of
+            # quest_id rather than state the pass carries per run.
+            team_resolver=self.autopilot_team_for,
+            team_ids=list(config.team_ids),
             persona_resolver=config.autopilot_persona_resolver,
             daily_budget=config.autopilot_daily_budget,
             backpressure=config.autopilot_backpressure,
@@ -320,7 +325,7 @@ class Poller:
             return []
         try:
             due = self.client.discover_due(
-                now=datetime.now(timezone.utc), team_id=self.discovery_team_id(),
+                now=datetime.now(timezone.utc), team_ids=self.discovery_team_ids(),
                 env_id=self.cfg.env_id)
         except (QuestApiError, QuestNotConfigured) as e:
             log.info("discovery unavailable (%s) — will retry next scan", e)
@@ -416,19 +421,25 @@ class Poller:
         consumer (routing, fan-out, env pickers) working unchanged while ALSO keeping the org-level
         registration alive, so nothing regresses for a runner that opts into org-wide availability
         on top of its existing team. Each call is independently best-effort; one failing never
-        blocks the other."""
-        if not self.cfg.org_id and not self.cfg.team_id:
+        blocks the other.
+
+        A lane serving SEVERAL teams (``cfg.team_ids``) heartbeats to each of them -- the union of
+        the home team and the discovered set, in a stable order, deduplicated. The heartbeat is
+        how a team learns this environment exists and what it can do, so a team whose work this
+        lane runs but which never hears from it shows the lane as absent and routes nothing to it.
+        One POST per team, each independently best-effort for the same reason as above."""
+        if not self.cfg.org_id and not self.cfg.team_id and not self.cfg.team_ids:
             return  # no team or org to attach the env to — nothing to heartbeat (still a valid poll)
-        if self.cfg.team_id:
+        for team in self.configured_teams():
             try:
                 self.client.post_environment_heartbeat(
                     self._capabilities,
                     runner_label=self.cfg.runner_label,
                     env_id=self.cfg.env_id,
-                    team_id=self.cfg.team_id,
+                    team_id=team,
                 )
             except Exception as e:  # noqa: BLE001 — heartbeat is best-effort, never breaks the scan
-                log.info("environment heartbeat (team scope) failed (%s) — continuing poll", e)
+                log.info("environment heartbeat (team %s) failed (%s) — continuing poll", team, e)
         if self.cfg.org_id:
             try:
                 self.client.post_environment_heartbeat(
@@ -859,14 +870,14 @@ class Poller:
         """
         if not self.cfg.autopilot_ensure_pass_task:
             return
-        if not self.client.configured or not self.cfg.team_id:
+        if not self.client.configured or not (self.cfg.team_id or self.cfg.team_ids):
             return
         try:
             # The team-wide read still happens, for ONE purpose: retiring a surviving team-wide
             # series, which carries no ``goal_id`` and so cannot be found by any per-quest read.
             # A legacy team pass was created by this lane's own account, so owner scoping does
             # not hide it.
-            existing = self._list_pass_tasks(team_id=self.cfg.team_id)
+            existing = self._list_legacy_pass_tasks()
             open_by_series: Dict[str, List[Dict[str, Any]]] = {}
             for t in (existing or []):
                 if str(t.get("status", "")).strip().lower() not in OPEN_TASK_STATUSES:
@@ -897,8 +908,10 @@ class Poller:
     # --- the pass series: one per opted-in quest ---------------------------------------------
 
     def _quest_schedule_snapshot(self) -> Dict[str, Dict[str, Any]]:
-        """``{quest_id: {mode, run_time, run_timezone, cadence, last_pass_at, has_instructions,
-        env_id}}`` for every one of the team's quests, refreshed at most every
+        """``{quest_id: {team_id, mode, run_time, run_timezone, cadence, last_pass_at,
+        has_instructions, env_id}}`` for every quest on every team this lane discovers from
+        (``discovery_team_ids``, which is the one home team unless the lane serves several),
+        refreshed at most every
         ``cfg.autopilot_settings_refresh_seconds`` (default 300s / 5 minutes) and reused from
         cache in between.
 
@@ -924,17 +937,33 @@ class Poller:
                 < max(0, self.cfg.autopilot_settings_refresh_seconds)):
             return self._quest_schedule_cache
         snapshot: Dict[str, Dict[str, Any]] = {}
-        quests = self.client.list_quests(team_id=self.cfg.team_id or None) or []
+        # One listing per team this lane discovers from, merged into ONE map. Quest ids are
+        # globally unique, so there is nothing to collide; a quest seen twice (a lane whose home
+        # team is also in the discovery set) is simply read once. Each entry REMEMBERS the team
+        # it came from -- that is what ``_create_quest_pass`` needs to create a quest's pass on
+        # the quest's OWN team rather than on the lane's home team.
+        # ``cfg.team_ids`` when the lane serves several teams, else the home team EXACTLY as
+        # before (including the empty/owner-scoped case). Deliberately not ``discovery_team_ids``:
+        # that one folds in ``discovery_team_id``, and a lane that overrides discovery to
+        # owner-scoped while keeping a home team would silently switch this listing from its
+        # team's quests to every quest its owner can see. Which quests get a pass is not the same
+        # question as which queue the lane reads.
+        for team in (list(self.cfg.team_ids) or [self.cfg.team_id]):
+            for row in (self.client.list_quests(team_id=team or None) or []):
+                quest_id = str(row.get("quest_id") or row.get("id") or "")
+                if quest_id and quest_id not in snapshot:
+                    snapshot[quest_id] = {"team_id": team or self.cfg.team_id}
         opted_in = 0
-        for row in quests:
-            quest_id = str(row.get("quest_id") or row.get("id") or "")
-            if not quest_id:
-                continue
+        for quest_id, entry in list(snapshot.items()):
             try:
                 state = self.client.get_quest_autopilot(quest_id) or {}
             except Exception:  # noqa: BLE001 -- one bad quest never voids the snapshot
                 log.info("autopilot: could not read quest %s's schedule this refresh -- skipping",
                          quest_id, exc_info=True)
+                # Drop the team-only stub: a half-filled entry is not a schedule, and every
+                # reader of this map (the timezone lookup, the pass ensure/retune path) treats a
+                # present entry as one it can act on.
+                snapshot.pop(quest_id, None)
                 continue
             autopilot_cfg = state.get("autopilot") or {}
             instructions = str(autopilot_cfg.get("instructions") or "").strip()
@@ -946,6 +975,11 @@ class Poller:
             run_time = (str(autopilot_cfg.get("run_time") or "").strip()
                         or self.cfg.autopilot_pass_time)
             snapshot[quest_id] = {
+                # The team this quest was LISTED under: the team its pass task must be created
+                # on. On a single-team lane this is always the lane's own team, so nothing
+                # changes; on a multi-team lane it is the only thing that keeps a pass off the
+                # wrong team.
+                "team_id": entry.get("team_id") or self.cfg.team_id,
                 "mode": mode,
                 "run_time": run_time,
                 "run_timezone": str(autopilot_cfg.get("run_timezone") or "").strip() or None,
@@ -965,6 +999,26 @@ class Poller:
         log.info("autopilot: read schedules for %d quest(s), %d opted in",
                  len(snapshot), opted_in)
         return snapshot
+
+    def autopilot_team_for(self, quest_id: str) -> str:
+        """The team a quest's autopilot work should be created on (``AutopilotPass``'s resolver).
+
+        Reads the ALREADY-CACHED schedule snapshot rather than refreshing it: this is called from
+        the pass, which runs on a worker thread, and a refresh there would fire a quest listing
+        per team plus a state read per quest off the hot path that the scan loop already keeps
+        warm (``_ensure_autopilot_pass`` refreshes it before every discovery). A quest missing
+        from the snapshot falls back to the client's own (cached) owning-team lookup, and then to
+        the lane's home team, which is exactly what every call site used before this existed.
+        """
+        entry = (self._quest_schedule_cache or {}).get(quest_id) or {}
+        team = str(entry.get("team_id") or "")
+        if team:
+            return team
+        try:
+            team = self.client.owning_team_for(quest_id) or ""
+        except Exception:  # noqa: BLE001 -- resolution is a refinement; never fail a pass over it
+            team = ""
+        return team or self.cfg.team_id or ""
 
     def _pass_timezone_for(self, task: Dict[str, Any]) -> Optional[str]:
         """The IANA zone a PASS task's local due-check should compare in.
@@ -1037,6 +1091,35 @@ class Poller:
             return strict(team_id=team_id, goal_id=goal_id, task_kind=AUTOPILOT_PASS_KIND)
         return self.client.list_tasks(team_id=team_id, goal_id=goal_id,
                                       task_kind=AUTOPILOT_PASS_KIND)
+
+    def _list_legacy_pass_tasks(self) -> Optional[List[Dict[str, Any]]]:
+        """Every team's pass-kind tasks, merged, for the legacy team-wide-series sweep.
+
+        One ``_list_pass_tasks`` read per team this lane discovers from (usually exactly one), so
+        a multi-team lane retires a surviving team-wide series on ANY of its teams rather than
+        only on its home team.
+
+        ALL-OR-NOTHING, and this is the whole reason this is a method rather than a loop inline:
+        if ANY team's read fails, the merged answer is ``None``, never the partial list. The
+        caller's next move on a list is to RETIRE what is not in it, and on ``None`` to retire
+        nothing -- so a partial list read as complete is how a rate-limited half hour turns into
+        a wrongly-retired series, the same class of bug as the duplicate-series incident that
+        ``list_tasks_or_none`` exists to prevent (2026-09-17). A failed read is not an empty one.
+        """
+        merged: List[Dict[str, Any]] = []
+        seen: set = set()
+        for team in self.configured_teams():
+            rows = self._list_pass_tasks(team_id=team)
+            if rows is None:
+                return None  # one failed read voids the WHOLE answer; never a partial list
+            for row in rows:
+                task_id = str(row.get("id") or row.get("task_id") or "")
+                if task_id and task_id in seen:
+                    continue  # a lane whose home team is also in the set reads it twice
+                if task_id:
+                    seen.add(task_id)
+                merged.append(row)
+        return merged
 
     def _open_quest_pass_occurrences(self, quest_id: str) -> Optional[List[Dict[str, Any]]]:
         """This quest's OPEN pass occurrences, read per quest so ownership cannot hide them.
@@ -1218,7 +1301,12 @@ class Poller:
             "Autopilot pass for this quest: work its current-scope goals and its standing "
             "instructions.",
             title="Autopilot pass",
-            team_id=self.cfg.team_id,
+            # THE QUEST'S team, not the lane's home team. A lane can discover from several teams
+            # (RunnerConfig.team_ids), and a pass filed on the wrong team is a pass the quest's
+            # own people cannot see, pause or audit. The snapshot recorded which team each quest
+            # was listed under; the home team is only the fallback for an entry that somehow has
+            # none. On a single-team lane the two are the same value.
+            team_id=entry.get("team_id") or self.cfg.team_id,
             goal_id=quest_id,
             source="chat",
             task_kind=AUTOPILOT_PASS_KIND,
@@ -1268,7 +1356,8 @@ class Poller:
             "Autopilot pass for this quest (requested run): work its current-scope goals and its "
             "standing instructions.",
             title="Autopilot pass (requested)",
-            team_id=self.cfg.team_id,
+            # Same rule as the series pass: the QUEST'S own team (see ``_create_quest_pass``).
+            team_id=entry.get("team_id") or self.cfg.team_id,
             goal_id=quest_id,
             source="chat",
             task_kind=AUTOPILOT_PASS_KIND,
@@ -1501,6 +1590,44 @@ class Poller:
                 if self.cfg.discovery_team_id is not None
                 else (self.cfg.team_id or ""))
 
+    def configured_teams(self) -> List[str]:
+        """The REAL teams this lane is attached to: its home team plus any discovery set, in a
+        stable order, deduplicated, with empties dropped.
+
+        Distinct from ``discovery_team_ids`` on purpose. That one answers "what scope do I ask the
+        task queue for", and legitimately contains ``""`` (owner-scoped, meaning "send no team
+        filter"). This one answers "which teams does this lane belong to" for the calls that need
+        a NAMED team -- the environment heartbeat and the legacy team-wide pass sweep -- where ""
+        is not a team and an owner-scoped discovery override must not change which team the lane
+        registers with. On a single-team lane this is exactly ``[cfg.team_id]``, which is what
+        both of those call sites used before this existed.
+        """
+        teams: List[str] = []
+        for team in [self.cfg.team_id] + list(self.cfg.team_ids):
+            if team and team not in teams:
+                teams.append(team)
+        return teams
+
+    def discovery_team_ids(self) -> List[str]:
+        """The full SET of teams both discovery paths serve, for a lane that serves several.
+
+        ``cfg.team_ids`` when the consumer set one, otherwise the single scope
+        ``discovery_team_id()`` already returns, as a one-element list. That one element may be
+        ``""`` (owner-scoped), which the client turns into "send no team filter" exactly as
+        before -- a single-team lane's request is therefore unchanged in every case.
+
+        ``discovery_team_id`` WINS over ``team_ids`` when the consumer set it at all, including an
+        explicit ``""``. The two are a contradiction (one says "this scope only", the other says
+        "all of these"), and honouring the narrower, older knob is what guarantees no existing
+        deployment changes behaviour by adding this field.
+
+        One list, one request: the whole set goes into a single call rather than a call per team,
+        which matters most for ``wait_for_interactive`` -- see its docstring.
+        """
+        if self.cfg.discovery_team_id is None and self.cfg.team_ids:
+            return list(self.cfg.team_ids)
+        return [self.discovery_team_id()]
+
     def _fast_lane_loop(self, stop_event: threading.Event) -> None:
         """Background thread: serve REAL-TIME work with sub-poll-interval latency (D2 revised).
 
@@ -1523,15 +1650,20 @@ class Poller:
 
         if not self.client.configured:
             return  # nothing to attach the fast lane to
-        if not self.cfg.team_id and self.cfg.discovery_team_id is None:
+        if (not self.cfg.team_id and self.cfg.discovery_team_id is None
+                and not self.cfg.team_ids):
             return  # no team AND no explicit owner-scoped discovery -- nothing to poll for
 
         while not stop_event.is_set():
             try:
                 if self.cfg.wait_channel_enabled:
                     started = _time.monotonic()
+                    # The WHOLE team set in ONE long-poll, never one call per team: this endpoint
+                    # hands back a single FIFO-oldest task for the scope it was given, so a lane
+                    # that asked per team and filtered the rest would discard work and reconnect
+                    # in a tight loop for as long as it sat at the head of the queue.
                     task = self.client.wait_for_interactive(
-                        team_id=self.discovery_team_id(), env_id=self.cfg.env_id,
+                        team_ids=self.discovery_team_ids(), env_id=self.cfg.env_id,
                         timeout=self.cfg.wait_timeout_seconds,
                     )
                     elapsed = _time.monotonic() - started
@@ -1547,7 +1679,7 @@ class Poller:
                     if interval <= 0:
                         return  # fast lane explicitly disabled
                     for t in self.client.list_interactive_due(
-                        team_id=self.discovery_team_id(), env_id=self.cfg.env_id,
+                        team_ids=self.discovery_team_ids(), env_id=self.cfg.env_id,
                     ):
                         self._dispatch_fast_task(t)
                     if stop_event.wait(interval):

@@ -186,3 +186,37 @@ def test_lane_user_id_from_env(monkeypatch):
     monkeypatch.setenv("QAR_LANE_USER_ID", "acct_app")
     cfg = cli._config_from_env()
     assert cfg.lane_user_id == "acct_app"
+
+
+# --- team_ids (QUEST_TEAM_IDS) -----------------------------------------------
+
+def test_team_ids_unset_is_empty_which_is_single_team_mode(monkeypatch):
+    """The default nobody has to set. Empty means the lane behaves exactly as it did before this
+    field existed, which is the whole backward-compatibility contract."""
+    _base_env(monkeypatch)
+    monkeypatch.delenv("QUEST_TEAM_IDS", raising=False)
+    assert cli._config_from_env().team_ids == []
+
+
+def test_team_ids_parses_comma_separated_and_trims(monkeypatch):
+    _base_env(monkeypatch)
+    monkeypatch.setenv("QUEST_TEAM_IDS", "a, b ,,a")
+    cfg = cli._config_from_env()
+    # Whitespace trimmed, empty parts dropped, duplicates removed, first-seen order kept.
+    assert cfg.team_ids == ["a", "b"]
+
+
+def test_team_ids_empty_string_is_the_same_as_unset(monkeypatch):
+    _base_env(monkeypatch)
+    monkeypatch.setenv("QUEST_TEAM_IDS", "   ,, ")
+    assert cli._config_from_env().team_ids == []
+
+
+def test_team_ids_does_not_touch_the_home_team(monkeypatch):
+    """``QUEST_TEAM_ID`` keeps its own meaning (heartbeat, escalation, client default) -- the set
+    is additive, never a replacement for it."""
+    _base_env(monkeypatch)
+    monkeypatch.setenv("QUEST_TEAM_IDS", "team_2,team_3")
+    cfg = cli._config_from_env()
+    assert cfg.team_id == "team_1"
+    assert cfg.team_ids == ["team_2", "team_3"]

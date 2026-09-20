@@ -221,3 +221,50 @@ def test_config_from_env_personas_table_fills_personas_field(tmp_path, monkeypat
     cfg = cli._config_from_env(str(path))
     assert isinstance(cfg.personas, PersonaResolverConfig)
     assert cfg.personas.skills_root == "/srv/skills"
+
+
+# --- team_ids: one lane, several teams ---------------------------------------
+
+def test_from_file_parses_team_ids_list(tmp_path):
+    """A list-typed field round-trips from TOML with no special-casing: ``from_file`` validates by
+    NAME (is this a real, file-expressible field?) and assigns the parsed value as-is."""
+    path = _write(tmp_path, """
+        team_id = "team_1"
+        team_ids = ["team_1", "team_2"]
+    """)
+    cfg = RunnerConfig.from_file(path)
+    assert cfg.team_ids == ["team_1", "team_2"]
+    assert cfg.team_id == "team_1"          # the home team keeps its own separate meaning
+
+
+def test_team_ids_defaults_to_empty_and_a_file_that_omits_it_changes_nothing(tmp_path):
+    cfg = RunnerConfig.from_file(_write(tmp_path, 'team_id = "team_1"\n'))
+    assert cfg.team_ids == []
+
+
+def test_apply_file_defaults_fills_team_ids_when_no_env_var_set_it():
+    cfg = RunnerConfig()
+    file_cfg = RunnerConfig(team_ids=["a", "b"])
+    apply_file_defaults(cfg, file_cfg)
+    assert cfg.team_ids == ["a", "b"]
+
+
+def test_apply_file_defaults_never_overrides_team_ids_an_env_var_already_set():
+    cfg = RunnerConfig(team_ids=["from_env"])
+    file_cfg = RunnerConfig(team_ids=["from_file"])
+    apply_file_defaults(cfg, file_cfg)
+    assert cfg.team_ids == ["from_env"]
+
+
+def test_config_from_env_team_ids_env_var_wins_over_file(tmp_path, monkeypatch):
+    path = _write(tmp_path, 'team_ids = ["from_file"]\n')
+    monkeypatch.setenv("QUEST_TEAM_IDS", "env_a,env_b")
+    cfg = cli._config_from_env(config_path=str(path))
+    assert cfg.team_ids == ["env_a", "env_b"]
+
+
+def test_config_from_env_file_supplies_team_ids_when_the_env_var_is_unset(tmp_path, monkeypatch):
+    path = _write(tmp_path, 'team_ids = ["from_file"]\n')
+    monkeypatch.delenv("QUEST_TEAM_IDS", raising=False)
+    cfg = cli._config_from_env(config_path=str(path))
+    assert cfg.team_ids == ["from_file"]

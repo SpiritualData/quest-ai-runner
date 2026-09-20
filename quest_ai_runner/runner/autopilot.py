@@ -1720,6 +1720,8 @@ class AutopilotPass:
     """
 
     def __init__(self, client: Any, *, team_id: str = "",
+                 team_resolver: Optional[Callable[[str], str]] = None,
+                 team_ids: Optional[List[str]] = None,
                  persona_resolver: Optional[Callable[[Dict[str, Any]], Optional[str]]] = None,
                  daily_budget: int = DEFAULT_TEAM_DAILY_BUDGET,
                  backpressure: bool = False,
@@ -1730,6 +1732,19 @@ class AutopilotPass:
         self._client = client
         self._update_engine = update_engine
         self._team_id = team_id or ""
+        # Which team a given quest's work belongs on, for a lane that serves several teams
+        # (RunnerConfig.team_ids). ``None`` -- the default, and what every existing consumer gets
+        # -- means every quest resolves to ``team_id``, exactly as before this existed.
+        #
+        # It is a RESOLVER rather than per-run state on purpose: one AutopilotPass instance is
+        # shared across the poller's thread pool, so concurrent passes for different quests run
+        # through this same object. A mutable "current team" attribute would be a data race that
+        # files one quest's work on another quest's team, which is precisely the bug this field
+        # exists to fix.
+        self._team_resolver = team_resolver
+        # The teams a TEAM-WIDE pass (one with no single target quest) should list quests from.
+        # Empty = just ``team_id``, unchanged.
+        self._team_ids: List[str] = [str(t) for t in (team_ids or []) if t]
         self._persona_resolver = persona_resolver
         self._daily_budget = daily_budget if daily_budget and daily_budget > 0 else DEFAULT_TEAM_DAILY_BUDGET
         self._backpressure = bool(backpressure)
@@ -1752,6 +1767,22 @@ class AutopilotPass:
         # The id of the pass task currently being run, set in ``run`` and stamped onto everything
         # this pass creates (see _create_autopilot_task). None until a pass starts.
         self._pass_task_id: Optional[str] = None
+
+    def _team_for(self, quest_id: str) -> str:
+        """The team THIS quest's reads and writes belong on.
+
+        The resolver when one was injected (a lane serving several teams), else the lane's single
+        configured team -- which is what every call site used unconditionally before, so a
+        consumer that injects nothing sees no change at all. A resolver that cannot answer, or
+        raises, falls back the same way rather than guessing.
+        """
+        if self._team_resolver is not None and quest_id:
+            try:
+                return self._team_resolver(quest_id) or self._team_id
+            except Exception:  # noqa: BLE001 -- never fail a pass over team resolution
+                log.info("autopilot: could not resolve the team for quest %s; using the lane's "
+                         "own team", quest_id, exc_info=True)
+        return self._team_id
 
     def _persona_label(self, rep_id: Optional[str]) -> Optional[str]:
         """A rep's human display name, falling back to the raw id.
@@ -1889,13 +1920,26 @@ class AutopilotPass:
         only_quest_id = str(task.get("goal_id") or "") or None
 
         quests = self._eligible_quests(only_quest_id)
-        budget_used = 0 if dry_run else self._count_autopilot_tasks_today()
+        # THE DAILY BUDGET IS PER TEAM, not per lane, and that is a deliberate decision rather
+        # than a detail of the implementation. A lane serving three teams is an efficiency of
+        # deployment: it must not silently divide each team's daily allowance by three, which is
+        # what one shared counter would do -- every team would go quiet earlier than its own
+        # setting says, with nothing anywhere to explain why. So the counter is keyed by the
+        # quest's own team, and each team's denominator is read from its own task list, once,
+        # the first time a quest on it is reached. On a single-team lane there is exactly one key
+        # and exactly one count call, as before.
+        budget_by_team: Dict[str, int] = {}
 
         for quest in quests:
             quest_id = str(quest.get("quest_id") or quest.get("id") or "")
             if not quest_id:
                 continue
             label = _quest_label(quest, quest_id)
+            team = self._team_for(quest_id)
+            if team not in budget_by_team:
+                budget_by_team[team] = (
+                    0 if dry_run else self._count_autopilot_tasks_today(team_id=team))
+            budget_used = budget_by_team[team]
             try:
                 if budget_used >= self._daily_budget:
                     self._skip(result, quest_id, label,
@@ -1906,6 +1950,7 @@ class AutopilotPass:
                     self._skip(result, quest_id, label, gate_reason)
                     continue
                 budget_used = self._run_one_quest(quest, quest_id, dry_run, budget_used, result)
+                budget_by_team[team] = budget_used
             except Exception as e:  # noqa: BLE001 -- one quest's failure never aborts the pass
                 log.error("autopilot: quest %s pass failed: %s", quest_id, e, exc_info=True)
                 result.errors.append({"quest_id": quest_id, "quest_label": label,
@@ -1938,7 +1983,8 @@ class AutopilotPass:
         default_quest_instructions = default_quest_instructions_for(autopilot_cfg)
         default_persona_instructions = default_persona_instructions_for(autopilot_cfg)
 
-        goals_payload = self._client.list_quest_goals(quest_id, team_id=self._team_id or None) or {}
+        goals_payload = self._client.list_quest_goals(
+            quest_id, team_id=self._team_for(quest_id) or None) or {}
         # Which period this quest is planning in. A LABEL only: it decides which period review to
         # read, what "the previous period" means here, and what period a proposed goal is filed
         # under. It selects no work, because goals are not work.
@@ -1986,7 +2032,7 @@ class AutopilotPass:
         # aborting the pass.
         try:
             quest_tasks: Optional[List[Dict[str, Any]]] = self._client.list_tasks(
-                team_id=self._team_id or None, goal_id=quest_id) or []
+                team_id=self._team_for(quest_id) or None, goal_id=quest_id) or []
         except Exception:  # noqa: BLE001 -- goals-only summary (no last-run block) beats no pass
             log.info("autopilot: could not read prior tasks for quest %s", quest_id, exc_info=True)
             quest_tasks = None
@@ -2203,12 +2249,18 @@ class AutopilotPass:
                 "autopilot": autopilot_cfg,
             }]
 
-        quests = self._client.list_quests(team_id=self._team_id or None) or []
+        # One listing per team this lane serves (just the home team unless ``team_ids`` was
+        # given), merged. Quest ids are globally unique, so a quest seen under two teams is read
+        # once. Which team each quest's work is then filed on comes from ``_team_for``, not from
+        # the listing it happened to appear in, so the answer is the same however it was found.
+        rows_by_quest: Dict[str, Dict[str, Any]] = {}
+        for team in (self._team_ids or [self._team_id]):
+            for row in (self._client.list_quests(team_id=team or None) or []):
+                quest_id = str(row.get("quest_id") or row.get("id") or "")
+                if quest_id and quest_id not in rows_by_quest:
+                    rows_by_quest[quest_id] = row
         eligible = []
-        for row in quests:
-            quest_id = str(row.get("quest_id") or row.get("id") or "")
-            if not quest_id:
-                continue
+        for quest_id, row in rows_by_quest.items():
             state = self._quest_state(quest_id)
             autopilot_cfg = (state.get("autopilot") or {}) if state else {}
             mode = str(autopilot_cfg.get("mode") or "off")
@@ -2246,7 +2298,8 @@ class AutopilotPass:
         previous output. Neither is recoverable from inside a pass, so both are excluded here.
         """
         tasks = self._client.list_tasks(
-            team_id=self._team_id or None, goal_id=quest_id, status="queued") or []
+            team_id=self._team_for(quest_id) or None, goal_id=quest_id,
+            status="queued") or []
         today = self._now().date()
         due: List[Dict[str, Any]] = []
         for t in tasks:
@@ -2581,12 +2634,16 @@ class AutopilotPass:
         return (task.get("task_kind") == AUTOPILOT_WORK_KIND
                 or task.get("source") == AUTOPILOT_LEGACY_SOURCE)
 
-    def _count_autopilot_tasks_today(self) -> int:
-        """Autopilot-authored tasks created TODAY, team-wide (the daily budget's denominator).
+    def _count_autopilot_tasks_today(self, team_id: Optional[str] = None) -> int:
+        """Autopilot-authored tasks created TODAY on ONE team (the daily budget's denominator).
 
         The Quest list route has no ``source``/``task_kind`` query filter, so this pulls the
-        team's tasks and narrows client-side (``list_tasks`` does the same, honestly)."""
-        tasks = self._client.list_tasks(team_id=self._team_id or None) or []
+        team's tasks and narrows client-side (``list_tasks`` does the same, honestly).
+
+        ``team_id`` omitted means the lane's own team, exactly as this always behaved. A lane
+        serving several teams passes the quest's team so each team's budget is counted against
+        that team's own tasks -- see the decision recorded at the call site in ``run``."""
+        tasks = self._client.list_tasks(team_id=(team_id or self._team_id) or None) or []
         today = self._now().date()
         count = 0
         for t in tasks:
@@ -2618,7 +2675,7 @@ class AutopilotPass:
         QUEST id (its handler loads the quest by it), and there is no separate ``quest_id`` field
         on a task at all. So the per-quest listing is ``list_tasks(goal_id=quest_id)``."""
         tasks = self._client.list_tasks(
-            team_id=self._team_id or None, goal_id=quest_id) or []
+            team_id=self._team_for(quest_id) or None, goal_id=quest_id) or []
         return any(
             self._is_autopilot_authored(t)
             and str(t.get("status", "")).strip().lower() in OPEN_TASK_STATUSES
@@ -2677,7 +2734,10 @@ class AutopilotPass:
         # be runnable until a human approves it.
         needs_approval = force_suggested or mode != "act"
         kwargs: Dict[str, Any] = dict(
-            team_id=self._team_id or None,
+            # The QUEST'S own team, not the lane's home team: a lane can discover work
+            # from several teams, and a batch filed on the wrong team is work the quest's own
+            # people never see. Identical to the home team on a single-team lane.
+            team_id=self._team_for(quest_id) or None,
             goal_id=quest_id,
             source=AUTOPILOT_TASK_SOURCE,
             task_kind=AUTOPILOT_WORK_KIND,
@@ -2826,7 +2886,7 @@ class AutopilotPass:
         """
         try:
             tasks = self._client.list_tasks(
-                team_id=self._team_id or None, goal_id=quest_id) or []
+                team_id=self._team_for(quest_id) or None, goal_id=quest_id) or []
         except Exception:  # noqa: BLE001 -- fail OPEN: a bad read must not silence a proposal
             log.info("autopilot: could not check for an open proposal on quest %s", quest_id,
                      exc_info=True)

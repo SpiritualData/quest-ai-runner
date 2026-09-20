@@ -66,7 +66,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
 
 from ..core.adapters import Escalation, EscalationSinkBase
 
@@ -176,21 +176,52 @@ class QuestClient:
 
     # --- discovery -----------------------------------------------------------
 
+    def team_param(self, team_id: Optional[str] = None,
+                   team_ids: Optional[Sequence[str]] = None) -> Optional[str]:
+        """The value to send as the ``team_id`` query param, for the discovery calls below.
+
+        ``team_ids`` non-empty: the comma-joined set, which the backend's assistant-task listing
+        accepts as "any of these teams". ONE request covers the whole set.
+
+        Otherwise: exactly the pre-existing fallback -- the caller's ``team_id`` when they named
+        one (including ``""`` for owner-scoped), else the client's own configured team.
+
+        THE GUARANTEE THIS EXISTS FOR: a single-element ``team_ids`` produces the identical string
+        a bare ``team_id`` of that same id produces (``",".join(["t"]) == "t"``), and an empty
+        ``team_ids`` changes nothing at all. So a single-team lane's request is byte-identical to
+        what it sent before multi-team discovery existed, which is what makes this addition a
+        provable no-op for every existing deployment.
+        """
+        if team_ids:
+            return ",".join(team_ids)
+        return self.team_id if team_id is None else team_id
+
     def discover_due(self, *, now: Optional[datetime] = None,
                      status: str = "queued",
                      team_id: Optional[str] = None,
+                     team_ids: Optional[Sequence[str]] = None,
                      env_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """GET queued tasks due at/before now (the poll-mode discovery floor).
 
         Unscheduled tasks count as 'due now'; scheduled ones surface within their window.
 
-        ``team_id`` scopes discovery to ONE team's tasks (per-team lane isolation): two teams
-        under the SAME owner share one owner-scoped queue, so without this filter each lane would
-        discover BOTH teams' tasks and race to claim/run them with the wrong corpus/escalation.
-        Defaults to the client's configured ``team_id`` so a team-bound lane is isolated by default;
-        pass ``team_id=""`` (or configure none) for an owner-scoped, teamless discovery. The backend
-        treats a task's null ``team_id`` as owner-scoped, so a team filter only narrows, never breaks
-        the personal lane.
+        ``team_id`` scopes discovery to ONE team's tasks. ``team_ids`` scopes it to a SET of teams
+        in one request (see ``team_param``), which is how a single lane serves several teams.
+
+        Why scope at all: several teams under the SAME owner share one owner-scoped queue, so an
+        unfiltered lane sees every one of them. The hazard that makes that dangerous is two
+        separate PROCESSES racing one shared queue -- the claim-before-run PATCH to
+        ``in_progress`` is an unconditional set, not a status-guarded find-and-update, so two
+        processes really can both claim the same task and run it twice. It is NOT a single
+        process legitimately serving several teams: each task is claimed once, by one process, and
+        carries its own ``team_id`` that the per-task path resolves persona, corpus and escalation
+        from. So run one process per QUEUE, not one per team, and give that process the set of
+        teams it should serve.
+
+        Defaults to the client's configured ``team_id`` so a team-bound lane is isolated by
+        default; pass ``team_id=""`` (or configure none) for an owner-scoped, teamless discovery.
+        The backend treats a task's null ``team_id`` as owner-scoped, so a team filter only
+        narrows, never breaks the personal lane.
 
         ``env_id`` scopes discovery further to ONE of the team's runner ENVIRONMENTS: a multi-env
         team routes a task pinned to a specific runner via ``env_id``, and the backend's list
@@ -204,7 +235,7 @@ class QuestClient:
         """
         now = now or datetime.now(timezone.utc)
         iso = now.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        tid = self.team_id if team_id is None else team_id
+        tid = self.team_param(team_id, team_ids)
         params: Dict[str, Any] = {"status": status, "due_before": iso}
         if tid:
             params["team_id"] = tid
@@ -218,6 +249,7 @@ class QuestClient:
             return []
 
     def list_interactive_due(self, *, team_id: Optional[str] = None,
+                             team_ids: Optional[Sequence[str]] = None,
                              env_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """GET queued REAL-TIME tasks only (the fast-lane FALLBACK poll).
 
@@ -226,9 +258,10 @@ class QuestClient:
         ``wait_for_interactive`` for the preferred, lower-latency long-poll channel. This method is
         the fallback used when the wait channel is disabled (``QAR_WAIT_CHANNEL=0``): the fast lane
         calls it on a short interval (``QAR_CONTEXT_POLL_SECONDS``) instead of waiting out the full
-        background ``poll_interval_seconds``. Same team/env scoping as ``discover_due``. Never raises.
+        background ``poll_interval_seconds``. Same team/env scoping as ``discover_due``, including
+        ``team_ids`` for a lane serving several teams. Never raises.
         """
-        tid = self.team_id if team_id is None else team_id
+        tid = self.team_param(team_id, team_ids)
         params: Dict[str, Any] = {"status": "queued", "real_time": "true"}
         if tid:
             params["team_id"] = tid
@@ -242,6 +275,7 @@ class QuestClient:
             return []
 
     def wait_for_interactive(self, *, team_id: Optional[str] = None,
+                             team_ids: Optional[Sequence[str]] = None,
                              env_id: Optional[str] = None,
                              timeout: float = 25.0) -> Optional[Dict[str, Any]]:
         """Long-poll GET /api/assistant-tasks/wait -- the presence-aware PUSH channel.
@@ -258,8 +292,14 @@ class QuestClient:
         endpoint not yet available on an older backend). Never raises. The socket-level timeout is
         padded past the server's own bound so a legitimate near-``timeout`` wait is never cut short
         by our own transport.
+
+        ``team_ids`` (a lane serving several teams) MUST go into this ONE call rather than a call
+        per team. This endpoint returns exactly one FIFO-oldest task for the scope it was given,
+        so a lane that asked for one team and filtered the rest client-side would, on every
+        reconnect, be handed a task it then discards -- a silent drop plus a hot reconnect loop
+        for as long as that task sits at the head of the queue.
         """
-        tid = self.team_id if team_id is None else team_id
+        tid = self.team_param(team_id, team_ids)
         params: Dict[str, Any] = {"real_time": "true", "timeout": timeout}
         if tid:
             params["team_id"] = tid
@@ -774,10 +814,18 @@ class QuestClient:
         team (cached) and retry there; if the cached team has ALSO stopped serving the quest, it
         moved again, so the stale entry is dropped and resolved once more from the live quest
         list. An explicit ``team_id`` is honored as given and never second-guessed.
+
+        CACHE-FIRST (a lane serving SEVERAL teams): when the caller named no team and this quest's
+        owning team is already known, that team is used straight away rather than after the
+        configured team has failed. On a single-team lane the cache is empty for every quest it
+        reads, so this costs nothing and changes nothing. The cache is consulted, never FILLED,
+        here: filling it means a quest-list call, and paying for one on every uncached quest --
+        including on lanes where the configured team was always going to serve it -- would turn a
+        multi-team convenience into a per-quest tax on everybody. The failure path below fills it.
         """
         try:
             self._require()
-            tid = team_id or self.team_id
+            tid = team_id or self._quest_team_cache.get(quest_id) or self.team_id
             resolved_now = False
             if not tid and not team_id:
                 resolved_now = quest_id not in self._quest_team_cache
@@ -1034,13 +1082,39 @@ class QuestClient:
 
         Returns quest metadata: quest_id, outcome, completed, owner_user_ids, and other context.
         Requires team_id either here or on the client instance. Returns {} if not found.
+
+        The quest need not be on the CLIENT'S team -- same reason as ``list_quest_goals``: a lane
+        can serve several teams, an owner-scoped lane syncs quests across all of its owner's
+        teams, and a quest can be moved between teams at any time. So when the caller named no
+        team: the quest's known owning team is used first (a cache lookup, never a quest-list
+        call, so a single-team lane pays nothing), and if the team that was tried fails, the
+        owning team is resolved from the live list and the read retried once there. Before this,
+        a quest outside the client's home team returned ``{}`` silently, forever. An explicit
+        ``team_id`` is honored as given and never second-guessed.
         """
         try:
             self._require()
-            tid = team_id or self.team_id
+            tid = team_id or self._quest_team_cache.get(quest_id) or self.team_id
+            if not tid and not team_id:
+                tid = self.owning_team_for(quest_id)
             if not tid:
                 raise QuestNotConfigured("team_id is required to get a quest")
-            return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}") or {}
+            try:
+                return self._request("GET", f"/api/teams/{tid}/quests/{quest_id}") or {}
+            except QuestApiError:
+                if team_id:
+                    raise  # caller named the team: their call, their error
+                # The team that failed may be a stale cache entry (the quest moved) or simply the
+                # wrong one (the quest was never ours). Drop it and ask the live list once.
+                if self._quest_team_cache.get(quest_id) == tid:
+                    self.forget_owning_team(quest_id)
+                owner_tid = self.owning_team_for(quest_id)
+                if not owner_tid or owner_tid == tid:
+                    raise
+                log.info("quest %s is not on team %s; using its own team %s",
+                         quest_id, tid, owner_tid)
+                return self._request(
+                    "GET", f"/api/teams/{owner_tid}/quests/{quest_id}") or {}
         except (QuestApiError, QuestNotConfigured) as e:
             log.warning("get_quest failed for quest %s: %s", quest_id, e)
             return {}
@@ -2320,6 +2394,25 @@ class QuestDecisionSink(EscalationSinkBase):
             return ""
         return ""
 
+    def team_for(self, quest_id: Optional[str]) -> Optional[str]:
+        """The team a decision about ``quest_id`` belongs on, or None for the client's own team.
+
+        A lane that discovers work from several teams escalates about quests on any of them, and
+        ``create_decision`` defaults to the CLIENT's home team. Filing team1's question on team2
+        puts it in front of the wrong people (or nobody), so resolve the quest's own team first.
+        Cheap and safe: ``owning_team_for`` is cached per quest and answers "" when it cannot
+        tell, in which case the old default stands. Never raises -- an escalation must reach a
+        human even if the lookup cannot.
+        """
+        if not quest_id:
+            return None
+        try:
+            return self._client.owning_team_for(quest_id) or None
+        except Exception:  # noqa: BLE001 -- routing is a refinement; never lose the escalation
+            log.info("escalate: could not resolve the owning team for quest %s", quest_id,
+                     exc_info=True)
+            return None
+
     def escalate(self, escalation: Escalation) -> str:
         existing = self._existing_open_decision(escalation)
         if existing:
@@ -2330,6 +2423,7 @@ class QuestDecisionSink(EscalationSinkBase):
                 escalation.summary,
                 kind=escalation.kind,
                 quest_id=escalation.quest_id,
+                team_id=self.team_for(escalation.quest_id),
                 assignee_user_id=escalation.assignee or self._default_assignee,
                 default_on_silence=escalation.default_on_silence,
             )

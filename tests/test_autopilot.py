@@ -2021,3 +2021,92 @@ def test_a_run_request_does_not_override_mode_off():
     client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals)
     result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
     assert result.created_task_ids == []
+
+
+# --- one lane, several teams (team_resolver / team_ids) ------------------------------------
+
+class TeamRecordingClient(FakeAutopilotClient):
+    """Records the ``team_id`` every read and write was scoped to, and scopes ``list_tasks`` by it
+    the way the real route does, so a per-team budget can be told apart from a lane-wide one."""
+
+    def __init__(self, *, team_by_quest=None, **kw):
+        super().__init__(**kw)
+        self.team_by_quest = dict(team_by_quest or {})
+        self.list_task_teams = []
+
+    def list_tasks(self, *, team_id=None, status=None, goal_id=None, source=None, task_kind=None):
+        self.list_task_teams.append(team_id)
+        rows = super().list_tasks(status=status, goal_id=goal_id, source=source,
+                                  task_kind=task_kind)
+        if team_id is None:
+            return rows
+        return [t for t in rows if t.get("team_id", team_id) == team_id]
+
+
+def _resolver(team_by_quest):
+    return lambda quest_id: team_by_quest.get(quest_id, "")
+
+
+def test_work_is_created_on_the_quests_own_team_not_the_lanes():
+    """A lane serving several teams must file each quest's work where that quest lives. Without
+    the resolver every batch went to the lane's home team: work the quest's own people never see,
+    on a team the quest is not even on."""
+    teams = {"q1": "team1", "q2": "team2"}
+    quests = [_quest("q1"), _quest("q2")]
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")])),
+             "q2": _goals_payload(("day", "2026-07-12", [_goal("g2")]))}
+    client = TeamRecordingClient(quests=quests, goals_by_quest=goals, team_by_quest=teams)
+    AutopilotPass(client, team_id="team1", team_resolver=_resolver(teams),
+                  now=_now).run({"text": "autopilot pass"})
+
+    by_quest = {t["goal_id"]: t for t in client.created_tasks}
+    assert by_quest["q1"]["team_id"] == "team1"
+    assert by_quest["q2"]["team_id"] == "team2"
+
+
+def test_no_resolver_means_every_quest_uses_the_lanes_team_exactly_as_before():
+    quests = [_quest("q1"), _quest("q2")]
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")])),
+             "q2": _goals_payload(("day", "2026-07-12", [_goal("g2")]))}
+    client = TeamRecordingClient(quests=quests, goals_by_quest=goals)
+    AutopilotPass(client, team_id="team1", now=_now).run({"text": "autopilot pass"})
+    assert {t["team_id"] for t in client.created_tasks} == {"team1"}
+
+
+def test_the_daily_budget_is_per_team_not_shared_across_the_lane():
+    """Deliberate decision: a lane serving three teams must not silently third each team's daily
+    allowance. team1's budget is already spent by a task created there today; team2's is not, so
+    team2's quest still runs."""
+    teams = {"q1": "team1", "q2": "team2"}
+    quests = [_quest("q1"), _quest("q2")]
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")])),
+             "q2": _goals_payload(("day", "2026-07-12", [_goal("g2")]))}
+    spent = [{"id": "t0", "task_kind": "autopilot_work", "goal_id": "other", "status": "done",
+              "team_id": "team1", "created_at": "2026-07-12T01:00:00Z"}]
+    client = TeamRecordingClient(quests=quests, goals_by_quest=goals, tasks=spent,
+                                 team_by_quest=teams)
+    result = AutopilotPass(client, team_id="team1", team_resolver=_resolver(teams),
+                           daily_budget=1, now=_now).run({"text": "autopilot pass"})
+
+    assert [t["goal_id"] for t in client.created_tasks] == ["q2"]
+    assert any(s["quest_id"] == "q1" and "budget" in s["reason"] for s in result.skipped)
+
+
+def test_the_eligible_quest_listing_covers_every_configured_team():
+    """A team-wide pass (no single target quest) lists quests once per team. ``team_ids`` empty
+    keeps it at exactly one listing on the lane's own team."""
+    client = TeamRecordingClient(quests=[_quest("q1")],
+                                 goals_by_quest={"q1": _goals_payload(
+                                     ("day", "2026-07-12", [_goal("g1")]))})
+    client.quest_list_teams = []
+    original = client.list_quests
+    client.list_quests = lambda *, team_id=None: (
+        client.quest_list_teams.append(team_id) or original(team_id=team_id))
+
+    AutopilotPass(client, team_id="team1", team_ids=["team1", "team2"],
+                  now=_now)._eligible_quests()
+    assert client.quest_list_teams == ["team1", "team2"]
+
+    client.quest_list_teams = []
+    AutopilotPass(client, team_id="team1", now=_now)._eligible_quests()
+    assert client.quest_list_teams == ["team1"]
