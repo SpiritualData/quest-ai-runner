@@ -208,6 +208,17 @@ ESCALATION_MARKER = "QAR-ESCALATED:"
 # whitespace-delimited token that follows it as the candidate id.
 ESCALATION_MARKER_ANYWHERE_RE = re.compile(re.escape(ESCALATION_MARKER) + r"\s*(\S+)")
 
+# What a captured token has to look like to be accepted as a real decision id: 4-64 characters of
+# id-shaped text only. Matching the marker mid-line (rather than only at a line's start) also
+# matches it inside PROSE -- above all the instruction that teaches the convention in the first
+# place ("print QAR-ESCALATED: <decision_id> when you escalate"), which a worker can echo back in
+# its own summary. Accepting that would pause a finished task on a decision id that does not
+# exist, which is a worse failure than the orphan this widening was meant to fix. Placeholders
+# (``<decision_id>``, ``{id}``, ``[id]``), sentence words and punctuation are all excluded by the
+# charset and the minimum length; the orchestrator's own open-decision diff still recovers a
+# genuine escalation whose marker never landed.
+ESCALATION_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{3,63}$")
+
 
 def extract_escalation_id(output: str) -> Optional[str]:
     """Return the decision id from the LAST ``QAR-ESCALATED: <id>`` marker, or None.
@@ -217,12 +228,15 @@ def extract_escalation_id(output: str) -> Optional[str]:
     list item), and requiring the line to start with the marker silently dropped those runs --
     they closed as done with an orphaned open decision instead of pausing on it. Trailing
     punctuation the model might tack on (a period, a closing paren/quote) is stripped from the id.
+    A candidate that is not ID-SHAPED (``ESCALATION_ID_RE``) is ignored, so the convention being
+    described in prose, or a ``<decision_id>`` placeholder echoed back, is never mistaken for a
+    real escalation.
     """
     decision_id: Optional[str] = None
     for line in (output or "").splitlines():
         for match in ESCALATION_MARKER_ANYWHERE_RE.finditer(line):
             candidate = match.group(1).strip().rstrip(").,;:\"'")
-            if candidate:
+            if candidate and ESCALATION_ID_RE.match(candidate):
                 decision_id = candidate
     return decision_id
 

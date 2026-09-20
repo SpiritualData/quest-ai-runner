@@ -1062,6 +1062,16 @@ def test_extract_escalation_id():
     assert extract_escalation_id("Note: QAR-ESCALATED: dec_mid_line") == "dec_mid_line"
     assert extract_escalation_id("- QAR-ESCALATED: dec_bullet.") == "dec_bullet"
     assert extract_escalation_id("(see QAR-ESCALATED: dec_paren)") == "dec_paren"
+    # ...but the marker appearing in PROSE (the instruction that teaches the convention, echoed
+    # back by a worker) must NOT be read as a real escalation: a placeholder is not an id.
+    assert extract_escalation_id(
+        "When you escalate, print QAR-ESCALATED: <decision_id> on its own line.") is None
+    assert extract_escalation_id("e.g. QAR-ESCALATED: {id}") is None
+    assert extract_escalation_id("QAR-ESCALATED: n/a") is None
+    # A real id later in the output still wins over an earlier prose mention.
+    assert extract_escalation_id(
+        "Print QAR-ESCALATED: <decision_id>\nQAR-ESCALATED: teamdec_ab12cd34"
+    ) == "teamdec_ab12cd34"
 
 
 def test_subprocess_runner_parses_escalation_marker(monkeypatch):
