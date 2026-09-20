@@ -29,8 +29,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..config import RunnerConfig, build_orchestrator, derive_capabilities, resolve_rep_sync_resolver
 from ..resources import ResourceGuard, ResourceLimits
-from .autopilot import (AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, AutopilotPass, cadence_due,
-                        persona_entries_on_duty, run_requested)
+from .autopilot import (AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, AutopilotPass, _parse_dt,
+                        cadence_due, persona_entries_on_duty, run_requested)
 from .context_updates import build_update_engine
 
 
@@ -115,6 +115,58 @@ def _quest_pass_recurrence(entry: Dict[str, Any], expected_time: str,
     if allowed_days:
         return {"frequency": "weekly", "days": allowed_days, "time": expected_time}
     return {"frequency": "daily", "time": expected_time}
+
+
+# A generic multi-day window, comfortably wider than a daily cadence so a live weekly (or
+# monthly) foreign series is never misread as dead just because nothing has touched it in the
+# last day or two -- see ``_foreign_series_looks_alive``.
+_FOREIGN_SERIES_STALE_AFTER_DAYS = 3
+
+
+def _foreign_series_looks_alive(occ: Dict[str, Any], entry: Dict[str, Any],
+                                now: datetime) -> bool:
+    """Whether a foreign-owned SERIES occurrence still looks like a LIVE pass (True) rather than a
+    genuinely stale/abandoned one (False).
+
+    This is the test ``_ensure_one_quest_pass`` uses to decide whether creating our own competing
+    series would duplicate a series another account's lane is actually servicing, or would be the
+    only thing standing between this quest and never getting an autopilot pass again. Neither
+    extreme is safe as a blanket rule: always ignoring a foreign series (the old behaviour)
+    resurrects the ORIGINAL bug this method's docstring already names -- a quest whose foreign
+    pass is permanently dead (created before passes carried ``assignee_user_id``, or that
+    account's lane is gone for good) never gets a pass again, silently, until a human clears it in
+    the app. Never creating our own when ANY foreign series exists brings back the duplicate-series
+    bug this heuristic exists to fix -- two lanes each maintaining their own series for the same
+    quest.
+
+    Primary signal: ``scheduled_date``, read in the quest's own zone (matching
+    ``_expected_quest_occurrence``'s date arithmetic). A series occurrence dated today or later
+    means SOME lane is advancing it on schedule -- alive. One dated in the past means nothing has
+    advanced it past its own due date, which is exactly what an abandoned lane looks like.
+
+    Fallback when ``scheduled_date`` is missing or unparseable: ``updated_at`` recency (via
+    ``autopilot._parse_dt``, the one existing way this repo parses a stored ISO timestamp) against
+    ``_FOREIGN_SERIES_STALE_AFTER_DAYS``.
+
+    Both fields missing/unparseable default to ALIVE -- the conservative choice. Being cautious
+    about NOT creating a duplicate costs nothing here: the loud per-scan foreign-occurrence warning
+    already logged by the caller is what tells a human to go clear a genuinely dead one; this
+    heuristic only decides whether THIS lane also creates a second series in the meantime.
+    """
+    zone = entry.get("run_timezone")
+    scheduled = str(occ.get("scheduled_date") or "").strip()
+    if scheduled:
+        try:
+            scheduled_date = date.fromisoformat(scheduled)
+        except ValueError:
+            scheduled_date = None
+        if scheduled_date is not None:
+            return scheduled_date >= today_in_zone(zone, now)
+    updated = _parse_dt(occ.get("updated_at"))
+    if updated is None:
+        return True
+    age = now_in_zone(zone, now) - now_in_zone(zone, updated)
+    return age.days < _FOREIGN_SERIES_STALE_AFTER_DAYS
 
 
 def _task_signature(task: Dict[str, Any]) -> str:
@@ -1238,10 +1290,17 @@ class Poller:
         exists is what leaves the quest with NO runnable pass at all, forever, silently.
 
         It is still logged every scan, because a human can clear it in the app and the ids are what
-        they need. The trade this accepts: if a second lane ever ran as that other account, the
-        quest would briefly have two live series. Nothing does that today (one app account per
-        lane), and the alternative failure, a quest whose autopilot never runs again, is worse and
-        harder to see.
+        they need.
+
+        When this lane has no writable series of its own, a foreign SERIES occurrence still gets
+        one narrow say: if it ``_foreign_series_looks_alive`` (see that function), this lane holds
+        off creating a competing series of its own, on the theory that another account's lane is
+        actually servicing this quest right now. A foreign series that looks stale/abandoned does
+        NOT hold anything off -- this lane creates its own exactly as if the foreign occurrence
+        were not there, which is the fix for the failure mode this method used to accept
+        unconditionally: a quest whose foreign pass is permanently dead (created before passes
+        carried ``assignee_user_id``, or that account's lane is gone for good) would otherwise
+        never get a pass again, silently, until a human clears it in the app.
 
         Only the SERIES occurrences steer anything here (the duplicate warning, the retune, and
         the create-when-missing all count those alone). The catch-ups are read for exactly one
@@ -1283,7 +1342,23 @@ class Poller:
         expected_date, expected_time = self._expected_quest_occurrence(entry)
         if not series:
             # An open catch-up is not a series and must not suppress this: the quest would be left
-            # with one run and no producer once that run closed.
+            # with one run and no producer once that run closed. A foreign SERIES occurrence is
+            # different: if it still looks alive, another account's lane appears to already be
+            # servicing this quest, and creating our own here is exactly the duplicate-series bug
+            # this heuristic exists to prevent (see _foreign_series_looks_alive).
+            foreign_series, _ = self._split_pass_occurrences(foreign)
+            alive_foreign = [o for o in foreign_series
+                             if _foreign_series_looks_alive(o, entry, self._now())]
+            if alive_foreign:
+                log.warning(
+                    "autopilot: quest %s has no pass of its own, but a foreign-owned series (%s) "
+                    "still looks live (not overdue, or recently updated) -- this quest's "
+                    "autopilot appears to already be served by another account's live lane, not "
+                    "creating a second series. If that lane ever stops, a human needs to "
+                    "clear/reassign the stale pass in the app before this lane will create its "
+                    "own.",
+                    quest_id, [o.get("id") or o.get("task_id") for o in alive_foreign])
+                return
             self._create_quest_pass(quest_id, entry, expected_date, expected_time)
             return
         if series[0] in foreign:

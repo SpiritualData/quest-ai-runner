@@ -7,10 +7,12 @@ absolutely nothing happened, forever, with no error anywhere. These tests pin th
 fix -- ``Poller._ensure_autopilot_pass`` -- including the cheap steady state (one list call when
 the pass already exists) and the refusal to create one when no quest is opted in.
 """
+from datetime import datetime, timezone
+
 import pytest
 
 from quest_ai_runner.config import RunnerConfig
-from quest_ai_runner.runner.poller import Poller
+from quest_ai_runner.runner.poller import Poller, _foreign_series_looks_alive
 
 from .conftest import StubProvider, StubRetrieval
 
@@ -78,13 +80,13 @@ class FakePassClient:
         return record
 
 
-def _poller(client, **cfg_overrides):
+def _poller(client, *, now=None, **cfg_overrides):
     cfg = RunnerConfig(
         quest_base_url="http://x", quest_api_key="qsk_test", team_id="team1",
         retrieval=StubRetrieval({}), model_provider=StubProvider(decisions=[]),
         **cfg_overrides,
     )
-    return Poller(cfg, state_path=None, client=client)
+    return Poller(cfg, state_path=None, client=client, now=now)
 
 
 def test_creates_a_recurring_pass_task_when_a_quest_is_opted_in_and_none_exists():
@@ -306,6 +308,90 @@ def test_a_pass_owned_by_someone_else_is_reported_and_replaced(caplog):
     assert client.created[0]["assignee_user_id"] == FakePassClient.user_id
     assert client.update_calls == []   # and never retry a PATCH that can only 404
     assert "p_old" in caplog.text      # the human still gets the id, to clear the dead row
+
+
+# --- a foreign series that still looks ALIVE (2026-09-20, multi-owner quests) --------------------
+#
+# The blanket "a foreign occurrence is always inert, always create our own" trade above was safe
+# only while one app account ran exactly one lane. On a quest with multiple owner_user_ids, a
+# human owner's personal lane and the shared org lane can both actively service the SAME quest, and
+# each independently reads the other's series as a dead row -- three separately-worded autopilot
+# reports (and three emails) for one quest inside ten minutes, live. The fix distinguishes a
+# foreign series another lane is actually running (do not create a second one) from one that is
+# genuinely abandoned (create ours, exactly as before).
+
+def test_a_foreign_alive_series_blocks_this_lane_from_creating_a_second_series(caplog):
+    """A foreign SERIES occurrence that is not overdue (scheduled today or later) reads as another
+    account's lane actively servicing this quest, so this lane must NOT start a competing series.
+    The warning must say why, distinctly from the generic foreign-occurrence warning above, since
+    that is what tells a human whether there is anything to clear."""
+    foreign = {"id": "p_alive", "task_kind": "autopilot", "status": "queued", "goal_id": "q1",
+               "user_id": "other_owner", "created_by": FakePassClient.user_id,
+               "recurrence": {"frequency": "daily", "time": "07:00"},
+               "scheduled_date": "2026-09-21", "scheduled_time": "07:00"}
+    client = FakePassClient(tasks=[foreign], quests=[{"quest_id": "q1"}],
+                            autopilot_by_quest={"q1": {"mode": "act"}})
+    now = lambda: datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
+
+    with caplog.at_level("WARNING"):
+        _poller(client, lane_user_id=FakePassClient.user_id, now=now)._ensure_autopilot_pass()
+
+    assert client.created == []        # no competing series
+    assert "already be served by another account" in caplog.text
+
+
+def test_a_foreign_stale_series_still_lets_this_lane_create_its_own(caplog):
+    """A foreign SERIES occurrence that is overdue (scheduled in the past, nothing advancing it)
+    still reads as abandoned, so this lane creates its own -- the pre-existing behaviour this fix
+    must not regress."""
+    foreign = {"id": "p_stale", "task_kind": "autopilot", "status": "queued", "goal_id": "q1",
+               "user_id": "other_owner", "created_by": FakePassClient.user_id,
+               "recurrence": {"frequency": "daily", "time": "07:00"},
+               "scheduled_date": "2026-09-10", "scheduled_time": "07:00"}
+    client = FakePassClient(tasks=[foreign], quests=[{"quest_id": "q1"}],
+                            autopilot_by_quest={"q1": {"mode": "act"}})
+    now = lambda: datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
+
+    with caplog.at_level("WARNING"):
+        _poller(client, lane_user_id=FakePassClient.user_id, now=now)._ensure_autopilot_pass()
+
+    assert len(client.created) == 1
+    assert client.created[0]["assignee_user_id"] == FakePassClient.user_id
+    assert "p_stale" in caplog.text    # still named, for a human to clear
+
+
+def test_a_foreign_catchup_only_never_blocks_creation():
+    """A foreign occurrence with no ``recurrence`` is a one-off catch-up, never a series, so it
+    must never hold off creating the quest's own series -- only a foreign SERIES gets a say."""
+    foreign_catchup = {"id": "p_catchup", "task_kind": "autopilot", "status": "queued",
+                       "goal_id": "q1", "user_id": "other_owner",
+                       "created_by": FakePassClient.user_id, "scheduled_date": "2026-09-25",
+                       "scheduled_time": "07:00"}
+    client = FakePassClient(tasks=[foreign_catchup], quests=[{"quest_id": "q1"}],
+                            autopilot_by_quest={"q1": {"mode": "act"}})
+    now = lambda: datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
+
+    _poller(client, lane_user_id=FakePassClient.user_id, now=now)._ensure_autopilot_pass()
+
+    assert len(client.created) == 1
+    assert client.created[0]["assignee_user_id"] == FakePassClient.user_id
+
+
+def test_foreign_series_liveness_falls_back_to_updated_at_when_scheduled_date_is_missing():
+    """Missing/unparseable ``scheduled_date`` falls back to ``updated_at`` recency, and missing
+    both defaults to alive -- the conservative choice, since the generic foreign-occurrence warning
+    already tells a human there is something to look at."""
+    now = datetime(2026, 9, 20, 12, 0, tzinfo=timezone.utc)
+    entry = {}
+    recent = {"updated_at": "2026-09-19T12:00:00Z"}
+    stale = {"updated_at": "2026-08-01T12:00:00Z"}
+    unparseable = {"updated_at": "not-a-date"}
+    nothing = {}
+
+    assert _foreign_series_looks_alive(recent, entry, now) is True
+    assert _foreign_series_looks_alive(stale, entry, now) is False
+    assert _foreign_series_looks_alive(unparseable, entry, now) is True
+    assert _foreign_series_looks_alive(nothing, entry, now) is True
 
 
 # --- one lane, several teams (RunnerConfig.team_ids) --------------------------------------------

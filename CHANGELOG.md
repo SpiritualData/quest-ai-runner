@@ -187,6 +187,26 @@ All notable changes to this project are documented here. The format is based on
   content. Tests: `tests/test_gemini_url_fetch.py`.
 
 ### Fixed
+- **On a quest with more than one `owner_user_id`, two different accounts' lanes could each end up
+  running their own competing autopilot pass series for the SAME quest** (2026-09-20). The
+  foreign-occurrence handling added for the ownership-asymmetry fix above (see "An autopilot pass
+  on a quest the lane does not own never RAN") treated ANY pass occurrence owned by a different
+  account as permanently inert and created a competing series of its own whenever it held none,
+  which is correct only under the single-app-account assumption that fix's own docstring named as
+  its accepted trade. On a quest with several human/app owners that assumption does not hold, and
+  the trade fires for real: three separately-worded autopilot reports (three outbound emails) for
+  one quest inside about ten minutes, each lane independently deciding the other's series did not
+  exist. New `_foreign_series_looks_alive(occ, entry, now)` in `runner/poller.py` distinguishes a
+  foreign SERIES occurrence another lane still appears to be running (its `scheduled_date` is not
+  overdue, or, when that is missing/unparseable, its `updated_at` is recent) from one that is
+  genuinely stale/abandoned; missing/unparseable dates default to "alive" as the conservative
+  choice, since the pre-existing per-scan warning about foreign occurrences is what tells a human
+  there is a dead row to clear. `_ensure_one_quest_pass` now checks this only in the narrow case it
+  has no writable series of its own: an alive foreign series holds off creating a second one (with
+  its own distinct warning explaining why), while a stale foreign series, or foreign occurrences
+  that are catch-ups only, change nothing -- this lane still creates its own exactly as before.
+  Does not touch catch-up handling, retuning, the mode-off retirement path, or
+  `_unwritable_pass_occurrences` itself. Tests: `tests/test_autopilot_pass_task.py`.
 - **`CompositeRetrievalAdapter.list_sources()` / `list_operations()` corrupted any merged line
   whose first colon fell inside its own content rather than at the intended name/description
   boundary.** Both methods split each line on its first `:` to dedupe across adapters, then
