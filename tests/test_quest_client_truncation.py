@@ -36,3 +36,29 @@ def test_create_decision_leaves_short_summary_unchanged():
     short = "Approve sending this email to the donor?"
     client.create_decision(short, kind="approve")
     assert captured["body"]["summary"] == short  # untouched when within the limit
+
+
+def test_create_decision_sanitizes_invalid_kind_to_approve():
+    client, captured = _client_capturing_body()
+    client.create_decision("Approve X?", kind="Not Valid Kind!")
+    assert captured["body"]["kind"] == "approve"
+
+
+def test_create_decision_accepts_a_valid_namespaced_kind():
+    client, captured = _client_capturing_body()
+    client.create_decision("Spend $500 on ads?", kind="explicit:spend")
+    assert captured["body"]["kind"] == "explicit:spend"
+
+
+def test_create_decision_serializes_a_datetime_deadline():
+    from datetime import datetime, timezone
+    client, captured = _client_capturing_body()
+    deadline = datetime(2026, 9, 25, 18, 0, tzinfo=timezone.utc)
+    client.create_decision("Approve X?", deadline=deadline)
+    assert captured["body"]["deadline"] == deadline.isoformat()
+
+
+def test_create_decision_omits_deadline_when_none():
+    client, captured = _client_capturing_body()
+    client.create_decision("Approve X?")
+    assert "deadline" not in captured["body"]

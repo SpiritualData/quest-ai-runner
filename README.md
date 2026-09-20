@@ -272,7 +272,17 @@ Auth: `Authorization: Bearer qsk_<hex>` (the executor identity).
 - **Claim**: `PATCH /api/assistant-tasks/{id}` `{status: in_progress}`
 - **Report**: `PATCH .../{id}` `{status: done|needs_you|failed, result, decision_id?}`
 - **Escalate** (human-only step): `POST /api/teams/{team_id}/decisions`
-  (`default_on_silence=hold`) → returns a `decision_id`, stamped on the task via `needs_you`.
+  (`kind`, `summary`, `default_on_silence=hold` by default, optional `deadline`) → returns a
+  `decision_id`, stamped on the task via `needs_you`. `QuestDecisionSink` never sends an empty
+  assignee: explicit assignee → configured default (`QAR_DECISION_ASSIGNEE`) → the quest's own
+  owner, or it raises instead of filing an unaddressed decision. A deep worker that raises one
+  itself reports it back by printing `QAR-ESCALATED: <decision_id>` in its output (see
+  [`docs/adapters.md`](docs/adapters.md#escalationsink)); a missing marker is recovered
+  automatically when the sink supports it, so a decision is never silently orphaned.
+- **Read a quest's decisions**: `GET /api/teams/decisions/for-quest?quest_id=` (open and
+  resolved), rendered into quest context (`QuestRetrievalAdapter`) so a rep sees what's already
+  been asked/answered and doesn't duplicate or re-ask it. See
+  [`docs/quest-api-contract.md`](docs/quest-api-contract.md).
 - **Loop-close**: `GET /api/teams/decisions/for-user`, `POST /api/teams/decisions/{id}/resolve`.
 - **Identity**: `GET /api/teams/whoami` (validate the key; `quest-ai-runner --check`).
 

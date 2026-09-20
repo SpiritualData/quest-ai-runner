@@ -205,6 +205,84 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             lines.append(f"  • {stamp}{prefix}{text}")
         return lines
 
+    # Cap on how many decisions ever go into one context block: this is grounding for the AI
+    # doing the work, not a full decision log, and a quest that has accumulated many should not
+    # push everything else out of the preamble.
+    MAX_DECISIONS_IN_CONTEXT = 10
+
+    def fetch_quest_decisions(self, quest_id: str) -> List[Dict[str, Any]]:
+        """This quest's decisions (open and resolved), or [] if the client can't fetch them.
+
+        Duck-typed via getattr like ``_fetch_goal_updates`` above: ``list_decisions_for_quest`` is
+        new enough that not every consumer's client (a test double, an older pin) carries it.
+        """
+        list_decisions = getattr(self.client, "list_decisions_for_quest", None)
+        if not callable(list_decisions):
+            return []
+        try:
+            return list(list_decisions(quest_id) or [])
+        except Exception:  # noqa: BLE001 — a decisions lookup must never break quest context
+            return []
+
+    @staticmethod
+    def flatten_quest_goals(goals_response: Any) -> List[Dict[str, Any]]:
+        """Flatten ``QuestClient.list_quest_goals``' period-grouped response into one flat list.
+
+        The real response shape is ``{quest_id, outcome, period_groups: [{..., goals: [...]}]}}``
+        (goals grouped by time period), not a flat list -- iterating the dict directly (its OLD
+        behavior here) silently yielded dict KEYS, and every call also passed a ``limit=`` kwarg
+        the method never accepted, raising ``TypeError`` on every single call (caught by the
+        surrounding ``except Exception`` in ``query()``, so ``quest_context`` always came back
+        ``kind="error"`` with no goals -- or the decisions block below -- ever shown). Tolerant of
+        already being a flat list too, so a future/alternate client shape is not broken by this.
+        """
+        if isinstance(goals_response, list):
+            return [g for g in goals_response if isinstance(g, dict)]
+        flat: List[Dict[str, Any]] = []
+        for group in (goals_response or {}).get("period_groups") or []:
+            flat.extend(g for g in (group.get("goals") or []) if isinstance(g, dict))
+        return flat
+
+    def render_quest_decisions(self, decisions: List[Dict[str, Any]]) -> List[str]:
+        """Compact "what's already been asked/answered on this quest" block.
+
+        Open decisions first (so the reader sees what's still pending before older history),
+        then the most recent resolved ones, capped at ``MAX_DECISIONS_IN_CONTEXT`` total. The
+        closing instruction is the point of including this at all: a rep with no memory of past
+        turns would otherwise re-raise a question that was already asked (a duplicate open
+        decision) or already answered (re-asking something settled).
+        """
+        opens = [d for d in decisions if str(d.get("status") or "").strip().lower() == "open"]
+        resolved = [d for d in decisions if str(d.get("status") or "").strip().lower() not in ("open", "")]
+        ordered = (opens + resolved)[: self.MAX_DECISIONS_IN_CONTEXT]
+        if not ordered:
+            return []
+
+        lines = ["\nDecisions already raised on this quest (do not duplicate an OPEN one below, "
+                "and do not re-ask a RESOLVED one -- it is settled):"]
+        for d in ordered:
+            summary = (d.get("summary") or "").strip() or "(no summary)"
+            status = str(d.get("status") or "").strip().lower() or "unknown"
+            if status == "open":
+                lines.append(f"  • OPEN: {summary}")
+                continue
+            resolution = (d.get("resolution") or "").strip()
+            response = (d.get("response_text") or "").strip()
+            resolver = (d.get("resolved_by_name") or "").strip()
+            auto = bool(d.get("auto_resolved"))
+            tail_bits = []
+            if resolution:
+                tail_bits.append(resolution)
+            if response:
+                tail_bits.append(f'"{response}"')
+            if resolver:
+                tail_bits.append(f"by {resolver}")
+            elif auto:
+                tail_bits.append("auto-resolved on its deadline")
+            tail = ", ".join(tail_bits) if tail_bits else status
+            lines.append(f"  • RESOLVED: {summary} -> {tail}")
+        return lines
+
     def _query_quest_context(self, spec: Dict[str, Any]) -> Observation:
         """Fetch quest metadata and list its goals."""
         quest_id = spec.get("quest_id")
@@ -228,13 +306,17 @@ class QuestRetrievalAdapter(RetrievalAdapter):
                 text_parts.append(f"Status: {'completed' if completed else 'in progress'}")
 
         # Fetch goals in this quest
-        goals = self.client.list_quest_goals(quest_id, limit=20)
+        goals = self.flatten_quest_goals(self.client.list_quest_goals(quest_id))
         if goals:
             text_parts.append("\nGoals in this quest:")
             for goal in goals:
-                goal_id = goal.get("goal_id", "?")
+                goal_id = goal.get("id") or goal.get("goal_id", "?")
                 goal_name = goal.get("name", goal_id)
                 text_parts.append(f"  • {goal_name} ({goal_id})")
+
+        # What's already been asked and answered on this quest, so the reader doesn't re-raise a
+        # duplicate or re-ask something already settled (see render_quest_decisions).
+        text_parts.extend(self.render_quest_decisions(self.fetch_quest_decisions(quest_id)))
 
         text = "\n".join(text_parts) if text_parts else ""
         return Observation(
@@ -402,13 +484,15 @@ class QuestRetrievalAdapter(RetrievalAdapter):
                 ]
 
                 # Include goals in this quest
-                goals = self.client.list_quest_goals(source_id, limit=20)
+                goals = self.flatten_quest_goals(self.client.list_quest_goals(source_id))
                 if goals:
                     lines.append("\nGoals:")
                     for goal in goals:
-                        goal_id = goal.get("goal_id", "?")
+                        goal_id = goal.get("id") or goal.get("goal_id", "?")
                         goal_name = goal.get("name", goal_id)
                         lines.append(f"  • {goal_name} ({goal_id})")
+
+                lines.extend(self.render_quest_decisions(self.fetch_quest_decisions(source_id)))
 
                 return Observation(kind="query", text="\n".join(lines))
 

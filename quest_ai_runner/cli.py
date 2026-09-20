@@ -369,6 +369,23 @@ def _apply_channel_env(cfg: RunnerConfig) -> None:
         cfg.channel_state_path = os.environ["QAR_CHANNEL_STATE_PATH"]
 
 
+def float_or_none(raw: Optional[str]) -> Optional[float]:
+    """Parse an env var as a float, or None if unset/blank/unparseable.
+
+    Unparseable is logged and treated as unset rather than raising -- a typo in an optional
+    numeric env var should degrade the ONE feature it configures, not crash startup.
+    """
+    text = (raw or "").strip()
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        logging.getLogger("quest-ai-runner").warning(
+            "float_or_none: expected a number, got %r; ignoring", text)
+        return None
+
+
 def _team_ids_from_env(raw: Optional[str]) -> List[str]:
     """Parse ``QUEST_TEAM_IDS`` ("a, b ,,a") into an ordered, de-duplicated list (``["a", "b"]``).
 
@@ -494,6 +511,8 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
         # — what lets a caller say create_decision(..., assignee="operator") instead of carrying
         # the deployment's routing policy into every call site.
         decision_assignees=parse_decision_assignees(os.getenv("QAR_DECISION_ASSIGNEES")),
+        decision_default_deadline_hours=float_or_none(
+            os.getenv("QAR_DECISION_DEFAULT_DEADLINE_HOURS")),
     )
     if os.getenv("QAR_MAX_PARALLEL"):
         cfg.orchestrator.max_parallel = int(os.environ["QAR_MAX_PARALLEL"])

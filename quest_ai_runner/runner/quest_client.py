@@ -61,12 +61,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Sequence
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, FrozenSet, List, Optional, Sequence
 
 from ..core.adapters import Escalation, EscalationSinkBase
 
@@ -98,6 +99,16 @@ class QuestApiError(RuntimeError):
     def __init__(self, message: str, *, status: Optional[int] = None):
         super().__init__(message)
         self.status = status
+
+
+# Quest's own validation for a decision's ``kind``: 1-64 chars, lowercase alnum/underscore/colon/
+# hyphen (e.g. "approve", "explicit:spend", "notice:prod-ops"). Checked client-side so a bad kind
+# degrades to "approve" instead of losing the whole escalation to a 422.
+DECISION_KIND_RE = re.compile(r"^[a-z0-9_:-]{1,64}$")
+
+# Env var naming the hours to add to "now" as a decision's deadline when the escalation itself
+# specified none. Unset (the default) means no deadline is ever synthesized here.
+QAR_DECISION_DEFAULT_DEADLINE_HOURS_ENV_VAR = "QAR_DECISION_DEFAULT_DEADLINE_HOURS"
 
 
 class QuestClient:
@@ -635,6 +646,7 @@ class QuestClient:
                         assignee: Optional[str] = None,
                         default_on_silence: str = "hold",
                         team_id: Optional[str] = None,
+                        deadline: Optional[datetime] = None,
                         executable: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         # ``assignee`` names a ROLE from config; ``assignee_user_id`` is the raw id. An explicit id
         # wins, so an existing caller is unaffected. Resolution happens OUTSIDE the try/except
@@ -654,12 +666,23 @@ class QuestClient:
             # regardless of which caller built it.
             if isinstance(summary, str) and len(summary) > 4000:
                 summary = summary[:3900].rstrip() + "\n\n[...truncated]"
+            # ``kind`` must satisfy Quest's ``^[a-z0-9_:-]{1,64}$`` or the POST 422s. A caller that
+            # built one from free-form planner output (or a hallucinated value) degrades to the
+            # generic "approve" here rather than losing the whole escalation to a rejected request.
+            if not isinstance(kind, str) or not DECISION_KIND_RE.match(kind):
+                log.warning("create_decision: kind %r does not match Quest's ^[a-z0-9_:-]+$ "
+                           "(max 64 chars); using 'approve' instead", kind)
+                kind = "approve"
             body: Dict[str, Any] = {"kind": kind, "summary": summary,
                                     "default_on_silence": default_on_silence}
             if quest_id:
                 body["quest_id"] = quest_id
             if assignee_user_id:
                 body["assigned_to_user_id"] = assignee_user_id
+            if deadline is not None:
+                # Accept either a real datetime (the normal case) or an already-ISO string, so a
+                # caller that pre-formatted one for some other reason is not rejected here.
+                body["deadline"] = deadline.isoformat() if hasattr(deadline, "isoformat") else str(deadline)
             if executable:
                 # An action to APPLY on approval. The server accepts only structured, data-shaped
                 # kinds here (see propose_field_change) and validates the payload at creation, so a
@@ -687,31 +710,39 @@ class QuestClient:
             log.warning("resolve_decision failed for decision %s: %s", decision_id, e)
             return {}
 
-    def list_open_decisions_for_quest(self, quest_id: str) -> List[Dict[str, Any]]:
-        """GET the OPEN (unresolved) decisions that reference a specific quest.
-
-        Used by Autopilot's HOLD gate (see ``runner.autopilot``): a quest with an open human
-        decision already pending should not have more autonomous work piled onto it.
+    def list_decisions_for_quest(self, quest_id: str) -> List[Dict[str, Any]]:
+        """GET every decision (open AND resolved) that references a specific quest.
 
         The backend route is ``GET /api/teams/decisions/for-quest?quest_id=`` (NOT a team-scoped
-        path: it is quest-scoped and derives access from the quest). It returns a BARE LIST of
-        ALL the quest's decisions, open AND resolved, with no status filter available server-side
-        -- so the open-only narrowing happens HERE, on ``status == "open"``
-        (``TeamDecisionStatus.OPEN``; the other values are ``resolved`` / ``expired``).
+        path: it is quest-scoped and derives access from the quest). It returns a BARE LIST with
+        no status filter available server-side -- narrowing by ``status`` is left to the caller
+        (``list_open_decisions_for_quest`` below does the open-only case; a context builder wants
+        both open and resolved). Each item may carry ``resolution``, ``response_text``,
+        ``resolved_by_name``, ``auto_resolved``, ``overdue`` when resolved -- treat all of these as
+        optional, since not every deployment's backend fills every field.
 
         Best-effort: returns ``[]`` on any failure (unconfigured client, network, a backend
-        without the route) so a gate check can never abort a pass. The CALLER logs the skip
-        reason either way, so a quest is never silently passed over.
+        without the route) so a caller can never be aborted by this lookup.
         """
         try:
             resp = self._request("GET", "/api/teams/decisions/for-quest",
                                  params={"quest_id": quest_id})
-            rows = resp if isinstance(resp, list) else list((resp or {}).get("decisions") or [])
-            return [d for d in rows
-                    if str(d.get("status") or "").strip().lower() == "open"]
+            return resp if isinstance(resp, list) else list((resp or {}).get("decisions") or [])
         except (QuestApiError, QuestNotConfigured) as e:
-            log.warning("list_open_decisions_for_quest failed for quest %s: %s", quest_id, e)
+            log.warning("list_decisions_for_quest failed for quest %s: %s", quest_id, e)
             return []
+
+    def list_open_decisions_for_quest(self, quest_id: str) -> List[Dict[str, Any]]:
+        """The OPEN (unresolved) subset of ``list_decisions_for_quest``.
+
+        Used by Autopilot's HOLD gate (see ``runner.autopilot``): a quest with an open human
+        decision already pending should not have more autonomous work piled onto it. Filtered on
+        ``status == "open"`` (``TeamDecisionStatus.OPEN``; the other values are ``resolved`` /
+        ``expired``). Best-effort: ``[]`` on any failure, same as the call it wraps. The CALLER
+        logs the skip reason either way, so a quest is never silently passed over.
+        """
+        return [d for d in self.list_decisions_for_quest(quest_id)
+                if str(d.get("status") or "").strip().lower() == "open"]
 
     # --- quest and goal browsing (for interactive chat context selection) ------
 
@@ -2366,9 +2397,85 @@ class QuestDecisionSink(EscalationSinkBase):
     via ``report_needs_you``).
     """
 
-    def __init__(self, client: QuestClient, *, default_assignee_user_id: Optional[str] = None):
+    def __init__(self, client: QuestClient, *, default_assignee_user_id: Optional[str] = None,
+                default_deadline_hours: Optional[float] = None):
         self._client = client
         self._default_assignee = default_assignee_user_id
+        self.default_deadline_hours = default_deadline_hours
+
+    def quest_owner_assignee(self, quest_id: Optional[str]) -> str:
+        """The quest's owner user id, as a last-resort escalation assignee, or "".
+
+        Best-effort: no ``quest_id``, an unreadable quest, or a quest with no recorded owner all
+        return "" -- the caller's own "never file an unaddressed decision" rule is what actually
+        fires on that, this lookup never pretends to know something it does not.
+        """
+        if not quest_id:
+            return ""
+        try:
+            quest = self._client.get_quest(quest_id)
+        except Exception:  # noqa: BLE001 -- a failed fallback lookup must not break escalation
+            return ""
+        owners = (quest or {}).get("owner_user_ids") or []
+        return str(owners[0]) if owners else ""
+
+    def resolve_assignee(self, escalation: Escalation) -> str:
+        """WHO this decision goes to: explicit escalation assignee, else the configured default,
+        else the quest's own owner.
+
+        Raises ``QuestNotConfigured`` instead of returning "" so ``escalate`` below never files a
+        decision with an empty ``assigned_to_user_id`` -- that used to succeed silently and sit in
+        nobody's queue forever, which is a worse failure than the escalation not landing at all
+        (at least a raised, logged failure is visible in the run's own error trail).
+        """
+        assignee = (escalation.assignee or self._default_assignee
+                   or self.quest_owner_assignee(escalation.quest_id))
+        if assignee:
+            return assignee
+        raise QuestNotConfigured(
+            f"cannot raise a decision ({escalation.summary!r}) for quest "
+            f"{escalation.quest_id!r}: no explicit assignee, no configured default "
+            "(QAR_DECISION_ASSIGNEE), and the quest's owner could not be resolved. Refusing to "
+            "file an unaddressed decision.")
+
+    def resolve_deadline(self, escalation: Escalation) -> Optional[datetime]:
+        """The deadline to send: the escalation's own, else this sink's configured default hours.
+
+        The default hours come from ``default_deadline_hours`` (constructor) or, absent that, the
+        ``QAR_DECISION_DEFAULT_DEADLINE_HOURS`` env var -- read here, at call time, rather than
+        only once at construction, so a consumer that sets just the env var (no RunnerConfig
+        wiring) still gets it. Unset either way means no deadline is added, exactly as before this
+        capability existed.
+        """
+        if escalation.deadline is not None:
+            return escalation.deadline
+        hours = self.default_deadline_hours
+        if hours is None:
+            raw = os.getenv(QAR_DECISION_DEFAULT_DEADLINE_HOURS_ENV_VAR)
+            if raw:
+                try:
+                    hours = float(raw)
+                except ValueError:
+                    log.warning("%s=%r is not a valid number; no default deadline applied",
+                               QAR_DECISION_DEFAULT_DEADLINE_HOURS_ENV_VAR, raw)
+        if not hours:
+            return None
+        return datetime.now(timezone.utc) + timedelta(hours=hours)
+
+    def open_decision_ids_for_quest(self, quest_id: str) -> FrozenSet[str]:
+        """Concrete implementation of the optional ``EscalationSinkBase`` recovery capability.
+
+        Best-effort: [] / any failure -> empty set, so a caller diffing before/after snapshots
+        never mistakes "could not check" for "confirmed no new decision."
+        """
+        try:
+            rows = self._client.list_open_decisions_for_quest(quest_id) or []
+        except Exception:  # noqa: BLE001 -- a failed probe must never break the run
+            return frozenset()
+        return frozenset(
+            str(d.get("decision_id") or d.get("id"))
+            for d in rows if d.get("decision_id") or d.get("id")
+        )
 
     @staticmethod
     def _same_ask(a: str, b: str) -> bool:
@@ -2419,13 +2526,15 @@ class QuestDecisionSink(EscalationSinkBase):
             log.info("escalate: reusing open decision %s rather than filing a duplicate", existing)
             return existing
         try:
+            assignee_user_id = self.resolve_assignee(escalation)
             res = self._client.create_decision(
                 escalation.summary,
                 kind=escalation.kind,
                 quest_id=escalation.quest_id,
                 team_id=self.team_for(escalation.quest_id),
-                assignee_user_id=escalation.assignee or self._default_assignee,
+                assignee_user_id=assignee_user_id,
                 default_on_silence=escalation.default_on_silence,
+                deadline=self.resolve_deadline(escalation),
             )
             # The API returns the created decision; surface its id (best-effort across field names).
             return str((res or {}).get("decision_id") or (res or {}).get("id") or "")

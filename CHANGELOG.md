@@ -7,6 +7,38 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Decision-requests gain a deadline, a validated kind, a guaranteed assignee, and quest context**
+  (`core/adapters.py`, `core/orchestrator.py`, `core/goal_runner.py`, `runner/quest_client.py`,
+  `adapters/quest_retrieval_adapter.py`). An audit found four related gaps in how QAR raises and
+  tracks "asks for you": (1) `QuestDecisionSink.escalate` sent `assignee_user_id=escalation.assignee
+  or self._default_assignee` straight through, so with BOTH empty a decision was still POSTed with
+  no `assigned_to_user_id` and sat in nobody's queue forever, silently, with no error anywhere.
+  `resolve_assignee` now tries explicit assignee -> configured default -> the quest's own owner
+  (`GET .../quests/{id}` -> `owner_user_ids[0]`), and raises (logged, no request sent) rather than
+  filing one unaddressed. (2) `Escalation` had no `deadline` and no validated `kind`: it now carries
+  `deadline: Optional[datetime]`, and the planner's decide-tool schema gained optional
+  `confirm_kind` / `confirm_deadline` (ISO or relative, e.g. "in 48h", parsed by the new
+  `core.adapters.parse_deadline`) / `confirm_default_on_silence`, threaded onto the `Escalation`
+  `_run_confirm`/`_run_clarify` raise. With no deadline given anywhere, `QuestDecisionSink` applies
+  `QAR_DECISION_DEFAULT_DEADLINE_HOURS` if configured; `QuestClient.create_decision` validates
+  `kind` against Quest's `^[a-z0-9_:-]{1,64}$` and falls back to `"approve"` rather than losing the
+  whole escalation to a 422. (3) `QuestRetrievalAdapter`'s quest context never included the quest's
+  own decisions, so a rep with no memory of past turns could re-raise a duplicate open decision or
+  re-ask something already resolved; `_query_quest_context`/`describe_source("quest/...")` now
+  render up to 10 (open first, then most recent resolved, with resolution/response/resolver) with
+  an explicit "don't duplicate / don't re-ask" instruction (new `QuestClient.list_decisions_for_quest`,
+  `list_open_decisions_for_quest` refactored to use it). Incidental fix along the way: this call
+  had ALWAYS raised `TypeError` (`list_quest_goals(quest_id, limit=20)`: the method never accepted
+  `limit`, and its real return shape is period-grouped, not a flat list), so `quest_context` queries
+  always came back `kind="error"` with no goals shown; added `flatten_quest_goals` and fixed both
+  call sites. (4) `core.goal_runner.extract_escalation_id` only matched a line that STARTED with
+  `QAR-ESCALATED:`, silently dropping a marker a worker wrapped in other text; it now matches the
+  marker anywhere within a line. For the case where the marker is missing or garbled entirely
+  (the worker's own text-based report is the only channel across the subprocess boundary),
+  `EscalationSinkBase` gained an optional, concrete `open_decision_ids_for_quest(quest_id)`
+  capability (implemented by `QuestDecisionSink` against `list_open_decisions_for_quest`), and
+  `Orchestrator._run_deep` diffs a before/after snapshot around each deep attempt to recover an
+  orphaned decision the marker never reported, pausing the run on it instead of closing done.
 - **The built-in default assistant is a roster entry you can point at: `DEFAULT_ASSISTANT_REP_ID`**
   (`runner/autopilot.py`). A quest with an EMPTY roster has always produced one plain-assistant
   batch per due pass, which is the right work and nothing the person can point at: days and a

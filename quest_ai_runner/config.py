@@ -105,7 +105,7 @@ _FILE_SCALAR_FIELDS = {
     "channel_turn_timeout_seconds", "channel_state_path",
     "corpus_root", "context_preamble",
     "poll_interval_seconds", "poll_lookahead_minutes", "max_concurrent_tasks",
-    "default_assignee_user_id", "decision_assignees",
+    "default_assignee_user_id", "decision_assignees", "decision_default_deadline_hours",
     "wait_channel_enabled", "context_poll_seconds", "wait_timeout_seconds",
     "rep_sync_direction",
     "quest_folder_map", "quest_folder_sync_direction", "quest_folder_zones", "quest_goal_sync",
@@ -337,6 +337,11 @@ class RunnerConfig:
     # what is deployment policy, so it belongs in config; the library only resolves the name.
     # Env: ``QAR_DECISION_ASSIGNEES`` as a JSON object, or ``name=id`` pairs separated by commas.
     decision_assignees: Dict[str, str] = field(default_factory=dict)
+    # Hours added to "now" as a decision's deadline when an escalation specified none. None (the
+    # default) means no deadline is synthesized -- a decision only gets one when the escalation
+    # asked for one explicitly. Env: ``QAR_DECISION_DEFAULT_DEADLINE_HOURS``. ``QuestDecisionSink``
+    # also reads that env var directly, so setting it alone (no RunnerConfig wiring) still works.
+    decision_default_deadline_hours: Optional[float] = None
 
     # --- fast lane for REAL-TIME work (context-requests from a live chat turn) ---
     # The background scan above (poll_interval_seconds, default 900s) is the right cadence for

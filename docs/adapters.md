@@ -102,12 +102,22 @@ A consumer that wires no writer gets a one-rung ladder and unchanged behaviour.
 (an unapproved outward send, an irreversible commitment). If the consumer's context preamble gives
 the worker an escalation mechanism (e.g. "create a decision-request via X"), the worker reports the
 raised decision back to the runner by printing, on its own line, `QAR-ESCALATED: <decision_id>`
-(the `ESCALATION_MARKER` contract in `core/goal_runner.py`). `SubprocessGoalRunner` parses the
-marker and returns `DeepResult(met=False, decision_id=...)` regardless of exit code, so the
-executor reports the task as `needs_you` with the decision linked — the ask shows up in the
-consumer's UI attached to the paused task instead of the task closing as done. A custom
-`DeepRunner` can set `DeepResult.decision_id` directly; `GoalRunner` normalizes `met=True` +
-`decision_id` to not-met so a paused run never reports done.
+(the `ESCALATION_MARKER` contract in `core/goal_runner.py`; matched anywhere WITHIN a line, not
+only at its start, so a worker that leads into it with other text is still caught).
+`SubprocessGoalRunner` parses the marker and returns `DeepResult(met=False, decision_id=...)`
+regardless of exit code, so the executor reports the task as `needs_you` with the decision linked,
+and the ask shows up in the consumer's UI attached to the paused task instead of the task closing
+as done. A custom `DeepRunner` can set `DeepResult.decision_id` directly; `GoalRunner` normalizes
+`met=True` + `decision_id` to not-met so a paused run never reports done.
+
+If the marker is missing entirely (the worker forgot, or its output got garbled), the run would
+otherwise close done with the decision it actually created orphaned. `Orchestrator._run_deep`
+recovers it anyway when the wired `EscalationSink` implements the OPTIONAL
+`open_decision_ids_for_quest(quest_id)` capability: it snapshots the quest's open decision ids
+before each deep attempt and, when the attempt's result carries no `decision_id`, diffs the
+snapshot again afterward: a new id is attached to the result exactly as if the marker had
+reported it. `QuestDecisionSink` implements this against `list_open_decisions_for_quest`; a sink
+implementing only `escalate` (the required surface) is unaffected, the probe is just a no-op.
 
 ## EscalationSink
 
@@ -118,11 +128,20 @@ class MyEscalation:
     def escalate(self, escalation) -> str:
         # create a decision/approval request somewhere; return its id (a string)
         return "decision_123"
+
+    # OPTIONAL: enables the orphan-decision recovery above. Return the ids of currently OPEN
+    # decisions for this quest, or an empty set if you have no way to look this up.
+    def open_decision_ids_for_quest(self, quest_id: str) -> frozenset:
+        return frozenset()
 ```
 
 The reference `QuestDecisionSink` (in `runner/quest_client.py`) raises a Quest team decision-request
-with `default_on_silence="hold"` and returns the `decision_id`, which the executor stamps onto the
-task as `needs_you`.
+and returns the `decision_id`, which the executor stamps onto the task as `needs_you`. It never
+files a decision with an empty assignee: it tries the `Escalation.assignee` given, then its
+configured `default_assignee_user_id` (`QAR_DECISION_ASSIGNEE`), then the quest's own owner, and
+raises (logged, no request sent) if none of those resolve. `default_on_silence` defaults to
+`"hold"`; an `Escalation.deadline` (or the sink's `QAR_DECISION_DEFAULT_DEADLINE_HOURS` default)
+lets a `"proceed"` decision auto-resolve at its deadline instead of blocking forever.
 
 ## GuidanceProvider (optional)
 

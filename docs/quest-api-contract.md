@@ -112,15 +112,63 @@ best-effort status note onto the task's own progress stream. See `docs/streaming
 
 ### Escalate (human-only step)
 ```
-POST /api/teams/{team_id}/decisions    { ..., "default_on_silence": "hold" }
+POST /api/teams/{team_id}/decisions
+  { "kind": "approve", "summary": "...", "quest_id": "...", "assigned_to_user_id": "...",
+    "default_on_silence": "hold", "deadline": "2026-09-25T18:00:00+00:00", "executable": {...} }
 ```
 Returns a `decision_id`. The executor stamps it onto the task via the `needs_you` report.
+
+- `kind` is 1-64 chars, `^[a-z0-9_:-]+$` (e.g. `approve`, `explicit:spend`, `notice:prod-ops`).
+  `QuestClient.create_decision` validates this client-side and falls back to `approve` on a bad
+  value, so a malformed/hallucinated kind never loses the whole escalation to a rejected request.
+- `deadline` is optional, ISO 8601. The planner can specify one as a relative form ("in 48h", "in
+  2 days") via `PlanDecision.confirm_deadline`; `core.adapters.parse_deadline` turns that into the
+  real datetime sent here. With no deadline given anywhere, `QuestDecisionSink` still applies
+  `QAR_DECISION_DEFAULT_DEADLINE_HOURS` if the deployment set it; otherwise no deadline is sent.
+- `default_on_silence` is `"hold"` (default; the decision just sits open past its deadline) or
+  `"proceed"` (the backend auto-resolves it at the deadline and the work is treated as approved).
+- `assigned_to_user_id` is **never left empty**. `QuestDecisionSink.resolve_assignee` tries, in
+  order: the `Escalation.assignee` the caller gave, the sink's configured
+  `default_assignee_user_id` (`QAR_DECISION_ASSIGNEE`), then the quest's own owner (`GET
+  /api/teams/{team_id}/quests/{quest_id}` -> `owner_user_ids[0]`). If none of those resolve, the
+  sink raises rather than POSTing an unaddressed decision that would sit in nobody's queue.
+
+### Read a quest's decisions (context + dedup)
+```
+GET /api/teams/decisions/for-quest?quest_id=...
+  -> [ { decision_id, status, summary, kind, quest_id, resolution?, response_text?,
+         resolved_by_name?, auto_resolved?, overdue? }, ... ]
+```
+Bare list, open **and** resolved, no server-side status filter. `QuestClient.list_decisions_for_quest`
+returns it as-is; `list_open_decisions_for_quest` narrows to `status == "open"` (used by the
+existing-open-decision dedup in `QuestDecisionSink._existing_open_decision`, and by Autopilot's
+HOLD gate). `QuestRetrievalAdapter` renders both halves into quest context (open first, then the
+most recent resolved ones, capped at 10) so a rep sees what has already been asked and answered on
+this quest, instead of re-raising a duplicate or re-asking something already settled.
 
 ### Close the loop
 ```
 GET  /api/teams/decisions/for-user
 POST /api/teams/decisions/{id}/resolve
 ```
+
+### The QAR-ESCALATED marker (deep/subprocess workers)
+
+A worker spawned as a separate process (`SubprocessGoalRunner`'s `claude -p`) has no direct call
+into this process's `EscalationSink` -- if its own instructions have it raise a decision directly
+against this API (using its own inherited `QUEST_API_KEY`), it reports the resulting `decision_id`
+back the only way it can: printing `QAR-ESCALATED: <decision_id>` in its final output.
+`core.goal_runner.extract_escalation_id` matches the marker **anywhere within a line**, not only
+at its start, and takes the first token after it (trailing punctuation stripped) -- a worker that
+leads into it with other text ("Note: QAR-ESCALATED: dec_123") or a bullet point is still caught.
+
+If the marker is missing or garbled entirely, the run would otherwise close done with an orphaned
+open decision nobody's task links to. `Orchestrator._run_deep` guards against exactly that: it
+snapshots the quest's open decision ids (via the optional `EscalationSink.open_decision_ids_for_quest`
+capability) before each deep attempt, and if the attempt's result carries no `decision_id`, diffs
+the snapshot again afterward. A new id that appeared is recovered and attached, and the run pauses
+on it instead of reporting done. This is best-effort (an `EscalationSink` that implements only
+`escalate` simply has no recovery capability, and the probe is silently a no-op).
 
 ### Identity check
 ```

@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 from concurrent.futures import Future, ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, FrozenSet, List, Optional, Tuple
 
 from .adapters import (
     EVENT_CARD_THREAD,
@@ -73,6 +73,7 @@ from .adapters import (
     PlanDecision,
     ProgressEvent,
     ProgressSink,
+    parse_deadline,
     RetrievalAdapter,
 )
 from .card_filter import _extract_json
@@ -789,6 +790,27 @@ DECIDE_TOOL: Dict[str, Any] = {
             "goal": {"type": ["string", "null"]},
             "deep_brief": {"type": ["string", "null"]},
             "confirm_question": {"type": ["string", "null"]},
+            "confirm_kind": {
+                "type": ["string", "null"],
+                "description": "Optional category for a confirm/clarify decision-request, "
+                               "lowercase letters/digits/underscore/colon/hyphen only, max 64 "
+                               "chars (e.g. 'approve', 'explicit:spend', 'notice:prod-ops'). "
+                               "Omit for the default 'approve' (or 'clarify' when the user is "
+                               "being asked to choose/provide input).",
+            },
+            "confirm_deadline": {
+                "type": ["string", "null"],
+                "description": "When this decision should be resolved by: an ISO datetime, or a "
+                               "short relative form like 'in 48h' / 'in 2 days'. Omit for no "
+                               "deadline.",
+            },
+            "confirm_default_on_silence": {
+                "type": ["string", "null"],
+                "enum": ["hold", "proceed", None],
+                "description": "What happens if nobody answers by the deadline: 'proceed' lets "
+                               "the decision auto-resolve and the work continue; 'hold' (the "
+                               "default) leaves it paused until a human answers.",
+            },
             "model_tier": {"type": ["string", "null"], "enum": ["haiku", "sonnet", "opus", None]},
             "subquestions": {"type": "array", "items": {"type": "string"}},
             "deep_subtasks": {
@@ -1396,6 +1418,20 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
     else:
         card_thread_raw = card_thread_raw.strip()
 
+    # confirm/clarify escalation extras: all optional, all normalized to None on anything that
+    # is not a plain non-empty string (a hallucinated type, empty string) -- the fail-safe is
+    # identical to every other optional planner field above: a bad value degrades to "not given",
+    # never raises or gets forwarded as garbage to the escalation sink.
+    confirm_kind_raw = raw.get("confirm_kind")
+    confirm_kind_raw = confirm_kind_raw.strip() if isinstance(confirm_kind_raw, str) and confirm_kind_raw.strip() else None
+    confirm_deadline_raw = raw.get("confirm_deadline")
+    confirm_deadline_raw = confirm_deadline_raw.strip() if isinstance(confirm_deadline_raw, str) and confirm_deadline_raw.strip() else None
+    confirm_silence_raw = raw.get("confirm_default_on_silence")
+    if not (isinstance(confirm_silence_raw, str) and confirm_silence_raw.strip().lower() in ("hold", "proceed")):
+        confirm_silence_raw = None
+    else:
+        confirm_silence_raw = confirm_silence_raw.strip().lower()
+
     return PlanDecision(
         action=action,
         reads=clean_reads,
@@ -1411,6 +1447,9 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
         clarification=clarification,
         mode_signal=mode_signal,
         card_thread=card_thread_raw,
+        confirm_kind=confirm_kind_raw,
+        confirm_deadline=confirm_deadline_raw,
+        confirm_default_on_silence=confirm_silence_raw,
     )
 
 
@@ -5830,6 +5869,11 @@ class Orchestrator:
             ]
             return OrchestratorResult(kind="cancelled", goals=_cancelled_goals,
                                       rationale=plan.rationale, exit_reason="cancelled")
+        # The single quest this run is about, if any -- used below only for the orphan-decision
+        # recovery probe (see ``quest_open_decision_ids``/``find_new_decision_id``). A multi-quest
+        # conversation's ``quest_ids`` is not consulted here: the probe is a best-effort narrowing
+        # to ONE quest's decisions, and guessing among several would be worse than skipping it.
+        quest_id = (ctx_meta or {}).get("quest_id")
         subtasks = (plan.deep_subtasks or [])[: self.cfg.max_deep_subtasks]
         if not subtasks:
             subtasks = [{"goal": _truncate_goal(plan.goal or f"Fully address the request: {user_message}"),
@@ -6158,9 +6202,22 @@ class Orchestrator:
                 # (the first attempt or a retry) acts on the latest input, not a stale request.
                 _new = self._drain_pending(pending_inputs)
                 run_brief = current_brief if not _new else (current_brief + "\n\n" + _new)
+                # Snapshot BEFORE the run so a decision the worker raises directly against the
+                # consumer's API (out of band from this sink) can be recovered below even if the
+                # worker never prints (or garbles) the QAR-ESCALATED marker.
+                before_decision_ids = self.quest_open_decision_ids(quest_id)
                 res = _do_run(run_brief, run_model, active_runner,
                               resume_session_id=resume_session, max_turns=attempt_turns)
                 resume_session = None   # consumed: a continuation is offered per attempt, not sticky
+                if res.decision_id is None and not getattr(res, "deferred", False):
+                    recovered = self.find_new_decision_id(quest_id, before_decision_ids)
+                    if recovered:
+                        log.info("deep run for quest %s created decision %s without printing a "
+                                "QAR-ESCALATED marker; recovered it via the escalation sink "
+                                "instead of closing the task done with it orphaned",
+                                quest_id, recovered)
+                        res.decision_id = recovered
+                        res.met = False
                 tokens_used += max(0, getattr(res, "tokens", 0) or 0)
                 # ASYNC HAND-OFF: the runner queued the real run to finish out-of-band (its
                 # ``output`` is a "task #N launched"-style sentinel, not work product). Re-verifying
@@ -7123,6 +7180,45 @@ class Orchestrator:
             pass
         return s[:_CONCISE_DECISION_LIMIT].rstrip() + " [...]"
 
+    def quest_open_decision_ids(self, quest_id: Optional[str]) -> FrozenSet[str]:
+        """Best-effort snapshot of ``quest_id``'s currently open decision ids, or empty.
+
+        Used to recover a decision a deep worker created directly against the consumer's API (out
+        of band from this process's own escalation sink) but failed to report back via the
+        ``QAR-ESCALATED`` marker: diffing a before/after snapshot around the run finds it without
+        depending on the worker's own text. Empty when there is no quest_id, no escalation sink is
+        wired, or the wired sink does not support the lookup (an ordinary ``EscalationSink``
+        implementing only ``escalate``) -- never raises.
+        """
+        if not quest_id or self.escalation is None:
+            return frozenset()
+        probe = getattr(self.escalation, "open_decision_ids_for_quest", None)
+        if not callable(probe):
+            return frozenset()
+        try:
+            return frozenset(probe(quest_id) or ())
+        except Exception:  # noqa: BLE001 — a failed probe must never break the run
+            return frozenset()
+
+    def find_new_decision_id(self, quest_id: Optional[str], before: FrozenSet[str]) -> Optional[str]:
+        """A decision id that appeared for ``quest_id`` since ``before`` was captured, or None.
+
+        Orphan-recovery fallback, only consulted when a deep run's OWN result carried no
+        decision_id (the ``QAR-ESCALATED`` marker path already found nothing). Picks the single
+        new id; if more than one appeared in the same run window, logs it and takes the first —
+        attributing a specific one to THIS run precisely is what the marker convention exists to
+        avoid needing, and any orphan surfacing to a human beats one staying invisible.
+        """
+        after = self.quest_open_decision_ids(quest_id)
+        new_ids = after - before
+        if not new_ids:
+            return None
+        if len(new_ids) > 1:
+            log.warning("multiple new open decisions appeared for quest %s during one deep run "
+                       "with no QAR-ESCALATED marker (%s); attaching the first",
+                       quest_id, sorted(new_ids))
+        return sorted(new_ids)[0]
+
     # --- STEP 1: User Input Understanding ------------------------------------
 
     def _needs_context_to_understand(self, msg: str) -> bool:
@@ -7306,9 +7402,10 @@ class Orchestrator:
                     # Condense to a concise done-standard: a decision summary is stored as a goal
                     # CONDITION, never a place to dump raw text.
                     summary=self._concise_decision_summary(question_with_opts),
-                    kind="clarify" if options or allow_free else "approve",
+                    kind=plan.confirm_kind or ("clarify" if options or allow_free else "approve"),
                     quest_id=quest_id,
-                    default_on_silence="hold"))
+                    default_on_silence=plan.confirm_default_on_silence or "hold",
+                    deadline=parse_deadline(plan.confirm_deadline)))
             except Exception:  # noqa: BLE001
                 decision_id = None
 
@@ -7330,7 +7427,9 @@ class Orchestrator:
                 decision_id = self.escalation.escalate(Escalation(
                     # Condense long questions: the summary is stored as a goal CONDITION.
                     summary=self._concise_decision_summary(question),
-                    kind="approve", quest_id=quest_id, default_on_silence="hold"))
+                    kind=plan.confirm_kind or "approve", quest_id=quest_id,
+                    default_on_silence=plan.confirm_default_on_silence or "hold",
+                    deadline=parse_deadline(plan.confirm_deadline)))
             except Exception:  # noqa: BLE001 — escalation failure still returns the question
                 decision_id = None
         return OrchestratorResult(kind="confirm", question=question, decision_id=decision_id,

@@ -1057,6 +1057,11 @@ def test_extract_escalation_id():
     assert extract_escalation_id("  QAR-ESCALATED:   dec_a  \nmore\nQAR-ESCALATED: dec_b") == "dec_b"
     # A bare marker with no id is not an escalation.
     assert extract_escalation_id("QAR-ESCALATED:\n") is None
+    # The marker anywhere WITHIN a line (not only at its start) still counts -- a worker's final
+    # message can lead into it or wrap it in other text.
+    assert extract_escalation_id("Note: QAR-ESCALATED: dec_mid_line") == "dec_mid_line"
+    assert extract_escalation_id("- QAR-ESCALATED: dec_bullet.") == "dec_bullet"
+    assert extract_escalation_id("(see QAR-ESCALATED: dec_paren)") == "dec_paren"
 
 
 def test_subprocess_runner_parses_escalation_marker(monkeypatch):

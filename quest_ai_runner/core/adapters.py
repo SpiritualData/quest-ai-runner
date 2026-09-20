@@ -43,8 +43,10 @@ whole point: a stranger's org can adopt the library by implementing five small s
 from __future__ import annotations
 
 import enum
+import re
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Protocol, runtime_checkable
+from datetime import datetime, timedelta, timezone
+from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, runtime_checkable
 
 
 # ---------------------------------------------------------------------------
@@ -232,6 +234,18 @@ class PlanDecision:
     # (the standing fail-safe: an ambiguous topic assignment must never cost a turn). A topic
     # switch is NOT a mode signal and never touches the brainstorm latch.
     card_thread: Optional[str] = None
+    # The escalation this confirm/clarify raises, all optional and all defaulting to the same
+    # behavior as before they existed: a decision KIND (Quest's ``^[a-z0-9_:-]{1,64}$``, e.g.
+    # "approve", "explicit:spend", "notice:prod-ops" -- validated/defaulted again at the Quest
+    # boundary in ``QuestClient.create_decision``, so a hallucinated value here degrades rather
+    # than losing the escalation); a deadline the decision should be resolved by, as the planner
+    # wrote it (an ISO datetime, or a short relative form like "in 48h" -- parsed by
+    # ``core.adapters.parse_deadline``, unparseable or absent means no deadline); and
+    # "hold" | "proceed" for what happens if nobody answers by the deadline ("proceed" auto-
+    # resolves the decision server-side; anything else, including no deadline at all, "hold"s).
+    confirm_kind: Optional[str] = None
+    confirm_deadline: Optional[str] = None
+    confirm_default_on_silence: Optional[str] = None
 
 
 @dataclass
@@ -292,6 +306,52 @@ class Escalation:
     quest_id: Optional[str] = None
     assignee: Optional[str] = None              # consumer-defined routing key
     default_on_silence: str = "hold"
+    # WHEN this decision should be resolved by, an aware datetime or None for no deadline. A
+    # sink that supports deadlines (``QuestDecisionSink``) applies its own configured default
+    # (``QAR_DECISION_DEFAULT_DEADLINE_HOURS``) when this is left None -- callers that never
+    # think about deadlines still get one if the deployment wants that; an explicit value here
+    # always wins.
+    deadline: Optional[datetime] = None
+
+
+# A short relative form the planner can emit instead of computing a real timestamp itself:
+# "in 48h", "in 2 days", "in 30m". Kept intentionally small (hours/days/minutes) -- a deadline
+# on a human decision is never usefully more precise than that.
+RELATIVE_DEADLINE_RE = re.compile(
+    r"^in\s+(\d+(?:\.\d+)?)\s*(hours?|hrs?|h|days?|d|minutes?|mins?|m)$",
+    re.IGNORECASE,
+)
+
+
+def parse_deadline(raw: Optional[str], *, now: Optional[datetime] = None) -> Optional[datetime]:
+    """Parse a planner-supplied deadline string into an aware UTC datetime, or None.
+
+    Accepts either a full ISO datetime (``2026-09-25T18:00:00Z`` or with a numeric UTC offset) or
+    the short relative form above. Anything else -- missing, empty, unparseable -- returns None,
+    exactly as if no deadline had been given: a malformed deadline must degrade to "no deadline",
+    never raise into the escalation path.
+    """
+    text = (raw or "").strip()
+    if not text:
+        return None
+    m = RELATIVE_DEADLINE_RE.match(text)
+    if m:
+        amount = float(m.group(1))
+        unit = m.group(2).lower()
+        base = now if now is not None else datetime.now(timezone.utc)
+        if unit.startswith("h"):
+            return base + timedelta(hours=amount)
+        if unit.startswith("d"):
+            return base + timedelta(days=amount)
+        return base + timedelta(minutes=amount)
+    iso_text = text[:-1] + "+00:00" if text.endswith("Z") else text
+    try:
+        parsed = datetime.fromisoformat(iso_text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
 
 
 # ---------------------------------------------------------------------------
@@ -1140,6 +1200,19 @@ class DeepRunnerBase(abc.ABC):
 class EscalationSinkBase(abc.ABC):
     @abc.abstractmethod
     def escalate(self, escalation: Escalation) -> str: ...
+
+    def open_decision_ids_for_quest(self, quest_id: str) -> FrozenSet[str]:
+        """Best-effort: ids of currently OPEN decisions for ``quest_id``, or empty.
+
+        Concrete (not abstract) so every existing subclass keeps working unchanged. This is an
+        OPTIONAL capability a caller can use to recover a decision created OUT OF BAND from this
+        sink instance -- e.g. a subprocess deep worker that raised a decision directly against the
+        consumer's API using its own credentials and then failed to report the id back (a missing
+        or malformed ``QAR-ESCALATED:`` marker) -- by diffing a before/after snapshot instead of
+        leaving it permanently orphaned. A sink with no way to look this up returns empty, which a
+        caller must read as "nothing new found," never as "confirmed none exist."
+        """
+        return frozenset()
 
 
 class ProgressSinkBase(abc.ABC):

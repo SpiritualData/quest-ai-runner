@@ -228,7 +228,8 @@ class Poller:
         # Default the escalation sink to a Quest decision-request sink if the consumer didn't set one.
         if config.escalation is None and self.client.configured:
             config.escalation = QuestDecisionSink(
-                self.client, default_assignee_user_id=config.default_assignee_user_id)
+                self.client, default_assignee_user_id=config.default_assignee_user_id,
+                default_deadline_hours=config.decision_default_deadline_hours)
         # Personas (opt-in; see runner/personas.py + RunnerConfig.personas): compose a
         # rep_sync_resolver from declarative config when the consumer did not already wire one by
         # hand. Same in-place write-back style build_orchestrator uses for deep_runner — a consumer

@@ -26,6 +26,7 @@ import inspect
 import json
 import logging
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -203,14 +204,24 @@ def _run_goal_accepts_resume_session_id(runner: Any) -> bool:
 # escalate are unaffected; the marker simply never appears.
 ESCALATION_MARKER = "QAR-ESCALATED:"
 
+# Matches the marker ANYWHERE in a line (not just at its start), capturing the first
+# whitespace-delimited token that follows it as the candidate id.
+ESCALATION_MARKER_ANYWHERE_RE = re.compile(re.escape(ESCALATION_MARKER) + r"\s*(\S+)")
+
 
 def extract_escalation_id(output: str) -> Optional[str]:
-    """Return the decision id from the LAST ``QAR-ESCALATED: <id>`` marker line, or None."""
+    """Return the decision id from the LAST ``QAR-ESCALATED: <id>`` marker, or None.
+
+    The marker is matched anywhere WITHIN a line, not only when it starts one: a worker's final
+    message can lead into it or wrap it in other text ("Note: QAR-ESCALATED: dec_123" or a bullet
+    list item), and requiring the line to start with the marker silently dropped those runs --
+    they closed as done with an orphaned open decision instead of pausing on it. Trailing
+    punctuation the model might tack on (a period, a closing paren/quote) is stripped from the id.
+    """
     decision_id: Optional[str] = None
     for line in (output or "").splitlines():
-        stripped = line.strip()
-        if stripped.startswith(ESCALATION_MARKER):
-            candidate = stripped[len(ESCALATION_MARKER):].strip()
+        for match in ESCALATION_MARKER_ANYWHERE_RE.finditer(line):
+            candidate = match.group(1).strip().rstrip(").,;:\"'")
             if candidate:
                 decision_id = candidate
     return decision_id
