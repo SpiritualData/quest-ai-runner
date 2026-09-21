@@ -484,6 +484,18 @@ def render_card_content_blocks(
     return blocks
 
 
+def _block_date(block: Dict[str, Any]) -> str:
+    """A content item's ``ts`` as ``YYYY-MM-DD``, or ``""`` when it has none/unparseable."""
+    try:
+        ts = float(block.get("ts") or 0.0)
+        if ts <= 0:
+            return ""
+        import datetime as _dt
+        return _dt.datetime.fromtimestamp(ts, _dt.timezone.utc).strftime("%Y-%m-%d")
+    except Exception:  # noqa: BLE001 -- a date is a nicety, never a reason to lose the item
+        return ""
+
+
 def render_block_lines(block: Dict[str, Any]) -> List[str]:
     """Render ONE content block to its context lines (header + indented body).
 
@@ -498,12 +510,20 @@ def render_block_lines(block: Dict[str, Any]) -> List[str]:
     name/id). NAMING the target is what makes a reference reusable: the next worker sees not just
     the resolved content but WHERE it came from, so it can re-read, edit, or search around it
     instead of rediscovering the location. A note (no external target) renders as before.
+
+    The header also carries WHEN the item was learned (``ts``, as a plain ``YYYY-MM-DD``). ``ts``
+    used to feed ranking only and never reached the prompt, so every item read as equally present:
+    a plan captured weeks ago ("Thursday: the long run") came back as this week's plan, stated in
+    the present tense with nothing in the context to date it (reported 2026-09-21). An item with no
+    usable ``ts`` renders exactly as before.
     """
     itype = block.get("type", "note")
     why = block.get("why", "")
     rendered = block.get("text", "")
     label = locator_label(block)
-    head = f"  - ({itype})"
+    head = f"  - ({itype}"
+    when = _block_date(block)
+    head += f", learned {when})" if when else ")"
     if label:
         head += f" {label}"
         if why:

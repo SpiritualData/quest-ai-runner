@@ -7,6 +7,18 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Off-subject context leaves no trace in the answer, and notes carry the date they were written**
+  (`core/orchestrator.py`, `core/context_doctrine.py`, `adapters/card_content_render.py`). A chat
+  about a work quest answered with a different quest's personal material and then told the user it
+  was doing so. Two instructions caused the second half of that: the closing instruction in
+  `grounding_answer_tail` and point 3 of `SPECIFICITY_GATE` both said to "name what you DID find"
+  when the context was off-subject, which is an instruction to describe the very material that
+  should not appear. Both now say off-subject material leaves no trace: do not answer from it, do
+  not summarise, allude to, or name it, and do not announce that anything is being set aside. The
+  sibling-referent list gained "quest", since one quest is often another part of the person's life
+  (work versus personal). Separately, `render_block_lines` emitted note blocks with no date at all,
+  so a plan written a week ago read as current; a block with a `ts` now renders as
+  `(note, learned YYYY-MM-DD)`.
 - **Decision-requests gain a deadline, a validated kind, a guaranteed assignee, and quest context**
   (`core/adapters.py`, `core/orchestrator.py`, `core/goal_runner.py`, `runner/quest_client.py`,
   `adapters/quest_retrieval_adapter.py`). An audit found four related gaps in how QAR raises and
