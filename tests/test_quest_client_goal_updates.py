@@ -288,3 +288,43 @@ def test_list_goal_notes_falls_back_directly_when_no_quest_id():
 def test_list_goal_notes_returns_empty_list_when_both_paths_fail():
     client = client_failing_request()
     assert client.list_goal_notes("goal_test1", quest_id="quest_test123") == []
+
+
+# --- the fallback fan-out is BOUNDED ----------------------------------------------------------
+# Why these two exist: on 2026-09-20 the bulk route 404'd (it is not on the deployed backend), the
+# fallback fanned out over a 216-goal quest, and the resulting 429s took down the autopilot pass
+# that was mid-flight -- its own POST /api/assistant-tasks came back rate-limited, so Joshua's
+# Sunday brief was never created and never sent.
+
+def _client_counting_fanout(goal_count, *, rate_limit_after=None):
+    """A client whose bulk route 404s, counting how many per-goal calls the fallback makes."""
+    client = QuestClient("https://quest.example", "test-api-key", team_id="team_test1")
+    calls = []
+
+    def fake_request(method, path, *, params=None, body=None, timeout_override=None):
+        if path.endswith("/goal-updates"):
+            raise QuestApiError(f"Quest API GET {path} -> 404: Not Found", status=404)
+        calls.append(path)
+        if rate_limit_after is not None and len(calls) > rate_limit_after:
+            raise QuestApiError(f"Quest API GET {path} -> 429: RATE_LIMITED", status=429)
+        return {"updates": [{"updateId": f"gupd_{len(calls)}"}]}
+
+    client._request = fake_request  # type: ignore[assignment]
+    client.list_quest_goals = lambda quest_id, **kw: {  # type: ignore[assignment]
+        "period_groups": [{"goals": [{"id": f"goal_{i}"} for i in range(goal_count)]}]}
+    return client, calls
+
+
+def test_fallback_fanout_is_capped_on_a_quest_with_many_goals():
+    from quest_ai_runner.runner.quest_client import GOAL_UPDATE_FANOUT_CAP
+    client, calls = _client_counting_fanout(GOAL_UPDATE_FANOUT_CAP + 50)
+    grouped = client.list_quest_goal_updates("quest_test1")
+    assert len(calls) == GOAL_UPDATE_FANOUT_CAP
+    assert len(grouped) == GOAL_UPDATE_FANOUT_CAP
+
+
+def test_fallback_fanout_stops_when_the_backend_rate_limits_it():
+    client, calls = _client_counting_fanout(10, rate_limit_after=3)
+    grouped = client.list_quest_goal_updates("quest_test1")
+    assert len(calls) == 4          # three answered, the fourth refused and ended the fan-out
+    assert len(grouped) == 3        # what was read is kept, not thrown away

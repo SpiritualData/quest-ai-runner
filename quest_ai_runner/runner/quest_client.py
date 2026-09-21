@@ -106,6 +106,18 @@ class QuestApiError(RuntimeError):
 # degrades to "approve" instead of losing the whole escalation to a 422.
 DECISION_KIND_RE = re.compile(r"^[a-z0-9_:-]{1,64}$")
 
+# How many goals the ``list_quest_goal_updates`` FALLBACK may fan out over before it stops.
+# The bulk route it prefers (``GET /api/planning/quests/{id}/goal-updates``) does not exist on
+# every backend, and where it 404s this client falls back to one call PER GOAL. Spiritual Data's
+# funding quest carries 216 goals, so that fallback fired 216 requests against a 60-per-minute
+# limit and rate-limited the caller out of the API: on 2026-09-20 it took down the Sunday
+# autopilot pass itself, whose own POST /api/assistant-tasks came back 429, so the brief Joshua
+# reads was never created and never mailed. The fan-out is a best-effort convenience (goal
+# check-ins are context, not the work), so it is bounded: read a sensible number of goals, say
+# loudly in the log how many were left unread, and never spend a whole quest's rate-limit budget
+# on it. The proper fix is the bulk route on the backend, which makes this whole path dead code.
+GOAL_UPDATE_FANOUT_CAP = 40
+
 # Env var naming the hours to add to "now" as a decision's deadline when the escalation itself
 # specified none. Unset (the default) means no deadline is ever synthesized here.
 QAR_DECISION_DEFAULT_DEADLINE_HOURS_ENV_VAR = "QAR_DECISION_DEFAULT_DEADLINE_HOURS"
@@ -1317,7 +1329,8 @@ class QuestClient:
         compose: the server applies its overall limit FIRST and trims per goal afterwards, so
         leaving it at the server default (50) would silently drop the oldest goals' check-ins on a
         quest with many goals, whatever ``limit_per_goal`` said. 200 is the server's own maximum.
-        The fan-out path has no such cap: it asks each goal for ``limit_per_goal`` directly.
+        The fan-out path asks each goal for ``limit_per_goal`` directly, over at most
+        ``GOAL_UPDATE_FANOUT_CAP`` goals, and stops early if the backend rate-limits it.
 
         Returns {} when both paths come up empty (no goals, or every call failed).
         """
@@ -1341,11 +1354,35 @@ class QuestClient:
             for group in (self.list_quest_goals(quest_id).get("period_groups") or [])
             for goal in (group.get("goals") or [])
         ]
+        ids = [gid for gid in ids if gid]
+        if len(ids) > GOAL_UPDATE_FANOUT_CAP:
+            log.warning(
+                "list_quest_goal_updates: quest %s has %d goals and this backend has no bulk "
+                "goal-updates route, so the per-goal fan-out is capped at %d; %d goal(s) go "
+                "unread this pass rather than spending the whole rate-limit budget here",
+                quest_id, len(ids), GOAL_UPDATE_FANOUT_CAP, len(ids) - GOAL_UPDATE_FANOUT_CAP)
+            ids = ids[:GOAL_UPDATE_FANOUT_CAP]
         grouped = {}
         for gid in ids:
-            if not gid:
+            # Called through ``_request`` rather than ``list_goal_updates`` ON PURPOSE: that
+            # method swallows every failure into ``[]``, so a rate-limited fan-out kept firing
+            # the remaining calls and kept being refused. Here a 429 STOPS the fan-out, which is
+            # what a backend saying "slow down" is asking for.
+            try:
+                resp = self._request(
+                    "GET", f"/api/planning/goals/{gid}/updates",
+                    params={"limit": limit_per_goal})
+            except (QuestApiError, QuestNotConfigured) as e:
+                if getattr(e, "status", None) == 429:
+                    log.warning(
+                        "list_quest_goal_updates: rate limited partway through quest %s's "
+                        "per-goal fan-out (%d of %d goals read); stopping here so the rest of "
+                        "this run keeps its API budget", quest_id, len(grouped), len(ids))
+                    break
+                log.warning("list_quest_goal_updates: goal %s failed: %s", gid, e)
                 continue
-            updates = self.list_goal_updates(gid, limit=limit_per_goal)
+            updates = (list(resp.get("updates") or []) if isinstance(resp, dict)
+                       else list(resp) if isinstance(resp, list) else [])
             if updates:
                 grouped[gid] = updates
         return grouped
