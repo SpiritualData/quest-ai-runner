@@ -316,6 +316,11 @@ class Poller:
             # What has changed on each quest since a run last looked at it, on every channel the
             # quest itself asks for. None when the consumer switched it off.
             update_engine=self._update_engine,
+            # The lane's own account, stamped as the assignee of the work a pass creates, so the
+            # lane that created it can discover and run it (discovery is owner-scoped). Without
+            # it the backend makes the quest's human owner the executor and the batch is
+            # invisible to every lane -- see AutopilotPass._lane_user_id.
+            lane_user_id=config.lane_user_id,
         )
         # Capabilities this runner can HONESTLY report, derived from the wired adapters
         # (corpus=FilesAdapter/corpus, code=deep-runner, web=deep-runner can browse via Claude

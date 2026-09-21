@@ -1750,8 +1750,18 @@ class AutopilotPass:
                  adopt_recurring_default: Optional[bool] = None,
                  quest_folder_map: Optional[Dict[str, str]] = None,
                  update_engine: Optional[UpdateEngine] = None,
+                 lane_user_id: Optional[str] = None,
                  now: Optional[Callable[[], datetime]] = None):
         self._client = client
+        # The account this lane authenticates as (RunnerConfig.lane_user_id), stamped as the
+        # assignee of every task this pass creates. WHY (incident 2026-09-20): a created task with
+        # no assignee gets the QUEST'S OWNER as its executor, and task discovery is owner-scoped,
+        # so on a human-owned quest the pass filed its work batch and no lane could ever see it.
+        # The funding quest's passes ran, created their batch, and the batch sat `queued` for days
+        # -- so no result existed, and the quest mailer had nothing to send. The poller already
+        # stamps this on the PASS row for exactly this reason (see _create_quest_pass); the work
+        # the pass creates needs it just as much. None keeps the old default-executor behaviour.
+        self._lane_user_id = (lane_user_id or "").strip() or None
         self._update_engine = update_engine
         self._team_id = team_id or ""
         # Which team a given quest's work belongs on, for a lane that serves several teams
@@ -2765,6 +2775,9 @@ class AutopilotPass:
             task_kind=AUTOPILOT_WORK_KIND,
             status="suggested" if needs_approval else "queued",
         )
+        if self._lane_user_id:
+            # The lane that creates the work is the lane that runs it -- see ``_lane_user_id``.
+            kwargs["assignee_user_id"] = self._lane_user_id
         if persona:
             # Structural persona routing. It also rides in the text (some consumers resolve from
             # prose), but a field a resolver can read beats one it has to parse.

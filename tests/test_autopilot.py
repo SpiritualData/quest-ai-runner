@@ -2110,3 +2110,34 @@ def test_the_eligible_quest_listing_covers_every_configured_team():
     client.quest_list_teams = []
     AutopilotPass(client, team_id="team1", now=_now)._eligible_quests()
     assert client.quest_list_teams == ["team1"]
+
+
+# --- the work a pass creates must be runnable by the lane that created it -----------------------
+
+def test_created_work_carries_the_lane_account_as_assignee():
+    """Without this the batch is filed to the quest's human owner and no lane can ever run it.
+
+    Discovery is owner-scoped. A ``create_task`` that names no assignee gets the QUEST'S OWNER as
+    its executor, so on a human-owned quest the pass filed its work and nothing picked it up: the
+    funding quest's batch sat ``queued`` for days, produced no result, and the quest mailer
+    therefore had nothing to send, which read from the outside as "autopilot never ran"
+    (2026-09-20). The poller already stamps the lane account on the PASS row for the same reason.
+    """
+    q1 = _quest("q1")
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))}
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals)
+    passer = AutopilotPass(client, team_id="team1", lane_user_id="acct_app", now=_now)
+    passer.run({"text": "autopilot pass"})
+    assert client.created_tasks
+    assert all(t.get("assignee_user_id") == "acct_app" for t in client.created_tasks)
+
+
+def test_created_work_has_no_assignee_when_the_lane_names_no_account():
+    """Unconfigured lanes keep the old default-executor behaviour, byte for byte."""
+    q1 = _quest("q1")
+    goals = {"q1": _goals_payload(("day", "2026-07-12", [_goal("g1")]))}
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest=goals)
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+    passer.run({"text": "autopilot pass"})
+    assert client.created_tasks
+    assert all("assignee_user_id" not in t for t in client.created_tasks)
