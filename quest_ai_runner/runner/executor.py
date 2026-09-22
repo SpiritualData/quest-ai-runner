@@ -667,7 +667,15 @@ class TaskExecutor:
         # model_hint: an optional per-task model/tier string stored by the consumer on the task
         # document (e.g. "opus", or any string the consumer's ModelRegistry understands).
         # Threaded into the orchestrator so the registry can honor it. None = default behavior.
-        model_hint: Optional[str] = task.get("model") or None
+        #
+        # TWO field names, in priority order, because a consumer may separate the two things this
+        # string used to conflate: "deep_run_model" pins the literal model for THIS deep run, while
+        # "model" may carry only the consumer's own tier for its lightweight assistant calls. When a
+        # consumer sets both, the deep-run field is the one that is about this execution, so it
+        # wins; when it sets only "model" (every task written before the split, and every consumer
+        # that never made it), behaviour is exactly as before. This mirrors the same precedence on
+        # the in-process path, so a task runs on the same model whichever lane picks it up.
+        model_hint: Optional[str] = task.get("deep_run_model") or task.get("model") or None
         # resume_session_id (optional, additive): the Claude session a PREVIOUS run on this same
         # thread left behind, handed back by the backend so this run opens holding what that run
         # read and decided instead of rediscovering it. Absent on a first run, on a backend that

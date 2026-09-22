@@ -1541,6 +1541,48 @@ def test_executor_task_without_model_field_uses_planner_tier():
     assert provider.answer_models == [expected_fast, expected_balanced]
 
 
+def test_executor_deep_run_model_wins_over_model():
+    """A consumer that separates the two fields gets the DEEP one honored for the deep run.
+
+    quest-backend split its old conflated ``model`` field in two: ``model`` now carries only the
+    tier for its own lightweight assistant calls, while ``deep_run_model`` pins the literal model
+    for THIS execution. A task carrying both must run on ``deep_run_model``; reading ``model``
+    here would silently run the deep work on the assistant-call tier instead.
+    """
+    provider = _ModelCapturingProvider(decisions=[
+        {"action": "answer", "model_tier": "haiku", "rationale": "ok"},
+    ])
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _brain(provider))
+    out = ex.execute({"id": "tmh4", "text": "say hi", "model": "fast", "deep_run_model": "opus"})
+    assert out.status == "done"
+    from quest_ai_runner.core.model_registry import ModelRegistry
+    registry = ModelRegistry(provider)
+    expected_fast = registry.resolve_tier("fast")
+    expected_opus = registry.resolve_tier("opus")
+    # STAGE 1's cheap goal-condition call is always on "fast"; the hinted answer call must be opus.
+    assert provider.answer_models == [expected_fast, expected_opus]
+
+
+def test_executor_falls_back_to_model_when_no_deep_run_model():
+    """Every task written before the split, and every consumer that never made it, is unchanged.
+
+    ``deep_run_model`` absent (or empty) leaves ``model`` as the hint, exactly as before.
+    """
+    provider = _ModelCapturingProvider(decisions=[
+        {"action": "answer", "model_tier": "haiku", "rationale": "ok"},
+    ])
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _brain(provider))
+    out = ex.execute({"id": "tmh5", "text": "say hi", "model": "opus", "deep_run_model": None})
+    assert out.status == "done"
+    from quest_ai_runner.core.model_registry import ModelRegistry
+    registry = ModelRegistry(provider)
+    expected_fast = registry.resolve_tier("fast")
+    expected_opus = registry.resolve_tier("opus")
+    assert provider.answer_models == [expected_fast, expected_opus]
+
+
 def test_executor_task_model_none_is_same_as_absent():
     """Explicit ``model=None`` on a task is the same as omitting it entirely."""
     provider = _ModelCapturingProvider(decisions=[
