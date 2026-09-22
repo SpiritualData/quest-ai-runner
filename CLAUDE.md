@@ -61,10 +61,16 @@ and keep the tests green.
 
 ## Before you commit or push
 
-1. Run the tests — they're offline (no network, no API key):
+1. **Run only the tests your change touches, never the full `tests/` suite unless a human
+   explicitly asks for it, and never make a full run a blocker to commit.** Most of this suite is
+   offline, but parts of it (context assembly, planner/verifier paths) make real LLM calls, so a
+   full run is slow and burns real spend; one run already had to be killed mid-flight for exactly
+   that reason (2026-09-19). Name the specific test file(s) your change touches and run those:
    ```bash
-   python -m pytest -q
+   python -m pytest -q tests/test_the_file_you_touched.py
    ```
+   Once the targeted files pass, commit. If you want the full suite run for extra confidence, ask
+   for it as its own separate step, never as a gate in front of a commit that's otherwise ready.
 2. Scan your staged change for secrets/PII before committing:
    ```bash
    git diff --cached | grep -nE 'qsk_[A-Za-z0-9]|sk-ant-|/home/|@[A-Za-z0-9.-]+\.(com|org)|[0-9a-f]{24}' \
