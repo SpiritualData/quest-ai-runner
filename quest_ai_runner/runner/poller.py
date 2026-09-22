@@ -1370,7 +1370,7 @@ class Poller:
         # that runs forever)". That is false for every path where the pass runs and SKIPS: a
         # gate-skipped quest returns before ``_update_pass_bookkeeping`` ever runs (see
         # ``AutopilotPass.run``), so nothing stamps ``last_pass_at`` and the request stays pending.
-        # A "Run now" pressed on a day the quest's roster excludes therefore span a closed loop:
+        # A "Run now" pressed on a day the quest's roster excludes therefore spun a closed loop:
         # ``_expected_quest_occurrence`` returned TODAY at the current minute, the created pass was
         # due on sight, it ran, the day rule skipped it, it closed leaving no open series, and the
         # next scan two minutes later created another one. Nothing bounded it but the calendar.
