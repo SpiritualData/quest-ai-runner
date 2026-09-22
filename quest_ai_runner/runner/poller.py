@@ -169,6 +169,19 @@ def _foreign_series_looks_alive(occ: Dict[str, Any], entry: Dict[str, Any],
     return age.days < _FOREIGN_SERIES_STALE_AFTER_DAYS
 
 
+def _run_request_signature(quest_id: str, entry: Dict[str, Any]) -> str:
+    """The dedup key for ONE pending "Run now" on one quest, or ``""`` when none is pending.
+
+    Keyed on the request's own ``run_requested_at`` instant, so pressing the button again is a
+    different request and gets its own pass, while the SAME press can only ever be served once.
+    Stored in the lane's ordinary ``StateStore``, the same place a task's signature lives, so it
+    survives a restart and needs no new storage.
+    """
+    if not quest_id or not run_requested(entry):
+        return ""
+    return f"autopilot-run-request:{quest_id}:{entry.get('run_requested_at')}"
+
+
 def _task_signature(task: Dict[str, Any]) -> str:
     """A stable per-task signature so each task fires exactly once.
 
@@ -1095,7 +1108,8 @@ class Poller:
         entry = self._quest_schedule_snapshot().get(quest_id)
         return (entry or {}).get("run_timezone") or None
 
-    def _expected_quest_occurrence(self, entry: Dict[str, Any]) -> Tuple[str, str]:
+    def _expected_quest_occurrence(self, entry: Dict[str, Any], *,
+                                   honour_run_request: bool = True) -> Tuple[str, str]:
         """The catch-up formula (autopilot spec A3): ``today_in_tz`` if the quest's cadence is
         due, else tomorrow -- computed from the exact SAME predicate ``cadence_due`` uses inside
         the pass itself, so the schedule and the gate can never disagree. A late run therefore
@@ -1120,13 +1134,17 @@ class Poller:
         day occurrence created and then immediately skipped once it ran, which is exactly the
         no-op noise this schedule exists to avoid creating in the first place.
 
+        ``honour_run_request=False`` is the caller saying THIS request has already been served, so
+        only the ordinary cadence path applies. That is not an optimisation, it is the bound on
+        this whole method: see ``_ensure_one_quest_pass``, which owns the decision.
+
         Returns ``(expected_date "YYYY-MM-DD", expected_time "HH:MM")``.
         """
         zone = entry.get("run_timezone")
         run_time = entry.get("run_time") or "00:00"
         now = self._now()
         today = today_in_zone(zone, now)
-        if run_requested(entry):
+        if honour_run_request and run_requested(entry):
             return today.isoformat(), min(run_time, now_in_zone(zone, now).strftime("%H:%M"))
         expected_date = today if cadence_due(entry, now, tz=zone) else today + timedelta(days=1)
         allowed_days = _quest_pass_days(entry, expected_date)
@@ -1344,7 +1362,32 @@ class Poller:
                         len(series), ids)
             series = sorted(series, key=lambda o: str(o.get("scheduled_date") or ""))[:1]
 
-        expected_date, expected_time = self._expected_quest_occurrence(entry)
+        # A pending "Run now" is honoured exactly ONCE, and this is the only place that decides it.
+        #
+        # INCIDENT (2026-09-21, 410 passes on one quest in 19 hours). ``run_requested``'s contract
+        # is that the request clears itself: "a finished pass stamps last_pass_at, which makes the
+        # request older and therefore spent... there is no state that can be left stuck ON (a pass
+        # that runs forever)". That is false for every path where the pass runs and SKIPS: a
+        # gate-skipped quest returns before ``_update_pass_bookkeeping`` ever runs (see
+        # ``AutopilotPass.run``), so nothing stamps ``last_pass_at`` and the request stays pending.
+        # A "Run now" pressed on a day the quest's roster excludes therefore span a closed loop:
+        # ``_expected_quest_occurrence`` returned TODAY at the current minute, the created pass was
+        # due on sight, it ran, the day rule skipped it, it closed leaving no open series, and the
+        # next scan two minutes later created another one. Nothing bounded it but the calendar.
+        #
+        # One press means one pass. Serving it once is what makes that true no matter WHY the pass
+        # it produced did not stamp anything, which is the part that matters: the stuck-ON state
+        # above was only the first way to reach a loop that had no bound of its own. After the
+        # request is spent the quest falls back to the ordinary cadence path, which is already
+        # bounded, because ``_quest_pass_days`` rolls an excluded day forward to one the roster
+        # actually allows, so the occurrence it creates is not due on sight.
+        #
+        # The person still sees the outcome: the pass is a real task with a real result saying why
+        # it did nothing. A request that produced a pass has been answered, even by a skip.
+        run_request_sig = _run_request_signature(quest_id, entry)
+        honour_run_request = bool(run_request_sig) and not self.state.seen(run_request_sig)
+        expected_date, expected_time = self._expected_quest_occurrence(
+            entry, honour_run_request=honour_run_request)
         if not series:
             # An open catch-up is not a series and must not suppress this: the quest would be left
             # with one run and no producer once that run closed. A foreign SERIES occurrence is
@@ -1365,13 +1408,28 @@ class Poller:
                     quest_id, [o.get("id") or o.get("task_id") for o in alive_foreign])
                 return
             self._create_quest_pass(quest_id, entry, expected_date, expected_time)
+            self._spend_run_request(quest_id, run_request_sig, honour_run_request)
             return
         if series[0] in foreign:
             # Alive, so nothing to create; unwritable, so nothing to retune. Already logged above.
             return
         outcome = self._retune_quest_pass(quest_id, entry, series[0], expected_date, expected_time)
-        if outcome == "date_conflict" and run_requested(entry) and not catch_ups:
+        if outcome == "date_conflict" and honour_run_request and not catch_ups:
             self._create_quest_catchup_pass(quest_id, entry)
+        self._spend_run_request(quest_id, run_request_sig, honour_run_request)
+
+    def _spend_run_request(self, quest_id: str, signature: str, honoured: bool) -> None:
+        """Record that this quest's pending "Run now" has been served, so it is never served twice.
+
+        Called only from the branches that actually acted on it (created the pass, or moved the
+        series' occurrence onto today), never from the ones that returned without writing anything,
+        so a request held off by a live foreign series is still pending when that lane goes away.
+        """
+        if not honoured or not signature:
+            return
+        self.state.mark(signature)
+        log.info("autopilot: quest %s's pending run request has been served by a pass; it will "
+                 "not be served again (press Run now again for another)", quest_id)
 
     def _create_quest_pass(self, quest_id: str, entry: Dict[str, Any], expected_date: str,
                            expected_time: str) -> None:

@@ -292,3 +292,44 @@ def test_split_held_for_another_day_holds_nothing_without_a_roster():
     workable, held = split_held_for_another_day(tasks, {}, SATURDAY)
     assert workable == tasks
     assert held == []
+
+
+# --- the day rule is read on the QUEST'S clock (2026-09-21 incident) -------------------------------
+#
+# The runner's clock is UTC. The poller decides which days a quest's series may fire on in the
+# quest's own zone (``_quest_pass_days``/``_next_allowed_date``, both via ``today_in_zone``), but
+# this gate read the weekday straight off ``self._now()``. For the seven hours between local
+# evening and UTC midnight the two disagreed about what day it was, so a quest was scheduled on a
+# day it was rostered for and then skipped as "not rostered" for the NEXT day. That is what turned
+# one "Run now" pressed at 22:07 Pacific on a Sunday into 410 gate-skipped passes.
+
+SATURDAY_LATE_PACIFIC = datetime(2026, 7, 12, 5, 0, 0, tzinfo=timezone.utc)   # Sat 22:00 in LA
+SUNDAY_PACIFIC = datetime(2026, 7, 12, 12, 0, 0, tzinfo=timezone.utc)        # Sun 05:00 in LA
+
+
+def _in_los_angeles(quest):
+    quest["autopilot"]["run_timezone"] = "America/Los_Angeles"
+    return quest
+
+
+def test_saturday_evening_in_the_quests_zone_is_still_saturday_to_the_day_rule():
+    """22:00 Saturday in Los Angeles is already Sunday in UTC. The Saturday character is on duty,
+    so the pass must run as Saturday, not skip as an unrostered Sunday."""
+    quest = _in_los_angeles(_rostered_quest(batman_instructions=BATMAN_BRIEF))
+    client = FakeAutopilotClient(quests=[quest], goals_by_quest={})
+    result = _run(client, SATURDAY_LATE_PACIFIC)
+
+    assert result.skipped == []
+    assert len(client.created_tasks) == 1
+    assert client.created_tasks[0]["assignee_rep_id"] == BATMAN
+
+
+def test_sunday_in_the_quests_zone_still_skips_and_names_sunday():
+    """The other half: once it really is Sunday where the quest lives, the gate holds exactly as
+    before. Without this, "reads the quest's zone" would also be satisfied by never gating."""
+    quest = _in_los_angeles(_rostered_quest(batman_instructions=BATMAN_BRIEF))
+    client = FakeAutopilotClient(quests=[quest], goals_by_quest={})
+    result = _run(client, SUNDAY_PACIFIC)
+
+    assert client.created_tasks == []
+    assert "Sunday" in result.skipped[0]["reason"]

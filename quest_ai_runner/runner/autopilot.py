@@ -2375,7 +2375,7 @@ class AutopilotPass:
         already held and reported it, and this is the belt to that braces, so a held task can never
         become a batch keyed on a marker that names no character.
         """
-        now = self._now()
+        now = self._quest_now(autopilot_cfg)  # the roster's day, in the quest's own zone
         merged: Dict[Optional[str], List[Dict[str, Any]]] = {}
         order: List[Optional[str]] = []
 
@@ -2594,6 +2594,24 @@ class AutopilotPass:
                                      if str(t.get("id") or t.get("task_id") or "") != task_id]
         return render_last_run_output(task)
 
+    def _quest_now(self, autopilot_cfg: Dict[str, Any]) -> datetime:
+        """This moment read on the QUEST'S OWN clock (``autopilot.run_timezone``), which is the
+        only clock the day rule may ever be evaluated against.
+
+        INCIDENT (2026-09-21). The runner's clock is UTC, so ``self._now().strftime('%A')`` is the
+        UTC weekday. The poller decides which days a quest's series may fire on in the quest's zone
+        (``_quest_pass_days`` / ``_next_allowed_date``, both anchored on ``today_in_zone``), so for
+        the seven hours between local evening and UTC midnight the schedule and this gate disagreed
+        about what day it was. A quest rostered Tue-Fri + Sun was scheduled on Sunday evening
+        Pacific and then gate-skipped as "not rostered for Monday" -- the exact disagreement
+        ``_gate_quest``'s own cadence comment promises can never happen. Reading the roster day
+        here the same way the schedule reads it is what makes that promise true.
+
+        Falls back to the runner's local clock when the zone is missing or unresolvable, which is
+        ``now_in_zone``'s documented behaviour and matches ``cadence_due``'s ``tz=`` fallback.
+        """
+        return now_in_zone(autopilot_cfg.get("run_timezone"), self._now())
+
     def _gate_quest(self, quest: Dict[str, Any], quest_id: str) -> Optional[str]:
         """Per-quest gates, cheapest first. Returns a skip reason, or None if the quest passes."""
         autopilot_cfg = quest.get("autopilot") or {}
@@ -2638,10 +2656,11 @@ class AutopilotPass:
         # not only who runs it.
         #
         # A quest with NO roster is untouched here: it set no days, so there is nothing to follow.
+        quest_now = self._quest_now(autopilot_cfg)
         if (autopilot_cfg.get("personas")
-                and not persona_entries_on_duty(autopilot_cfg, self._now())):
+                and not persona_entries_on_duty(autopilot_cfg, quest_now)):
             return (f"no character on this quest's roster is rostered for "
-                    f"{self._now().strftime('%A')}")
+                    f"{quest_now.strftime('%A')}")
         if self._backpressure and self._has_backpressure(quest_id):
             return "backpressure: a previous autopilot task for this quest is still open"
         # Behind the SAME opt-in as task backpressure, and for the same reason. An unresolved

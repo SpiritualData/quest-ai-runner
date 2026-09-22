@@ -514,3 +514,75 @@ def test_a_failed_team_read_does_not_stop_the_other_teams_quests_getting_a_pass(
         _poller(client, team_ids=["team1", "team2"])._ensure_autopilot_pass()
     assert {c["goal_id"] for c in client.created} == {"q1", "q2"}
     assert "not retiring anything" in caplog.text
+
+
+# --- a pending "Run now" is served ONCE (2026-09-21 incident) --------------------------------------
+#
+# 410 "Autopilot pass" series on ONE quest in 19 hours, one every ~2.6 minutes, each a real deep
+# run. ``run_requested`` promises the request clears itself ("a finished pass stamps last_pass_at,
+# which makes the request older and therefore spent... there is no state that can be left stuck ON
+# (a pass that runs forever)"). It does not hold for a pass that runs and SKIPS: a gate-skipped
+# quest returns before any bookkeeping, so last_pass_at never moves and the request stays pending
+# forever. With it pending, _expected_quest_occurrence returns TODAY at the current minute, so the
+# pass it creates is due on sight, runs, skips, closes, and the next scan finds no open series and
+# creates another. Nothing bounded it but the calendar rolling over in UTC.
+#
+# The quest below is the real one: daily cadence, noon Pacific, rostered every day but Monday and
+# Saturday, and a "Run now" pressed on the Monday.
+
+_MONDAY_1PM_PACIFIC = datetime(2026, 9, 21, 20, 0, 0, tzinfo=timezone.utc)
+_ROSTER_WITHOUT_MONDAY = ["Tue", "Wed", "Thu", "Fri", "Sun"]
+
+
+def _run_now_entry(requested_at="2026-09-21T05:07:53Z"):
+    return {"team_id": "team1", "mode": "act", "run_time": "12:00",
+            "run_timezone": "America/Los_Angeles", "cadence": "daily",
+            "last_pass_at": "2026-09-20T19:00:00Z", "run_requested_at": requested_at,
+            "personas": [{"rep_id": "rep_1", "days": _ROSTER_WITHOUT_MONDAY}], "env_id": None}
+
+
+def test_a_pending_run_request_creates_one_pass_and_then_stops_creating():
+    """Scan after scan with the request still pending and no open occurrence (the pass ran, skipped
+    and closed): the FIRST scan honours the request with a same-day pass, and every scan after it
+    falls back to the ordinary cadence path, which rolls off Monday onto the next rostered day and
+    is therefore not due on sight. That is the loop's bound."""
+    client = FakePassClient()
+    poller = _poller(client, now=lambda: _MONDAY_1PM_PACIFIC)
+    entry = _run_now_entry()
+    for _ in range(3):
+        poller._ensure_one_quest_pass("q1", entry, [])
+
+    assert len(client.created) == 3    # a quest with no open series always gets one, as before
+    # Only the first is the requested run: today, at the moment it was asked for.
+    assert client.created[0]["scheduled_date"] == "2026-09-21"
+    assert client.created[0]["scheduled_time"] == "12:00"
+    # The rest are ordinary scheduled occurrences on the next day the roster allows, so they sit
+    # queued instead of running immediately. Before the fix every one of these was "2026-09-21".
+    assert [c["scheduled_date"] for c in client.created[1:]] == ["2026-09-22", "2026-09-22"]
+
+
+def test_pressing_run_now_again_is_a_new_request_and_is_served_again():
+    """Served once means once per PRESS, not once per quest: the button has to keep working."""
+    client = FakePassClient()
+    poller = _poller(client, now=lambda: _MONDAY_1PM_PACIFIC)
+    poller._ensure_one_quest_pass("q1", _run_now_entry(), [])
+    poller._ensure_one_quest_pass("q1", _run_now_entry(), [])
+    poller._ensure_one_quest_pass("q1", _run_now_entry("2026-09-21T19:30:00Z"), [])
+
+    assert [c["scheduled_date"] for c in client.created] == [
+        "2026-09-21", "2026-09-22", "2026-09-21"]
+
+
+def test_a_quest_with_no_pending_run_request_is_untouched():
+    """The ordinary path keeps its exact behaviour: nothing about this is conditional on having
+    ever seen a request."""
+    client = FakePassClient()
+    entry = _run_now_entry()
+    entry.pop("run_requested_at")
+    poller = _poller(client, now=lambda: _MONDAY_1PM_PACIFIC)
+    poller._ensure_one_quest_pass("q1", entry, [])
+    poller._ensure_one_quest_pass("q1", entry, [])
+
+    assert [c["scheduled_date"] for c in client.created] == ["2026-09-22", "2026-09-22"]
+    assert client.created[0]["recurrence"] == {"frequency": "weekly",
+                                               "days": _ROSTER_WITHOUT_MONDAY, "time": "12:00"}

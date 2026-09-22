@@ -270,6 +270,28 @@ All notable changes to this project are documented here. The format is based on
   itself (capped at 10 entries, 200 characters each), so both the planner and the grounded answer
   see it directly. Absent when nothing was declined, so behavior is unchanged for callers that pass
   no refusals. Tests: `tests/test_declined_proposals.py`.
+- **One "Run now" press produced 410 autopilot passes on one quest in 19 hours** (`runner/poller.py`,
+  `runner/autopilot.py`). Two defects compounded, and the second is the one that removed every
+  bound. First, `AutopilotPass._gate_quest` read the ROSTER'S weekday off the runner's own clock
+  (UTC) while the poller decides which days a quest's series may fire on in the quest's
+  `run_timezone` (`_quest_pass_days`/`_next_allowed_date`, both via `today_in_zone`). For the seven
+  hours between local evening and UTC midnight the schedule and the gate disagreed about what day
+  it was, so a request made at 22:07 Pacific on a Sunday, a day the quest WAS rostered for, was
+  gated as "no character on this quest's roster is rostered for Monday". New `_quest_now` reads the
+  day on the quest's own clock, the same way the schedule does, which is what `_gate_quest`'s own
+  cadence comment already promised. Second, `run_requested` documents itself as self-clearing ("a
+  finished pass stamps last_pass_at... there is no state that can be left stuck ON (a pass that runs
+  forever)"), and that is false for every path where the pass runs and SKIPS: a gate-skipped quest
+  returns before `_update_pass_bookkeeping`, so nothing stamps `last_pass_at` and the request stays
+  pending. With it pending, `_expected_quest_occurrence` returned TODAY at the current minute, so
+  the pass it created was due on sight: it ran, skipped, closed, and the next scan found no open
+  series and created another, once every ~2.6 minutes until the UTC calendar rolled over. 410 deep
+  runs, and the token spike that exhausted a person's daily model quota. `_ensure_one_quest_pass`
+  now honours a pending request exactly ONCE, keyed on the request's own `run_requested_at` in the
+  lane's existing `StateStore`, after which the quest falls back to the ordinary cadence path, which
+  is already bounded (an excluded day rolls forward to a rostered one, so the occurrence is not due
+  on sight). Pressing the button again is a new request and is served again. Tests:
+  `tests/test_autopilot_pass_task.py`, `tests/test_autopilot_day_authority.py`.
 
 ### Changed
 - **The overseer's answer checkpoint (hook B) can stop a bad answer again.** New
