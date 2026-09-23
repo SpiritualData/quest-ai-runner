@@ -6326,6 +6326,19 @@ class Orchestrator:
                         emit.status("That did not produce anything; escalating to the full "
                                     "deep runner…")
                     continue
+                # THE RUNNER IS OUT OF MOVES (``DeepResult.exhausted``): it already spent its own
+                # attempt budget this turn, or its retry reproduced a result it had returned before.
+                # Re-launching it with an augmented brief is exactly the endless "correcting its
+                # code" loop a user watched: same runner, same data, same result. A not-met
+                # exhausted run is terminal (its output already says what it tried); a further
+                # rung, when there is one, still gets its turn.
+                if getattr(res, "exhausted", False) and not res.met:
+                    if has_more_rungs:
+                        continue
+                    if emit is not None:
+                        emit.status("Nothing new left to try on this; stopping instead of "
+                                    "repeating the same attempt.")
+                    break
                 # Verify the done-standard ourselves, applying the quality standards (guidance) and
                 # the rep persona. verdict is None => verification could not run (LLM outage, no
                 # verify tier, parse failure) => this run is UNVERIFIED, and must NEVER be reported
@@ -6364,6 +6377,10 @@ class Orchestrator:
                 # and can reach a human. A lowercase "goal not yet met:" followed by a verifier's
                 # raw clause looked like debug output leaking into a report.
                 res.error = res.error or ("Goal not yet met: " + reason[:1].upper() + reason[1:])
+                # A runner that reported it is out of moves gets no retry even when its own ``met``
+                # was optimistic: the verifier said no, and the runner said another run would only
+                # repeat this one.
+                stop_after_this = bool(getattr(res, "exhausted", False)) and not has_more_rungs
                 if emit is not None:
                     # Always show what was attempted (the output) first
                     output_text = _strip_future_context(res.output).strip()
@@ -6380,6 +6397,8 @@ class Orchestrator:
                         emit.status("Goal not met: " + verdict.get("reason"))
                     else:
                         emit.status("Goal not met: " + reason)
+                if stop_after_this:
+                    break
                 # TURN-BUDGET CONTINUATION: the worker did not fail here, it ran out of room. Its
                 # session still holds everything it read and changed, so continuing THAT session
                 # with a bigger budget is both cheaper and far likelier to finish than re-running

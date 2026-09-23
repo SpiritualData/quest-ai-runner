@@ -287,6 +287,13 @@ class DeepResult:
     # The worker session this run used, when the runner has one (Claude Code's ``--session-id``).
     # It is what a continuation resumes, so the follow-up attempt picks up the run's own context.
     session_id: Optional[str] = None
+    # The runner is OUT OF MOVES for this goal: it already tried what it can this turn (its own
+    # attempt budget is spent, or a retry reproduced a result it had already returned), so running
+    # it again would only repeat the same work. The goal loop stops on this instead of re-launching
+    # the runner with an augmented brief; the runner's ``output`` should already say, in plain words,
+    # what it tried. Structural, set by the runner from its own bookkeeping, never inferred from the
+    # text of its output. A runner that cannot tell leaves it False, and behaves exactly as before.
+    exhausted: bool = False
 
 
 # The two ways a deep runner can hand its future-context bullets back. Declared per runner as

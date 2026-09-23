@@ -7,6 +7,18 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **A deep runner can say it is out of moves, and the goal loop stops instead of re-launching it**
+  (`core/adapters.py`, `core/orchestrator.py`). A code-writing runner asked for something its data
+  could not answer got an empty result, the verifier said not met, and the goal loop re-ran it with
+  an augmented brief up to `deep_goal_max_iterations` times: new code, same empty result, every
+  time, which the user watched as an endless "correcting its code" loop. The runner's own token
+  count was 0, so `deep_goal_token_budget` never bound either. New `DeepResult.exhausted`: set by
+  the runner from its own bookkeeping (its attempt budget for the turn is spent, or a retry
+  reproduced a result it already returned), never inferred from output text. A not-met exhausted
+  run is terminal with no verifier call; an exhausted run the verifier rejects gets no retry; a
+  further ladder rung still gets its turn. Identical output TEXT alone is deliberately not treated
+  as no progress in the library, since an agentic worker can repeat its summary after real work on
+  disk. Tests: `tests/test_goal_loop_no_progress.py`.
 - **Off-subject context leaves no trace in the answer, and notes carry the date they were written**
   (`core/orchestrator.py`, `core/context_doctrine.py`, `adapters/card_content_render.py`). A chat
   about a work quest answered with a different quest's personal material and then told the user it
