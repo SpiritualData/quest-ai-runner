@@ -7,11 +7,19 @@ uses.
     python -m quest_ai_runner.tools.send_quest_email \\
         --quest quest_abc123 --subject "Friday brief" --body-file /tmp/brief.md --rep bailey
 
+    python -m quest_ai_runner.tools.send_quest_email \\
+        --quest quest_abc123 --subject "Following up" --body-file /tmp/note.md --rep bailey \\
+        --to someone@example.com --to someone.else@example.com
+
 Why this rather than a local mail script, which is what runs did before: mail sent outside Quest
 has no per-quest Reply-To, so the person's answer goes nowhere; it misses the account's
 unsubscribe handling; it leaves no record on the quest; and it signs as a generic assistant rather
-than the persona that wrote it. Recipients are the quest's own setting and cannot be passed here,
-so a run chooses what to say, never who hears it.
+than the persona that wrote it. Recipients default to the quest's own setting, so a run chooses
+what to say, not who a standing quest's mail reaches, by default. ``--to`` (repeatable) names an
+explicit, bounded override for the genuine one-off case: somebody who is not, and should not
+become, a standing participant on the quest, who still needs this quest's Reply-To rather than a
+mailer with none. It replaces the quest's own list for this one send; leave it out for the
+default.
 
 Exit codes: 0 sent, 1 refused or failed (the reason is printed). A refusal is usually "email is
 not enabled for this quest", which is a person's decision to make in the quest's settings, not
@@ -42,6 +50,9 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--body-file", help="read the body from a file instead")
     parser.add_argument("--rep", help="AI rep id whose display name signs the mail (e.g. bailey)")
     parser.add_argument("--task", help="assistant task id this came from, recorded for tracing")
+    parser.add_argument("--to", action="append", dest="to",
+                        help=("explicit recipient override for this one send (repeatable); "
+                              "omit to use the quest's own configured recipients"))
     parser.add_argument("--base-url", default=os.getenv("QUEST_API_URL"))
     parser.add_argument("--api-key", default=os.getenv("QUEST_API_KEY"))
     args = parser.parse_args(argv)
@@ -54,7 +65,8 @@ def main(argv: Optional[list] = None) -> int:
     client = QuestClient(base_url=args.base_url, api_key=args.api_key)
     try:
         result = client.send_quest_email(args.quest, subject=args.subject, body=body,
-                                         rep_id=args.rep, task_id=args.task)
+                                         rep_id=args.rep, task_id=args.task,
+                                         recipients=args.to)
     except (QuestApiError, QuestNotConfigured) as e:
         print(f"Not sent: {e}", file=sys.stderr)
         return 1
