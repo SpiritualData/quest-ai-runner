@@ -63,11 +63,14 @@ def test_deep_models_uses_configured_ladder_as_is():
 def test_deep_models_pin_from_model_hint_bypasses_ladder():
     # An explicit per-task model request that IS Claude-runnable pins a single model, even though
     # a ladder is configured -- no auto-escalation when the caller asked for a specific model.
+    # A concrete id naming a known Claude family is normalized to that family's rolling alias
+    # (see test_deep_model_pin.py), so the worker always gets the family's current best rather
+    # than the dated id the request happened to spell out.
     provider = StubProvider(decisions=[])
     orch = _orch(provider, config=OrchestratorConfig(
         deep_model_ladder=["claude-sonnet-4-6", "claude-opus-4-8"]))
     ladder = orch._deep_models("claude-opus-4-8", None, "claude-opus-4-8")
-    assert ladder == ["claude-opus-4-8"]
+    assert ladder == ["opus"]
 
 
 def test_deep_models_fallback_resolves_claude_id_from_tier_fallback_on_non_claude_session(caplog):
@@ -145,10 +148,11 @@ def test_fallback_deep_ladder_dedupes_rungs_by_what_the_worker_would_invoke():
 
 def test_deep_models_pinned_single_model_does_not_warn(caplog):
     # A PIN (explicit request or guidance pref) is an intentional single-model choice, not an
-    # escalation failure -- must not trigger the "escalation unavailable" warning.
+    # escalation failure -- must not trigger the "escalation unavailable" warning. Normalized to
+    # the family's rolling alias, same as above.
     provider = StubProvider(decisions=[])
     orch = _orch(provider, config=OrchestratorConfig())
     with caplog.at_level(logging.INFO, logger=ORCH_LOGGER):
         ladder = orch._deep_models("claude-opus-4-8", None, "claude-opus-4-8")
-    assert ladder == ["claude-opus-4-8"]
+    assert ladder == ["opus"]
     assert not any(r.levelno >= logging.WARNING for r in caplog.records)

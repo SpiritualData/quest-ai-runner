@@ -5310,11 +5310,31 @@ class Orchestrator:
         ``fallback_deep_ladder``). Always returns a non-empty list.
         Logs (INFO) the resolved ladder once per deep run, and WARNS when a NON-pinned resolution
         still comes out length <= 1 (escalation unavailable), so a deployment can see and fix it."""
-        from .goal_runner import _is_claude_model  # worker-runnable check (deep worker is Claude Code)
-        # Explicit per-task model request: ``fallback`` already factored ``model_hint`` through the
-        # registry. When a hint was given and it resolved to a model the worker can run (Claude), pin
-        # it (no auto-escalation). In a non-Claude deployment the resolved hint is not worker-runnable,
-        # so we fall through to the ladder instead of handing Claude Code a Gemini/OpenAI id.
+        from .goal_runner import _is_claude_model, cli_safe_model  # deep worker is Claude Code
+        # Explicit per-task model request that names a MODEL rather than a tier (e.g. a quest's
+        # ``autopilot.model = "fable"``, or a task's stored ``model``): honour it VERBATIM.
+        #
+        # ``fallback`` cannot be used for this, even though it was derived from ``model_hint``:
+        # it is the hint AFTER ``ModelRegistry.resolve_tier``, which only understands tier names
+        # and silently rewrites anything else to the balanced tier. So a lane asking for Fable
+        # arrived here as its balanced model and was then "pinned" to that, with an INFO line
+        # calling it "an explicit per-task model request" -- the request's own name was gone.
+        # (Live: the dissertation lane pinned ``fable`` and ran every deep task on Sonnet, which
+        # needs more turns for the same work and so kept hitting the turn wall.)
+        #
+        # Tiers still resolve through the registry exactly as before: ``cli_safe_model`` returns
+        # None for the four semantic tier names, and ``is_tier_name`` keeps the legacy aliases
+        # (haiku/sonnet/opus), which ARE tier names, out of this branch.
+        if model_hint and not ModelRegistry.is_tier_name(model_hint):
+            pinned = cli_safe_model(model_hint)
+            if pinned:
+                log.info("Deep-worker model ladder: pinned to %r (explicit per-task model id, used "
+                         "verbatim); escalation intentionally disabled.", pinned)
+                return [pinned]
+        # A per-task TIER request (or a model id this worker cannot run): ``fallback`` is that
+        # request resolved through the registry. Pin it when the worker can run it; in a non-Claude
+        # deployment the resolved hint is not worker-runnable, so we fall through to the ladder
+        # instead of handing Claude Code a Gemini/OpenAI id.
         if model_hint and fallback and _is_claude_model(fallback):
             log.info("Deep-worker model ladder: pinned to %r (explicit per-task model request); "
                      "escalation intentionally disabled.", fallback)
@@ -6185,6 +6205,43 @@ class Orchestrator:
             resume_session: Optional[str] = None if multi else (resume_session_id or None)
             attempt_turns = self.cfg.deep_max_turns
             continued = 0
+
+            def can_continue(prev: DeepResult, runner: Any) -> bool:
+                """Whether ``prev`` is a run that can be PICKED UP rather than redone.
+
+                Three things have to hold: the worker itself said it ran out of turns
+                (``limit_hit``, never our inference, see ``SubprocessGoalRunner``), it left a
+                session id to resume, and this runner can actually resume one.
+                """
+                return bool(getattr(prev, "limit_hit", False)
+                            and getattr(prev, "session_id", None)
+                            and caps_for(runner)["resume"])
+
+            def begin_continuation(prev: DeepResult,
+                                   verdict: Optional[Dict[str, Any]]) -> bool:
+                """Set the next attempt up to CONTINUE ``prev``'s session. False = cannot.
+
+                Grows the turn budget once per continuation (capped), points the next attempt at
+                the session to resume, and swaps in the short continuation brief. The only reason
+                it refuses is the deep token budget: a continuation is a cheaper way to finish, it
+                is never a way around the budget.
+                """
+                nonlocal continued, resume_session, attempt_turns, current_brief
+                if budget is not None and tokens_used >= budget:
+                    if emit is not None:
+                        emit.status(f"Deep token budget reached ({tokens_used}/{budget}); "
+                                    "stopping without continuing the run.")
+                    return False
+                continued += 1
+                resume_session = prev.session_id
+                attempt_turns = self.cfg.deep_max_turns * min(
+                    continued + 1, DEEP_CONTINUATION_TURN_MULTIPLIER_CAP)
+                current_brief = self._continuation_brief(base_brief, verdict)
+                if emit is not None:
+                    emit.status("That run used all its turns before finishing; continuing the "
+                                f"same session with a larger budget ({attempt_turns} turns)…")
+                return True
+
             for attempt in range(1, max_iters + 1):
                 # Cooperative cancellation, checked before starting each new attempt (a retry can be
                 # a full agentic subprocess run, so this is the natural point to stop rather than
@@ -6230,8 +6287,30 @@ class Orchestrator:
                 # outcome is verified when it reflects back.
                 if getattr(res, "deferred", False):
                     break
+                # TURN-BUDGET CONTINUATION, decided BEFORE the terminal guard below, because a
+                # worker stopped by ``--max-turns`` produces EXACTLY the shape that guard calls a
+                # hard failure, and it is not one.
+                #
+                # Claude Code's ``error_max_turns`` envelope carries no result text: the run is cut
+                # off before the worker ever writes its final message, so an out-of-turns result is
+                # (error set, output EMPTY) by construction, every time. Deciding continuation
+                # after the guard therefore meant the continuation never ran for the one case it
+                # was written for. It reported the work as a failure instead, twice on a real lane
+                # (2026-09-09, and again 2026-09-21 with the email already sent and the goal note
+                # already posted), and the continuation brief had never once been sent to a worker.
+                #
+                # There is nothing to verify here (no output means no claim to check), so this
+                # goes STRAIGHT back into the same worker session rather than spending a verifier
+                # call on an empty string and then feeding that verdict's "it did nothing" reason
+                # to a worker that had in fact done nearly everything.
+                if (not res.decision_id and not (res.output or "").strip()
+                        and can_continue(res, active_runner)):
+                    if begin_continuation(res, None):
+                        continue
+                    break
                 # A human-decision escalation, or a hard failure with NO output (binary missing,
-                # timeout, silent no-op), is terminal — do not verify or iterate.
+                # timeout, silent no-op), is terminal: do not verify or iterate. A run that merely
+                # ran out of turns is none of those and was handled just above.
                 #
                 # …unless there is a further RUNG to fall through to. That rule was written when a
                 # goal only ever had one runner, so "this runner produced nothing" and "nothing
@@ -6307,22 +6386,13 @@ class Orchestrator:
                 # the goal cold, which pays for the same discovery again and tends to stop in the
                 # same place. (Without this, a long task burned attempt after attempt on the same
                 # wall and then reported a bare failure, with its real work left uncommitted.)
-                if (getattr(res, "limit_hit", False) and getattr(res, "session_id", None)
-                        and caps_for(active_runner)["resume"]):
-                    if budget is not None and tokens_used >= budget:
-                        if emit is not None:
-                            emit.status(f"Deep token budget reached ({tokens_used}/{budget}); "
-                                        "stopping without continuing the run.")
-                        break
-                    continued += 1
-                    resume_session = res.session_id
-                    attempt_turns = self.cfg.deep_max_turns * min(
-                        continued + 1, DEEP_CONTINUATION_TURN_MULTIPLIER_CAP)
-                    current_brief = self._continuation_brief(base_brief, verdict)
-                    if emit is not None:
-                        emit.status("That run used all its turns before finishing; continuing the "
-                                    f"same session with a larger budget ({attempt_turns} turns)…")
-                    continue
+                # …and the same continuation for a run that DID produce output and was then cut
+                # off: it reached the verifier, so the continuation brief can carry the verifier's
+                # specific next action instead of only "you were cut off".
+                if can_continue(res, active_runner):
+                    if begin_continuation(res, verdict):
+                        continue
+                    break
 
                 # WIDEN: if the verifier says the worker lacked context, pull MORE for the next
                 # attempt (a fresh assembler read for the named missing context, wider conversation

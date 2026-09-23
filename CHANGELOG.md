@@ -199,6 +199,45 @@ All notable changes to this project are documented here. The format is based on
   content. Tests: `tests/test_gemini_url_fetch.py`.
 
 ### Fixed
+- **A deep worker that ran out of TURNS was reported as a failure instead of being continued: the
+  continuation feature had never once fired** (`core/orchestrator.py`). A turn-budget continuation
+  has shipped since the 2026-09-09 incident: seeing `DeepResult.limit_hit`, the goal loop is meant
+  to resume that worker's own session with a larger budget rather than re-run the goal cold. It was
+  unreachable. Claude Code's `error_max_turns` envelope carries **no result text** (the run is cut
+  off before the worker ever writes its final message), so a real turn exhaustion is
+  `(error set, output EMPTY)` every time, which is exactly the shape the loop's earlier
+  "a human-decision escalation, or a hard failure with NO output (binary missing, timeout, silent
+  no-op), is terminal" guard claims. That guard sits ~75 lines ABOVE the `limit_hit` branch, so
+  every real limit hit broke out of the attempt loop before reaching verification or continuation.
+  The whole suite passed throughout because every test built its limit-hit `DeepResult` with a
+  non-empty `output=`, and the runner-level fixture fabricated an `error_max_turns` envelope with a
+  populated `result` field, a shape the real CLI does not emit. Live cost: the same task failed the
+  same way on 2026-09-09 and again on 2026-09-21, the second time with its email already sent and
+  its goal note already posted, and the continuation brief had never been sent to a worker at all.
+  The continuation decision now happens BEFORE that guard, and a limit hit with no output goes
+  straight back into the same session without spending a verifier call on an empty string (there is
+  no claim to check, and the resulting "it did nothing" verdict would then have been handed to the
+  worker as what it still owed). The bookkeeping both paths share is factored into `can_continue` /
+  `begin_continuation`, so the post-verification continuation still carries the verifier's next
+  action. Unchanged: a crash/timeout (`limit_hit` False) is still terminal, a runner that cannot
+  resume still gets the old behaviour, a verified-met run is never continued, and the deep token
+  budget still stops everything. Tests: `tests/test_deep_turn_budget_continuation.py` section 4,
+  including the real no-`result` envelope.
+- **A per-task model REQUEST naming a model id ran a different model, silently**
+  (`core/model_registry.py`, `core/orchestrator.py`). One field carries either a TIER name
+  (`"best"`) or a concrete model id (`"fable"`), and it was always resolved as a tier:
+  `ModelRegistry.resolve_tier` knows the four tiers plus the legacy `haiku`/`sonnet`/`opus` aliases
+  and rewrites anything else to `"balanced"` without a word in the log. `Orchestrator._deep_models`
+  then pinned that rewritten value and logged it as `pinned to 'sonnet' (explicit per-task model
+  request)`, the requested name already gone, and returned before the configured
+  `deep_model_ladder` (`QAR_DEEP_MODELS`) could be consulted. A lane pinning Fable ran every deep
+  task on its balanced model, which needs more turns for the same work and so kept hitting the turn
+  wall above. `_deep_models` now honours a hint that is not a tier name verbatim when the deep
+  worker can actually invoke it (`cli_safe_model`, which returns `None` for the four semantic tiers,
+  so tier hints are untouched), and new `ModelRegistry.is_tier_name` keeps the legacy aliases, which
+  ARE tier names, out of that branch. `resolve_tier` now WARNs once per distinct name when it
+  substitutes, so the same class of silent downgrade is visible next time. A non-Claude id is still
+  never passed to Claude Code. Tests: `tests/test_deep_model_pin.py`.
 - **On a quest with more than one `owner_user_id`, two different accounts' lanes could each end up
   running their own competing autopilot pass series for the SAME quest** (2026-09-20). The
   foreign-occurrence handling added for the ownership-asymmetry fix above (see "An autopilot pass

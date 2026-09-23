@@ -21,7 +21,19 @@ the `session_id` it launched with. Nothing here is inferred: a crash, a timeout,
 worker with no envelope leaves `limit_hit` False, because resuming a crashed session would be a
 guess and the two cases call for opposite responses.
 
-**The goal loop continues that session.** Seeing `limit_hit`, the next attempt is handed:
+**The goal loop continues that session, and decides that BEFORE it decides anything else.**
+Ordering is the whole of it. An `error_max_turns` envelope carries no result text (the worker is cut
+off before it ever writes its final message), so a real turn exhaustion is always `error` set and
+`output` EMPTY. That is also, word for word, the shape of the loop's terminal guard for "a hard
+failure with NO output (binary missing, timeout, silent no-op)". As first written the continuation
+was decided *after* that guard, so every real limit hit broke out of the attempt loop before
+reaching it, and the feature never fired once between shipping and 2026-09-21: the incident it was
+built for (2026-09-09) simply repeated, the second time with the mail already sent and the goal note
+already posted. The continuation is now decided first, and a limit hit with no output
+skips verification entirely: there is no claim to check, and a verdict on an empty string ("it did
+nothing") would then be handed to the worker as what it still owed.
+
+Seeing `limit_hit`, the next attempt is handed:
 
 - `resume_session_id` — the worker relaunches with `--resume <id>`, so it still holds everything it
   read, decided and changed. It does not open a second session.
@@ -88,6 +100,17 @@ A run that still falls short reports what it did. The executor's failure path us
 results' `error` strings and drop their `output`, which is how a task with two finished modules
 reached its owner as one line of error text. The work now travels with the failure under a heading
 that says plainly it is unfinished and unverified, so it can be found and picked up.
+
+## Why the tests did not catch it
+
+Every test built its turn-exhausted `DeepResult` with a non-empty `output=`, and the runner-level
+fixture fabricated an `error_max_turns` envelope with a populated `result` field, a shape the real
+CLI does not emit. The suite therefore exercised a run that had produced output and then run out of
+room, which reaches the continuation, and never the ordinary case, which does not. A fixture that
+invents a field the real dependency omits will pass forever while the feature is dead.
+
+Section 4 of the continuation tests now pins the real envelope (a `result` key that is *absent*, not
+empty) and the loop's behaviour on it, and both of those tests fail against the pre-fix loop.
 
 Tests: `tests/test_deep_turn_budget_continuation.py` (within one run),
 `tests/test_session_continuity_across_runs.py` (across runs).

@@ -14,6 +14,7 @@ the provider's list actually changes (the provider is expected to cache its own 
 """
 from __future__ import annotations
 
+import logging
 import re
 from typing import Dict, List, Optional
 
@@ -22,6 +23,17 @@ from .adapters import ModelProvider
 # Tier names in capability order (cheap -> expensive). The brain uses these names.
 # Semantic names (provider-agnostic): fast/balanced/quality (best = quality if not overridden)
 TIERS = ("fast", "balanced", "quality", "best")
+
+log = logging.getLogger("quest-ai-runner.model_registry")
+
+# Provider-specific tier names kept working for backward compatibility. These are TIER names, not
+# model ids: "opus" here means "whatever the quality tier resolves to on this deployment", which is
+# why they must never be mistaken for a literal model pin (see ``is_tier_name``).
+LEGACY_TIER_ALIASES = {
+    "haiku": "fast",
+    "sonnet": "balanced",
+    "opus": "quality",
+}
 
 # Downgrade order (expensive -> cheap), used when a tier's resolved model exhausts its
 # quota/rate limit: stepping down to a cheaper tier keeps the caller answered instead of
@@ -117,7 +129,9 @@ DEFAULT_FALLBACK_TOP = {
     "fast": "gemini-3.1-flash-lite",
     "balanced": "gemini-3.1-flash-lite",
     "quality": "gemini-3.5-flash",
-    "best": "claude-opus-4-8",  # fallback to best available
+    "best": "claude-opus-5",  # last-known-good pin, bumped as newer Opus releases confirm (2026-09-22); the
+    # live list_models() path above is what actually keeps pace release-to-release, this only
+    # covers a live-list outage
 }
 
 
@@ -235,6 +249,9 @@ class ModelRegistry:
         # Keep only user-specified overrides, not defaults
         self._user_overrides = dict(fallback or {})
         self._cache: Dict[str, object] = {"source_id": None, "top": None}
+        # Names ``resolve_tier`` has already warned about substituting, so the warning names each
+        # distinct one once rather than on every call.
+        self._warned_unknown_tiers: set = set()
 
     def get_provider_for_tier(self, tier: str) -> ModelProvider:
         """Get the provider to use for a given tier (supports per-tier provider routing).
@@ -276,19 +293,44 @@ class ModelRegistry:
             self._cache["top"] = bucket_top(all_models, self._user_overrides)
         return dict(self._cache["top"])  # copy so callers can't mutate the cache
 
+    @staticmethod
+    def is_tier_name(name: Optional[str]) -> bool:
+        """Whether ``name`` is a TIER this registry owns, rather than a concrete model id.
+
+        The four semantic tiers plus the legacy provider-specific aliases. Callers that accept
+        "a tier OR a model id" in one field (a task's stored ``model``, a guidance preference) use
+        this to tell the two apart: a tier goes through ``resolve_tier``, a model id must be honoured
+        verbatim instead of being fed to ``resolve_tier``, which would silently rewrite it (see the
+        warning there). ``None``/blank is not a tier name: it is "unspecified".
+        """
+        n = (name or "").strip().lower()
+        return bool(n) and (n in TIERS or n in LEGACY_TIER_ALIASES)
+
     def resolve_tier(self, tier: Optional[str]) -> str:
-        """Resolve a tier name to the current top model id. Unknown/None -> "balanced". Never raises."""
-        # Map old provider-specific tier names to new semantic names for backward compatibility
-        tier_map = {
-            "haiku": "fast",
-            "sonnet": "balanced",
-            "opus": "quality",
-        }
+        """Resolve a tier name to the current top model id. Unknown/None -> "balanced". Never raises.
+
+        NOTE the asymmetry this WARNS about: a name that is not a tier at all (a concrete model id
+        such as ``fable``, handed in where a tier was expected) is not an error here: it silently
+        becomes "balanced", i.e. whatever this deployment's balanced tier resolves to. That is the
+        right degradation for a genuinely unknown tier and the wrong one for a model the caller
+        meant literally, and because it was silent it was invisible: a lane that pinned Fable ran
+        every deep task on its balanced model for weeks with nothing in the log saying so. Callers
+        holding a field that may be EITHER a tier or a model id must ask ``is_tier_name`` first.
+        """
         t = (tier or "balanced").strip().lower()
-        # Check if it's an old tier name and map it
-        if t in tier_map:
-            t = tier_map[t]
-        # If still not in TIERS, default to balanced
+        # Check if it's an old provider-specific tier name and map it to the semantic one
+        if t in LEGACY_TIER_ALIASES:
+            t = LEGACY_TIER_ALIASES[t]
+        # If still not in TIERS, default to balanced, and say so ONCE per distinct name, so the
+        # substitution is discoverable without spamming a line on every call that repeats it.
         if t not in TIERS:
+            if t and t not in self._warned_unknown_tiers:
+                self._warned_unknown_tiers.add(t)
+                log.warning(
+                    "model tier %r is not a known tier (%s), so it resolves as \"balanced\" "
+                    "instead. If this is a MODEL ID rather than a tier, the caller should check "
+                    "ModelRegistry.is_tier_name() and pin the id verbatim; resolving it here "
+                    "silently substitutes a different model.",
+                    tier, ", ".join(TIERS))
             t = "balanced"
         return self.top_models()[t]
