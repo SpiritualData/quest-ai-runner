@@ -85,3 +85,19 @@ def test_create_task_omits_assignee_user_id_when_not_given():
     client, captured = client_capturing_body()
     client.create_task("t")
     assert "assignee_user_id" not in captured["body"]
+
+
+def test_create_task_sends_model_and_deep_run_model_as_independent_fields():
+    """``model`` (a QAR-call tier) and ``deep_run_model`` (a literal deep-run model pin) are
+    separate fields on the backend's create-task schema (split 2026-09-22) -- a caller holding
+    both must be able to send both in the same call, and each lands under its own key."""
+    client, captured = client_capturing_body()
+    client.create_task("t", model="balanced", deep_run_model="opus")
+    assert captured["body"]["model"] == "balanced"
+    assert captured["body"]["deep_run_model"] == "opus"
+
+
+def test_create_task_omits_deep_run_model_when_not_given():
+    client, captured = client_capturing_body()
+    client.create_task("t", model="balanced")
+    assert "deep_run_model" not in captured["body"]

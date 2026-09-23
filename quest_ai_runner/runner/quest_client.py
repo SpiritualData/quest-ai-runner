@@ -1538,7 +1538,8 @@ class QuestClient:
 
     def send_quest_email(self, quest_id: str, *, subject: str, body: str,
                          rep_id: Optional[str] = None,
-                         task_id: Optional[str] = None) -> Dict[str, Any]:
+                         task_id: Optional[str] = None,
+                         recipients: Optional[List[str]] = None) -> Dict[str, Any]:
         """POST /api/quests/{quest_id}/email — mail this quest's people, as the persona that wrote it.
 
         THE way a run sends mail. Not a local mail script: going through Quest is what gives the
@@ -1546,10 +1547,15 @@ class QuestClient:
         than into a void), the account's unsubscribe handling, a record, and a signature naming the
         persona instead of a generic assistant.
 
-        There is no recipient argument, deliberately. The audience is the quest's own settings, so
-        a run decides what to say and when, never who receives a quest's contents. Requires the
-        person to have enabled email on the quest (which is also what mints the reply address);
-        without it the backend answers 400 and nothing is sent.
+        The audience defaults to the quest's own settings, so a run decides what to say and when,
+        not who a standing quest's mail reaches, by default. ``recipients`` is an explicit
+        override for the genuine one-off case: someone who is not, and should not become, a
+        standing participant on the quest (a donor, an applicant, a specific person not yet
+        sharing it) who still needs this quest's Reply-To rather than a mailer with none. It
+        replaces the quest's own list for this one send rather than adding to it; the backend caps
+        how many addresses one call may name. Requires the person to have enabled email on the
+        quest (which is also what mints the reply address); without it the backend answers 400 and
+        nothing is sent.
 
         RAISES on failure rather than returning a falsy value: a run that believes it has told
         someone something, when it has not, will go on to act as though the message landed.
@@ -1560,6 +1566,8 @@ class QuestClient:
             body_payload["rep_id"] = rep_id
         if task_id:
             body_payload["task_id"] = task_id
+        if recipients:
+            body_payload["recipients"] = recipients
         return self._request("POST", f"/api/quests/{quest_id}/email", body=body_payload) or {}
 
     # --- quest context entries (the quest's own documents; UPDATABLE, unlike notes) ------------
@@ -1990,7 +1998,8 @@ class QuestClient:
                     assignee_user_id: Optional[str] = None,
                     parent_task_id: Optional[str] = None,
                     card_ids: Optional[List[str]] = None,
-                    model: Optional[str] = None) -> Dict[str, Any]:
+                    model: Optional[str] = None,
+                    deep_run_model: Optional[str] = None) -> Dict[str, Any]:
         """POST a new queued AI task to /api/assistant-tasks.
 
         ``team_id`` routes the task to a specific team's runner (defaults to the client's
@@ -2007,13 +2016,16 @@ class QuestClient:
         quest's configured ``autopilot.env_id``); omit to let the backend's normal env routing
         apply.
 
-        ``model`` is the per-task model/tier override (e.g. a quest's configured
-        ``autopilot.model``); the executor lane reads it as ``model_hint`` and the orchestrator's
-        deep-model resolution turns it into a pin on the deep worker when it names a
-        worker-runnable model. Omit to let the executor's own default model/tier ladder apply. The
-        accepted vocabulary (tier names, bare family aliases, pinned ids, ...) is the consumer
-        backend's, not this library's -- pass a value that backend's task-creation endpoint
-        accepts.
+        ``model`` is the per-task QAR-call TIER override (e.g. "fast"/"balanced"/"quality"/"best").
+        ``deep_run_model`` is a separate, literal pin for the expensive DEEP RUN execution (e.g. a
+        bare Claude family alias like "opus"/"sonnet"/"haiku"/"fable", or a pinned id) -- the two
+        are independent knobs on the consumer backend's task schema and must not be conflated: a
+        caller holding a single configured value (e.g. a quest's ``autopilot.model``) must classify
+        it itself (tier name vs. literal model name) and pass it via the matching parameter, since
+        the backend validates each field against its own distinct allowed set and 400s a tier name
+        sent as ``deep_run_model`` or a literal model sent as ``model``. Omit either to let the
+        executor's own default apply. The accepted vocabulary for both is the consumer backend's,
+        not this library's -- pass a value that backend's task-creation endpoint accepts.
 
         ``task_kind`` is the PERSISTENT routing classification (e.g. ``"autopilot"`` for the
         recurring autopilot pass task). Unlike ``handler`` -- which the claim path OVERWRITES on
@@ -2101,6 +2113,8 @@ class QuestClient:
             body["card_ids"] = card_ids
         if model is not None:
             body["model"] = model
+        if deep_run_model is not None:
+            body["deep_run_model"] = deep_run_model
         return self._request("POST", "/api/assistant-tasks", body=body) or {}
 
     def update_task(self, task_id: str, fields: Dict[str, Any]) -> Dict[str, Any]:

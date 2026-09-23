@@ -2775,11 +2775,17 @@ class AutopilotPass:
         of the scanner's bookkeeping. A client whose ``create_task`` predates the argument simply
         creates the task without it, exactly as before.
 
-        When the quest's ``autopilot`` block carries a ``model``, it is passed through as the
-        created task's own model/tier override -- which model the deep worker runs THIS quest's
-        autopilot work on. Unset means the lane's own default model ladder applies, exactly as
-        before this field existed. This is the single choke point every autopilot-created task
-        (work batches and goal proposals alike) passes through, so both inherit the setting.
+        When the quest's ``autopilot`` block carries a ``model``, it names which model the deep
+        worker runs THIS quest's autopilot work on -- but that config field is itself overloaded
+        (a human can set it in the app to either a QAR-call tier like "fast"/"balanced" or a bare
+        Claude family alias like "opus"), while the backend's create-task API now validates those
+        as two SEPARATE fields (``model`` = tier only, ``deep_run_model`` = literal pin only, split
+        2026-09-22). So the configured value is classified here with ``_is_claude_model`` (Claude-
+        shaped -> ``deep_run_model``, anything else -> ``model``) and routed to whichever create
+        argument the backend actually validates it against. Unset means the lane's own default
+        model ladder applies, exactly as before this field existed. This is the single choke point
+        every autopilot-created task (work batches and goal proposals alike) passes through, so
+        both inherit the setting.
         """
         # suggest mode (and every goal proposal, which is always a proposal for a human) must not
         # be runnable until a human approves it.
@@ -2809,17 +2815,24 @@ class AutopilotPass:
             kwargs["env_id"] = env_id
         model = autopilot_cfg.get("model")
         if model:
-            kwargs["model"] = model
+            from ..core.goal_runner import _is_claude_model
+            if _is_claude_model(model):
+                # A literal deep-run model pin (e.g. "opus"), not a QAR-call tier -- the field the
+                # backend validates it against post-split. Sending it as ``model`` 400s.
+                kwargs["deep_run_model"] = model
+            else:
+                kwargs["model"] = model
         if self._pass_task_id:
             kwargs["parent_task_id"] = self._pass_task_id
         try:
             created = self._client.create_task(text, **kwargs) or {}
         except TypeError:
-            # An older/stand-in client without ``parent_task_id`` and/or ``model``. Both are
-            # improvements to how the pass reports/routes, never a requirement for it to work, so
-            # lose the refinement rather than the task.
+            # An older/stand-in client without ``parent_task_id``/``model``/``deep_run_model``.
+            # All three are improvements to how the pass reports/routes, never a requirement for
+            # it to work, so lose the refinement rather than the task.
             kwargs.pop("parent_task_id", None)
             kwargs.pop("model", None)
+            kwargs.pop("deep_run_model", None)
             created = self._client.create_task(text, **kwargs) or {}
         task_id = created.get("id") or created.get("task_id")
         if not task_id:

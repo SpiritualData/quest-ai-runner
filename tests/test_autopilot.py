@@ -892,35 +892,55 @@ def test_created_task_links_to_the_QUEST_not_a_per_goal_id():
     assert created["source"] in ("chat", "reflection", "review")
 
 
-def test_quest_autopilot_model_is_stamped_on_the_created_task():
+def test_quest_autopilot_literal_model_is_routed_to_deep_run_model():
     """A quest's ``autopilot.model`` is the per-quest choice of which model the deep worker runs
-    THIS quest's autopilot work on. It rides through ``_create_autopilot_task`` onto every task
-    the pass creates, the same choke point ``env_id`` goes through."""
+    THIS quest's autopilot work on, but that config field is overloaded: a human can set it to
+    either a QAR-call tier or a bare Claude family alias. The backend's create-task API validates
+    those as two SEPARATE fields (split 2026-09-22), so a literal alias like "opus" must land in
+    ``deep_run_model``, never ``model`` -- sending it as ``model`` 400s with "model must be one of
+    ['balanced', 'best', 'fast', 'quality', 'science'] or omitted", which is exactly the production
+    failure loop this test guards against (quest_da6449dc011c, 2026-09-23: every poll cycle failed
+    to create the work task and re-spun the pass, forever)."""
     q1 = _quest("q1", model="opus")
     goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
     client = FakeAutopilotClient(quests=[q1], goals_by_quest={"q1": goals_payload})
     passer = AutopilotPass(client, team_id="team1", now=_now)
     passer.run({"text": "pass"})
-    assert client.created_tasks[0]["model"] == "opus"
+    assert client.created_tasks[0]["deep_run_model"] == "opus"
+    assert "model" not in client.created_tasks[0]
+
+
+def test_quest_autopilot_tier_model_is_stamped_on_the_created_task():
+    """A QAR-call tier (not a literal Claude alias) still rides through as ``model``, the field
+    the backend actually validates tiers against."""
+    q1 = _quest("q1", model="balanced")
+    goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
+    client = FakeAutopilotClient(quests=[q1], goals_by_quest={"q1": goals_payload})
+    passer = AutopilotPass(client, team_id="team1", now=_now)
+    passer.run({"text": "pass"})
+    assert client.created_tasks[0]["model"] == "balanced"
+    assert "deep_run_model" not in client.created_tasks[0]
 
 
 def test_a_quest_with_no_autopilot_model_creates_a_task_with_no_model_key_at_all():
-    """Unset means the lane's own default model ladder applies -- the create call must OMIT the
-    key entirely rather than send ``model: None``, matching the create_task contract."""
+    """Unset means the lane's own default model ladder applies -- the create call must OMIT both
+    keys entirely rather than send ``model: None``, matching the create_task contract."""
     q1 = _quest("q1")
     goals_payload = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
     client = FakeAutopilotClient(quests=[q1], goals_by_quest={"q1": goals_payload})
     passer = AutopilotPass(client, team_id="team1", now=_now)
     passer.run({"text": "pass"})
     assert "model" not in client.created_tasks[0]
+    assert "deep_run_model" not in client.created_tasks[0]
 
 
 def test_a_client_whose_create_task_rejects_model_still_gets_its_task_created():
-    """A stand-in ``create_task`` that predates ``model`` (or ``parent_task_id``, or both) must
-    still create the task: the field is an improvement to routing, never a requirement to run."""
+    """A stand-in ``create_task`` that predates ``model``/``deep_run_model``/``parent_task_id``
+    must still create the task: each field is an improvement to routing, never a requirement to
+    run."""
     class OlderClient(FakeAutopilotClient):
         def create_task(self, text, **kwargs):
-            if "model" in kwargs or "parent_task_id" in kwargs:
+            if "model" in kwargs or "deep_run_model" in kwargs or "parent_task_id" in kwargs:
                 raise TypeError("create_task() got an unexpected keyword argument")
             return super().create_task(text, **kwargs)
 
@@ -930,6 +950,7 @@ def test_a_client_whose_create_task_rejects_model_still_gets_its_task_created():
     result = AutopilotPass(client, team_id="team1", now=_now).run({"text": "pass"})
     assert len(result.created_task_ids) == 1
     assert "model" not in client.created_tasks[0]
+    assert "deep_run_model" not in client.created_tasks[0]
 
 
 # --- the built-in default assistant as a roster entry ------------------------------------------
