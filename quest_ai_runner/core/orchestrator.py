@@ -318,6 +318,18 @@ CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
   If you have already read and gathered context, and now realize execution is needed: choose
   action="answer" WITH deferred_deep. The answer can acknowledge what was found, but deferred_deep
   must specify the work to execute. {deferred_deep_semantics}
+
+  REACH OF A READ: reads reach ONLY the sources the CONTEXT and discovery list. When the request
+  needs something none of them hold (the files, running processes, jobs, logs, or code on a
+  machine; an external spreadsheet or service), no read, grep, or query will find it, so do not
+  search for it and do not grep a scope that is not a listed source: hand the work off. Prefer
+  action="answer" with a SHORT reply saying what you are handing off and what it will check or do,
+  WITH deferred_deep carrying the work, so the user hears the plan first. A read that came back
+  empty for such a request is the signal to hand off now, not to read again. If the CONTEXT says
+  nothing attached can reach that place, say so plainly instead of handing off. A MIXED message
+  (some parts your sources might answer, some parts only reachable elsewhere) must not hold the
+  hand-off hostage to more reading: in ONE step, answer what you already know and put everything
+  that lives elsewhere, including the checks, into deferred_deep.
 """
 
 # The deferred_deep semantics sentence injected into the planner doctrine above. Which one a turn
@@ -389,7 +401,8 @@ The four actions:
     request needs, list_sources / list_operations first (then describe_* the few you'll use), rather
     than inventing a shape. Discovery is the cheapest, most reliable way to honor what the user
     literally asked for. It does NOT favor any particular source or operation -- it just shows what
-    exists. BATCH AGGRESSIVELY: reads in ONE step run IN PARALLEL -- list ALL you'd plausibly want now
+    exists. Discovery maps ONLY the listed sources, so it is never a step toward work that lives
+    outside them (see REACH OF A READ): for that, skip discovery and hand off. BATCH AGGRESSIVELY: reads in ONE step run IN PARALLEL -- list ALL you'd plausibly want now
     (up to {max_reads}), including several describe_* calls at once. After the read you'll be
     re-invoked with the results in GATHERED.
   - "answer": you have ENOUGH real content in GATHERED -- or it's chit-chat needing no reading.
@@ -404,7 +417,8 @@ The four actions:
     an answer; choose "deep" so the change is actually proposed/made. Describing a mutation in prose,
     or printing a diff/patch instead of applying it, is a FAILURE.
   - "deep": this needs REAL WORK. The test is simple: if fulfilling the request means PRODUCING or
-    CHANGING an artifact (not just explaining one), it is "deep". That covers BOTH the user's data
+    CHANGING an artifact (not just explaining one), it is "deep". So is any request, even a pure
+    question, whose answer lives somewhere your reads cannot reach (see REACH OF A READ). That covers BOTH the user's data
     or artifacts -- CREATE / ADD / UPDATE / EDIT / DELETE / MARK / SET (e.g. "add a goal", "add a
     measurable outcome", "make this goal more ambitious", "update my X", "create a strategy") -- AND
     code or files: FIX a bug, IMPLEMENT / BUILD / REFACTOR a feature, EDIT or APPLY a change to a
@@ -682,7 +696,10 @@ assume an answer and do not act on one. The open question is:
 PLANNER_PROMPT = (
     _PLANNER_HEAD
     + "\n--- SUFFICIENCY (read enough before acting) ---\n"
-    + SUFFICIENCY_GATE + "\n\n"
+    + SUFFICIENCY_GATE + "\n"
+    + "  This checklist covers what your reads CAN reach. For work that lives outside the listed\n"
+    + "  sources (see REACH OF A READ), the deep runner does that reading where the work lives:\n"
+    + "  hand off without it rather than reading sources that cannot contain the answer.\n\n"
     + "\n--- SPECIFICITY (match the exact subject, not its category) ---\n"
     + SPECIFICITY_GATE + "\n\n"
     + _PLANNER_ACTIONS

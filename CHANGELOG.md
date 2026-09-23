@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **The planner hands off work its reads cannot reach instead of searching for it**
+  (`core/orchestrator.py` `PLANNER_PROMPT`). A request whose answer lives outside the listed
+  sources (a machine's files, running jobs, logs, code, an external spreadsheet or service) used
+  to trigger discovery and greps against scopes that were never sources, then an answer or a
+  re-read, because the deep test only named "producing or changing an artifact" and the discovery
+  and sufficiency rules both said "read first". New REACH OF A READ doctrine: such a request is a
+  hand-off, preferably `answer` + `deferred_deep` so the user hears the plan first; an empty read
+  is the signal to hand off; a mixed message answers what it knows and defers the rest in ONE
+  step; discovery and the sufficiency checklist are scoped to what reads can reach. Measured by a
+  consumer's 100-case routing check (real prompt and planner, no execution): deep picked for
+  machine-only work rose from 11/50 to 44/50 with a covering runner attached, with 50/50
+  conversational cases still kept shallow.
+
 ### Added
 - **A deep runner can say it is out of moves, and the goal loop stops instead of re-launching it**
   (`core/adapters.py`, `core/orchestrator.py`). A code-writing runner asked for something its data
