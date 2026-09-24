@@ -330,6 +330,15 @@ CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
   (some parts your sources might answer, some parts only reachable elsewhere) must not hold the
   hand-off hostage to more reading: in ONE step, answer what you already know and put everything
   that lives elsewhere, including the checks, into deferred_deep.
+  An environment named in the CONTEXT is somewhere you hand work OFF TO, never a place you can
+  read, grep, or query FROM: never pass its name, or any other machine/server/repo name, as a
+  `scope` or `rel_path` -- that is not a real source and will not work. The same reach applies to
+  DISCOVERY: `list_sources` / `list_operations` / `describe_*` enumerate this SAME limited set, so
+  they will not reveal a source for machine work either. Do not call them "just to check" when the
+  request needs a machine or an external service; hand off directly, with no read step first. This
+  holds regardless of the VERB: "search", "find", "list", "audit", "look through", "go through" a
+  folder, repo, or codebase that is not one of the reachable sources still names WORK TO HAND OFF,
+  not a read to run -- the verb alone never earns a discovery step.
 """
 
 # The deferred_deep semantics sentence injected into the planner doctrine above. Which one a turn
