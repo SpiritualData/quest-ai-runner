@@ -18,7 +18,11 @@ All notable changes to this project are documented here. The format is based on
   step; discovery and the sufficiency checklist are scoped to what reads can reach. Measured by a
   consumer's 100-case routing check (real prompt and planner, no execution): deep picked for
   machine-only work rose from 11/50 to 44/50 with a covering runner attached, with 50/50
-  conversational cases still kept shallow.
+  conversational cases still kept shallow. Follow-up fix from pushing that check toward its
+  remaining misses: an environment named in CONTEXT is now explicitly a hand-off target, never a
+  readable `scope`/`rel_path`, and "search/audit/list a folder" phrasing no longer earns one more
+  `list_sources`/`list_operations` discovery call on work outside the listed sources -- discovery
+  enumerates that same limited set regardless of the verb used.
 
 ### Added
 - **A deep runner can say it is out of moves, and the goal loop stops instead of re-launching it**
