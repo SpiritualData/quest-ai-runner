@@ -28,6 +28,7 @@ def start_textual_interactive(
     verbosity: int = 0,
     rep_specified: bool = True,
     persona_specified: bool = True,
+    resume=None,
 ) -> None:
     """Launch the Textual UI immediately, build the InteractiveSession in a background worker."""
     from .textual_ui import QuestAITerminal
@@ -56,6 +57,7 @@ def start_textual_interactive(
             _goal_id=goal_id,
             _rep_specified=rep_specified,
             _persona_specified=persona_specified,
+            resume=resume,
         ).run(mouse=True)
     except KeyboardInterrupt:
         # Ctrl+C pressed — exit cleanly without traceback

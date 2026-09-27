@@ -69,6 +69,7 @@ except ImportError:
     yaml = None  # type: ignore
 
 if TYPE_CHECKING:
+    from .chat_conversations import SavedConversation
     from .config import RunnerConfig
     from .core.orchestrator import Orchestrator, OrchestratorResult, ProgressEvent
 
@@ -732,7 +733,8 @@ class InteractiveSession:
     def __init__(self, cfg: "RunnerConfig", *, rep_name: str = "Assistant",
                  persona: Optional[str] = None, goal_id: Optional[str] = None,
                  _startup_notify=None, verbose: bool = False,
-                 rep_specified: bool = True, persona_specified: bool = True) -> None:
+                 rep_specified: bool = True, persona_specified: bool = True,
+                 resume: Optional["SavedConversation"] = None) -> None:
         from .config import build_orchestrator
 
         # Must run before build_orchestrator() spawns the background indexing thread(s).
@@ -760,12 +762,25 @@ class InteractiveSession:
         _conv_dir = Path(os.getenv("QAR_CHAT_HISTORY_DIR") or (Path.home() / ".quest-ai-runner" / "conversations"))
         self._session_file: Optional[Path] = None
         self._conv_id: Optional[str] = None
-        try:
-            _conv_dir.mkdir(parents=True, exist_ok=True)
-            self._session_file = _conv_dir / f"qar_chat_{_uuid.uuid4().hex}.json"
-            self._conv_id = self._session_file.stem
-        except Exception:
-            pass
+        # `chat --resume`: the conversation this session continues, or None for a fresh one.
+        self.resumed = resume
+        if resume is not None:
+            # Continue in the SAME file (one conversation stays one record) with its turns as
+            # this session's history. Mutate in place: ChatSessionStore below holds this list.
+            self._session_file = resume.path
+            self._conv_id = resume.conv_id
+            self._session_history.extend(resume.history)
+            self._turn_count = len(resume.history)
+            self._last_user, self._last_assistant = resume.history[-1]
+            if goal_id is None and isinstance(resume.meta.get("goal_id"), str):
+                self._goal_id = resume.meta["goal_id"]
+        else:
+            try:
+                _conv_dir.mkdir(parents=True, exist_ok=True)
+                self._session_file = _conv_dir / f"qar_chat_{_uuid.uuid4().hex}.json"
+                self._conv_id = self._session_file.stem
+            except Exception:
+                pass
 
         # Wire Stage 1 anaphora resolution: in-memory current-session context +
         # past QAR session files for cross-session recall.  Must be set before
@@ -850,8 +865,17 @@ class InteractiveSession:
             for user_text, asst_text in self._session_history:
                 messages.append({"role": "user", "content": user_text})
                 messages.append({"role": "assistant", "content": asst_text})
+            # Metadata lets `chat --resume` pick this corpus's latest conversation and restore
+            # the goal it was attached to. Readers of the file only look at "messages".
+            payload = {
+                "messages": messages,
+                "corpus_root": getattr(self._cfg, "corpus_root", None),
+                "goal_id": self._goal_id,
+                "rep_name": self._rep_name,
+                "updated_at": time.time(),
+            }
             self._session_file.write_text(
-                json.dumps({"messages": messages}, ensure_ascii=False), encoding="utf-8"
+                json.dumps(payload, ensure_ascii=False), encoding="utf-8"
             )
         except Exception:
             pass

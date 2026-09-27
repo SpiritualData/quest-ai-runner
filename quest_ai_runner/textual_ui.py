@@ -906,6 +906,7 @@ class QuestAITerminal(App):
         _goal_id: Optional[str] = None,
         _rep_specified: bool = True,
         _persona_specified: bool = True,
+        resume=None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
@@ -920,6 +921,7 @@ class QuestAITerminal(App):
         self._deferred_goal_id = _goal_id
         self._deferred_rep_specified = _rep_specified
         self._deferred_persona_specified = _persona_specified
+        self.deferred_resume = resume
 
         # Per-turn streaming state (reset by _begin_turn).
         self._turn_active = False
@@ -1066,6 +1068,7 @@ class QuestAITerminal(App):
                 verbose=self.verbosity >= 1,
                 rep_specified=self._deferred_rep_specified,
                 persona_specified=self._deferred_persona_specified,
+                resume=self.deferred_resume,
             )
             _active[0] = False  # suppress any background-thread notices from here on
             self.call_from_thread(self._finish_startup, session)
@@ -1094,10 +1097,40 @@ class QuestAITerminal(App):
             parts.append(f"model: {session._model_hint}")
         c.dim("  " + "  •  ".join(parts))
         c.line("")
+        self.deferred_resume = None
+        if getattr(session, "resumed", None) is not None:
+            self.replay_resumed_history(session)
         # Replay any messages the user typed before the session was ready.
         for queued_line in self._pre_session_queue:
             self._begin_turn(queued_line, echo=True)
         self._pre_session_queue.clear()
+
+    RESUME_REPLAY_TURNS = 10
+
+    def replay_resumed_history(self, session: InteractiveSession) -> None:
+        """Show the tail of a `chat --resume` conversation so the user sees where they left off.
+
+        Only the last RESUME_REPLAY_TURNS turns are rendered (a long conversation would otherwise
+        flood the scrollback); the session's history, which the model reads, holds all of them.
+        """
+        history = session._session_history
+        c = self._console
+        conv = session.resumed
+        c.dim(f"  Resumed conversation {conv.short_id[:12]} ({len(history)} "
+              f"turn{'s' if len(history) != 1 else ''})")
+        shown = history[-self.RESUME_REPLAY_TURNS:]
+        if len(history) > len(shown):
+            c.dim(f"  ... {len(history) - len(shown)} earlier turn(s) not shown")
+        c.line("")
+        for user_text, asst_text in shown:
+            self._tlog.write(Text(f"❯ {user_text}", style="bold cyan"))
+            self._tlog.write(Text(""))
+            if asst_text:
+                self._tlog.write(Text(f"{session._rep_name} (AI):", style="bold cyan"))
+                self._console.markdown(asst_text)
+            self._tlog.write(Text(""))
+        c.dim("  End of resumed history. Continue below.")
+        c.line("")
 
     def _startup_failed(self, exc: Exception) -> None:
         """Called on the UI thread when session init fails — show the error and quit."""

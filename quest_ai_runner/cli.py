@@ -185,7 +185,9 @@ Env it reads:
                                                    QAR reads this directory but never writes to it.
   QAR_CHAT_HISTORY_DIR (optional)             — directory where QAR writes its own chat session
                                                    history (default: ~/.quest-ai-runner/conversations).
-                                                   Written by QAR; read back by QAR in future sessions.
+                                                   Written by QAR; read back by QAR in future sessions,
+                                                   and reopened by `chat --resume [ID]`
+                                                   (`chat --list-conversations` lists them).
   QAR_QUEST_FOLDER_MAP (optional)             — JSON object mapping quest/goal id -> local folder,
                                                    e.g. {"quest_123": "/srv/corpus/some_quest"}. Each
                                                    entry's folder is kept in sync with its quest's
@@ -983,6 +985,13 @@ def main(argv=None) -> int:
     chat_p.add_argument("--check", action="store_true",
                         help="validate chat prerequisites (model provider, context store) and exit, "
                              "without opening the terminal UI")
+    chat_p.add_argument("--resume", "-r", nargs="?", const="last", default=None, metavar="ID",
+                        help="continue a saved chat conversation: with no ID, the most recent one "
+                             "for this corpus; otherwise the conversation whose id starts with ID "
+                             "(see --list-conversations). Its turns are restored as context and "
+                             "new turns append to the same conversation file")
+    chat_p.add_argument("--list-conversations", action="store_true",
+                        help="list saved chat conversations for this corpus (newest first) and exit")
 
     # --- quest subcommand: call the Quest API from the shell -------------------
     quest_p = sub.add_parser(
@@ -1205,6 +1214,22 @@ def main(argv=None) -> int:
                     cfg.corpus_root, f"{rep_positional.lower()}/CLAUDE.md")
         persona_specified = persona is not None
 
+        # --list-conversations / --resume: resolved HERE, before the TUI takes the screen, so a
+        # bad id is a plain one-line error in the terminal instead of a crash inside the app.
+        from .chat_conversations import (
+            format_conversation_list, list_conversations, resolve_conversation,
+        )
+        if getattr(args, "list_conversations", False):
+            print(format_conversation_list(list_conversations(corpus_root=cfg.corpus_root)))
+            return 0
+        resume = None
+        if getattr(args, "resume", None) is not None:
+            try:
+                resume = resolve_conversation(args.resume, corpus_root=cfg.corpus_root)
+            except LookupError as e:
+                log.error("cannot resume: %s", e)
+                return 1
+
         # The Textual UI is the only chat UI. `textual` is a CORE dependency (see
         # pyproject.toml), so it should always import from a correctly installed
         # environment; there is no second renderer to degrade to. If it does not
@@ -1222,7 +1247,7 @@ def main(argv=None) -> int:
             return 1
         start_textual_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id,
                                   verbosity=args.verbose, rep_specified=rep_specified,
-                                  persona_specified=persona_specified)
+                                  persona_specified=persona_specified, resume=resume)
         return 0
 
     # --- quest ----------------------------------------------------------------
