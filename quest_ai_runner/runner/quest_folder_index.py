@@ -44,6 +44,10 @@ log = logging.getLogger("quest-ai-runner.quest_folder_index")
 # How deep under the corpus root to look for sync files, and which directories never hold one.
 # The scan is a plain directory walk, measured at ~30 ms for ~2k directories.
 DISCOVERY_MAX_DEPTH = 4
+# A session started somewhere broad (a home directory) must not stall on the walk: stop after this
+# many directories or this many seconds, whichever comes first, keeping what was found so far.
+DISCOVERY_MAX_DIRS = 20000
+DISCOVERY_MAX_SECONDS = 1.0
 SKIP_DIRS = frozenset({"node_modules", "__pycache__", "venv", "site-packages", "dist", "build"})
 
 # Ceilings for what one matched quest adds to EVERY turn that mentions it.
@@ -186,8 +190,16 @@ def discover_quest_folders(corpus_root: Optional[str],
     if corpus_root and os.path.isdir(corpus_root):
         root = os.path.abspath(corpus_root)
         candidates = []
+        import time
+        deadline = time.monotonic() + DISCOVERY_MAX_SECONDS
+        seen_dirs = 0
         try:
             for dirpath, dirnames, filenames in os.walk(root):
+                seen_dirs += 1
+                if seen_dirs > DISCOVERY_MAX_DIRS or time.monotonic() > deadline:
+                    log.info("quest folder discovery stopped after %d directories under %s",
+                             seen_dirs, root)
+                    break
                 depth = dirpath[len(root):].count(os.sep)
                 dirnames[:] = ([d for d in dirnames if not d.startswith(".") and d not in SKIP_DIRS]
                                if depth < max_depth else [])
@@ -401,7 +413,7 @@ def sync_quest_cards(store, entries: Sequence[QuestFolder], corpus_root: Optiona
 
 def describe_match(entry: QuestFolder) -> str:
     """One short line for the UI: which quest was matched, and where it lives."""
-    return f"Quest: {entry.title or entry.quest_id}  ·  {entry.folder or 'not synced locally'}"
+    return f"quest: {entry.title or entry.quest_id}  ·  {entry.folder or 'not synced locally'}"
 
 
 def ids(entries: Iterable[QuestFolder]) -> List[str]:

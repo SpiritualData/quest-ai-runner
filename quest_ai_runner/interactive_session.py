@@ -402,14 +402,13 @@ class _DeepRunTracker:
 
 _SLASH_COMMANDS = [
     "/help", "/clear", "/reps", "/rep ", "/file ",
-    "/quests", "/goal ", "/whoami", "/status", "/tasks",
+    "/whoami", "/status", "/tasks",
     "/quit", "/q",
     "/models", "/model", "/model ", "/depth", "/depth ",
     "/system", "/replan",
     "/save ", "/save", "/load ", "/sessions",
     "/quest", "/quest ",
 ]
-# /goal with a space triggers search; bare /goal (no arg) also works as a browse
 # /models — interactive model tier selection menu
 # /model [haiku|sonnet|opus|fable] — set or show current model tier (no arg → menu)
 # /depth [light|standard|deep] — alias for /model (light=haiku, standard=sonnet, deep=opus)
@@ -440,11 +439,11 @@ Commands:
     /system [text]       Show or set a custom system prompt prepended to persona
     /replan              Prime next turn for a fresh re-planning pass (uses opus)
 
-  ● Quest grounding
-    /quest               Show quest matching and the synced quest folders
-    /quest none          Never add a quest to your messages (remembered)
-    /quest auto          Match each message to the quest it is about (default)
-    /quest <name>        Pin one quest for this session
+  ● Quest
+    /quest               Select a quest for this conversation
+    /quest <name>        Select a quest by name or id
+    /quest auto          No selected quest; match each message to one (default)
+    /quest none          No quest at all, not even matched (remembered)
 
   ● Sessions
     /save [name]         Save this session (transcript + config) to disk
@@ -454,10 +453,6 @@ Commands:
   ● Conversation
     /clear               Reset the transcript
     /help                Show this help
-
-  ● Goals & Quests
-    /quests              Browse and attach to goals
-    /goal <search|id>    Search goals or attach by ID
 
   ● Exit
     /quit, /q            Exit the session
@@ -835,10 +830,12 @@ class InteractiveSession:
         # walk, tens of milliseconds. "auto" matches every message; "none" never adds a quest (for
         # people whose chats are mostly not about a quest); a pinned quest is added to every turn.
         self.quest_folders = []
+        self.quest_search_root = ""
         try:
             from .runner.quest_folder_index import discover_quest_folders
+            self.quest_search_root = getattr(cfg, "corpus_root", None) or os.getcwd()
             self.quest_folders = discover_quest_folders(
-                getattr(cfg, "corpus_root", None), getattr(cfg, "quest_folder_map", None))
+                self.quest_search_root, getattr(cfg, "quest_folder_map", None))
         except Exception:  # noqa: BLE001 — must never break session startup
             self.quest_folders = []
         # Each synced quest is a context card, like every quest is in Quest itself, so selection can
@@ -856,6 +853,7 @@ class InteractiveSession:
         # Quests the Quest account can reach but that have no local folder, for the "/quest" menu.
         # Fetched off-thread: a slow or absent Quest API must never delay the session.
         self.remote_quests = []
+        self.quest_list_listeners = []  # called (no args) when the remote list arrives
         threading.Thread(target=self.fetch_remote_quests, name="qar-quest-list", daemon=True).start()
         # Turn history for /tasks and /status commands
         self._turns: List[dict] = []  # [{user, model, tokens_in, tokens_out, elapsed, timestamp}]
@@ -954,6 +952,22 @@ class InteractiveSession:
             self.remote_quests = reachable_quests(client, list(dict.fromkeys(team_ids)))
         except Exception:  # noqa: BLE001 — the menu just shows local quests
             self.remote_quests = []
+        for listener in list(getattr(self, "quest_list_listeners", [])):
+            try:
+                listener()
+            except Exception:  # noqa: BLE001
+                pass
+
+    def no_quests_reason(self) -> str:
+        """Why the quest list is empty, in words a person can act on."""
+        where = self.quest_search_root or "the corpus root"
+        parts = [f"No quests found. No folder under {where} has a QUEST_SYNC.md"]
+        if self._quest_client() is None:
+            parts.append("and this chat is not signed in to Quest (QUEST_BASE_URL and "
+                         "QUEST_API_KEY are not set), so it cannot list your Quest quests")
+        else:
+            parts.append("and Quest returned no quests for this account")
+        return ", ".join(parts) + "."
 
     def quest_choices(self) -> list:
         """Every quest a person can pick: local synced folders first, then Quest-only ones."""
@@ -1003,13 +1017,26 @@ class InteractiveSession:
             base = self._effective_preamble()
         if quest is None:
             return base, None
+        meta: dict = {}
+        if quest is self.pinned_quest:
+            # SELECTED, not guessed: bind the turn to it exactly as choosing a quest in the Quest AI
+            # chat does (quest-backend passes the chosen quest as quest_id and in quest_ids), so the
+            # scope fence keeps other quests' context out. A guessed match stays a soft nudge.
+            meta["quest_ids"] = [quest.quest_id]
         if quest.folder:
             from .runner.quest_folder_index import quest_card_id
-            return base, {"priority_card_ids": [quest_card_id(quest.quest_id)],
-                          "quest_folder": quest.folder}
+            meta.update({"priority_card_ids": [quest_card_id(quest.quest_id)],
+                         "quest_folder": quest.folder})
+            return base, meta
         from .runner.quest_folder_index import render_quest_folder_context
         block = render_quest_folder_context(quest)
-        return (f"{base}\n\n{block}" if base else block), None
+        return (f"{base}\n\n{block}" if base else block), (meta or None)
+
+    def bound_quest_id(self) -> Optional[str]:
+        """The quest id this session's turns are bound to: a selected quest, else /goal's."""
+        if self.pinned_quest is not None:
+            return self.pinned_quest.quest_id
+        return self._goal_id
 
     def cmd_quest(self, arg: str) -> None:
         """/quest [auto|none|<name or id>]: how turns are grounded in a synced quest folder."""
@@ -1037,16 +1064,17 @@ class InteractiveSession:
                 c.dim(f"  No synced quest clearly matches {arg!r}. /quest lists them.")
                 return
             self.pinned_quest = found
-            c.dim(f"  Pinned for this session. {describe_match(found)}")
-            c.dim("  /quest auto goes back to matching each message.")
+            c.dim(f"  Selected for this conversation: {describe_match(found)}")
+            c.dim("  Every message is now about this quest, as when you choose a quest in Quest AI "
+                  "chat. /quest auto goes back to matching each message.")
             return
         if self.pinned_quest is not None:
-            c.dim(f"  Pinned: {describe_match(self.pinned_quest)}")
+            c.dim(f"  Selected {describe_match(self.pinned_quest)}")
         else:
             c.dim(f"  Quest matching: {self.quest_match_mode}")
         choices = self.quest_choices()
         if not choices:
-            c.dim("  No quests found: no synced quest folders, and no Quest quests reachable.")
+            c.dim("  " + self.no_quests_reason())
             return
         c.dim("  Quests (type /quest and a space to pick one):")
         for q in choices:

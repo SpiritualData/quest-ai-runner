@@ -67,6 +67,18 @@ All notable changes to this project are documented here. The format is based on
   `/quest none` turns matching off and is remembered in `qar_state.json`; `/quest auto` turns it
   back on; `/quest <name|id>` pins one; `QAR_QUEST_AUTO_MATCH=0` makes off the deployment default.
   Tests: `tests/test_quest_folder_index.py`, `tests/test_hybrid_context_assembler_recent_hint.py`.
+- **`/quest` selects a quest for the conversation, like choosing one in Quest AI chat
+  (2026-09-26).** Every picker (`/quest`, `/model`, `/reps`) now opens a chooser above the prompt
+  instead of printing a numbered list: arrows move, Enter selects, typing narrows, Esc cancels (a
+  typed number still works). The `/quest` chooser lists every reachable quest first (synced
+  folders plus the account's Quest quests, filled in when the background fetch lands), then "Match
+  automatically" and "No quest". A SELECTED quest binds the turn exactly as the Quest AI chat does
+  (`quest_id` plus `context_meta["quest_ids"]`, so the scope fence keeps other quests' context
+  out); an automatically matched one stays a soft nudge (priority card only). A "/" line is always
+  a command: it no longer goes to a running turn as guidance, and one typed during startup runs as
+  a command once ready. `/quests` and `/goal` (the old goal-attach browser) now open `/quest`. An
+  empty quest list says why (where it looked; whether Quest credentials are set), and discovery
+  falls back to the working directory, capped at 20k directories or 1 s.
 - **A "/" command menu in the chat, like Claude Code's (2026-09-26).** Typing `/` lists every
   command with its description (parsed from `/help`, so they cannot drift), narrowing as you type:
   arrows move, Tab completes, Enter runs, Esc closes. After `/quest ` it lists the choices: none,

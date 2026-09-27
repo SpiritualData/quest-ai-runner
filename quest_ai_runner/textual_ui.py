@@ -1213,9 +1213,15 @@ class QuestAITerminal(App):
                 c.dim("  Ready. Continue the conversation below.")
                 c.line("")
         self.deferred_resume = None
+        listeners = getattr(session, "quest_list_listeners", None)
+        if isinstance(listeners, list):
+            listeners.append(lambda: self.call_from_thread(self.pick_quest, True))
         # Replay any messages the user typed before the session was ready.
         for queued_line in self._pre_session_queue:
-            self._begin_turn(queued_line, echo=False)
+            if queued_line.startswith("/"):
+                self._dispatch_command(queued_line)
+            else:
+                self._begin_turn(queued_line, echo=False)
         self._pre_session_queue.clear()
 
     RESUME_REPLAY_TURNS = 10
@@ -1281,18 +1287,27 @@ class QuestAITerminal(App):
 
         # Session still initializing — queue the message for replay once ready.
         if self.sess is None:
-            # Echo it now (it is replayed without a second echo) so it does not seem lost.
-            self._tlog.write(Text(f"❯ {line}", style="bold cyan"))
-            self._tlog.write(Text(""))
-            self._console.dim("  Queued. Sends as soon as the session is ready.")
+            if line.startswith("/"):
+                self._console.dim(f"  Still starting up; {line.split()[0]} opens in a moment.")
+            else:
+                # Echo it now (it is replayed without a second echo) so it does not seem lost.
+                self._tlog.write(Text(f"❯ {line}", style="bold cyan"))
+                self._tlog.write(Text(""))
+                self._console.dim("  Queued. Sends as soon as the session is ready.")
             self._pre_session_queue.append(line)
             return
 
         # Menu selection mode (a picker is awaiting a number).
         if self._pending_select is not None:
             cb = self._pending_select
-            self._pending_select = None
+            self.close_choices()
             cb(line)
+            return
+
+        # A "/" line is a command for this terminal, never words for the AI: it runs now, even in
+        # the middle of a turn (a queued "/quest" used to be handed to the running turn to act on).
+        if line.startswith("/"):
+            self._dispatch_command(line)
             return
 
         if self._turn_active:
@@ -1303,10 +1318,7 @@ class QuestAITerminal(App):
             self._tlog.write(Text(f"  ↑ queued: {line}", style="dim"))
             return
 
-        if line.startswith("/"):
-            self._dispatch_command(line)
-        else:
-            self._begin_turn(line, echo=True)
+        self._begin_turn(line, echo=True)
 
     def _dispatch_command(self, line: str) -> None:
         c = self._console
@@ -1362,11 +1374,12 @@ class QuestAITerminal(App):
             s._cmd_sessions(); return
         if line == "/reps":
             self._cmd_reps(); return
-        if line == "/quests":
-            self._cmd_quests(); return
-        if line.startswith("/goal"):
-            self._cmd_goal(line[5:].strip()); return
-        if line == "/quest" or line.startswith("/quest "):
+        # /quests and /goal were the old way to attach the chat to a goal; /quest does it now.
+        if line in ("/quest", "/quests", "/goal"):
+            self.pick_quest(); return
+        if line.startswith("/goal "):
+            s.cmd_quest(line[6:]); return
+        if line.startswith("/quest "):
             s.cmd_quest(line[6:]); return
         c.dim(f"  Unknown command: {line!r}  (/help for list)")
 
@@ -1377,16 +1390,29 @@ class QuestAITerminal(App):
         self._console.dim(prompt)
         self._pending_select = handler
 
+    choice_picker: Optional[dict] = None
+
+    def pick(self, title: str, options: List[tuple], handle: Callable[[str], None]) -> None:
+        """Offer ``options`` ((label, description) pairs) in the menu above the prompt.
+
+        Arrows move, Enter picks, typing narrows the list, Esc cancels. ``handle`` gets the chosen
+        option's 1-based number as a string ("0" on cancel), the same contract as a typed number,
+        which also still works.
+        """
+        self._console.dim(f"  {title}  (arrows to move, Enter to select, Esc to cancel)")
+        self.choice_picker = {"options": list(options), "handle": handle}
+        self._pending_select = handle
+        self.refresh_command_menu()
+
+    def close_choices(self) -> None:
+        self.choice_picker = None
+        self._pending_select = None
+        self.refresh_command_menu()
+
     def _cmd_models_menu(self) -> None:
         c = self._console
         s = self.sess
         current = s._model_hint or "auto"
-        c.line("")
-        c.dim("  Available models:")
-        for i, (tier, desc) in enumerate(s._model_tiers, 1):
-            marker = "●" if tier == current else " "
-            c.dim(f"  {i}.  {marker} {tier:9s}  {desc}")
-        c.dim(f"  0.  Cancel (keep: {current})")
 
         def _handle(raw: str) -> None:
             try:
@@ -1404,7 +1430,42 @@ class QuestAITerminal(App):
                 c.dim(f"  Model set to {tier_name}.")
             s._persist_session_state()
 
-        self._ask_select("  select › ", _handle)
+        self.pick(f"Model (current: {current})",
+                  [(tier, desc + ("  (current)" if tier == current else ""))
+                   for tier, desc in s._model_tiers], _handle)
+
+    def pick_quest(self, refresh: bool = False) -> None:
+        """/quest with no argument: select a quest for this conversation (or auto / none).
+
+        ``refresh`` re-fills an already open chooser in place, used when the list of quests from
+        Quest arrives after the chooser opened (it is fetched in the background at startup).
+        """
+        from .command_menu import quest_items
+        s = self.sess
+        pinned = getattr(s, "pinned_quest", None)
+        items = quest_items("", s.quest_choices(), getattr(s, "quest_match_mode", "auto"),
+                            pinned.quest_id if pinned is not None else None)
+
+        def handle(raw: str) -> None:
+            try:
+                n = int(raw.strip())
+            except ValueError:
+                n = 0
+            if n <= 0 or n > len(items):
+                self._console.dim("  Cancelled."); return
+            s.cmd_quest(items[n - 1].completion[len("/quest "):])
+
+        options = [(i.label, i.description) for i in items]
+        if refresh:
+            if self.choice_picker is not None and self.choice_picker.get("kind") == "quest":
+                self.choice_picker.update(options=options, handle=handle)
+                self._pending_select = handle
+                self.refresh_command_menu()
+            return
+        if not s.quest_choices():
+            self._console.dim("  " + s.no_quests_reason())
+        self.pick("Select a quest for this conversation", options, handle)
+        self.choice_picker["kind"] = "quest"
 
     def _cmd_reps(self) -> None:
         c = self._console
@@ -1429,10 +1490,6 @@ class QuestAITerminal(App):
             })
         if not reps:
             c.dim(f"  No SKILL.md files found under {skills_dir}."); return
-        c.line("")
-        for i, r in enumerate(reps, 1):
-            c.dim(f"  {i}.  {r['display_name']}")
-        c.dim("  0.  Cancel")
 
         def _handle(raw: str) -> None:
             try:
@@ -1453,99 +1510,9 @@ class QuestAITerminal(App):
             except OSError as e:
                 c.dim(f"  Could not read {r['skill_file']!r}: {e}")
 
-        self._ask_select("  select › ", _handle)
-
-    def _cmd_goal(self, arg: str) -> None:
-        c = self._console
-        s = self.sess
-        if arg and " " not in arg and len(arg) < 80:
-            s._goal_id = arg
-            c.dim(f"  Goal set to {arg!r} — use /quests to browse by name."); return
-        self._cmd_quests()
-
-    def _cmd_quests(self) -> None:
-        c = self._console
-        s = self.sess
-        client = s._quest_client()
-        if client is None:
-            c.dim("  Quest credentials not configured. Set QUEST_BASE_URL, QUEST_API_KEY, QUEST_TEAM_ID.")
-            return
-        c.dim("  Fetching quests and goals…")
-        try:
-            quests = client.list_quests()
-        except Exception as e:  # noqa: BLE001
-            c.dim(f"  Could not fetch quests: {e}"); return
-        if not quests:
-            c.dim("  No quests attached to this team."); return
-
-        SCOPE_ORDER = ["year", "quarter", "month", "week", "day", "custom", "quest", ""]
-
-        def _scope_rank(x) -> int:
-            try:
-                return SCOPE_ORDER.index(str(x or ""))
-            except ValueError:
-                return len(SCOPE_ORDER)
-
-        buckets: dict = {}
-        for quest in quests:
-            quest_id = quest.get("quest_id") or ""
-            quest_outcome = quest.get("outcome") or quest_id or "untitled"
-            if not quest_id:
-                continue
-            try:
-                data = client.list_quest_goals(quest_id)
-            except Exception:  # noqa: BLE001
-                continue
-            for group in (data.get("period_groups") or []):
-                scope = group.get("time_scope") or "custom"
-                period = group.get("period") or ""
-                key = (scope, period)
-                bucket = buckets.setdefault(key, {
-                    "time_scope": scope, "period": period,
-                    "period_label": group.get("period_label") or period or scope,
-                    "goals": [],
-                })
-                for g in (group.get("goals") or []):
-                    g["_quest_outcome"] = quest_outcome
-                    bucket["goals"].append(g)
-
-        if not buckets:
-            c.dim("  No goals found."); return
-
-        sorted_groups = sorted(buckets.values(),
-                               key=lambda p: (_scope_rank(p["time_scope"]), p.get("period") or ""))
-        flat_goals: List[dict] = []
-        c.line("")
-        n = 0
-        for group in sorted_groups:
-            goals = group.get("goals") or []
-            if not goals:
-                continue
-            c.dim(f"       ── {group['period_label']} ──")
-            for g in goals:
-                n += 1
-                name = g.get("name") or g.get("title") or g.get("id") or "untitled"
-                ctx = g.get("_quest_outcome") or ""
-                done = "  ✓" if g.get("completed") else ""
-                suffix = f"  ({ctx}){done}" if ctx else done
-                flat_goals.append(g)
-                c.dim(f"  {n:2d}.  {name}{suffix}")
-        c.dim("   0.  cancel")
-        if not flat_goals:
-            c.dim("  No goals found."); return
-
-        def _handle(raw: str) -> None:
-            try:
-                pick = int(raw.strip())
-            except ValueError:
-                c.dim("  Cancelled."); return
-            if pick <= 0 or pick > len(flat_goals):
-                c.dim("  Cancelled."); return
-            g = flat_goals[pick - 1]
-            s._goal_id = g.get("id") or g.get("goal_id") or ""
-            c.dim(f"  Attached to: {g.get('name') or g.get('title') or s._goal_id}")
-
-        self._ask_select("  select › ", _handle)
+        self.pick("Representative",
+                  [(r["display_name"], "(current)" if r["display_name"] == s._rep_name else "")
+                   for r in reps], _handle)
 
     # -- turn lifecycle --------------------------------------------------------
 
@@ -1638,11 +1605,13 @@ class QuestAITerminal(App):
             preamble, grounding_meta = s.turn_grounding(user_text)
             if s.turn_quest is not None:
                 from .runner.quest_folder_index import describe_match
-                self.call_from_thread(self._console.dim, "  " + describe_match(s.turn_quest))
+                how = "Selected" if s.turn_quest is s.pinned_quest else "Matched"
+                self.call_from_thread(self._console.dim,
+                                      f"  {how} {describe_match(s.turn_quest)}")
             for item in s._orch.run_stream(
                 user_text,
                 transcript=s._last_transcript(),
-                quest_id=s._goal_id,
+                quest_id=s.bound_quest_id(),
                 rep_preamble=preamble,
                 model_hint=model_hint,
                 pending_inputs=_pending,
@@ -2161,6 +2130,14 @@ class QuestAITerminal(App):
         except Exception:  # noqa: BLE001 — not mounted yet
             return
         s = self.sess
+        if self.choice_picker is not None:
+            from .command_menu import MenuItem
+            words = [] if text.strip().isdigit() else text.lower().split()
+            items = [MenuItem(label, desc, str(i), True)
+                     for i, (label, desc) in enumerate(self.choice_picker["options"], 1)
+                     if all(w in f"{label} {desc}".lower() for w in words)]
+            self.show_menu_items(menu, items)
+            return
         if not hasattr(self, "help_commands"):
             self.help_commands = parse_help(_HELP)
         pinned = getattr(s, "pinned_quest", None) if s is not None else None
@@ -2170,12 +2147,15 @@ class QuestAITerminal(App):
             mode=getattr(s, "quest_match_mode", "auto") if s is not None else "auto",
             pinned_id=pinned.quest_id if pinned is not None else None,
         )
+        self.show_menu_items(menu, items)
+
+    def show_menu_items(self, menu, items) -> None:
         self.menu_items_shown = items
         menu.clear_options()
         if not items:
             menu.display = False
             return
-        width = max(len(i.label) for i in items) + 2
+        width = min(max(len(i.label) for i in items), 60) + 2
         menu.add_options([
             Option(Text.assemble((i.label.ljust(width), "bold"), (i.description, "dim")))
             for i in items
@@ -2200,6 +2180,12 @@ class QuestAITerminal(App):
             menu.highlighted = (current + 1) % count
             return True
         if key == "escape":
+            if self.choice_picker is not None:
+                handle = self.choice_picker["handle"]
+                self.query_one("#prompt", PromptTextArea).text = ""
+                self.close_choices()
+                handle("0")
+                return True
             menu.display = False
             self.menu_items_shown = []
             return True
@@ -2207,6 +2193,17 @@ class QuestAITerminal(App):
             return False
         item = self.menu_items_shown[current]
         prompt = self.query_one("#prompt", PromptTextArea)
+        if self.choice_picker is not None:
+            if key == "tab":
+                return True
+            if prompt.text.strip().isdigit():
+                return False  # a typed number is submitted as-is, the way it always worked
+            handle = self.choice_picker["handle"]
+            prompt.text = ""
+            self.close_choices()
+            self._console.dim(f"  › {item.label}")
+            handle(item.completion)
+            return True
         if key == "enter" and item.submit:
             # Run the highlighted command, exactly as if it had been typed out and submitted.
             prompt.post_message(PromptTextArea.Submitted(prompt, item.completion))

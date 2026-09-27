@@ -164,8 +164,10 @@ def test_matched_turn_puts_the_quest_card_first(monkeypatch, corpus, tmp_path):
     sess, _ = make_session(monkeypatch, corpus, tmp_path)
     preamble, meta = sess.turn_grounding("where is the 1000 subscribers quest")
     assert sess.turn_quest.quest_id == "quest_subs"
+    # A guessed match is a nudge only: no quest_ids, so it never binds or fences the turn.
     assert meta == {"priority_card_ids": ["quest-folder-quest_subs"],
                     "quest_folder": str((corpus / "quest_subscribers_growth").resolve())}
+    assert sess.bound_quest_id() is None
     assert preamble is None  # the card carries it; no extra prompt text
     assert sess.turn_grounding("hello") == (None, None) and sess.turn_quest is None
 
@@ -177,7 +179,7 @@ def test_quest_without_local_folder_goes_in_the_preamble(monkeypatch, corpus, tm
                                                "Two episodes recorded.")]
     sess.cmd_quest("quest_remote")
     preamble, meta = sess.turn_grounding("hi")
-    assert meta is None and "Two episodes recorded." in preamble
+    assert meta == {"quest_ids": ["quest_remote"]} and "Two episodes recorded." in preamble
 
 
 def test_follow_up_stays_on_the_quest(monkeypatch, corpus, tmp_path):
@@ -205,15 +207,23 @@ def test_deployment_can_default_matching_off(monkeypatch, corpus, tmp_path):
     assert sess.turn_grounding("where is the 1000 subscribers quest") == (None, None)
 
 
-def test_pinned_quest_applies_to_every_turn(monkeypatch, corpus, tmp_path):
+def test_selected_quest_binds_every_turn_like_quest_ai_chat(monkeypatch, corpus, tmp_path):
     sess, lines = make_session(monkeypatch, corpus, tmp_path)
+    assert sess.bound_quest_id() is None
     sess.cmd_quest("wikipedia")
-    sess.turn_grounding("hello")
+    _, meta = sess.turn_grounding("hello")
     assert sess.turn_quest.quest_id == "quest_wiki"
+    # Bound like choosing a quest in the app: quest_id on the turn, and quest_ids for the fence.
+    assert sess.bound_quest_id() == "quest_wiki"
+    assert meta["quest_ids"] == ["quest_wiki"]
+    assert meta["priority_card_ids"] == ["quest-folder-quest_wiki"]
+    sess.cmd_quest("auto")
+    assert sess.bound_quest_id() is None
     sess.cmd_quest("nothing like any quest")
     assert any("No synced quest clearly matches" in l for l in lines)
+    sess.cmd_quest("wikipedia")
     sess.cmd_quest("")
-    assert any("Pinned:" in l for l in lines)
+    assert any(l.startswith("  Selected quest:") for l in lines)  # /quest with a selection shows it
 
 
 # -- shared-corpus file permissions ----------------------------------------------------------
@@ -228,3 +238,21 @@ def test_atomic_card_write_is_readable_by_others(tmp_path):
         os.umask(old)
     mode = stat.S_IMODE((tmp_path / "card-a.json").stat().st_mode)
     assert mode & stat.S_IRGRP and mode & stat.S_IROTH, oct(mode)
+
+
+def test_discovery_falls_back_to_the_working_directory(monkeypatch, corpus, tmp_path):
+    from quest_ai_runner.config import RunnerConfig
+    from quest_ai_runner import interactive_session as mod
+    monkeypatch.chdir(corpus)
+    sess, lines = make_session(monkeypatch, corpus, tmp_path)
+    # make_session passes corpus_root; rebuild the same way with none set.
+    fresh = mod.InteractiveSession(RunnerConfig(quest_base_url="", quest_api_key="", corpus_root=None))
+    assert {q.quest_id for q in fresh.quest_folders} >= {"quest_subs", "quest_wiki"}
+
+
+def test_empty_quest_list_says_why(monkeypatch, tmp_path):
+    empty = tmp_path / "empty_corpus"
+    empty.mkdir()
+    sess, lines = make_session(monkeypatch, empty, tmp_path)
+    sess.cmd_quest("")
+    assert any(f"No folder under {empty}" in l and "not signed in to Quest" in l for l in lines)

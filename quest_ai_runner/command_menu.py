@@ -60,7 +60,7 @@ def parse_help(help_text: str) -> List[MenuItem]:
 
 def quest_items(query: str, quests: Sequence, mode: str = "auto",
                 pinned_id: Optional[str] = None) -> List[MenuItem]:
-    """The choices after "/quest ": off, on, then each reachable quest matching the query."""
+    """The choices after "/quest ": every reachable quest matching the query, then auto / none."""
     query_words = query.lower().split()
 
     def wanted(*texts: str) -> bool:
@@ -68,22 +68,23 @@ def quest_items(query: str, quests: Sequence, mode: str = "auto",
         return all(w in hay for w in query_words)
 
     items: List[MenuItem] = []
-    if wanted("none off no quest"):
-        items.append(MenuItem("none", "Never add a quest to your messages"
-                              + (" (current)" if mode == "none" and not pinned_id else ""),
-                              "/quest none", True))
-    if wanted("auto on match"):
-        items.append(MenuItem("auto", "Match each message to the quest it is about"
-                              + (" (current)" if mode == "auto" and not pinned_id else ""),
-                              "/quest auto", True))
     for q in quests:
         title = getattr(q, "title", "") or q.quest_id
         folder = getattr(q, "folder", "") or ""
         if not wanted(title, q.quest_id, folder):
             continue
         where = folder if folder else "not synced to a local folder"
-        current = " (pinned)" if pinned_id and q.quest_id == pinned_id else ""
+        current = " (selected)" if pinned_id and q.quest_id == pinned_id else ""
         items.append(MenuItem(title, f"{where}{current}", f"/quest {q.quest_id}", True))
+    if wanted("match automatically auto"):
+        items.append(MenuItem("Match automatically", "No selected quest; each message is matched "
+                              "to the quest it is about"
+                              + (" (current)" if mode == "auto" and not pinned_id else ""),
+                              "/quest auto", True))
+    if wanted("no quest none off"):
+        items.append(MenuItem("No quest", "Never add a quest to your messages"
+                              + (" (current)" if mode == "none" and not pinned_id else ""),
+                              "/quest none", True))
     return items
 
 
