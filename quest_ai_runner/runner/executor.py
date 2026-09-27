@@ -929,6 +929,16 @@ class TaskExecutor:
             except Exception:  # noqa: BLE001 -- handled below exactly like a failed write
                 log.error("usage-limit requeue failed for task %s", task_id, exc_info=True)
         if not requeued:
+            # A backend that predates the start-time hold refuses its fields. Put the task back as
+            # plain queued instead: this lane's own pause keeps it from running until the reset,
+            # so it still waits rather than failing.
+            plain = getattr(self._client, "update_task", None)
+            if callable(plain):
+                try:
+                    requeued = plain(task_id, {"status": "queued"}) or None
+                except Exception:  # noqa: BLE001
+                    log.error("plain requeue failed for task %s", task_id, exc_info=True)
+        if not requeued:
             msg = (f"{note} The task could not be put back in the queue automatically, so it is "
                    "marked failed; run it again once Claude Code is available.")
             self._post_conv(conv_id, msg, kind="failed", task_id=task_id, card_id=card_id)

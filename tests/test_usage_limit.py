@@ -233,7 +233,7 @@ class RecordingClient:
     def __getattr__(self, name):
         def record(*args, **kwargs):
             self.calls.append((name, args, kwargs))
-            if name == "requeue_for_usage_limit":
+            if name in ("requeue_for_usage_limit", "update_task"):
                 return {"task_id": args[0], "status": "queued"}
             if name in ("get_task",):
                 return {"status": "in_progress"}
@@ -315,6 +315,9 @@ def test_a_failed_requeue_write_is_reported_failed_not_left_in_progress():
         def requeue_for_usage_limit(self, *a, **k):
             return None
 
+        def update_task(self, *a, **k):
+            raise RuntimeError("backend down")
+
     client = NoRequeue()
     outcome = TaskExecutor(client, FixedOrchestrator(
         raises=usage_limit.UsageLimitError(usage_limit.UsageLimit(message=WEEKLY)))).execute(
@@ -383,3 +386,19 @@ def test_start_at_tasks_are_due_whatever_the_runner_clock(tmp_path):
             "start_at": "2026-09-25T16:00:00Z"}
     due, deferred = _due_now_locally([task])
     assert due == [task] and deferred == []
+
+
+def test_an_older_backend_gets_a_plain_requeue_and_the_lane_pause_holds_it():
+    from quest_ai_runner.runner.executor import TaskExecutor
+
+    class OldBackend(RecordingClient):
+        def requeue_for_usage_limit(self, *a, **k):
+            return None          # 422: the backend does not know start_at yet
+
+    client = OldBackend()
+    outcome = TaskExecutor(client, FixedOrchestrator(
+        raises=usage_limit.UsageLimitError(usage_limit.UsageLimit(message=WEEKLY)))).execute(
+        {"task_id": "atask_3", "text": "x"})
+    assert outcome.status == "waiting"
+    assert ("update_task", ("atask_3", {"status": "queued"}), {}) in client.calls
+    assert not client.named("report_failed")
