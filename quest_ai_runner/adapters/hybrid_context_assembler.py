@@ -113,6 +113,11 @@ class HybridContextAssembler(ContextAssemblerBase):
     # ContextAssemblerBase implementation
     # ------------------------------------------------------------------
 
+    @property
+    def assemblers(self) -> List[Any]:
+        """The keyword and vector arms (for callers looking for a capability among them)."""
+        return [a for a in (self._keyword, self._vector) if a is not None]
+
     def assemble(
         self, task_text: str, *, meta: Optional[Dict[str, Any]] = None
     ) -> AssembledContext:
@@ -449,6 +454,19 @@ class HybridContextAssembler(ContextAssemblerBase):
                 return None
 
             meta_by_id = {m.get("id", ""): m for m in merged_metadata}
+            # PRIORITY CARDS (``meta["priority_card_ids"]``, see FileContextStore) are ones the
+            # caller already knows this turn needs: the consolidator reranks and prunes the rest
+            # but can never drop them, and they lead, with every item they carry.
+            priority = [str(p) for p in (meta or {}).get("priority_card_ids") or []
+                        if str(p) in meta_by_id]
+            if priority:
+                by_card = {e.get("card_id", ""): e for e in verdict}
+                forced = [by_card.get(pid) or {
+                    "card_id": pid,
+                    "items": [{"item_id": it.get("id", ""), "deliver": "paste"}
+                              for it in (meta_by_id[pid].get("items") or [])],
+                } for pid in priority]
+                verdict = forced + [e for e in verdict if e.get("card_id", "") not in priority]
             view_parts: List[str] = []
             new_metadata: List[dict] = []
             new_ids: List[str] = []

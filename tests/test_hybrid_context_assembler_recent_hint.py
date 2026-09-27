@@ -172,3 +172,25 @@ def test_consolidator_prune_still_removes_dropped_item_from_rendered_section():
     section = result.card_metadata[0]["rendered_section"]
     assert "First item text" in section
     assert "Second item text" not in section
+
+
+# ---------------------------------------------------------------------------
+# Priority cards (meta["priority_card_ids"]) survive consolidation and lead.
+# ---------------------------------------------------------------------------
+
+
+def test_consolidator_cannot_drop_a_priority_card():
+    quest = _card_with_two_items()
+    quest = {**quest, "id": "quest-card"}
+    other = {**_card_with_two_items(), "id": "other-card"}
+    # The consolidator keeps only the other card.
+    provider = _ScriptedProvider(
+        '{"cards": [{"card_id": "other-card", "items": [{"item_id": "i1", "deliver": "paste"}]}]}'
+    )
+    hybrid = HybridContextAssembler(_FixedAssembler([other, quest]), _EmptyAssembler(),
+                                    model_provider=provider, model="stub-model")
+    dropped = hybrid.assemble("do the thing")
+    assert dropped.card_ids == ["other-card"]
+    kept = hybrid.assemble("do the thing", meta={"priority_card_ids": ["quest-card"]})
+    assert kept.card_ids == ["quest-card", "other-card"]
+    assert "First item text" in kept.context_view and "Second item text" in kept.context_view

@@ -9877,7 +9877,8 @@ class Orchestrator:
                    pending_inputs: Optional[Callable[[], List[str]]] = None,
                    conv_id: Optional[str] = None,
                    conv_scope: Optional[Dict[str, Any]] = None,
-                   now: Optional[str] = None):
+                   now: Optional[str] = None,
+                   context_meta: Optional[Dict[str, Any]] = None):
         """Generator form of ``run`` for a LIVE consumer that wants to iterate events.
 
         Yields each ``ProgressEvent`` (as emitted, post-sink-policy for the given mode) and,
@@ -9885,7 +9886,8 @@ class Orchestrator:
         ``StreamSink`` whose forward appends to a thread-safe queue while ``run`` executes in a
         worker thread, so the caller streams in real time and still gets the structured result.
 
-        ``model_hint`` is forwarded to ``run`` unchanged — see ``run`` for semantics.
+        ``model_hint`` and ``context_meta`` are forwarded to ``run`` unchanged — see ``run`` for
+        semantics.
 
         Example::
 
@@ -9912,7 +9914,7 @@ class Orchestrator:
                                quest_id=quest_id, mode=mode, sink=sink, model_hint=model_hint,
                                attachments=attachments, rep_preamble=rep_preamble,
                                pending_inputs=pending_inputs, conv_id=conv_id,
-                               conv_scope=conv_scope, now=now)
+                               conv_scope=conv_scope, now=now, context_meta=context_meta)
                 result_box["result"] = res
             except Exception as e:  # noqa: BLE001
                 result_box["error"] = e

@@ -86,14 +86,51 @@ def test_matching(corpus, message, expected):
     assert (found.quest_id if found else None) == expected
 
 
-def test_render_gives_full_paths_state_and_next_steps(corpus):
+def test_quest_card_carries_full_paths_state_and_next_steps(corpus):
+    from quest_ai_runner.runner.quest_folder_index import quest_card
     quest = match_quest_folder("1000 subscribers", discover_quest_folders(str(corpus)))
-    block = render_quest_folder_context(quest)
-    assert str((corpus / "quest_subscribers_growth").resolve()) in block
-    assert "QUEST_SYNC.md" in block and "PLAN.md" in block
-    assert "Ship the checkout deep link" in block
-    assert "do not mention the quest" in block
+    card = quest_card(quest, str(corpus))
+    note = card["content"][0]["locator"]["text"]
+    assert str((corpus / "quest_subscribers_growth").resolve()) in note
+    assert "QUEST_SYNC.md" in note and "PLAN.md" in note
+    assert "Ship the checkout deep link" in note
+    assert card["files"][0]["path"] == "quest_subscribers_growth/QUEST_SYNC.md"
+    assert card["scope_tags"] and card["managed_by"]
     assert render_quest_folder_context(None) == ""
+
+
+def make_store(corpus):
+    from quest_ai_runner.adapters.file_context_store import FileContextStore
+    return FileContextStore(str(corpus / ".cards"), repo_root=str(corpus), auto_bootstrap=False)
+
+
+def test_quest_cards_are_synced_once_and_refreshed_on_change(corpus):
+    from quest_ai_runner.runner.quest_folder_index import quest_card_id, sync_quest_cards
+    store = make_store(corpus)
+    quests = discover_quest_folders(str(corpus))
+    assert sync_quest_cards(store, quests, str(corpus)) == 4
+    assert sync_quest_cards(store, quests, str(corpus)) == 0  # unchanged: nothing rewritten
+    make_quest(corpus, "quest_subscribers_growth", "quest_subs", "Reach 1000 paying Quest subscribers",
+               state="Checkout deep link shipped.")
+    assert sync_quest_cards(store, discover_quest_folders(str(corpus)), str(corpus)) == 1
+    assert "Checkout deep link shipped" in str(store.get_card(quest_card_id("quest_subs")))
+
+
+def test_priority_card_is_selected_first_even_without_shared_words(corpus):
+    from quest_ai_runner.runner.quest_folder_index import quest_card_id, sync_quest_cards
+    store = make_store(corpus)
+    sync_quest_cards(store, discover_quest_folders(str(corpus)), str(corpus))
+    subs = quest_card_id("quest_subs")
+    plain = store.assemble("tell me something unrelated about bananas")
+    assert subs not in (plain.card_ids or [])
+    forced = store.assemble("tell me something unrelated about bananas",
+                            meta={"priority_card_ids": [subs]})
+    assert forced.card_ids[0] == subs
+    assert "Ship the checkout deep link" in forced.context_view
+    # The cross-quest fence still wins: a turn scoped to another quest never gets this card.
+    fenced = store.assemble("bananas", meta={"priority_card_ids": [subs],
+                                             "scope_tags": ["quest:quest_wiki"]})
+    assert subs not in (fenced.card_ids or [])
 
 
 # -- session: auto, none (remembered), pinned, follow-ups ------------------------------------
@@ -123,43 +160,55 @@ def make_session(monkeypatch, corpus, tmp_path, env_default=None):
     return sess, lines
 
 
-def test_turn_preamble_carries_the_matched_quest(monkeypatch, corpus, tmp_path):
+def test_matched_turn_puts_the_quest_card_first(monkeypatch, corpus, tmp_path):
     sess, _ = make_session(monkeypatch, corpus, tmp_path)
-    preamble = sess.turn_preamble("where is the 1000 subscribers quest")
+    preamble, meta = sess.turn_grounding("where is the 1000 subscribers quest")
     assert sess.turn_quest.quest_id == "quest_subs"
-    assert "Ship the checkout deep link" in preamble
-    assert sess.turn_preamble("hello") is None and sess.turn_quest is None
+    assert meta == {"priority_card_ids": ["quest-folder-quest_subs"],
+                    "quest_folder": str((corpus / "quest_subscribers_growth").resolve())}
+    assert preamble is None  # the card carries it; no extra prompt text
+    assert sess.turn_grounding("hello") == (None, None) and sess.turn_quest is None
+
+
+def test_quest_without_local_folder_goes_in_the_preamble(monkeypatch, corpus, tmp_path):
+    from quest_ai_runner.runner.quest_folder_index import quest_without_folder
+    sess, _ = make_session(monkeypatch, corpus, tmp_path)
+    sess.remote_quests = [quest_without_folder("quest_remote", "Launch the podcast series",
+                                               "Two episodes recorded.")]
+    sess.cmd_quest("quest_remote")
+    preamble, meta = sess.turn_grounding("hi")
+    assert meta is None and "Two episodes recorded." in preamble
 
 
 def test_follow_up_stays_on_the_quest(monkeypatch, corpus, tmp_path):
     sess, _ = make_session(monkeypatch, corpus, tmp_path)
     sess._session_history.append(("how many paying subscribers do we have", "12"))
-    sess.turn_preamble("and what is next for it?")
+    sess.turn_grounding("and what is next for it?")
     assert sess.turn_quest.quest_id == "quest_subs"
 
 
 def test_quest_none_turns_matching_off_and_is_remembered(monkeypatch, corpus, tmp_path):
     sess, lines = make_session(monkeypatch, corpus, tmp_path)
     sess.cmd_quest("none")
-    assert sess.turn_preamble("where is the 1000 subscribers quest") is None
+    assert sess.turn_grounding("where is the 1000 subscribers quest") == (None, None)
     assert json.loads((tmp_path / "qar_state.json").read_text())["chat_state"]["quest_match"] == "none"
     again, _ = make_session(monkeypatch, corpus, tmp_path)
     assert again.quest_match_mode == "none"
     again.cmd_quest("auto")
-    again.turn_preamble("where is the 1000 subscribers quest")
+    again.turn_grounding("where is the 1000 subscribers quest")
     assert again.turn_quest.quest_id == "quest_subs"
 
 
 def test_deployment_can_default_matching_off(monkeypatch, corpus, tmp_path):
     sess, _ = make_session(monkeypatch, corpus, tmp_path, env_default="0")
     assert sess.quest_match_mode == "none"
-    assert sess.turn_preamble("where is the 1000 subscribers quest") is None
+    assert sess.turn_grounding("where is the 1000 subscribers quest") == (None, None)
 
 
 def test_pinned_quest_applies_to_every_turn(monkeypatch, corpus, tmp_path):
     sess, lines = make_session(monkeypatch, corpus, tmp_path)
     sess.cmd_quest("wikipedia")
-    sess.turn_preamble("hello")
+    sess.turn_grounding("hello")
     assert sess.turn_quest.quest_id == "quest_wiki"
     sess.cmd_quest("nothing like any quest")
     assert any("No synced quest clearly matches" in l for l in lines)

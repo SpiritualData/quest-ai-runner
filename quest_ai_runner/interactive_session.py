@@ -841,10 +841,22 @@ class InteractiveSession:
                 getattr(cfg, "corpus_root", None), getattr(cfg, "quest_folder_map", None))
         except Exception:  # noqa: BLE001 — must never break session startup
             self.quest_folders = []
+        # Each synced quest is a context card, like every quest is in Quest itself, so selection can
+        # find it on its own and a matched turn can put it first. Rewritten only when it changed.
+        try:
+            from .runner.quest_folder_index import card_writer, sync_quest_cards
+            sync_quest_cards(card_writer(getattr(self._orch, "context_assembler", None)),
+                             self.quest_folders, getattr(cfg, "corpus_root", None))
+        except Exception:  # noqa: BLE001 — must never break session startup
+            pass
         self.quest_match_mode = ("none" if os.getenv("QAR_QUEST_AUTO_MATCH", "1").strip().lower()
                                  in ("0", "false", "no", "off", "none") else "auto")
         self.pinned_quest = None
         self.turn_quest = None  # the quest the latest turn was grounded in, for the UI
+        # Quests the Quest account can reach but that have no local folder, for the "/quest" menu.
+        # Fetched off-thread: a slow or absent Quest API must never delay the session.
+        self.remote_quests = []
+        threading.Thread(target=self.fetch_remote_quests, name="qar-quest-list", daemon=True).start()
         # Turn history for /tasks and /status commands
         self._turns: List[dict] = []  # [{user, model, tokens_in, tokens_out, elapsed, timestamp}]
         # TurnContextStore is wired automatically by resolve_context_assembler in config.py,
@@ -930,6 +942,24 @@ class InteractiveSession:
                 parts.append(block)
         return "\n\n".join(parts) if parts else None
 
+    def fetch_remote_quests(self) -> None:
+        """Fill ``remote_quests`` from the Quest API (every team this lane polls, plus own quests)."""
+        try:
+            client = self._quest_client()
+            if client is None:
+                return
+            from .runner.quest_folder_index import reachable_quests
+            team_ids = [getattr(self._cfg, "team_id", None) or ""]
+            team_ids += [t.strip() for t in os.getenv("QUEST_TEAM_IDS", "").split(",") if t.strip()]
+            self.remote_quests = reachable_quests(client, list(dict.fromkeys(team_ids)))
+        except Exception:  # noqa: BLE001 — the menu just shows local quests
+            self.remote_quests = []
+
+    def quest_choices(self) -> list:
+        """Every quest a person can pick: local synced folders first, then Quest-only ones."""
+        from .runner.quest_folder_index import merge_quests
+        return merge_quests(self.quest_folders, self.remote_quests)
+
     def quest_for_turn(self, user_text: str):
         """The synced quest this turn is about: the pinned one, else a clear match, else None.
 
@@ -947,20 +977,23 @@ class InteractiveSession:
                                        self.quest_folders)
         return found
 
-    def turn_preamble(self, user_text: str) -> Optional[str]:
-        """``_effective_preamble()`` plus the quest this message is about, when there is one."""
+    def turn_grounding(self, user_text: str) -> Tuple[Optional[str], Optional[dict]]:
+        """``(rep_preamble, context_meta)`` for a turn, grounded in the quest it is about.
+
+        A quest synced to a local folder has a context card (see ``sync_quest_cards``), so the
+        match only tells card selection to put that card first (``priority_card_ids``) and to
+        favour the quest folder's other cards (``quest_folder``); no extra prompt text. A quest
+        known only from Quest (no folder, so no local card) is added to the preamble instead.
+        """
         quest = None
         try:
             quest = self.quest_for_turn(user_text)
         except Exception:  # noqa: BLE001 — grounding is a bonus, never a reason to fail a turn
             quest = None
         self.turn_quest = quest
-        if quest is None:
-            return self._effective_preamble()
-        from .runner.quest_folder_index import render_quest_folder_context
         standing = getattr(self, "_standing_next_steps", None)
-        if standing is not None and standing.quest_id == quest.quest_id:
-            # The quest block already carries this quest's next steps; do not say them twice.
+        if quest is not None and standing is not None and standing.quest_id == quest.quest_id:
+            # The quest's card already carries its next steps; do not say them twice.
             self._standing_next_steps = None
             try:
                 base = self._effective_preamble()
@@ -968,8 +1001,15 @@ class InteractiveSession:
                 self._standing_next_steps = standing
         else:
             base = self._effective_preamble()
+        if quest is None:
+            return base, None
+        if quest.folder:
+            from .runner.quest_folder_index import quest_card_id
+            return base, {"priority_card_ids": [quest_card_id(quest.quest_id)],
+                          "quest_folder": quest.folder}
+        from .runner.quest_folder_index import render_quest_folder_context
         block = render_quest_folder_context(quest)
-        return f"{base}\n\n{block}" if base else block
+        return (f"{base}\n\n{block}" if base else block), None
 
     def cmd_quest(self, arg: str) -> None:
         """/quest [auto|none|<name or id>]: how turns are grounded in a synced quest folder."""
@@ -990,7 +1030,9 @@ class InteractiveSession:
             c.dim("  Quest matching on: each message is matched to the synced quest it is about.")
             return
         if arg:
-            found = match_quest_folder(arg, self.quest_folders)
+            choices = self.quest_choices()
+            found = next((q for q in choices if q.quest_id == arg), None) \
+                or match_quest_folder(arg, choices)
             if found is None:
                 c.dim(f"  No synced quest clearly matches {arg!r}. /quest lists them.")
                 return
@@ -1002,12 +1044,13 @@ class InteractiveSession:
             c.dim(f"  Pinned: {describe_match(self.pinned_quest)}")
         else:
             c.dim(f"  Quest matching: {self.quest_match_mode}")
-        if not self.quest_folders:
-            c.dim("  No synced quest folders found under the corpus root.")
+        choices = self.quest_choices()
+        if not choices:
+            c.dim("  No quests found: no synced quest folders, and no Quest quests reachable.")
             return
-        c.dim("  Synced quest folders:")
-        for q in self.quest_folders:
-            c.dim(f"    {q.title or q.quest_id}  ·  {q.folder}")
+        c.dim("  Quests (type /quest and a space to pick one):")
+        for q in choices:
+            c.dim(f"    {q.title or q.quest_id}  ·  {q.folder or 'not synced locally'}")
         c.dim("  /quest none  never add a quest  ·  /quest auto  match each message  ·  "
               "/quest <name>  pin one")
 

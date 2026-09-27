@@ -40,7 +40,8 @@ from textual.geometry import Offset
 from textual.message import Message
 from textual.selection import Selection
 from textual.strip import Strip
-from textual.widgets import Footer, Header, Input, RichLog, Static, TextArea
+from textual.widgets import Footer, Header, Input, OptionList, RichLog, Static, TextArea
+from textual.widgets.option_list import Option
 
 from rich.markdown import Markdown as RichMarkdown
 from rich.segment import Segment
@@ -827,6 +828,11 @@ class PromptTextArea(TextArea):
 
     def on_key(self, event) -> None:
         key = event.key
+        menu_key = getattr(self.app, "command_menu_key", None)
+        if menu_key is not None and menu_key(key):
+            event.prevent_default()
+            event.stop()
+            return
         if key == "enter":
             event.prevent_default()
             event.stop()
@@ -948,6 +954,15 @@ class QuestAITerminal(App):
         height: 1;
         padding: 0 1;
         margin: 0 1;
+    }
+
+    #command-menu {
+        height: auto;
+        max-height: 14;
+        margin: 0 1;
+        border: none;
+        background: $panel;
+        display: none;
     }
 
     #prompt {
@@ -1072,6 +1087,7 @@ class QuestAITerminal(App):
         # one additional bottom-docked widget.
         with Vertical(id="bottom-bar"):
             yield ActivityBar(id="activity")
+            yield OptionList(id="command-menu")
             yield PromptTextArea(
                 id="prompt",
                 soft_wrap=True,
@@ -1619,7 +1635,7 @@ class QuestAITerminal(App):
             _inbox = getattr(s._orch, "input_inbox", None)
             _sid = self._session_id
             _pending = (lambda: _inbox.drain(_sid)) if _inbox is not None else None
-            preamble = s.turn_preamble(user_text)
+            preamble, grounding_meta = s.turn_grounding(user_text)
             if s.turn_quest is not None:
                 from .runner.quest_folder_index import describe_match
                 self.call_from_thread(self._console.dim, "  " + describe_match(s.turn_quest))
@@ -1631,6 +1647,7 @@ class QuestAITerminal(App):
                 model_hint=model_hint,
                 pending_inputs=_pending,
                 conv_id=s._conv_id,
+                context_meta=grounding_meta,
             ):
                 if self._cancel.is_set():
                     break
@@ -2126,6 +2143,81 @@ class QuestAITerminal(App):
         self.notify(f"Last reply · {detail}", title="Copied" if ok else "Copy",
                     timeout=2.5, severity="information" if ok else "warning")
 
+    # -- "/" command menu ---------------------------------------------------------
+
+    menu_items_shown: list = []
+
+    def on_text_area_changed(self, event: TextArea.Changed) -> None:
+        if getattr(event.text_area, "id", None) == "prompt":
+            self.refresh_command_menu()
+
+    def refresh_command_menu(self) -> None:
+        """Show what the "/" menu offers for the prompt's current text (hidden when nothing)."""
+        from .command_menu import menu_items, parse_help
+        from .interactive_session import _HELP
+        try:
+            menu = self.query_one("#command-menu", OptionList)
+            text = self.query_one("#prompt", PromptTextArea).text
+        except Exception:  # noqa: BLE001 — not mounted yet
+            return
+        s = self.sess
+        if not hasattr(self, "help_commands"):
+            self.help_commands = parse_help(_HELP)
+        pinned = getattr(s, "pinned_quest", None) if s is not None else None
+        items = menu_items(
+            text, self.help_commands,
+            quests=(s.quest_choices() if s is not None and hasattr(s, "quest_choices") else ()),
+            mode=getattr(s, "quest_match_mode", "auto") if s is not None else "auto",
+            pinned_id=pinned.quest_id if pinned is not None else None,
+        )
+        self.menu_items_shown = items
+        menu.clear_options()
+        if not items:
+            menu.display = False
+            return
+        width = max(len(i.label) for i in items) + 2
+        menu.add_options([
+            Option(Text.assemble((i.label.ljust(width), "bold"), (i.description, "dim")))
+            for i in items
+        ])
+        menu.highlighted = 0
+        menu.display = True
+
+    def command_menu_key(self, key: str) -> bool:
+        """Handle a key while the menu is open. True when the menu used it."""
+        try:
+            menu = self.query_one("#command-menu", OptionList)
+        except Exception:  # noqa: BLE001
+            return False
+        if not menu.display or not self.menu_items_shown:
+            return False
+        count = len(self.menu_items_shown)
+        current = menu.highlighted if menu.highlighted is not None else 0
+        if key == "up":
+            menu.highlighted = (current - 1) % count
+            return True
+        if key == "down":
+            menu.highlighted = (current + 1) % count
+            return True
+        if key == "escape":
+            menu.display = False
+            self.menu_items_shown = []
+            return True
+        if key not in ("tab", "enter"):
+            return False
+        item = self.menu_items_shown[current]
+        prompt = self.query_one("#prompt", PromptTextArea)
+        if key == "enter" and item.submit:
+            # Run the highlighted command, exactly as if it had been typed out and submitted.
+            prompt.post_message(PromptTextArea.Submitted(prompt, item.completion))
+            menu.display = False
+            self.menu_items_shown = []
+            return True
+        # Complete it into the prompt; a command that takes an argument keeps the menu going.
+        prompt.text = item.completion
+        prompt.move_cursor(prompt.document.end)
+        return True
+
     def action_cancel(self) -> None:
         if self._turn_active:
             self._cancel.set()
@@ -2371,7 +2463,10 @@ class QuestAITerminal(App):
 
         Cycles over whatever runs are available — the live tracker during a turn, or the finished-run
         archive afterwards — keyed off the panel's currently-shown run so it works post-turn too.
+        While the "/" command menu is open, Tab completes the highlighted command instead.
         """
+        if self.command_menu_key("tab"):
+            return
         runs = self._available_deep_runs()
         if not runs:
             return

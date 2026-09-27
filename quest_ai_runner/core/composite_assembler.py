@@ -27,6 +27,11 @@ class CompositeContextAssembler:
     def __init__(self, assemblers: List[Any]):
         self._assemblers = assemblers
 
+    @property
+    def assemblers(self) -> List[Any]:
+        """The member assemblers, in order (for callers looking for a capability among them)."""
+        return list(self._assemblers)
+
     def assemble(
         self, task_text: str, *, meta: Optional[Dict[str, Any]] = None, on_event=None
     ) -> Any:

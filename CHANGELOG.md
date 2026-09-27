@@ -7,19 +7,31 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
-- **Chat turns are grounded in the synced quest they are about, automatically (2026-09-26).**
+- **Chat turns are grounded in the synced quest they are about, through its card (2026-09-26).**
   Asked "what is the full path of the 1000 subscribers quest and what is next", the chat went
   searching (and its narration guessed a path that did not exist) while the quest folder's
-  `QUEST_SYNC.md` already held the id, state and next steps. New `runner/quest_folder_index.py`
-  indexes every synced quest folder at session start (the deployment's `quest_folder_map` plus
-  `QUEST_SYNC.md` files under the corpus root, a ~30 ms walk) and matches each message to one with
-  no model call: by the quest's name, by its id, or, when the message never names it, by several
-  rare words from its current state ("did we fix the pricing page deep link"). No clear winner adds
-  nothing. A match adds the quest's full folder path, sync file, folder contents, current state and
-  standing next steps to the turn, and the UI shows which quest it was. A follow-up that names
-  nothing is matched with the previous message. `/quest none` turns matching off and is
-  remembered in `qar_state.json`; `/quest auto` turns it back on; `/quest <name>` pins one quest;
-  `QAR_QUEST_AUTO_MATCH=0` makes off the deployment default. Tests: `tests/test_quest_folder_index.py`.
+  `QUEST_SYNC.md` already held the id, state and next steps. Quests are cards in Quest itself; now
+  a locally synced quest is one too. New `runner/quest_folder_index.py` finds every synced quest
+  folder at session start (`quest_folder_map` plus `QUEST_SYNC.md` files under the corpus root, a
+  ~30 ms walk) and keeps one managed card per quest (`quest-folder-<id>`: full folder path, sync
+  file, folder contents, state and next steps as a note, pinning the sync file, `scope_tags` of its
+  quest), rewritten only when the sync file changed. Each message is matched to a quest with no
+  model call (by name, by id, or by several rare words from its current state; no clear winner
+  matches nothing) and the match only steers card selection: new generic assembly meta
+  `priority_card_ids` makes `FileContextStore` select those cards first past the confidence gate
+  and LLM filter (the scope fence still applies) and makes `HybridContextAssembler`'s
+  consolidation keep them; `quest_folder` feeds the existing quest-folder boost. `run_stream` now
+  forwards `context_meta`. A quest known only from Quest (no local folder, so no card) goes into
+  the turn's preamble instead. A follow-up that names nothing is matched with the previous message.
+  `/quest none` turns matching off and is remembered in `qar_state.json`; `/quest auto` turns it
+  back on; `/quest <name|id>` pins one; `QAR_QUEST_AUTO_MATCH=0` makes off the deployment default.
+  Tests: `tests/test_quest_folder_index.py`, `tests/test_hybrid_context_assembler_recent_hint.py`.
+- **A "/" command menu in the chat, like Claude Code's (2026-09-26).** Typing `/` lists every
+  command with its description (parsed from `/help`, so they cannot drift), narrowing as you type:
+  arrows move, Tab completes, Enter runs, Esc closes. After `/quest ` it lists the choices: none,
+  auto, and every quest this account can reach (each team the lane polls plus the account's own,
+  fetched in the background at session start), synced folders marked with their path. Logic in
+  `command_menu.py`. Tests: `tests/test_command_menu.py`.
 - **`chat --resume` / `--continue`: reopen a saved chat conversation, Claude Code style
   (2026-09-26).** Bare `--resume` (`-r`) opens a searchable picker of saved conversations (arrow
   keys, Enter to resume, type to filter, Esc to cancel); `--resume last` or `--continue` (`-c`)

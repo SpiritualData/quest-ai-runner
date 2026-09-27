@@ -2276,6 +2276,21 @@ class FileContextStore(ContextAssemblerBase):
         except Exception:  # noqa: BLE001
             return False
 
+    def write_card(self, card_id: str, card: Dict[str, Any]) -> bool:
+        """Store ``card`` whole under ``card_id`` (create or replace). True on success. Never raises.
+
+        The write seam for a consumer that DERIVES a card from its own source of truth and owns it
+        outright (``managed_by``), e.g. one card per locally synced quest, rebuilt from that
+        folder's sync file (``runner/quest_folder_index.sync_quest_cards``). Learned cards go
+        through ``record``/``update_card`` instead, which merge rather than replace.
+        """
+        try:
+            self._write_card_atomic(card_id, card)
+            return True
+        except Exception:  # noqa: BLE001
+            _log.debug("write_card failed for %s", card_id, exc_info=True)
+            return False
+
     def get_card(self, card_id: str) -> Optional[Dict[str, Any]]:
         """Return the RAW stored card dict for ``card_id`` (or None if absent). Never raises.
 
@@ -3547,7 +3562,7 @@ class FileContextStore(ContextAssemblerBase):
     def _assemble_inner(self, task_text: str, *,
                         meta: Optional[Dict[str, Any]] = None) -> AssembledContext:
         task_kws = _tokenize(task_text)
-        if not task_kws:
+        if not task_kws and not (meta or {}).get("priority_card_ids"):
             return AssembledContext()
 
         # QUEST-FOLDER SCOPING: when this run's meta carries a goal/quest id that quest_folder_map
@@ -3562,6 +3577,14 @@ class FileContextStore(ContextAssemblerBase):
                 if _id and str(_id) in self._quest_folder_map:
                     folder_prefix = self._quest_folder_map[str(_id)]
                     break
+        # A caller that already knows which quest FOLDER this turn is about (an attended chat that
+        # matched the message to a synced quest) names it directly: same boost, no map needed.
+        if folder_prefix is None and meta and meta.get("quest_folder") and self._repo_root:
+            try:
+                folder_prefix = Path(str(meta["quest_folder"])).resolve().relative_to(
+                    self._repo_root).as_posix()
+            except (ValueError, OSError):
+                folder_prefix = None
 
         # Candidate pool for the keyword arm. When the repository exposes NATIVE text search
         # (a Qdrant-backed repo, say), let it serve the candidates directly instead of scanning
@@ -3585,7 +3608,24 @@ class FileContextStore(ContextAssemblerBase):
             cid: c for cid, c in cards.items()
             if scope_tags_allow(c.get("scope_tags"), turn_scope_tags)
         }
-        if not cards:
+        # PRIORITY CARDS: ids the caller already knows this turn needs (the matched quest's card,
+        # or a task's explicitly attached cards). Always selected, first, past the confidence gate
+        # and the LLM filter; still subject to the scope fence above. Read through the repository
+        # when the candidate pool (a native-search subset) does not hold them.
+        priority_cards: List[Dict[str, Any]] = []
+        for pid in (meta or {}).get("priority_card_ids") or []:
+            pcard = cards.get(str(pid))
+            if pcard is None:
+                try:
+                    pcard = self._repo.read(str(pid))
+                except Exception:  # noqa: BLE001
+                    pcard = None
+                if not isinstance(pcard, dict) or not scope_tags_allow(
+                        pcard.get("scope_tags"), turn_scope_tags):
+                    pcard = None
+            if pcard is not None and all(pcard is not c for c in priority_cards):
+                priority_cards.append(pcard)
+        if not cards and not priority_cards:
             return AssembledContext()
 
         # ---- Field-weighted TF-IDF scoring ----
@@ -3637,7 +3677,7 @@ class FileContextStore(ContextAssemblerBase):
                 rank_score = score * self._recency_boost_factor(card)
                 scored.append((-rank_score, -usage, -len(verified_at), verified_at, card))
 
-        if not scored:
+        if not scored and not priority_cards:
             return self._fallback_file_search(task_kws)
 
         # Sort: primary descending score, then tie-break descending usage_count,
@@ -3687,6 +3727,11 @@ class FileContextStore(ContextAssemblerBase):
                 _log.debug("LLM card filter failed, using IDF ranking", exc_info=True)
 
         top_cards = idf_candidates[: self._max_cards]
+        if priority_cards:
+            priority_ids = {c.get("id", "") for c in priority_cards}
+            rest = [c for c in top_cards if c.get("id", "") not in priority_ids]
+            top_cards = priority_cards + rest[: max(0, self._max_cards - len(priority_cards))]
+
 
         # QUERY-AWARE TIME FILTER (spec v3 work package C, item level): when the caller's meta
         # carries a ``time_range`` (the shape ``parse_goal_condition_reply`` emits, threaded in by

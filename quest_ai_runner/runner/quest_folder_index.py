@@ -129,6 +129,46 @@ def read_quest_folder(folder: str, quest_id: str = "") -> Optional[QuestFolder]:
     )
 
 
+def quest_without_folder(quest_id: str, title: str = "", current_state: str = "") -> QuestFolder:
+    """A quest known only from the Quest API (no local folder), matchable and pinnable the same way."""
+    return QuestFolder(quest_id=quest_id, folder="", title=title or "", current_state=current_state or "",
+                       name_words=frozenset(words(title or "")),
+                       body_words=frozenset(words(current_state or "")))
+
+
+def reachable_quests(client, team_ids: Sequence[str]) -> List[QuestFolder]:
+    """Every quest this Quest account can reach: each team's quests plus the account's own.
+
+    Network calls, so callers run this off the UI thread. Failures shrink the list, never raise.
+    """
+    found: Dict[str, QuestFolder] = {}
+    for team_id in [t for t in team_ids if t]:
+        try:
+            for q in client.list_quests(team_id=team_id) or []:
+                qid = q.get("quest_id") or ""
+                if qid and qid not in found:
+                    found[qid] = quest_without_folder(qid, q.get("outcome") or "")
+        except Exception:  # noqa: BLE001
+            log.info("could not list quests for team %s", team_id, exc_info=True)
+    try:
+        for q in client.list_my_quests() or []:
+            qid = q.get("quest_id") or ""
+            state = q.get("state") or {}
+            if qid:
+                found[qid] = quest_without_folder(
+                    qid, state.get("outcome") or (found[qid].title if qid in found else ""),
+                    state.get("current_state") or "")
+    except Exception:  # noqa: BLE001
+        log.info("could not list the account's own quests", exc_info=True)
+    return list(found.values())
+
+
+def merge_quests(local: Sequence[QuestFolder], remote: Sequence[QuestFolder]) -> List[QuestFolder]:
+    """Local synced folders first (they carry a path), then remote-only quests, each id once."""
+    seen = {q.quest_id for q in local}
+    return list(local) + [q for q in remote if q.quest_id not in seen]
+
+
 def discover_quest_folders(corpus_root: Optional[str],
                            quest_folder_map: Optional[Dict[str, str]] = None,
                            max_depth: int = DISCOVERY_MAX_DEPTH) -> List[QuestFolder]:
@@ -227,38 +267,141 @@ def clip(text: str, limit: int, where: str) -> str:
     return text[:limit].rstrip() + f"\n(truncated; the full text is in {where})"
 
 
-def render_quest_folder_context(entry: Optional[QuestFolder]) -> str:
-    """The matched quest as known context for this turn, or "" when nothing matched."""
-    if entry is None:
-        return ""
+QUEST_CARD_PREFIX = "quest-folder-"
+QUEST_CARD_OWNER = "quest_folder_index"
+
+
+def quest_digest(entry: QuestFolder) -> str:
+    """What is known about a quest without reading anything else: id, full paths, state, next steps."""
     parts = [
-        "QUEST MATCHED TO THIS MESSAGE (from the quest's locally synced folder; this is known, "
-        "so do not search for it). The user's words matched this quest by name. Answer questions "
-        "about where it lives, its state, or what to do next from this block, giving full "
-        "absolute paths exactly as written here. Name the sync file as the source. If the message "
-        "turns out not to be about this quest, ignore this block entirely and do not mention the "
-        "quest: never relate an answer back to it unless the message is actually about it.",
         f"Quest: {entry.title or '(untitled)'}",
         f"Quest id: {entry.quest_id}",
-        f"Local folder (full path): {entry.folder}",
-        f"Sync file (full path): {entry.sync_file}",
     ]
-    files = list_folder_files(entry.folder)
+    if entry.folder:
+        parts += [f"Local folder (full path): {entry.folder}",
+                  f"Sync file (full path): {entry.sync_file}"]
+    else:
+        parts.append("Local folder: none; this quest is not synced to a folder on this machine.")
+    files = list_folder_files(entry.folder) if entry.folder else []
     if files:
         parts.append("Folder contents: " + ", ".join(files))
     if entry.current_state:
-        parts.append("Current state:\n" + clip(entry.current_state, STATE_MAX_CHARS, entry.sync_file))
+        parts.append("Current state:\n" + clip(entry.current_state, STATE_MAX_CHARS,
+                                               entry.sync_file if entry.folder else "Quest"))
     if entry.next_steps:
         parts.append("Standing next steps (its first line says when and by whom it was refreshed):\n"
                      + clip(entry.next_steps, NEXT_STEPS_MAX_CHARS, entry.sync_file))
-    else:
+    elif entry.folder:
         parts.append("Standing next steps: none written yet in the sync file.")
     return "\n".join(parts)
 
 
+def render_quest_folder_context(entry: Optional[QuestFolder]) -> str:
+    """The matched quest as turn text, for a quest with no local card (not synced to a folder)."""
+    if entry is None:
+        return ""
+    return (
+        "QUEST MATCHED TO THIS MESSAGE (known, so do not search for it). The user's words matched "
+        "this quest. Answer questions about it from this block. If the message turns out not to be "
+        "about this quest, ignore this block entirely and do not mention the quest: never relate an "
+        "answer back to it unless the message is actually about it.\n" + quest_digest(entry)
+    )
+
+
+def quest_card_id(quest_id: str) -> str:
+    return QUEST_CARD_PREFIX + quest_id
+
+
+def quest_card(entry: QuestFolder, corpus_root: Optional[str] = None) -> Dict[str, object]:
+    """The context card for one locally synced quest, derived entirely from its sync file.
+
+    Quests are cards (quest-backend keeps one per quest); this is the same idea for a quest synced
+    to a folder on this machine, so card selection can pick it like any other card and a caller
+    that knows the turn is about this quest can put it first (``priority_card_ids``). The digest is
+    a ``note`` item, so the card carries the full paths, state and next steps itself; it also pins
+    the sync file, so the store's quest-folder boost treats it as part of the quest's folder. Owned
+    outright by this module (``managed_by``) and rebuilt from the sync file whenever it changes.
+    """
+    from ..core.recent_context import quest_scope_key
+    sync_rel = entry.sync_file
+    if corpus_root:
+        try:
+            sync_rel = Path(entry.sync_file).resolve().relative_to(
+                Path(corpus_root).resolve()).as_posix()
+        except (ValueError, OSError):
+            sync_rel = entry.sync_file
+    keywords = sorted(set(entry.name_words) | {"quest"})
+    summary = f"Quest: {entry.title}" if entry.title else f"Quest {entry.quest_id}"
+    note_text = (
+        "This quest is synced to a local folder. Answer where it lives, its state, or what to do "
+        "next from this card, giving the full paths exactly as written; name the sync file as the "
+        "source.\n" + quest_digest(entry)
+    )
+    return {
+        "id": quest_card_id(entry.quest_id),
+        "name": summary,
+        "summary": summary,
+        "description": clip(entry.current_state, 300, entry.sync_file) if entry.current_state else summary,
+        "keywords": keywords,
+        "conventions": [],
+        "files": [{"path": sync_rel, "why": "The quest's sync file: goal, state, notes, next steps"}],
+        "content": [
+            {"id": "quest-digest", "type": "note", "why": "Quest location, state and next steps",
+             "locator": {"text": note_text}},
+            {"id": "quest-sync-file", "type": "file", "why": "The quest's sync file",
+             "locator": {"path": entry.sync_file}},
+        ],
+        "scope_tags": [quest_scope_key(entry.quest_id)],
+        "managed_by": QUEST_CARD_OWNER,
+        "managed_fields": ["name", "summary", "description", "keywords", "files"],
+        "managed_items": ["quest-digest", "quest-sync-file"],
+        "provenance": {"created_by_task": "quest folder sync", "model": "", "created_at": "",
+                       "last_verified_at": ""},
+    }
+
+
+def card_writer(assembler):
+    """The first context store under ``assembler`` that can store a whole card, or None."""
+    if assembler is None:
+        return None
+    if callable(getattr(assembler, "write_card", None)) and callable(getattr(assembler, "get_card", None)):
+        return assembler
+    for member in getattr(assembler, "assemblers", None) or []:
+        found = card_writer(member)
+        if found is not None:
+            return found
+    return None
+
+
+def sync_quest_cards(store, entries: Sequence[QuestFolder], corpus_root: Optional[str] = None) -> int:
+    """Create or refresh the card of every quest with a local folder. Returns how many were written.
+
+    Only a card whose content actually changed is rewritten, so an unchanged corpus costs reads.
+    Usage history (``usage_count``) on an existing card is kept.
+    """
+    written = 0
+    if store is None:
+        return 0
+    for entry in entries:
+        if not entry.folder:
+            continue
+        card = quest_card(entry, corpus_root)
+        try:
+            existing = store.get_card(card["id"]) or {}
+        except Exception:  # noqa: BLE001
+            existing = {}
+        if all(existing.get(k) == card[k] for k in ("name", "keywords", "content", "files",
+                                                      "scope_tags", "description")):
+            continue
+        card["usage_count"] = existing.get("usage_count", 0)
+        if store.write_card(card["id"], card):
+            written += 1
+    return written
+
+
 def describe_match(entry: QuestFolder) -> str:
     """One short line for the UI: which quest was matched, and where it lives."""
-    return f"Quest: {entry.title or entry.quest_id}  ·  {entry.folder}"
+    return f"Quest: {entry.title or entry.quest_id}  ·  {entry.folder or 'not synced locally'}"
 
 
 def ids(entries: Iterable[QuestFolder]) -> List[str]:
