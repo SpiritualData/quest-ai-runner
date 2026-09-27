@@ -1350,6 +1350,8 @@ class QuestAITerminal(App):
             self._cmd_quests(); return
         if line.startswith("/goal"):
             self._cmd_goal(line[5:].strip()); return
+        if line == "/quest" or line.startswith("/quest "):
+            s.cmd_quest(line[6:]); return
         c.dim(f"  Unknown command: {line!r}  (/help for list)")
 
     # -- interactive pickers (Textual-native) ---------------------------------
@@ -1617,11 +1619,15 @@ class QuestAITerminal(App):
             _inbox = getattr(s._orch, "input_inbox", None)
             _sid = self._session_id
             _pending = (lambda: _inbox.drain(_sid)) if _inbox is not None else None
+            preamble = s.turn_preamble(user_text)
+            if s.turn_quest is not None:
+                from .runner.quest_folder_index import describe_match
+                self.call_from_thread(self._console.dim, "  " + describe_match(s.turn_quest))
             for item in s._orch.run_stream(
                 user_text,
                 transcript=s._last_transcript(),
                 quest_id=s._goal_id,
-                rep_preamble=s._effective_preamble(),
+                rep_preamble=preamble,
                 model_hint=model_hint,
                 pending_inputs=_pending,
                 conv_id=s._conv_id,

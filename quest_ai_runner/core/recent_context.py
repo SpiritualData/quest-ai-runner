@@ -84,6 +84,7 @@ from typing import Any, Dict, List, Optional, Protocol, Tuple, Union, runtime_ch
 from quest_ai_runner.adapters.conversation_format import parse_date_bound, timestamp_in_range
 from quest_ai_runner.adapters.tfdfidf_sampling import keywords_from_text
 from quest_ai_runner.core.scope_tags import scope_tags_allow, scope_tags_from_keys
+from .file_modes import match_umask
 
 log = logging.getLogger("quest-ai-runner.recent_context")
 
@@ -513,6 +514,7 @@ class FileRecentContextStore:
 
         self._dir.mkdir(parents=True, exist_ok=True)
         tmp_fd, tmp_path = tempfile.mkstemp(dir=str(self._dir), prefix=".tmp_", suffix=".json")
+        match_umask(tmp_fd)  # mkstemp makes 0600; another account sharing the corpus must read it
         try:
             with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
                 json.dump({"turns": turns}, fh, indent=2, ensure_ascii=False)

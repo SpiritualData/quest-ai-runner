@@ -407,6 +407,7 @@ _SLASH_COMMANDS = [
     "/models", "/model", "/model ", "/depth", "/depth ",
     "/system", "/replan",
     "/save ", "/save", "/load ", "/sessions",
+    "/quest", "/quest ",
 ]
 # /goal with a space triggers search; bare /goal (no arg) also works as a browse
 # /models — interactive model tier selection menu
@@ -438,6 +439,12 @@ Commands:
     /depth [level]       Alias for /model: light=haiku, standard=sonnet, deep=opus
     /system [text]       Show or set a custom system prompt prepended to persona
     /replan              Prime next turn for a fresh re-planning pass (uses opus)
+
+  ● Quest grounding
+    /quest               Show quest matching and the synced quest folders
+    /quest none          Never add a quest to your messages (remembered)
+    /quest auto          Match each message to the quest it is about (default)
+    /quest <name>        Pin one quest for this session
 
   ● Sessions
     /save [name]         Save this session (transcript + config) to disk
@@ -823,6 +830,21 @@ class InteractiveSession:
             self._standing_next_steps = None
         if self._standing_next_steps is not None:
             notify_and_log("Standing next steps for this quest loaded from QUEST_SYNC.md.")
+        # Every locally synced quest folder, so each turn can be grounded in the quest it is about
+        # without the brain having to go looking (runner/quest_folder_index.py). A plain directory
+        # walk, tens of milliseconds. "auto" matches every message; "none" never adds a quest (for
+        # people whose chats are mostly not about a quest); a pinned quest is added to every turn.
+        self.quest_folders = []
+        try:
+            from .runner.quest_folder_index import discover_quest_folders
+            self.quest_folders = discover_quest_folders(
+                getattr(cfg, "corpus_root", None), getattr(cfg, "quest_folder_map", None))
+        except Exception:  # noqa: BLE001 — must never break session startup
+            self.quest_folders = []
+        self.quest_match_mode = ("none" if os.getenv("QAR_QUEST_AUTO_MATCH", "1").strip().lower()
+                                 in ("0", "false", "no", "off", "none") else "auto")
+        self.pinned_quest = None
+        self.turn_quest = None  # the quest the latest turn was grounded in, for the UI
         # Turn history for /tasks and /status commands
         self._turns: List[dict] = []  # [{user, model, tokens_in, tokens_out, elapsed, timestamp}]
         # TurnContextStore is wired automatically by resolve_context_assembler in config.py,
@@ -839,6 +861,8 @@ class InteractiveSession:
         self._persona_file: Optional[str] = None
         # Restore persisted model/persona from qar_state.json (best-effort)
         self._load_session_state()
+        if getattr(self, "saved_quest_match_mode", None):
+            self.quest_match_mode = self.saved_quest_match_mode
         # Resolve display name from skill frontmatter (display_name > name > rep_name as given)
         self._refresh_rep_name_from_skill()
         # If no skill file loaded yet, try auto-discovering one by rep name
@@ -905,6 +929,87 @@ class InteractiveSession:
             if block:
                 parts.append(block)
         return "\n\n".join(parts) if parts else None
+
+    def quest_for_turn(self, user_text: str):
+        """The synced quest this turn is about: the pinned one, else a clear match, else None.
+
+        A follow-up that names nothing ("and what is next for it?") is matched together with the
+        previous user message, so a conversation about a quest stays grounded in it.
+        """
+        if self.pinned_quest is not None:
+            return self.pinned_quest
+        if self.quest_match_mode == "none" or not self.quest_folders:
+            return None
+        from .runner.quest_folder_index import match_quest_folder
+        found = match_quest_folder(user_text, self.quest_folders)
+        if found is None and self._session_history:
+            found = match_quest_folder(self._session_history[-1][0] + "\n" + user_text,
+                                       self.quest_folders)
+        return found
+
+    def turn_preamble(self, user_text: str) -> Optional[str]:
+        """``_effective_preamble()`` plus the quest this message is about, when there is one."""
+        quest = None
+        try:
+            quest = self.quest_for_turn(user_text)
+        except Exception:  # noqa: BLE001 — grounding is a bonus, never a reason to fail a turn
+            quest = None
+        self.turn_quest = quest
+        if quest is None:
+            return self._effective_preamble()
+        from .runner.quest_folder_index import render_quest_folder_context
+        standing = getattr(self, "_standing_next_steps", None)
+        if standing is not None and standing.quest_id == quest.quest_id:
+            # The quest block already carries this quest's next steps; do not say them twice.
+            self._standing_next_steps = None
+            try:
+                base = self._effective_preamble()
+            finally:
+                self._standing_next_steps = standing
+        else:
+            base = self._effective_preamble()
+        block = render_quest_folder_context(quest)
+        return f"{base}\n\n{block}" if base else block
+
+    def cmd_quest(self, arg: str) -> None:
+        """/quest [auto|none|<name or id>]: how turns are grounded in a synced quest folder."""
+        from .runner.quest_folder_index import describe_match, match_quest_folder
+        c = self._console
+        arg = arg.strip()
+        low = arg.lower()
+        if low in ("none", "off", "no"):
+            self.quest_match_mode = "none"
+            self.pinned_quest = None
+            self._persist_session_state()
+            c.dim("  Quest matching off: no quest is added to your messages. /quest auto turns it back on.")
+            return
+        if low in ("auto", "on"):
+            self.quest_match_mode = "auto"
+            self.pinned_quest = None
+            self._persist_session_state()
+            c.dim("  Quest matching on: each message is matched to the synced quest it is about.")
+            return
+        if arg:
+            found = match_quest_folder(arg, self.quest_folders)
+            if found is None:
+                c.dim(f"  No synced quest clearly matches {arg!r}. /quest lists them.")
+                return
+            self.pinned_quest = found
+            c.dim(f"  Pinned for this session. {describe_match(found)}")
+            c.dim("  /quest auto goes back to matching each message.")
+            return
+        if self.pinned_quest is not None:
+            c.dim(f"  Pinned: {describe_match(self.pinned_quest)}")
+        else:
+            c.dim(f"  Quest matching: {self.quest_match_mode}")
+        if not self.quest_folders:
+            c.dim("  No synced quest folders found under the corpus root.")
+            return
+        c.dim("  Synced quest folders:")
+        for q in self.quest_folders:
+            c.dim(f"    {q.title or q.quest_id}  ·  {q.folder}")
+        c.dim("  /quest none  never add a quest  ·  /quest auto  match each message  ·  "
+              "/quest <name>  pin one")
 
     def _maybe_refresh_next_steps(self, final) -> None:
         """Write this turn's conclusion back as the quest's standing next steps, when it earns it.
@@ -1042,6 +1147,7 @@ class InteractiveSession:
                 "model_hint": self._model_hint,
                 "rep_name": self._rep_name,
                 "persona_file": self._persona_file,
+                "quest_match": getattr(self, "quest_match_mode", "auto"),
             }
             path.write_text(json.dumps(state, indent=2))
         except Exception:  # noqa: BLE001
@@ -1061,6 +1167,9 @@ class InteractiveSession:
                 self._model_hint = cs["model_hint"]
             if cs.get("rep_name"):
                 self._rep_name = cs["rep_name"]
+            if cs.get("quest_match") in ("auto", "none"):
+                # The person's own saved choice beats the deployment's QAR_QUEST_AUTO_MATCH default.
+                self.saved_quest_match_mode = cs["quest_match"]
             pf = cs.get("persona_file")
             if pf:
                 try:

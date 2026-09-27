@@ -98,6 +98,7 @@ from quest_ai_runner.adapters.tfdfidf_sampling import keywords_from_text
 
 from .adapters import AssembledContext
 from .scope_tags import scope_tags_allow, scope_tags_from_keys
+from .file_modes import match_umask
 
 log = logging.getLogger("quest-ai-runner.anticipation")
 
@@ -787,6 +788,7 @@ class FilePredictionStore:
         try:
             self._dir.mkdir(parents=True, exist_ok=True)
             tmp_fd, tmp_path = tempfile.mkstemp(dir=str(self._dir), prefix=".tmp_", suffix=".json")
+            match_umask(tmp_fd)  # mkstemp makes 0600; another account sharing the corpus must read it
             try:
                 with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
                     json.dump(state, fh, indent=2, ensure_ascii=False)

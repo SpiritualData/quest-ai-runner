@@ -27,6 +27,7 @@ import os
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Tuple, runtime_checkable
+from ..core.file_modes import match_umask
 
 # Name of the bootstrap meta sidecar written next to cards on the filesystem. The filesystem repo
 # ignores it when enumerating cards (it is store meta-state, not a card). Kept in sync with
@@ -210,6 +211,7 @@ class FilesystemCardRepository:
             tmp_fd, tmp_path = tempfile.mkstemp(
                 dir=str(self._cards_dir), prefix=".tmp_", suffix=".json"
             )
+            match_umask(tmp_fd)  # mkstemp makes 0600; another account sharing the corpus must read it
             try:
                 with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
                     json.dump(card, fh, indent=2, ensure_ascii=False)

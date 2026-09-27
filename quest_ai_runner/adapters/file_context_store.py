@@ -77,6 +77,7 @@ from .card_content_render import (
 )
 from .card_repository import CardRepository, FilesystemCardRepository, card_embed_text
 from .tfdfidf_sampling import extract_terms as tfdfidf_extract_terms, select_representatives
+from ..core.file_modes import match_umask
 
 _log = logging.getLogger("quest-ai-runner.context")
 
@@ -185,6 +186,7 @@ def _write_bootstrap_meta(
             "completed_at": datetime.now(timezone.utc).isoformat(),
         }
         tmp_fd, tmp_path = tempfile.mkstemp(dir=str(cards_dir), prefix=".tmp_meta_", suffix=".json")
+        match_umask(tmp_fd)  # mkstemp makes 0600; another account sharing the corpus must read it
         try:
             with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
                 json.dump(payload, fh, indent=2, ensure_ascii=False)

@@ -1804,6 +1804,8 @@ def main(argv=None) -> int:
                 prefix=".tmp_",
                 suffix=".json"
             )
+            from .core.file_modes import match_umask
+            match_umask(tmp_fd)  # mkstemp makes 0600; another account sharing the corpus must read it
             try:
                 with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
                     json.dump(card, fh, indent=2, ensure_ascii=False)
