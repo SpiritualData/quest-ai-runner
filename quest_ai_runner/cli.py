@@ -846,7 +846,7 @@ _LARGE_CORPUS_FILES = 5000
 def _count_indexable_files(corpus: str) -> int:
     """How many files one bootstrap of ``corpus`` would index, using the real walk rules."""
     from pathlib import Path as _Path
-    from .adapters._walk import effective_skip_dirs, prune_dirnames
+    from .adapters._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames
     from .adapters.file_context_store import _SOURCE_EXTS
     root = _Path(corpus).resolve()
     skip = effective_skip_dirs(root)
@@ -854,7 +854,7 @@ def _count_indexable_files(corpus: str) -> int:
     for dirpath, dirnames, filenames in os.walk(root):
         prune_dirnames(dirnames, current=_Path(dirpath), base_skip=skip)
         for fn in filenames:
-            if _Path(fn).suffix.lower() in _SOURCE_EXTS:
+            if not is_claude_state_file(fn) and _Path(fn).suffix.lower() in _SOURCE_EXTS:
                 total += 1
     return total
 

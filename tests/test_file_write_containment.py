@@ -124,6 +124,25 @@ def test_refuses_credential_ish_files_even_inside_the_root(writer, tree, name):
     assert writer.read_file(name) is None
 
 
+@pytest.mark.parametrize("name", [".claude.json", ".claude.json.backup",
+                                  "product/.claude.json.backup.1775314548497",
+                                  "product/.claude.json.tmp.523349.16a862451318",
+                                  "product/.claude.json.corrupted.1766205104974"])
+def test_refuses_claude_codes_own_state_file_even_by_exact_path(writer, tree, name):
+    """Discovery (list_sources/grep) already skips every dotfile, so this only bites a direct,
+    by-exact-path read/write -- but that file carries OAuth account metadata and feature-flag
+    caches, so it gets the same refusal as .env/.key/.pem rather than relying on the dotfile skip
+    alone."""
+    root, _ = tree
+    target = root / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text('{"oauthAccount": "..."}\n')
+    res = writer.write_file(name, "overwritten\n")
+    assert not res.ok
+    assert target.read_text() == '{"oauthAccount": "..."}\n'
+    assert writer.read_file(name) is None
+
+
 def test_refuses_a_binary_file(writer, tree):
     root, _ = tree
     (root / "image.png").write_bytes(b"\x89PNG\r\n")

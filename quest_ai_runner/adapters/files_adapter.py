@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from ..core.adapters import Observation, RetrievalAdapterBase
-from ._walk import effective_skip_dirs, prune_dirnames
+from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames
 _BINARY_EXTS = {
     ".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip", ".gz", ".tar", ".mp4", ".mov",
     ".woff", ".woff2", ".ttf", ".ico", ".so", ".pyc", ".bin", ".db", ".sqlite",
@@ -30,6 +30,12 @@ _SECRET_SUFFIXES = (".env", ".key", ".pem")
 def _is_secretish(name: str) -> bool:
     low = name.lower()
     if low.startswith(".env") or any(low.endswith(s) for s in _SECRET_SUFFIXES):
+        return True
+    if is_claude_state_file(name):
+        # Discovery (list_sources/grep, below) already skips every dotfile, so this only bites a
+        # DIRECT read_section(".claude.json") by exact path -- but that path contains OAuth account
+        # metadata, so it belongs in the same refusal as .env/.key/.pem, not left to the dotfile
+        # skip alone.
         return True
     return any(h in low for h in _SECRET_HINTS)
 

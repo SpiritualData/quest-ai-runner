@@ -7,6 +7,13 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **`FilesAdapter`/`FilesWriter` would read or overwrite Claude Code's own `.claude.json` (OAuth
+  account metadata, feature-flag caches) given its exact path**, even though `list_sources`/`grep`
+  already skip every dotfile during discovery — the gap was a targeted `read_section`/write by a
+  path already known (e.g. copied from elsewhere in a poisoned corpus). `_is_secretish` (the shared
+  boundary in `adapters/files_adapter.py::resolve_in_tree`, used by both the read and write sides)
+  now also refuses the same `is_claude_state_file` family as the indexing fix below. Tests:
+  `tests/test_file_write_containment.py::test_refuses_claude_codes_own_state_file_even_by_exact_path`.
 - **Claude Code's own on-disk state file (`.claude.json` and its backup/tmp/corrupted siblings)
   was being indexed as corpus content, and re-analysed by an LLM on every single refresh, forever**
   (`adapters/_walk.py` new `is_claude_state_file`, wired into `adapters/file_context_store.py` and
