@@ -294,6 +294,12 @@ class DeepResult:
     # what it tried. Structural, set by the runner from its own bookkeeping, never inferred from the
     # text of its output. A runner that cannot tell leaves it False, and behaves exactly as before.
     exhausted: bool = False
+    # Claude Code refused this run because the subscription USAGE LIMIT is reached (see
+    # ``core.usage_limit``). Not a failed goal: nothing ran, or the run stopped mid-flight, and the
+    # work belongs back in the queue until the limit resets. The goal loop stops on it at once (every
+    # rung is a Claude model, so another rung would be refused too) and the task executor requeues
+    # the task instead of reporting it. ``session_id`` still names the session to continue.
+    usage_limited: bool = False
 
 
 # The two ways a deep runner can hand its future-context bullets back. Declared per runner as

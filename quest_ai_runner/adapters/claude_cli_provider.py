@@ -40,6 +40,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ..core import usage_limit
 from ..core.adapters import ModelProviderBase
 from .retry_utils import retry_transient
 
@@ -395,6 +396,12 @@ class ClaudeCliProvider(ModelProviderBase):
         The prompt is piped via stdin (not passed as a CLI argument) so large prompts do not
         hit the OS ARG_MAX limit.
         """
+        # While the lane knows Claude Code is at its usage limit, do not spawn a CLI that can only
+        # be refused: say so straight away, as the same typed error a live refusal raises. The
+        # note clears itself at the reset (see core.usage_limit.active_limit).
+        paused_on = usage_limit.active_limit()
+        if paused_on is not None:
+            raise usage_limit.UsageLimitError(paused_on)
         # Pass "-p" with no inline prompt — the CLI reads from stdin when no prompt arg follows.
         binary = self._resolve_binary()
         cmd: List[str] = [binary, "-p", "--output-format", "json"]
@@ -442,6 +449,13 @@ class ClaudeCliProvider(ModelProviderBase):
                         err = str(envelope["result"])
                 except (ValueError, TypeError):
                     err = out[:300].strip()
+            # The subscription usage limit is not an error to report, it is a wait: raise it typed
+            # so the lane can pause and the task can resume at the reset (core.usage_limit).
+            limit = usage_limit.detect_usage_limit(err)
+            if limit is not None:
+                raise usage_limit.UsageLimitError(
+                    usage_limit.record(limit),
+                    f"claude CLI exited {proc.returncode}: {err}")
             raise RuntimeError(f"claude CLI exited {proc.returncode}: {err or 'no stderr'}")
         try:
             envelope = json.loads(out)
@@ -449,6 +463,11 @@ class ClaudeCliProvider(ModelProviderBase):
             raise RuntimeError(f"claude CLI returned non-JSON output: {e}")
         if isinstance(envelope, dict):
             if envelope.get("is_error"):
+                limit = usage_limit.detect_usage_limit(str(envelope.get("result") or ""))
+                if limit is not None:
+                    raise usage_limit.UsageLimitError(
+                        usage_limit.record(limit),
+                        f"claude CLI reported an error: {envelope.get('result')}")
                 raise RuntimeError(f"claude CLI reported an error: {envelope.get('result') or out[:200]}")
             self._accumulate_usage(envelope)
             return envelope.get("result") or ""
@@ -510,6 +529,10 @@ class ClaudeCliProvider(ModelProviderBase):
         )
         try:
             text = self._invoke(prompt + instruction, model=model)
+        except usage_limit.UsageLimitError:
+            # Not a hiccup: nothing further in this turn can run, so let the caller stop and wait
+            # rather than planning on an empty default decision.
+            raise
         except Exception:  # noqa: BLE001 — a planner hiccup must never break the loop
             return {}
         return extract_json_object(text)

@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Set
 
+from . import usage_limit
 from .adapters import DeepResult, DeepRunner, EVENT_EXEC, ProgressEvent
 
 _log = logging.getLogger("quest-ai-runner.goal_runner")
@@ -982,6 +983,12 @@ class SubprocessGoalRunner(DeepRunner):
         # is used for THIS run only; otherwise the runner's configured base preamble applies, so
         # callers that pass nothing see exactly the prior behaviour.
         preamble = self.cfg.context_preamble if context_preamble is None else context_preamble
+        # Claude Code is known to be at its usage limit: a worker spawned now can only be refused.
+        # Report that as the limit it is, keeping the session to resume, without spawning.
+        paused_on = usage_limit.active_limit()
+        if paused_on is not None:
+            return DeepResult(met=False, error=f"Claude Code usage limit: {paused_on.message}",
+                              session_id=resume_session_id, usage_limited=True)
         prompt = compose_goal_prompt(goal, brief, preamble=preamble)
         # ``working_dir`` is an OPTIONAL PER-CALL override of ``self.cfg.working_dir`` (e.g. a
         # quest's synced folder, see quest_autopilot_design.md's execution-environment section).
@@ -1155,6 +1162,23 @@ class SubprocessGoalRunner(DeepRunner):
             return self.run_goal(goal=goal, brief=brief, model=model, max_turns=max_turns,
                                  emit=emit, context_preamble=context_preamble, run_id=run_id,
                                  working_dir=working_dir, resume_session_id=None)
+
+        # THE SUBSCRIPTION USAGE LIMIT is a wait, not a failure. Claude Code refuses with exit 1 and
+        # a synthetic result ("You've hit your weekly limit · resets 1pm (America/Los_Angeles)");
+        # its session record says the same structurally (quotaLimits.resetsAt). Checked only on an
+        # error exit, so ordinary output that merely mentions limits is never mistaken for one.
+        # The session id travels with it: the work done before the refusal lives in that session,
+        # and the resumed run continues it.
+        if proc.returncode != 0 or json_is_error:
+            limit = (usage_limit.limit_from_session_file(
+                        resolve_session_file(effective_working_dir, session_id))
+                     or usage_limit.detect_usage_limit(out)
+                     or usage_limit.detect_usage_limit(err or ""))
+            if limit is not None:
+                limit = usage_limit.record(limit)
+                return DeepResult(met=False, output="", tokens=tokens, cost_usd=cost,
+                                  session_id=session_id, usage_limited=True,
+                                  error=f"Claude Code usage limit: {limit.message}")
 
         # The escalation-marker contract: the worker raised a human decision mid-run and printed
         # ``QAR-ESCALATED: <decision_id>``. That overrides met-vs-limit — the run is PAUSED on a

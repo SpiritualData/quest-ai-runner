@@ -6341,6 +6341,15 @@ class Orchestrator:
                 # outcome is verified when it reflects back.
                 if getattr(res, "deferred", False):
                     break
+                # CLAUDE CODE IS AT ITS USAGE LIMIT (``DeepResult.usage_limited``): terminal for this
+                # turn, whatever rungs remain, since every rung is a Claude model and would be
+                # refused the same way. Nothing to verify; the task executor puts the work back in
+                # the queue until the limit resets (``core.usage_limit``).
+                if getattr(res, "usage_limited", False):
+                    if emit is not None:
+                        emit.status("Claude Code reached its usage limit; pausing this work "
+                                    "until it resets.")
+                    break
                 # TURN-BUDGET CONTINUATION, decided BEFORE the terminal guard below, because a
                 # worker stopped by ``--max-turns`` produces EXACTLY the shape that guard calls a
                 # hard failure, and it is not one.

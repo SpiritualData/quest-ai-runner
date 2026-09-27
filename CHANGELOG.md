@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **The Claude subscription usage limit is a wait, not a failure** (`core/usage_limit.py`). When a
+  keyless (`claude_cli`) lane runs out of allowance, Claude Code refuses with exit 1 and a result
+  like `You've hit your weekly limit · resets 1pm (America/Los_Angeles)` (also session and
+  monthly-spend variants; the run's session record carries `quotaLimits.resetsAt`). Before, a deep
+  run reported that as a failed goal, the planner swallowed it, and the lane went on claiming work,
+  marking its whole queue failed in seconds. Now: the refusal is recognised only on an error path
+  and its reset time parsed (structured `resetsAt` first, then the text; a capped 30-minute backoff
+  when none can be read); `ClaudeCliProvider` raises a typed `UsageLimitError` (a `RuntimeError`)
+  and stops spawning while the lane is paused; `SubprocessGoalRunner` returns
+  `DeepResult(usage_limited=True)` keeping the session id, and the goal loop stops on it; the
+  executor puts the task back in the queue (`QuestClient.requeue_for_usage_limit`: status queued,
+  `start_at` = reset + 2 minutes, `hold_reason=claude_limit`, `resume_session_id`) instead of
+  reporting it done or failed, and never pauses a run that actually succeeded; the poller holds new
+  work without claiming it until the reset (`QuestClient.hold_for_usage_limit`), persists the note
+  beside its state file across restarts, and lets through a task its owner released after the pause
+  began (`start_requested_at`), lifting the pause so that run really tries. `ExecutionOutcome.status`
+  gains `"waiting"`. Tests: `tests/test_usage_limit.py`.
+- **A task's explicit `start_at` is honoured as the backend's own hold**: `_due_now_locally` treats a
+  task carrying `start_at` as due (the backend only returns it once that instant has passed), so a
+  runner in a different timezone from the person no longer re-holds it by its own wall clock.
+
 ### Fixed
 - **Turn-start budgets raised: context assembly 15s -> 30s, guidance selection 5s -> 15s**
   (`QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` / `QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS`). They are a

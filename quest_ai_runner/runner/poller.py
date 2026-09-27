@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from ..config import RunnerConfig, build_orchestrator, derive_capabilities, resolve_rep_sync_resolver
+from ..core import usage_limit
 from ..resources import ResourceGuard, ResourceLimits
 from .autopilot import (AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, AutopilotPass, _parse_dt,
                         cadence_due, persona_entries_on_duty, run_requested)
@@ -228,6 +229,12 @@ def _due_now_locally(tasks: List[Dict[str, Any]],
     due: List[Dict[str, Any]] = []
     deferred: List[Dict[str, Any]] = []
     for task in tasks:
+        # A task carrying an explicit ``start_at`` (a UTC instant) was already held by the backend
+        # until that instant: discovery only returns it once it has arrived. It is due, whatever
+        # this runner's own clock makes of its local-date schedule.
+        if str(task.get("start_at") or "").strip():
+            due.append(task)
+            continue
         date = str(task.get("scheduled_date") or "").strip()
         if not date:
             due.append(task)
@@ -301,6 +308,11 @@ class Poller:
         # or test that reads config.rep_sync_resolver after construction sees the resolved callable.
         config.rep_sync_resolver = resolve_rep_sync_resolver(config, quest_client=self.client)
         self.state = StateStore(state_path)
+        # The lane's Claude usage-limit note lives beside its state file, so a lane restarted
+        # mid-pause keeps honouring the reset instead of re-discovering the limit task by task.
+        if state_path:
+            usage_limit.configure_persistence(
+                str(Path(state_path).with_name(Path(state_path).stem + "_usage_limit.json")))
         # One-shot: abandoned claims are reconciled on this process's first scan (_recover_orphans).
         self._orphans_reconciled = False
         self._orchestrator = None  # built lazily so an unconfigured poll degrades cleanly
@@ -574,6 +586,18 @@ class Poller:
             return self._handle_context_request(task)
         sig = _task_signature(task)
         task_id = str(task.get("id") or task.get("task_id") or "")
+        # LANE PAUSE: Claude Code is at its usage limit, so new work would only be refused (and,
+        # before this, was then marked failed, the whole queue in seconds). Hold it until the reset
+        # instead, visibly and server-enforced, without claiming it. A task its owner explicitly
+        # released AFTER the pause began ("Start now") goes through: they may know the limit has
+        # reset, and if it has not, the run is simply held again.
+        paused_on = usage_limit.active_limit()
+        if paused_on is not None:
+            if self._released_during_pause(task, paused_on):
+                usage_limit.clear(f"task {task_id} was started by its owner")
+            else:
+                self._hold_for_usage_limit(task_id, paused_on)
+                return None
         # Re-check resources PER TASK: overload can begin mid-scan (earlier tasks in this very
         # batch may be what pushed the host over). Defer BEFORE marking/claiming, so the task is
         # re-discovered and runs on a later scan once resources recover.
@@ -633,8 +657,34 @@ class Poller:
         # Opt-in push-back: post any locally-queued notes on the quest folder up to Quest.
         self._push_quest_folder_for(task)
         # Opt-in: record this task's outcome into the rep's turn store so future runs can recall it.
-        self._record_rep_turn(task, target, outcome)
+        # A task paused on the Claude usage limit has no outcome yet; its resumed run records one.
+        if getattr(outcome, "status", None) != "waiting":
+            self._record_rep_turn(task, target, outcome)
         return task_id
+
+    # --- the usage-limit lane pause (see core.usage_limit) -----------------------
+
+    @staticmethod
+    def _released_during_pause(task: Dict[str, Any], paused_on: "usage_limit.UsageLimit") -> bool:
+        """Whether the task's owner pressed "Start now" after this pause began."""
+        stamp = str(task.get("start_requested_at") or "").strip()
+        if not stamp:
+            return False
+        parsed = _parse_dt(stamp)
+        if parsed is None:
+            return False
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.timestamp() > paused_on.seen_at
+
+    def _hold_for_usage_limit(self, task_id: str, paused_on: "usage_limit.UsageLimit") -> None:
+        """Hold a discovered task until the pause ends: visible on the task, enforced by the backend."""
+        resume_at = paused_on.resume_at()
+        hold = getattr(self.client, "hold_for_usage_limit", None)
+        if callable(hold) and task_id:
+            hold(task_id, start_at=resume_at, detail=paused_on.message)
+        log.info("Claude Code usage limit (%s): holding task %s until %s", paused_on.label(),
+                 task_id, resume_at.isoformat())
 
     # --- D1: context-request fast path (no goal execution, no LLM plan loop) ------
 

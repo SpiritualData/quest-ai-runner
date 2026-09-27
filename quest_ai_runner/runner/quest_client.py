@@ -457,6 +457,52 @@ class QuestClient:
             log.warning("report_done_with_data failed for task %s: %s", task_id, e)
             return {}
 
+    # --- the usage-limit wait (see core.usage_limit) --------------------------
+
+    @staticmethod
+    def utc_stamp(moment: datetime) -> str:
+        """An aware datetime as the backend's start_at form: UTC, second precision, trailing Z."""
+        return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def requeue_for_usage_limit(self, task_id: str, *, start_at: datetime, detail: str,
+                                resume_session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Put a CLAIMED task back in the queue to wait out the Claude usage limit.
+
+        PATCHes ``status=queued`` with ``start_at`` (when to resume, the parsed reset time) and
+        ``hold_reason=claude_limit``; the backend then keeps every lane off the task until then
+        (its claim guard and discovery filter), counts the waiting episode, and notifies the owner
+        once. ``resume_session_id`` hands over the Claude session the stopped run had open, so the
+        resumed run continues that work rather than starting over. Returns the task, or None when
+        the write failed (the caller must then report the task some other way, since it is still
+        marked in_progress and nothing else will pick it up).
+        """
+        body: Dict[str, Any] = {"status": "queued", "start_at": self.utc_stamp(start_at),
+                                "hold_reason": "claude_limit", "hold_detail": (detail or "")[:500]}
+        sid = (resume_session_id or "").strip()
+        if sid:
+            body["resume_session_id"] = sid
+        try:
+            return self._request("PATCH", f"/api/assistant-tasks/{task_id}", body=body)
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("requeue_for_usage_limit failed for task %s: %s", task_id, e)
+            return None
+
+    def hold_for_usage_limit(self, task_id: str, *, start_at: datetime,
+                             detail: str) -> Optional[Dict[str, Any]]:
+        """Hold a still-QUEUED task until the lane's usage-limit pause ends, without claiming it.
+
+        Used by the lane pause: work that arrives while Claude Code is limited is not run (it would
+        only be refused), and holding it makes the wait visible on the task ("Waiting for Claude
+        Code, resumes ...") and enforced server-side. Returns the task, or None on failure.
+        """
+        body = {"start_at": self.utc_stamp(start_at), "hold_reason": "claude_limit",
+                "hold_detail": (detail or "")[:500]}
+        try:
+            return self._request("PATCH", f"/api/assistant-tasks/{task_id}", body=body)
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("hold_for_usage_limit failed for task %s: %s", task_id, e)
+            return None
+
     # --- live execution progress onto the task (the task-detail stream) ------
 
     def report_progress(self, task_id: str, kind: str, *, text: Optional[str] = None,

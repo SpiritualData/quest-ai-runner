@@ -26,6 +26,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional
 
+from ..core import usage_limit
 from ..core.adapters import Mode, ProgressEvent
 from ..core.orchestrator import Orchestrator, OrchestratorResult, _strip_future_context
 from .context_updates import (parse_manifest, parse_usage_notes, render_receipt,
@@ -406,6 +407,12 @@ def terminal_session_id(result: OrchestratorResult) -> Optional[str]:
     return None
 
 
+def utc_stamp(moment) -> str:
+    """An aware datetime as "YYYY-MM-DDTHH:MM:SSZ" (the backend's start_at form)."""
+    from datetime import timezone as _tz
+    return moment.astimezone(_tz.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def client_accepts_session_id(fn: Any) -> bool:
     """Whether a client's report method takes a ``session_id`` keyword (or ``**kwargs``).
 
@@ -427,7 +434,7 @@ def client_accepts_session_id(fn: Any) -> bool:
 @dataclass
 class ExecutionOutcome:
     task_id: str
-    status: str                       # "done" | "needs_you" | "failed" | "cancelled"
+    status: str                       # "done" | "needs_you" | "failed" | "cancelled" | "waiting"
     result: str = ""
     decision_id: Optional[str] = None
 
@@ -800,6 +807,9 @@ class TaskExecutor:
         # environment section).
         working_dir_override = self._resolve_working_dir(goal_id, quest_id)
 
+        # When this run began, so a usage limit recorded DURING it can be told apart from one some
+        # other concurrent run hit (see ``_usage_limit_behind``).
+        run_started = time.time()
         try:
             result: OrchestratorResult = self._orch.run(
                 text, quest_id=quest_id, context_view=context_view, mode=Mode.BACKGROUND,
@@ -823,6 +833,12 @@ class TaskExecutor:
             # (unthrottled, this is the terminal path) whether the task was cancelled meanwhile.
             if self._is_task_cancelled(task_id):
                 return self._quiet_cancelled(task_id)
+            # Claude Code refused on its usage limit (a planner or answer call raised it, or a
+            # concurrent run recorded it while this one was failing): a wait, not a failure.
+            limit = usage_limit.from_exception(e) or usage_limit.seen_since(run_started)
+            if limit is not None:
+                return self._pause_for_usage_limit(task, task_id, limit, conv_id=conv_id,
+                                                   card_id=card_id, session_id=resume_session_id)
             msg = f"orchestrator error: {type(e).__name__}: {e}"
             self._report_progress(task_id, "error", text=msg)
             self._safe_report_failed(task_id, msg)
@@ -833,12 +849,95 @@ class TaskExecutor:
         # The run had the person's material in front of it, so the next look starts after it.
         # After the run and not before: an orchestrator that raised before doing anything has not
         # delivered it (see ``ContextUpdates.mark_seen``).
+        # A run that did not finish because Claude Code hit its usage limit goes back in the queue
+        # to resume at the reset, holding its session, instead of being reported done or failed.
+        limit = self._usage_limit_behind(result, run_started)
+        if limit is not None:
+            return self._pause_for_usage_limit(
+                task, task_id, limit, conv_id=conv_id, card_id=card_id,
+                session_id=terminal_session_id(result) or resume_session_id)
         if self._context_bundle is not None:
             self._safe(self._context_bundle.mark_seen)
         return self._report(task_id, result, conv_id, request_text=text,
                             rep_preamble=rep_preamble,
                             card_id=(task.get("card_id") or None),
                             autopilot_composed=composed_by_autopilot)
+
+    @staticmethod
+    def _usage_limit_behind(result: OrchestratorResult,
+                            run_started: float) -> Optional["usage_limit.UsageLimit"]:
+        """The usage limit that stopped this run, or None when the run's outcome stands.
+
+        A run that SUCCEEDED is never paused, even if some concurrent run recorded a limit while it
+        worked: its result is real. Only an unfinished outcome is attributed to the limit, and only
+        on evidence: a deep result the runner itself flagged ``usage_limited``, or a limit recorded
+        during this very run (``seen_since``) behind a failed deep result or an empty answer.
+        """
+        kind = getattr(result, "kind", None)
+        if kind == "cancelled":
+            return None
+        deep = list(getattr(result, "deep_results", None) or [])
+        for d in deep:
+            if getattr(d, "usage_limited", False):
+                return (usage_limit.seen_since(run_started)
+                        or usage_limit.detect_usage_limit(d.error or "")
+                        or usage_limit.UsageLimit(message=(d.error or "Claude Code usage limit")))
+        recent = usage_limit.seen_since(run_started)
+        if recent is None:
+            return None
+        if kind == "answer":
+            text = (getattr(result, "text", "") or "").strip()
+            if not text or usage_limit.detect_usage_limit(text):
+                return recent
+            return None
+        if kind == "deep":
+            if deep and all(d.met for d in deep):
+                return None
+            if any(d.decision_id for d in deep):
+                return None
+            return recent
+        return None
+
+    def _pause_for_usage_limit(self, task: Dict[str, Any], task_id: str,
+                               limit: "usage_limit.UsageLimit", *,
+                               conv_id: Optional[str], card_id: Optional[str],
+                               session_id: Optional[str]) -> ExecutionOutcome:
+        """Put a task stopped by the Claude usage limit back in the queue to resume at the reset.
+
+        The lane-wide note (``usage_limit.record``) makes the poller stop claiming new Claude work
+        until then; this puts THIS task back with ``start_at`` = the reset (plus grace), or a capped
+        backoff when no reset time could be read, and with the session to continue. The backend
+        holds it until then and tells its owner once. If the requeue write itself fails the task
+        would sit in_progress forever, so it is reported failed instead, saying why.
+        """
+        limit = usage_limit.record(limit)
+        hits = int(task.get("limit_hit_count") or 0) + 1
+        resume_at = limit.resume_at(hit_count=hits)
+        note = (f"Claude Code reached its {limit.label()}, so this is paused, not failed. It will "
+                "resume automatically when Claude Code is available again and continue where it "
+                "left off.")
+        self._report_progress(task_id, "status", text=note,
+                              data={"phase": "usage_limit",
+                                    "resume_at": utc_stamp(resume_at),
+                                    "limit": limit.message})
+        requeue = getattr(self._client, "requeue_for_usage_limit", None)
+        requeued = None
+        if callable(requeue):
+            try:
+                requeued = requeue(task_id, start_at=resume_at, detail=limit.message,
+                                   resume_session_id=session_id)
+            except Exception:  # noqa: BLE001 -- handled below exactly like a failed write
+                log.error("usage-limit requeue failed for task %s", task_id, exc_info=True)
+        if not requeued:
+            msg = (f"{note} The task could not be put back in the queue automatically, so it is "
+                   "marked failed; run it again once Claude Code is available.")
+            self._post_conv(conv_id, msg, kind="failed", task_id=task_id, card_id=card_id)
+            self._safe_report_failed(task_id, msg)
+            return ExecutionOutcome(task_id, "failed", msg)
+        log.info("task %s paused on the Claude usage limit (%s); resumes at %s", task_id,
+                 limit.message, resume_at.isoformat())
+        self._post_conv(conv_id, note, kind="progress", task_id=task_id, card_id=card_id)
+        return ExecutionOutcome(task_id, "waiting", note)
 
     def report(self, task_id: str, result: OrchestratorResult,
                conv_id: Optional[str] = None, *,
