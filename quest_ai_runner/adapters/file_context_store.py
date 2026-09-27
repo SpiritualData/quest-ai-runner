@@ -2098,6 +2098,12 @@ class FileContextStore(ContextAssemblerBase):
         # In-memory card cache: {card_id: card_dict} or None when not yet loaded.
         # (see register_reference_resolver below for adding a resolver after construction)
         self._cache: Optional[Dict[str, Dict[str, Any]]] = None
+        # Per-card IDF term-weight maps, reused only while the card is the SAME object the cache
+        # holds (a reload or rewrite yields a new dict, so it recomputes). Rebuilding all of them
+        # every turn was ~5s of CPU on a 5,000-card store. See _scoring_index.
+        self._term_weight_cache: Dict[str, Tuple[Dict[str, Any], Dict[str, float]]] = {}
+        self._load_lock = threading.Lock()
+        self._df_cache: Optional[Tuple[frozenset, Dict[str, int]]] = None
         # Dirty flag: set after any write so next _load_all() reloads from the repo.
         self._cache_dirty: bool = False
         # The repository revision (``repo.revision()``) captured at the last cache load. For the
@@ -3601,6 +3607,39 @@ class FileContextStore(ContextAssemblerBase):
 
         return weights
 
+    def _scoring_index(self, cards: Dict[str, Dict[str, Any]]
+                       ) -> Tuple[Dict[str, Dict[str, float]], Dict[str, int]]:
+        """``(term-weight map per card, presence-based document frequency)`` for ``cards``.
+
+        Cached across turns: a card's weights are reused while it is the same object (the card
+        cache hands out new dicts whenever it reloads), and the DF table while the card set is
+        unchanged and no card's weights were recomputed.
+        """
+        cache = self._term_weight_cache
+        maps: Dict[str, Dict[str, float]] = {}
+        recomputed = False
+        for cid, card in cards.items():
+            hit = cache.get(cid)
+            if hit is not None and hit[0] is card:
+                maps[cid] = hit[1]
+            else:
+                weights = self._card_term_weights(card)
+                cache[cid] = (card, weights)
+                maps[cid] = weights
+                recomputed = True
+        if len(cache) > 2 * max(len(cards), 1):
+            for stale_id in [k for k in cache if k not in cards]:
+                del cache[stale_id]
+        key = frozenset(cards)
+        if not recomputed and self._df_cache is not None and self._df_cache[0] == key:
+            return maps, self._df_cache[1]
+        df: Dict[str, int] = {}
+        for tw in maps.values():
+            for term in tw:
+                df[term] = df.get(term, 0) + 1
+        self._df_cache = (key, df)
+        return maps, df
+
     def _card_searchable_terms(self, card: Dict[str, Any]) -> Set[str]:
         """Return the set of all terms in a card (for DF computation)."""
         return set(self._card_term_weights(card).keys())
@@ -3747,16 +3786,8 @@ class FileContextStore(ContextAssemblerBase):
         # symbols=1, dir components=0.5, extensions dropped). DF is computed
         # from presence (a term counts once per card regardless of weight) so
         # rare terms still get high IDF. Score = sum(field_weight * IDF).
-        card_weight_maps: Dict[str, Dict[str, float]] = {
-            cid: self._card_term_weights(c) for cid, c in cards.items()
-        }
+        card_weight_maps, df = self._scoring_index(cards)
         N = len(cards)
-
-        # Compute document frequency per term (presence-based across all cards).
-        df: Dict[str, int] = {}
-        for tw in card_weight_maps.values():
-            for term in tw:
-                df[term] = df.get(term, 0) + 1
 
         # IDF(term) = log((N+1)/(df+1)) + 1  (smooth, always >= 1).
         def _idf(term: str) -> float:
@@ -4731,8 +4762,29 @@ class FileContextStore(ContextAssemblerBase):
         if not need_reload:
             return self._cache  # type: ignore[return-value]
 
-        # Reload from the repository.
-        self._cache_dirty = False
-        self._cache_dir_stamp = current_stamp
-        self._cache = self._repo.load_all()
-        return self._cache
+        # One reload at a time: the keyword arm and the vector arm's seed read the same store from
+        # two threads on a turn's first assemble, and both used to parse every card (the second,
+        # GIL-starved, took 6.8s for 5,800 cards). The loser waits and then reuses the result.
+        with self._load_lock:
+            current_stamp = self._repo.revision()
+            if (self._cache is not None and not self._cache_dirty
+                    and current_stamp == self._cache_dir_stamp):
+                return self._cache
+            self._cache_dirty = False
+            self._cache_dir_stamp = current_stamp
+            self._cache = self._repo.load_all()
+            return self._cache
+
+    def prewarm(self) -> None:
+        """Load the cards and build the scoring index ahead of the first turn. Never raises.
+
+        A cold first turn otherwise pays for parsing every card and weighting every term (~7s on
+        a 5,800-card store) inside its turn-start context budget. Meant to run in a background
+        thread while the session waits for its first message.
+        """
+        try:
+            cards = self._load_all()
+            if cards:
+                self._scoring_index(cards)
+        except Exception:  # noqa: BLE001
+            _log.debug("context index: prewarm failed", exc_info=True)

@@ -2143,6 +2143,13 @@ def _resolve_context_assembler_base(
         bootstrap_model = registry.resolve_tier("balanced")
         _bootstrap_if_needed(keyword, root=root, cards_dir=cards_dir,
                              provider=cfg.model_provider, model=bootstrap_model, notify=notify)
+        # Warm the card cache and scoring index while the session waits for its first message,
+        # so the first turn's context budget is not spent parsing and weighting every card.
+        if callable(getattr(keyword, "prewarm", None)):
+            _prewarm_thread = threading.Thread(target=keyword.prewarm, daemon=True,
+                                               name="qar-prewarm")
+            _register_index_thread(_prewarm_thread, keyword)
+            _prewarm_thread.start()
 
         if vector_store is not None:
             from .adapters import HybridContextAssembler, VectorContextAssembler

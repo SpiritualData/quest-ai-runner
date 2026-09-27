@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import os
 import tempfile
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Protocol, Tuple, runtime_checkable
 from ..core.file_modes import match_umask
@@ -146,8 +147,13 @@ class FilesystemCardRepository:
     excluded from every enumeration. Every method is best-effort and never raises.
     """
 
+    # How often ``revision`` re-stats every card file as a backstop (see there).
+    FULL_SCAN_INTERVAL_SECONDS = 30.0
+
     def __init__(self, cards_dir: str) -> None:
         self._cards_dir = Path(cards_dir)
+        self._full_stamp: Tuple[float, int] = (0.0, 0)
+        self._full_stamp_at: Optional[float] = None
 
     @property
     def cards_dir(self) -> Path:
@@ -169,23 +175,42 @@ class FilesystemCardRepository:
 
         A card whose JSON is corrupt or unreadable is skipped (never aborts the load). The card id is
         the card's own ``id`` field, falling back to the file stem.
+
+        Incremental: a file whose ``(mtime_ns, size)`` is unchanged since the last load returns the
+        SAME dict object as last time instead of being re-parsed. A store shared by several
+        processes reloads whenever any one of them writes a card; re-parsing all of them each time
+        (5,800 on one corpus) also threw away every per-card cache keyed on those objects, so one
+        learned card cost ~6s of re-tokenizing on the next turn. Callers already share the returned
+        dicts between reloads, so reusing them across a reload changes nothing for them.
         """
         cards: Dict[str, Dict[str, Any]] = {}
+        parsed: Dict[str, Tuple[int, int, Dict[str, Any]]] = {}
+        previous = getattr(self, "_parsed", {})
         try:
             if not self._cards_dir.exists():
+                self._parsed = parsed
                 return cards
-            for entry in self._cards_dir.iterdir():
-                if not self._is_card_file(entry):
-                    continue
-                try:
-                    with open(entry, "r", encoding="utf-8") as fh:
-                        card = json.load(fh)
-                    card_id = card.get("id") or entry.stem
-                    cards[card_id] = card
-                except Exception:  # noqa: BLE001 — corrupt card: skip
-                    continue
+            with os.scandir(self._cards_dir) as it:
+                for entry in it:
+                    path = Path(entry.path)
+                    if not self._is_card_file(path):
+                        continue
+                    try:
+                        st = entry.stat()
+                        old = previous.get(entry.path)
+                        if old is not None and old[0] == st.st_mtime_ns and old[1] == st.st_size:
+                            card = old[2]
+                        else:
+                            with open(path, "r", encoding="utf-8") as fh:
+                                card = json.load(fh)
+                        parsed[entry.path] = (st.st_mtime_ns, st.st_size, card)
+                        card_id = card.get("id") or path.stem
+                        cards[card_id] = card
+                    except Exception:  # noqa: BLE001 — corrupt card: skip
+                        continue
         except Exception:  # noqa: BLE001
             return {}
+        self._parsed = parsed
         return cards
 
     def read(self, card_id: str) -> Optional[Dict[str, Any]]:
@@ -248,12 +273,28 @@ class FilesystemCardRepository:
         except Exception:  # noqa: BLE001
             return False
 
-    def revision(self) -> Tuple[float, int]:
-        """Cheap snapshot of cards_dir state: ``(max_child_mtime, file_count)``.
+    def revision(self) -> Any:
+        """Cheap change-stamp of cards_dir: its own mtime, plus a periodic full re-stat.
 
-        Detects external writes (other agents / processes) without reading every card. Returns
-        ``(0.0, 0)`` if the directory does not exist or cannot be stat-ed.
+        Every write here is a temp file + ``os.replace`` and every delete an ``unlink``, so the
+        DIRECTORY's mtime changes on any write by any process using this repository. Reading it is
+        one stat; the old stamp stat-ed every card file, 0.7s per check on a 5,000-card store,
+        paid on every assemble. A card edited in place by hand (which does not touch the directory)
+        is still caught by the full ``(max_child_mtime, file_count)`` scan, re-run at most every
+        ``FULL_SCAN_INTERVAL_SECONDS``. Returns ``(0, (0.0, 0))`` on any error.
         """
+        try:
+            dir_mtime = self._cards_dir.stat().st_mtime_ns
+        except OSError:
+            return (0, (0.0, 0))
+        now = time.monotonic()
+        if self._full_stamp_at is None or now - self._full_stamp_at >= self.FULL_SCAN_INTERVAL_SECONDS:
+            self._full_stamp = self._full_scan_stamp()
+            self._full_stamp_at = now
+        return (dir_mtime, self._full_stamp)
+
+    def _full_scan_stamp(self) -> Tuple[float, int]:
+        """``(max_child_mtime, file_count)`` over every card file. Never raises."""
         try:
             if not self._cards_dir.exists():
                 return (0.0, 0)

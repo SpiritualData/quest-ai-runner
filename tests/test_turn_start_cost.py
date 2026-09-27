@@ -197,3 +197,80 @@ def test_startup_refresh_is_skipped_when_the_store_was_refreshed_recently(tmp_pa
 
     monkeypatch.setenv("QAR_REFRESH_MIN_INTERVAL_SECONDS", "0")
     assert run() == 1, "an interval of 0 refreshes on every start"
+
+
+def test_one_card_write_reparses_and_reweights_only_that_card(tmp_path, monkeypatch):
+    from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+
+    repo = FilesystemCardRepository(str(tmp_path))
+    for i in range(3):
+        repo.write(f"c{i}", {"id": f"c{i}", "name": f"Card {i}", "keywords": [f"k{i}"]})
+    first = repo.load_all()
+    repo.write("c1", {"id": "c1", "name": "Card one, edited", "keywords": ["k1", "edited"]})
+    second = repo.load_all()
+    assert second["c0"] is first["c0"] and second["c2"] is first["c2"]
+    assert second["c1"] is not first["c1"] and second["c1"]["name"] == "Card one, edited"
+
+    store = FileContextStore(str(tmp_path), auto_bootstrap=False)
+    store._repo = repo
+    calls = []
+    real = FileContextStore._card_term_weights
+    monkeypatch.setattr(FileContextStore, "_card_term_weights",
+                        lambda self, card: calls.append(card["id"]) or real(self, card))
+    store._scoring_index(repo.load_all())
+    assert sorted(calls) == ["c0", "c1", "c2"]
+    calls.clear()
+    repo.write("c2", {"id": "c2", "name": "Card two, edited", "keywords": ["k2"]})
+    store._scoring_index(repo.load_all())
+    assert calls == ["c2"]
+
+
+def test_repository_revision_sees_a_write_without_statting_every_card(tmp_path):
+    from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+
+    repo = FilesystemCardRepository(str(tmp_path))
+    repo.write("a", {"id": "a"})
+    before = repo.revision()
+    assert repo.revision() == before
+    time.sleep(0.01)
+    repo.write("b", {"id": "b"})
+    assert repo.revision() != before
+
+
+def test_concurrent_first_loads_parse_the_store_once(tmp_path):
+    import threading
+    from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+
+    repo = FilesystemCardRepository(str(tmp_path))
+    for i in range(5):
+        repo.write(f"c{i}", {"id": f"c{i}", "name": f"Card {i}"})
+    store = FileContextStore(str(tmp_path), auto_bootstrap=False)
+    loads = []
+    real_load = store._repo.load_all
+
+    def slow_load():
+        loads.append(1)
+        time.sleep(0.2)
+        return real_load()
+
+    store._repo.load_all = slow_load
+    threads = [threading.Thread(target=store._load_all) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert len(loads) == 1, "two threads each parsed the whole store"
+
+
+def test_prewarm_builds_the_cache_the_first_turn_uses(tmp_path, monkeypatch):
+    from quest_ai_runner.adapters.card_repository import FilesystemCardRepository
+
+    repo = FilesystemCardRepository(str(tmp_path))
+    repo.write("c0", {"id": "c0", "name": "Grants due soon", "keywords": ["grants", "deadline"]})
+    store = FileContextStore(str(tmp_path), auto_bootstrap=False)
+    store.prewarm()
+    calls = []
+    monkeypatch.setattr(FileContextStore, "_card_term_weights",
+                        lambda self, card: calls.append(card["id"]) or {})
+    store._scoring_index(store._load_all())
+    assert calls == [], "the first turn recomputed weights prewarm already built"

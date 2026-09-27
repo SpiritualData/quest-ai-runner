@@ -31,6 +31,16 @@ All notable changes to this project are documented here. The format is based on
   per `QAR_REFRESH_MIN_INTERVAL_SECONDS` (default 1800) across every process sharing a store, since
   each turn's own freshness check already flags changed files. Result on the measured corpus:
   guidance selection 6.5s -> 1.0s; warm assembly 11.7s -> 3.5s. Tests: `tests/test_turn_start_cost.py`.
+- **A turn re-weighted every card whenever any process wrote one, and a session's first turn parsed
+  the whole store twice.** `FilesystemCardRepository.load_all` now reuses the parsed dict of every
+  file whose `(mtime_ns, size)` is unchanged, so `FileContextStore`'s new per-card term-weight cache
+  (`_scoring_index`, reused while a card is the same object) survives another process writing one
+  card; `revision()` is one directory stat instead of a stat per card (0.7s on 5,800 cards), with
+  the full per-file scan kept as a 30s backstop for hand edits; `_load_all` reloads under a lock,
+  so the keyword arm and the vector arm's seed no longer both parse every card on the first turn
+  (the second, GIL-starved, took 6.8s); and `FileContextStore.prewarm()` builds the card cache and
+  scoring index in a background thread at session start (`qar-prewarm`). Measured first turn:
+  context assembly 18-84s -> 8-11s, guidance 6.5s -> 1.3s; warm turns 0.8-2s.
 
 ### Added
 - **Chat turns are grounded in the synced quest they are about, through its card (2026-09-26).**
