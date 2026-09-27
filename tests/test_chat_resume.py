@@ -249,3 +249,36 @@ def test_session_restores_history_and_appends_to_same_file(monkeypatch, tmp_path
     sess._write_session_file()
     assert read_conversation(path).history[-1] == ("third", "three")
     assert len(list(tmp_path.glob("qar_chat_*.json"))) == 1
+
+
+# -- TUI: history shows before the slow session build ---------------------------------------
+
+def test_resumed_history_shows_before_session_is_ready(tmp_path):
+    import asyncio
+    from types import SimpleNamespace
+    from quest_ai_runner.textual_ui import QuestAITerminal
+
+    path = write_conv(tmp_path, "abc123", [("first question", "first answer"),
+                                           ("second question", "second answer")])
+    conv = read_conversation(path)
+    conv.meta["rep_name"] = "Tester"
+
+    async def run():
+        app = QuestAITerminal(None, _config=None, resume=conv)
+        app._build_session_worker = lambda: None  # the session never finishes building here
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            before = "\n".join(str(line.text) for line in app._tlog.lines)
+            session = SimpleNamespace(_rep_name="Tester", _cfg=SimpleNamespace(corpus_root=None),
+                                      _goal_id=None, _model_hint=None, _console=None,
+                                      resumed=conv, _session_history=list(conv.history))
+            app._finish_startup(session)
+            await pilot.pause()
+            after = "\n".join(str(line.text) for line in app._tlog.lines)
+        return before, after
+
+    before, after = asyncio.run(run())
+    assert "second question" in before and "Tester (AI):" in before
+    assert "Loading the rest of the session" in before
+    assert "Ready. Continue the conversation below." in after
+    assert after.count("second question") == 1  # not replayed a second time

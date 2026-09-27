@@ -1088,6 +1088,16 @@ class QuestAITerminal(App):
             # Deferred init: show the static banner immediately; session line follows once ready.
             self._console = _RichLogConsole(self, self._tlog)
             self._print_static_banner()
+            # A resumed conversation was already read from disk before the app started, so
+            # show it NOW instead of after the (seconds-long) session build; otherwise the
+            # screen looks like a brand-new conversation until then.
+            if self.deferred_resume is not None:
+                conv = self.deferred_resume
+                self.replay_resumed_history(
+                    conv, conv.meta.get("rep_name") or self._deferred_rep_name)
+                self._console.dim("  Loading the rest of the session. You can type now; your "
+                                  "message is sent once it is ready.")
+                self.sub_title = "Resuming conversation..."
             self.query_one("#prompt", PromptTextArea).focus()
             self.run_worker(self._build_session_worker, exclusive=True, thread=True)
 
@@ -1148,25 +1158,29 @@ class QuestAITerminal(App):
             parts.append(f"model: {session._model_hint}")
         c.dim("  " + "  •  ".join(parts))
         c.line("")
-        self.deferred_resume = None
         if getattr(session, "resumed", None) is not None:
-            self.replay_resumed_history(session)
+            if self.deferred_resume is None:
+                # Not already shown at mount (a session built outside the deferred path).
+                self.replay_resumed_history(session.resumed, session._rep_name)
+            else:
+                c.dim("  Ready. Continue the conversation below.")
+                c.line("")
+        self.deferred_resume = None
         # Replay any messages the user typed before the session was ready.
         for queued_line in self._pre_session_queue:
-            self._begin_turn(queued_line, echo=True)
+            self._begin_turn(queued_line, echo=False)
         self._pre_session_queue.clear()
 
     RESUME_REPLAY_TURNS = 10
 
-    def replay_resumed_history(self, session: InteractiveSession) -> None:
+    def replay_resumed_history(self, conv, rep_name: str) -> None:
         """Show the tail of a `chat --resume` conversation so the user sees where they left off.
 
         Only the last RESUME_REPLAY_TURNS turns are rendered (a long conversation would otherwise
         flood the scrollback); the session's history, which the model reads, holds all of them.
         """
-        history = session._session_history
+        history = conv.history
         c = self._console
-        conv = session.resumed
         c.dim(f"  Resumed conversation {conv.short_id[:12]} ({len(history)} "
               f"turn{'s' if len(history) != 1 else ''})")
         shown = history[-self.RESUME_REPLAY_TURNS:]
@@ -1177,10 +1191,10 @@ class QuestAITerminal(App):
             self._tlog.write(Text(f"❯ {user_text}", style="bold cyan"))
             self._tlog.write(Text(""))
             if asst_text:
-                self._tlog.write(Text(f"{session._rep_name} (AI):", style="bold cyan"))
+                self._tlog.write(Text(f"{rep_name} (AI):", style="bold cyan"))
                 self._console.markdown(asst_text)
             self._tlog.write(Text(""))
-        c.dim("  End of resumed history. Continue below.")
+        c.dim("  End of resumed history.")
         c.line("")
 
     def _startup_failed(self, exc: Exception) -> None:
@@ -1220,6 +1234,10 @@ class QuestAITerminal(App):
 
         # Session still initializing — queue the message for replay once ready.
         if self.sess is None:
+            # Echo it now (it is replayed without a second echo) so it does not seem lost.
+            self._tlog.write(Text(f"❯ {line}", style="bold cyan"))
+            self._tlog.write(Text(""))
+            self._console.dim("  Queued. Sends as soon as the session is ready.")
             self._pre_session_queue.append(line)
             return
 
