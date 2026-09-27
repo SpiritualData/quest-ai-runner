@@ -313,7 +313,12 @@ def test_an_open_team_wide_pass_is_retired_and_replaced_by_the_quest_own_series(
 
 # --- 10: duplicate open occurrences ---------------------------------------------------------
 
-def test_two_open_occurrences_warns_and_acts_on_the_earliest_only(caplog):
+def test_two_open_series_keeps_the_earliest_and_retires_the_other(caplog):
+    """A quest has ONE pass series; a second is a second full pass (and mail) every day.
+
+    Incident 2026-09-25: this used to warn and leave the duplicate alive, so every live series
+    went due at the same minute and each ran its own pass.
+    """
     client = FakeRunTimeClient(
         tasks=[
             _pass_task("later", quest_id="q1", scheduled_date="2026-08-22",
@@ -328,10 +333,79 @@ def test_two_open_occurrences_warns_and_acts_on_the_earliest_only(caplog):
     with caplog.at_level("WARNING"):
         _poller_now(client, NOW)._ensure_autopilot_pass()
     assert client.created == []  # never create a third
-    assert len(client.task_updates) == 1
-    task_id, _fields = client.task_updates[0]
-    assert task_id == "earlier"          # acted on the earliest scheduled_date only
+    updates = dict(client.task_updates)
+    assert updates["later"] == {"recurrence": "", "status": "cancelled"}   # retired, one PATCH
+    assert "scheduled_time" in updates["earlier"]                           # kept, and retuned
     assert "2 open pass occurrences" in caplog.text
+
+
+def test_a_running_duplicate_is_left_to_finish_not_cancelled_mid_run():
+    client = FakeRunTimeClient(
+        tasks=[
+            _pass_task("keep", quest_id="q1", scheduled_date="2026-08-21",
+                      scheduled_time="06:30", recurrence_time="06:30"),
+            _pass_task("running", quest_id="q1", status="in_progress",
+                      scheduled_date="2026-08-21", scheduled_time="06:30",
+                      recurrence_time="06:30"),
+        ],
+        quests=[{"quest_id": "q1"}],
+        autopilot_by_quest={"q1": {"mode": "act", "run_time": "06:30",
+                                   "last_pass_at": "2026-08-19T13:00:00Z"}},
+    )
+    client.tasks[0]["created_at"] = "2026-08-01T00:00:00Z"
+    client.tasks[1]["created_at"] = "2026-08-10T00:00:00Z"
+    _poller_now(client, NOW)._ensure_autopilot_pass()
+    assert "running" not in dict(client.task_updates)
+    assert client.created == []
+
+
+class CollapsingGoalListingClient(FakeRunTimeClient):
+    """The backend's goal-scoped listing as it really behaves: it collapses each series to its
+    latest meaningful occurrence for the review UI, so a queued occurrence of a series that has
+    run before is ABSENT from it. The owner-scoped listing does no such collapsing."""
+
+    hidden_in_goal_listing = ()
+
+    def list_tasks_or_none(self, *, team_id=None, status=None, goal_id=None, source=None,
+                           task_kind=None):
+        rows = super().list_tasks_or_none(team_id=team_id, status=status, goal_id=goal_id,
+                                          source=source, task_kind=task_kind)
+        if goal_id is not None and rows is not None:
+            rows = [t for t in rows if t.get("id") not in self.hidden_in_goal_listing]
+        return rows
+
+
+def test_a_series_hidden_by_the_goal_listing_is_still_seen_and_its_duplicate_retired():
+    """Incident 2026-09-25: the goal-scoped listing hid one of three live series, so the lane
+    could not see it, never retired it, and it ran every morning alongside the others."""
+    client = CollapsingGoalListingClient(
+        tasks=[
+            _pass_task("visible", quest_id="q1", scheduled_date="2026-08-21",
+                      scheduled_time="06:30", recurrence_time="06:30"),
+            _pass_task("hidden", quest_id="q1", scheduled_date="2026-08-22",
+                      scheduled_time="06:30", recurrence_time="06:30"),
+        ],
+        quests=[{"quest_id": "q1"}],
+        autopilot_by_quest={"q1": {"mode": "act", "run_time": "06:30",
+                                   "last_pass_at": "2026-08-19T13:00:00Z"}},
+    )
+    client.hidden_in_goal_listing = ("hidden",)
+    _poller_now(client, NOW)._ensure_autopilot_pass()
+    assert dict(client.task_updates).get("hidden") == {"recurrence": "", "status": "cancelled"}
+    assert client.created == []
+
+
+def test_a_quest_whose_only_series_is_hidden_by_the_goal_listing_gets_no_second_series():
+    client = CollapsingGoalListingClient(
+        tasks=[_pass_task("only", quest_id="q1", scheduled_date="2026-08-21",
+                          scheduled_time="06:30", recurrence_time="06:30")],
+        quests=[{"quest_id": "q1"}],
+        autopilot_by_quest={"q1": {"mode": "act", "run_time": "06:30",
+                                   "last_pass_at": "2026-08-19T13:00:00Z"}},
+    )
+    client.hidden_in_goal_listing = ("only",)
+    _poller_now(client, NOW)._ensure_autopilot_pass()
+    assert client.created == []
 
 
 # --- 12: "Run now" pulls the SAME occurrence forward --------------------------------------------

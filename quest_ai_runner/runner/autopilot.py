@@ -78,6 +78,7 @@ from __future__ import annotations
 
 import logging
 import re
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -1709,6 +1710,25 @@ def _describe_created(item: Dict[str, Any]) -> str:
     return line
 
 
+# One lock per quest, process-wide. Passes run on the executor's worker threads, so two pass
+# occurrences due at the same minute used to run the same quest CONCURRENTLY: both read the quest
+# before either stamped ``last_pass_at``, both passed the cadence gate, and each created its own
+# batch (INCIDENT 2026-09-25: two duplicate series, two briefs' worth of deep runs, four emails).
+# Held around the whole pass, including the quest read in ``_eligible_quests``, so the second
+# pass reads the quest AFTER the first has stamped it and is skipped by the ordinary cadence gate.
+# The key is the pass's quest id ("" for an unscoped team pass, which serializes those too).
+_QUEST_PASS_LOCKS: Dict[str, threading.Lock] = {}
+_QUEST_PASS_LOCKS_GUARD = threading.Lock()
+
+
+def _quest_pass_lock(quest_id: str) -> threading.Lock:
+    with _QUEST_PASS_LOCKS_GUARD:
+        lock = _QUEST_PASS_LOCKS.get(quest_id)
+        if lock is None:
+            lock = _QUEST_PASS_LOCKS[quest_id] = threading.Lock()
+        return lock
+
+
 class AutopilotPass:
     """Runs ONE autopilot pass against a Quest client. See the module docstring for the algorithm.
 
@@ -1937,6 +1957,12 @@ class AutopilotPass:
     # --- the pass --------------------------------------------------------------------------
 
     def run(self, task: Dict[str, Any]) -> AutopilotResult:
+        """Run one pass, never concurrently with another pass on the same quest (see
+        ``_QUEST_PASS_LOCKS``)."""
+        with _quest_pass_lock(str(task.get("goal_id") or "")):
+            return self._run_pass(task)
+
+    def _run_pass(self, task: Dict[str, Any]) -> AutopilotResult:
         text = str(task.get("text") or task.get("title") or "")
         dry_run = "dry-run" in text.lower()
         result = AutopilotResult(ran_at=self._now(), dry_run=dry_run)

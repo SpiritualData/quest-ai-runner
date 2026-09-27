@@ -2162,3 +2162,39 @@ def test_created_work_has_no_assignee_when_the_lane_names_no_account():
     passer.run({"text": "autopilot pass"})
     assert client.created_tasks
     assert all("assignee_user_id" not in t for t in client.created_tasks)
+
+
+# --- two passes for one quest due at the same minute (incident 2026-09-25) ----------------------
+
+def test_two_passes_for_the_same_quest_never_both_work_it():
+    """Two pass occurrences for one quest went due at 06:30 and ran on two worker threads at once.
+    Both read the quest before either stamped ``last_pass_at``, both passed the cadence gate, and
+    each created its own brief. Passes on one quest are now serialized, so the second reads the
+    quest after the first stamped it and the ordinary cadence gate skips it."""
+    import threading
+    import time
+
+    class SlowGoalsClient(FakeAutopilotClient):
+        def list_quest_goals(self, quest_id, *, team_id=None):
+            time.sleep(0.05)   # widen the window in which the two passes used to overlap
+            return super().list_quest_goals(quest_id, team_id=team_id)
+
+    q1 = _quest("q1", cadence="daily")
+    client = SlowGoalsClient(quests=[q1], accepts_bookkeeping=True,
+                             goals_by_quest={"q1": _goals_payload(
+                                 ("day", "2026-07-12", [_goal("g1")]))})
+    results = []
+
+    def one_pass():
+        passer = AutopilotPass(client, team_id="team1", daily_budget=10, now=_now)
+        results.append(passer.run({"text": "autopilot pass", "goal_id": "q1"}))
+
+    threads = [threading.Thread(target=one_pass) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert sum(len(r.created_task_ids) for r in results) >= 1
+    assert sum(1 for r in results if r.created_task_ids) == 1
+    assert any("cadence" in s["reason"] for r in results for s in r.skipped)

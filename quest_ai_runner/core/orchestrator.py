@@ -1585,6 +1585,11 @@ next", the run ended with that work unfinished and unverified (a headless worker
 subagents are killed the moment it stops), so set met=false and say in next_action that the next
 attempt must wait for and verify all delegated work before reporting.
 
+PLATFORM DELIVERY: when the task says its result is emailed or delivered automatically when the run
+finishes, a requirement to email, send, or deliver the work is MET by the output containing the
+finished work itself. Never set met=false because the worker did not send it separately, and never
+tell the next attempt to send it: that is how the person receives the same thing twice.
+
 CRITICAL: Absence of context can be the correct answer. If the goal asks about prior conversation
 history, prior messages, or what was previously said, and the CONVERSATION HISTORY below confirms
 there is no prior history (it is empty or shows only the current message), then an answer of

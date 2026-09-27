@@ -64,8 +64,9 @@ def email_contract(quest_id: str, rep_id: Optional[str] = None) -> str:
     return (
         "Email for this quest is ON. What you put in your result is mailed to its people "
         "automatically, so do NOT send mail yourself with a local mail script -- that mail would "
-        "carry no reply address, and the person would receive your work twice. If you need to send "
-        "something at a particular moment instead of at the end, run:\n"
+        "carry no reply address, and the person would receive your work twice. The same goes for the "
+        "command below: never use it to send the work your result already carries. Only if you "
+        "need to send something DIFFERENT at a particular moment instead of at the end, run:\n"
         f"  python -m quest_ai_runner.tools.send_quest_email --quest {quest_id} "
         f"--subject \"<subject>\" --body-file <path>{rep}\n"
         "Recipients come from the quest's own settings: you choose the words and the moment, never "
@@ -74,6 +75,22 @@ def email_contract(quest_id: str, rep_id: Optional[str] = None) -> str:
         "IS the mail, so a \"here is what I sent\" preamble, or a second copy pasted underneath, "
         "is something a person reads in their inbox and has to skip past."
     )
+
+
+# Appended to the TASK TEXT itself (not only the context) when the quest mails its work. The
+# context's email contract reaches the worker, but the goal loop's verifier judges the task's own
+# words, and a brief that says "... and email it to him" was held to that literally.
+# INCIDENT (2026-09-25): an autopilot persona brief opening "Produce Joshua's dissertation brief
+# for TODAY and email it to him" made every work task run TWICE: the first attempt wrote the brief
+# as its result (correct: the result is the mail), the verifier ruled it unmet because nothing
+# had been emailed, and the retry sent it by hand -- so the person got the hand-sent copy AND the
+# automatic one. Stating delivery in the task text is what both the worker and the verifier read.
+AUTOMATIC_DELIVERY_NOTE = (
+    "DELIVERY (set by this quest, not by you): when this run finishes, your result is emailed to "
+    "the quest's people automatically. Any instruction above to email, send, or deliver the work "
+    "to them is fulfilled by putting the finished work in your result. Do not send it yourself, "
+    "and it is not left undone because you did not."
+)
 
 
 # Said to EVERY run, whether or not its quest mails anything. The result is the one place the
@@ -730,6 +747,8 @@ class TaskExecutor:
         # brief (someone pasting a previous run's output into chat, which the backend files as its
         # own task) is not autopilot-composed and must still get fresh context collected.
         composed_by_autopilot = _autopilot_composed_text(task)
+        if (goal_id or quest_id) and self._mailing_quest_id(goal_id, quest_id):
+            text = f"{text}\n\n{AUTOMATIC_DELIVERY_NOTE}"
         context_view = self._build_context_view(
             goal_id, quest_id, conv_id, rep_id=task.get("assignee_rep_id"),
             related_goal_id=related_goal_id,
@@ -1073,9 +1092,20 @@ class TaskExecutor:
         A ``get_quest`` on an id that is a goal rather than a quest returns {} and falls through,
         so trying both is safe as well as necessary.
         """
+        mailing = self._mailing_quest_id(goal_id, quest_id)
+        if mailing:
+            # The id that actually carries the settings, so the printed command names the quest
+            # whose recipients the mail will go to.
+            parts.append(email_contract(mailing, rep_id))
+
+    def _mailing_quest_id(self, goal_id: Optional[str],
+                          quest_id: Optional[str]) -> Optional[str]:
+        """The id of the quest whose results are mailed automatically, or None when email is off
+        (or the quest cannot be read). quest_id first, then goal_id, for the reason
+        ``_append_email_contract`` gives."""
         get_quest = getattr(self._client, "get_quest", None)
         if not callable(get_quest):
-            return
+            return None
         for candidate in (quest_id, goal_id):
             if not candidate:
                 continue
@@ -1085,10 +1115,8 @@ class TaskExecutor:
                 continue
             settings = ((quest.get("autopilot") or {}).get("email") or {})
             if settings.get("enabled"):
-                # The id that actually carries the settings, so the printed command names the
-                # quest whose recipients the mail will go to.
-                parts.append(email_contract(candidate, rep_id))
-                return
+                return candidate
+        return None
 
     def _append_folder_zones_contract(self, parts: List[str], goal_id: Optional[str],
                                       quest_id: Optional[str]) -> None:

@@ -146,10 +146,13 @@ def test_an_open_pass_task_is_the_liveness_test_for_the_whole_series(status):
     )
     _poller(client)._ensure_autopilot_pass()
     assert client.created == []
-    # The team-wide read (legacy team pass) plus one quest-scoped read for the opted-in quest.
+    # The team-wide read (legacy team pass), then for the opted-in quest its quest-scoped read
+    # plus this account's own unfiltered read (the quest-scoped one hides a series' queued
+    # occurrence once the series has run; see Poller._open_quest_pass_occurrences).
     assert client.list_tasks_calls == [
         {"team_id": "team1", "goal_id": None, "task_kind": "autopilot"},
         {"team_id": None, "goal_id": "q1", "task_kind": "autopilot"},
+        {"team_id": "", "goal_id": None, "task_kind": "autopilot"},
     ]
     assert client.state_reads == ["q1"]       # the schedule snapshot still reads every quest once
 

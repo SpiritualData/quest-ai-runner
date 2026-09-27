@@ -7,6 +7,21 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **One autopilot quest produced four briefs and four emails in one morning (2026-09-25).**
+  Three compounding causes. (1) The quest had three live pass series, and the runner could see
+  only two: the backend's goal-scoped task listing collapses each recurring series to its latest
+  meaningful occurrence, hiding a queued next run. `Poller._open_quest_pass_occurrences` now
+  merges the lane's own owner-scoped listing, and `_ensure_one_quest_pass` RETIRES duplicate
+  series (keeping the earliest scheduled, leaving a running one to finish) instead of only warning.
+  (2) Two due passes worked the same quest concurrently, both passing the cadence gate before
+  either stamped `last_pass_at`; `AutopilotPass.run` now holds a per-quest lock, so the second
+  re-reads the quest and is skipped. (3) A brief saying "... and email it to him" made the goal
+  verifier reject a correct result (the result IS the mail), and the retry hand-sent it on top of
+  the automatic copy. On a mailing quest the executor now appends `AUTOMATIC_DELIVERY_NOTE` to the
+  task text, the email contract forbids hand-sending the work itself, and `VERIFY_GOAL_PROMPT`
+  has a PLATFORM DELIVERY rule. Tests: `tests/test_autopilot_run_time.py`,
+  `tests/test_autopilot.py::test_two_passes_for_the_same_quest_never_both_work_it`,
+  `tests/test_single_delivery.py`.
 - **The auto-built Qdrant vector arm warned on every single process start when
   `QAR_EMBEDDER_BACKEND=voyage` or `=openai`** (`config.py`'s `_open_qdrant` call sites). Both
   branches omitted `vector_size`, so construction always fell through to `QdrantVectorStore`'s

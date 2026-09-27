@@ -1204,13 +1204,38 @@ class Poller:
         caller's own task list, so a pass owned by the quest's human owner comes back even though
         the lane's account merely created it. Returns ``None`` when the read failed (never an
         empty list, which a caller would act on by creating).
+
+        The quest-scoped listing alone is NOT enough, and is merged with this account's own
+        owner-scoped listing. INCIDENT (2026-09-25, four dissertation briefs in one morning): the
+        backend's goal-scoped listing collapses each recurring series to its latest MEANINGFUL
+        occurrence for the review UI (``_collapse_recurring_autopilot_duplicates``), so once a
+        series has run, its queued next occurrence is hidden there. The lane therefore saw two of
+        a quest's three live series, could never clean up the third, and read a quest whose only
+        series was hidden as having none (and created another). The owner-scoped listing applies
+        no cycle collapsing (it is also the discovery poll, where hiding a queued row would strand
+        it), so every open occurrence this lane owns is visible in it. Either read failing is a
+        failed read: acting on half the picture is how a duplicate gets created.
         """
-        rows = self._list_pass_tasks(goal_id=quest_id)
-        if rows is None:
+        scoped = self._list_pass_tasks(goal_id=quest_id)
+        if scoped is None:
             return None
-        return [t for t in rows
-                if str(t.get("status", "")).strip().lower() in OPEN_TASK_STATUSES
-                and str(t.get("goal_id") or "") == quest_id]
+        # team_id="" is "no team filter": this account's passes on every team, since the quest's
+        # own team is not necessarily the lane's home team.
+        owned = self._list_pass_tasks(team_id="")
+        if owned is None:
+            return None
+        open_rows: List[Dict[str, Any]] = []
+        seen: set = set()
+        for t in list(scoped) + list(owned):
+            if (str(t.get("status", "")).strip().lower() not in OPEN_TASK_STATUSES
+                    or str(t.get("goal_id") or "") != quest_id):
+                continue
+            key = str(t.get("id") or t.get("task_id") or "") or str(id(t))
+            if key in seen:
+                continue
+            seen.add(key)
+            open_rows.append(t)
+        return open_rows
 
     def _ensure_quest_pass_tasks(self, open_by_series: Dict[str, List[Dict[str, Any]]],
                                  snapshot: Dict[str, Dict[str, Any]]) -> None:
@@ -1356,11 +1381,28 @@ class Poller:
         # neither stands in for the series nor counts toward the duplicate warning.
         series, catch_ups = self._split_pass_occurrences(writable)
         if len(series) > 1:
-            ids = [o.get("id") or o.get("task_id") for o in series]
-            log.warning("autopilot: quest %s has %d open pass occurrences (%s) -- acting on the "
-                        "earliest scheduled_date only, creating nothing", quest_id,
-                        len(series), ids)
-            series = sorted(series, key=lambda o: str(o.get("scheduled_date") or ""))[:1]
+            # A quest has exactly ONE pass series. Every extra one is a full second pass a day --
+            # its own batch, its own deep runs, its own mail -- so it is retired, not merely
+            # tolerated. INCIDENT (2026-09-25): this branch used to warn and act on the earliest
+            # only, leaving the others alive; three live series on the dissertation quest all went
+            # due at 06:30, two ran concurrently, and the person got four briefs.
+            #
+            # Kept: the earliest scheduled_date, oldest created_at on a tie (the long-standing one).
+            # An extra that is RUNNING right now is left to finish, since cancelling mid-run would
+            # abandon work already under way; its terminal status spawns a next occurrence, which
+            # is queued and is retired by the next scan.
+            ordered = sorted(series, key=lambda o: (str(o.get("scheduled_date") or ""),
+                                                    str(o.get("created_at") or "")))
+            keep, extras = ordered[0], ordered[1:]
+            retirable = [o for o in extras
+                         if str(o.get("status", "")).strip().lower() != "in_progress"]
+            log.warning("autopilot: quest %s has %d open pass occurrences (%s) -- keeping %s and "
+                        "retiring %d duplicate series", quest_id, len(series),
+                        [o.get("id") or o.get("task_id") for o in series],
+                        keep.get("id") or keep.get("task_id"), len(retirable))
+            if retirable:
+                self._retire_quest_pass(quest_id, retirable, "duplicate series")
+            series = [keep]
 
         # A pending "Run now" is honoured exactly ONCE, and this is the only place that decides it.
         #
