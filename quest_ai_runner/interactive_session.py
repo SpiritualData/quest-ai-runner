@@ -428,13 +428,13 @@ Commands:
     /whoami              Show AI identity and session state
     /status              Show token usage and speed metrics
     /tasks               Show recently completed tasks
-    /reps                List available AI representatives (skill files)
+    /reps                Choose an AI representative (skill files)
     /rep <name>          Set representative name directly
     /file <path>         Load a persona file
 
   ● Model & Behavior
-    /models              Interactive model selection menu
-    /model [tier]        Show or set model tier: haiku, sonnet, opus, fable
+    /models              Choose a model from a list
+    /model [tier]        Choose a model, or set one: haiku, sonnet, opus, fable
     /depth [level]       Alias for /model: light=haiku, standard=sonnet, deep=opus
     /system [text]       Show or set a custom system prompt prepended to persona
     /replan              Prime next turn for a fresh re-planning pass (uses opus)
@@ -451,7 +451,7 @@ Commands:
     /sessions            List saved sessions
 
   ● Conversation
-    /clear               Reset the transcript
+    /clear               Start fresh: the AI forgets this conversation so far
     /help                Show this help
 
   ● Exit
@@ -459,10 +459,20 @@ Commands:
 
 Keys:
 
-  ESC            Cancel current turn (while streaming)
-  Ctrl+C         Clear input line (twice within 2s to exit)
-  Ctrl+D         Exit
-  Ctrl+R         Search input history (fuzzy, incremental)
+  /              Open the command menu (arrows move, Tab completes, Enter runs, Esc closes)
+  Esc            Cancel the current turn, or close an open menu
+  Ctrl+C         Copy the selected text; with nothing selected, exit
+  Ctrl+Y         Copy the last AI reply
+  Ctrl+L         Clear the screen
+  Shift+Enter    New line (also Ctrl+J, Alt+Enter, or a backslash before Enter)
+  PageUp/Down    Scroll the transcript
+  Tab            Next deep agent's detail (completes a command while the menu is open)
+  Alt+D / Alt+C  Expand the deep agent's detail / show the context used
+
+Resume a conversation later (run outside this session):
+
+  quest-ai-runner chat --resume          Pick a saved conversation from a list
+  quest-ai-runner chat --continue        Continue the most recent one (same as --resume last)
 
 Companion CLI commands (run outside this session, e.g. in another terminal):
 
@@ -479,7 +489,7 @@ _BANNER = """\
   ● optimal token usage; can run forever without context bloat
   ● named AI reps learn how to act like their associated human
 
-  {D}ESC to cancel  ·  Ctrl+D to exit  ·  /help for all commands{R}
+  {D}/ for commands  ·  Esc to cancel  ·  Ctrl+C to exit  ·  /help for everything{R}
 """
 
 
@@ -853,6 +863,11 @@ class InteractiveSession:
         # Quests the Quest account can reach but that have no local folder, for the "/quest" menu.
         # Fetched off-thread: a slow or absent Quest API must never delay the session.
         self.remote_quests = []
+        # `chat --goal-id <quest_id>` starts with that quest selected, same as `/quest <id>`.
+        if self._goal_id:
+            from .runner.quest_folder_index import quest_without_folder
+            self.pinned_quest = next((q for q in self.quest_folders if q.quest_id == self._goal_id),
+                                     None) or quest_without_folder(self._goal_id)
         self.quest_list_listeners = []  # called (no args) when the remote list arrives
         threading.Thread(target=self.fetch_remote_quests, name="qar-quest-list", daemon=True).start()
         # Turn history for /tasks and /status commands
@@ -904,7 +919,8 @@ class InteractiveSession:
             payload = {
                 "messages": messages,
                 "corpus_root": getattr(self._cfg, "corpus_root", None),
-                "goal_id": self._goal_id,
+                # The selected quest, so `chat --resume` comes back to it.
+                "goal_id": self.bound_quest_id() if hasattr(self, "pinned_quest") else self._goal_id,
                 "rep_name": self._rep_name,
                 "updated_at": time.time(),
             }
@@ -950,6 +966,11 @@ class InteractiveSession:
             team_ids = [getattr(self._cfg, "team_id", None) or ""]
             team_ids += [t.strip() for t in os.getenv("QUEST_TEAM_IDS", "").split(",") if t.strip()]
             self.remote_quests = reachable_quests(client, list(dict.fromkeys(team_ids)))
+            pinned = self.pinned_quest
+            if pinned is not None and not pinned.folder and not pinned.title:
+                # A quest selected by id before its details were known: fill them in.
+                self.pinned_quest = next(
+                    (q for q in self.remote_quests if q.quest_id == pinned.quest_id), pinned)
         except Exception:  # noqa: BLE001 — the menu just shows local quests
             self.remote_quests = []
         for listener in list(getattr(self, "quest_list_listeners", [])):
@@ -1047,12 +1068,14 @@ class InteractiveSession:
         if low in ("none", "off", "no"):
             self.quest_match_mode = "none"
             self.pinned_quest = None
+            self._goal_id = None
             self._persist_session_state()
             c.dim("  Quest matching off: no quest is added to your messages. /quest auto turns it back on.")
             return
         if low in ("auto", "on"):
             self.quest_match_mode = "auto"
             self.pinned_quest = None
+            self._goal_id = None
             self._persist_session_state()
             c.dim("  Quest matching on: each message is matched to the synced quest it is about.")
             return

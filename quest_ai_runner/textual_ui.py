@@ -1330,8 +1330,9 @@ class QuestAITerminal(App):
             c.line(_HELP); return
         if line == "/clear":
             s._last_user = ""; s._last_assistant = ""
-            s._session_history = []
-            c.dim("  Transcript cleared."); return
+            # In place: the conversation store resolving "it"/"that one" holds this same list.
+            s._session_history.clear()
+            c.dim("  Started fresh: the AI no longer sees this conversation's earlier turns."); return
         if line.startswith("/rep "):
             s._rep_name = line[5:].strip()
             self.rep_name = s._rep_name

@@ -10,6 +10,10 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
   what a consumer is NOT supposed to own any more (the CLI/loop shape, `.env` loading, persona
   resolution — those are library concerns; see [`examples/minimal_lane.py`](../examples/minimal_lane.py)).
 
+- **[The terminal chat](chat.md)**: talk to the brain in your terminal. Resume past
+  conversations (`--resume`, `--continue`), use the `/` command menu, choose the quest a
+  conversation is about, and the full list of commands and keys.
+
 ## How-to guides
 
 - **[Writing a consumer](writing-a-consumer.md)** — wire the generic library to *your* Quest

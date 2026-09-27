@@ -67,6 +67,15 @@ All notable changes to this project are documented here. The format is based on
   `/quest none` turns matching off and is remembered in `qar_state.json`; `/quest auto` turns it
   back on; `/quest <name|id>` pins one; `QAR_QUEST_AUTO_MATCH=0` makes off the deployment default.
   Tests: `tests/test_quest_folder_index.py`, `tests/test_hybrid_context_assembler_recent_hint.py`.
+- **Documented the terminal chat (2026-09-26).** New [`docs/chat.md`](docs/chat.md): starting a
+  chat, resuming conversations (`--resume`, `--continue`, `--resume <id>`, the exit hint, where
+  conversations are stored), the `/` command menu and every command, choosing a quest, keys, and
+  the chat's environment variables; advertised from the README, the docs index and the
+  quickstart. The in-app `/help` keys were wrong (Ctrl+D and Ctrl+R are not bound; Ctrl+C copies
+  a selection or exits) and now list the real bindings plus how to resume. `chat --goal-id` now
+  really selects that quest (same as `/quest <id>`), `/quest auto|none` clears it, and a resumed
+  conversation reselects its quest. `/clear` now clears the history the conversation store reads
+  (it replaced the list, so "it"/"that one" still resolved against the old turns).
 - **`/quest` selects a quest for the conversation, like choosing one in Quest AI chat
   (2026-09-26).** Every picker (`/quest`, `/model`, `/reps`) now opens a chooser above the prompt
   instead of printing a numbered list: arrows move, Enter selects, typing narrows, Esc cancels (a

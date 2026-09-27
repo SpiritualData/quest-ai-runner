@@ -71,6 +71,8 @@ against a live backend, use [`examples/e2e_demo.py`](../examples/e2e_demo.py) (i
 
 ## 4. Where to go next
 
+- Talk to it in your terminal, and resume the conversation later → [The terminal chat](chat.md)
+  (`quest-ai-runner chat`, then `quest-ai-runner chat --continue`)
 - Make it yours → [Writing a consumer](writing-a-consumer.md)
 - Add a persona roster, a corpus, a deep-run preamble → [Your first lane](tutorial-your-first-lane.md)
 - Plug in a different source or model → [Implementing adapters](adapters.md)

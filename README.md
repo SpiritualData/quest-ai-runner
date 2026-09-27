@@ -95,6 +95,28 @@ To run the **executor** lane (poll Quest for due tasks and run them), see
 QUEST_BASE_URL=... QUEST_API_KEY=qsk_... QAR_CORPUS_ROOT=... quest-ai-runner --once
 ```
 
+## Chat in your terminal
+
+The same brain is also an interactive chat, grounded in your corpus and your quests, that hands
+big jobs to a deep worker and shows its progress live:
+
+```bash
+QAR_CORPUS_ROOT=/path/to/docs quest-ai-runner chat
+```
+
+- **Pick up where you left off, like Claude Code.** Every conversation is saved as you go.
+  `quest-ai-runner chat --resume` opens a searchable list of past conversations,
+  `--continue` (`-c`) reopens the latest, and `--resume <id>` a specific one. On exit the chat
+  prints the exact command to resume it.
+- **Type `/` for commands.** A menu lists every command as you type (arrows, Tab, Enter, Esc).
+  Commands with choices, like `/model`, open a chooser you pick from with the arrow keys.
+- **Choose a quest for the conversation.** `/quest` lists every quest you can reach (synced
+  folders and your Quest quests) and binds the conversation to the one you pick, like choosing a
+  quest in the Quest AI chat app. With none selected, each message is matched to the quest it is
+  about automatically; `/quest none` turns that off.
+
+Full reference: [The terminal chat](docs/chat.md).
+
 ## Scripting the Quest API
 
 Talking to the Quest API from a script, a notebook, or an agent's one-off lookup needs **no
@@ -134,6 +156,7 @@ name and prints the JSON result. Read-only methods (`whoami`, `get_*`, `list_*`,
 - **Smart Context Selection (TF-DF-IDF sampling)** — Instead of reading all files or sampling randomly, the runner uses a linguistic heuristic to select the *most representative* items from each group. **62% fewer tokens** on typical codebases, zero external dependencies. See [TF-DF-IDF Sampling](docs/TF_DF_IDF_SAMPLING.md) for details.
 - **Multi-source retrieval** — Composite retrieval adapter lets you query files, databases, Claude conversations, vector stores, etc., all in one orchestrator.
 - **Web search (default, no extra key)**: the runner grounds answers on the live web using the model provider's own tool (Claude's `web_search` / Gemini's Google Search grounding), reusing the LLM key, so tasks like "find marathons near Portland" return current, cited results with no separate search key and no Claude Code subprocess. A dedicated Tavily key is supported as an alternative. See [Web search](docs/web-search.md).
+- **Terminal chat with resume and a `/` command menu**: talk to the brain in your terminal, resume any past conversation (`--resume`, `--continue`) like Claude Code, pick commands and options from menus, and choose the quest a conversation is about. See [The terminal chat](docs/chat.md).
 - **Streaming & live events** — LIVE mode streams partial results to the user; BACKGROUND mode runs detached and reports back. Handoff between the two is seamless.
 - **Extensible adapters** — Four clean interfaces (Retrieval, ModelProvider, DeepRunner, EscalationSink) are Protocol-based, so you implement only what you need.
 - **Discovery-driven planning** — The brain learns source structure at runtime, never needing a static schema blob in the prompt.
@@ -142,6 +165,8 @@ name and prints the JSON result. Read-only methods (`whoami`, `get_*`, `list_*`,
 ## Documentation
 
 - [Quickstart tutorial](docs/quickstart.md) — install, ground the brain, run the executor lane.
+- [The terminal chat](docs/chat.md): `quest-ai-runner chat`, resuming conversations (`--resume`,
+  `--continue`), the `/` command menu and every command, choosing a quest, keys.
 - [Context assembly](docs/context-assembly.md) — the context engine design of record, including the
   principled test (not a vibe) for when a message stays on its current topic card vs. opens a new one.
 - [TF-DF-IDF Sampling](docs/TF_DF_IDF_SAMPLING.md) — smart context selection: 62% fewer tokens, zero external deps.

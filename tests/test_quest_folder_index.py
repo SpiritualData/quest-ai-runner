@@ -256,3 +256,17 @@ def test_empty_quest_list_says_why(monkeypatch, tmp_path):
     sess, lines = make_session(monkeypatch, empty, tmp_path)
     sess.cmd_quest("")
     assert any(f"No folder under {empty}" in l and "not signed in to Quest" in l for l in lines)
+
+
+def test_goal_id_flag_starts_with_the_quest_selected_and_auto_clears_it(monkeypatch, corpus, tmp_path):
+    from quest_ai_runner import interactive_session as mod
+    from quest_ai_runner.config import RunnerConfig
+    make_session(monkeypatch, corpus, tmp_path)  # applies the offline patches
+    sess = mod.InteractiveSession(RunnerConfig(quest_base_url="", quest_api_key="",
+                                               corpus_root=str(corpus)), goal_id="quest_wiki")
+    lines = []
+    sess._console.dim = lines.append
+    _, meta = sess.turn_grounding("hello")
+    assert sess.bound_quest_id() == "quest_wiki" and meta["quest_ids"] == ["quest_wiki"]
+    sess.cmd_quest("auto")
+    assert sess.bound_quest_id() is None

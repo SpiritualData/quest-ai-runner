@@ -188,6 +188,10 @@ Env it reads:
                                                    Written by QAR; read back by QAR in future sessions,
                                                    and reopened by `chat --resume` (picker),
                                                    `chat --resume last|ID` or `chat --continue`.
+                                                   See docs/chat.md.
+  QAR_QUEST_AUTO_MATCH (optional)             — `chat`: 0 makes "no quest" the default instead of
+                                                   matching each message to a synced quest (a
+                                                   person's own /quest choice still wins).
   QAR_QUEST_FOLDER_MAP (optional)             — JSON object mapping quest/goal id -> local folder,
                                                    e.g. {"quest_123": "/srv/corpus/some_quest"}. Each
                                                    entry's folder is kept in sync with its quest's
@@ -984,11 +988,13 @@ def main(argv=None) -> int:
                              "the persona, same as --persona-file")
     chat_p.add_argument("--rep", default=None, metavar="NAME",
                         help="AI representative display name shown in the session "
-                             "(default: QAR_REP_NAME env var, else 'AI')")
+                             "(default: QAR_REP_NAME env var, else 'Assistant')")
     chat_p.add_argument("--persona-file", default=None, metavar="PATH",
                         help="path to a persona/skill file injected into every turn "
                              "(default: QAR_REP_PERSONA_FILE env var)")
-    chat_p.add_argument("--goal-id", default=None, help="attach session to this Quest goal id")
+    chat_p.add_argument("--goal-id", default=None, metavar="QUEST_ID",
+                        help="start with this quest selected for the conversation (same as "
+                             "/quest <id> inside the chat)")
     chat_p.add_argument("--config", default=None, metavar="PATH",
                         help="TOML config file (see docs/writing-a-consumer.md); "
                              "QAR_CONFIG_FILE also works. Environment variables always win over "
