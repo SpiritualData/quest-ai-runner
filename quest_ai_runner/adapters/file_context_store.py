@@ -3877,7 +3877,6 @@ class FileContextStore(ContextAssemblerBase):
             rest = [c for c in top_cards if c.get("id", "") not in priority_ids]
             top_cards = priority_cards + rest[: max(0, self._max_cards - len(priority_cards))]
 
-
         # QUERY-AWARE TIME FILTER (spec v3 work package C, item level): when the caller's meta
         # carries a ``time_range`` (the shape ``parse_goal_condition_reply`` emits, threaded in by
         # the orchestrator as ``meta["time_range"]``), apply it as a HARD filter over each selected

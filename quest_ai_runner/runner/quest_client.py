@@ -804,6 +804,24 @@ class QuestClient:
 
     # --- quest and goal browsing (for interactive chat context selection) ------
 
+    def list_teams(self) -> List[Dict[str, Any]]:
+        """GET /api/teams — every team the authenticated account is a member of.
+
+        This is the org-level view: a deployment's app account usually sits on all of its
+        organization's teams, so walking these and calling ``list_quests(team_id=...)`` on each
+        answers "which quests can you act on" without assuming the configured ``team_id`` is the
+        whole picture. Returns [] on any failure.
+        """
+        try:
+            self._require()
+            resp = self._request("GET", "/api/teams") or []
+            if isinstance(resp, dict):
+                resp = resp.get("teams") or []
+            return resp if isinstance(resp, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_teams failed: %s", e)
+            return []
+
     def list_quests(self, *, team_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """GET /api/teams/{team_id}/quests — all quests attached to the team.
 
