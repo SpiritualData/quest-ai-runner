@@ -46,6 +46,7 @@ from rich.style import Style as RichStyle
 from rich.text import Text
 import logging
 
+from .keyboard_state import PhysicalShiftProbe, shared_probe
 from .adapters.retry_utils import format_provider_error
 from .interactive_session import (
     InteractiveSession,
@@ -771,8 +772,10 @@ class PromptTextArea(TextArea):
     """Auto-expanding multi-line input. Enter submits; Shift+Enter adds a newline.
 
     Most terminals send the same carriage return for Enter and Shift+Enter, so Shift+Enter is
-    only seen as such where the terminal speaks the kitty keyboard protocol. Everywhere else a
-    newline comes from one of the sequences a terminal CAN tell apart from Enter:
+    only seen as such where the terminal speaks the kitty keyboard protocol. On a local Linux
+    keyboard (GNOME Terminal and the other VTE terminals included) an Enter that arrives while
+    Shift is physically held is read from the keyboard device instead; see ``keyboard_state``.
+    A newline also comes from any of the sequences a terminal CAN tell apart from Enter:
       - Alt+Enter (ESC CR), which is also what Claude Code's /terminal-setup maps Shift+Enter to;
       - Ctrl+J (a bare LF);
       - a backslash typed right before Enter, the Claude Code convention. VS Code's
@@ -793,6 +796,7 @@ class PromptTextArea(TextArea):
     PAIRED_LF_WINDOW_SECONDS = 0.05
 
     backslash_newline_at: float = 0.0
+    shift_probe: PhysicalShiftProbe = shared_probe()
 
     def on_key(self, event) -> None:
         key = event.key
@@ -802,6 +806,9 @@ class PromptTextArea(TextArea):
             if self.consume_backslash_before_cursor():
                 self.insert("\n")
                 self.backslash_newline_at = event.time
+                return
+            if self.shift_probe.shift_held():
+                self.insert("\n")
                 return
             self.post_message(self.Submitted(self, self.text))
         elif key in ("shift+enter", "alt+enter", "ctrl+j"):

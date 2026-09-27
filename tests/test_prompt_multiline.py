@@ -193,3 +193,31 @@ async def test_backslash_not_before_cursor_does_not_turn_enter_into_newline():
         await pilot.press("enter")
         await pilot.pause()
         assert app.submitted == ["a\\b"]
+
+
+class FakeShift:
+    def __init__(self, held: bool) -> None:
+        self.held = held
+
+    def shift_held(self) -> bool:
+        return self.held
+
+
+@pytest.mark.asyncio
+async def test_enter_with_shift_physically_held_is_a_newline():
+    """GNOME Terminal sends Shift+Enter as a plain CR; the keyboard device says Shift is down."""
+    app = PromptHarness()
+    async with app.run_test(size=(60, 24)) as pilot:
+        prompt = app.query_one("#prompt", PromptTextArea)
+        prompt.shift_probe = FakeShift(True)
+        prompt.focus()
+        await typed(pilot, "first")
+        await pilot.press("enter")
+        prompt.shift_probe = FakeShift(False)
+        await typed(pilot, "second")
+        assert prompt.text == "first\nsecond"
+        assert app.submitted == []
+
+        await pilot.press("enter")
+        await pilot.pause()
+        assert app.submitted == ["first\nsecond"]

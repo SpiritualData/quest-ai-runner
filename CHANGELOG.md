@@ -17,6 +17,13 @@ All notable changes to this project are documented here. The format is based on
   Tests: `tests/test_chat_resume.py`.
 
 ### Fixed
+- **Shift+Enter still sent the message in GNOME Terminal (2026-09-26).** VTE terminals (GNOME
+  Terminal, Ptyxis) send Shift+Enter as the same carriage return as Enter and support neither the
+  kitty keyboard protocol nor modifyOtherKeys, so no byte sequence can separate them. On a local
+  Linux keyboard the prompt now asks the kernel whether Shift is physically down when an Enter
+  arrives (`EVIOCGKEY` on the `/dev/input` keyboards, new `quest_ai_runner/keyboard_state.py`) and
+  inserts a newline if it is. This needs read access to `/dev/input` (the `input` group), and it
+  stays off over SSH. Tests: `tests/test_keyboard_state.py`, `tests/test_prompt_multiline.py`.
 - **The terminal prompt hid wrapped rows, and Shift+Enter sent the message (2026-09-26).**
   `PromptTextArea` sized itself from hard newlines only, so a long message that soft-wrapped kept
   a one-row box showing just its last row. It now sizes from the wrapped row count (up to
