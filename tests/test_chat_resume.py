@@ -282,3 +282,48 @@ def test_resumed_history_shows_before_session_is_ready(tmp_path):
     assert "Loading the rest of the session" in before
     assert "Ready. Continue the conversation below." in after
     assert after.count("second question") == 1  # not replayed a second time
+
+
+# -- exit hint: print how to resume, like Claude Code ---------------------------------------
+
+def run_chat_returning(argv, monkeypatch, tmp_path, conv_id):
+    monkeypatch.setenv("QAR_CHAT_HISTORY_DIR", str(tmp_path))
+    monkeypatch.setattr(cli, "_config_from_env", lambda config_path=None: RunnerConfig(
+        quest_base_url="http://example.invalid", quest_api_key="qsk_test",
+        retrieval=object(), model_provider=object(), corpus_root=None))
+    import quest_ai_runner.textual_session as textual_session
+    monkeypatch.setattr(textual_session, "is_textual_available", lambda: True)
+    monkeypatch.setattr(textual_session, "start_textual_interactive", lambda cfg, **kw: conv_id)
+    return cli.main(argv)
+
+
+def test_exit_prints_resume_command(monkeypatch, tmp_path, capsys):
+    assert run_chat_returning(["chat"], monkeypatch, tmp_path, "qar_chat_abc123") == 0
+    out = capsys.readouterr().out
+    assert "Resume this session with:" in out
+    assert "quest-ai-runner chat --resume abc123" in out
+
+
+def test_exit_hint_keeps_named_rep(monkeypatch, tmp_path, capsys):
+    run_chat_returning(["chat", "wadona"], monkeypatch, tmp_path, "qar_chat_abc123")
+    assert "quest-ai-runner chat wadona --resume abc123" in capsys.readouterr().out
+
+
+def test_no_hint_when_nothing_was_saved(monkeypatch, tmp_path, capsys):
+    run_chat_returning(["chat"], monkeypatch, tmp_path, None)
+    assert "Resume this session" not in capsys.readouterr().out
+
+
+def test_saved_conversation_id_only_for_files_on_disk(tmp_path):
+    from types import SimpleNamespace
+    from quest_ai_runner.textual_session import saved_conversation_id
+
+    written = write_conv(tmp_path, "abc123", [("a", "b")])
+    unwritten = tmp_path / "qar_chat_never.json"
+    assert saved_conversation_id(SimpleNamespace(sess=SimpleNamespace(_session_file=written))) \
+        == "qar_chat_abc123"
+    assert saved_conversation_id(SimpleNamespace(sess=SimpleNamespace(_session_file=unwritten))) is None
+    # Quit while a resumed conversation was still loading: offer that conversation.
+    assert saved_conversation_id(SimpleNamespace(sess=None), read_conversation(written)) \
+        == "qar_chat_abc123"
+    assert saved_conversation_id(None) is None

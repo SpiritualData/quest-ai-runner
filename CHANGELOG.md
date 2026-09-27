@@ -14,7 +14,8 @@ All notable changes to this project are documented here. The format is based on
   with it. The conversation's turns become the session's history and new turns append to the same
   file, and the TUI replays the last 10 turns. Conversation files now also record `corpus_root`,
   `goal_id`, `rep_name` and `updated_at`. `--list-conversations` prints the list without a picker.
-  Tests: `tests/test_chat_resume.py`.
+  On exit (Ctrl+C or /quit), chat prints the exact command to resume that session, as Claude Code
+  does, when the session saved at least one turn. Tests: `tests/test_chat_resume.py`.
 
 ### Fixed
 - **Shift+Enter still sent the message in GNOME Terminal (2026-09-26).** VTE terminals (GNOME

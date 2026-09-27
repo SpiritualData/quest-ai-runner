@@ -269,6 +269,14 @@ from .runner.poller import Poller
 RESUME_PICK = "\0pick"
 
 
+def resume_command(conv_id: str, rep: Optional[str] = None) -> str:
+    """The command that reopens conversation ``conv_id``, keeping the rep the user named."""
+    from .chat_conversations import FILE_PREFIX
+    short_id = conv_id[len(FILE_PREFIX):] if conv_id.startswith(FILE_PREFIX) else conv_id
+    parts = ["quest-ai-runner", "chat"] + ([rep] if rep else []) + ["--resume", short_id]
+    return " ".join(parts)
+
+
 def _model_provider_from_env() -> ModelProvider:
     """Pick the model backend from env.
 
@@ -1267,9 +1275,13 @@ def main(argv=None) -> int:
                 "--upgrade quest-ai-runner` to install it, then try `quest-ai-runner chat` again."
             )
             return 1
-        start_textual_interactive(cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id,
-                                  verbosity=args.verbose, rep_specified=rep_specified,
-                                  persona_specified=persona_specified, resume=resume)
+        conv_id = start_textual_interactive(
+            cfg, rep_name=rep_name, persona=persona, goal_id=args.goal_id,
+            verbosity=args.verbose, rep_specified=rep_specified,
+            persona_specified=persona_specified, resume=resume)
+        if conv_id:
+            # Printed after the TUI has left the alternate screen, so it stays in the terminal.
+            print(f"\nResume this session with:\n  {resume_command(conv_id, rep_positional)}")
         return 0
 
     # --- quest ----------------------------------------------------------------

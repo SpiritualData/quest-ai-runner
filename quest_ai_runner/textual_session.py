@@ -29,10 +29,15 @@ def start_textual_interactive(
     rep_specified: bool = True,
     persona_specified: bool = True,
     resume=None,
-) -> None:
-    """Launch the Textual UI immediately, build the InteractiveSession in a background worker."""
+) -> Optional[str]:
+    """Launch the Textual UI immediately, build the InteractiveSession in a background worker.
+
+    Returns the id of the conversation the session wrote to (for the CLI's "resume this
+    session" hint), or None when nothing was saved, e.g. a session closed before any turn.
+    """
     from .textual_ui import QuestAITerminal
 
+    app = None
     try:
         # mouse=True (Textual's default) is REQUIRED for wheel scrolling. A Textual
         # app runs in the alternate-screen buffer, where the terminal has no
@@ -48,7 +53,7 @@ def start_textual_interactive(
         # SSH/mobile too); see action_copy_or_quit in textual_ui.py. Shift+drag remains
         # available as the terminal-native selection fallback, and Ctrl+Y copies the
         # last AI reply. So scroll + selection + copy all work at once.
-        QuestAITerminal(
+        app = QuestAITerminal(
             None,
             verbosity=verbosity,
             _config=config,
@@ -58,10 +63,26 @@ def start_textual_interactive(
             _rep_specified=rep_specified,
             _persona_specified=persona_specified,
             resume=resume,
-        ).run(mouse=True)
+        )
+        app.run(mouse=True)
     except KeyboardInterrupt:
         # Ctrl+C pressed — exit cleanly without traceback
         pass
+    return saved_conversation_id(app, resume)
+
+
+def saved_conversation_id(app, resume=None) -> Optional[str]:
+    """The conversation id to offer for `--resume`, only if its file really exists on disk."""
+    session = getattr(app, "sess", None) if app is not None else None
+    path = getattr(session, "_session_file", None) if session is not None else None
+    if path is None and resume is not None:
+        path = resume.path  # exited while still loading a resumed conversation
+    try:
+        if path is not None and path.exists():
+            return path.stem
+    except OSError:
+        pass
+    return None
 
 
 def is_textual_available() -> bool:
