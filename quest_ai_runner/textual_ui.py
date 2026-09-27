@@ -329,6 +329,7 @@ class DeepActivity(Static):
         app._cur_deep_run = run_id
         if app._deep_detail.display and app._deep_detail.active_run_id == run_id:
             app._deep_detail.hide()
+            app._refresh_deep_dashboard()
         else:
             app._open_detail_for(run_id)
 
@@ -1638,9 +1639,7 @@ class QuestAITerminal(App):
             # Throttle dashboard redraws to every 10 events to avoid flicker.
             self._deep_event_count += 1
             if self._deep_event_count % 10 == 0:
-                n = len(self._deep._runs)
-                dashboard, line_map = self._deep.get_dashboard_with_map(active_run_id=self._cur_deep_run)
-                self._deep_view.show(dashboard, n_runs=n, line_map=line_map)
+                self._refresh_deep_dashboard()
             self._activity.set_status("Executing…")
             # A terminal phase means this deep task is finished: persist its full
             # output to the scrollback transcript now, so it stays readable after
@@ -2052,6 +2051,21 @@ class QuestAITerminal(App):
         total = len(run_ids)
         existing = list(info.get("exec_lines", []))
         self._deep_detail.open_for(run_id, info["goal"], existing, pos=pos, total=total)
+        self._refresh_deep_dashboard()
+
+    def _refresh_deep_dashboard(self) -> None:
+        """Redraw the inline dashboard so its expand/collapse arrow (▾/▸) tracks which run, if
+        any, is actually open in the detail panel right now.
+
+        Called right after the detail panel opens or closes (click, Alt+D, Tab), not just on the
+        next throttled exec-event redraw, so the arrow flips the instant the panel does instead of
+        lagging behind (or during a quiet run, never catching up at all).
+        """
+        if not self._deep._runs:
+            return
+        n = len(self._deep._runs)
+        dashboard, line_map = self._deep.get_dashboard_with_map(active_run_id=self._deep_detail.active_run_id)
+        self._deep_view.show(dashboard, n_runs=n, line_map=line_map)
 
     @staticmethod
     def _summarize_exec_lines(lines: List[str]) -> tuple:
@@ -2201,6 +2215,7 @@ class QuestAITerminal(App):
         """
         if self._deep_detail.display:
             self._deep_detail.hide()
+            self._refresh_deep_dashboard()
             return
         runs = self._available_deep_runs()
         if not runs:

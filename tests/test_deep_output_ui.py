@@ -215,6 +215,43 @@ async def test_click_on_dashboard_row_expands_that_runs_detail():
 
 
 @pytest.mark.asyncio
+async def test_dashboard_arrow_follows_the_detail_panel_not_the_last_streaming_run():
+    # The arrow must track whichever run is actually open in the detail panel, not
+    # ``_cur_deep_run`` (whichever run most recently streamed output) -- those are different
+    # things, and conflating them left the arrow pointing "expanded" the moment a run started
+    # streaming, even though nothing was open, and stuck once the panel closed.
+    app = QuestAITerminal(_FakeSession())
+    async with app.run_test() as pilot:
+        app._deep.add_run("r1", "Goal one")
+        app._deep.update_run_output("r1", "r1 output")
+        app._cur_deep_run = "r1"  # simulates a live exec event having streamed for r1
+        dashboard, line_map = app._deep.get_dashboard_with_map()
+        app._deep_view.show(dashboard, n_runs=1, line_map=line_map)
+        await pilot.pause()
+
+        # Nothing is open yet: the header must show the collapsed arrow despite r1 being
+        # "current" for streaming purposes.
+        assert "▸" in app._deep_view._dashboard
+        assert "▾" not in app._deep_view._dashboard
+
+        # Clicking the row opens the panel and must flip the arrow immediately, without
+        # waiting for the next throttled exec-event redraw.
+        row = next(row for row, rid in line_map.items() if rid == "r1")
+        app._deep_view.on_click(_FakeClickEvent(row))
+        await pilot.pause()
+        assert app._deep_detail.active_run_id == "r1"
+        assert "▾" in app._deep_view._dashboard
+        assert "▸" not in app._deep_view._dashboard
+
+        # Clicking again closes the panel and must flip the arrow back immediately too.
+        app._deep_view.on_click(_FakeClickEvent(row))
+        await pilot.pause()
+        assert app._deep_detail.display is False
+        assert "▸" in app._deep_view._dashboard
+        assert "▾" not in app._deep_view._dashboard
+
+
+@pytest.mark.asyncio
 async def test_click_on_trailing_hint_row_is_a_noop():
     # The dashboard's last rendered row is the "[Alt+D/click] expand..." hint, not part of any
     # run's block -- clicking it must not open a (wrong) run, and must leave the click unstopped

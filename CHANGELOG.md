@@ -7,6 +7,18 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **The Textual terminal UI's deep-run dashboard arrow (▾/▸) didn't reflect whether the detail
+  panel was actually open.** `textual_ui.py`'s exec-event handler passed `_cur_deep_run`
+  (whichever run most recently streamed output) as the dashboard's `active_run_id`, instead of
+  `self._deep_detail.active_run_id` (which run, if any, is actually open in the detail panel) --
+  so the arrow showed "expanded" (▾) as soon as a run started streaming, even with nothing open,
+  and never flipped back to "collapsed" (▸) when the panel closed. Separately, opening/closing the
+  panel (click, Alt+D, Tab) never triggered a dashboard redraw at all -- it only redrew on the next
+  throttled exec event (every 10 events, live-execution only), so the arrow could lag or, once a
+  run stopped streaming, never catch up. Fixed by adding `QuestAITerminal._refresh_deep_dashboard()`
+  (keys the dashboard render off the detail panel's own state) and calling it from
+  `_open_detail_for` and every `_deep_detail.hide()` site that can leave the dashboard visible.
+  Test: `tests/test_deep_output_ui.py::test_dashboard_arrow_follows_the_detail_panel_not_the_last_streaming_run`.
 - **`FilesAdapter`/`FilesWriter` would read or overwrite Claude Code's own `.claude.json` (OAuth
   account metadata, feature-flag caches) given its exact path**, even though `list_sources`/`grep`
   already skip every dotfile during discovery — the gap was a targeted `read_section`/write by a
