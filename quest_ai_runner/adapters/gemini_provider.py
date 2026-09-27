@@ -113,7 +113,8 @@ class GeminiProvider(ModelProviderBase):
 
     @retry_transient(max_retries=3, base_delay=1.0)
     def answer(self, messages: List[Dict[str, Any]], *, model: str, system: Optional[str] = None,
-               layers: Optional[List[Dict[str, Any]]] = None) -> str:
+               layers: Optional[List[Dict[str, Any]]] = None,
+               reasoning: Optional[str] = None) -> str:
         """Generate an answer from a conversation history.
 
         Gemini API expects a single prompt, so we convert the message list to text. When ``layers``
@@ -129,11 +130,7 @@ class GeminiProvider(ModelProviderBase):
             config: Dict[str, Any] = {}
             if system_instruction:
                 config["system_instruction"] = system_instruction
-            response = client.models.generate_content(
-                model=model,
-                contents=contents,
-                config=config or None,
-            )
+            response = self._generate(client, model, contents, config, reasoning)
             meta = getattr(response, "usage_metadata", None)
             if meta:
                 self.tokens_in += getattr(meta, "prompt_token_count", 0) or 0
@@ -161,15 +158,36 @@ class GeminiProvider(ModelProviderBase):
 
         full_prompt = "".join(prompt_parts).strip()
         self.call_count += 1
-        response = client.models.generate_content(
-            model=model,
-            contents=full_prompt
-        )
+        response = self._generate(client, model, full_prompt, {}, reasoning)
         meta = getattr(response, "usage_metadata", None)
         if meta:
             self.tokens_in += getattr(meta, "prompt_token_count", 0) or 0
             self.tokens_out += getattr(meta, "candidates_token_count", 0) or 0
         return response.text if response and response.text else ""
+
+    @staticmethod
+    def _generate(client: Any, model: str, contents: Any, config: Dict[str, Any],
+                  reasoning: Optional[str]) -> Any:
+        """One ``generate_content`` call, with minimal thinking when ``reasoning == "minimal"``.
+
+        Gemini's thinking models spend hidden reasoning tokens by default even on a one-line
+        classification: measured on a card-relevance prompt, ~760 thought tokens and 4.3s at the
+        default versus 0.9s at ``thinking_level="minimal"``, with the same output. On the larger
+        real prompts that was ~11s per call, several per turn, which is what pushed turn-start
+        context assembly and guidance selection past their timeouts. A model that rejects the
+        thinking config (one without a thinking budget) is retried once without it.
+        """
+        if reasoning == "minimal":
+            try:
+                return client.models.generate_content(
+                    model=model, contents=contents,
+                    config={**config, "thinking_config": {"thinking_level": "minimal"}},
+                )
+            except Exception as exc:  # noqa: BLE001
+                if "think" not in str(exc).lower():
+                    raise
+        return client.models.generate_content(model=model, contents=contents,
+                                              config=config or None)
 
     def supports_web_search(self, model: Optional[str] = None) -> bool:
         """Gemini grounds on Google Search natively; available whenever the key is set."""

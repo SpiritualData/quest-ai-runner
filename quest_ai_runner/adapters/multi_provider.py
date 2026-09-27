@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
-from ..core.adapters import ModelProvider
+from ..core.adapters import ModelProvider, answer_with_reasoning
 
 _log = logging.getLogger("quest-ai-runner.multi-provider")
 
@@ -213,7 +213,7 @@ class MultiProvider(ModelProvider):
 
     def answer(
         self, messages: List[Dict[str, Any]], *, model: str, system: Optional[str] = None,
-        layers: Optional[List[Dict[str, Any]]] = None,
+        layers: Optional[List[Dict[str, Any]]] = None, reasoning: Optional[str] = None,
     ) -> str:
         """Route answer call to correct provider, passing the cache ``layers`` through untouched.
 
@@ -229,7 +229,8 @@ class MultiProvider(ModelProvider):
             provider = self._get_provider_for_model(m)
             before_in = getattr(provider, "tokens_in", 0)
             before_out = getattr(provider, "tokens_out", 0)
-            result = provider.answer(messages, model=m, system=system, layers=layers)
+            result = answer_with_reasoning(provider, messages, model=m, system=system,
+                                           layers=layers, reasoning=reasoning)
             self._record_token_delta(provider, before_in, before_out)
             return result
 

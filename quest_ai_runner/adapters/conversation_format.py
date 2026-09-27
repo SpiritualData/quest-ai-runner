@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -393,6 +394,39 @@ def format_conversation_date(conv: Any) -> Optional[str]:
     return datetime.fromtimestamp(ts, tz=timezone.utc).strftime("%Y-%m-%d")
 
 
+def _find_conversation_dirs(corpus_root: Path) -> List[Path]:
+    """Every ``.claude`` and ``conversations`` directory under ``corpus_root``, in ONE pruned walk.
+
+    Two unpruned ``glob("**/...")`` calls used to do this, each descending into every
+    node_modules, venv and vendored SDK in the tree: 37s on a real corpus, paid on the first turn
+    of every chat session. The walk skips the same directories the indexer skips
+    (``effective_skip_dirs`` + nested .gitignore) and never descends into hidden directories,
+    recording a ``.claude`` directory where it sits rather than walking into it.
+    """
+    from ._walk import effective_skip_dirs, prune_dirnames
+
+    found: List[Path] = []
+    skip = effective_skip_dirs(corpus_root)
+    for dirpath, dirnames, _filenames in os.walk(corpus_root):
+        here = Path(dirpath)
+        if ".claude" in dirnames:
+            found.append(here / ".claude")
+        if here.name == "conversations":
+            found.append(here)
+        # A hidden tool dir holding its own conversations/ (e.g. .quest-ai-runner/conversations)
+        # is still found, even though hidden dirs are not walked into.
+        for d in dirnames:
+            if d.startswith(".") and d != ".claude" and d not in skip:
+                conv = here / d / "conversations"
+                try:
+                    if conv.is_dir():
+                        found.append(conv)
+                except OSError:  # unreadable hidden dir (.ssh, another user's): skip it
+                    pass
+        prune_dirnames(dirnames, current=here, base_skip=skip)
+    return found
+
+
 def scan_conversation_files(
     corpus_root: Optional[Path], sessions_dir: Path
 ) -> Tuple[Dict[str, Path], Dict[str, str]]:
@@ -414,8 +448,7 @@ def scan_conversation_files(
     search_dirs: List[Path] = []
     if corpus_root and corpus_root.is_dir():
         try:
-            search_dirs.extend(corpus_root.glob("**/.claude"))
-            search_dirs.extend(corpus_root.glob("**/conversations"))
+            search_dirs.extend(_find_conversation_dirs(corpus_root))
         except Exception:  # noqa: BLE001
             pass
     if sessions_dir.is_dir():

@@ -1406,6 +1406,15 @@ def shutdown_background_index(timeout: float = 10.0) -> None:
             _log.debug("context index: joining background thread failed", exc_info=True)
 
 
+def _refresh_min_interval_seconds() -> float:
+    """``QAR_REFRESH_MIN_INTERVAL_SECONDS`` (default 1800): the shortest gap between two startup
+    index refreshes of one store, across every process sharing it. 0 refreshes on every start."""
+    try:
+        return max(0.0, float(os.getenv("QAR_REFRESH_MIN_INTERVAL_SECONDS", "1800")))
+    except ValueError:
+        return 1800.0
+
+
 def _bootstrap_if_needed(
     keyword, *, root: str, cards_dir: str, provider=None, model: Optional[str] = None,
     notify: Optional[Callable[[str], None]] = None,
@@ -1460,12 +1469,33 @@ def _bootstrap_if_needed(
             # checkpoint so an interrupted run resumes from where it left off next startup.
             pass
         else:
-            # Everything up to date: just refresh cards whose source files changed.
+            # Everything up to date: just refresh cards whose source files changed -- unless any
+            # process sharing this store already did so recently. A refresh walks the whole
+            # corpus several times over (nested-repo detection, folder review, the file walk,
+            # nested-store discovery): ~40s of in-process CPU on a large corpus, competing with
+            # the first turns of every chat session for the GIL. A session restarted minutes
+            # later gains nothing from it: each turn's own freshness check already flags a card
+            # whose files changed since it was written.
+            stamp = Path(cards_dir) / "index-state" / "last_refresh"
+            min_interval = _refresh_min_interval_seconds()
+            try:
+                age = time.time() - stamp.stat().st_mtime
+            except OSError:
+                age = None
+            if age is not None and 0 <= age < min_interval:
+                _log.debug("context index: refreshed %.0fs ago (< %.0fs); skipping startup refresh",
+                           age, min_interval)
+                return
             _log.debug("context index: scanning %s for changes (background)", root)
 
             def _bg_refresh() -> None:
                 try:
                     n = keyword.refresh_stale(root=root, provider=provider, model=model)
+                    try:
+                        stamp.parent.mkdir(parents=True, exist_ok=True)
+                        stamp.touch()
+                    except OSError:
+                        pass
                     if n > 0:
                         _log.info("context index: refreshed %d card(s)", n)
                         _tell(f"Context index updated: {n} card(s) refreshed.")

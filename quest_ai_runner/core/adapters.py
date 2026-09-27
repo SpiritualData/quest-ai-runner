@@ -448,6 +448,28 @@ class RetrievalAdapter(Protocol):
         ``ReferenceResolver`` for ``reference_type``. Default (unsupported): ``None``."""
 
 
+def accepts_reasoning_hint(provider: Any) -> bool:
+    """Whether ``provider.answer`` declares a ``reasoning`` keyword (or ``**kwargs``). Never raises."""
+    import inspect
+    try:
+        params = inspect.signature(provider.answer).parameters.values()
+    except (TypeError, ValueError, AttributeError):
+        return False
+    return any(p.name == "reasoning" or p.kind is p.VAR_KEYWORD for p in params)
+
+
+def answer_with_reasoning(provider: Any, messages: List[Dict[str, Any]], *, model: Optional[str],
+                          reasoning: Optional[str] = None, **kwargs: Any) -> str:
+    """``provider.answer(...)``, passing the ``reasoning`` hint only when the provider takes it.
+
+    The one place that decides whether the hint is forwarded, so a provider (or test fake, or
+    wrapper) that predates it keeps working unchanged. See ``ModelProvider.answer``.
+    """
+    if reasoning and accepts_reasoning_hint(provider):
+        return provider.answer(messages, model=model, reasoning=reasoning, **kwargs)
+    return provider.answer(messages, model=model, **kwargs)
+
+
 @runtime_checkable
 class ModelProvider(Protocol):
     """The LLM behind planning, answering, and the live model list."""
@@ -475,6 +497,12 @@ class ModelProvider(Protocol):
         volatile tail as the final turn, while a provider given no ``layers`` uses ``messages``
         unchanged. Callers always build ``messages`` faithfully too, so ``layers`` is purely an
         additive cache hint.
+
+        A provider MAY also accept an optional ``reasoning`` keyword (``"minimal"`` today): a
+        hint that the call is a selection/classification step that gains nothing from hidden
+        reasoning, so a model with a configurable thinking budget should spend as little as it
+        allows. It is never passed to a provider whose ``answer`` does not declare it; callers go
+        through ``answer_with_reasoning`` below, which checks.
         """
 
     def list_models(self) -> List[str]:

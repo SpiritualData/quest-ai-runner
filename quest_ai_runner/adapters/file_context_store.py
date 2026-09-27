@@ -100,6 +100,13 @@ _TFDFIDF_VERSION = 1  # stored as "tfdfidf_v" in each file entry within a card
 # Name of the meta file written to cards_dir after a successful bootstrap.
 _BOOTSTRAP_META_FILE = "bootstrap_meta.json"
 
+# {rel_path: mtime} of files a topic-discovery pass has already been shown. Discovery samples
+# representative files per folder, so most files it sees never end up pinned by any card; without
+# this record they counted as "new" forever and every refresh re-ran paid LLM discovery on them
+# (20,376 files on one corpus, at every chat start). A file drops out of this record, and becomes
+# new again, as soon as its mtime changes.
+_DISCOVERED_FILE = "index-state/discovered_files.json"
+
 # Sane bound on how many parent directories ``_discover_ancestor_card_dir`` will walk up looking
 # for an already-indexed ancestor corpus, so a pathological mount (e.g. a very deep or looping
 # filesystem namespace) can't make the upward walk hang. 12 comfortably covers any realistic
@@ -2349,8 +2356,8 @@ class FileContextStore(ContextAssemblerBase):
             for card in self._load_all().values():
                 for fe in card.get("files", []):
                     if fe.get("path") == path:
-                        fp = self._fingerprint(path)
-                        if fp.get("sha256") and fe.get("sha256") != fp["sha256"]:
+                        cur = self._current_sha(path, fe)
+                        if cur and fe.get("sha256") != cur:
                             card_ids.add(card["id"])
             return card_ids
         except Exception:  # noqa: BLE001
@@ -2685,6 +2692,46 @@ class FileContextStore(ContextAssemblerBase):
         except Exception:  # noqa: BLE001
             pass
         return found
+
+    def _imported_card_unchanged(self, imported: Dict[str, Any],
+                                 stored: Optional[Dict[str, Any]]) -> bool:
+        """Whether a card re-imported from a nested/ancestor store already sits here unchanged.
+
+        Every refresh re-imports every nested card. Without this check each one went through the
+        fingerprint and TF-DF-IDF passes and was rewritten: 3,230 cards and 11,847 files re-read on
+        every chat start, ~30s of CPU competing with the first turn. Unchanged means the same
+        name/keywords/summary and path list, every stored entry at the current feature version,
+        and every file's mtime still the one recorded. Never raises; any doubt re-imports.
+        """
+        if not stored:
+            return False
+        try:
+            if (stored.get("name", "") != imported.get("name", "")
+                    or stored.get("keywords", []) != imported.get("keywords", [])
+                    or stored.get("summary", "") != imported.get("summary", "")):
+                return False
+            entries = [fe for fe in stored.get("files", []) if isinstance(fe, dict)]
+            if [fe.get("path", "") for fe in entries] != list(imported.get("files", [])):
+                return False
+            for fe in entries:
+                if fe.get("tfdfidf_v", 0) < _TFDFIDF_VERSION:
+                    return False
+                p = Path(fe.get("path", ""))
+                if not p.is_absolute() and self._repo_root is not None:
+                    p = self._repo_root / p
+                try:
+                    mtime = p.stat().st_mtime
+                except OSError:
+                    mtime = None
+                if mtime is None:
+                    # Unreadable/gone now: unchanged only if it was already recorded that way.
+                    if fe.get("sha256"):
+                        return False
+                elif not fe.get("mtime") or float(fe["mtime"]) != mtime:
+                    return False
+            return True
+        except Exception:  # noqa: BLE001
+            return False
 
     def _import_nested_cards(self, nested_root: Path, walk_root: Path) -> List[Dict[str, Any]]:
         """Reuse a nested corpus's already-bootstrapped cards instead of re-discovering them.
@@ -3136,8 +3183,7 @@ class FileContextStore(ContextAssemblerBase):
                     stored = fe.get("sha256", "")
                     if not stored:
                         continue
-                    fp = self._fingerprint(p)
-                    cur = fp.get("sha256", "")
+                    cur = self._current_sha(p, fe)
                     if cur and cur != stored and p not in stale_covered:
                         stale_covered.append(p)
 
@@ -3145,6 +3191,14 @@ class FileContextStore(ContextAssemblerBase):
         # is "uncovered".
         if not existing_cards:
             uncovered = [p for p in file_paths if p not in imported_covered]
+
+        discovered = self._read_discovered()
+        if discovered and uncovered:
+            before = len(uncovered)
+            uncovered = [p for p in uncovered if not self._discovered_unchanged(p, discovered)]
+            if before != len(uncovered):
+                _log.info("context index: %d file(s) already shown to topic discovery and "
+                          "unchanged since; not re-analysed", before - len(uncovered))
 
         # --- Feature migration: cards whose file entries have an outdated per-feature version ---
         # These cards already have correct LLM-generated content; only the cheap computed fields
@@ -3190,6 +3244,7 @@ class FileContextStore(ContextAssemblerBase):
                 uncovered, provider, model=model, existing_cards=existing_cards, walk_root=walk_root
             )
             _log.info("context index: identified %d topic card(s) from new files", len(topic_cards))
+        discovered_now: List[str] = list(uncovered) if (uncovered and topic_cards) else []
 
         # Merge nested-imported cards now (before stale-covered regen below): a file re-imported
         # unchanged from a nested store can also show up in ``stale_covered`` versus THIS store's
@@ -3199,9 +3254,13 @@ class FileContextStore(ContextAssemblerBase):
         # is needed here.
         if imported_cards:
             queued_ids = {tc.get("id") for tc in topic_cards}
+            stored_by_id = {c.get("id"): c for c in existing_cards if c.get("id")}
             for ic in imported_cards:
-                if ic.get("id") not in queued_ids:
-                    topic_cards.append(ic)
+                if ic.get("id") in queued_ids:
+                    continue
+                if self._imported_card_unchanged(ic, stored_by_id.get(ic.get("id"))):
+                    continue
+                topic_cards.append(ic)
 
         # --- Stale-covered: regenerate the cards that reference any stale file ---
         # Identify the cards touching a stale file and re-run topic extraction over each card's
@@ -3413,9 +3472,64 @@ class FileContextStore(ContextAssemblerBase):
                 # In dry-run mode, count the card but don't write it.
                 cards_written += 1
 
+        # Recorded last, once the cards are written, so an interrupted pass re-discovers.
+        if discovered_now and not self._dry_run:
+            self._record_discovered(discovered_now, discovered, set(file_paths))
+
         # Invalidate cache after all writes.
         self._cache_dirty = True
         return cards_written
+
+    def _read_discovered(self) -> Dict[str, float]:
+        """The discovered-files record (see ``_DISCOVERED_FILE``). Never raises."""
+        try:
+            data = json.loads((self._cards_dir / _DISCOVERED_FILE).read_text(encoding="utf-8"))
+            files = data.get("files") if isinstance(data, dict) else None
+            return {str(k): float(v) for k, v in files.items()} if isinstance(files, dict) else {}
+        except Exception:  # noqa: BLE001
+            return {}
+
+    def _discovered_unchanged(self, rel: str, discovered: Dict[str, float]) -> bool:
+        seen = discovered.get(rel)
+        if seen is None:
+            return False
+        try:
+            p = Path(rel)
+            if not p.is_absolute() and self._repo_root is not None:
+                p = self._repo_root / rel
+            return p.stat().st_mtime == seen
+        except OSError:
+            return False
+
+    def _record_discovered(self, paths: List[str], previous: Dict[str, float],
+                           walked: Set[str]) -> None:
+        """Add ``paths`` (with current mtimes) to the record; drop files no longer walked."""
+        record = {k: v for k, v in previous.items() if k in walked}
+        for rel in paths:
+            try:
+                p = Path(rel)
+                if not p.is_absolute() and self._repo_root is not None:
+                    p = self._repo_root / rel
+                record[rel] = p.stat().st_mtime
+            except OSError:
+                continue
+        try:
+            target = self._cards_dir / _DISCOVERED_FILE
+            target.parent.mkdir(parents=True, exist_ok=True)
+            tmp_fd, tmp_path = tempfile.mkstemp(dir=str(target.parent), prefix=".tmp_disc_",
+                                                suffix=".json")
+            match_umask(tmp_fd)
+            try:
+                with os.fdopen(tmp_fd, "w", encoding="utf-8") as fh:
+                    json.dump({"v": 1, "files": record}, fh)
+                os.replace(tmp_path, str(target))
+            except Exception:  # noqa: BLE001
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+        except Exception:  # noqa: BLE001
+            _log.debug("context index: could not write %s", _DISCOVERED_FILE, exc_info=True)
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -3786,15 +3900,16 @@ class FileContextStore(ContextAssemblerBase):
             )
             card["_sorted_files"] = sorted_files  # stash for render phase below
             for fi, fe in enumerate(sorted_files):
-                fp_jobs.append((ci, fi, fe.get("path", "")))
+                fp_jobs.append((ci, fi, fe))
 
-        # Dispatch fingerprint reads in parallel.
-        fp_results: Dict[tuple, Dict[str, Any]] = {}  # (ci, fi) -> fp dict
+        # Dispatch freshness checks in parallel (stat-first, no git: see _current_sha).
+        fp_results: Dict[tuple, Dict[str, Any]] = {}  # (ci, fi) -> {"sha256": ...}
         if fp_jobs:
             n_workers = min(8, len(fp_jobs))
             raw = _run_parallel(
-                [lambda ci=ci, fi=fi, fp=fpath: ((ci, fi), self._fingerprint(fp))
-                 for ci, fi, fpath in fp_jobs],
+                [lambda ci=ci, fi=fi, fe=fe: (
+                    (ci, fi), {"sha256": self._current_sha(fe.get("path", ""), fe)})
+                 for ci, fi, fe in fp_jobs],
                 max_workers=n_workers,
             )
             for item in raw:
@@ -4392,6 +4507,36 @@ class FileContextStore(ContextAssemblerBase):
             return f"[{card_id}] {title}\n{body}" if title else body
         except Exception:  # noqa: BLE001 — a card fetch must never raise into the loop
             return None
+
+    def _current_sha(self, path: str, stored: Optional[Dict[str, Any]] = None) -> str:
+        """The file's current sha256, for a freshness comparison only. Never raises.
+
+        Cheap on the common path: when the stored entry's mtime still matches the file on disk,
+        the stored sha is returned without reading the file. Never spawns ``git``. The read path
+        (``assemble``) checks every file pinned by every top card, which on a large store is tens
+        of thousands of files per turn; a full read plus a ``git hash-object`` process for each one
+        cost 17s+ and pushed turn-start assembly past its timeout.
+        """
+        try:
+            p = Path(path)
+            if not p.is_absolute() and self._repo_root is not None:
+                p = self._repo_root / path
+            st = p.stat()
+        except OSError:
+            return ""
+        if stored:
+            stored_sha = stored.get("sha256", "")
+            stored_mtime = stored.get("mtime")
+            if stored_sha and stored_mtime and float(stored_mtime) == st.st_mtime:
+                return stored_sha
+        try:
+            h = hashlib.sha256()
+            with open(p, "rb") as fh:
+                for chunk in iter(lambda: fh.read(65536), b""):
+                    h.update(chunk)
+            return h.hexdigest()
+        except OSError:
+            return ""
 
     def _fingerprint(self, path: str) -> Dict[str, Any]:
         """Compute current sha256 + mtime + (optional) git_sha for a file path.

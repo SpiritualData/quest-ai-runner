@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Turn-start context assembly and guidance selection blew their 15s / 5s budgets on every
+  session because each turn and each start repeated work already done** (measured on a ~100k-file
+  corpus; the budgets were never the problem). Five causes, each fixed at its source:
+  (1) `FileContextStore`'s per-turn freshness check read every file pinned by every top card in
+  full and spawned `git hash-object` for each (15k processes, 17s+ per turn); it is now stat-first
+  (`_current_sha`: the stored sha when the mtime is unchanged) and never spawns git.
+  (2) The Claude-conversations scan used two unpruned `glob("**/...")` walks through every
+  node_modules/venv (16-37s on the first turn of every session); it is now one walk pruned like the
+  indexer (`conversation_format._find_conversation_dirs`), ~1s.
+  (3) Selection-only LLM calls (card relevance, file ranking, consolidation, and so guidance
+  filtering) paid for hidden model reasoning: ~760 thought tokens and 4-11s per call on
+  `gemini-3.5-flash`. They now pass an optional `reasoning="minimal"` hint
+  (`core.adapters.answer_with_reasoning`, forwarded only to a provider whose `answer` declares it);
+  `GeminiProvider` maps it to minimal thinking (0.9s, same output).
+  (4) Topic discovery samples representative files, so most files it saw were pinned by no card
+  and counted as "new" forever: every refresh with a provider re-ran paid discovery on them (20k
+  files at every chat start). Files shown to discovery are now recorded with their mtime
+  (`<cards_dir>/index-state/discovered_files.json`) and only become new again when they change.
+  (5) Every refresh rewrote every card imported from a nested store (3,230 cards, 11,847 files
+  re-fingerprinted); unchanged imports are now skipped (`_imported_card_unchanged`).
+  The startup refresh (still ~40s of in-process corpus walks on a large tree) now runs at most once
+  per `QAR_REFRESH_MIN_INTERVAL_SECONDS` (default 1800) across every process sharing a store, since
+  each turn's own freshness check already flags changed files. Result on the measured corpus:
+  guidance selection 6.5s -> 1.0s; warm assembly 11.7s -> 3.5s. Tests: `tests/test_turn_start_cost.py`.
+
 ### Added
 - **Chat turns are grounded in the synced quest they are about, through its card (2026-09-26).**
   Asked "what is the full path of the 1000 subscribers quest and what is next", the chat went
