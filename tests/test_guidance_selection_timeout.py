@@ -11,7 +11,7 @@ terminal that happened to report it.
 
 Fixed: the call now runs in a bounded ThreadPoolExecutor, collected with
 ``guidance_selection_timeout_seconds()`` (env ``QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS``, default
-5.0s). A timeout degrades to "no guidance this turn" (matching the existing "any failure leaves
+15.0s). A timeout degrades to "no guidance this turn" (matching the existing "any failure leaves
 the run exactly as if no guidance were wired" contract for a raising select()), not a hung turn.
 """
 from __future__ import annotations
@@ -78,7 +78,7 @@ def test_hanging_guidance_select_does_not_hang_the_turn(monkeypatch):
 def test_guidance_selection_timeout_env_default(monkeypatch):
     monkeypatch.delenv("QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS", raising=False)
     from quest_ai_runner.core.orchestrator import guidance_selection_timeout_seconds
-    assert guidance_selection_timeout_seconds() == 5.0
+    assert guidance_selection_timeout_seconds() == 15.0
 
 
 def test_guidance_selection_timeout_env_override(monkeypatch):
@@ -90,7 +90,7 @@ def test_guidance_selection_timeout_env_override(monkeypatch):
 def test_guidance_selection_timeout_invalid_env_falls_back(monkeypatch):
     monkeypatch.setenv("QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS", "not-a-number")
     from quest_ai_runner.core.orchestrator import guidance_selection_timeout_seconds
-    assert guidance_selection_timeout_seconds() == 5.0
+    assert guidance_selection_timeout_seconds() == 15.0
 
 
 def test_fast_guidance_select_still_applies_normally(monkeypatch):

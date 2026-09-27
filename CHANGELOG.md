@@ -7,6 +7,11 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Turn-start budgets raised: context assembly 15s -> 30s, guidance selection 5s -> 15s**
+  (`QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` / `QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS`). They are a
+  safety net, sized for a slow day rather than a typical one: losing a turn's context costs more
+  than a few seconds' wait, and the instant ack already shows the turn started. The cost fixes
+  below are what keep typical turns far inside them (1-11s / ~1s measured).
 - **Turn-start context assembly and guidance selection blew their 15s / 5s budgets on every
   session because each turn and each start repeated work already done** (measured on a ~100k-file
   corpus; the budgets were never the problem). Five causes, each fixed at its source:

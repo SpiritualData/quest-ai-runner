@@ -111,7 +111,7 @@ default 3). If that call fails, the tag and keyword ranking stands on its own.
 
 The selected cards are rendered into an `APPLICABLE GUIDANCE` block, prepended to the context so
 it leads, and a status tick names the cards that were applied. The whole selection is bounded by
-`QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS` (default 5.0): a provider that blocks on a slow database
+`QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS` (default 15.0): a provider that blocks on a slow database
 costs the turn its guidance, never the turn itself. Any failure at all leaves the run exactly as if
 no guidance were wired.
 
@@ -225,7 +225,7 @@ ever raise: `list()` (catalog, bodies empty), `read(card_id)` (one card with bod
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS` | `5.0` | Wall-clock budget for the per-turn `select()` call. Read fresh each call, so it can be tuned without a restart. |
+| `QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS` | `15.0` | Wall-clock budget for the per-turn `select()` call. Read fresh each call, so it can be tuned without a restart. |
 
 `guidance_topk` (default 3) is a `RunnerConfig` field rather than an environment variable.
 

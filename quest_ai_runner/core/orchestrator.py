@@ -3637,7 +3637,7 @@ def describe_read_spec(spec: Dict[str, Any]) -> str:
 def context_assembly_timeout_seconds() -> float:
     """Wall-clock budget for the turn-start context-assembly background fetch (cards + recent +
     corpus consolidation, run concurrently with the instant ack). Env
-    ``QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS`` (default 15.0, accepts a float); read fresh on every
+    ``QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS`` (default 30.0, accepts a float); read fresh on every
     call so it can be tuned without a restart. A soft deadline slightly under this budget is
     threaded to the assembler via ``meta["assembly_deadline"]`` so a deadline-aware assembler
     (e.g. ``HybridContextAssembler``) returns whatever completed in time as a PARTIAL result
@@ -3655,20 +3655,27 @@ def context_assembly_timeout_seconds() -> float:
     entirely (0 cards / 0 sources for that turn). 15.0 gives real headroom over that observed tail
     while staying tiny next to the overall per-turn answer budget (``QAR_ANSWER_TIMEOUT``, minutes)
     and the deep-run wall-clock timeout (``QAR_DEEP_TIMEOUT_SECONDS``, an hour); the common case is
-    unaffected since it already returns in under a second."""
+    unaffected since it already returns in under a second.
+
+    Raised again 15.0 -> 30.0 (2026-09-26, Joshua: "better for things to work than to not"). The
+    budget is a safety net, sized for a slow day rather than a typical one: dropping a turn's
+    context costs far more than waiting a few more seconds for it, and the instant ack already
+    tells the user the turn has started. Typical assembly is well inside it (1-11s measured on a
+    5,800-card store after the 2026-09-26 turn-start cost fixes); a timeout still warns loudly."""
     raw = os.getenv("QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS")
     if raw is None or not raw.strip():
-        return 15.0
+        return 30.0
     try:
         value = float(raw)
     except ValueError:
-        return 15.0
-    return value if value > 0 else 15.0
+        return 30.0
+    return value if value > 0 else 30.0
 
 
 def guidance_selection_timeout_seconds() -> float:
     """Wall-clock budget for the turn-start GuidanceProvider.select() call. Env
-    ``QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS`` (default 5.0, accepts a float); read fresh on every
+    ``QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS`` (default 15.0, accepts a float; raised from 5.0 on
+    2026-09-26 for the same reason as ``context_assembly_timeout_seconds``); read fresh on every
     call so it can be tuned without a restart.
 
     ``GuidanceProvider.select()`` is a caller-supplied implementation (``core/adapters.py``'s
@@ -3681,12 +3688,12 @@ def guidance_selection_timeout_seconds() -> float:
     directly, synchronously, in the main turn thread, un-timed). See the call site in ``run()``."""
     raw = os.getenv("QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS")
     if raw is None or not raw.strip():
-        return 5.0
+        return 15.0
     try:
         value = float(raw)
     except ValueError:
-        return 5.0
-    return value if value > 0 else 5.0
+        return 15.0
+    return value if value > 0 else 15.0
 
 
 def verify_context_max_chars() -> int:
