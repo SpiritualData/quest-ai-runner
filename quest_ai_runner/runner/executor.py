@@ -444,8 +444,8 @@ class _TaskProgressSink:
 
     Forwards all events EXCEPT raw streaming partials to report_progress, so the
     task-detail SSE stream shows step-by-step what the AI is doing (plan -> read ->
-    answer) and live token counts. Milestones additionally post into the originating
-    chat (same behavior as the old MilestoneSink path).
+    answer) and live token counts. Milestones also go to ``on_milestone``, which keeps them on
+    the task stream too: interim updates never post into the originating chat.
     """
     _SKIP = frozenset({"partial"})
 
@@ -682,8 +682,9 @@ class TaskExecutor:
         # change anything below.
         related_goal_id = task.get("related_goal_id")
         # conv_id links this task back to the Quest AI conversation it was delegated from. When
-        # present, we post LIVE progress (started → milestones → done) INTO that chat so the
-        # conversation doesn't go silent after the hand-off.
+        # present, the chat hears the task START and its verified CLOSING message (done / failed /
+        # needs_you / decision), so the conversation doesn't go silent after the hand-off. Interim
+        # milestones stay on the task's own progress feed (see ``_on_milestone``).
         conv_id = task.get("conv_id") or None
         # card_id (reserved, no behavior yet): forwarded on every conversation progress post so
         # a future backend can thread this task's posts under a per-idea thread.
@@ -763,7 +764,7 @@ class TaskExecutor:
 
         # Route all orchestrator events (except raw streaming partials) to the task's live progress
         # stream so the task-detail SSE shows step-by-step what the AI is doing (plan, read, replan,
-        # tokens). Milestones additionally post into the originating chat (same as MilestoneSink).
+        # tokens). Milestones stay on that stream only; the chat gets start and close.
         sink = _TaskProgressSink(
             task_id,
             self._report_progress,
@@ -981,16 +982,20 @@ class TaskExecutor:
 
     def _on_milestone(self, task_id: str, conv_id: Optional[str], event: ProgressEvent,
                       card_id: Optional[str] = None) -> None:
-        """Surface a real milestone: the live task-detail stream AND the originating chat.
+        """Surface a real milestone on the live task-detail stream, and ONLY there.
 
-        Background runs surface only real milestones/decisions/results (the MilestoneSink policy),
-        so this fires for genuine progress — never planning/reading chatter. We fan each milestone
-        to BOTH the task progress stream (kind="exec") and the chat (kind="progress"). Both posts
-        are best-effort: a dropped progress event must never affect the task outcome."""
+        Milestones are interim: a deep attempt's "Worker output" (posted BEFORE the goal verifier
+        rules on it, so it can be a "fixed" claim the verifier then rejects), a sub-goal marked
+        complete, a retry. They belong on the task's progress feed. They used to be posted into
+        the originating chat as well, and on 2026-09-27 that put a rejected attempt's wrong
+        "fixed" claim and three contradicting updates into the reporter's conversation within
+        eight minutes, while the one message that mattered (the verified result) was the only
+        one they could trust. The chat now hears a task twice: when it starts and when it ends
+        (``_report``'s closing post, written only after verification). ``conv_id``/``card_id``
+        stay in the signature so a caller need not change. Best-effort: a dropped progress event
+        must never affect the task outcome."""
         if event.text:
             self._report_progress(task_id, "exec", text=event.text)
-            self._post_conv(conv_id, event.text, kind="progress", task_id=task_id,
-                            card_id=card_id)
 
     def _report_progress(self, task_id: str, kind: str, *, text: Optional[str] = None,
                          output: Optional[str] = None,

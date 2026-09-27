@@ -374,13 +374,12 @@ def test_executor_claim_corrected_posts_needs_you_kind_not_done():
 
 # --- live-progress-into-chat tests (conv_id linkage) ----------------------------
 
-def test_executor_posts_live_progress_into_conversation():
-    """A task carrying ``conv_id`` streams started → milestones → done INTO that chat.
+def test_executor_posts_start_and_verified_result_into_conversation():
+    """A task carrying ``conv_id`` tells that chat when it STARTS and, once verified, its RESULT.
 
-    This is the core "chat won't go silent" proof at the executor level: a started message when
-    the task is picked up, a progress post for each real deep milestone (the MilestoneSink only
-    surfaces real milestones, never planning chatter), and a closing done message with the result.
-    """
+    Interim deep milestones go to the task's own progress stream, never the chat: found live
+    2026-09-27, a rejected attempt's "fixed" claim and three contradicting updates landed in the
+    reporter's conversation before the verified result did."""
     provider = StubProvider(decisions=[
         {"action": "deep", "goal": "draft plan", "deep_brief": "x", "rationale": "work"},
         # Scripted verify verdict: unverifiable runs report failed now, never trusted-done.
@@ -392,24 +391,37 @@ def test_executor_posts_live_progress_into_conversation():
 
     assert out.status == "done"
     kinds = [k for (_c, _t, k) in client.posts]
-    convs = {c for (c, _t, _k) in client.posts}
-    # All posts went to the originating conversation.
-    assert convs == {"qaconv_abc"}
-    # The lifecycle the chat sees: started first, a real milestone, done last.
-    assert kinds[0] == "started"
-    assert kinds[-1] == "done"
-    assert "progress" in kinds            # the deep milestone surfaced
-    # The done post carries the result text.
+    assert {c for (c, _t, _k) in client.posts} == {"qaconv_abc"}
+    assert kinds == ["started", "done"]
     assert any(t == "PLAN" and k == "done" for (_c, t, k) in client.posts)
+    # The milestone was not lost: it is on the task's own progress stream.
+    assert any(kind == "exec" for (_tid, kind, *_rest) in client.progress)
 
 
-def test_executor_progress_messages_accumulate_in_strict_order():
-    """Flow 4 (deferred live-progress as MULTIPLE messages): the runner's posts arrive as a
-    started → progress(…) → done SEQUENCE, in order, each a distinct append (no overwrite).
+def test_rejected_attempt_never_reaches_the_chat():
+    """A deep attempt the goal verifier REJECTS surfaces its worker output as a milestone. That
+    output is often a confident "fixed" claim, so it must stay on the task stream; the chat hears
+    only the start and the verified closing message."""
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "fix the bug", "deep_brief": "x", "rationale": "work"},
+        {"met": False, "reason": "not verified on the device", "next_action": "verify it"},
+        {"met": True, "reason": "ok"},
+    ])
+    runner = StubDeepRunner(met=True, output="Fixed, all done.")
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _brain(provider, deep_runner=runner))
+    out = ex.execute({"id": "trej", "text": "fix the bug", "conv_id": "qaconv_rej"})
 
-    A deep run that surfaces several milestones must produce: one ``started`` first, one
-    ``progress`` per real milestone in the order they completed, and exactly one ``done`` last —
-    so the chat shows the task working through to its result, not a single replaced message."""
+    assert out.status == "done"
+    assert [k for (_c, _t, k) in client.posts] == ["started", "done"]
+    assert not any(t.startswith("Worker output") for (_c, t, _k) in client.posts)
+    assert any("Worker output" in (text or "")
+               for (_tid, kind, text, *_r) in client.progress if kind == "exec")
+
+
+def test_executor_progress_messages_stay_off_the_chat_for_multi_goal_runs():
+    """A deep run with several sub-goals completes each one as a milestone. The chat still gets
+    exactly one ``started`` and one ``done``; every per-goal milestone is task progress only."""
     provider = StubProvider(decisions=[
         {"action": "deep",
          "deep_subtasks": [
@@ -421,25 +433,12 @@ def test_executor_progress_messages_accumulate_in_strict_order():
         {"met": True, "reason": "ok"},
         {"met": True, "reason": "ok"},
     ])
-    # A deep runner whose every subtask is met surfaces one milestone per subtask.
     client = MockQuestClient([])
     ex = TaskExecutor(client, _brain(provider, deep_runner=StubDeepRunner(met=True, output="RESULT")))
     out = ex.execute({"id": "tseq", "text": "overnight research", "conv_id": "qaconv_seq"})
 
     assert out.status == "done"
-    posts = [(t, k) for (_c, t, k) in client.posts]
-    kinds = [k for (_t, k) in posts]
-    # started leads, done closes, and progress milestones sit strictly between them.
-    assert kinds[0] == "started"
-    assert kinds[-1] == "done"
-    assert kinds.count("started") == 1
-    assert kinds.count("done") == 1
-    assert kinds.count("progress") >= 1
-    # Every progress milestone is between the start and the final done (ordering, no overwrite).
-    first_progress = kinds.index("progress")
-    assert 0 < first_progress < len(kinds) - 1
-    # Each post is a DISTINCT entry (no in-place replacement): count == sequence length.
-    assert len(client.posts) == len(kinds)
+    assert [k for (_c, _t, k) in client.posts] == ["started", "done"]
 
 
 def test_executor_no_conv_id_posts_nothing():

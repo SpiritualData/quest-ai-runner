@@ -2622,8 +2622,14 @@ def message_holds_off_work(message: Optional[str]) -> bool:
         return False
 
 
-def _message_requests_change(message: Optional[str]) -> bool:
+def _message_requests_change(message: Optional[str], *, honor_hold_off: bool = True) -> bool:
     """True iff the USER MESSAGE asks for a CHANGE to be made (code/files/data), not just info.
+
+    ``honor_hold_off=False`` skips the hold-off veto (``message_holds_off_work``). Pass it for a
+    QUEUED TASK's brief (``run(message_is_user_turn=False)``): that text is machine-composed and
+    quotes earlier runs' own output, so a "not yet released" inside a prior result read as the
+    human saying "not yet" and switched every escalation net off (live 2026-09-27: a reply
+    reporting two new bugs on a fix thread ended as a best-effort answer, marked done).
 
     Keyed off the STABLE user message rather than the (highly variable) answer text, because the
     cheap planner often misroutes an actionable request to "answer" and then only DESCRIBES the
@@ -2640,7 +2646,7 @@ def _message_requests_change(message: Optional[str]) -> bool:
         m = message.strip()
         # "don't create a task", "just answer here", "kill those runs": the human is talking about
         # the assistant's own behavior, not asking for work. Never escalate that.
-        if message_holds_off_work(m):
+        if honor_hold_off and message_holds_off_work(m):
             return False
         has_verb = _change_verb_used_as_verb(m)
         has_wrongness = bool(_WRONGNESS_RE.search(m))
@@ -2688,7 +2694,19 @@ def _message_requests_change(message: Optional[str]) -> bool:
 # output") and the qar-playbook.
 
 
-def message_change_signal_ambiguous(message: Optional[str]) -> bool:
+def clip_head_and_tail(text: str, limit: int) -> str:
+    """``text`` cut to about ``limit`` chars keeping its START and its END. A queued task's brief
+    opens with the standing request and ENDS with what the person just said; a head-only cut
+    judged the brief on everything except the newest words."""
+    if len(text) <= limit:
+        return text
+    head = limit * 2 // 5
+    tail = limit - head
+    return text[:head].rstrip() + "\n[...]\n" + text[-tail:].lstrip()
+
+
+def message_change_signal_ambiguous(message: Optional[str], *,
+                                    honor_hold_off: bool = True) -> bool:
     """True when ``message`` carries a cheap signal of an executable directive (a change verb or a
     wrongness description) but ``_message_requests_change`` still returned False for it -- because
     an interrogative opener or a bare "?" ending overrode the signal. This is the AMBIGUOUS band
@@ -2700,7 +2718,7 @@ def message_change_signal_ambiguous(message: Optional[str]) -> bool:
         return False
     try:
         m = message.strip()
-        if message_holds_off_work(m):
+        if honor_hold_off and message_holds_off_work(m):
             return False
         return bool(_change_verb_used_as_verb(m) or _WRONGNESS_RE.search(m))
     except Exception:  # noqa: BLE001
@@ -5233,7 +5251,7 @@ class Orchestrator:
         if not model:
             return False, fallback_reason
         prompt = INTENT_DIRECTIVE_PROMPT.format(
-            message=(user_message or "")[:1000],
+            message=clip_head_and_tail(user_message or "", 1000),
             answer=(answer_text or "").strip()[:1500] or "(no answer produced yet)",
         )
 
@@ -7844,6 +7862,10 @@ class Orchestrator:
         # never had a filesystem at all -- a silent false-completion, which is the exact failure
         # this file is otherwise full of guards against.
         hold_off_active = message_is_user_turn and message_forbids_new_task(user_message)
+        # The same reasoning covers the ESCALATION NETS' own hold-off check (the "is this a request
+        # for a change?" fallbacks below): on a queued task's brief it would read quoted output of
+        # earlier runs as the human holding off. Only a message typed this turn can hold off.
+        nets_honor_hold_off = message_is_user_turn
         if hold_off_active:
             log.info("User message forbids opening a task this turn; running under the no-action "
                      "gate (planner deep/confirm will degrade to answer).")
@@ -9208,8 +9230,36 @@ class Orchestrator:
         # probe answered "I cannot execute this task in the read-and-answer step" and PATCHed done,
         # bypassing the _answer_describes_unexecuted_work net below, which only guards the normal
         # answer path). Requests for work escalate to deep instead.
+        #
+        # "Is this a request for work?" is answered in three steps, cheapest first (live
+        # 2026-09-27: a reply on a bug-fix thread reporting two new bugs was diagnosed correctly,
+        # then wrapped up as a best-effort answer and marked done, and nothing was fixed until the
+        # reporter said "yes, fix it"):
+        #   1. the PLANNER already prepared deep work (``deferred_deep`` or a ``deep_brief`` on its
+        #      last read step: it was reading "to ground a brief before escalating"). Honoring its
+        #      own structured decision, never keywords in its text;
+        #   2. the regex prefilter on the user's words (hold-off honored only for a typed turn);
+        #   3. the ambiguous band gets the same one-shot LLM judgment the answer path uses.
         if final not in ("answer", "deep", "confirm", "clarify"):
-            must_execute = (not brainstorm_active) and _message_requests_change(user_message)
+            must_execute = False
+            last_plan = plan or PlanDecision(action="answer")
+            if not brainstorm_active:
+                planner_prepared_deep = bool(last_plan.deferred_deep
+                                             or (last_plan.deep_brief or "").strip())
+                must_execute = planner_prepared_deep or _message_requests_change(
+                    user_message, honor_hold_off=nets_honor_hold_off)
+                if (not must_execute
+                        and (self._has_deep_execution_capability()
+                             or self._has_deferred_queue_capability())
+                        and message_change_signal_ambiguous(
+                            user_message, honor_hold_off=nets_honor_hold_off)):
+                    must_execute, _why = self.judge_execution_directive(user_message, "")
+                    log.info("Read budget spent; intent judgment on the request: %s (%s).",
+                             must_execute, _why)
+                if must_execute and last_plan.deferred_deep:
+                    last_plan.goal = last_plan.goal or last_plan.deferred_deep.get("goal")
+                    last_plan.deep_brief = (last_plan.deep_brief
+                                            or last_plan.deferred_deep.get("brief"))
             if (gathered or brainstorm_active) and not must_execute:
                 emit.status("Wrapping up with a best-effort answer…")
                 model = self._answer_model(plan, "balanced", hint=model_hint)
@@ -9226,9 +9276,13 @@ class Orchestrator:
                 return finish(OrchestratorResult(kind="answer", text=text, rationale=plan.rationale,
                                                  partial=True, model=model,
                                                  exit_reason="read_budget"))
+            plan = last_plan
             plan.action = final = "deep"
             plan.goal = _truncate_goal(plan.goal or f"Fully address the request: {user_message}")
             plan.deep_brief = plan.deep_brief or user_message
+            if gathered:
+                emit.status("This asks for a change, so doing the work instead of wrapping up "
+                            "with an answer…")
 
         # A planner-originated "confirm" is HONORED as a confirm (it surfaces below via
         # _run_confirm). QAR does not re-route or auto-execute a confirm by inspecting keywords in
@@ -9432,7 +9486,7 @@ class Orchestrator:
         # turns the whole block off. Those messages carry change verbs, so without this they were
         # the most reliably escalated of all: the request not to open a task opened one.
         if (not should_defer_deep and not brainstorm_active
-                and not message_holds_off_work(user_message)
+                and not (nets_honor_hold_off and message_holds_off_work(user_message))
                 and (self._has_deep_execution_capability()
                      or self._has_deferred_queue_capability())):
             # Primary: trust planner's explicit flag
@@ -9454,7 +9508,8 @@ class Orchestrator:
             # action signal gets a fair shot at the message-intent LLM judgment below, which sees
             # this same answer text (``judge_execution_directive``), instead of being escalated by
             # this regex alone.
-            elif _answer_describes_unexecuted_work(text) and _message_requests_change(user_message):
+            elif _answer_describes_unexecuted_work(text) and _message_requests_change(
+                    user_message, honor_hold_off=nets_honor_hold_off):
                 should_defer_deep = {"goal": f"Execute the work the answer describes: {user_message}",
                                       "rationale": "auto-detected unexecuted work in answer (fallback)"}
                 if emit is not None:
@@ -9483,11 +9538,13 @@ class Orchestrator:
                 # what was discussed. The work itself usually lives in the transcript, not in that
                 # short message ("go ahead"), so the regex below cannot see it and the turn would
                 # otherwise end with one more proposal (and, worse, a reply claiming it had acted).
-                _is_directive = brainstorm_released_this_turn or _message_requests_change(user_message)
+                _is_directive = brainstorm_released_this_turn or _message_requests_change(
+                    user_message, honor_hold_off=nets_honor_hold_off)
                 _directive_reason = ("brainstorm release: the user lifted the hold and told us to act"
                                      if brainstorm_released_this_turn
                                      else "message-intent fallback (regex)")
-                if not _is_directive and message_change_signal_ambiguous(user_message):
+                if not _is_directive and message_change_signal_ambiguous(
+                        user_message, honor_hold_off=nets_honor_hold_off):
                     _is_directive, _llm_reason = self.judge_execution_directive(user_message, text)
                     _directive_reason = f"message-intent fallback (LLM judgment: {_llm_reason})"
                 if _is_directive:
