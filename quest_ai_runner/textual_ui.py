@@ -768,7 +768,17 @@ class TranscriptLog(RichLog):
 # ── Multi-line prompt input ────────────────────────────────────────────────────
 
 class PromptTextArea(TextArea):
-    """Auto-expanding multi-line input. Enter submits; Shift+Enter/Alt+Enter adds a newline."""
+    """Auto-expanding multi-line input. Enter submits; Shift+Enter adds a newline.
+
+    Most terminals send the same carriage return for Enter and Shift+Enter, so Shift+Enter is
+    only seen as such where the terminal speaks the kitty keyboard protocol. Everywhere else a
+    newline comes from one of the sequences a terminal CAN tell apart from Enter:
+      - Alt+Enter (ESC CR), which is also what Claude Code's /terminal-setup maps Shift+Enter to;
+      - Ctrl+J (a bare LF);
+      - a backslash typed right before Enter, the Claude Code convention. VS Code's
+        /terminal-setup keybinding sends Shift+Enter as backslash, CR, LF, so the LF that
+        trails a backslash-Enter is part of the same keypress and is dropped.
+    """
 
     class Submitted(Message):
         def __init__(self, textarea: "PromptTextArea", value: str) -> None:
@@ -777,22 +787,63 @@ class PromptTextArea(TextArea):
             self.value = value
 
     MAX_LINES = 8
+    # A trailing LF read this soon after a backslash-Enter belongs to the same keypress. Measured
+    # on the events' own timestamps (set when the terminal input is parsed), so a busy UI thread
+    # that handles the keys late does not split one keypress into two.
+    PAIRED_LF_WINDOW_SECONDS = 0.05
+
+    backslash_newline_at: float = 0.0
 
     def on_key(self, event) -> None:
-        if event.key == "enter":
+        key = event.key
+        if key == "enter":
             event.prevent_default()
             event.stop()
+            if self.consume_backslash_before_cursor():
+                self.insert("\n")
+                self.backslash_newline_at = event.time
+                return
             self.post_message(self.Submitted(self, self.text))
-        elif event.key in ("shift+enter", "alt+enter"):
+        elif key in ("shift+enter", "alt+enter", "ctrl+j"):
             event.prevent_default()
             event.stop()
-            self.insert("\n")
+            paired_lf = (
+                key == "ctrl+j"
+                and event.time - self.backslash_newline_at < self.PAIRED_LF_WINDOW_SECONDS
+            )
+            self.backslash_newline_at = 0.0
+            if not paired_lf:
+                self.insert("\n")
+        else:
+            self.backslash_newline_at = 0.0
+
+    def consume_backslash_before_cursor(self) -> bool:
+        """Delete a backslash sitting right before an empty-selection cursor; report whether one was."""
+        if not self.selection.is_empty:
+            return False
+        row, col = self.cursor_location
+        if col == 0 or self.document[row][col - 1] != "\\":
+            return False
+        self.delete((row, col - 1), (row, col))
+        return True
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
-        line_count = self.text.count("\n") + 1
-        # +2 for the tall CSS border (1 top + 1 bottom cell)
-        new_height = min(max(line_count, 1), self.MAX_LINES) + 2
-        self.styles.height = new_height
+        self.fit_height()
+
+    def on_resize(self, event) -> None:
+        # A new width re-wraps the text, which changes how many rows it needs. TextArea re-wraps
+        # in its own resize handler, which runs after this one, so measure once that has happened.
+        self.call_after_refresh(self.fit_height)
+
+    def fit_height(self) -> None:
+        """Grow (or shrink) to show every row the text occupies, wrapped rows included."""
+        rows = min(max(self.wrapped_document.height, 1), self.MAX_LINES)
+        # gutter = the border and padding rows (2 with the tall border this app styles it with).
+        new_height = rows + self.styles.gutter.height
+        if self.styles.height is None or self.styles.height.value != new_height:
+            self.styles.height = new_height
+        # Once the box is tall enough for everything, the rows scrolled off the top come back.
+        self.call_after_refresh(self.scroll_cursor_visible)
 
 
 # ── Main app ──────────────────────────────────────────────────────────────────
@@ -996,7 +1047,7 @@ class QuestAITerminal(App):
                 tab_behavior="focus",
                 show_line_numbers=False,
                 compact=True,
-                placeholder="Ask anything…   Enter=send, Shift+Enter=newline   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)",
+                placeholder="Ask anything…   Enter=send, Shift+Enter or Ctrl+J=newline   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)",
             )
         yield Footer()
 
@@ -1865,7 +1916,7 @@ class QuestAITerminal(App):
         if self._awaiting_decision:
             inp.placeholder = _AWAITING_DECISION_PLACEHOLDER
         else:
-            inp.placeholder = "Ask anything…   Enter=send   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)"
+            inp.placeholder = "Ask anything…   Enter=send, Shift+Enter or Ctrl+J=newline   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)"
         inp.focus()
 
         # Auto-execute a planned-but-unexecuted deep turn.

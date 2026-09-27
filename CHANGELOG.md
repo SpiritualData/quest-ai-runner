@@ -7,6 +7,15 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **The terminal prompt hid wrapped rows, and Shift+Enter sent the message (2026-09-26).**
+  `PromptTextArea` sized itself from hard newlines only, so a long message that soft-wrapped kept
+  a one-row box showing just its last row. It now sizes from the wrapped row count (up to
+  `MAX_LINES`), re-measures when the terminal is resized, and scrolls back to the top once
+  everything fits. Most terminals send the same carriage return for Shift+Enter as for Enter,
+  so Shift+Enter is only distinguishable where the terminal speaks the kitty keyboard protocol;
+  the prompt now also takes Ctrl+J, Alt+Enter, and a backslash before Enter as a newline,
+  including VS Code's `/terminal-setup` rendering of Shift+Enter (backslash, CR, LF), whose
+  trailing LF is dropped so one keypress gives one newline. Tests: `tests/test_prompt_multiline.py`.
 - **One autopilot quest produced four briefs and four emails in one morning (2026-09-25).**
   Three compounding causes. (1) The quest had three live pass series, and the runner could see
   only two: the backend's goal-scoped task listing collapses each recurring series to its latest
