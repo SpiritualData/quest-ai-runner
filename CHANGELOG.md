@@ -7,6 +7,22 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **The auto-built Qdrant vector arm warned on every single process start when
+  `QAR_EMBEDDER_BACKEND=voyage` or `=openai`** (`config.py`'s `_open_qdrant` call sites). Both
+  branches omitted `vector_size`, so construction always fell through to `QdrantVectorStore`'s
+  384 default; Voyage's real 1024-dim (or OpenAI's 1536-dim) output then never matched, so
+  `_adopt_embedding_dim` logged a "embedder produced N-dim vectors but vector_size=384 was
+  configured; adopting N" WARNING every run -- correct self-healing, but on a correctly-configured
+  deployment it could never NOT fire, which is a config bug rather than a real anomaly worth
+  surfacing each time. A fresh CLI process (e.g. interactive `qar chat`) builds a new
+  `QdrantVectorStore` every invocation, so this showed up on literally every session. Fixed by
+  declaring the real dimension up front, mirroring `_qar_embedders`' own
+  `VOYAGE_EMBEDDING_SIZE`-aware resolution. A deployment whose Qdrant server still holds the
+  legacy, wrongly-sized `{prefix}_default` collection from before this fix will still see the
+  (accurate, one-time-per-legacy-artifact) "existing collection holds N-dim vectors ... using
+  `{prefix}_default_{size}` instead" warning until that dead collection is deleted -- that one is
+  real, physical leftover state, not something code can retroactively silence. Tests:
+  `tests/test_vector_context.py::TestAutoBuiltQdrantDeclaresRealVectorSize`.
 - **The Textual terminal UI's deep-run dashboard arrow (▾/▸) didn't reflect whether the detail
   panel was actually open.** `textual_ui.py`'s exec-event handler passed `_cur_deep_run`
   (whichever run most recently streamed output) as the dashboard's `active_run_id`, instead of

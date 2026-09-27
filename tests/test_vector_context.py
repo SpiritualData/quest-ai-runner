@@ -2493,3 +2493,88 @@ class TestVectorBackendEnvSwitch:
         assert any(
             "unrecognized QAR_VECTOR_BACKEND" in r.getMessage() for r in caplog.records
         )
+
+
+class TestAutoBuiltQdrantDeclaresRealVectorSize:
+    """QAR_EMBEDDER_BACKEND=voyage/openai must declare their REAL dimension up front.
+
+    _open_qdrant used to omit vector_size for both branches, so construction always fell
+    through to QdrantVectorStore's 384 default. Voyage (1024-d) / OpenAI (1536-d) output then
+    NEVER matched, so _adopt_embedding_dim logged a mismatch-and-adopt WARNING on every single
+    process start -- correct self-healing, but a warning that can never NOT fire on a working,
+    correctly-configured deployment is a config bug, not a real anomaly. A fresh CLI process
+    (e.g. interactive `qar chat`) constructs a brand new QdrantVectorStore every run, so this
+    fired on literally every invocation.
+    """
+
+    def _resolve_with_embedder_backend(self, tmp_path, monkeypatch, embedder_backend,
+                                       qdrant_cls, *, voyage_size_env=None):
+        import quest_ai_runner.adapters as adapters_mod
+        from quest_ai_runner.config import RunnerConfig, resolve_context_assembler
+
+        for var in ("QAR_QUEST_API_URL", "QAR_QUEST_API_KEY", "QAR_USER_ID",
+                    "QAR_CARDS_BACKEND", "QAR_QDRANT_URL", "QAR_VECTOR_QDRANT_URL",
+                    "QDRANT_URL", "QAR_VECTOR_BACKEND", "VOYAGE_EMBEDDING_SIZE"):
+            monkeypatch.delenv(var, raising=False)
+        monkeypatch.setenv("QAR_EMBEDDER_BACKEND", embedder_backend)
+        if voyage_size_env is not None:
+            monkeypatch.setenv("VOYAGE_EMBEDDING_SIZE", str(voyage_size_env))
+        monkeypatch.setattr(adapters_mod, "QdrantVectorStore", qdrant_cls)
+
+        repo = tmp_path / "repo"
+        repo.mkdir(exist_ok=True)
+        (repo / "main.py").write_text('"""Main."""\n', encoding="utf-8")
+        provider = MagicMock()
+        provider.list_models.return_value = []
+        provider.answer.return_value = "[]"
+        cfg = RunnerConfig(
+            quest_base_url="http://example.com",
+            quest_api_key="qsk_test",
+            retrieval=None,
+            model_provider=provider,
+            corpus_root=str(repo),
+            context_cards_dir=str(tmp_path / "cards"),
+        )
+        return resolve_context_assembler(cfg)
+
+    def test_voyage_backend_declares_1024_by_default(self, tmp_path, monkeypatch):
+        import sys
+        import types
+
+        va_stub = types.ModuleType("voyageai")
+        va_stub.Client = MagicMock()
+        monkeypatch.setitem(sys.modules, "voyageai", va_stub)
+
+        qdrant = MagicMock()
+        self._resolve_with_embedder_backend(tmp_path, monkeypatch, "voyage", qdrant)
+
+        assert qdrant.called, "voyage backend must attempt to construct QdrantVectorStore"
+        assert qdrant.call_args.kwargs.get("vector_size") == 1024, (
+            f"expected vector_size=1024 declared up front, got kwargs: {qdrant.call_args.kwargs}"
+        )
+
+    def test_voyage_backend_honors_embedding_size_override(self, tmp_path, monkeypatch):
+        import sys
+        import types
+
+        va_stub = types.ModuleType("voyageai")
+        va_stub.Client = MagicMock()
+        monkeypatch.setitem(sys.modules, "voyageai", va_stub)
+
+        qdrant = MagicMock()
+        self._resolve_with_embedder_backend(tmp_path, monkeypatch, "voyage", qdrant,
+                                            voyage_size_env=256)
+
+        assert qdrant.call_args.kwargs.get("vector_size") == 256
+
+    def test_openai_backend_declares_1536(self, tmp_path, monkeypatch):
+        import sys
+        import types
+
+        monkeypatch.setitem(sys.modules, "openai", types.ModuleType("openai"))
+
+        qdrant = MagicMock()
+        self._resolve_with_embedder_backend(tmp_path, monkeypatch, "openai", qdrant)
+
+        assert qdrant.called, "openai backend must attempt to construct QdrantVectorStore"
+        assert qdrant.call_args.kwargs.get("vector_size") == 1536

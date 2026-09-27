@@ -2049,7 +2049,19 @@ def _resolve_context_assembler_base(
                     if backend == "voyage":
                         try:
                             from .adapters.qdrant_vector_store import make_voyage_embedder
+                            # Declare the REAL dimension up front. _open_qdrant used to omit
+                            # vector_size here, so this always fell through to the constructor's
+                            # 384 default and _adopt_embedding_dim logged a mismatch-and-adopt
+                            # warning on every single process start once Voyage's actual 1024-dim
+                            # output arrived -- correct behavior, but a warning that could never
+                            # NOT fire is a config bug, not a real anomaly worth surfacing every
+                            # run. Mirrors _qar_embedders' own VOYAGE_EMBEDDING_SIZE resolution.
+                            try:
+                                _voyage_vsize = int(os.getenv("VOYAGE_EMBEDDING_SIZE") or 1024)
+                            except (TypeError, ValueError):
+                                _voyage_vsize = 1024
                             vector_store = _open_qdrant(
+                                vector_size=_voyage_vsize,
                                 embedder=make_voyage_embedder(input_type="document"),
                                 query_embedder=make_voyage_embedder(input_type="query"),
                             )
@@ -2064,7 +2076,11 @@ def _resolve_context_assembler_base(
                         try:
                             from .adapters.qdrant_vector_store import make_openai_embedder
                             embedder = make_openai_embedder()
+                            # Same fix as the voyage branch above: declare the real (fixed) OpenAI
+                            # embedding dimension up front instead of relying on the 384 default
+                            # and a same-process "adopting 1536" warning every run.
                             vector_store = _open_qdrant(
+                                vector_size=1536,
                                 embedder=embedder,
                                 query_embedder=embedder,
                             )
