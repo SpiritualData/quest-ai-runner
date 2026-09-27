@@ -90,12 +90,100 @@ def run_chat(argv, monkeypatch, tmp_path):
     return cli.main(argv), calls
 
 
-def test_cli_resume_most_recent(monkeypatch, tmp_path):
+@pytest.mark.parametrize("argv", [["chat", "--resume", "last"], ["chat", "--continue"], ["chat", "-c"]])
+def test_cli_resume_last_and_continue(monkeypatch, tmp_path, argv):
     write_conv(tmp_path, "old1", [("a", "b")], age=100)
     write_conv(tmp_path, "new2", [("c", "d")], age=1)
-    rc, calls = run_chat(["chat", "--resume"], monkeypatch, tmp_path)
+    rc, calls = run_chat(argv, monkeypatch, tmp_path)
     assert rc == 0
     assert calls[0]["resume"].short_id == "new2"
+
+
+def fake_tty(monkeypatch, is_tty):
+    monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: is_tty, raising=False)
+    monkeypatch.setattr(cli.sys.stdout, "isatty", lambda: is_tty, raising=False)
+
+
+def test_cli_bare_resume_opens_picker(monkeypatch, tmp_path):
+    write_conv(tmp_path, "old1", [("a", "b")], age=100)
+    write_conv(tmp_path, "new2", [("c", "d")], age=1)
+    fake_tty(monkeypatch, True)
+    offered = []
+
+    def fake_pick(convs):
+        offered.append([c.short_id for c in convs])
+        return convs[1]
+
+    monkeypatch.setattr("quest_ai_runner.conversation_picker.pick_conversation", fake_pick)
+    rc, calls = run_chat(["chat", "--resume"], monkeypatch, tmp_path)
+    assert rc == 0
+    assert offered == [["new2", "old1"]]
+    assert calls[0]["resume"].short_id == "old1"
+
+
+def test_cli_picker_cancel_exits_without_chat(monkeypatch, tmp_path):
+    write_conv(tmp_path, "new2", [("c", "d")])
+    fake_tty(monkeypatch, True)
+    monkeypatch.setattr("quest_ai_runner.conversation_picker.pick_conversation", lambda convs: None)
+    rc, calls = run_chat(["chat", "-r"], monkeypatch, tmp_path)
+    assert rc == 0
+    assert calls == []
+
+
+def test_cli_bare_resume_without_terminal_lists_instead(monkeypatch, tmp_path, capsys):
+    write_conv(tmp_path, "abc123", [("what is the plan", "this")])
+    fake_tty(monkeypatch, False)
+    rc, calls = run_chat(["chat", "--resume"], monkeypatch, tmp_path)
+    assert rc == 1
+    assert calls == []
+    assert "abc123" in capsys.readouterr().out
+
+
+def test_cli_bare_resume_with_nothing_saved(monkeypatch, tmp_path):
+    fake_tty(monkeypatch, True)
+    rc, calls = run_chat(["chat", "--resume"], monkeypatch, tmp_path)
+    assert rc == 1
+    assert calls == []
+
+
+# -- picker -----------------------------------------------------------------------------------
+
+def picker_convs(tmp_path):
+    write_conv(tmp_path, "aaa1", [("fix the calendar sync", "done")], age=10)
+    write_conv(tmp_path, "bbb2", [("draft the grant email", "drafted")], age=20)
+    write_conv(tmp_path, "ccc3", [("calendar invites broken", "looking")], age=30)
+    return list_conversations(tmp_path)
+
+
+def drive_picker(convs, keys):
+    import asyncio
+    from quest_ai_runner.conversation_picker import picker_app
+
+    async def run():
+        app = picker_app(convs)
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press(*keys)
+            await pilot.pause()
+        return app.chosen
+
+    return asyncio.run(run())
+
+
+def test_picker_enter_resumes_highlighted(tmp_path):
+    convs = picker_convs(tmp_path)
+    assert drive_picker(convs, ["enter"]).short_id == "aaa1"
+    assert drive_picker(convs, ["down", "down", "enter"]).short_id == "ccc3"
+
+
+def test_picker_typing_filters(tmp_path):
+    convs = picker_convs(tmp_path)
+    assert drive_picker(convs, list("grant") + ["enter"]).short_id == "bbb2"
+    assert drive_picker(convs, list("calendar") + ["down", "enter"]).short_id == "ccc3"
+
+
+def test_picker_escape_cancels(tmp_path):
+    assert drive_picker(picker_convs(tmp_path), ["escape"]) is None
 
 
 def test_cli_resume_by_id(monkeypatch, tmp_path):

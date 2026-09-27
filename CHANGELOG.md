@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **`chat --resume` / `--continue`: reopen a saved chat conversation, Claude Code style
+  (2026-09-26).** Bare `--resume` (`-r`) opens a searchable picker of saved conversations (arrow
+  keys, Enter to resume, type to filter, Esc to cancel); `--resume last` or `--continue` (`-c`)
+  takes the most recent one for this corpus; `--resume <id>` takes the conversation whose id starts
+  with it. The conversation's turns become the session's history and new turns append to the same
+  file, and the TUI replays the last 10 turns. Conversation files now also record `corpus_root`,
+  `goal_id`, `rep_name` and `updated_at`. `--list-conversations` prints the list without a picker.
+  Tests: `tests/test_chat_resume.py`.
+
 ### Fixed
 - **The terminal prompt hid wrapped rows, and Shift+Enter sent the message (2026-09-26).**
   `PromptTextArea` sized itself from hard newlines only, so a long message that soft-wrapped kept

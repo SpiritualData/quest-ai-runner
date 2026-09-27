@@ -186,8 +186,8 @@ Env it reads:
   QAR_CHAT_HISTORY_DIR (optional)             — directory where QAR writes its own chat session
                                                    history (default: ~/.quest-ai-runner/conversations).
                                                    Written by QAR; read back by QAR in future sessions,
-                                                   and reopened by `chat --resume [ID]`
-                                                   (`chat --list-conversations` lists them).
+                                                   and reopened by `chat --resume` (picker),
+                                                   `chat --resume last|ID` or `chat --continue`.
   QAR_QUEST_FOLDER_MAP (optional)             — JSON object mapping quest/goal id -> local folder,
                                                    e.g. {"quest_123": "/srv/corpus/some_quest"}. Each
                                                    entry's folder is kept in sync with its quest's
@@ -264,6 +264,9 @@ from .core.adapters import ModelProvider
 from .pricing import estimate_bootstrap_cost, get_provider_and_model
 from .runner.channel_runner import ChannelRunner
 from .runner.poller import Poller
+
+# `chat --resume` with no id: open the conversation picker (Claude Code's behavior).
+RESUME_PICK = "\0pick"
 
 
 def _model_provider_from_env() -> ModelProvider:
@@ -985,11 +988,16 @@ def main(argv=None) -> int:
     chat_p.add_argument("--check", action="store_true",
                         help="validate chat prerequisites (model provider, context store) and exit, "
                              "without opening the terminal UI")
-    chat_p.add_argument("--resume", "-r", nargs="?", const="last", default=None, metavar="ID",
-                        help="continue a saved chat conversation: with no ID, the most recent one "
-                             "for this corpus; otherwise the conversation whose id starts with ID "
-                             "(see --list-conversations). Its turns are restored as context and "
-                             "new turns append to the same conversation file")
+    chat_p.add_argument("--resume", "-r", nargs="?", const=RESUME_PICK, default=None,
+                        metavar="ID",
+                        help="continue a saved chat conversation. With no ID, pick one from a "
+                             "searchable list (like Claude Code); `--resume last` takes the most "
+                             "recent one for this corpus; otherwise the conversation whose id "
+                             "starts with ID. Its turns are restored as context and new turns "
+                             "append to the same conversation")
+    chat_p.add_argument("--continue", "-c", dest="resume", action="store_const", const="last",
+                        help="continue the most recent conversation for this corpus "
+                             "(same as --resume last)")
     chat_p.add_argument("--list-conversations", action="store_true",
                         help="list saved chat conversations for this corpus (newest first) and exit")
 
@@ -1223,7 +1231,21 @@ def main(argv=None) -> int:
             print(format_conversation_list(list_conversations(corpus_root=cfg.corpus_root)))
             return 0
         resume = None
-        if getattr(args, "resume", None) is not None:
+        if getattr(args, "resume", None) == RESUME_PICK:
+            convs = list_conversations(corpus_root=cfg.corpus_root)
+            if not convs:
+                log.error("cannot resume: no saved chat conversations to resume")
+                return 1
+            import sys  # main() imports sys locally further down, so it is local here too
+            if not (sys.stdin.isatty() and sys.stdout.isatty()):
+                # No terminal to pick in: show the choices and how to name one.
+                print(format_conversation_list(convs))
+                return 1
+            from .conversation_picker import pick_conversation
+            resume = pick_conversation(convs)
+            if resume is None:
+                return 0  # cancelled
+        elif getattr(args, "resume", None) is not None:
             try:
                 resume = resolve_conversation(args.resume, corpus_root=cfg.corpus_root)
             except LookupError as e:
