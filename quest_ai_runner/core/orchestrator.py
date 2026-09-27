@@ -96,6 +96,7 @@ from .context_doctrine import (
 )
 from .anticipation import Anticipator
 from .inbox import InputInbox
+from .tools import ToolContext, ToolRegistry
 from .guard import (
     ExecutionFact,
     ExecutionRecord,
@@ -936,8 +937,25 @@ DEFERRED_DEEP_FIELD_DESC_QUEUED = (
 DEFERRED_RUNNER_KEY = "deferred"
 
 
+# The opt-in `tool_calls` field (the orchestrator was given a ToolRegistry, core/tools.py): the
+# direct-tool action. Same discipline as the other opt-in fields: a consumer with no tools exposes
+# neither the "tool" action nor this field, so the planner cannot choose a tool that isn't there.
+TOOL_CALLS_TOOL_FIELD: Dict[str, Any] = {
+    "type": "array",
+    "description": "When action='tool': the tool calls to run now, in order, from the TOOLS "
+                   "block. Each is {\"name\": <tool name>, \"args\": {<argument>: <value>}} "
+                   "with real, final content in the args (never a placeholder). Ignored for any "
+                   "other action: leave it empty unless action is 'tool'.",
+    "items": {
+        "type": "object",
+        "properties": {"name": {"type": "string"}, "args": {"type": "object"}},
+        "required": ["name"],
+    },
+}
+
+
 def decide_tool_for(mode_signals: bool, deferred_queued: bool,
-                    card_thread: bool = False) -> Dict[str, Any]:
+                    card_thread: bool = False, tools: bool = False) -> Dict[str, Any]:
     """Return the decide-tool schema variant for this run's configuration.
 
     ``mode_signals`` adds the opt-in ``mode_signal`` field; ``card_thread`` adds the opt-in
@@ -946,9 +964,13 @@ def decide_tool_for(mode_signals: bool, deferred_queued: bool,
     the wired deep runner ACTUALLY does with deferred work.
     """
     base = DECIDE_TOOL_WITH_MODE_SIGNAL if mode_signals else DECIDE_TOOL
-    if not deferred_queued and not card_thread:
+    if not deferred_queued and not card_thread and not tools:
         return base
     tool = copy.deepcopy(base)
+    if tools:
+        props = tool["input_schema"]["properties"]
+        props["action"]["enum"] = list(props["action"]["enum"]) + ["tool"]
+        props["tool_calls"] = copy.deepcopy(TOOL_CALLS_TOOL_FIELD)
     if deferred_queued:
         tool["input_schema"]["properties"]["deferred_deep"]["description"] = (
             DEFERRED_DEEP_FIELD_DESC_QUEUED)
@@ -1360,7 +1382,8 @@ class OrchestratorResult:
 # Decision normalization (coerce a raw planner dict into a safe PlanDecision).
 # ---------------------------------------------------------------------------
 
-def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDecision:
+def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
+                       tools_enabled: bool = False) -> PlanDecision:
     # A provider's structured output is not guaranteed to be a dict: some models/SDKs return a LIST
     # (e.g. multiple tool calls, or a JSON array). Coerce to a dict so a stray shape degrades to a
     # safe "answer" instead of raising 'list' object has no attribute 'get' from the planner.
@@ -1370,7 +1393,19 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
         else:
             raw = {}
     action = (raw.get("action") or "answer").strip().lower()
-    if action not in ("read", "answer", "deep", "confirm", "clarify"):
+    if action not in ("read", "answer", "deep", "confirm", "clarify") and not (
+            action == "tool" and tools_enabled):
+        action = "answer"
+
+    tool_calls: List[Dict[str, Any]] = []
+    if tools_enabled:
+        for c in (raw.get("tool_calls") or []):
+            if isinstance(c, dict) and isinstance(c.get("name"), str) and c["name"].strip():
+                args = c.get("args")
+                tool_calls.append({"name": c["name"].strip(),
+                                   "args": args if isinstance(args, dict) else {}})
+    if action == "tool" and not tool_calls:
+        # "tool" with nothing to call is not an action: answer from what was gathered.
         action = "answer"
 
     reads_in = raw.get("reads") or []
@@ -1383,6 +1418,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
                 or r.get("list_operations") or r.get("describe_operation")
                 or r.get("list_guidance") or r.get("read_guidance")
                 or r.get("cards") or r.get("card")
+                or (tools_enabled and r.get("tools"))
             ):
                 clean_reads.append(r)
 
@@ -1481,6 +1517,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig) -> PlanDeci
         confirm_kind=confirm_kind_raw,
         confirm_deadline=confirm_deadline_raw,
         confirm_default_on_silence=confirm_silence_raw,
+        tool_calls=tool_calls,
     )
 
 
@@ -2961,7 +2998,16 @@ def _card_update_store(assembler: Any) -> Optional[Any]:
 # gathering real material — the "I have these operations, shall I run discovery?" failure mode).
 # ``read_guidance`` is deliberately excluded: it returns actual instructions, which ARE grounding.
 _DISCOVERY_SPEC_KEYS = ("list_operations", "list_sources", "list_guidance",
-                        "describe_operation", "describe_source")
+                        "describe_operation", "describe_source", "tools")
+
+
+# Header of the planner's TOOLS block (the per-request catalog follows it; core/tools.py renders
+# the catalog and its usage rules). States the fifth action the base prompt does not list.
+PLANNER_TOOLS_HEAD = (
+    "--- DIRECT TOOLS: a fifth action, \"tool\" ---\n"
+    "Besides read/answer/deep/confirm/clarify you may choose action=\"tool\" with "
+    "\"tool_calls\". To find a tool that is not listed below, use a read spec "
+    "{\"tools\": \"<what you need>\"}.\n")
 
 
 def _is_discovery_spec(spec: Any) -> bool:
@@ -4212,6 +4258,7 @@ class Orchestrator:
         conversation_store: Optional[ConversationStore] = None,
         recent_context: Optional[RecentContextStore] = None,
         anticipator: Optional[Anticipator] = None,
+        tools: Optional[ToolRegistry] = None,
     ):
         self.retrieval = retrieval
         self.provider = provider
@@ -4285,6 +4332,11 @@ class Orchestrator:
         # byte-for-byte identical (zero calls, zero threads, zero events). Never raises: every
         # touch point is guarded so any failure degrades to the normal path.
         self.anticipator = anticipator
+        # DIRECT TOOLS (core/tools.py): when a registry with at least one tool is given, the
+        # planner gains the "tool" action and sees the tools relevant to each request; deep
+        # briefs list the same tools with the shell command that calls them. None/empty = the
+        # loop is exactly what it was before tools existed.
+        self.tools: Optional[ToolRegistry] = tools if tools else None
         # The single-flight handle for the turn-end anticipation learn/plan thread (see
         # _kickoff_anticipation): while it is alive, further kickoffs are skipped, not queued.
         self._anticipation_thread: Optional[threading.Thread] = None
@@ -4341,6 +4393,16 @@ class Orchestrator:
             return self.read_cards_context(str(spec["cards"]), card_context)
         if spec.get("card") is not None:
             return self.read_one_card(str(spec["card"]), card_context)
+        # TOOL CATALOG SEARCH: the planner is shown only the tools relevant to the request; this
+        # read searches the whole catalog when it needs one that was not shown.
+        if spec.get("tools") is not None and self.tools is not None:
+            query = str(spec["tools"])
+            found = self.tools.search(query, k=8)
+            text = (self.tools.render_catalog(found) if found
+                    else f"No tool matches {query!r}. Available: {', '.join(self.tools.names())}")
+            return Observation(kind="query", locator=f"tools({query})",
+                               text="TOOLS MATCHING YOUR SEARCH (call with action \"tool\"):\n"
+                                    + text)
         # No retrieval adapter: gracefully report unsupported rather than crashing. The brain
         # can still answer from transcript/context_view; it just cannot ground on a corpus.
         if self.retrieval is None and not (
@@ -4671,6 +4733,48 @@ class Orchestrator:
 
     # --- planner call --------------------------------------------------------
 
+    def run_tool_calls(self, calls: List[Dict[str, Any]], *, gathered: List[Dict[str, Any]],
+                        exec_record: ExecutionRecord, tool_ok_signatures: set,
+                        emit: "_Emitter", steps: int, ctx: ToolContext) -> None:
+        """Run the planner's direct tool calls in order, in-process (no deep run).
+
+        Each outcome lands twice: in ``gathered`` (so the re-plan and the answer see the receipt)
+        and, for a tool that ACTS, in ``exec_record`` (so the claim verifier backs "sent" with a
+        real success, and the answer->deep nets see that work already ran this turn). A call
+        identical to one that already succeeded is skipped, never repeated.
+        """
+        for call in calls[: self.cfg.max_reads_per_step]:
+            name = call.get("name") or ""
+            args = call.get("args") or {}
+            spec = self.tools.get(name) if self.tools is not None else None
+            sig = (name, json.dumps(args, sort_keys=True, default=str))
+            if sig in tool_ok_signatures:
+                gathered.append({"kind": "query", "locator": f"tool:{name}",
+                                 "text": f"TOOL {name}: ALREADY SUCCEEDED earlier this turn with "
+                                         f"these args; not run again. Answer with its receipt."})
+                continue
+            emit.status(f"Calling {name}…")
+            emit.emit(ProgressEvent(type=EVENT_EXEC, step=steps, text=f"tool {name}",
+                                    data={"phase": "tool_call", "tool": name}))
+            result = (self.tools.invoke(name, args, ctx) if self.tools is not None
+                      else None)
+            ok = bool(result and result.ok)
+            text = result.text if result is not None else "no tools configured"
+            if ok:
+                tool_ok_signatures.add(sig)
+            gathered.append({"kind": "query", "locator": f"tool:{name}",
+                             "text": f"TOOL {name} {'SUCCEEDED' if ok else 'FAILED'} "
+                                     f"(args {json.dumps(args, default=str)[:600]}):\n{text}"})
+            if spec is None or spec.mutates:
+                exec_record.facts.append(ExecutionFact(
+                    goal=f"tool {name}: {text[:200]}" if ok else f"tool {name}",
+                    succeeded=ok, failed=not ok, error=None if ok else text[:300],
+                    phases=["tool_call", "done" if ok else "failed"]))
+            emit.emit(ProgressEvent(type=EVENT_EXEC, step=steps,
+                                    text=f"tool {name}: {text[:200]}",
+                                    data={"phase": "done" if ok else "failed", "tool": name}))
+            log.info("tool %s %s: %s", name, "ok" if ok else "FAILED", text[:200])
+
     def _plan(self, user_message: str, transcript: str, context_view: str,
               gathered: List[Dict[str, Any]], *, step: int = 0,
               narrate: bool = False, persona: str = "",
@@ -4708,7 +4812,13 @@ class Orchestrator:
                 brainstorm_note += _BRAINSTORM_EXIT_SIGNAL_NOTE
         decide_tool = decide_tool_for(self.cfg.mode_signals_enabled,
                                       self.cfg.deferred_deep_queued,
-                                      self.cfg.card_thread_enabled)
+                                      self.cfg.card_thread_enabled,
+                                      tools=self.tools is not None)
+        # The TOOLS block: only the tools relevant to THIS request (the registry narrows a large
+        # catalog; the rest are searchable with a {"tools": ...} read). Layered in like the
+        # brainstorm note so PLANNER_PROMPT keeps its format slots; absent entirely with no tools.
+        tools_block = (PLANNER_TOOLS_HEAD + self.tools.render_planner_block(user_message)
+                       if self.tools is not None else "")
         deferred_semantics = (DEFERRED_DEEP_QUEUED_SEMANTICS if self.cfg.deferred_deep_queued
                               else DEFERRED_DEEP_INLINE_SEMANTICS)
         # Per-idea threading: the TOPIC block (doctrine + this turn's candidate prior) is rendered
@@ -4746,6 +4856,11 @@ class Orchestrator:
             )
         if preamble_parts:
             prompt = "\n\n".join(preamble_parts) + "\n\n" + prompt
+        # AFTER the planner body, not above it: the body's own action list (read/answer/deep/...)
+        # is otherwise the last word before the decision, and a live run filled tool_calls with
+        # the right call but still chose "answer", so nothing ran.
+        if tools_block:
+            prompt = prompt + "\n\n" + tools_block
         model = self.registry.resolve_tier(self.cfg.planner_tier)
         provider = self.get_provider_for_model(model)
         # Cache-friendly layered shape (in addition to the flattened ``prompt`` fallback above): the
@@ -4781,13 +4896,15 @@ class Orchestrator:
                     + "\n".join(f"• {s}" for s in already_said)
                 )
             tail_parts.append(plan_body)
+            if tools_block:
+                tail_parts.append(tools_block)
             plan_kwargs["layers"] = compose_layers(
                 persona=(persona if (narrate and persona.strip()) else ""),
                 context=plan_context or "",
                 tail="\n\n".join(tail_parts),
             ).blocks()
         raw = provider.plan(prompt, **plan_kwargs)
-        return normalize_decision(raw or {}, self.cfg)
+        return normalize_decision(raw or {}, self.cfg, tools_enabled=self.tools is not None)
 
     # --- answer generation (grounded; optional parallel sub-questions) -------
 
@@ -6026,6 +6143,17 @@ class Orchestrator:
             # Show task identifier in brief so user sees which task is running
             task_label = f"TASK {task_index}" if multi else "TASK"
             brief = "\n\n".join(_hdr) + f"\n\n{task_label} [{task_uuid}]: {goal}\n\n" + brief
+            # DIRECT TOOLS for the deep worker: the tools relevant to this goal, each with the
+            # exact shell command that calls it, so a run that needs (say) to send the quest's
+            # mail calls the tool instead of rediscovering how. Absent when no tools are wired.
+            if self.tools is not None:
+                deep_tools_block = self.tools.render_deep_block(f"{user_message}\n{goal}")
+                if deep_tools_block:
+                    if quest_id:
+                        deep_tools_block += (f"\nThis run's quest is {quest_id}: add "
+                                         f"--quest {quest_id} to a call so tools that take the "
+                                         f"quest from context get it.")
+                    brief = brief + "\n\n" + deep_tools_block
             # NOTE: the FUTURE-CONTEXT instruction is appended further down, once the runner that will
             # handle THIS goal is resolved: which of the two instructions applies depends on that
             # runner's ``future_context_channel``. Both are appended only when the updater is active,
@@ -7885,6 +8013,10 @@ class Orchestrator:
         # to "answer", if any. Feeds the no-action acknowledgment steer on the answer path so the
         # reply can say the work was held rather than silently dropping it.
         brainstorm_suppressed_action: Optional[str] = None
+        # Direct tool calls (core/tools.py): whether any ran this turn, and the (name, args)
+        # signatures that SUCCEEDED, so a re-plan that repeats a done call cannot run it twice.
+        tool_calls_ran = False
+        tool_ok_signatures: set = set()
         # The question a suppressed "clarify" (planner) or a suppressed understanding-clarify
         # (stage 1) wanted to park as a decision-request. While the latch is held nothing may
         # escalate, so the question rides into the REPLY instead (see BRAINSTORM_CLARIFY_ACK_PREFIX).
@@ -8986,6 +9118,15 @@ class Orchestrator:
                     brainstorm_clarify_question = (
                         _clarify_question_text(plan) or brainstorm_clarify_question)
                 plan.action = "answer"
+            # A tool that ACTS is an action like any other: held while the latch is. A read-only
+            # tool is just more gathered context and still runs.
+            if (plan and brainstorm_active and plan.action == "tool" and self.tools is not None
+                    and any((self.tools.get(c["name"]) is None
+                             or self.tools.get(c["name"]).mutates) for c in plan.tool_calls)):
+                log.info("Brainstorm mode: holding the planner's tool call(s) %s.",
+                         [c["name"] for c in plan.tool_calls])
+                brainstorm_suppressed_action = brainstorm_suppressed_action or "tool"
+                plan.action = "answer"
 
             # --- STRUCTURAL SUFFICIENCY GATE: never answer ABOUT a summary you never opened ------
             # The prose SUFFICIENCY gate in the planner prompt asks the model to check, before
@@ -9086,6 +9227,18 @@ class Orchestrator:
                 except Exception:  # noqa: BLE001 — the overseer must never break the loop
                     pass
 
+            if plan.action == "tool":
+                self.run_tool_calls(plan.tool_calls, gathered=gathered, exec_record=exec_record,
+                                     tool_ok_signatures=tool_ok_signatures, emit=emit,
+                                     steps=steps, ctx=ToolContext(
+                                         quest_id=quest_id,
+                                         user_id=_ctx_meta.get("user_id"),
+                                         task_id=_ctx_meta.get("task_id"),
+                                         meta=dict(_ctx_meta)))
+                tool_calls_ran = True
+                if budget_exhausted():
+                    break
+                continue
             if plan.action == "read":
                 if not plan.reads:
                     plan.action = "answer"
@@ -9138,6 +9291,12 @@ class Orchestrator:
             plan = plan or PlanDecision(action="answer")
 
         final = (plan or PlanDecision(action="answer")).action
+        # A turn that ENDED on a tool step (the budget ran out right after the calls ran) or on a
+        # read after its tool calls already ran has done its work: it answers with the receipts in
+        # ``gathered``. It must not fall into the read-budget wrap-up below, whose change-request
+        # net would otherwise escalate "send the email" to a deep run after the email was sent.
+        if final == "tool" or (final == "read" and tool_calls_ran):
+            plan.action = final = "answer"
 
         # --- BRAINSTORM TERMINAL GATE (the single choke point) --------------------------------
         # Whatever set the action -- the planner, the read-loop safety escalation, an overseer
@@ -9181,7 +9340,7 @@ class Orchestrator:
             user_vetoed = hold_off_active and cfg.execution_mode != "brainstorm"
             brainstorm_ack_note = (HOLD_OFF_NO_ACTION_ACK_NOTE if user_vetoed
                                    else BRAINSTORM_NO_ACTION_ACK_NOTE)
-            planner_tried_to_act = (brainstorm_suppressed_action in ("deep", "confirm")
+            planner_tried_to_act = (brainstorm_suppressed_action in ("deep", "confirm", "tool")
                                     or bool(plan.deferred_deep)
                                     or bool(plan.answer_contains_work_to_execute))
             if planner_tried_to_act:

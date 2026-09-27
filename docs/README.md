@@ -23,6 +23,9 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
   "Scripting the Quest API" and the `quest-ai-runner quest <method>` CLI subcommand).
 - **[Implementing adapters](adapters.md)** — the four interfaces (`RetrievalAdapter`,
   `ModelProvider`, `DeepRunner`, `EscalationSink`) and how to build your own.
+- **[Direct tools](tools.md)**: actions the brain calls in one planner step with no deep run
+  (standard `send_quest_email`, plus your own tools declared in TOML with when to use and when
+  not to), shown only when relevant to the request, and callable from a deep run by shell.
 - **[Personas](personas.md)** — run each task AS somebody without writing a resolver: the persona
   registry (both file shapes), the four resolution steps (structured field, LLM-judged explicit
   ask, domain-card dominance, structural fallback), auto-registering an unknown persona as a real

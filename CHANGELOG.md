@@ -7,6 +7,25 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Direct tools: act in one planner step, no deep run** (`core/tools.py`, `tools/__main__.py`,
+  [docs/tools.md](docs/tools.md)). "Email me today's plan" used to go through a deep run and take
+  minutes. The planner now has a fifth action, `"tool"`, with `tool_calls`; the loop runs each call
+  in-process (`ToolRegistry.invoke`: explicit args, then turn context, then configured defaults;
+  unknown and missing args rejected; timeout; never raises), shows the planner the receipt, and it
+  answers. Standard tools ship on by default when their credentials are present (today
+  `send_quest_email`, over `QuestClient.send_quest_email`; `QAR_STANDARD_TOOLS=0` turns them off).
+  Custom tools come from `QAR_TOOLS_FILE` TOML: a command (flags or stdin JSON) or a
+  `module:function`, each with a required `when_to_use` and `when_not_to_use` so the model can tell
+  two similar tools apart, plus `[standard.<name>]` overrides (defaults, extra guidance,
+  `enabled = false`). Only relevant tools are shown: the whole catalog up to 8 tools, else the BM25
+  top 5 with the rest searchable by a `{"tools": "..."}` read spec. A deep run's brief lists the
+  relevant tools with the exact `python -m quest_ai_runner.tools call <name> --args ...` command.
+  A successful call is never repeated in a turn, brainstorm mode holds a mutating call, each
+  mutating call is an execution fact for the claim verifier, and a budget that ends on a tool step
+  answers instead of escalating to deep. The tools block sits after the planner body: placed above
+  it, a live model filled `tool_calls` correctly yet chose `"answer"`, so nothing ran.
+  `RunnerConfig.tool_registry` lets a consumer pass its own registry. `send_quest_email.py`'s
+  `--base-url` now also reads `QUEST_BASE_URL` / `QUEST_API_URL`.
 - **The Claude subscription usage limit is a wait, not a failure** (`core/usage_limit.py`). When a
   keyless (`claude_cli`) lane runs out of allowance, Claude Code refuses with exit 1 and a result
   like `You've hit your weekly limit · resets 1pm (America/Los_Angeles)` (also session and

@@ -78,6 +78,11 @@ Env it reads:
                                                    for a short one-liner) since multi-line prose is
                                                    miserable as a bare env var; the file wins when
                                                    both are set.
+  QAR_TOOLS_FILE (optional)                      - ':'-separated TOML file(s) of custom direct
+                                                   tools and standard-tool overrides the brain
+                                                   calls with no deep run (docs/tools.md).
+  QAR_STANDARD_TOOLS (optional)                  - "0" turns off the standard direct tools
+                                                   (send_quest_email). Default on.
   QAR_AUTOPILOT_PASS_TIME (optional)             — default daily local time ("HH:MM") for an
                                                    opted-in quest that names no run_time of its own
                                                    (RunnerConfig.autopilot_pass_time; default "07:00")

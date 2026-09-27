@@ -282,6 +282,11 @@ class RunnerConfig:
     # session files; a host can plug a Mongo-backed one behind the same Protocol. Left None → Step 1
     # is a no-op (self-contained inputs add ZERO latency), exactly today's behavior.
     conversation_store: Optional[Any] = None
+    # DIRECT TOOLS (core/tools.py): the catalog the brain can call in-process and deep runs can
+    # call from their shell. None = build it from env in build_orchestrator (the standard tools
+    # when Quest credentials exist, plus QAR_TOOLS_FILE custom tools; QAR_STANDARD_TOOLS=0 turns
+    # the standard ones off). Pass a ToolRegistry to wire one in code (an empty one = no tools).
+    tool_registry: Optional[Any] = None
 
     # --- LIVE CHANNEL lane (opt-in; see runner/channel_runner.py) ---------------------------
     # A live, two-way messaging channel (e.g. ``adapters.openclaw_channel.OpenClawChannel``) QAR
@@ -2307,6 +2312,28 @@ def _resolve_anticipation_refiner(cfg: RunnerConfig):
         return None
 
 
+def resolve_tool_registry(cfg: RunnerConfig):
+    """The tool catalog for this runner: ``cfg.tool_registry`` if the consumer wired one, else the
+    standard tools + ``QAR_TOOLS_FILE`` custom tools from env. The Quest credentials the standard
+    tools use fall back to the config's own ``quest_base_url``/``quest_api_key``/``team_id`` so a
+    lane configured by file (not env) still gets them. Never raises: no tools on any failure."""
+    if cfg.tool_registry is not None:
+        return cfg.tool_registry
+    try:
+        from .core.tools import build_tool_registry
+        env = dict(os.environ)
+        if cfg.quest_base_url and not (env.get("QUEST_BASE_URL") or env.get("QUEST_API_URL")):
+            env["QUEST_BASE_URL"] = cfg.quest_base_url
+        if cfg.quest_api_key and not env.get("QUEST_API_KEY"):
+            env["QUEST_API_KEY"] = cfg.quest_api_key
+        if cfg.team_id and not env.get("QUEST_TEAM_ID"):
+            env["QUEST_TEAM_ID"] = cfg.team_id
+        return build_tool_registry(env)
+    except Exception:  # noqa: BLE001 -- never let tool wiring break runner construction
+        _log.warning("tool registry not built", exc_info=True)
+        return None
+
+
 def build_orchestrator(
     cfg: RunnerConfig,
     *,
@@ -2525,4 +2552,5 @@ def build_orchestrator(
         conversation_store=cfg.conversation_store,
         recent_context=resolve_recent_context_store(cfg),
         anticipator=resolve_anticipator(cfg, context_assembler),
+        tools=resolve_tool_registry(cfg),
     )

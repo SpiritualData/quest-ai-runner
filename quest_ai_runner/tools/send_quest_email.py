@@ -53,7 +53,7 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--to", action="append", dest="to",
                         help=("explicit recipient override for this one send (repeatable); "
                               "omit to use the quest's own configured recipients"))
-    parser.add_argument("--base-url", default=os.getenv("QUEST_API_URL"))
+    parser.add_argument("--base-url", default=os.getenv("QUEST_BASE_URL") or os.getenv("QUEST_API_URL"))
     parser.add_argument("--api-key", default=os.getenv("QUEST_API_KEY"))
     args = parser.parse_args(argv)
 

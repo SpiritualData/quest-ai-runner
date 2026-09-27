@@ -36,6 +36,19 @@ def deep_runner_default_is_inert_in_tests(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def tool_catalog_is_empty_unless_a_test_says_otherwise(monkeypatch):
+    """No test inherits the developer's tool catalog.
+
+    ``build_orchestrator`` adds the standard tools whenever Quest credentials are in the env (a
+    team shell exports them) and custom ones from ``QAR_TOOLS_FILE``. Either would change the
+    planner schema and prompt under every test that builds through config, depending on whose
+    machine runs the suite. Tests of the tool path set their own env or pass a registry.
+    """
+    monkeypatch.setenv("QAR_STANDARD_TOOLS", "0")
+    monkeypatch.delenv("QAR_TOOLS_FILE", raising=False)
+
+
+@pytest.fixture(autouse=True)
 def no_background_index_survives_a_test():
     """No context-index thread may outlive the test that started it.
 

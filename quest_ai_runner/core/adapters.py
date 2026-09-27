@@ -207,7 +207,7 @@ class Observation:
 @dataclass
 class PlanDecision:
     """The planner's structured next-step decision (one iteration of the loop)."""
-    action: str                                   # "read" | "answer" | "deep" | "confirm" | "clarify"
+    action: str                                   # "read" | "answer" | "deep" | "confirm" | "clarify" | "tool"
     reads: List[Dict[str, Any]] = field(default_factory=list)
     goal: Optional[str] = None
     deep_brief: Optional[str] = None
@@ -246,6 +246,10 @@ class PlanDecision:
     confirm_kind: Optional[str] = None
     confirm_deadline: Optional[str] = None
     confirm_default_on_silence: Optional[str] = None
+    # action="tool": the direct tool calls to run in-process, in order, each
+    # ``{"name": "<tool>", "args": {...}}`` (see core/tools.py). Only ever populated when the
+    # orchestrator was given a tool registry; otherwise "tool" is not an action the planner has.
+    tool_calls: List[Dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
