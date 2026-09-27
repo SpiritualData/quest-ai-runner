@@ -51,7 +51,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase
-from ._walk import effective_skip_dirs, prune_dirnames
+from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames
 
 logger = logging.getLogger(__name__)
 
@@ -267,7 +267,7 @@ class BM25ContentStore(ContextAssemblerBase):
                 if len(paths) >= _MAX_FILES:
                     break
                 fpath = Path(dirpath) / fname
-                if fpath.suffix not in _SOURCE_EXTS:
+                if is_claude_state_file(fname) or fpath.suffix not in _SOURCE_EXTS:
                     continue
                 try:
                     if fpath.stat().st_size > _BOOTSTRAP_MAX_BYTES:
@@ -334,7 +334,7 @@ class BM25ContentStore(ContextAssemblerBase):
             prune_dirnames(dirnames, current=Path(dirpath), base_skip=self._skip_dirs)
             for fname in filenames:
                 fpath = Path(dirpath) / fname
-                if fpath.suffix not in _SOURCE_EXTS:
+                if is_claude_state_file(fname) or fpath.suffix not in _SOURCE_EXTS:
                     continue
                 try:
                     if fpath.stat().st_size > _BOOTSTRAP_MAX_BYTES:

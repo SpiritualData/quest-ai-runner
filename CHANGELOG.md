@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Claude Code's own on-disk state file (`.claude.json` and its backup/tmp/corrupted siblings)
+  was being indexed as corpus content, and re-analysed by an LLM on every single refresh, forever**
+  (`adapters/_walk.py` new `is_claude_state_file`, wired into `adapters/file_context_store.py` and
+  `adapters/bm25_content_store.py`). `_SOURCE_EXTS` includes `.json` with no filename-level
+  exclusion, so any corpus root under a directory Claude Code has ever run in picks up its
+  `.claude.json` -- a large opaque JSON blob (feature-flag caches, OAuth account metadata,
+  project/session history) with no editorial content -- and chunks it into topic cards named after
+  Claude Code's OWN internals ("GrowthBook Feature Flag Cache", "Tengu Feature Flag Namespace")
+  instead of anything in the real corpus. Worse than one bad bootstrap: the file is rewritten on
+  nearly every Claude Code interaction, so every card derived from it looks "stale" on almost every
+  refresh and gets LLM-regenerated again, repeatedly failing. Measured on two real corpora: 284 and
+  2,483 such cards respectively, all regenerating in one burst every refresh cycle -- saturating the
+  shallow-call concurrency budget for minutes and starving concurrent turn-start context assembly
+  into hitting `QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` and dropping all context for the turn. Fix:
+  the filename family is excluded from every file-discovery walk (bootstrap, folder-review sizing
+  and sampling, duplicate-folder detection, BM25 indexing), and `_file_entry_is_dead` now treats an
+  existing card pinning one of these files as dead unconditionally (the file itself never goes
+  missing, so this is the only way an already-created card of this kind is ever cleared -- run
+  `quest-ai-runner bootstrap --prune-only` once to clear a store that already has some). Tests:
+  `tests/test_dead_card_pruning.py::test_a_claude_code_state_file_is_always_dead`,
+  `::test_bootstrap_never_indexes_a_claude_code_state_file`.
+
 ### Changed
 - **The planner hands off work its reads cannot reach instead of searching for it**
   (`core/orchestrator.py` `PLANNER_PROMPT`). A request whose answer lives outside the listed

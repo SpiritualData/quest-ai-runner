@@ -59,7 +59,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase
 from ..core.scope_tags import scope_tags_allow, union_scope_tags
-from ._walk import effective_skip_dirs, prune_dirnames
+from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames
 from .card_content_render import (
     MAX_CARD_CONTENT_ITEMS as _MAX_CARD_CONTENT_ITEMS,
     MAX_CARD_REF_CHARS as _MAX_CARD_REF_CHARS,
@@ -395,7 +395,8 @@ def _dir_file_counts(walk_root: Path, skip_dirs: Set[str]) -> Dict[str, int]:
     counts: Dict[str, int] = {}
     for dirpath, dirnames, filenames in os.walk(walk_root):
         prune_dirnames(dirnames, current=Path(dirpath), base_skip=skip_dirs)
-        n = sum(1 for fn in filenames if Path(fn).suffix.lower() in _SOURCE_EXTS)
+        n = sum(1 for fn in filenames
+                if not is_claude_state_file(fn) and Path(fn).suffix.lower() in _SOURCE_EXTS)
         if n:
             try:
                 counts[Path(dirpath).relative_to(walk_root).as_posix()] = n
@@ -421,7 +422,7 @@ def _sample_filenames(walk_root: Path, folder: str, limit: int = 6) -> List[str]
     try:
         for dirpath, dirnames, filenames in os.walk(base):
             for fn in filenames:
-                if Path(fn).suffix.lower() in _SOURCE_EXTS:
+                if not is_claude_state_file(fn) and Path(fn).suffix.lower() in _SOURCE_EXTS:
                     names.append(fn)
                     if len(names) >= limit:
                         return names
@@ -524,7 +525,7 @@ def _folder_signature(walk_root: Path, folder: str, limit: int = _DUP_SAMPLE_FIL
             dirnames[:] = [d for d in dirnames if d not in _NESTED_VCS_MARKERS
                            and d != "__pycache__"]
             for fn in sorted(filenames):
-                if Path(fn).suffix.lower() not in _SOURCE_EXTS:
+                if is_claude_state_file(fn) or Path(fn).suffix.lower() not in _SOURCE_EXTS:
                     continue
                 fp = Path(dirpath) / fn
                 try:
@@ -2476,7 +2477,7 @@ class FileContextStore(ContextAssemblerBase):
             for dirpath, dirnames, filenames in os.walk(walk_root):
                 prune_dirnames(dirnames, current=Path(dirpath), base_skip=skip_dirs)
                 for fn in filenames:
-                    if Path(fn).suffix.lower() in _SOURCE_EXTS:
+                    if not is_claude_state_file(fn) and Path(fn).suffix.lower() in _SOURCE_EXTS:
                         try:
                             walked_files.add((Path(dirpath) / fn).relative_to(walk_root).as_posix())
                         except ValueError:
@@ -2603,9 +2604,20 @@ class FileContextStore(ContextAssemblerBase):
         for innocent reasons -- an extension outside ``_SOURCE_EXTS``, a path recorded by a run
         rather than discovered by the walk -- and deleting cards for those would throw away real
         learning. So a path counts as dead only when it is positively gone: inside a skipped
-        directory, or absent from disk. Anything that still exists and is still reachable is kept,
-        whatever the walk happened to collect.
+        directory, is one of Claude Code's own on-disk state files (see ``is_claude_state_file``:
+        a card pinning ``.claude.json`` or a sibling isn't just excluded going forward, it is
+        exactly the dead weight this pass exists to remove, and the ONLY way an existing one of
+        these cards is ever cleared, since the file itself never goes missing), or absent from
+        disk. Anything that still exists and is still reachable is kept, whatever the walk
+        happened to collect.
+
+        The Claude-state check runs BEFORE the ``walked`` short-circuit, unlike every other case
+        here: those files are excluded from the walk itself (see the pass-1 walk in
+        ``_bootstrap_inner``), so in practice ``walked`` never contains one -- but a caller that
+        passes an unfiltered set (a future call site, a test) must not accidentally resurrect one.
         """
+        if is_claude_state_file(Path(rel_path).name):
+            return True
         if rel_path in walked:
             return False
         try:
@@ -2903,6 +2915,8 @@ class FileContextStore(ContextAssemblerBase):
                 if max_files is not None and file_count >= max_files:
                     truncated = True
                     break
+                if is_claude_state_file(fname):
+                    continue
                 fpath = Path(dirpath) / fname
                 if fpath.suffix not in _SOURCE_EXTS:
                     continue

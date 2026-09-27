@@ -44,6 +44,50 @@ def test_an_unreadable_path_is_never_assumed_dead():
     assert _dead("\x00bad", root=Path("/nope")) is False
 
 
+def test_a_claude_code_state_file_is_always_dead(tmp_path):
+    # .claude.json (and its backup/tmp/corrupted siblings) is Claude Code's OWN on-disk state --
+    # never corpus content. Unlike a genuinely deleted file, it never goes missing (Claude Code
+    # keeps rewriting it), so "absent from disk" can never catch it; the file existing and even
+    # being in the current walk must not save the card. On a real corpus this reached 2,483 cards
+    # that regenerated (mostly failing) every single refresh, saturating the subprocess budget and
+    # timing out concurrent turn-start context assembly.
+    (tmp_path / ".claude.json").write_text('{"oauthAccount": "..."}')
+    assert _dead(".claude.json", walked=[".claude.json"], root=tmp_path) is True
+    assert _dead("product/.claude.json.backup", walked=["product/.claude.json.backup"],
+                 root=tmp_path) is True
+    assert _dead("product/.claude.json.backup.1775314548497", root=tmp_path) is True
+    assert _dead("product/.claude.json.tmp.523349.16a862451318", root=tmp_path) is True
+    assert _dead("product/.claude.json.bak-20260811-204558", root=tmp_path) is True
+    assert _dead("product/.claude.json.corrupted.1766205104974", root=tmp_path) is True
+    # A file that merely shares the name minus the leading dot (e.g. a schema example someone
+    # committed on purpose), or an unrelated hidden config file, is untouched.
+    assert _dead("docs/claude.json", walked=["docs/claude.json"], root=tmp_path) is False
+    assert _dead(".eslintrc.json", walked=[".eslintrc.json"], root=tmp_path) is False
+
+
+def test_bootstrap_never_indexes_a_claude_code_state_file(tmp_path):
+    # The walk-level half of the fix: even on a brand-new corpus (nothing to prune yet), a
+    # .claude.json alongside real content must never become a card in the first place -- otherwise
+    # the very next refresh finds it "stale" (the file is rewritten on nearly every Claude Code
+    # interaction) and regenerates it forever.
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / ".claude.json").write_text(
+        '{"cachedGrowthBookFeatures": {"tengu_rc_long_turn_nudge": {"value": true}}}')
+    (corpus / "real.md").write_text("# Real project notes\n")
+    cards = tmp_path / "cards"
+
+    store = FileContextStore(cards_dir=str(cards), repo_root=str(corpus), auto_bootstrap=False)
+    store.bootstrap(root=str(corpus), provider=None)
+
+    all_cards = store._repo.load_all() or {}
+    for card in all_cards.values():
+        for fe in card.get("files", []):
+            path = fe.get("path", "") if isinstance(fe, dict) else fe
+            assert not path.startswith(".claude.json"), (
+                f"card {card.get('id')!r} was derived from Claude Code's own state file {path!r}")
+
+
 def test_prune_is_opt_outable(monkeypatch):
     from quest_ai_runner.adapters.file_context_store import _prune_dead_cards
     monkeypatch.delenv("QAR_PRUNE_DEAD_CARDS", raising=False)

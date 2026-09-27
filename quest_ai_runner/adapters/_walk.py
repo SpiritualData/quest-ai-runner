@@ -119,3 +119,26 @@ def prune_dirnames(dirnames: list, *, current: Path, base_skip: Set[str]) -> Non
         and d not in local
         and not d.startswith(".")
     ]
+
+
+def is_claude_state_file(name: str) -> bool:
+    """Whether *name* (a bare filename) is Claude Code's own on-disk state, never corpus content.
+
+    Claude Code writes its per-directory/global config-and-history blob as ``.claude.json`` and
+    leaves several siblings next to it as it rewrites that file: ``.claude.json.backup``,
+    ``.claude.json.backup.<epoch-ms>``, ``.claude.json.tmp.<pid>.<hash>``,
+    ``.claude.json.bak-<date>``, ``.claude.json.corrupted.<epoch-ms>`` — all sharing the
+    ``.claude.json`` prefix, so a prefix match catches the whole family in one test.
+
+    A corpus root under any directory Claude Code has ever run in accumulates one or more of
+    these: large opaque JSON blobs (feature-flag caches, OAuth account metadata, project/session
+    history) with no editorial content. Indexing one is worse than merely wasteful: the file is
+    rewritten on nearly every Claude Code interaction, so a card derived from it looks "stale" on
+    almost every refresh, forever, and gets LLM-regenerated (mostly failing) over and over. On one
+    real corpus this reached 2,483 such cards, regenerated every refresh cycle, saturating the
+    concurrent-subprocess budget for minutes and starving turn-start context assembly into timing
+    out. The giveaway when it happens: topic-card names are Claude Code's OWN internal feature
+    flags ("GrowthBook Feature Flag Cache", "Tengu Feature Flag Namespace") rather than anything in
+    the real corpus.
+    """
+    return name.startswith(".claude.json")
