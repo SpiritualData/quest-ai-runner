@@ -18,13 +18,16 @@ All notable changes to this project are documented here. The format is based on
   does, when the session saved at least one turn. Tests: `tests/test_chat_resume.py`.
 
 ### Fixed
-- **Shift+Enter still sent the message in GNOME Terminal (2026-09-26).** VTE terminals (GNOME
-  Terminal, Ptyxis) send Shift+Enter as the same carriage return as Enter and support neither the
-  kitty keyboard protocol nor modifyOtherKeys, so no byte sequence can separate them. On a local
-  Linux keyboard the prompt now asks the kernel whether Shift is physically down when an Enter
-  arrives (`EVIOCGKEY` on the `/dev/input` keyboards, new `quest_ai_runner/keyboard_state.py`) and
-  inserts a newline if it is. This needs read access to `/dev/input` (the `input` group), and it
-  stays off over SSH. Tests: `tests/test_keyboard_state.py`, `tests/test_prompt_multiline.py`.
+- **Shift+Enter still sent the message in GNOME Terminal, and Alt+Enter did too (2026-09-26).**
+  GNOME Terminal, Ptyxis and the other VTE terminals send Shift+Enter as the same carriage
+  return as Enter and support neither the kitty keyboard protocol nor modifyOtherKeys, so no
+  program reading the terminal can tell them apart. Shift+Enter keeps working in terminals that
+  speak the kitty protocol (kitty, WezTerm, Ghostty, foot, Alacritty). In a VTE terminal the
+  prompt hint now reads "Ctrl+J or Alt+Enter=newline" instead of promising Shift+Enter. Alt+Enter
+  itself was broken everywhere: Textual re-read ESC CR as a bare CR and dropped the Alt, so it
+  submitted. `textual_ui.py` now registers ESC CR as `alt+enter`. A one-commit attempt that read
+  Shift from `/dev/input` was reverted. Tests: `tests/test_prompt_multiline.py`, which now feeds
+  raw terminal bytes through Textual's own parser.
 - **The terminal prompt hid wrapped rows, and Shift+Enter sent the message (2026-09-26).**
   `PromptTextArea` sized itself from hard newlines only, so a long message that soft-wrapped kept
   a one-row box showing just its last row. It now sizes from the wrapped row count (up to

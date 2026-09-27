@@ -195,29 +195,32 @@ async def test_backslash_not_before_cursor_does_not_turn_enter_into_newline():
         assert app.submitted == ["a\\b"]
 
 
-class FakeShift:
-    def __init__(self, held: bool) -> None:
-        self.held = held
+def parsed_keys(data: str) -> list[str]:
+    """Run raw terminal bytes through Textual's real input parser, as the Linux driver does."""
+    from textual._xterm_parser import XTermParser
 
-    def shift_held(self) -> bool:
-        return self.held
+    parser = XTermParser()
+    tokens = list(parser.feed(data)) + list(parser.feed(""))
+    return [token.key for token in tokens if isinstance(token, events.Key)]
 
 
-@pytest.mark.asyncio
-async def test_enter_with_shift_physically_held_is_a_newline():
-    """GNOME Terminal sends Shift+Enter as a plain CR; the keyboard device says Shift is down."""
-    app = PromptHarness()
-    async with app.run_test(size=(60, 24)) as pilot:
-        prompt = app.query_one("#prompt", PromptTextArea)
-        prompt.shift_probe = FakeShift(True)
-        prompt.focus()
-        await typed(pilot, "first")
-        await pilot.press("enter")
-        prompt.shift_probe = FakeShift(False)
-        await typed(pilot, "second")
-        assert prompt.text == "first\nsecond"
-        assert app.submitted == []
+@pytest.mark.parametrize(
+    ("data", "key"),
+    [
+        ("\x1b[13;2u", "shift+enter"),  # Shift+Enter under the kitty keyboard protocol
+        ("\x1b\r", "alt+enter"),  # Alt+Enter; Textual alone parsed this as plain "enter"
+        ("\n", "ctrl+j"),
+        ("\r", "enter"),
+    ],
+)
+def test_terminal_bytes_reach_the_prompt_as_the_right_key(data, key):
+    import quest_ai_runner.textual_ui  # noqa: F401  registers the Alt+Enter sequence
 
-        await pilot.press("enter")
-        await pilot.pause()
-        assert app.submitted == ["first\nsecond"]
+    assert parsed_keys(data) == [key]
+
+
+def test_newline_hint_does_not_promise_shift_enter_in_vte_terminals():
+    from quest_ai_runner.textual_ui import newline_hint
+
+    assert newline_hint({"VTE_VERSION": "8000"}) == "Ctrl+J or Alt+Enter=newline"
+    assert newline_hint({}) == "Shift+Enter or Ctrl+J=newline"

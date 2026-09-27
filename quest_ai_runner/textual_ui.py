@@ -23,6 +23,7 @@ renderer to fall back to.
 """
 from __future__ import annotations
 
+import enum
 import os
 import shutil
 import threading
@@ -31,6 +32,7 @@ from collections import OrderedDict
 from typing import Callable, Dict, List, Optional, TYPE_CHECKING
 
 from textual import work
+from textual._ansi_sequences import ANSI_SEQUENCES_KEYS
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll  # Horizontal kept for layout elsewhere if needed
@@ -46,7 +48,6 @@ from rich.style import Style as RichStyle
 from rich.text import Text
 import logging
 
-from .keyboard_state import PhysicalShiftProbe, shared_probe
 from .adapters.retry_utils import format_provider_error
 from .interactive_session import (
     InteractiveSession,
@@ -68,6 +69,24 @@ if TYPE_CHECKING:
 # Prompt placeholder shown while a turn is waiting on the user's reply to a decision question
 # raised mid-turn (EVENT_DECISION) — makes it obvious the AI is paused for input, not just idle.
 _AWAITING_DECISION_PLACEHOLDER = "Reply to the question above to continue…"
+
+
+def newline_hint(environ=os.environ) -> str:
+    """The newline keys to advertise in this terminal.
+
+    VTE terminals (GNOME Terminal, Ptyxis, Tilix, Terminator; all set ``VTE_VERSION``) send
+    Shift+Enter as the same carriage return as Enter and speak neither the kitty keyboard
+    protocol nor modifyOtherKeys, so Shift+Enter cannot reach the prompt there. Advertise only
+    the keys that do.
+    """
+    if environ.get("VTE_VERSION"):
+        return "Ctrl+J or Alt+Enter=newline"
+    return "Shift+Enter or Ctrl+J=newline"
+
+
+_READY_PLACEHOLDER = (
+    f"Ask anything…   Enter=send, {newline_hint()}   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)"
+)
 
 
 # ── RichLog-backed console adapter ─────────────────────────────────────────────
@@ -768,15 +787,24 @@ class TranscriptLog(RichLog):
 
 # ── Multi-line prompt input ────────────────────────────────────────────────────
 
+# Textual 8 parses ESC CR by re-reading the CR on its own, and CR maps to plain "enter", so the
+# Alt is lost and Alt+Enter submitted. Mapping the whole sequence makes the parser report it as
+# "alt+enter" before that fallback runs.
+_ALT_ENTER_SEQUENCE = "\x1b\r"
+_QarKeys = enum.Enum("_QarKeys", {"AltEnter": "alt+enter"})
+ANSI_SEQUENCES_KEYS.setdefault(_ALT_ENTER_SEQUENCE, (_QarKeys.AltEnter,))
+
+
 class PromptTextArea(TextArea):
     """Auto-expanding multi-line input. Enter submits; Shift+Enter adds a newline.
 
     Most terminals send the same carriage return for Enter and Shift+Enter, so Shift+Enter is
-    only seen as such where the terminal speaks the kitty keyboard protocol. On a local Linux
-    keyboard (GNOME Terminal and the other VTE terminals included) an Enter that arrives while
-    Shift is physically held is read from the keyboard device instead; see ``keyboard_state``.
-    A newline also comes from any of the sequences a terminal CAN tell apart from Enter:
-      - Alt+Enter (ESC CR), which is also what Claude Code's /terminal-setup maps Shift+Enter to;
+    only seen as such where the terminal speaks the kitty keyboard protocol (kitty, WezTerm,
+    Ghostty, foot, Alacritty, iTerm2 with CSI u on). GNOME Terminal and the other VTE terminals
+    do not, and nothing on the terminal's input stream separates the two there. Everywhere a
+    newline also comes from one of the sequences a terminal CAN tell apart from Enter:
+      - Alt+Enter (ESC CR), which is also what Claude Code's /terminal-setup maps Shift+Enter to.
+        Textual drops the Alt from ESC CR, so ``_ALT_ENTER_SEQUENCE`` registers it;
       - Ctrl+J (a bare LF);
       - a backslash typed right before Enter, the Claude Code convention. VS Code's
         /terminal-setup keybinding sends Shift+Enter as backslash, CR, LF, so the LF that
@@ -796,7 +824,6 @@ class PromptTextArea(TextArea):
     PAIRED_LF_WINDOW_SECONDS = 0.05
 
     backslash_newline_at: float = 0.0
-    shift_probe: PhysicalShiftProbe = shared_probe()
 
     def on_key(self, event) -> None:
         key = event.key
@@ -806,9 +833,6 @@ class PromptTextArea(TextArea):
             if self.consume_backslash_before_cursor():
                 self.insert("\n")
                 self.backslash_newline_at = event.time
-                return
-            if self.shift_probe.shift_held():
-                self.insert("\n")
                 return
             self.post_message(self.Submitted(self, self.text))
         elif key in ("shift+enter", "alt+enter", "ctrl+j"):
@@ -1054,7 +1078,7 @@ class QuestAITerminal(App):
                 tab_behavior="focus",
                 show_line_numbers=False,
                 compact=True,
-                placeholder="Ask anything…   Enter=send, Shift+Enter or Ctrl+J=newline   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)",
+                placeholder=_READY_PLACEHOLDER,
             )
         yield Footer()
 
@@ -1941,7 +1965,7 @@ class QuestAITerminal(App):
         if self._awaiting_decision:
             inp.placeholder = _AWAITING_DECISION_PLACEHOLDER
         else:
-            inp.placeholder = "Ask anything…   Enter=send, Shift+Enter or Ctrl+J=newline   (/help, Esc=cancel, Alt+D=expand, Tab=cycle)"
+            inp.placeholder = _READY_PLACEHOLDER
         inp.focus()
 
         # Auto-execute a planned-but-unexecuted deep turn.
