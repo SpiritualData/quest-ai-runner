@@ -28,6 +28,17 @@ All notable changes to this project are documented here. The format is based on
   `quest-ai-runner bootstrap --prune-only` once to clear a store that already has some). Tests:
   `tests/test_dead_card_pruning.py::test_a_claude_code_state_file_is_always_dead`,
   `::test_bootstrap_never_indexes_a_claude_code_state_file`.
+- **`DEFAULT_FALLBACK_TOP["best"]` (`core/model_registry.py`) was pinned to a stale Opus release
+  id** (`claude-opus-5`), so any deployment resolving the "best" tier with no live model list and
+  no operator override (a fresh `AnthropicProvider` before its first `list_models()`, or a
+  live-list outage) got an out-of-date Opus id instead of the current strongest Claude release.
+  Bumped to `claude-opus-5-5`. Confirmed this is the correct fix for the "Escalation unavailable
+  ... (resolved: ['claude-opus'])" warning some deep runs hit at the CLI-only Opus ceiling: Opus is
+  the library's own strongest tier, so that warning is a real ceiling, not a bug, and the fix is
+  keeping the "best" pin current -- NOT auto-escalating to a different family (e.g. Fable) as if it
+  were a higher tier, which an earlier version of this fix wrongly did and has been reverted. Test:
+  `test_fallback_deep_ladder_warns_at_the_opus_ceiling_and_does_not_invent_fable` in
+  `tests/test_deep_escalation_ladder.py`.
 
 ### Changed
 - **The planner hands off work its reads cannot reach instead of searching for it**

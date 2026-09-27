@@ -129,9 +129,10 @@ DEFAULT_FALLBACK_TOP = {
     "fast": "gemini-3.1-flash-lite",
     "balanced": "gemini-3.1-flash-lite",
     "quality": "gemini-3.5-flash",
-    "best": "claude-opus-5",  # last-known-good pin, bumped as newer Opus releases confirm (2026-09-22); the
-    # live list_models() path above is what actually keeps pace release-to-release, this only
-    # covers a live-list outage
+    "best": "claude-opus-5-5",  # last-known-good pin, bumped as newer Opus releases confirm (2026-09-26,
+    # Opus 5.5 -- the current strongest Claude family; NOT Fable, which is a different family, not a
+    # stronger tier); the live list_models() path above is what actually keeps pace release-to-release,
+    # this only covers a live-list outage
 }
 
 

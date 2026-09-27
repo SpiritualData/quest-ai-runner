@@ -146,6 +146,28 @@ def test_fallback_deep_ladder_dedupes_rungs_by_what_the_worker_would_invoke():
     assert ladder == ["claude-sonnet", "claude-opus-4-8"]
 
 
+def test_fallback_deep_ladder_warns_at_the_opus_ceiling_and_does_not_invent_fable(caplog):
+    """A CLI-only deployment whose fallback is ALREADY the "claude-opus" bucket (e.g. a task's own
+    tier request resolved straight to "best"/"opus") has genuinely nothing to escalate to: Opus is
+    the library's own strongest tier (``DEFAULT_FALLBACK_TOP["best"]``), so "quality" and "best"
+    both resolve back onto the same "opus" CLI invocation. This is a real ceiling, not a bug -- the
+    fix is NOT to invent a further family (e.g. Fable) as an automatic "stronger than Opus" rung,
+    since Fable is a different family, not a higher tier. The warning naming
+    QAR_DEEP_MODELS/QAR_MODEL_BEST is the correct, actionable outcome (2026-09-26)."""
+    from quest_ai_runner.adapters.claude_cli_provider import CLI_RUNNABLE_MODELS
+
+    provider = StubProvider(decisions=[], models=CLI_RUNNABLE_MODELS)
+    orch = _orch(provider, config=OrchestratorConfig())
+    with caplog.at_level(logging.INFO, logger=ORCH_LOGGER):
+        ladder = orch._deep_models(None, None, "claude-opus")
+
+    assert ladder == ["claude-opus"]
+    assert not any("fable" in (m or "") for m in ladder)
+    warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
+    assert warnings, "expected a WARNING naming why escalation is unavailable"
+    assert "Escalation unavailable" in warnings[0].getMessage()
+
+
 def test_deep_models_pinned_single_model_does_not_warn(caplog):
     # A PIN (explicit request or guidance pref) is an intentional single-model choice, not an
     # escalation failure -- must not trigger the "escalation unavailable" warning. Normalized to

@@ -5399,6 +5399,17 @@ class Orchestrator:
         ACTUALLY invoke (``cli_safe_model``: ``claude-sonnet``, ``sonnet`` and ``claude-sonnet-4-6``
         are one rung, not three), so this adds a step only when it is a genuinely different model.
 
+        Opus is the library's own strongest Claude family (``DEFAULT_FALLBACK_TOP["best"]`` pins
+        the current Opus release; see ``core/model_registry.py``), so a CLI-only deployment whose
+        fallback already sits at the ``claude-opus`` bucket has genuinely nothing further to
+        escalate to via auto-resolution -- "quality" and "best" both resolve back onto the same
+        "opus" CLI invocation, and the tier loop above correctly finds nothing new. That is a real
+        ceiling, not a bug: it surfaces as the "Escalation unavailable" WARNING (``log_deep_ladder``
+        below), same as a deployment that pins a single explicit model on purpose. Do NOT paper
+        over it by inventing a further family (e.g. Fable) as an automatic "stronger than Opus"
+        rung -- Opus is the library's best tier, and a consumer that genuinely wants a different
+        family in the ladder says so explicitly via ``QAR_DEEP_MODELS``/``QAR_MODEL_BEST``.
+
         Never raises; always returns a non-empty list (falls back to ``[fallback]`` alone, even if
         that is not Claude-runnable, so a caller always has something to try)."""
         from .goal_runner import _is_claude_model, cli_safe_model  # worker-runnable check + translation
