@@ -397,3 +397,28 @@ def test_the_guard_can_be_switched_off_and_then_the_reply_is_untouched():
     res = orch.run("where?")
     assert "/settings/hub" in res.text
     assert res.link_checks == []
+
+
+def test_http_probe_asks_for_html_like_the_browser_that_will_open_the_link(monkeypatch):
+    """A proxied single-page app serves its screens only to a request that accepts HTML."""
+    import urllib.request
+    from quest_ai_runner.core import link_guard
+
+    seen = {}
+
+    class Resp:
+        status = 200
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake_urlopen(req, timeout):
+        seen["accept"] = req.get_header("Accept")
+        return Resp()
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    assert link_guard.http_probe("https://example.org/reports?x=1", 1.0) == (200, "HEAD")
+    assert seen["accept"].startswith("text/html")

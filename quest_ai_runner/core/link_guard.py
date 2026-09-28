@@ -508,6 +508,9 @@ def strip_link(label: str, v: LinkVerdict) -> str:
 # The network seam
 # ---------------------------------------------------------------------------------------------
 
+BROWSER_ACCEPT = "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+
+
 def http_probe(url: str, timeout: float) -> Tuple[Optional[int], str]:
     """HEAD a URL, falling back to GET, and report ``(status, detail)``. Never raises.
 
@@ -515,9 +518,12 @@ def http_probe(url: str, timeout: float) -> Tuple[Optional[int], str]:
     description the caller treats as unsettled.
     """
     for method in ("HEAD", "GET"):
+        # Ask the way a browser does: the reader will click this link, and a single-page app
+        # behind a proxy often serves its screens only to a request that accepts HTML (to
+        # anything else the same path is the API's 404), so "*/*" struck real pages.
         req = urllib.request.Request(url, method=method, headers={
             "User-Agent": "quest-ai-runner link guard",
-            "Accept": "*/*",
+            "Accept": BROWSER_ACCEPT,
         })
         try:
             with urllib.request.urlopen(req, timeout=timeout) as resp:
