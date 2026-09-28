@@ -28,6 +28,14 @@ class InputInbox(Protocol):
     def drain(self, conversation_id: str) -> List[str]:
         """Return and CLEAR the pending messages for ``conversation_id`` (orchestrator side)."""
 
+    def peek(self, conversation_id: str) -> List[str]:
+        """Return the pending messages for ``conversation_id`` WITHOUT clearing them.
+
+        For an interface that wants to show "N messages queued" while a run is still in
+        flight (a busy indicator, a placeholder count) without competing with the
+        orchestrator's own ``drain`` for the same messages.
+        """
+
 
 class InMemoryInbox:
     """Thread-safe, in-process ``InputInbox``. The default wired by ``build_orchestrator``.
@@ -52,3 +60,9 @@ class InMemoryInbox:
             return []
         with self._lock:
             return self._by_conv.pop(str(conversation_id), [])
+
+    def peek(self, conversation_id: str) -> List[str]:
+        if not conversation_id:
+            return []
+        with self._lock:
+            return list(self._by_conv.get(str(conversation_id), []))

@@ -7,6 +7,19 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Terminal chat: a message queued mid-turn is never lost, and is never played back one at a
+  time.** A message typed while the AI works was shown in the transcript as "queued", but a turn
+  with no internal retry/goal loop never drained it (`InputInbox.drain` is only called from inside
+  the orchestrator's own mid-run loop points), so it sat in the inbox forever, silently ignored
+  once the turn finished. `QuestAITerminal._finish_turn` (`textual_ui.py`) now drains this
+  session's inbox itself once a turn is fully done (normal completion, or an Escape cancel, but
+  never after an error) and, when anything is left, joins every queued message into ONE new turn
+  (`"\n\n".join`) and starts it immediately, instead of leaving it stuck or replaying messages one
+  by one. Escape reaches the exact same path: cancelling stops the current run and the interrupted
+  turn's own `_finish_turn` flushes the queue right away. `InputInbox`/`InMemoryInbox`
+  (`core/inbox.py`) gained a non-destructive `peek`, so an interface can show a live "N queued"
+  count without competing with the orchestrator's own `drain` for the same messages; the terminal's
+  activity strip and prompt placeholder both show the count while a turn is busy.
 - **Direct tools: act in one planner step, no deep run** (`core/tools.py`, `tools/__main__.py`,
   [docs/tools.md](docs/tools.md)). "Email me today's plan" used to go through a deep run and take
   minutes. The planner now has a fifth action, `"tool"`, with `tool_calls`; the loop runs each call

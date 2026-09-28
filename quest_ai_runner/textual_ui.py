@@ -71,6 +71,16 @@ if TYPE_CHECKING:
 # raised mid-turn (EVENT_DECISION) — makes it obvious the AI is paused for input, not just idle.
 _AWAITING_DECISION_PLACEHOLDER = "Reply to the question above to continue…"
 
+# Prompt placeholder shown while a turn is running — makes it explicit that typing now is safe
+# and queues, rather than looking like the input is simply dead until the AI finishes.
+_BUSY_PLACEHOLDER = "Type to queue a message for the next step…"
+
+
+def _busy_placeholder(queued: int) -> str:
+    if not queued:
+        return _BUSY_PLACEHOLDER
+    return f"{_BUSY_PLACEHOLDER} ({queued} queued)"
+
 
 def newline_hint(environ=os.environ) -> str:
     """The newline keys to advertise in this terminal.
@@ -197,6 +207,10 @@ class ActivityBar(Static):
         self._frame = 0
         self._timer = None
         self.display = False
+        # Messages the user typed and queued while this turn runs. Tracked separately from
+        # ``_text`` (which every status update below overwrites) so the count survives the
+        # whole turn instead of vanishing the next time the AI's own status line changes.
+        self._queued = 0
 
     def on_mount(self) -> None:
         self._timer = self.set_interval(self._INTERVAL, self._tick)
@@ -209,6 +223,10 @@ class ActivityBar(Static):
         self._text = text
         self.refresh()
 
+    def set_queued(self, n: int) -> None:
+        self._queued = n
+        self.refresh()
+
     def render(self):
         t = Text()
         for i in range(3):
@@ -218,6 +236,12 @@ class ActivityBar(Static):
             t.append("●", style=style)
         t.append("  ")
         t.append(self._text, style="dim")
+        if self._queued:
+            t.append("  ")
+            t.append(
+                f"· {self._queued} queued message{'s' if self._queued != 1 else ''} — sends next",
+                style="bold yellow",
+            )
         return t
 
 
@@ -1315,11 +1339,22 @@ class QuestAITerminal(App):
             return
 
         if self._turn_active:
-            # Queue the message for the orchestrator to drain between goal-loop steps.
+            # Queue the message. The orchestrator may drain and fold it into THIS turn's own
+            # goal loop (a long deep run mid-step); whatever it leaves untouched is picked up
+            # and acted on the moment this turn ends (see _finish_turn) — a queued message is
+            # never simply dropped once the AI stops, even outside a loop that drains it itself.
             inbox = getattr(self.sess._orch, "input_inbox", None)
-            if inbox is not None:
-                inbox.push(self._session_id, line)
-            self._tlog.write(Text(f"  ↑ queued: {line}", style="dim"))
+            if inbox is None:
+                self._tlog.write(Text(
+                    f"  ↑ {line}  [not queued: no input inbox wired for this session]",
+                    style="dim red",
+                ))
+                return
+            inbox.push(self._session_id, line)
+            count = len(inbox.peek(self._session_id))
+            self._tlog.write(Text(f"  ↑ queued ({count}): {line}", style="dim"))
+            self._activity.set_queued(count)
+            self.query_one("#prompt", PromptTextArea).placeholder = _busy_placeholder(count)
             return
 
         self._begin_turn(line, echo=True)
@@ -1582,10 +1617,13 @@ class QuestAITerminal(App):
             self._tlog.write(Text(f"↻ Pass {self._auto_pass}: auto-executing planned work…", style="bold yellow"))
             self._tlog.write(Text(""))
 
-        # Loading strip on; keep input enabled so mid-turn messages can be queued.
+        # Loading strip on; keep input enabled so mid-turn messages can be queued. Reset the
+        # queued-count indicator: any messages left over from a previous turn were already
+        # folded into THIS turn's starting text (see _finish_turn), so none are outstanding.
         self._activity.set_status("Thinking…")
+        self._activity.set_queued(0)
         self._activity.display = True
-        self.query_one("#prompt", PromptTextArea).placeholder = "Type to queue a message for the next step…"
+        self.query_one("#prompt", PromptTextArea).placeholder = _busy_placeholder(0)
 
         self._run_stream(user_text)
 
@@ -1826,6 +1864,22 @@ class QuestAITerminal(App):
             self.query_one("#prompt", PromptTextArea).placeholder = _AWAITING_DECISION_PLACEHOLDER
         # done: terminal signal only.
 
+    def _drain_queued_inputs(self) -> List[str]:
+        """Pull (and clear) whatever this session's messages are still sitting in the inbox.
+
+        Called once a turn is fully done (normal finish OR an Escape cancel). Anything the
+        orchestrator's own goal loop already drained mid-run (a long deep run folding steering
+        into its next attempt) is gone from the inbox by then, so this only ever returns messages
+        that turn never got a chance to act on -- the case that used to leave a message marked
+        "queued" in the transcript forever with nothing done about it.
+        """
+        if self.sess is None:
+            return []
+        inbox = getattr(self.sess._orch, "input_inbox", None)
+        if inbox is None:
+            return []
+        return [m for m in inbox.drain(self._session_id) if m and m.strip()]
+
     def _finish_turn(self, user_text: str, final, elapsed: float,
                      cancelled: bool, error: Optional[Exception]) -> None:
         """Wrap up a turn on the UI thread: answer, footer, bookkeeping."""
@@ -1956,6 +2010,7 @@ class QuestAITerminal(App):
         log.write(Text(""))
 
         self._turn_active = False
+        self._activity.set_queued(0)
         inp = self.query_one("#prompt", PromptTextArea)
         # A decision question leaves the prompt awaiting the user's reply; don't clobber that
         # placeholder with the normal one until they actually answer it.
@@ -1964,6 +2019,26 @@ class QuestAITerminal(App):
         else:
             inp.placeholder = _READY_PLACEHOLDER
         inp.focus()
+
+        # Anything the user typed and queued while this turn ran, and that the orchestrator's own
+        # goal loop never got a chance to drain and act on mid-run, becomes the next turn NOW --
+        # never left sitting in the transcript marked "queued" with nothing done about it. An
+        # Escape cancel (``cancelled=True``) reaches this exact path immediately, since the run
+        # it interrupted stops here rather than running to its own natural end. Multiple queued
+        # messages are sent as ONE turn, combined in the order they were typed, instead of being
+        # replayed one at a time.
+        if error is None:
+            queued = self._drain_queued_inputs()
+            if queued:
+                combined = "\n\n".join(queued)
+                log.write(Text(
+                    f"  ↑ Sending {len(queued)} queued message"
+                    f"{'s' if len(queued) != 1 else ''}…",
+                    style="bold yellow",
+                ))
+                log.write(Text(""))
+                self._begin_turn(combined, echo=True, auto=False)
+                return
 
         # Auto-execute a planned-but-unexecuted deep turn.
         if not cancelled and error is None and final is not None:
