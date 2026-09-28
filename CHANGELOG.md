@@ -7,15 +7,20 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
-- **The terminal UI names which LLM model a deep run actually executed with, and status labels
-  read as proper sentences.** `DeepResult` gained a `model` field (`core/adapters.py`), set by the
+- **Deep-run completions name which LLM model actually executed them, in both the terminal and any
+  chat/task-detail consumer.** `DeepResult` gained a `model` field (`core/adapters.py`), set by the
   goal loop (`core/orchestrator.py`) from the ladder rung it dispatched each attempt to, and carried
-  on the run's completion `EVENT_MILESTONE`. The Textual terminal (`textual_ui.py`,
-  `interactive_session.py::_DeepRunTracker`) reads it and appends it to the completion line, e.g.
-  `✓ Deep task complete · 12s · claude-sonnet-4-6`. Also capitalized "Result" (was "result"), "Deep
-  task complete"/"Deep task ended with an error" (was lowercase "deep task ..."), and the "Gathering
-  context" status line, for a consistently sentence-cased terminal. Tests:
-  `tests/test_deep_output_ui.py`.
+  on the run's completion `EVENT_MILESTONE`. Two consumers of this:
+  - The Textual terminal (`textual_ui.py`, `interactive_session.py::_DeepRunTracker`) appends it to
+    the completion line, e.g. `✓ Deep task complete · 12s · claude-sonnet-4-6`.
+  - `runner/executor.py`'s `TaskExecutor._report` (the generic queued-task path any consumer's chat
+    UI reads from) appends a `_model_used_note` naming every distinct model a fanned-out deep task
+    ran with, e.g. `(Completed with model: claude-sonnet-4-6.)`, onto the same text posted to the
+    conversation and stored as the task's result. No consumer-side (quest-backend/quest-frontend)
+    change needed: this travels inside the text every terminal report already carries.
+  Also capitalized "Result" (was "result"), "Deep task complete"/"Deep task ended with an error"
+  (was lowercase "deep task ..."), and the "Gathering context" status line, for a consistently
+  sentence-cased terminal. Tests: `tests/test_deep_output_ui.py`, `tests/test_runner.py`.
 - **Deep runs pick their starting model by difficulty** (`core/deep_model_selection.py`). When no
   model is pinned, the planner rates the deep work `simple` / `normal` / `hard` on the planning call
   it already makes (new `deep_difficulty` + `deep_difficulty_reason` fields, zero extra LLM calls)

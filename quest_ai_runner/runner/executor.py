@@ -439,6 +439,24 @@ class ExecutionOutcome:
     decision_id: Optional[str] = None
 
 
+def _model_used_note(deep: List[Any]) -> str:
+    """A trailing note naming which LLM model(s) executed this deep work, or "" when unknown.
+
+    ``deep`` is a completed run's list of ``DeepResult``s (more than one on a fan-out); each may
+    carry ``.model`` (the ladder rung the goal loop actually dispatched it to, see
+    ``core/orchestrator.py``). Reports every DISTINCT model, not just the first, so a run that
+    escalated mid-goal (or fanned out across subtasks starting at different rungs) is described
+    honestly. Consumers (a chat UI, a task detail view) get this for free since it travels inside
+    the same text every terminal report already carries -- no extra field or API surface needed.
+    """
+    models = sorted({(getattr(d, "model", None) or "").strip() for d in deep
+                     if (getattr(d, "model", None) or "").strip()})
+    if not models:
+        return ""
+    label = "model" if len(models) == 1 else "models"
+    return f"\n\n(Completed with {label}: {', '.join(models)}.)"
+
+
 class _TaskProgressSink:
     """Routes orchestrator events to the task's live progress stream.
 
@@ -1424,6 +1442,7 @@ class TaskExecutor:
             # makes a transcript tail read as a report is free to drop it.
             done_report = self._with_context_receipt(done_report, request_text, run_output=summary,
                                                       autopilot_composed=autopilot_composed)
+            done_report += _model_used_note(deep)
             self._report_progress(task_id, "done", text="Done.", output=done_report)
             # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
             self._post_conv(conv_id, done_report, kind="done", task_id=task_id,

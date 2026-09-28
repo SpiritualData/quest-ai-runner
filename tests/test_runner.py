@@ -393,7 +393,11 @@ def test_executor_posts_start_and_verified_result_into_conversation():
     kinds = [k for (_c, _t, k) in client.posts]
     assert {c for (c, _t, _k) in client.posts} == {"qaconv_abc"}
     assert kinds == ["started", "done"]
-    assert any(t == "PLAN" and k == "done" for (_c, t, k) in client.posts)
+    # The report carries the raw output plus a trailing note on which model ran it (added below,
+    # since ``StubDeepRunner`` doesn't set ``DeepResult.model`` itself; the goal loop fills it in
+    # from the resolved ladder rung).
+    assert any(t.startswith("PLAN") and "Completed with model:" in t and k == "done"
+              for (_c, t, k) in client.posts)
     # The milestone was not lost: it is on the task's own progress stream.
     assert any(kind == "exec" for (_tid, kind, *_rest) in client.progress)
 
