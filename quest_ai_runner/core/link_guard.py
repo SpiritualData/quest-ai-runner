@@ -43,6 +43,7 @@ against anything and therefore come back ``unknown``.
 """
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import logging
 import re
@@ -100,6 +101,15 @@ class LinkPolicy:
     max_urls: int = 25
     # How long a cached verdict stays good, in seconds (default 1 hour).
     cache_ttl: float = 3600.0
+    # How many distinct URLs ``sanitize()`` checks at once. A reply on the answer path can carry up
+    # to ``max_urls`` links, each worth up to ``passes`` x ``timeout`` seconds if checked one at a
+    # time; checking them concurrently is what keeps a reply full of slow links from holding up the
+    # whole turn.
+    concurrency: int = 8
+    # Wall-clock budget, in seconds, for one whole ``sanitize()`` call (every pass, every link
+    # together). Whatever has not settled when it elapses is treated as ``unknown`` (stripped, same
+    # as any other unverified link) rather than making the reply wait on it.
+    overall_timeout: float = 8.0
 
     @staticmethod
     def from_dict(data: Dict[str, Any], *, base_dir: Optional[Path] = None) -> "LinkPolicy":
@@ -148,6 +158,8 @@ class LinkPolicy:
             passes=max(1, int(data.get("passes", 3))),
             max_urls=max(1, int(data.get("max_urls", 25))),
             cache_ttl=float(data.get("cache_ttl", 3600.0)),
+            concurrency=max(1, int(data.get("concurrency", 8))),
+            overall_timeout=float(data.get("overall_timeout", 8.0)),
         )
 
     @staticmethod
@@ -274,6 +286,8 @@ class LinkGuard:
             return LinkVerdict(url, OK, "in-app scheme", replaced)
         if scheme == "mailto":
             return LinkVerdict(url, OK, "mail address", replaced)
+        if scheme == "tel":
+            return LinkVerdict(url, OK, "phone number", replaced)
 
         # An internal path, either relative ("/profile/ai-tasks") or absolute on the app's own
         # origin. Judged against the route table, never fetched.
@@ -349,33 +363,86 @@ class LinkGuard:
     # -- rewriting a whole reply ---------------------------------------------------------------
 
     def sanitize(self, text: str) -> Tuple[str, List[LinkVerdict]]:
-        """Return ``(safe_text, verdicts)``. Repeats until a scan finds nothing left to strip."""
+        """Return ``(safe_text, verdicts)``. Repeats until a scan finds nothing left to strip.
+
+        The whole call is held to ``policy.overall_timeout``: a reply full of slow links must not
+        hold up a turn for minutes, so whatever is still unresolved when the budget runs out is
+        treated as ``unknown``, same as any other link this guard could not stand behind.
+        """
         if not text or not text.strip():
             return text, []
         verdicts: List[LinkVerdict] = []
         seen: Dict[str, LinkVerdict] = {}
         current = text
+        deadline = time.time() + self.policy.overall_timeout
         for _round in range(self.policy.passes):
-            current, changed = self.sanitize_once(current, seen, verdicts)
+            current, changed = self.sanitize_once(current, seen, verdicts, deadline)
             if not changed:
                 break
         return current, verdicts
 
+    def _judge_pending(self, urls: List[str], seen: Dict[str, LinkVerdict],
+                        verdicts: List[LinkVerdict], deadline: float) -> None:
+        """Judge every URL in ``urls`` (none yet in ``seen``), concurrently, within ``deadline``.
+
+        Checking links one at a time is what let a reply full of slow hosts stall a turn: up to
+        ``max_urls`` links, each up to ``passes`` x ``timeout`` seconds, back to back. A thread pool
+        runs them side by side instead, and anything still outstanding when the deadline passes is
+        recorded ``unknown`` without waiting on it further.
+        """
+        remaining = deadline - time.time()
+        if remaining > 0 and urls:
+            workers = min(len(urls), max(1, self.policy.concurrency))
+            pool = concurrent.futures.ThreadPoolExecutor(max_workers=workers)
+            futures = {pool.submit(self.verify, url): url for url in urls}
+            try:
+                for fut in concurrent.futures.as_completed(futures, timeout=remaining):
+                    url = futures[fut]
+                    try:
+                        v = fut.result()
+                    except Exception as e:  # noqa: BLE001 -- one bad check must not sink the reply
+                        v = LinkVerdict(url, UNKNOWN, f"{type(e).__name__}: {e}")
+                    seen[url] = v
+                    verdicts.append(v)
+            except concurrent.futures.TimeoutError:
+                pass
+            finally:
+                # Never block the reply on a straggler; threads still running finish on their own.
+                pool.shutdown(wait=False)
+        for url in urls:
+            if url not in seen:
+                v = LinkVerdict(url, UNKNOWN, "time limit reached before this link could be checked")
+                seen[url] = v
+                verdicts.append(v)
+
     def sanitize_once(self, text: str, seen: Dict[str, LinkVerdict],
-                      verdicts: List[LinkVerdict]) -> Tuple[str, bool]:
+                      verdicts: List[LinkVerdict], deadline: float) -> Tuple[str, bool]:
         """One scan-and-rewrite pass. ``changed`` says whether anything was stripped or rewritten."""
         changed = False
-        checked = 0
+
+        # Phase 1: find every not-yet-judged URL this pass would touch, capped at max_urls, and
+        # judge them all together before rewriting anything. A second scan is cheap; a blocking
+        # network call inside the substitution callback is what made link checks serialize.
+        pending: List[str] = []
+
+        def collect(m: re.Match) -> str:
+            target = m.group(2) or m.group(3)
+            bare = m.group(4)
+            if bare is not None:
+                target = trim_url(bare)
+            if target and target not in seen and target not in pending \
+                    and len(pending) < self.policy.max_urls:
+                pending.append(target)
+            return m.group(0)
+
+        SCAN_RE.sub(collect, text)
+        if pending:
+            self._judge_pending(pending, seen, verdicts, deadline)
 
         def judge(url: str) -> LinkVerdict:
-            nonlocal checked
             if url in seen:
                 return seen[url]
-            checked += 1
-            if checked > self.policy.max_urls:
-                v = LinkVerdict(url, UNKNOWN, "too many links in one reply to check")
-            else:
-                v = self.verify(url)
+            v = LinkVerdict(url, UNKNOWN, "too many links in one reply to check")
             seen[url] = v
             verdicts.append(v)
             return v

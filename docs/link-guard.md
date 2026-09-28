@@ -24,9 +24,9 @@ sanitized text. It applies to both terminal kinds that carry prose (`answer` and
 
 A link is `ok` when it is an external URL that answered (2xx/3xx, or 401/403, which prove the
 endpoint is there and is merely gated), a host on the configured trusted list, an in-app
-pseudo-scheme the consumer declared, or an internal path that matches the host app's real route
-table. It is `dead` on 404/410, a host that does not resolve, a refused connection, or an internal
-path with no matching route.
+pseudo-scheme the consumer declared, a `mailto:` or `tel:` address (never fetched, kept as-is), or
+an internal path that matches the host app's real route table. It is `dead` on 404/410, a host that
+does not resolve, a refused connection, or an internal path with no matching route.
 
 **Unverified is treated like dead on purpose.** A link nobody can stand behind is not worth sending,
 and a short honest note beats a dead tap. The author's own label survives as plain text, so the
@@ -45,6 +45,16 @@ the first pass happened to see.
 
 Every verdict is cached per URL for `cache_ttl` seconds on the guard instance, which lives as long
 as the orchestrator does, so a long-lived poller checks a given URL once an hour, not once a reply.
+
+## Checking links does not mean checking them one at a time
+
+A reply can carry up to `max_urls` links, each worth up to `passes` x `timeout` seconds in the
+worst case; checked back to back that is minutes, sitting between the answer and the reader. So
+`sanitize()` checks up to `LinkPolicy.concurrency` links at once (a thread pool; the one network
+seam, `fetcher`, is still called per URL, so tests stay offline), and the WHOLE call is held to
+`LinkPolicy.overall_timeout` (default 8s) rather than each link individually. Whatever has not
+settled when that budget runs out is recorded `unknown` and stripped, same as any other link the
+guard could not stand behind — the reply ships on time rather than waiting on a straggler.
 
 ## Configuring it
 
@@ -70,7 +80,9 @@ Two environment variables (both read in `cli.py`'s `_config_from_env`, both also
   "timeout": 4.0,
   "passes": 3,
   "max_urls": 25,
-  "cache_ttl": 3600
+  "cache_ttl": 3600,
+  "concurrency": 8,
+  "overall_timeout": 8.0
 }
 ```
 

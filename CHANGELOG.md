@@ -30,6 +30,15 @@ All notable changes to this project are documented here. The format is based on
   `OrchestratorConfig.link_guard` (ON by default; env `QAR_LINK_GUARD=0` disables) and
   `.link_policy_file` (env `QAR_LINK_POLICY_FILE`), plus `OrchestratorResult.link_checks`, the
   per-link record of what was kept or stripped and why.
+- **Link guard: links are checked concurrently, under one time budget, and `tel:` is kept
+  alongside `mailto:`.** `sanitize()` used to check each link one at a time (`max_urls` x `passes`
+  x `timeout` seconds worst case), so a reply full of slow hosts could hold up a turn for minutes.
+  A `ThreadPoolExecutor` now checks up to `LinkPolicy.concurrency` links at once, and the whole
+  `sanitize()` call is held to `LinkPolicy.overall_timeout` (default 8s): whatever has not settled
+  when it elapses is treated as `unknown`, same as any other link the guard could not stand behind.
+  `tel:` now gets the same treatment `mailto:` already had (kept, never fetched) instead of falling
+  through to the unrecognized-scheme branch and being stripped, since a reply often hands someone a
+  number to call.
 - **`QuestClient.create_goal` / `create-goal` CLI can assign the new goal to a human Quest member
   at creation** via `assigned_to_user_id` (CLI: `--assigned-to-user-id`). This was a real gap: the
   backend's `POST /api/planning/goals` has taken `assignedToUserId` for a while (the same field its

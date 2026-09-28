@@ -149,6 +149,48 @@ def test_a_verdict_is_cached_so_the_same_url_is_checked_once():
     assert fetch.calls == ["https://real.example.com/a"]
 
 
+def test_slow_links_are_checked_concurrently_not_one_at_a_time():
+    # THE POINT OF CONCURRENCY: a reply with several slow hosts must not take as long as checking
+    # each of them back to back would.
+    import time as _time
+
+    def slow_fetch(url, timeout):
+        _time.sleep(0.3)
+        return 200, "HEAD"
+
+    policy = LinkPolicy(passes=1, concurrency=8)
+    guard = LinkGuard(policy, fetcher=slow_fetch)
+    text = " ".join(f"[l{i}](https://h{i}.example.com/x)" for i in range(6))
+    start = _time.monotonic()
+    out, verdicts = guard.sanitize(text)
+    elapsed = _time.monotonic() - start
+    assert all(v.verdict == OK for v in verdicts)
+    assert len(verdicts) == 6
+    # Sequential would take ~1.8s (6 x 0.3s); concurrent finishes in about one link's time.
+    assert elapsed < 1.0
+
+
+def test_an_overall_time_budget_bounds_the_whole_sanitize_call():
+    # A reply full of slow links must not hold up the turn for minutes: whatever has not settled
+    # inside policy.overall_timeout is unknown, not waited on.
+    import time as _time
+
+    def slow_fetch(url, timeout):
+        _time.sleep(0.5)
+        return 200, "HEAD"
+
+    policy = LinkPolicy(passes=1, concurrency=8, overall_timeout=0.05)
+    guard = LinkGuard(policy, fetcher=slow_fetch)
+    text = " ".join(f"[l{i}](https://h{i}.example.com/x)" for i in range(4))
+    start = _time.monotonic()
+    out, verdicts = guard.sanitize(text)
+    elapsed = _time.monotonic() - start
+    assert elapsed < 0.5
+    assert all(v.verdict == UNKNOWN for v in verdicts)
+    assert all("time limit" in v.reason for v in verdicts)
+    assert "example.com" not in out
+
+
 # --- what is and is not a link ------------------------------------------------------------------
 
 def test_urls_inside_code_are_shown_not_offered_and_are_never_touched():
@@ -184,6 +226,26 @@ def test_an_in_app_scheme_the_consumer_declared_is_left_alone():
     out, verdicts = guard.sanitize("[#atask_2f875a184178](app-task:atask_2f875a184178)")
     assert out == "[#atask_2f875a184178](app-task:atask_2f875a184178)"
     assert verdicts[0].verdict == OK
+
+
+def test_a_mailto_address_is_kept_without_being_fetched():
+    fetch = fetcher_for({})
+    guard = LinkGuard(APP, fetcher=fetch)
+    out, verdicts = guard.sanitize("Reach us at [support](mailto:support@example.org).")
+    assert out == "Reach us at [support](mailto:support@example.org)."
+    assert verdicts[0].verdict == OK
+    assert fetch.calls == []
+
+
+def test_a_tel_number_is_kept_without_being_fetched():
+    # Quest AI often gives a person a number to call; tel: used to fall through to the catch-all
+    # unrecognized-scheme branch and get stripped like a fabricated URL.
+    fetch = fetcher_for({})
+    guard = LinkGuard(APP, fetcher=fetch)
+    out, verdicts = guard.sanitize("Call [the office](tel:+15551234567) any time.")
+    assert out == "Call [the office](tel:+15551234567) any time."
+    assert verdicts[0].verdict == OK
+    assert fetch.calls == []
 
 
 def test_a_label_that_is_itself_the_url_does_not_survive_as_text():
