@@ -1072,7 +1072,11 @@ class QuestAITerminal(App):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=True)
-        yield TranscriptLog(id="transcript", max_lines=20000, wrap=True,
+        # min_width=1: RichLog's default (78) is a floor under the shrink-to-fit width
+        # computed from the widget's own content region, so on a narrower terminal (a
+        # phone-width SSH session) every write still wraps at 78 columns and the extra
+        # width is then cropped off rather than ever reaching a second visual line.
+        yield TranscriptLog(id="transcript", max_lines=20000, wrap=True, min_width=1,
                             highlight=True, markup=True, auto_scroll=True)
         yield ContextPanel(id="context")
         yield DeepActivity(id="deep")
