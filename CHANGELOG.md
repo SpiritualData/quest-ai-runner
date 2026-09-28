@@ -7,6 +7,14 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Deep runs pick their starting model by difficulty** (`core/deep_model_selection.py`). When no
+  model is pinned, the planner rates the deep work `simple` / `normal` / `hard` on the planning call
+  it already makes (new `deep_difficulty` + `deep_difficulty_reason` fields, zero extra LLM calls)
+  and the run starts on that difficulty's model: haiku for clearly trivial work, sonnet otherwise
+  (hard included), with opus kept as the escalation rung the goal loop climbs to on a not-met goal.
+  Pins still win unchanged. Configure with `QAR_DEEP_AUTO_MODEL` and `QAR_DEEP_MODEL_SIMPLE` /
+  `_NORMAL` / `_HARD`; the escalation ladder is `QAR_DEEP_MODELS` when set, else haiku,sonnet,opus.
+  Logged once per run and emitted as a status event with `data.deep_model_selection`.
 - **Link guard: no reply leaves the brain carrying a link nobody checked**
   (`core/link_guard.py`, docs: `docs/link-guard.md`). A model writes URLs that read perfectly and
   do not exist; the reader taps one, lands nowhere, and stops trusting the real links too. Every

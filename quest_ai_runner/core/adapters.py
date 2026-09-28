@@ -213,6 +213,11 @@ class PlanDecision:
     deep_brief: Optional[str] = None
     confirm_question: Optional[str] = None
     model_tier: Optional[str] = None              # "haiku" | "sonnet" | "opus" | None
+    # The planner's rating of DEEP work, judged on the same planning call (zero extra LLM calls):
+    # "simple" | "normal" | "hard" | None. Picks the deep run's STARTING model when nothing pinned
+    # one (see core/deep_model_selection.py). None = not assessed; the ladder is then unchanged.
+    deep_difficulty: Optional[str] = None
+    deep_difficulty_reason: Optional[str] = None  # one short clause, logged with the choice
     subquestions: List[str] = field(default_factory=list)
     deep_subtasks: List[Dict[str, Any]] = field(default_factory=list)
     rationale: str = ""

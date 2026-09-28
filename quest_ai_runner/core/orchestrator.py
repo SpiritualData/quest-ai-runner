@@ -114,6 +114,16 @@ from .answer_explanation import (
     trace_from_result,
 )
 from .model_registry import TIERS, ModelRegistry
+from .deep_model_selection import (
+    DEFAULT_AUTO_DEEP_LADDER,
+    DEFAULT_DIFFICULTY_MODELS,
+    normalize_difficulty,
+    select_deep_start,
+)
+
+# Log labels for where a deep-worker ladder came from (see Orchestrator.log_deep_ladder).
+CONFIGURED_LADDER_SOURCE = "configured deep_model_ladder (e.g. QAR_DEEP_MODELS)"
+FALLBACK_LADDER_SOURCE = "fallback model + Claude-runnable tier resolution"
 from .overseer import OverseerSignal, build_digest, oversee
 from .sufficiency import (
     AbridgedTurnState,
@@ -467,6 +477,13 @@ The four actions:
 MODEL TIER (`model_tier`): always set one of "haiku" | "sonnet" | "opus" -- governs the model
   that GENERATES the answer / deep run (the planner itself always runs cheap). haiku=triage/
   trivial, sonnet=most answers (default), opus=hard reasoning / deep work.
+
+DEEP DIFFICULTY (`deep_difficulty`): whenever you choose "deep" or fill `deferred_deep`, rate the
+  work so the right worker model starts it (leave it null otherwise). "simple" ONLY for clearly
+  trivial, mechanical work: a lookup, reformatting, a short status read, a one-line edit.
+  "normal" for everything else, and whenever you are unsure. "hard" for multi-file code changes,
+  architecture, ambiguous research, or anything outward-facing, user-facing or irreversible.
+  Put one short clause saying why in `deep_difficulty_reason`.
 """
 
 _PLANNER_TAIL = """\
@@ -845,6 +862,17 @@ DECIDE_TOOL: Dict[str, Any] = {
                                "default) leaves it paused until a human answers.",
             },
             "model_tier": {"type": ["string", "null"], "enum": ["haiku", "sonnet", "opus", None]},
+            "deep_difficulty": {
+                "type": ["string", "null"],
+                "enum": ["simple", "normal", "hard", None],
+                "description": "When action='deep' or deferred_deep is set: how demanding the "
+                               "work is. 'simple' only for clearly trivial mechanical work; "
+                               "'normal' when unsure. Null otherwise.",
+            },
+            "deep_difficulty_reason": {
+                "type": ["string", "null"],
+                "description": "One short clause explaining deep_difficulty.",
+            },
             "subquestions": {"type": "array", "items": {"type": "string"}},
             "deep_subtasks": {
                 "type": "array",
@@ -1019,6 +1047,16 @@ class OrchestratorConfig:
     # QAR_DEEP_MODELS); an explicit per-task model request or a guidance "model preference" pins the
     # model and disables auto-escalation.
     deep_model_ladder: Optional[List[str]] = None
+    # AUTOMATIC STARTING MODEL for a deep run nobody pinned (core/deep_model_selection.py). The
+    # planner rates the work "simple" | "normal" | "hard" on the call it already makes, and the run
+    # STARTS on that difficulty's model, then escalates up the ladder (``deep_model_ladder``, or
+    # ``DEFAULT_AUTO_DEEP_LADDER`` = haiku, sonnet, opus when none is configured) on a not-met goal
+    # exactly as before. Defaults: simple -> haiku, normal and hard -> sonnet (the strongest model
+    # is the escalation rung, not a starting point). Consumers set these from QAR_DEEP_AUTO_MODEL
+    # and QAR_DEEP_MODEL_SIMPLE / _NORMAL / _HARD. False = the ladder is used exactly as before.
+    deep_auto_model: bool = True
+    deep_difficulty_models: Dict[str, str] = field(
+        default_factory=lambda: dict(DEFAULT_DIFFICULTY_MODELS))
     # The SAME goal loop applied to plain ANSWERS (not just deep execution): after an answer is
     # written, the brain verifies it meets the goal at the quality bar (the guidance cards selected
     # for the input) and, if unmet, regenerates with steering — up to this many attempts. Only
@@ -1523,6 +1561,10 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
         deep_brief=raw.get("deep_brief") or None,
         confirm_question=raw.get("confirm_question") or None,
         model_tier=tier,
+        deep_difficulty=normalize_difficulty(raw.get("deep_difficulty")),
+        deep_difficulty_reason=(str(raw.get("deep_difficulty_reason")).strip()[:300]
+                                if isinstance(raw.get("deep_difficulty_reason"), str)
+                                and raw.get("deep_difficulty_reason").strip() else None),
         subquestions=subs,
         deep_subtasks=deep_subs,
         rationale=(raw.get("rationale") or "").strip(),
@@ -5513,8 +5555,64 @@ class Orchestrator:
         return release, reason
 
     def _deep_models(self, model_hint: Optional[str], quality_standards: Optional[str],
-                     fallback: Optional[str]) -> List[Optional[str]]:
-        """Resolve the deep-worker model LADDER (tried in order, escalating on a not-met goal).
+                     fallback: Optional[str],
+                     difficulty: Optional[str] = None,
+                     difficulty_reason: Optional[str] = None) -> List[Optional[str]]:
+        """The deep-worker ladder only (see ``deep_model_plan`` for the full resolution)."""
+        return self.deep_model_plan(model_hint, quality_standards, fallback,
+                                    difficulty=difficulty, difficulty_reason=difficulty_reason)[0]
+
+    def deep_model_plan(self, model_hint: Optional[str], quality_standards: Optional[str],
+                        fallback: Optional[str], *,
+                        difficulty: Optional[str] = None,
+                        difficulty_reason: Optional[str] = None,
+                        ) -> Tuple[List[Optional[str]], Optional[Dict[str, Any]]]:
+        """Resolve the deep-worker ladder plus, when the start was chosen automatically, the
+        selection record (difficulty, start_model, ladder, reason) to log and record; None when
+        the ladder came from a pin or from the pre-existing resolution unchanged.
+
+        Pins (per-task model, guidance preference) are resolved first and always win. Then, when
+        ``cfg.deep_auto_model`` is on and the planner rated the work (``difficulty``), the run
+        starts on that difficulty's rung of the configured ladder (or ``DEFAULT_AUTO_DEEP_LADDER``)
+        and escalates from there. With no rating the configured ladder starts at the NORMAL
+        model's rung when it has one ("when unsure, normal"), and with no configured ladder either,
+        today's generic fallback ladder is used unchanged."""
+        ladder, pinned = self.resolve_deep_ladder(model_hint, quality_standards, fallback,
+                                                  log_ladder=False)
+        if pinned:
+            return ladder, None   # a pin logs its own line inside the resolver
+        if not self.cfg.deep_auto_model:
+            self.log_deep_ladder(ladder, source=(CONFIGURED_LADDER_SOURCE if self.cfg.deep_model_ladder
+                                                 else FALLBACK_LADDER_SOURCE))
+            return ladder, None
+        configured = [m for m in (self.cfg.deep_model_ladder or []) if m]
+        level = normalize_difficulty(difficulty)
+        if level is not None:
+            base = configured or list(DEFAULT_AUTO_DEEP_LADDER)
+            picked = select_deep_start(level, base, self.cfg.deep_difficulty_models,
+                                       reason=difficulty_reason)
+        elif configured:
+            picked = select_deep_start("normal", configured, self.cfg.deep_difficulty_models,
+                                       reason="difficulty not assessed; using the normal start")
+            if picked is not None:
+                picked[1]["difficulty"] = None
+        else:
+            picked = None
+        if picked is None:
+            self.log_deep_ladder(ladder, source=(CONFIGURED_LADDER_SOURCE if configured
+                                                 else FALLBACK_LADDER_SOURCE))
+            return ladder, None
+        start_ladder, selection = picked
+        log.info("Deep-worker model auto-selected: difficulty=%s, starting model=%s, escalation "
+                 "ladder=%s, reason: %s", selection.get("difficulty") or "not assessed",
+                 selection["start_model"], selection["ladder"], selection["reason"])
+        return list(start_ladder), selection
+
+    def resolve_deep_ladder(self, model_hint: Optional[str], quality_standards: Optional[str],
+                            fallback: Optional[str], *,
+                            log_ladder: bool = True) -> Tuple[List[Optional[str]], bool]:
+        """Resolve the deep-worker model LADDER (tried in order, escalating on a not-met goal), and
+        whether it is a PIN (``(ladder, pinned)``; a pin is never re-started by difficulty).
 
         Priority: (1) an explicit per-task model request via ``model_hint`` when it names a model the
         worker can run; (2) a guidance card model preference; either PINS a single model (no
@@ -5548,7 +5646,7 @@ class Orchestrator:
             if pinned:
                 log.info("Deep-worker model ladder: pinned to %r (explicit per-task model id, used "
                          "verbatim); escalation intentionally disabled.", pinned)
-                return [pinned]
+                return [pinned], True
         # A per-task TIER request (or a model id this worker cannot run): ``fallback`` is that
         # request resolved through the registry. Pin it when the worker can run it; in a non-Claude
         # deployment the resolved hint is not worker-runnable, so we fall through to the ladder
@@ -5556,20 +5654,22 @@ class Orchestrator:
         if model_hint and fallback and _is_claude_model(fallback):
             log.info("Deep-worker model ladder: pinned to %r (explicit per-task model request); "
                      "escalation intentionally disabled.", fallback)
-            return [fallback]
+            return [fallback], True
         pref = _guidance_model_pref(quality_standards)
         if pref:
             log.info("Deep-worker model ladder: pinned to %r (guidance model preference); "
                      "escalation intentionally disabled.", pref)
-            return [pref]
+            return [pref], True
         if self.cfg.deep_model_ladder:
             ladder = [m for m in self.cfg.deep_model_ladder if m]
             if ladder:
-                self.log_deep_ladder(ladder, source="configured deep_model_ladder (e.g. QAR_DEEP_MODELS)")
-                return list(ladder)
+                if log_ladder:
+                    self.log_deep_ladder(ladder, source=CONFIGURED_LADDER_SOURCE)
+                return list(ladder), False
         ladder = self.fallback_deep_ladder(fallback)
-        self.log_deep_ladder(ladder, source="fallback model + Claude-runnable tier resolution")
-        return ladder
+        if log_ladder:
+            self.log_deep_ladder(ladder, source=FALLBACK_LADDER_SOURCE)
+        return ladder, False
 
     def fallback_deep_ladder(self, fallback: Optional[str]) -> List[Optional[str]]:
         """Build the deep-worker ladder when no explicit ``deep_model_ladder`` is configured.
@@ -6163,6 +6263,25 @@ class Orchestrator:
         # store). Computed once: it gates appending the FUTURE-CONTEXT instruction to each deep brief.
         card_update_active = self._card_updater_active()
 
+        # The model ladder for THIS deep run, resolved ONCE (every subgoal of a fan-out shares it):
+        # an explicit per-task / guidance model pins it (no escalation); otherwise the planner's
+        # difficulty rating picks the starting rung and the goal loop escalates from there. The
+        # automatic choice is announced once as a status event carrying a structured
+        # ``deep_model_selection`` payload, which the task lane records on the task's progress feed.
+        planned_deep_models, deep_selection = self.deep_model_plan(
+            model_hint, quality_standards, model,
+            difficulty=getattr(plan, "deep_difficulty", None),
+            difficulty_reason=getattr(plan, "deep_difficulty_reason", None))
+        if deep_selection is not None and emit is not None:
+            level = deep_selection.get("difficulty")
+            start_text = f"Starting on {deep_selection['start_model']}"
+            if level:
+                start_text += f" ({level} task)"
+            if len(deep_selection["ladder"]) > 1:
+                start_text += ", with a stronger model ready if the result falls short"
+            emit.emit(ProgressEvent(type=EVENT_STATUS, text=start_text + ".",
+                                    data={"deep_model_selection": dict(deep_selection)}))
+
         def run_one(task: Dict[str, Any], task_index: int = 0) -> DeepResult:
             goal = (task.get("goal") or "").strip() or f"Fully address: {user_message}"
             brief = (task.get("brief") or goal).strip()
@@ -6435,7 +6554,7 @@ class Orchestrator:
             budget = self.cfg.deep_goal_token_budget
             # The model ladder for THIS turn: an explicit per-task / guidance model pins it (no
             # escalation); otherwise fast -> strong, starting at the fast tier by default.
-            deep_models = self._deep_models(model_hint, quality_standards, model)
+            deep_models = list(planned_deep_models)   # a copy: a verifier tier override edits it
             tier_idx = 0
             tokens_used = 0
             res = DeepResult(met=False)
@@ -9660,6 +9779,8 @@ class Orchestrator:
                         goal=_truncate_goal(plan.goal or f"Carry out the user's request: {user_message}"),
                         deep_brief=(user_message)[:2000],
                         rationale="overseer escalated the answer to deep execution",
+                        deep_difficulty=getattr(plan, "deep_difficulty", None),
+                        deep_difficulty_reason=getattr(plan, "deep_difficulty_reason", None),
                     )
                     _ov_model = self._answer_model(_ov_plan, "opus", hint=model_hint)
                     _ov_res = self._run_deep(
@@ -9817,6 +9938,8 @@ class Orchestrator:
                     goal=_truncate_goal(should_defer_deep.get("goal") or f"Execute: {user_message}"),
                     deep_brief=(should_defer_deep.get("brief") or user_message)[:2000],
                     rationale=should_defer_deep.get("rationale") or "follow-up work from answer phase",
+                    deep_difficulty=getattr(plan, "deep_difficulty", None),
+                    deep_difficulty_reason=getattr(plan, "deep_difficulty_reason", None),
                 )
                 deep_model = self._answer_model(deferred_plan, "opus", hint=model_hint)
                 # Queued deployments pin deferred work to the registered queue runner (reserved
@@ -10050,6 +10173,8 @@ class Orchestrator:
                                             f"change for real now (make the actual code/file/data "
                                             f"changes):\n{(text or '').strip()}")[:2000],
                                 rationale="claim verification: answer claimed unexecuted work",
+                                deep_difficulty=getattr(plan, "deep_difficulty", None),
+                                deep_difficulty_reason=getattr(plan, "deep_difficulty_reason", None),
                             )
                             _rem_model = self._answer_model(_rem_plan, "opus", hint=model_hint)
                             _rem_res = self._run_deep(_rem_plan, user_message, _rem_model,
@@ -10112,6 +10237,8 @@ class Orchestrator:
                                 "Search more thoroughly and give a definitive answer."
                             ),
                             rationale="answer verification escalated to deep (insufficient context)",
+                            deep_difficulty=getattr(plan, "deep_difficulty", None),
+                            deep_difficulty_reason=getattr(plan, "deep_difficulty_reason", None),
                         )
                         _esc_model = self._answer_model(_esc_plan, "opus", hint=model_hint)
                         _esc_res = self._run_deep(

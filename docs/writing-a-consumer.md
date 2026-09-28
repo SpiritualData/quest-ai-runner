@@ -101,6 +101,8 @@ so there is one set of switches and not two:
 | `QAR_CLAUDE_PATH` | the worker binary (default `claude`, looked up on PATH) |
 | `QAR_DEEP_TIMEOUT_SECONDS` | wall-clock cap per deep run (default 1 hour) |
 | `QAR_DEEP_MODELS` | the goal loop's escalation ladder (lives on `OrchestratorConfig`) |
+| `QAR_DEEP_AUTO_MODEL` | `0`/`false`/`off` turns off the automatic starting model (on by default, see below) |
+| `QAR_DEEP_MODEL_SIMPLE`, `QAR_DEEP_MODEL_NORMAL`, `QAR_DEEP_MODEL_HARD` | the model a deep run starts on per planner-rated difficulty (defaults `haiku`, `sonnet`, `sonnet`) |
 | `QAR_DEEP_MAX_TURNS` | hard per-attempt turn cap (`OrchestratorConfig.deep_max_turns`, default 30) |
 | `QAR_CONTEXT_PREAMBLE_FILE` | a file whose contents become `RunnerConfig.context_preamble` (org/persona doctrine on every deep-run brief) — preferred over the inline `QAR_CONTEXT_PREAMBLE` (still supported) since multi-line prose is miserable as a bare env var |
 
@@ -129,6 +131,22 @@ genuinely must not execute, e.g. a read-only chat surface.
    single model the orchestrator's normal tier resolution ("quality"/"best") would otherwise use,
    extended with a real escalation step when a distinct Claude-runnable id can be found for a
    stronger tier.
+
+**Automatic starting model (steps 3 and 4, on by default).** When neither pin applies, the
+planner rates the deep work on the call it already makes (`deep_difficulty`: `simple` for clearly
+trivial mechanical work such as a lookup, reformatting or a short status read; `normal` otherwise
+and whenever it is unsure; `hard` for multi-file code, architecture, ambiguous research, or
+outward-facing and irreversible work). The run STARTS on that difficulty's model
+(`OrchestratorConfig.deep_difficulty_models`, defaults `haiku` / `sonnet` / `sonnet`) and the goal
+loop still escalates up the ladder on a not-met goal: the configured ladder when set, otherwise
+`haiku,sonnet,opus`. The strongest model is deliberately an escalation rung, not a starting point,
+so hard work is not paid for twice by default; set `QAR_DEEP_MODEL_HARD=opus` if you want it. A
+start model missing from a configured ladder resolves to the nearest stronger rung, so a
+`sonnet,opus` ladder never starts on haiku. No rating (a synthetic escalation, a parse miss) keeps
+the previous behaviour, except that a configured ladder starts at its normal-difficulty rung. The
+choice is logged once per deep run and emitted as a status event carrying
+`data.deep_model_selection` (`difficulty`, `start_model`, `ladder`, `reason`), which the task lane
+posts to the task's progress feed. `QAR_DEEP_AUTO_MODEL=0` restores the old first-rung start.
 
 An **autopilot** quest sets step 1 for all of its own created work: the quest's
 `autopilot.model` setting (read by `AutopilotPass._create_autopilot_task`) rides onto every task

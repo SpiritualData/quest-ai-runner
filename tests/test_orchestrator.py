@@ -517,8 +517,10 @@ class _TokenDeepRunner:
 
 def test_deep_loop_escalates_model_on_not_met():
     # Verify keeps saying not-met -> the worker model escalates through the ladder fast->strong.
+    # Rated simple, so the run starts on the first rung (an unrated run starts at the normal rung).
     provider = StubProvider(decisions=[
-        {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
+        {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work",
+         "deep_difficulty": "simple"},
         {"met": False, "reason": "no", "next_action": "x"},
         {"met": False, "reason": "no", "next_action": "x"},
         {"met": False, "reason": "no", "next_action": "x"},

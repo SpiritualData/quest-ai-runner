@@ -222,7 +222,9 @@ def test_the_model_tier_is_not_escalated_by_running_out_of_turns():
         DeepResult(met=True, output="done"),
     ])
 
-    _orch(provider, runner, deep_model_ladder=["haiku", "sonnet", "opus"]).run("build X")
+    # Automatic start selection off: this pins the first-rung start the assertion is about.
+    _orch(provider, runner, deep_model_ladder=["haiku", "sonnet", "opus"],
+          deep_auto_model=False).run("build X")
 
     assert [c["model"] for c in runner.calls] == ["haiku", "haiku"]
 

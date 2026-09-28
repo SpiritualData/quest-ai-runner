@@ -65,6 +65,14 @@ Env it reads:
                                                    (OrchestratorConfig.deep_max_turns; library
                                                    default 30 — raise it for a lane whose tasks
                                                    chain several real actions in one run)
+  QAR_DEEP_AUTO_MODEL (optional)                 — "0"/"false"/"off" disables the automatic
+                                                   starting model for unpinned deep runs (on by
+                                                   default; see core/deep_model_selection.py)
+  QAR_DEEP_MODEL_SIMPLE / _NORMAL / _HARD         — the Claude model a deep run STARTS on for work
+                                                   the planner rated simple / normal / hard
+                                                   (defaults haiku / sonnet / sonnet); the run
+                                                   still escalates up QAR_DEEP_MODELS (or
+                                                   haiku,sonnet,opus when unset) on a not-met goal
   QAR_REP_SYNC_DIRECTION (optional)              — "pull" (default) | "push" | "both"; sets
                                                    RunnerConfig.rep_sync_direction. Only takes
                                                    effect once a rep_sync_resolver or a personas
@@ -660,6 +668,29 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
         cfg.orchestrator.deep_model_ladder = (
             [m.strip() for m in deep_models_env.split(",") if m.strip()] or None
         )
+    # Automatic STARTING model for deep runs nobody pinned (core/deep_model_selection.py): the
+    # planner rates the work simple/normal/hard on the call it already makes and the run starts on
+    # that difficulty's model, escalating up the ladder above (or haiku,sonnet,opus when
+    # QAR_DEEP_MODELS is unset) on a not-met goal. QAR_DEEP_AUTO_MODEL=0/false/off disables it (the
+    # ladder then starts at its first rung, as before). QAR_DEEP_MODEL_SIMPLE / _NORMAL / _HARD set
+    # the per-difficulty start (defaults haiku / sonnet / sonnet). Like QAR_DEEP_MODELS these must be
+    # Claude ids/aliases the deep worker can run, never tier names; an unusable value is ignored.
+    _auto = (os.getenv("QAR_DEEP_AUTO_MODEL") or "").strip().lower()
+    if _auto in ("0", "false", "off", "no"):
+        cfg.orchestrator.deep_auto_model = False
+    elif _auto in ("1", "true", "on", "yes"):
+        cfg.orchestrator.deep_auto_model = True
+    from .core.goal_runner import cli_safe_model
+    for level, var in (("simple", "QAR_DEEP_MODEL_SIMPLE"), ("normal", "QAR_DEEP_MODEL_NORMAL"),
+                       ("hard", "QAR_DEEP_MODEL_HARD")):
+        value = (os.getenv(var) or "").strip()
+        if not value:
+            continue
+        if not cli_safe_model(value):   # also rejects tier names such as "fast" or "best"
+            logging.getLogger("quest-ai-runner").warning(
+                "%s=%r is not a Claude model the deep worker can run; ignoring it", var, value)
+            continue
+        cfg.orchestrator.deep_difficulty_models[level] = value
     # Overall TOKEN BUDGET for one turn's deep goal loop (worker tokens summed across attempts).
     # Operator-tunable; replaces a fixed attempt count as the primary stop.
     if os.getenv("QAR_GOAL_TOKEN_BUDGET"):
