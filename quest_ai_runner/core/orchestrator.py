@@ -6193,6 +6193,11 @@ class Orchestrator:
                         deep_tools_block += (f"\nThis run's quest is {quest_id}: add "
                                          f"--quest {quest_id} to a call so tools that take the "
                                          f"quest from context get it.")
+                    brief_task_id = (ctx_meta or {}).get("task_id")
+                    if brief_task_id:
+                        deep_tools_block += (f"\nThis run's task is {brief_task_id}: add "
+                                             f"--task {brief_task_id} to a call so tools that "
+                                             f"need the task (who asked, what they replied) get it.")
                     brief = brief + "\n\n" + deep_tools_block
             # NOTE: the FUTURE-CONTEXT instruction is appended further down, once the runner that will
             # handle THIS goal is resolved: which of the two instructions applies depends on that

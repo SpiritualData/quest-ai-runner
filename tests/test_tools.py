@@ -436,3 +436,30 @@ def test_tools_block_comes_after_the_planner_body():
     prompt = provider.plan_prompts[0]
     assert prompt.index("DIRECT TOOLS") > prompt.index("Please email me the weekly plan")
     assert "Calls run ONLY when action is \"tool\"" in prompt
+
+
+def test_executor_hands_the_task_id_to_direct_tools_and_the_deep_brief():
+    """docs/tools.md promises every command tool QAR_TOOL_TASK_ID: the executor must put the
+    task's id in the turn's context so ToolContext.task_id (and the deep brief) carry it."""
+    from quest_ai_runner.runner.executor import TaskExecutor
+    from .test_runner import MockQuestClient
+
+    seen = []
+    tools = ToolRegistry([make_spec(
+        "who_asked", handler=lambda args, ctx: seen.append(ctx.task_id) or "ok",
+        keywords=("who",))])
+    provider = StubProvider(decisions=[
+        {"action": "tool", "rationale": "use it", "tool_calls": [{"name": "who_asked", "args": {}}]},
+        {"action": "answer", "rationale": "done"},
+    ])
+    TaskExecutor(MockQuestClient([]), make_orch(provider, tools)).execute(
+        {"id": "atask_t1", "text": "who asked"})
+    assert seen == ["atask_t1"]
+
+    deep = StubDeepRunner(met=True)
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "who asked, deeply", "deep_brief": "b", "rationale": "work"},
+    ])
+    TaskExecutor(MockQuestClient([]), make_orch(provider, tools, deep_runner=deep)).execute(
+        {"id": "atask_t2", "text": "who asked"})
+    assert deep.calls and "--task atask_t2" in deep.calls[0]["brief"]
