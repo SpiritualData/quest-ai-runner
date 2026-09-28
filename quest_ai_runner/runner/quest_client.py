@@ -1134,7 +1134,8 @@ class QuestClient:
                     target_value: Optional[float] = None,
                     target_unit: Optional[str] = None,
                     ai_help: Optional[bool] = None,
-                    assignee_rep_id: Optional[str] = None) -> Dict[str, Any]:
+                    assignee_rep_id: Optional[str] = None,
+                    assigned_to_user_id: Optional[str] = None) -> Dict[str, Any]:
         """POST a new Goal to /api/planning/goals.
 
         This is the REAL, typed Goal object shown on a quest's plan (period-scoped, with a
@@ -1152,6 +1153,13 @@ class QuestClient:
           quarter "YYYY_Q#"      e.g. "2026_Q3"
           year    "YYYY"         e.g. "2026"
         The deadline is auto-calculated server-side from the period (end of day/week/month/etc).
+
+        ``assigned_to_user_id`` assigns the goal, at creation, to a specific HUMAN member of
+        ``quest_id`` (a Quest user_id, not an AI persona -- see ``assignee_rep_id`` for that).
+        The backend authorizes this the same way as its separate assign-after-creation endpoint:
+        the caller must be able to edit the quest, and the assignee must already be a member of
+        it, or the request is refused with no goal created. Requires ``quest_id`` -- a standalone
+        goal has no quest membership to check the assignee against.
 
         Returns the created Goal dict (camelCase fields: id, questId, title, period, deadline,
         ...). Raises ``QuestApiError``/``QuestNotConfigured`` on failure rather than swallowing
@@ -1182,6 +1190,8 @@ class QuestClient:
             body["ai_help"] = ai_help
         if assignee_rep_id is not None:
             body["assignee_rep_id"] = assignee_rep_id
+        if assigned_to_user_id is not None:
+            body["assigned_to_user_id"] = assigned_to_user_id
         return self._request("POST", "/api/planning/goals", body=body) or {}
 
     def get_quest(self, quest_id: str, *, team_id: Optional[str] = None) -> Dict[str, Any]:

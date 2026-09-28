@@ -255,7 +255,13 @@ before making the request, so a malformed period fails fast with a clear message
 round trip to get a 400.
 
 Optional fields: `description`, `criteria` (completion criteria), `goal_type`, `parent_goal_id`
-(for a sub-goal), `target_value` / `target_unit` (a measurable target).
+(for a sub-goal), `target_value` / `target_unit` (a measurable target), `assigned_to_user_id`
+(assign the goal, at creation, to a HUMAN member of `quest_id` -- a Quest user_id, distinct from
+`assignee_rep_id` below, which names an AI persona, not a person). Authorized the same way as the
+backend's separate assign-after-creation endpoint: the caller must be able to edit the quest, and
+the assignee must already be a member of it, or the whole create is refused with no goal left
+behind. Requires `quest_id` -- a standalone goal has no quest membership to check the assignee
+against.
 
 `ai_help` and `assignee_rep_id` are **gone from a goal** on current Quest backends, and nothing in
 this runner sends them any more. A goal is the plan that work serves, never a unit of AI work and

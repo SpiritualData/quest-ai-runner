@@ -77,7 +77,7 @@ def test_create_goal_passes_optional_fields_only_when_given():
         "t", period="2026-08-18",
         description="desc", criteria="crit", goal_type="day_goal",
         parent_goal_id="goal_parent", target_value=5.0, target_unit="hours",
-        ai_help=True, assignee_rep_id="bailey",
+        ai_help=True, assignee_rep_id="bailey", assigned_to_user_id="user_42",
     )
     body = captured["body"]
     assert body["description"] == "desc"
@@ -88,6 +88,7 @@ def test_create_goal_passes_optional_fields_only_when_given():
     assert body["target_unit"] == "hours"
     assert body["ai_help"] is True
     assert body["assignee_rep_id"] == "bailey"
+    assert body["assigned_to_user_id"] == "user_42"
 
 
 def test_create_goal_omits_optional_fields_when_not_given():
@@ -95,5 +96,19 @@ def test_create_goal_omits_optional_fields_when_not_given():
     client.create_goal("t", period="2026-08-18")
     body = captured["body"]
     for field in ("description", "criteria", "goal_type", "parent_goal_id",
-                  "target_value", "target_unit", "ai_help", "assignee_rep_id"):
+                  "target_value", "target_unit", "ai_help", "assignee_rep_id",
+                  "assigned_to_user_id"):
         assert field not in body
+
+
+def test_create_goal_assigns_to_a_human_user_distinct_from_assignee_rep_id():
+    """``assigned_to_user_id`` (a HUMAN Quest member) is a separate field from
+    ``assignee_rep_id`` (an AI persona) -- both can be sent, and neither implies the other."""
+    client, captured = client_capturing_body()
+    client.create_goal(
+        "Review the chat history delete/rename request", period="2026-09-29",
+        quest_id="quest_9", assigned_to_user_id="user_joshua",
+    )
+    body = captured["body"]
+    assert body["assigned_to_user_id"] == "user_joshua"
+    assert "assignee_rep_id" not in body

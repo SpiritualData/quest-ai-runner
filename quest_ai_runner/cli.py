@@ -1073,6 +1073,9 @@ def main(argv=None) -> int:
     goal_p.add_argument("--parent-goal-id", default=None, help="parent goal id, for a sub-goal")
     goal_p.add_argument("--ai-help", action="store_true",
                         help="mark this goal AI-assisted (Quest Autopilot may act on it)")
+    goal_p.add_argument("--assigned-to-user-id", default=None,
+                        help="assign the goal to this Quest member's user_id at creation "
+                             "(requires --quest-id; refused if they are not a member)")
 
     # --- bootstrap subcommand: build/refresh the context card store ----------
     boot_p = sub.add_parser("bootstrap", help="build or refresh the context card store for the corpus")
@@ -1394,6 +1397,7 @@ def main(argv=None) -> int:
                 goal_type=args.goal_type,
                 parent_goal_id=args.parent_goal_id,
                 ai_help=True if args.ai_help else None,
+                assigned_to_user_id=args.assigned_to_user_id,
             )
         except (QuestApiError, QuestNotConfigured) as e:
             log.error("failed to create goal: %s", e)

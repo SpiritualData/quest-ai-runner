@@ -77,6 +77,42 @@ def test_create_goal_quest_id_omitted_when_not_given(monkeypatch):
     assert captured["quest_id"] is None
 
 
+def test_create_goal_passes_assigned_to_user_id_when_given(monkeypatch):
+    _patch_env(monkeypatch)
+    captured = {}
+
+    def fake_create_goal(self, title, **kwargs):
+        captured.update(kwargs)
+        return {"id": "goal_1", "deadline": kwargs["period"]}
+
+    monkeypatch.setattr(
+        "quest_ai_runner.runner.quest_client.QuestClient.create_goal", fake_create_goal)
+
+    rc = cli.main(["create-goal", "Review the chat history request",
+                   "--quest-id", "quest_9", "--period", "2026-09-29",
+                   "--assigned-to-user-id", "user_joshua"])
+
+    assert rc == 0
+    assert captured["assigned_to_user_id"] == "user_joshua"
+
+
+def test_create_goal_assigned_to_user_id_omitted_when_not_given(monkeypatch):
+    _patch_env(monkeypatch)
+    captured = {}
+
+    def fake_create_goal(self, title, **kwargs):
+        captured.update(kwargs)
+        return {"id": "goal_1", "deadline": kwargs["period"]}
+
+    monkeypatch.setattr(
+        "quest_ai_runner.runner.quest_client.QuestClient.create_goal", fake_create_goal)
+
+    rc = cli.main(["create-goal", "Standalone goal"])
+
+    assert rc == 0
+    assert captured["assigned_to_user_id"] is None
+
+
 def test_create_goal_reports_api_failure_and_returns_nonzero(monkeypatch, capsys):
     _patch_env(monkeypatch)
 

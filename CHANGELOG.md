@@ -7,6 +7,16 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **`QuestClient.create_goal` / `create-goal` CLI can assign the new goal to a human Quest member
+  at creation** via `assigned_to_user_id` (CLI: `--assigned-to-user-id`). This was a real gap: the
+  backend's `POST /api/planning/goals` has taken `assignedToUserId` for a while (the same field its
+  separate assign-after-creation endpoint uses), but nothing in this client or CLI ever sent it, so
+  "create a goal already assigned to someone" had no path other than create-then-assign as two
+  calls. Distinct from `assignee_rep_id` (an AI persona, not a user, and already unused by current
+  backends per `docs/quest-api-contract.md`): `assigned_to_user_id` names a real team member and is
+  authorized the same way the assign endpoint is (caller must be able to edit the quest; the
+  assignee must already be a member of it, or the API refuses the whole create with no goal left
+  behind). Requires `quest_id`, since a standalone goal has no quest membership to check against.
 - **Terminal chat: a message queued mid-turn is never lost, and is never played back one at a
   time.** A message typed while the AI works was shown in the transcript as "queued", but a turn
   with no internal retry/goal loop never drained it (`InputInbox.drain` is only called from inside
