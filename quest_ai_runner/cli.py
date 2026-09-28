@@ -763,6 +763,21 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     _explain_tier = (os.getenv("QAR_EXPLAIN_TIER") or "").strip().lower()
     if _explain_tier:
         cfg.orchestrator.explain_tier = _explain_tier
+    # QAR_LINK_GUARD / QAR_LINK_POLICY_FILE: the link guard (see core/link_guard.py) -- ON by
+    # default, because a fabricated URL that reads perfectly is worse than no URL at all. "0"
+    # turns it off. QAR_LINK_POLICY_FILE names the JSON that says what "verified" means for this
+    # host app (its route table or a routes_file pointing at a generated one, its own origins,
+    # trusted hosts, in-app schemes, rewrite rules). With no policy file external URLs are still
+    # fetched and checked, while in-app paths have no route table to be checked against, so they
+    # come back unverified and are stripped.
+    _link_guard = (os.getenv("QAR_LINK_GUARD") or "").strip().lower()
+    if _link_guard in ("1", "true", "on", "yes"):
+        cfg.orchestrator.link_guard = True
+    elif _link_guard in ("0", "false", "off", "no"):
+        cfg.orchestrator.link_guard = False
+    _link_policy = (os.getenv("QAR_LINK_POLICY_FILE") or "").strip()
+    if _link_policy:
+        cfg.orchestrator.link_policy_file = _link_policy
     # Config FILE last: fills any field no environment variable above touched, from config_path/
     # QAR_CONFIG_FILE (see RunnerConfig.from_file + config.apply_file_defaults). A field an env var
     # set always wins; this never overrides one.

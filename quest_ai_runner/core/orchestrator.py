@@ -102,6 +102,7 @@ from .guard import (
     ExecutionRecord,
     classify_exec_phase,
 )
+from .link_guard import LinkGuard, build_link_guard
 from .answer_explanation import (
     EXPLAIN_PROMPT,
     EXPLAIN_TOOL,
@@ -1305,6 +1306,17 @@ class OrchestratorConfig:
     # The tier the explanation call resolves to. This is a summary of a turn that already happened,
     # not a gate on its outcome (that is verify_tier), so it gets the cheap tier.
     explain_tier: str = "fast"
+    # LINK GUARD (see core/link_guard.py): every terminal reply is scanned and no link the guard
+    # could not verify reaches the reader. A model writes plausible, wrong URLs; a reader who taps
+    # one and lands nowhere stops trusting the real links too. ON by default because sending a
+    # fabricated address is worse than sending none. Env: QAR_LINK_GUARD ("0"/"false" disables).
+    link_guard: bool = True
+    # JSON file describing what "verified" means for THIS host app: its route table (or a
+    # ``routes_file`` pointing at a generated one), its own origins, trusted hosts, in-app schemes
+    # and rewrite rules. Unset means external URLs are still checked over the network while in-app
+    # paths have nothing to be checked against, so they come back unverified and are stripped.
+    # Env: QAR_LINK_POLICY_FILE.
+    link_policy_file: str = ""
 
 
 @dataclass
@@ -1376,6 +1388,11 @@ class OrchestratorResult:
     # returned result without having to observe the event stream. None whenever the feature is off
     # or the turn was judged not worth explaining.
     explanation: Optional[Dict[str, Any]] = None
+    # One entry per link the LINK GUARD judged in this turn's reply (see core/link_guard.py):
+    # {"url", "verdict": "ok"|"dead"|"unknown", "reason", "replaced_with"}. Empty when the guard is
+    # off or the reply carried no links. This is the record of WHY a link was kept or stripped, so
+    # a stripped link is auditable rather than a silent edit.
+    link_checks: List[Dict[str, Any]] = field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
@@ -4312,6 +4329,11 @@ class Orchestrator:
         # "APPLICABLE GUIDANCE" block before planning, and the planner may list_guidance /
         # read_guidance on demand. Cards are opaque text. Never raises. None = today's behavior.
         self.guidance = guidance
+        # The LINK GUARD, built once on first use and then kept for the life of this orchestrator
+        # so its verdict cache survives across turns: a long-lived poller checks a given URL once
+        # an hour, not once a reply. See resolve_link_guard() and core/link_guard.py.
+        self.link_guard_instance: Optional[LinkGuard] = None
+        self.link_guard_built = False
         # Optional storage-agnostic CONVERSATION STORE (the User Input Understanding step). When
         # wired AND the caller passes a conv_id, the brain may pull a relevant slice of the current
         # (and related) conversation to rewrite a short/anaphoric message into a self-contained goal
@@ -5300,6 +5322,24 @@ class Orchestrator:
                 log.warning("Goal verification call failed (model=%s): %s",
                            model, last_error, exc_info=True)
         return None, last_error
+
+    def resolve_link_guard(self) -> Optional[LinkGuard]:
+        """The LINK GUARD for this orchestrator, built once and kept (see core/link_guard.py).
+
+        Built lazily so an orchestrator that never answers never reads a policy file, and cached on
+        the instance so the guard's verdict cache survives across turns: a poller that answers a
+        hundred times an hour checks a given URL once, not a hundred times.
+        """
+        if not self.link_guard_built:
+            self.link_guard_built = True
+            try:
+                self.link_guard_instance = build_link_guard(
+                    self.cfg.link_policy_file or os.getenv("QAR_LINK_POLICY_FILE", ""),
+                    enabled=self.cfg.link_guard)
+            except Exception as e:  # noqa: BLE001 -- a bad policy must not break every turn
+                log.warning("Link guard could not be built: %s: %s", type(e).__name__, e)
+                self.link_guard_instance = None
+        return self.link_guard_instance
 
     def write_answer_explanation(self, trace: TurnTrace) -> Optional[Dict[str, Any]]:
         """Write the user-facing "how I got this" payload for a turn that already answered.
@@ -8797,6 +8837,33 @@ class Orchestrator:
                 # stream so any consumer waiting on EVENT_DONE is not left hanging.
                 emit.emit(ProgressEvent(type=EVENT_DONE, result_kind=res.kind, step=steps))
                 return res
+            # --- LINK GUARD (core/link_guard.py) ----------------------------------------------
+            # THE LAST THING THAT TOUCHES THE WORDS, and deliberately so: it runs before the
+            # context write-back and before EVENT_RESULT, so what the reader sees, what a consumer
+            # persists, and what the assembler learns from are all the SAME sanitized text. Every
+            # link is checked (external URLs fetched for real, in-app paths matched against the
+            # host app's route table) over several passes, and anything that does not come back
+            # verified is stripped to plain words. A fabricated address that reads perfectly is the
+            # failure mode here, so "could not verify" is treated like "does not exist".
+            if cfg.link_guard and res.kind in ("answer", "deep"):
+                try:
+                    guard = self.resolve_link_guard()
+                    if guard is not None:
+                        if res.text:
+                            res.text, _lv = guard.sanitize(res.text)
+                            res.link_checks.extend(v.to_dict() for v in _lv)
+                        for _d in res.deep_results:
+                            if getattr(_d, "output", None):
+                                _d.output, _lv = guard.sanitize(_d.output)
+                                res.link_checks.extend(v.to_dict() for v in _lv)
+                        _stripped = [v for v in res.link_checks if v.get("verdict") != "ok"]
+                        if _stripped:
+                            log.info("Link guard stripped %d unverified link(s): %s",
+                                     len(_stripped),
+                                     ", ".join(f"{v['url']} ({v.get('reason') or v['verdict']})"
+                                               for v in _stripped[:5]))
+                except Exception as e:  # noqa: BLE001 -- guarding links must never lose the reply
+                    log.warning("Link guard skipped: %s: %s", type(e).__name__, e, exc_info=True)
             # Best-effort ContextAssembler write-back (learn from the outcome for next run). Pass the
             # files the brain ACTUALLY read this run (their rel_paths, from the gathered reads/greps)
             # so the card PINS them: that is what makes the loop compound and what staleness later

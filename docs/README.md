@@ -71,6 +71,9 @@ Start here. These docs go from "run it in five minutes" to "implement your own a
 - **[Quest API contract](quest-api-contract.md)** — the exact endpoints the runner speaks.
 - **[The anticipation engine](anticipation.md)** — learned ask patterns, the objective function and
   online EMA learning, precomputed context, and the opt-in `QAR_ANTICIPATION` flag.
+- **[Link guard](link-guard.md)**: how every link in a reply is verified before it is sent
+  (external URLs fetched, in-app paths matched against the host app's real route table), why
+  "could not verify" is treated like "does not exist", and what the policy file configures.
 - **[Answer explanation](answer-explanation.md)** — the user-facing "Explain how I got this" panel:
   why it is a second call after the answer, the model-free eligibility gate, and which half of the
   payload is a record rather than prose.

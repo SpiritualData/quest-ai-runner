@@ -7,6 +7,29 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Link guard: no reply leaves the brain carrying a link nobody checked**
+  (`core/link_guard.py`, docs: `docs/link-guard.md`). A model writes URLs that read perfectly and
+  do not exist; the reader taps one, lands nowhere, and stops trusting the real links too. Every
+  terminal `answer`/`deep` reply is now scanned in `finish()` (before `EVENT_RESULT` and before the
+  `ContextAssembler` write-back, so the reader, the consumer and the assembler all get the SAME
+  text) and each link gets one of three verdicts: `ok` (an external URL that answered 2xx/3xx, or
+  401/403 which prove the endpoint exists and is merely gated; a trusted host; a declared in-app
+  scheme; an internal path matching the host app's real route table), `dead` (404/410, a host that
+  does not resolve, a refused connection, or an internal path with no matching route), or `unknown`
+  (timeout, 5xx, no route table to check against). `ok` links are untouched; `dead` and `unknown`
+  links are stripped, keeping the author's label as plain text plus a short "(link removed: ...)"
+  note. Unverified is treated like dead on purpose. Multiple passes are the point: an `unknown` is
+  re-read up to `passes` times before the verdict sticks, and the rewritten text is rescanned until
+  a scan finds nothing left to strip, so the guarantee is about the emitted string rather than the
+  links the first pass happened to see. Verdicts are cached per URL for `cache_ttl` on a guard that
+  lives as long as the orchestrator, so a long-lived poller checks a URL once an hour, not once a
+  reply. URLs inside code spans and fenced blocks are being shown, not offered, and are never
+  touched. Generic by construction: the route table (or a `routes_file` pointing at one the host app
+  generates), origins, trusted hosts, in-app schemes and rewrite rules are all consumer data, and
+  the single network seam is `LinkGuard(fetcher=...)`, so the suite runs offline. New:
+  `OrchestratorConfig.link_guard` (ON by default; env `QAR_LINK_GUARD=0` disables) and
+  `.link_policy_file` (env `QAR_LINK_POLICY_FILE`), plus `OrchestratorResult.link_checks`, the
+  per-link record of what was kept or stripped and why.
 - **`QuestClient.create_goal` / `create-goal` CLI can assign the new goal to a human Quest member
   at creation** via `assigned_to_user_id` (CLI: `--assigned-to-user-id`). This was a real gap: the
   backend's `POST /api/planning/goals` has taken `assignedToUserId` for a while (the same field its
