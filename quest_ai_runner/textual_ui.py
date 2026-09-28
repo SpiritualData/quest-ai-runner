@@ -1734,7 +1734,7 @@ class QuestAITerminal(App):
             self._ctx.add_sources(paths)
             total = self._ctx.total_sources
             self._activity.set_status(
-                f"gathering context  ({total} source{'s' if total != 1 else ''} so far)"
+                f"Gathering context  ({total} source{'s' if total != 1 else ''} so far)"
             )
 
         elif t == ev["context"]:
@@ -1827,6 +1827,9 @@ class QuestAITerminal(App):
                 deep_out = data.get("deep_output")
                 if rid and deep_out:
                     self._deep.set_final_output(rid, deep_out)
+                model = data.get("model")
+                if rid and model:
+                    self._deep.set_model(rid, model)
             if text:
                 # Show the first sentence of the goal as a clean completion line.
                 first = text.split(".")[0].strip()
@@ -2485,7 +2488,7 @@ class QuestAITerminal(App):
             log.write(Text(f"  {summary}", style="dim"))
         if final_output:
             log.write(Text(""))
-            log.write(Text("  result", style="bold green"))
+            log.write(Text("  Result", style="bold green"))
             self._console.markdown(final_output)
         elif narration:
             # No structured result (e.g. an errored/incomplete run): fall back to the worker's own
@@ -2495,10 +2498,12 @@ class QuestAITerminal(App):
                 log.write(Text(f"  … {len(narration) - len(tail)} earlier steps", style="dim"))
             for nl in tail:
                 log.write(Text(f"  {nl}"))
+        model = (snap.get("model") or "").strip()
+        model_suffix = f" · {model}" if model else ""
         if status == "error":
-            log.write(Text(f"  ✗ deep task ended with an error · {time_str}", style="red"))
+            log.write(Text(f"  ✗ Deep task ended with an error · {time_str}{model_suffix}", style="red"))
         else:
-            log.write(Text(f"  ✓ deep task complete · {time_str}", style="green"))
+            log.write(Text(f"  ✓ Deep task complete · {time_str}{model_suffix}", style="green"))
         # Point at the full per-action trace (the summary above is a roll-up). Only when there are
         # actions to replay; the panel stays available after the turn via the archive.
         if lines:

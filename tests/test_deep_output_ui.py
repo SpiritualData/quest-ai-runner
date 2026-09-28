@@ -288,7 +288,7 @@ async def test_finished_deep_task_output_persisted_to_transcript():
     assert "⎅ [Pass 1] Build the thing" in body
     assert "reading file [a].py" in body  # not misparsed as markup
     assert "wrote patch" in body
-    assert "✓ deep task complete" in body
+    assert "✓ Deep task complete" in body
 
 
 def test_flush_is_idempotent_per_run():
@@ -307,7 +307,48 @@ def test_errored_task_persisted_with_error_marker():
     app._deep.update_run_output("r1", "tried something")
     app._deep.set_run_status("r1", "error")
     app._flush_deep_run("r1")
-    assert any("✗ deep task ended with an error" in ln for ln in log.lines)
+    assert any("✗ Deep task ended with an error" in ln for ln in log.lines)
+
+
+def test_deep_task_complete_shows_which_model_ran_it():
+    """The completion line names the LLM model the run actually executed with, so the user
+    can tell a haiku pass from an opus one at a glance."""
+    app, log = _make_app()
+    app._deep.add_run("r1", "Goal")
+    app._deep.update_run_output("r1", "did a thing")
+    app._deep.set_model("r1", "claude-sonnet-4-6")
+    app._deep.set_run_status("r1", "done")
+    app._flush_deep_run("r1")
+
+    body = "\n".join(log.lines)
+    assert "✓ Deep task complete" in body
+    assert "claude-sonnet-4-6" in body
+
+
+def test_errored_run_also_shows_the_model_it_was_attempted_with():
+    app, log = _make_app()
+    app._deep.add_run("r1", "Goal")
+    app._deep.update_run_output("r1", "tried something")
+    app._deep.set_model("r1", "claude-haiku-4-5")
+    app._deep.set_run_status("r1", "error")
+    app._flush_deep_run("r1")
+
+    body = "\n".join(log.lines)
+    assert "✗ Deep task ended with an error" in body
+    assert "claude-haiku-4-5" in body
+
+
+def test_deep_task_complete_omits_model_suffix_when_unknown():
+    """No model reported (an older orchestrator, or a runner that never resolved one) leaves the
+    completion line exactly as before -- no stray separator or empty label."""
+    app, log = _make_app()
+    app._deep.add_run("r1", "Goal")
+    app._deep.update_run_output("r1", "did a thing")
+    app._deep.set_run_status("r1", "done")
+    app._flush_deep_run("r1")
+
+    line = next(ln for ln in log.lines if "Deep task complete" in ln)
+    assert line.strip() == "✓ Deep task complete · 0s"
 
 
 def test_pending_runs_flushed_at_turn_end():
@@ -331,7 +372,7 @@ def test_empty_run_writes_no_block_but_is_marked():
 
 @pytest.mark.asyncio
 async def test_final_output_rendered_in_record():
-    """The worker's final result is shown under a 'result' header, not the per-op trace."""
+    """The worker's final result is shown under a 'Result' header, not the per-op trace."""
     app, log = await _make_app_after_begin_turn("Fix the bug")
     app._deep.add_run("r1", "Fix the bug")
     app._deep.update_run_output("r1", "Read: /a/b.py")
@@ -343,7 +384,7 @@ async def test_final_output_rendered_in_record():
     assert "⎅ [Pass 1] Fix the bug" in body
     assert "1 read" in body                 # rolled up, not the path
     assert "/a/b.py" not in body            # individual file ops are NOT replayed
-    assert "result" in body
+    assert "Result" in body
     assert "Patched the off-by-one in foo()." in body
     assert "Committed as abc123." in body
 
@@ -432,7 +473,7 @@ def test_narration_shown_when_no_result():
     body = "\n".join(log.lines)
     assert "1 read" in body
     assert "I think the issue is in the parser." in body
-    assert "✗ deep task ended with an error" in body
+    assert "✗ Deep task ended with an error" in body
 
 
 def test_final_output_alone_is_enough_to_flush():
@@ -519,7 +560,7 @@ async def test_deep_turn_answer_not_duplicated_after_flush():
         body = "\n".join(log.lines)
         assert body.count(output) == 1  # the result body appears exactly once, not twice
         assert "⎅ [Pass 1] Build the thing" in body
-        assert "✓ deep task complete" in body
+        assert "✓ Deep task complete" in body
         assert f"{app.rep_name} (AI):" not in body  # no second generic answer bubble
 
 

@@ -309,6 +309,11 @@ class DeepResult:
     # rung is a Claude model, so another rung would be refused too) and the task executor requeues
     # the task instead of reporting it. ``session_id`` still names the session to continue.
     usage_limited: bool = False
+    # The model this run actually executed with, when known. Set by the goal loop from the ladder
+    # rung it dispatched to (``core/orchestrator.py``'s ``run_one``), not by the runner itself, so
+    # every runner gets this for free; a runner that resolves its own model (or a future rung that
+    # differs from what was requested) may overwrite it with the truer value.
+    model: Optional[str] = None
 
 
 # The two ways a deep runner can hand its future-context bullets back. Declared per runner as

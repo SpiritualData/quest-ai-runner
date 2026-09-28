@@ -254,6 +254,7 @@ class _DeepRunTracker:
                 'started': time.time(),
                 'exec_lines': [],  # accumulate exec events for this run
                 'final_output': '',  # the worker's final result, set on completion
+                'model': None,  # the LLM model this run actually executed with, set on completion
             }
             if self._active_run_id is None:
                 self._active_run_id = run_id
@@ -263,6 +264,12 @@ class _DeepRunTracker:
         with self._lock:
             if run_id in self._runs and text:
                 self._runs[run_id]['final_output'] = text
+
+    def set_model(self, run_id: str, model: str) -> None:
+        """Record which LLM model a deep run actually executed with."""
+        with self._lock:
+            if run_id in self._runs and model:
+                self._runs[run_id]['model'] = model
 
     def update_goal(self, run_id: str, goal: str) -> None:
         """Set/refine a run's goal text once the real subgoal is known."""
@@ -341,7 +348,7 @@ class _DeepRunTracker:
                 goal = " ".join((info['goal'] or "").split())
                 if len(goal) > 160:
                     goal = goal[:160].rstrip() + "…"
-                goal_text = goal or "deep task"
+                goal_text = goal or "Deep task"
                 if run_id == active_run_id:
                     lines.append(f"\x1b[1;33m▾ ⎅ {goal_text}\x1b[0m")
                 else:

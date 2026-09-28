@@ -6633,6 +6633,7 @@ class Orchestrator:
                 before_decision_ids = self.quest_open_decision_ids(quest_id)
                 res = _do_run(run_brief, run_model, active_runner,
                               resume_session_id=resume_session, max_turns=attempt_turns)
+                res.model = res.model or run_model
                 resume_session = None   # consumed: a continuation is offered per attempt, not sticky
                 if res.decision_id is None and not getattr(res, "deferred", False):
                     recovered = self.find_new_decision_id(quest_id, before_decision_ids)
@@ -6834,7 +6835,8 @@ class Orchestrator:
                 emit.emit(ProgressEvent(type=EVENT_MILESTONE, text=f"Completed: {goal}",
                                         data={"goal": goal,
                                               "run_id": captured_run_id["id"],
-                                              "deep_output": _strip_future_context(res.output).strip() or None}))
+                                              "deep_output": _strip_future_context(res.output).strip() or None,
+                                              "model": res.model}))
             # WARM recent-context write-back (see core/recent_context.py): record the cards+items
             # THIS goal's context actually included, under every applicable scope key, so a task
             # follow-up (another deep goal on the same quest/conversation, or the next chat turn)
