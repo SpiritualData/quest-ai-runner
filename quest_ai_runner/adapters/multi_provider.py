@@ -14,13 +14,25 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, List, Optional
 
-from ..core.adapters import ModelProvider, answer_with_reasoning
+from ..core.adapters import ModelProvider, ThreadLocalCounter, answer_with_reasoning
 
 _log = logging.getLogger("quest-ai-runner.multi-provider")
 
 
 class MultiProvider(ModelProvider):
     """Routes model calls to the correct provider based on model name prefix."""
+
+    # Thread-local (see ThreadLocalCounter): this instance is a singleton, built once by
+    # build_orchestrator and reused by the Orchestrator for EVERY task, including several run
+    # concurrently (quest-ai-runner's Poller, max_concurrent_tasks). Orchestrator.run() resets
+    # provider.tokens_in/out to 0 at the start of "this turn" and reads them at the end -- true
+    # only if these describe just the calling thread's own calls. A plain shared int let one
+    # task's reset zero out a sibling task's in-flight count and let concurrent tasks' calls sum
+    # into one total, which is how AI-created tasks were observed reporting 200,000+ tokens for a
+    # single task's modest real usage.
+    call_count = ThreadLocalCounter()
+    tokens_in = ThreadLocalCounter()
+    tokens_out = ThreadLocalCounter()
 
     def __init__(
         self,
@@ -46,8 +58,8 @@ class MultiProvider(ModelProvider):
         self.primary = primary
         self.providers = providers or {}
         self.call_count = 0
-        self.tokens_in: int = 0
-        self.tokens_out: int = 0
+        self.tokens_in = 0
+        self.tokens_out = 0
         self._usage_tracker = usage_tracker
         self._registry = registry
 

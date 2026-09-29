@@ -53,8 +53,8 @@ class GeminiProvider(ModelProviderBase):
         self._client = None
         self._models_cache: Optional[List[str]] = None
         self._models_cached_at = 0.0
-        self.tokens_in: int = 0
-        self.tokens_out: int = 0
+        # tokens_in/tokens_out: thread-local counters inherited from ModelProviderBase (see
+        # ThreadLocalCounter) -- a provider instance is shared across concurrently running tasks.
 
     def _get_client(self):
         if self._client is None:

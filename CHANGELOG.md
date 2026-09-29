@@ -125,6 +125,24 @@ All notable changes to this project are documented here. The format is based on
   runner in a different timezone from the person no longer re-holds it by its own wall clock.
 
 ### Fixed
+- **A shared provider instance let concurrently running tasks' token counts contaminate each
+  other, reported live as AI-created tasks showing 200,000+ tokens for a single task's modest real
+  usage.** `Poller` builds ONE `Orchestrator` (and hence one `MultiProvider`, wrapping one
+  `ClaudeCliProvider`/`AnthropicProvider`/`GeminiProvider`) and reuses it for every task; with
+  `max_concurrent_tasks` (default 2) running several tasks' `Orchestrator.run()` calls concurrently
+  on a thread pool, `tokens_in`/`tokens_out`/`call_count` were plain shared `int` instance
+  attributes. `Orchestrator.run()` resets them to 0 at the start of "this turn" and reads them at
+  the end to report what the turn cost, which is only true if nothing else concurrently touches the
+  same counters -- one task's reset could zero out a sibling task's in-flight count, and concurrent
+  tasks' calls summed into one shared total. A repro (`ThreadPoolExecutor`, 4 tasks, one shared
+  `MultiProvider`) showed every task's reported total inflated roughly 10x and mismatched from its
+  own real usage. Fixed by making these counters thread-local (`ThreadLocalCounter` descriptor,
+  `core/adapters.py`; used by `ModelProviderBase` and by `MultiProvider`, plus
+  `ClaudeCliProvider`'s extra breakdown fields), so each concurrently-running task's turn only ever
+  sees its own calls no matter how many siblings run in parallel on the same instance. No call site
+  changes (`self.tokens_in = 0`, `+= n`, `getattr(obj, "tokens_in", 0)` all keep working); a normal
+  single-threaded run (the CLI, `max_concurrent_tasks=1`) is unaffected. Tests:
+  `tests/test_provider_token_counters_thread_safety.py`.
 - **Turn-start budgets raised: context assembly 15s -> 30s, guidance selection 5s -> 15s**
   (`QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` / `QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS`). They are a
   safety net, sized for a slow day rather than a typical one: losing a turn's context costs more

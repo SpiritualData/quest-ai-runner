@@ -57,10 +57,12 @@ class AnthropicProvider(ModelProviderBase):
         self._client = None
         self._models_cache: Optional[List[str]] = None
         self._models_cached_at = 0.0
-        # Accumulated token counts for the current turn; reset by Orchestrator.run() at the
-        # start of each turn and read by finish() to populate OrchestratorResult.tokens_in/out.
-        self.tokens_in: int = 0
-        self.tokens_out: int = 0
+        # tokens_in/tokens_out are thread-local counters inherited from ModelProviderBase (see
+        # ThreadLocalCounter): accumulated for the CALLING thread's current turn, reset by
+        # Orchestrator.run() at the start of each turn and read by finish() to populate
+        # OrchestratorResult.tokens_in/out. A provider instance is shared across concurrently
+        # running tasks, so a plain shared int here would let one task's reset/accumulation
+        # corrupt another's count.
 
     def _get_client(self):
         if self._client is None:

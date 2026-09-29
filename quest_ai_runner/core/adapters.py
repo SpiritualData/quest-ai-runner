@@ -44,9 +44,52 @@ from __future__ import annotations
 
 import enum
 import re
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Protocol, runtime_checkable
+
+
+class ThreadLocalCounter:
+    """A per-thread numeric counter that reads/writes like a plain instance attribute.
+
+    WHY THIS EXISTS. A ``ModelProvider`` instance is not one-run-at-a-time: quest-ai-runner's
+    ``Poller`` builds ONE ``Orchestrator`` (and hence one provider, see ``build_orchestrator``)
+    and reuses it for every task, and ``max_concurrent_tasks`` (default 2) runs several tasks'
+    ``Orchestrator.run()`` calls CONCURRENTLY on a thread pool. ``Orchestrator.run()`` resets a
+    provider's ``tokens_in``/``tokens_out`` to 0 at the start of "the current turn" and reads them
+    at the end to report what THIS turn cost -- an assumption that is only true if nothing else is
+    writing to the same counters meanwhile. A plain ``int`` instance attribute breaks that: one
+    task's reset can zero out a sibling task's still-accumulating count, and both tasks' calls add
+    into the SAME shared total, so a busy scan's combined usage across every concurrently-running
+    task gets reported as any ONE of those tasks' own cost (observed live: AI-created tasks showing
+    200,000+ tokens for what was, per-task, a modest amount of real usage). Backing the attribute
+    with ``threading.local()`` keeps each thread's view isolated, which is exactly correct because
+    the Poller's execution model is already "one worker thread runs one task's turn start to
+    finish" -- no call site (``self.tokens_in = 0``, ``self.tokens_in += n``, ``getattr(obj,
+    "tokens_in", 0)``) needs to change.
+    """
+
+    def __init__(self, default: float = 0):
+        self._default = default
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        self._name = name
+
+    def _local(self, obj: Any) -> threading.local:
+        store = obj.__dict__.get("_thread_local_counters")
+        if store is None:
+            store = threading.local()
+            obj.__dict__["_thread_local_counters"] = store
+        return store
+
+    def __get__(self, obj: Any, objtype: Optional[type] = None):
+        if obj is None:
+            return self
+        return getattr(self._local(obj), self._name, self._default)
+
+    def __set__(self, obj: Any, value: Any) -> None:
+        setattr(self._local(obj), self._name, value)
 
 
 # ---------------------------------------------------------------------------
@@ -1185,8 +1228,17 @@ class RetrievalAdapterBase(abc.ABC):
 
 
 class ModelProviderBase(abc.ABC):
+    # Thread-local (see ThreadLocalCounter): a provider instance is shared across concurrently
+    # running tasks, so these must describe only the calling thread's own usage, not a global
+    # total. Every subclass shares these instead of redeclaring its own tokens_in/tokens_out.
+    call_count = ThreadLocalCounter()      # Track LLM calls for reporting
+    tokens_in = ThreadLocalCounter()
+    tokens_out = ThreadLocalCounter()
+
     def __init__(self):
-        self.call_count: int = 0  # Track LLM calls for reporting
+        self.call_count = 0
+        self.tokens_in = 0
+        self.tokens_out = 0
 
     @abc.abstractmethod
     def plan(self, prompt, *, model, tool_schema, layers=None) -> Dict[str, Any]: ...

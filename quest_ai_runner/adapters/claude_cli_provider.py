@@ -41,7 +41,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..core import usage_limit
-from ..core.adapters import ModelProviderBase
+from ..core.adapters import ModelProviderBase, ThreadLocalCounter
 from .retry_utils import retry_transient
 
 # Tools the spawned planner/answer process is barred from. plan/answer are PURE completions —
@@ -306,6 +306,16 @@ class ClaudeCliProvider(ModelProviderBase):
     # (transcribe to text) instead of trying to send blocks the CLI would flatten to a placeholder.
     supports_native_images = False
 
+    # Thread-local (see ThreadLocalCounter / ModelProviderBase): this instance is shared across
+    # concurrently running tasks (quest-ai-runner's Poller runs max_concurrent_tasks turns in
+    # parallel on one Orchestrator/provider), so these must describe only the calling thread's
+    # own usage. tokens_in/tokens_out/call_count come from ModelProviderBase; the extra
+    # CLI-specific breakdown fields below need the same treatment.
+    fresh_input_tokens = ThreadLocalCounter()
+    cache_creation_tokens = ThreadLocalCounter()
+    cache_read_tokens = ThreadLocalCounter()
+    cost_usd = ThreadLocalCounter(default=0.0)
+
     def __init__(
         self,
         *,
@@ -325,6 +335,7 @@ class ClaudeCliProvider(ModelProviderBase):
             else list(_PURE_COMPLETION_DISALLOWED)
         )
         # Running totals, read by callers that report what a run cost (see _accumulate_usage).
+        # All thread-local (see the class-level ThreadLocalCounter declarations above).
         self.tokens_in = 0
         self.tokens_out = 0
         self.fresh_input_tokens = 0
