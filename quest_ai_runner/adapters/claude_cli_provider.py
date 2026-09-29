@@ -134,9 +134,8 @@ _ONE_SHOT_FLAGS: Dict[str, List[str]] = {
 }
 
 
-@lru_cache(maxsize=1)
 def _neutral_cwd() -> str:
-    """An empty directory to run a pure-completion subprocess in, created once per process.
+    """An empty directory to run a pure-completion subprocess in.
 
     The CLI reads the CLAUDE.md chain above its WORKING DIRECTORY no matter what the setting
     sources say, and this runner is deliberately started from the corpus root so the deep runner
@@ -148,6 +147,16 @@ def _neutral_cwd() -> str:
     An empty scratch directory has no CLAUDE.md above it that belongs to anyone's project, so the
     completion gets its prompt and nothing else. Falls back to the inherited cwd (``None``) if the
     directory cannot be made, because a slightly expensive call beats a call that cannot run.
+
+    Deliberately NOT memoized (this used to be ``@lru_cache(maxsize=1)``, computing the path and
+    creating the directory once per process). A long-running process (the poll/chat services run
+    for days) outlives the directory: anything that clears stale scratch dirs under ``/tmp`` (a
+    tmpfiles sweep, a reboot, a stray cleanup script) removes it, and the cached path then pointed
+    at nothing -- every subsequent call failed with ``FileNotFoundError: ... 'qar-cli-completion'``
+    from ``subprocess.run``'s ``cwd=``, with no way to recover short of restarting the process
+    (found 2026-09-29: two Quest AI tasks failed back to back with exactly this error). Recomputed
+    and `mkdir(exist_ok=True)`-ensured on every call instead, which is self-healing at the cost of
+    one cheap, idempotent syscall per model call.
     """
     try:
         d = Path(tempfile.gettempdir()) / "qar-cli-completion"

@@ -226,6 +226,28 @@ def test_invoke_uses_neutral_cwd_and_bare_tools_flag(monkeypatch):
     assert "--disallowed-tools" not in captured["cmd"]
 
 
+def test_neutral_cwd_recreates_the_directory_if_something_else_removed_it():
+    """Regression for FileNotFoundError: ... 'qar-cli-completion' (found 2026-09-29).
+
+    _neutral_cwd() used to be @lru_cache(maxsize=1): the directory was created once per process
+    and the path cached forever. A long-running poll/chat service outlives the directory (a tmp
+    sweep, a reboot, a stray cleanup), so every call after that point returned a path to nothing,
+    and subprocess.run's cwd= raised. It must now recreate the directory on every call.
+    """
+    import os
+    import shutil
+
+    path = ccp._neutral_cwd()
+    assert os.path.isdir(path)
+
+    shutil.rmtree(path)
+    assert not os.path.exists(path)
+
+    path_again = ccp._neutral_cwd()
+    assert path_again == path
+    assert os.path.isdir(path_again), "a missing scratch dir must be recreated, not just re-returned"
+
+
 def test_answer_flattens_messages_and_returns_text(monkeypatch):
     p = ClaudeCliProvider()
     captured = {}
