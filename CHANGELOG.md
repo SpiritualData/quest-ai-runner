@@ -125,6 +125,14 @@ All notable changes to this project are documented here. The format is based on
   runner in a different timezone from the person no longer re-holds it by its own wall clock.
 
 ### Fixed
+- **`ClaudeCliProvider`'s neutral scratch directory was cached forever, so a task failed with
+  `FileNotFoundError: ... 'qar-cli-completion'` the moment anything else cleared it out from under
+  a long-running process.** `_neutral_cwd()` was `@lru_cache(maxsize=1)`: the directory was created
+  once per process and the path cached for that process's whole lifetime (the poll/chat services
+  run for days). A tmp sweep, a reboot, or a stray cleanup removing the directory left the cached
+  path pointing at nothing, and every subsequent planner/answer call's `subprocess.run(..., cwd=)`
+  raised, with no recovery short of restarting the process. Now recomputed and
+  `mkdir(exist_ok=True)`-ensured on every call: cheap, idempotent, and self-healing.
 - **A shared provider instance let concurrently running tasks' token counts contaminate each
   other, reported live as AI-created tasks showing 200,000+ tokens for a single task's modest real
   usage.** `Poller` builds ONE `Orchestrator` (and hence one `MultiProvider`, wrapping one
