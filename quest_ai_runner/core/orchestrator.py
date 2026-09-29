@@ -34,12 +34,17 @@ import re
 import threading
 import time
 from datetime import datetime, timezone
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Tuple
 
 from .adapters import (
+    # Every pool this module builds must carry the turn's usage scope into its workers, or the
+    # model calls those workers make (parallel sub-answers, overseer consults) never show up in
+    # the turn's reported token total. Imported under the stdlib name so pool call sites read the
+    # same as before.
+    ScopedThreadPoolExecutor as ThreadPoolExecutor,
     EVENT_CARD_THREAD,
     EVENT_CONTEXT,
     EVENT_DECISION,

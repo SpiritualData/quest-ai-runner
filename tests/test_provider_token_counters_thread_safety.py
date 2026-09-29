@@ -17,7 +17,7 @@ import time
 
 from quest_ai_runner.adapters.claude_cli_provider import ClaudeCliProvider
 from quest_ai_runner.adapters.multi_provider import MultiProvider
-from quest_ai_runner.core.adapters import ModelProviderBase
+from quest_ai_runner.core.adapters import ModelProviderBase, ScopedThreadPoolExecutor
 
 
 class CountingProvider(ModelProviderBase):
@@ -116,6 +116,59 @@ def test_single_threaded_behavior_unchanged():
     provider.tokens_in += 8
     assert provider.tokens_in == 50
     assert provider.tokens_out == 0
+
+
+def test_scoped_thread_pool_executor_attributes_worker_usage_to_the_turn():
+    """Model calls made by a pool the orchestrator spawns INSIDE a turn (parallel sub-answers,
+    the overseer consult, guidance calls) must land in that turn's own count, not vanish into an
+    anonymous worker thread's isolated tally.
+
+    A plain ThreadPoolExecutor would make plain thread-local counters under-report: each worker
+    thread is a distinct scope by default, so its calls would never be visible to the parent
+    thread's reset-then-read sequence. ScopedThreadPoolExecutor fixes that by having every
+    worker bill the CREATING thread's scope instead of its own.
+    """
+    provider = CountingProvider(tokens_per_call=1000)
+    provider.tokens_in = 0
+    provider.tokens_out = 0
+
+    with ScopedThreadPoolExecutor(max_workers=4) as pool:
+        futures = [pool.submit(provider.answer,
+                                [{"role": "user", "content": "hi"}], model="claude-sonnet")
+                   for _ in range(4)]
+        for f in futures:
+            f.result(timeout=10)
+
+    assert provider.tokens_in == 4 * 1000, (
+        f"worker-thread calls must count toward the spawning turn, got {provider.tokens_in}")
+
+
+def test_scoped_thread_pool_executor_does_not_leak_into_a_concurrent_turn():
+    """Two turns running concurrently, each spawning its OWN worker pool, must not cross-count --
+    the same isolation the plain thread-local tests above assert, extended to pooled workers."""
+    provider = CountingProvider(tokens_per_call=1000, delay=0.01)
+    results = [None, None]
+
+    def turn_with_pool(calls, index):
+        provider.tokens_in = 0
+        provider.tokens_out = 0
+        with ScopedThreadPoolExecutor(max_workers=calls) as pool:
+            futures = [pool.submit(provider.answer,
+                                    [{"role": "user", "content": "hi"}], model="claude-sonnet")
+                       for _ in range(calls)]
+            for f in futures:
+                f.result(timeout=10)
+        results[index] = provider.tokens_in
+
+    t1 = threading.Thread(target=turn_with_pool, args=(4, 0))
+    t2 = threading.Thread(target=turn_with_pool, args=(3, 1))
+    t1.start()
+    t2.start()
+    t1.join(timeout=10)
+    t2.join(timeout=10)
+
+    assert results[0] == 4 * 1000, f"turn A should see only its own 4 pooled calls, got {results[0]}"
+    assert results[1] == 3 * 1000, f"turn B should see only its own 3 pooled calls, got {results[1]}"
 
 
 def test_thread_local_counter_defaults_per_thread_without_explicit_init():

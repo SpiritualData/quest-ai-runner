@@ -127,6 +127,57 @@ def test_plan_degrades_to_empty_dict_on_invoke_failure(monkeypatch):
     assert p.plan("x", model="sonnet", tool_schema=DECIDE_TOOL) == {}
 
 
+def test_accumulate_usage_does_not_double_count_cache_reads():
+    """A cache READ must not be added into ``tokens_in`` alongside cache CREATION.
+
+    The two describe the SAME prompt prefix at two different points in its life: creation is
+    the first time it is paid for, a read is the identical tokens being re-fed on a later call.
+    Before this fix both were summed into tokens_in, so a harness-heavy multi-call turn (the
+    CLI's own tool-use preamble, re-sent on every internal turn) reported 200,000+ "tokens used"
+    for a few hundred tokens of real work -- the exact inflated figure seen on AI-created tasks.
+    """
+    p = ClaudeCliProvider()
+    envelope = {
+        "usage": {
+            "input_tokens": 9,
+            "cache_creation_input_tokens": 36465,
+            "cache_read_input_tokens": 24012,
+            "output_tokens": 40,
+        },
+        "total_cost_usd": 0.05,
+    }
+    p._accumulate_usage(envelope)
+    # Fresh input + cache creation only -- the cache read is NOT folded into tokens_in.
+    assert p.tokens_in == 9 + 36465
+    assert p.tokens_out == 40
+    # The read total is still tracked separately for cost work, just never re-added to tokens_in.
+    assert p.cache_read_tokens == 24012
+    assert p.cache_creation_tokens == 36465
+
+
+def test_accumulate_usage_repeated_calls_do_not_compound_cache_reads():
+    """A second call re-reading the SAME cached prefix must not keep inflating tokens_in.
+
+    Simulates a multi-turn ``claude -p`` run where every internal turn re-sends the same large
+    harness prefix from cache: only the first call's cache CREATION should count toward
+    tokens_in, not each subsequent call's cache READ of that same prefix.
+    """
+    p = ClaudeCliProvider()
+    first_call = {
+        "usage": {"input_tokens": 5, "cache_creation_input_tokens": 36465,
+                   "cache_read_input_tokens": 0, "output_tokens": 20},
+    }
+    second_call = {
+        "usage": {"input_tokens": 5, "cache_creation_input_tokens": 0,
+                   "cache_read_input_tokens": 36465, "output_tokens": 20},
+    }
+    p._accumulate_usage(first_call)
+    p._accumulate_usage(second_call)
+    # Two calls of ~5 fresh tokens each plus ONE cache creation, not two.
+    assert p.tokens_in == 5 + 36465 + 5
+    assert p.tokens_out == 40
+
+
 def test_answer_flattens_messages_and_returns_text(monkeypatch):
     p = ClaudeCliProvider()
     captured = {}

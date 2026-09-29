@@ -510,11 +510,19 @@ class ClaudeCliProvider(ModelProviderBase):
             self.cache_creation_tokens += int(usage.get("cache_creation_input_tokens") or 0)
             self.cache_read_tokens += int(usage.get("cache_read_input_tokens") or 0)
             self.tokens_in += int(usage.get("input_tokens") or 0)
-            # Cache creation is real input the model had to read; counting only ``input_tokens``
-            # under-reports a harness-heavy call by orders of magnitude (17,815 vs 9 on one
-            # measured call), which would make an expensive configuration look free.
+            # Cache creation is real input the model had to read for the FIRST time; counting only
+            # ``input_tokens`` under-reports a harness-heavy call by orders of magnitude (17,815 vs
+            # 9 on one measured call), which would make an expensive configuration look free.
             self.tokens_in += int(usage.get("cache_creation_input_tokens") or 0)
-            self.tokens_in += int(usage.get("cache_read_input_tokens") or 0)
+            # CACHE READS ARE DELIBERATELY NOT ADDED to ``tokens_in``. A cache read is the same
+            # prompt prefix being re-fed on a later call, and it was already counted once, as
+            # cache CREATION, on the call that wrote it. Adding it again on every call re-counts
+            # the identical tokens once per call: the CLI's own harness prefix alone measured
+            # 36,465 created + 24,012 re-read on a single "Say OK" call, so a normal multi-call
+            # turn reported 200,000+ "tokens used" for a few hundred tokens of real work. That is
+            # the inflated number users saw on AI-created tasks. The re-read total is still kept
+            # in ``cache_read_tokens`` for cost work, where it bills at roughly a tenth of fresh
+            # input and must stay a separate line rather than a hidden part of one total.
             self.tokens_out += int(usage.get("output_tokens") or 0)
             self.cost_usd += float(envelope.get("total_cost_usd") or 0.0)
             self.call_count += 1
