@@ -1898,16 +1898,26 @@ class AutopilotPass:
         return defaults
 
     def _reflections(self, scope_label: str) -> ReflectionContext:
-        """The person's latest reflection, fetched once per pass per period order.
+        """The person's latest PERIOD reflection, fetched once per pass per period order.
 
         Best-effort by construction (``collect_reflections`` never raises and returns an empty
         context for a client that has no reflection methods at all), so a backend or client without
         these endpoints composes exactly the batch text it composed before.
+
+        ``include_daily=False`` on purpose: the daily plan's free text is the same for every quest
+        this pass runs, so folding it into every quest's batch handed each quest the person's whole
+        reflection regardless of what it concerned -- a quest about one area learning what they
+        wrote about a completely different one. That text is now split into per-quest notes at
+        reflection time (see quest-backend's daily-plan reflection-notes endpoint), and a quest's
+        own notes already reach its own batch by the ordinary quest-reference path, correctly
+        scoped to just that quest. The period review is left alone: unlike the daily entry it is
+        one review of the whole period, not something with an obvious single quest to attach to.
         """
         periods = self._reflection_periods(scope_label)
         cached = self._reflection_cache.get(periods)
         if cached is None:
-            cached = collect_reflections(self._client, periods=periods, now=self._now())
+            cached = collect_reflections(self._client, periods=periods, now=self._now(),
+                                          include_daily=False)
             self._reflection_cache[periods] = cached
             if cached.has_any():
                 log.info("autopilot: read the person's reflection (daily=%s, period=%s)",

@@ -266,7 +266,11 @@ def adapter_with(**kwargs):
     return QuestRetrievalAdapter(ConfigurableFakeClient(**kwargs))
 
 
-def test_reflection_context_query_returns_both_reflections():
+def test_reflection_context_query_returns_the_period_review_but_never_the_daily_text():
+    """The daily plan's free text is split into per-quest notes at reflection time now (see
+    quest-backend's daily-plan reflection-notes endpoint), so this tool must never hand back the
+    whole thing -- a quest scoped conversation asking for "my reflection" would otherwise learn
+    what the person wrote about every other quest too. The period review is unaffected."""
     adapter = adapter_with(
         daily_by_date={None: {"has_plan": True, "date": "2026-08-12",
                               "yesterday_review": "Lost the afternoon to meetings."}},
@@ -276,18 +280,35 @@ def test_reflection_context_query_returns_both_reflections():
     obs = adapter.query({"kind": "reflection_context"})
     assert obs.kind == "query"
     assert obs.rel_path == "quest://reflections"
-    assert "Lost the afternoon to meetings." in obs.text
+    assert "Lost the afternoon to meetings." not in obs.text
     assert "Protect two mornings for writing." in obs.text
+    # The daily endpoint is never even called, so there is nothing to leak.
+    assert adapter.client.daily_calls == []
 
 
-def test_reflection_context_query_with_only_the_daily_entry():
+def test_reflection_context_query_ignores_an_explicit_include_daily_true():
+    """A caller cannot opt back into the daily leak by passing include_daily -- it is accepted
+    (so an older caller does not get a TypeError) and silently ignored."""
+    adapter = adapter_with(
+        daily_by_date={None: {"has_plan": True, "date": "2026-08-12",
+                              "yesterday_review": "Good deep-work day."}},
+    )
+    obs = adapter.query({"kind": "reflection_context", "include_daily": True})
+    assert "Good deep-work day." not in obs.text
+    assert adapter.client.daily_calls == []
+
+
+def test_reflection_context_query_with_only_the_daily_entry_reports_absence():
+    """With no period review on record and the daily portion excluded by design, there is
+    genuinely nothing to report -- and the message must not pretend the daily text was checked."""
     adapter = adapter_with(
         daily_by_date={None: {"has_plan": True, "date": "2026-08-12",
                               "yesterday_review": "Good deep-work day."}},
     )
     obs = adapter.query({"kind": "reflection_context"})
     assert obs.kind == "query"
-    assert "Good deep-work day." in obs.text
+    assert "No period reflection is recorded" in obs.text
+    assert "Good deep-work day." not in obs.text
 
 
 def test_reflection_context_query_reports_absence_as_a_result_not_an_error():
@@ -295,7 +316,7 @@ def test_reflection_context_query_reports_absence_as_a_result_not_an_error():
     asking the person to paste text it has just verified does not exist."""
     obs = adapter_with().query({"kind": "reflection_context"})
     assert obs.kind == "query"
-    assert "No reflection is recorded" in obs.text
+    assert "No period reflection is recorded" in obs.text
     assert "week, month" in obs.text
 
 
@@ -304,8 +325,7 @@ def test_reflection_context_query_accepts_a_single_period_string():
         reviews={("quarter", False): {"has_review": True,
                                       "reflection_past": "Quarter went wide."}},
     )
-    obs = adapter.query({"kind": "reflection_context", "periods": "quarter",
-                         "include_daily": False})
+    obs = adapter.query({"kind": "reflection_context", "periods": "quarter"})
     assert "Quarter went wide." in obs.text
     assert adapter.client.daily_calls == []
 

@@ -326,12 +326,22 @@ class QuestRetrievalAdapter(RetrievalAdapter):
         )
 
     def _query_reflection_context(self, spec: Dict[str, Any]) -> Observation:
-        """Fetch the person's own latest reflections: daily review plus one period review.
+        """Fetch the person's own latest reflection: one period review (week/month/...).
 
         Needs no goal_id or quest_id — reflections live on the USER. This exists because a planner
-        asked to work "based on my daily reflection" previously had no action that could go and get
-        one, so the best it could do was say it did not have the text and ask the person to paste
-        it. Now it can read it.
+        asked to work "based on my reflection" previously had no action that could go and get one,
+        so the best it could do was say it did not have the text and ask the person to paste it.
+        Now it can read it.
+
+        The DAILY plan's free text (how yesterday went, what they planned for the day) is
+        deliberately NEVER included here, whatever ``include_daily`` says. Quest now asks an LLM to
+        split that text into per-quest notes at reflection time, and those notes already reach the
+        quest they were assigned to through its own notes (any conversation scoped to a quest can
+        read that quest's own notes). Reading the WHOLE daily reflection here would defeat that
+        scoping: whichever quest this conversation is scoped to would learn what the person wrote
+        about every OTHER quest too, and a request is not evidence the person wants that. The
+        ``include_daily`` key is still accepted so an older caller does not get a TypeError, it is
+        simply ignored.
 
         An absence is reported as a normal result, not an error: "the person has not written one"
         is a true, useful answer, and returning kind="error" would read as "this lookup is broken"
@@ -340,12 +350,11 @@ class QuestRetrievalAdapter(RetrievalAdapter):
         periods = spec.get("periods") or spec.get("period") or DEFAULT_PERIODS
         if isinstance(periods, str):
             periods = [periods]
-        include_daily = spec.get("include_daily", True)
         use_previous = bool(spec.get("use_previous", False))
 
         ctx = collect_reflections(
             self.client,
-            include_daily=bool(include_daily),
+            include_daily=False,
             periods=list(periods),
             use_previous=use_previous,
         )
@@ -355,9 +364,11 @@ class QuestRetrievalAdapter(RetrievalAdapter):
                 kind="query",
                 locator="reflection_context",
                 rel_path="quest://reflections",
-                text=("No reflection is recorded on Quest right now. Checked the daily plan"
-                      f"{' (skipped)' if not include_daily else ''} and the {checked} review; "
-                      "the person has not submitted one. Do not invent what it might have said."),
+                text=("No period reflection is recorded on Quest right now. Checked the "
+                      f"{checked} review; the person has not submitted one. This does not cover "
+                      "the daily reflection's free text -- read this quest's own notes for what "
+                      "the person said about it specifically. Do not invent what either might "
+                      "have said."),
             )
         return Observation(
             kind="query",
@@ -541,10 +552,12 @@ class QuestRetrievalAdapter(RetrievalAdapter):
             "person's check-in notes on that specific goal) from Quest",
             "query_quest: Query a specific quest for goals and metadata",
             "discover_goals: List goals available in a quest",
-            "get_reflection_context: Fetch the person's own latest reflections from Quest (their "
-            "daily review of how yesterday went, and their week/month review). Needs no ids. Use "
-            "this whenever a request refers to their reflection, their review, how their day or "
-            "week went, or what they said they want to focus on",
+            "get_reflection_context: Fetch the person's own latest period review from Quest (their "
+            "week/month review of how it went and what to focus on next). Needs no ids. Does NOT "
+            "cover the daily reflection's free text -- that is split into notes on the quest(s) it "
+            "concerns, so read this quest's own notes for that instead. Use this whenever a "
+            "request refers to their week or month review, or what they said they want to focus "
+            "on next",
             "get_task: Read one task in full, including the result the person received. Use it "
             "when a goal note answers one of your emails and names the task it answers",
         ]
@@ -565,15 +578,18 @@ class QuestRetrievalAdapter(RetrievalAdapter):
                 "Usage: query({kind: 'task_history', task_id: 'atask_...'})"
             ),
             "get_reflection_context": (
-                "Fetch what the person themselves last wrote about their own work: the daily "
-                "plan's review of how the previous day went (and what they planned for the day), "
-                "plus the most recent submitted period review's 'how did it go' and 'what to "
-                "focus on next'. USER-scoped, so no goal_id or quest_id is needed or accepted. "
-                "Usage: query({kind: 'reflection_context', periods: ['week', 'month'], "
-                "include_daily: true, use_previous: false}). All fields optional; periods may be "
-                "any of week/month/quarter/year, tried in the order given, first submitted review "
-                "wins. When nothing is on record it returns a plain statement to that effect, not "
-                "an error, so read it before telling the person you cannot see their reflection."
+                "Fetch what the person themselves last wrote in their most recent submitted "
+                "period review: 'how did it go' and 'what to focus on next'. USER-scoped, so no "
+                "goal_id or quest_id is needed or accepted. Usage: query({kind: "
+                "'reflection_context', periods: ['week', 'month'], use_previous: false}). All "
+                "fields optional; periods may be any of week/month/quarter/year, tried in the "
+                "order given, first submitted review wins. This does NOT cover the daily "
+                "reflection's free text (how yesterday went, today's plan) -- that is split into "
+                "verbatim notes on the quest(s) it concerns at reflection time, so read THIS "
+                "quest's own notes for what the person said about it specifically, rather than "
+                "asking for it here. When nothing is on record it returns a plain statement to "
+                "that effect, not an error, so read it before telling the person you cannot see "
+                "their reflection."
             ),
         }
         desc = ops.get(name)

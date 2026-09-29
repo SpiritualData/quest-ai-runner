@@ -74,7 +74,12 @@ def _pass_with(client, **kwargs):
     return AutopilotPass(client, team_id="team1", now=_now, **kwargs)
 
 
-def test_a_pass_folds_the_daily_reflection_into_the_batch_it_creates():
+def test_a_pass_never_folds_the_daily_reflection_into_the_batch_it_creates():
+    """The daily plan's free text is the SAME for every quest a pass touches, so folding it into
+    every quest's batch handed each one the person's whole reflection regardless of what it
+    concerned. That text is now split into per-quest notes at reflection time (quest-backend's
+    daily-plan reflection-notes endpoint); a quest's own notes reach its own batch through the
+    ordinary quest-reference path, correctly scoped. The daily endpoint must never even be called."""
     client = ReflectingClient(
         quests=[_quest("q1")],
         goals_by_quest={"q1": _goals_payload(("day", "2026-07-12", [_goal("g1", "Draft ch. 2")]))},
@@ -83,7 +88,8 @@ def test_a_pass_folds_the_daily_reflection_into_the_batch_it_creates():
     )
     result = _pass_with(client).run({"text": "autopilot pass"})
     assert result.created_task_ids
-    assert "Lost the afternoon to meetings again." in client.created_tasks[0]["text"]
+    assert "Lost the afternoon to meetings again." not in client.created_tasks[0]["text"]
+    assert client.daily_calls == []
 
 
 def test_a_pass_falls_back_to_the_period_review_when_no_daily_entry_exists():
@@ -122,17 +128,20 @@ def test_the_quest_scope_decides_which_period_review_is_read_first():
 
 
 def test_reflections_are_read_once_per_pass_not_once_per_quest():
-    """They are USER-scoped: re-reading them per quest would be the same text at N times the cost."""
+    """They are USER-scoped: re-reading them per quest would be the same text at N times the cost.
+    Proven via the period review, the surviving broadcast path now that the daily entry is never
+    read by autopilot at all (see test_a_pass_never_folds_the_daily_reflection_into_the_batch)."""
     goals = _goals_payload(("day", "2026-07-12", [_goal("g1")]))
     client = ReflectingClient(
         quests=[_quest("q1"), _quest("q2"), _quest("q3")],
         goals_by_quest={"q1": goals, "q2": goals, "q3": goals},
-        daily={None: {"has_plan": True, "date": "2026-07-12",
-                      "yesterday_review": "Slow start, good finish."}},
+        reviews={("week", False): {"has_review": True,
+                                   "reflection_future": "Slow start, good finish."}},
     )
     result = _pass_with(client, daily_budget=5).run({"text": "autopilot pass"})
     assert len(result.created_task_ids) == 3
-    assert client.daily_calls == [None]
+    assert client.daily_calls == []
+    assert client.period_calls.count(("week", False)) == 1
     assert all("Slow start, good finish." in t["text"] for t in client.created_tasks)
 
 

@@ -1721,14 +1721,22 @@ class QuestEventsSource(_BaseSource):
 
 
 class ReflectionsSource(_BaseSource):
-    """The person's latest daily/period reflection (``runner.reflections``).
+    """The person's latest PERIOD reflection (``runner.reflections``).
 
     Wrapped rather than reimplemented: the module already handles the period order, the framing and
     the degradation to empty. What this adds is that it now arrives through the same engine, with a
     ref, so a run can be asked what it did with it.
+
+    Deliberately ``include_daily=False``: the daily plan's free text is the same for every card this
+    engine assembles for, so delivering it here handed every quest's card the person's WHOLE
+    reflection regardless of what it concerned. That text is now split into per-quest notes at
+    reflection time (quest-backend's daily-plan reflection-notes endpoint), and a quest's own notes
+    already reach its own card correctly scoped, through the ordinary quest-reference path. The
+    period review stays: it is one review of the whole period, without an obvious single quest to
+    attach to the way a daily entry's individual sentences do.
     """
     name = "reflections"
-    describes = "the person's own daily and period reflections"
+    describes = "the person's own period reflections"
 
     slot = "reflection"
 
@@ -1740,7 +1748,8 @@ class ReflectionsSource(_BaseSource):
         key = ("reflections", periods)
         ctx = request.cache.get(key)
         if ctx is None:
-            ctx = collect_reflections(request.client, periods=periods, now=request.now)
+            ctx = collect_reflections(request.client, periods=periods, now=request.now,
+                                       include_daily=False)
             request.cache[key] = ctx
         text = ctx.as_text() if ctx else ""
         if not text:
