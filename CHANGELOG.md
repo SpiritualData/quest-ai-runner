@@ -143,6 +143,37 @@ All notable changes to this project are documented here. The format is based on
   changes (`self.tokens_in = 0`, `+= n`, `getattr(obj, "tokens_in", 0)` all keep working); a normal
   single-threaded run (the CLI, `max_concurrent_tasks=1`) is unaffected. Tests:
   `tests/test_provider_token_counters_thread_safety.py`.
+- **AI-created tasks still reported 200,000+ tokens after the fix above, for two further reasons,
+  both inside `ClaudeCliProvider` (MEDIUM-008).** (1) `ThreadLocalCounter` isolated usage per
+  CALLING thread, but the orchestrator spawns worker-thread pools INSIDE a single turn (parallel
+  sub-answers, the overseer consult, guidance calls); those workers' calls landed in their own
+  anonymous thread's counter and were silently dropped from the turn's reported total. Fixed by
+  replacing it with a scope-based `ScopedCounter` plus a new `ScopedThreadPoolExecutor`
+  (`core/adapters.py`): a usage scope defaults to the calling thread (unchanged for ordinary
+  single-threaded use and for two tasks running concurrently), but a worker spawned via
+  `ScopedThreadPoolExecutor` now bills the CREATING thread's scope instead of its own.
+  `ThreadLocalCounter` is kept as a compatibility alias; no call site changed. (2) The real driver
+  of the 200k figure: a "Say OK" completion call was measured at 18,820 tokens because
+  `--disallowed-tools` blocks tool USE but still ships every built-in tool's SCHEMA (~9,000
+  tokens), and this runner deliberately runs from the corpus root so the deep runner can see the
+  whole tree, which means every pure-completion planner/answer call also inherited that cwd and
+  was handed the CLAUDE.md chain above it (~9,400 tokens of repo instructions it has no tools to
+  act on). Ten to fifteen such calls make an ordinary turn, so 18,820 each is exactly the 200k
+  users saw: the count was honest, the harness behind it was not. Fixed in `claude_cli_provider.py`
+  by passing `--tools ""` (no tools at all, so no schemas — supersedes `--disallowed-tools`, kept
+  only as a fallback for older CLI builds that don't accept `--tools`) and running the subprocess in
+  `_neutral_cwd()`, a scratch directory with no CLAUDE.md chain above it; the same call measured
+  462 tokens afterward. A short-lived middle attempt at this bug (committed as part of the same
+  investigation) instead stopped counting `cache_read_input_tokens` into `tokens_in`, on the theory
+  that a cache read re-counts tokens already paid for as cache creation — that is wrong (a read is
+  separately billed input on its OWN call) and was reverted once the harness measurement above
+  showed the real cause; a warm call after the harness fix measured 2 fresh + 9,894 cache read,
+  which the reverted theory would have reported as "2 tokens used" for a real 9,896. `tokens_in` is
+  therefore fresh + cache-creation + cache-read, all three, unconditionally. Tests:
+  `tests/test_claude_cli_provider.py` (`test_accumulate_usage_sums_all_three_input_categories`,
+  `test_accumulate_usage_repeated_calls_each_count_their_own_cache_read`,
+  `test_invoke_uses_neutral_cwd_and_bare_tools_flag`),
+  `tests/test_provider_token_counters_thread_safety.py` (pooled-worker attribution).
 - **Turn-start budgets raised: context assembly 15s -> 30s, guidance selection 5s -> 15s**
   (`QAR_CONTEXT_ASSEMBLY_TIMEOUT_SECONDS` / `QAR_GUIDANCE_SELECTION_TIMEOUT_SECONDS`). They are a
   safety net, sized for a slow day rather than a typical one: losing a turn's context costs more

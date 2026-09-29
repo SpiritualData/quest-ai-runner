@@ -127,14 +127,18 @@ def test_plan_degrades_to_empty_dict_on_invoke_failure(monkeypatch):
     assert p.plan("x", model="sonnet", tool_schema=DECIDE_TOOL) == {}
 
 
-def test_accumulate_usage_does_not_double_count_cache_reads():
-    """A cache READ must not be added into ``tokens_in`` alongside cache CREATION.
+def test_accumulate_usage_sums_all_three_input_categories():
+    """``tokens_in`` must be fresh + cache-creation + cache-read, all three.
 
-    The two describe the SAME prompt prefix at two different points in its life: creation is
-    the first time it is paid for, a read is the identical tokens being re-fed on a later call.
-    Before this fix both were summed into tokens_in, so a harness-heavy multi-call turn (the
-    CLI's own tool-use preamble, re-sent on every internal turn) reported 200,000+ "tokens used"
-    for a few hundred tokens of real work -- the exact inflated figure seen on AI-created tasks.
+    All three are input the model genuinely processed on that call, and all three are genuinely
+    billed (fresh at list price, cache creation at 1.25x, cache reads at roughly a tenth). An
+    earlier pass at MEDIUM-008 dropped cache reads on the theory that a read just re-counts the
+    tokens already paid for as cache creation -- but a read is separately billed input on its OWN
+    call, so dropping it under-reports a warm call by orders of magnitude (a call measured at 2
+    fresh + 9,894 read would report "2 tokens used" for a real 9,896). The real inflation the user
+    saw came from the CLI harness sending far too many tokens per call in the first place (tool
+    schemas, the CLAUDE.md chain above the corpus root) -- fixed via ``--tools ""`` and a neutral
+    ``cwd`` in ``_invoke``, not by hiding part of what was actually sent.
     """
     p = ClaudeCliProvider()
     envelope = {
@@ -147,20 +151,21 @@ def test_accumulate_usage_does_not_double_count_cache_reads():
         "total_cost_usd": 0.05,
     }
     p._accumulate_usage(envelope)
-    # Fresh input + cache creation only -- the cache read is NOT folded into tokens_in.
-    assert p.tokens_in == 9 + 36465
+    assert p.tokens_in == 9 + 36465 + 24012
     assert p.tokens_out == 40
-    # The read total is still tracked separately for cost work, just never re-added to tokens_in.
-    assert p.cache_read_tokens == 24012
+    # The three stay separately readable for cost work, since they bill at different rates.
+    assert p.fresh_input_tokens == 9
     assert p.cache_creation_tokens == 36465
+    assert p.cache_read_tokens == 24012
 
 
-def test_accumulate_usage_repeated_calls_do_not_compound_cache_reads():
-    """A second call re-reading the SAME cached prefix must not keep inflating tokens_in.
+def test_accumulate_usage_repeated_calls_each_count_their_own_cache_read():
+    """A second call re-reading a cached prefix bills that read on ITS OWN call, every time.
 
-    Simulates a multi-turn ``claude -p`` run where every internal turn re-sends the same large
-    harness prefix from cache: only the first call's cache CREATION should count toward
-    tokens_in, not each subsequent call's cache READ of that same prefix.
+    Simulates a multi-turn ``claude -p`` run where a later internal turn re-sends the same large
+    harness prefix from cache: that read is real input processed on the second call and must be
+    counted there too, not skipped because an earlier call already paid for the same prefix once
+    (see ``test_accumulate_usage_sums_all_three_input_categories`` for why skipping it is wrong).
     """
     p = ClaudeCliProvider()
     first_call = {
@@ -173,9 +178,52 @@ def test_accumulate_usage_repeated_calls_do_not_compound_cache_reads():
     }
     p._accumulate_usage(first_call)
     p._accumulate_usage(second_call)
-    # Two calls of ~5 fresh tokens each plus ONE cache creation, not two.
-    assert p.tokens_in == 5 + 36465 + 5
+    assert p.tokens_in == 5 + 36465 + 5 + 36465
     assert p.tokens_out == 40
+
+
+def test_invoke_uses_neutral_cwd_and_bare_tools_flag(monkeypatch):
+    """A pure-completion call must run outside the corpus root and drop tool schemas entirely.
+
+    Regression for the harness bloat that made an ordinary planner/answer call carry ~9,400
+    tokens of repo CLAUDE.md content (inherited cwd = corpus root) plus ~9,000 tokens of built-in
+    tool schemas (``--disallowed-tools`` blocks tool USE but still ships every schema). The fix is
+    ``--tools ""`` (no tools at all, so no schemas) and ``cwd=_neutral_cwd()`` (an empty scratch
+    directory with no CLAUDE.md chain above it).
+    """
+    import json
+    import subprocess as subprocess_module
+
+    p = ClaudeCliProvider()
+    captured = {}
+
+    def fake_supported_flags(binary):
+        return frozenset(ccp._ONE_SHOT_FLAGS.keys())
+
+    def fake_run(cmd, **kwargs):
+        captured["cmd"] = cmd
+        captured["cwd"] = kwargs.get("cwd")
+
+        class P:
+            returncode = 0
+            stdout = json.dumps({
+                "result": "ok",
+                "usage": {"input_tokens": 1, "output_tokens": 1},
+            }).encode()
+            stderr = b""
+        return P()
+
+    monkeypatch.setattr(ccp, "_supported_flags", fake_supported_flags)
+    monkeypatch.setattr(subprocess_module, "run", fake_run)
+    p._invoke("hi", model="haiku")
+
+    assert captured["cwd"] == ccp._neutral_cwd()
+    assert "--tools" in captured["cmd"]
+    tools_idx = captured["cmd"].index("--tools")
+    assert captured["cmd"][tools_idx + 1] == ""
+    # No schemas to disallow once "--tools" strips them all, so the (redundant) fallback flag
+    # must not also be sent.
+    assert "--disallowed-tools" not in captured["cmd"]
 
 
 def test_answer_flattens_messages_and_returns_text(monkeypatch):

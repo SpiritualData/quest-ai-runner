@@ -37,6 +37,7 @@ import os
 import shutil
 import subprocess
 from functools import lru_cache
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -77,6 +78,24 @@ _PURE_COMPLETION_SYSTEM = (
 # Multiplied by a parallel fan-out it is also the difference between a bounded indexing pass and
 # one that pushes a loaded box into the OOM killer -- the harness, not the inference, is the cost.
 #
+# RE-MEASURED 2026-09-29, same "Say OK", and the "0 system tokens" line above had silently stopped
+# being true on a newer CLI. Two of the holes it used to plug had re-opened, and together they are
+# why AI-created tasks reported 200,000+ tokens for small work (see current_bugs/MEDIUM-008):
+#   as the flags stood (--disallowed-tools, cwd = corpus root)   18,820 tokens   $0.0753
+#   + --tools "" instead of --disallowed-tools                    9,896 tokens   $0.0396
+#   + a neutral working directory                                    462 tokens   $0.0010
+# Ten to fifteen such calls make an ordinary turn, so 18,820 each IS the 200k figure users saw:
+# the count was honest, the harness behind it was not. Two causes, both now closed:
+#   * ``--exclude-dynamic-system-prompt-sections`` no longer drops the built-in TOOL SCHEMAS.
+#     ``--disallowed-tools`` never did: it blocks tool USE and still ships every schema, ~9,000
+#     tokens of them. ``--tools ""`` removes the tools themselves, which is what a pure completion
+#     wanted all along (it has no use for a tool it is forbidden to call).
+#   * ``--setting-sources ""`` no longer keeps the CLAUDE.md chain out. The files above the
+#     WORKING DIRECTORY are read regardless, and this runner deliberately runs from the corpus
+#     root (the deep runner needs to see the whole tree), so every planner call was being handed
+#     ~9,400 tokens of repo instructions it must not act on anyway. Hence ``cwd=`` below: the
+#     completion subprocess runs in an empty scratch directory of its own.
+#
 #   --system-prompt                 REPLACE the agent prompt instead of appending to it, which is
 #                                   what ``--append-system-prompt`` does (it keeps the whole agent
 #                                   prompt and adds to it).
@@ -110,8 +129,32 @@ _ONE_SHOT_FLAGS: Dict[str, List[str]] = {
     "--exclude-dynamic-system-prompt-sections": ["--exclude-dynamic-system-prompt-sections"],
     "--setting-sources": ["--setting-sources", ""],
     "--strict-mcp-config": ["--strict-mcp-config"],
+    "--tools": ["--tools", ""],        # no built-in tools AT ALL, so no schemas in the prompt
     "--effort": ["--effort"],          # presence-probed only; the value is appended in _invoke
 }
+
+
+@lru_cache(maxsize=1)
+def _neutral_cwd() -> str:
+    """An empty directory to run a pure-completion subprocess in, created once per process.
+
+    The CLI reads the CLAUDE.md chain above its WORKING DIRECTORY no matter what the setting
+    sources say, and this runner is deliberately started from the corpus root so the deep runner
+    can see the whole tree. A planner/answer call inherited that cwd and was handed thousands of
+    tokens of repository instructions on every single call: instructions it is not an agent for,
+    cannot act on (it has no tools) and must not be steered by. Measured at ~9,400 tokens a call
+    on this corpus, which is most of what made an ordinary turn report 200,000+ tokens used.
+
+    An empty scratch directory has no CLAUDE.md above it that belongs to anyone's project, so the
+    completion gets its prompt and nothing else. Falls back to the inherited cwd (``None``) if the
+    directory cannot be made, because a slightly expensive call beats a call that cannot run.
+    """
+    try:
+        d = Path(tempfile.gettempdir()) / "qar-cli-completion"
+        d.mkdir(parents=True, exist_ok=True)
+        return str(d)
+    except Exception:  # noqa: BLE001 -- never let scratch-dir trouble break a model call
+        return None  # type: ignore[return-value]
 
 
 @lru_cache(maxsize=8)
@@ -436,13 +479,16 @@ class ClaudeCliProvider(ModelProviderBase):
         effort = _cli_effort()
         if effort and "--effort" in supported:
             cmd += ["--effort", effort]
-        if self.disallowed_tools:
+        # Only needed as the FALLBACK. When ``--tools ""`` was accepted above there is no tool left
+        # to disallow, and naming them again would only re-introduce the schemas we just removed.
+        if self.disallowed_tools and "--tools" not in supported:
             cmd += ["--disallowed-tools", ",".join(self.disallowed_tools)]
 
         proc = subprocess.run(
             cmd,
             input=prompt.encode("utf-8"),
             env=self._build_env(),
+            cwd=_neutral_cwd(),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             timeout=self.timeout_seconds,
@@ -509,20 +555,25 @@ class ClaudeCliProvider(ModelProviderBase):
             self.fresh_input_tokens += int(usage.get("input_tokens") or 0)
             self.cache_creation_tokens += int(usage.get("cache_creation_input_tokens") or 0)
             self.cache_read_tokens += int(usage.get("cache_read_input_tokens") or 0)
+            # ALL THREE count toward ``tokens_in``, because all three are input the model
+            # genuinely processed on this call and all three are genuinely billed (fresh at list
+            # price, cache creation at 1.25x, cache reads at about a tenth). Dropping any of them
+            # does not make an expensive call cheap, it only makes the report wrong:
+            #  * counting ``input_tokens`` alone under-reports a harness-heavy call by orders of
+            #    magnitude (17,815 vs 9 on one measured call);
+            #  * an earlier pass at MEDIUM-008 dropped cache READS on the theory that a read is a
+            #    re-count of the creation that wrote it. It is not. A read is separately billed
+            #    input on a separate call, and once the harness shrank (see the flag notes at the
+            #    top of this module) a warm second call measured 2 fresh + 9,894 read, which that
+            #    theory would have reported as "2 tokens used" for a real 9,896. The fix for an
+            #    inflated number is to stop sending the tokens, which is what the flags now do,
+            #    never to stop counting tokens that were sent.
+            # The three stay separately readable above (``fresh_input_tokens`` /
+            # ``cache_creation_tokens`` / ``cache_read_tokens``) because a single total cannot be
+            # turned back into a cost.
             self.tokens_in += int(usage.get("input_tokens") or 0)
-            # Cache creation is real input the model had to read for the FIRST time; counting only
-            # ``input_tokens`` under-reports a harness-heavy call by orders of magnitude (17,815 vs
-            # 9 on one measured call), which would make an expensive configuration look free.
             self.tokens_in += int(usage.get("cache_creation_input_tokens") or 0)
-            # CACHE READS ARE DELIBERATELY NOT ADDED to ``tokens_in``. A cache read is the same
-            # prompt prefix being re-fed on a later call, and it was already counted once, as
-            # cache CREATION, on the call that wrote it. Adding it again on every call re-counts
-            # the identical tokens once per call: the CLI's own harness prefix alone measured
-            # 36,465 created + 24,012 re-read on a single "Say OK" call, so a normal multi-call
-            # turn reported 200,000+ "tokens used" for a few hundred tokens of real work. That is
-            # the inflated number users saw on AI-created tasks. The re-read total is still kept
-            # in ``cache_read_tokens`` for cost work, where it bills at roughly a tenth of fresh
-            # input and must stay a separate line rather than a hidden part of one total.
+            self.tokens_in += int(usage.get("cache_read_input_tokens") or 0)
             self.tokens_out += int(usage.get("output_tokens") or 0)
             self.cost_usd += float(envelope.get("total_cost_usd") or 0.0)
             self.call_count += 1
