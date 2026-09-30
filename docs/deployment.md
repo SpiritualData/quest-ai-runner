@@ -77,6 +77,30 @@ sudo systemctl enable --now quest-ai-runner
 journalctl -u quest-ai-runner -f
 ```
 
+## Optional read-only context channels: Notion and Google Chat
+
+A lane can read Notion databases and Google Chat spaces, and an autopilot pass can be told what
+changed in them, with two TOML blocks and nothing else. Both are off unless configured.
+
+```toml
+[notion]
+token_env = "NOTION_TOKEN"                  # the NAME of the variable; set its value in the unit's environment
+[notion.database_ids]
+tasks = "0123456789abcdef0123456789abcdef"
+
+[google_chat]
+service_account_file = "/path/to/chat-sa.json"
+subject = "someone@example.org"
+space_names = ["spaces/AAAA1111"]           # required; without it Chat is not wired
+```
+
+Each block is built only when its credential is actually there, and the start-up log says what was
+skipped and why (never the token). A quest then opts in per card with `{"source": "notion_database",
+"database": "tasks"}` or `{"source": "google_chat", "spaces": ["spaces/AAAA1111"]}` in its
+`context_sources`; a card naming one on a lane without the block gets an honest "not configured" line
+in its bundle. Details: [context-updates.md](context-updates.md) and
+[adapters.md](adapters.md#notion-and-google-chat-opt-in-read-only).
+
 ## Scheduling is Quest's job
 
 There is no separate scheduling plumbing. The poller discovers via

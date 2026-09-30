@@ -19,6 +19,10 @@ These satisfy the core interfaces; a consumer wires the ones it needs into a Run
                                 provider (``static_token_provider`` or, for a Google Workspace,
                                 ``service_account_token_provider`` with domain-wide delegation —
                                 the latter needs the optional [google] extra). HTTP is stdlib-only.
+  * NotionAdapter             - READ-ONLY RetrievalAdapter over a configured set of Notion databases
+                                (list, filtered query, read a page, grep rows). Auth is an injected
+                                token provider (env var name, file, or static); HTTP is stdlib-only;
+                                it cannot send a write request. Opt-in via the ``notion`` config block.
   * GoogleDriveAdapter        — RetrievalAdapter over Google Drive files/folders (list a folder,
                                 read a file's text content: Google Docs, Google Sheets first sheet,
                                 PDF via the optional [drive] extra, or plain text). Auth is injected
@@ -119,6 +123,7 @@ from .google_chat_adapter import (
     static_token_provider,
     service_account_token_provider,
 )
+from .notion_adapter import NotionAdapter
 from .google_drive_adapter import (
     GoogleDriveAdapter,
     parse_drive_url,
@@ -239,6 +244,7 @@ __all__ = [
     "CachedDbAdapter",
     "ClaudeConversationsAdapter",
     "GoogleChatAdapter",
+    "NotionAdapter",
     "static_token_provider",
     "service_account_token_provider",
     "GoogleDriveAdapter",

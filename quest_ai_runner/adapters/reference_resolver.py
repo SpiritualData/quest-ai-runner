@@ -31,11 +31,12 @@ from typing import Any, Callable, Dict, Optional, Protocol, runtime_checkable
 # resolvers; the data-backed types are consumer-injected (and degrade to an unresolved-pointer line
 # when absent). ``conversation`` resolves via a local Claude session file by conv_id
 # (``ClaudeConversationsAdapter.resolve_reference``); ``chat_thread`` resolves a Google Chat thread
-# by re-fetching it through ``GoogleChatAdapter.resolve_reference``. Both are just RetrievalAdapters
+# by re-fetching it through ``GoogleChatAdapter.resolve_reference``; ``notion_page`` does the same
+# through ``NotionAdapter.resolve_reference``. All three are just RetrievalAdapters
 # advertising a ``reference_type`` -- their own ``resolve_reference`` wires straight in as the
 # resolver (see ``build_resolver_registry``). Kept here so this module and the store agree on the
 # vocabulary.
-CONTENT_TYPES = ("file", "collection", "conversation", "chat_thread", "query", "note")
+CONTENT_TYPES = ("file", "collection", "conversation", "chat_thread", "notion_page", "query", "note")
 
 
 @runtime_checkable
@@ -77,6 +78,10 @@ def _render_unresolved(item_type: str, locator: Dict[str, Any]) -> str:
             tid = str(loc.get("thread_or_message_id") or loc.get("id") or "?").strip() or "?"
             space = str(loc.get("space") or "").strip()
             return f"[chat_thread ref: {tid}{(' in ' + space) if space else ''} (unresolved)]"
+        if item_type == "notion_page":
+            pid = str(loc.get("page_id") or loc.get("id") or "?").strip() or "?"
+            db = str(loc.get("database") or "").strip()
+            return f"[notion_page ref: {pid}{(' in ' + db) if db else ''} (unresolved)]"
         if item_type == "query":
             q = str(loc.get("query") or loc.get("text") or "?").strip() or "?"
             return f"[query ref: {q} (unresolved)]"

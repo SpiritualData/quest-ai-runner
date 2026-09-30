@@ -20,6 +20,7 @@ ExecStart=/path/to/venv/bin/quest-ai-runner poll --config /path/to/qar.toml
 | `quest_folder_map_file` | reading a `{quest_id: folder}` JSON file in Python |
 | `context_sources_file` / `context_sources_map` | per-card context-source specs a backend cannot carry yet |
 | `[drive_comments_auth]` | constructing a `DriveComments` client from a service-account credential |
+| `[notion]` / `[google_chat]` | constructing the read-only `NotionAdapter` / `GoogleChatAdapter`, wiring them into retrieval and the context-update engine; Chat needs `space_names` or nothing is wired |
 | `state_path`, `lane_label` | `run_lane(state_path=..., lane_label=...)` |
 
 ## Precedence, top to bottom

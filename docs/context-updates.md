@@ -29,7 +29,7 @@ prose, the retrieval plan the context engine was supposed to own.
   move at different speeds stay independent.
 
 Built in: `reflections`, `insights`, `quest_notes`, `goal_updates`, `drive_comments`,
-`drive_changes`, `inbound_mail`. A consumer adds its own with `engine.register(MySource())`, and
+`drive_changes`, `inbound_mail`, `notion_database`, `google_chat`. A consumer adds its own with `engine.register(MySource())`, and
 every caller of the engine sees it.
 
 `goal_updates` is the per-goal check-in thread: what the person wrote on ONE goal of this quest
@@ -53,7 +53,9 @@ any particular quest:
       {"source": "insights", "categories": ["PhD"]},
       {"source": "drive_comments", "folder_id": "1kEc..."},
       {"source": "drive_changes", "folder_id": "1kEc..."},
-      {"source": "inbound_mail", "mailbox": "support@example.org"}
+      {"source": "inbound_mail", "mailbox": "support@example.org"},
+      {"source": "notion_database", "database": "tasks"},
+      {"source": "google_chat", "spaces": ["spaces/AAAA1111"]}
     ]
   }
 }
@@ -86,6 +88,49 @@ read). It can never be pointed at a quest's own reply mailbox (`ai@...`, `ai+q-.
 address is already polled by a consumer's own inbound-reply service on its own schedule, and a
 second poller on the same mailbox ingests every reply twice. A card naming it gets a reported
 source error instead, never a silent double-ingest (`adapters.inbound_mail.refuses_as_inbound_mailbox`).
+
+**`{"source": "notion_database", "database": "tasks"}`** reports the rows created or edited in one
+Notion database since the watermark (Notion's own `last_edited_time`), one row per page, with the
+title, the link and WHICH properties changed where that can be known:
+
+```
+"Write the methods section" changed in tasks
+    Status: Not started -> In progress; Deadline Date: (empty) -> 2026-10-01
+```
+
+What changed comes from comparing each row with a snapshot stored beside the watermark (in the same
+file, under the same rules: written only when a run was handed the result, never by a read-only
+engine, never after a failed read). A row the source has never seen that was not created inside the
+window says plainly that it was edited and that there is no earlier snapshot to compare, instead of
+guessing. An edit that changed no listed property (a page-body edit) says that too. `database` is an
+alias from the `notion` block's `database_ids` (or one of those ids); a database that is not
+configured is refused and the gap names what is. Optional `"max_rows"` (default 50); when more rows
+were touched than that, the report says only the most recent were read. Notion reports edit times
+to the minute, so the read starts at the watermark floored to its minute and the snapshot removes
+the duplicates, which is why an edit made inside the watermark's own minute is never lost.
+
+**`{"source": "google_chat", "spaces": ["spaces/AAAA1111"]}`** reports the new messages in the named
+Google Chat spaces since the watermark, one row per thread (newest threads first, at most 10 per
+space, 30 messages per thread, each clipped). **Only spaces the card names AND the deployment's
+`space_names` allowlist contains are ever read**; a space that is not is refused before any request
+is made and the refusal is reported, and with no allowlist nothing is read. The assistant's own
+messages and every Chat app's are skipped and counted (`assistant_senders` in the `google_chat` block
+names the assistant's own sender ids). A message that arrived after the look began is left for the
+next one, so the watermark never skips a message. Optional `"max_messages"` per space (default 100).
+The channel is read-only: nothing here can post in Chat, and each row says so in its
+`how_to_respond`.
+
+**Both are opt-in, read-only and card-scoped by where they are named.** Neither is always-on,
+neither is put to the relevance judge (the card chose the database or the space; a judge written for
+captures would only be guessing), and neither tracks asks (a row changing or a thread moving is news,
+not a question owed an answer).
+
+**Unconfigured is an honest gap, never an exception.** A card naming either source on a deployment
+with no `notion` / `google_chat` block gets a line in the bundle's "sources checked" report
+(`notion_database (could not read: notion is not configured on this deployment ...)`), and the rest
+of the bundle is delivered. A source signals this by raising `SourceGap`: the engine reports the
+message as written, logs it at info rather than as a failure, and does not advance the watermark,
+because nothing was read. A failed read (a 403, a timeout) is reported the same way, with its cause.
 
 **Every capture is its own row, and a tag never gates delivery.** The captures arrive one update
 each, each with its own ref, so the relevance judge decides on each one and the receipt answers
@@ -149,6 +194,10 @@ bundle.mark_seen()
 | `drive_comments` | `None` | a `DriveComments` client; without it the two Drive sources contribute nothing |
 | `inbound_mail` | `None` | an `InboundMail` client; without it `inbound_mail` contributes nothing |
 | `inbound_mail_auth` | `None` | declarative form: `{service_account_file, subject, allowed_addresses, scopes}`, resolved into `inbound_mail` by `resolve_config_objects` |
+| `notion_adapter` | `None` | a `NotionAdapter`; without it `notion_database` contributes nothing but a reported gap |
+| `notion` | `None` | declarative form: `{token_env \| token_file, database_ids = {alias = id}}`; built only when a token is available and a database is named, and wired into retrieval too |
+| `google_chat_adapter` | `None` | a `GoogleChatAdapter`; without it `google_chat` contributes nothing but a reported gap |
+| `google_chat` | `None` | declarative form: `{service_account_file, subject, scopes (default read-only), space_names (REQUIRED), lookback_days, assistant_senders}`; with no `space_names` nothing is wired and the log says why |
 
 Env equivalents: `QAR_CONTEXT_UPDATES`, `QAR_CONTEXT_UPDATES_STATE_PATH`,
 `QAR_CONTEXT_UPDATES_FIRST_LOOK_DAYS`. The rest are TOML-file fields only (no env var), the same
@@ -163,6 +212,23 @@ cfg.drive_comments = DriveComments(token_provider=service_account_token_provider
 
 Reading needs `drive.readonly`; posting a reply needs a write scope (`COMMENT_WRITE_SCOPES`), and a
 read-scoped token gets a clean error rather than a silent no-op.
+
+Notion and Google Chat are declarative (TOML), and the SAME adapter serves two purposes: it is
+folded into the retrieval stack, so a run can read, grep and query it, and it is handed to the
+engine, so the two sources above work. See [adapters.md](adapters.md#notion-and-google-chat-opt-in-read-only).
+
+```toml
+[notion]
+token_env = "NOTION_TOKEN"                  # the NAME of an environment variable, never the token
+[notion.database_ids]
+tasks = "0123456789abcdef0123456789abcdef"
+
+[google_chat]
+service_account_file = "/path/to/chat-sa.json"
+subject = "someone@example.org"             # the Workspace user the delegation impersonates
+space_names = ["spaces/AAAA1111"]           # REQUIRED; omit it and Chat is not wired
+lookback_days = 14
+```
 
 ## Where an answer goes
 

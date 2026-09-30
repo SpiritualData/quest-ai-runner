@@ -51,6 +51,7 @@ import time as _time
 import urllib.error
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional
 
 from ..core.adapters import AssembledContext, Observation, RetrievalAdapterBase
@@ -168,6 +169,19 @@ def service_account_token_provider(
     return _provider
 
 
+class ChatReadError(RuntimeError):
+    """A typed Chat read failed or was refused. The message never carries a token."""
+
+
+@dataclass
+class ChatMessages:
+    """The raw messages ``GoogleChatAdapter.fetch_messages_since`` read from one space."""
+    space: str = ""
+    display_name: str = ""
+    messages: List[Dict[str, Any]] = field(default_factory=list)   # newest first
+    truncated: bool = False          # more matched than ``max_messages``; the oldest were left out
+
+
 # ---------------------------------------------------------------------------
 # The adapter
 # ---------------------------------------------------------------------------
@@ -203,6 +217,7 @@ class GoogleChatAdapter(RetrievalAdapterBase):
         timeout_seconds: float = 20.0,
         api_base: str = _CHAT_API_BASE,
         card_store: Optional[Any] = None,
+        assistant_senders: Optional[List[str]] = None,
     ) -> None:
         """
         Args:
@@ -227,10 +242,15 @@ class GoogleChatAdapter(RetrievalAdapterBase):
                 that card via the shared ``card_scoped_learning`` module. When absent (or no card is
                 active) the adapter falls back to the pure global keyword + TF-DF-IDF scan, exactly as
                 before. Requires only ``get_card`` / ``update_card`` / ``mark_sources_used``.
+            assistant_senders: Sender resource names (``users/...``) or display names that are THIS
+                assistant's own voice. ``fetch_messages_since`` (what the ``google_chat`` context
+                source reads through) drops them, as it drops every Chat app (``sender.type ==
+                "BOT"``), so an assistant is never handed its own words back as news.
         """
         self._token_provider = token_provider
         self._card_store = card_store
         self._space_names = list(space_names) if space_names else None
+        self._assistant_senders = {str(x).strip() for x in (assistant_senders or []) if str(x).strip()}
         self._group_by = "space" if str(group_by).lower() == "space" else "thread"
         self._lookback_days = lookback_days
         self._max_spaces = max(1, int(max_spaces))
@@ -399,6 +419,82 @@ class GoogleChatAdapter(RetrievalAdapterBase):
             if not page_token or len(out) >= self._max_messages_per_space:
                 break
         return out[: self._max_messages_per_space]
+
+    # ------------------------------------------------------------------
+    # Typed, allowlist-enforced reads (what the ``google_chat`` context source uses)
+    # ------------------------------------------------------------------
+
+    @property
+    def allowed_spaces(self) -> List[str]:
+        """The spaces this adapter may read by name (its ``space_names`` allowlist), or []."""
+        return list(self._space_names or [])
+
+    def space_allowed(self, space: str) -> bool:
+        """Whether ``space`` is on the allowlist. FAILS CLOSED: with no allowlist, nothing is allowed.
+
+        The retrieval methods above may enumerate every space the credential can see when no
+        ``space_names`` was given (the long-standing behaviour). The typed read below never does:
+        a domain-wide-delegation credential can see every space its subject is in, so the only
+        thing standing between an automated pass and all of it is this list.
+        """
+        return bool(self._space_names) and str(space or "").strip() in self._space_names
+
+    def is_assistant_message(self, message: Dict[str, Any]) -> bool:
+        """Whether a raw Chat message is this assistant's own voice: any Chat app, or a configured sender."""
+        sender = (message or {}).get("sender") or {}
+        if str(sender.get("type") or "").upper() == "BOT":
+            return True
+        return bool({str(sender.get("name") or ""), str(sender.get("displayName") or "")}
+                    & self._assistant_senders)
+
+    def fetch_messages_since(self, space: str, since: Optional[Any], *,
+                             max_messages: int = 100) -> "ChatMessages":
+        """Raw messages created after ``since`` in ONE allowlisted space, newest first. RAISES.
+
+        Unlike the retrieval methods this does not swallow failures: a caller that advances a
+        watermark after reading must be able to tell "nothing new" from "could not read". Raises
+        ``ChatReadError`` for a space off the allowlist (refused BEFORE any request), for no
+        credential, and for an API failure. ``since`` is a datetime (or None for the lookback window).
+        """
+        name = str(space or "").strip()
+        if not self.space_allowed(name):
+            raise ChatReadError(f"refused: {name or 'that space'} is not on the allowlist (space_names)")
+        if self._token_provider is None:
+            raise ChatReadError("google chat not configured: no token_provider supplied")
+        token = self._token_provider()
+        if not token:
+            raise ChatReadError("google chat not configured: token_provider returned no token")
+        cap = max(1, int(max_messages))
+        if since is not None:
+            cutoff = since.timestamp()
+        elif self._lookback_days is not None:
+            cutoff = _time.time() - self._lookback_days * 86400.0
+        else:
+            cutoff = None
+        params: Dict[str, Any] = {"pageSize": min(100, cap + 1), "orderBy": "createTime desc"}
+        if cutoff is not None:
+            params["filter"] = f'createTime > "{_to_rfc3339(cutoff)}"'
+        out: List[Dict[str, Any]] = []
+        page_token: Optional[str] = None
+        try:
+            while True:
+                url = self._build_url(f"{name}/messages", {**params, "pageToken": page_token})
+                data = self._get_json(url, token)
+                out.extend(data.get("messages", []) or [])
+                page_token = data.get("nextPageToken")
+                if not page_token or len(out) > cap:
+                    break
+            display = name
+            try:
+                display = str(self._get_json(self._build_url(name), token).get("displayName") or name)
+            except Exception:  # noqa: BLE001 -- a label is nice to have, never a reason to fail the read
+                pass
+        except urllib.error.HTTPError as exc:
+            raise ChatReadError(f"HTTP {exc.code} reading {name}") from None
+        except Exception as exc:  # noqa: BLE001
+            raise ChatReadError(f"could not read {name} ({type(exc).__name__})") from None
+        return ChatMessages(space=name, display_name=display,
+                            messages=out[:cap], truncated=len(out) > cap)
 
     # ------------------------------------------------------------------
     # Ranking helpers (shared with the Claude-conversations adapter)

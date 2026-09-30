@@ -37,6 +37,62 @@ is read-only and hard-scoped inside a root, skipping secret-ish/binary/oversize 
 `CachedDbAdapter` wraps a `query` callable (e.g. a Mongo `find`) with a short TTL so the brain
 grounds on **live** data without syncing it to files.
 
+## Notion and Google Chat (opt-in, read-only)
+
+Two first-class context channels, both generic, both off unless configured, both read-only.
+
+| | `NotionAdapter` | `GoogleChatAdapter` |
+|---|---|---|
+| module | `adapters/notion_adapter.py` | `adapters/google_chat_adapter.py` |
+| reads | configured databases (`database_ids`: alias to id): rows, pages, block text | configured spaces (`space_names`): threads and messages |
+| auth | injected `token_provider` (`env_token_provider("NAME")`, `file_token_provider(path)`, `static_token_provider(t)`) | injected; `service_account_token_provider` for a Workspace |
+| HTTP | stdlib `urllib`, `Notion-Version` pinned (`NOTION_VERSION`) | stdlib `urllib` |
+| never raises | yes: `Observation(kind="error")` | yes |
+| reference type | `notion_page` | `chat_thread` |
+| context source | `notion_database` | `google_chat` |
+
+**Retrieval surface (Notion).** `list_sources` (the configured databases by alias), `describe_source`
+(a database's properties and types), `query({"database": "tasks", "filter": {"Status": "In
+progress"}, "query": "terms", "limit": 10})`, `read_section(<page id | link | alias/id>)` (properties
+plus block text, bounded by `max_blocks` and `max_page_chars`), and `grep(pattern, scope=<alias>)`
+across the rows. A simple filter is `{"Property": value}` or `{"Property": {"operator": value}}`,
+turned into Notion's own filter shape using the database's real property types; an unknown property
+or an operator that does not apply returns an error naming the valid choices. `make_locator` and
+`resolve_reference` let a learned `notion_page` reference re-fetch the page fresh, as `chat_thread`
+does for Chat, and are discovered automatically from the retrieval stack.
+
+**Read-only is enforced in code, not by convention.** The Notion adapter has one method that sends a
+request, and it refuses anything but a `GET` on pages, databases and blocks and the single `POST`
+Notion uses to query a database (which reads, and changes nothing). A create, update, archive or
+delete cannot be sent. A database that is not configured, and a page whose parent is not a configured
+database, are refused. Set the Notion integration to "read content" only as well. Notion-Version is
+pinned to `2022-06-28`, the last version that queries `/databases/{id}/query`; later versions split a
+database into data sources, so moving the pin is a deliberate change.
+
+**Google Chat fails closed.** Domain-wide delegation can read every space its subject is in, so the
+declarative `google_chat` block REQUIRES `space_names` and wires nothing without it. The typed read
+the context source uses (`GoogleChatAdapter.fetch_messages_since`) refuses any space not on that list
+before making a request. Scopes default to the read-only pair.
+
+Declarative wiring (the same blocks the context-updates doc describes):
+
+```toml
+[notion]
+token_env = "NOTION_TOKEN"
+[notion.database_ids]
+tasks = "0123456789abcdef0123456789abcdef"
+
+[google_chat]
+service_account_file = "/path/to/chat-sa.json"
+subject = "someone@example.org"
+space_names = ["spaces/AAAA1111"]
+```
+
+A block is built only when its credentials exist (a token in the named environment variable or file;
+a service-account file that is on disk), logs why and wires nothing otherwise, and never puts a token
+in a log line. See [context-updates.md](context-updates.md) for the `notion_database` and
+`google_chat` sources that let an autopilot pass see what changed.
+
 ## ModelProvider
 
 The LLM behind the brain.

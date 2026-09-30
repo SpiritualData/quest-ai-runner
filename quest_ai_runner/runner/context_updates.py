@@ -240,6 +240,18 @@ def _as_utc(value: Any) -> Optional[datetime]:
     return dt.astimezone(timezone.utc)
 
 
+class SourceGap(Exception):
+    """A source cannot look, and says so plainly: a gap in the bundle, not a failure.
+
+    Raised from ``collect`` when the thing the card asked for is not available on this deployment
+    (no client wired, a space or database that is not on the allowlist, a spec that names nothing).
+    The engine reports it as the source's ``error`` with the message as written and does NOT log a
+    warning, and -- because the report is not ``ok`` -- the watermark does not advance, so nothing
+    is consumed by a read that never happened. Any other exception is reported with its type name
+    and logged as a failure.
+    """
+
+
 # ---------------------------------------------------------------------------------------------
 # The rows
 # ---------------------------------------------------------------------------------------------
@@ -347,6 +359,10 @@ class SourceReport:
     # days while both of the person's comments sat there, answered, exactly as designed.
     considered: int = 0
     explanation: str = ""
+    # What the source asked to remember for its NEXT look (``CollectRequest.remember``), keyed by
+    # the source's own choice of key. Stored by ``mark_seen`` beside the watermark, for the same
+    # reason: it only counts once a run has actually been handed what produced it.
+    snapshots: Dict[str, Dict[str, Any]] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -586,6 +602,8 @@ class ContextUpdates:
             for r in self.reports:
                 if r.ok:
                     self._watermarks.set(self.card_id, r.source, stamp)
+                    for key, snapshot in (r.snapshots or {}).items():
+                        self._watermarks.set_snapshot(self.card_id, r.source, key, snapshot)
         # The same moment, the same reason: this is when an item was actually put in front of a
         # run, which is what "offered" means. It records existence and nothing else -- being shown
         # something is not acting on it, and the ledger is careful about the difference.
@@ -921,6 +939,10 @@ class Watermarks:
         self._path = Path(path) if path else None
         self._read_only = bool(read_only)
         self._data: Dict[str, str] = {}
+        # Per (card, source, key) "what it looked like the last time a run was handed it", for a
+        # source that has to say WHAT changed rather than only that something did (a Notion row's
+        # properties). Persisted in the same file and under the same rules as the stamps.
+        self._snapshots: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.Lock()
         self._load()
 
@@ -940,6 +962,9 @@ class Watermarks:
             seen = payload.get("last_seen") if isinstance(payload, dict) else None
             if isinstance(seen, dict):
                 self._data = {str(k): str(v) for k, v in seen.items()}
+            snaps = payload.get("snapshots") if isinstance(payload, dict) else None
+            if isinstance(snaps, dict):
+                self._snapshots = {str(k): v for k, v in snaps.items() if isinstance(v, dict)}
         except (json.JSONDecodeError, OSError) as e:
             log.warning("context watermarks unreadable (%s); starting fresh", e)
 
@@ -949,7 +974,10 @@ class Watermarks:
         try:
             self._path.parent.mkdir(parents=True, exist_ok=True)
             tmp = self._path.with_suffix(self._path.suffix + ".tmp")
-            tmp.write_text(json.dumps({"last_seen": self._data}, indent=2, sort_keys=True))
+            payload: Dict[str, Any] = {"last_seen": self._data}
+            if self._snapshots:
+                payload["snapshots"] = self._snapshots
+            tmp.write_text(json.dumps(payload, indent=2, sort_keys=True))
             os.replace(tmp, self._path)   # atomic: never a partial file after a crash
         except OSError as e:
             log.warning("could not persist context watermarks: %s", e)
@@ -969,6 +997,20 @@ class Watermarks:
             if existing and existing >= when:
                 return
             self._data[key] = when.astimezone(timezone.utc).isoformat()
+            self._save()
+
+    def get_snapshot(self, card_id: str, source: str, key: str) -> Optional[Dict[str, Any]]:
+        """The snapshot a source stored for this (card, source, key), or None."""
+        with self._lock:
+            found = self._snapshots.get(f"{card_id}:{source}:{key}")
+            return json.loads(json.dumps(found)) if isinstance(found, dict) else None
+
+    def set_snapshot(self, card_id: str, source: str, key: str, snapshot: Dict[str, Any]) -> None:
+        """Replace this (card, source, key) snapshot. A read-only store cannot."""
+        if self._read_only or not isinstance(snapshot, dict):
+            return
+        with self._lock:
+            self._snapshots[f"{card_id}:{source}:{key}"] = snapshot
             self._save()
 
 
@@ -1102,6 +1144,25 @@ class CollectRequest:
     # rather than the circumstantial evidence it had to use before (a reply appearing under a
     # comment, a run finishing later the same day).
     ledger: Any = None
+    # Reads this (card, source)'s stored snapshot for a key, or None. Set by the engine.
+    snapshot_reader: Optional[Callable[[str], Optional[Dict[str, Any]]]] = None
+    # What the source wants stored for its next look, by key. Copied to the ``SourceReport`` and
+    # only written when a run is actually handed the result (``ContextUpdates.mark_seen``).
+    remembered: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+
+    def prior_snapshot(self, key: str) -> Optional[Dict[str, Any]]:
+        """What this source stored under ``key`` the last time a run was handed its results."""
+        if self.snapshot_reader is None:
+            return None
+        try:
+            return self.snapshot_reader(key)
+        except Exception as e:  # noqa: BLE001 -- a snapshot is an aid to explanation, never required
+            log.info("context updates: could not read a snapshot (%s)", e)
+            return None
+
+    def remember(self, key: str, snapshot: Dict[str, Any]) -> None:
+        """Ask for ``snapshot`` to be stored under ``key`` once this read has been delivered."""
+        self.remembered[key] = snapshot
 
     def recorded(self, item_id: str) -> Any:
         """This item's ledger row, or None when nothing is tracked."""
@@ -2322,6 +2383,295 @@ class InboundMailSource(_BaseSource):
 
 
 # ---------------------------------------------------------------------------------------------
+# Notion and Google Chat: opt-in, read-only, named by the card
+# ---------------------------------------------------------------------------------------------
+
+# Bounds. A busy database or space must not push the actual work out of a run's attention, and the
+# honest answer to "there was more" is to say so (the explanation), not to silently cut.
+NOTION_MAX_ROWS = 50
+NOTION_SNAPSHOT_MAX_ROWS = 500
+NOTION_CHANGE_LINES = 12
+CHAT_MAX_MESSAGES = 100
+CHAT_MAX_THREADS = 10
+CHAT_MESSAGES_PER_THREAD = 30
+CHAT_LINE_CHARS = 500
+
+
+def notion_changes(before: Dict[str, str], after: Dict[str, str]) -> List[str]:
+    """``Property: old -> new`` for each property whose rendered value differs, sorted by name."""
+    lines = []
+    for name in sorted(set(before) | set(after)):
+        old, new = str(before.get(name, "")), str(after.get(name, ""))
+        if old != new:
+            lines.append(f"{name}: {_clip(old, 80) or '(empty)'} -> {_clip(new, 80) or '(empty)'}")
+    return lines
+
+
+def notion_explanation(considered: int, reported: int, unchanged: int, truncated: bool,
+                       limit: int) -> str:
+    """Why a Notion read offered fewer rows than it touched, in a person's words."""
+    bits = []
+    if not considered:
+        return "no rows were created or edited since the last look"
+    if unchanged:
+        bits.append(f"{unchanged} already delivered unchanged")
+    if truncated:
+        bits.append(f"only the {limit} most recently edited rows were read, so older changes in "
+                    "the window are not shown")
+    if not bits:
+        return ""
+    return f"{considered} row(s) touched, " + ", ".join(bits)
+
+
+class NotionDatabaseSource(_BaseSource):
+    """Rows created or edited in a Notion database this card names, and WHAT changed on them.
+
+    Spec: ``{"source": "notion_database", "database": "<alias or configured id>"}`` (optionally
+    ``"max_rows": 50``). No code names a database for any particular card: it is data the card
+    carries, like a Drive ``folder_id``, and it must be one the deployment configured (the
+    ``notion`` block's ``database_ids``), so a card can never point this at a database nobody
+    connected. Needs a ``NotionAdapter`` supplied once by the consumer (``UpdateEngine(notion=)``).
+
+    WHAT IS NEW is asked of Notion itself (``last_edited_time`` on or after the watermark). WHAT
+    CHANGED is worked out by comparing each row's properties with the snapshot stored beside the
+    watermark the last time a run was handed this database (``CollectRequest.remember``, written
+    by ``mark_seen``), so a Status moving to "In progress" or a Deadline appearing arrives as
+    ``Status: Not started -> In progress``, not just "row edited". Where it cannot know (a row
+    never seen before that was not created inside the window) it says so instead of guessing.
+
+    CARD-SCOPED BY WHERE IT IS NAMED, so never put to the relevance judge (``judge_relevance``
+    stays False): the card chose this database. It does not track asks: a row changing is news,
+    not a question owed an answer. Unconfigured, or naming a database that is not configured, is a
+    reported gap (``SourceGap``), never an exception that hides the rest of the bundle.
+    """
+    name = "notion_database"
+    describes = "rows created or edited in a Notion database this work names, and which properties changed"
+
+    def __init__(self, notion_client: Any = None) -> None:
+        self._client = notion_client
+
+    def collect(self, request: CollectRequest) -> Sequence[ContextUpdate]:
+        client = self._client
+        if client is None:
+            raise SourceGap("notion is not configured on this deployment (no notion block), so "
+                            "no database can be read")
+        database = str(request.opt("database") or "").strip()
+        if not database:
+            raise SourceGap('the spec names no database; use {"source": "notion_database", '
+                            '"database": "<alias>"}')
+        database_id = client.resolve_database(database)
+        if not database_id:
+            known = ", ".join(sorted(getattr(client, "databases", {}) or {})) or "none"
+            raise SourceGap(f"database {database!r} is not one of the configured databases "
+                            f"(configured: {known})")
+        alias = client.alias_for(database_id) or database
+        limit = max(1, min(int(request.opt("max_rows") or NOTION_MAX_ROWS), 100))
+        since = request.since
+        floor = since.replace(second=0, microsecond=0) if since else None
+        # A failed read raises (NotionError): the engine reports it and the watermark stays put.
+        fetched = client.fetch_rows(database, edited_since=since, limit=limit)
+
+        prior = request.prior_snapshot(database_id) or {}
+        prior_rows = prior.get("rows") if isinstance(prior.get("rows"), dict) else {}
+        next_rows: Dict[str, Any] = dict(prior_rows)
+        out: List[ContextUpdate] = []
+        unchanged = 0
+        for row in fetched.rows:
+            edited_iso = row.edited_at.isoformat() if row.edited_at else ""
+            before = prior_rows.get(row.page_id)
+            next_rows[row.page_id] = {"props": dict(row.properties), "title": row.title,
+                                      "edited": edited_iso}
+            changes: Optional[List[str]] = None
+            if isinstance(before, dict):
+                changes = notion_changes(before.get("props") or {}, row.properties)
+                if not changes and before.get("edited") == edited_iso:
+                    unchanged += 1
+                    continue
+                kind = "changed" if changes else "edited"
+            elif row.created_at and floor and row.created_at >= floor:
+                kind = "created"
+            else:
+                kind = "edited"
+            current = "; ".join(f"{k}: {_clip(v, 80)}"
+                                for k, v in list(row.properties.items())[:NOTION_CHANGE_LINES])
+            if kind == "created":
+                body = "New row. " + (current or "No properties are filled in yet.")
+            elif kind == "changed":
+                shown = (changes or [])[:NOTION_CHANGE_LINES]
+                body = "; ".join(shown)
+                if changes and len(changes) > len(shown):
+                    body += f"; and {len(changes) - len(shown)} more changed"
+            elif before is not None:
+                body = ("Edited, but none of the properties shown here changed, so the change is in "
+                        "the page body or in a property this read does not render.")
+            else:
+                body = ("Edited since the last look. There is no earlier snapshot of this row, so "
+                        "which properties changed is unknown. Now: " + (current or "no properties"))
+            verb = {"created": "was added", "changed": "changed", "edited": "was edited"}[kind]
+            out.append(ContextUpdate(
+                source=self.name,
+                kind=kind,
+                item_id=row.page_id,
+                title=f'"{row.title or "(untitled)"}" {verb} in {alias}',
+                body=body,
+                excerpt=(changes[0] if changes else row.title),
+                occurred_at=row.edited_at,
+                location=alias,
+                url=row.url,
+                how_to_respond=("read the page for its full content before relying on it; this "
+                                "channel is read-only, so anything to record goes in your result "
+                                "or on the quest"),
+                needs_response=False,
+                raw={"page_id": row.page_id, "database": alias, "changes": changes or []},
+            ))
+        if len(next_rows) > NOTION_SNAPSHOT_MAX_ROWS:
+            newest = sorted(next_rows.items(), key=lambda kv: str((kv[1] or {}).get("edited") or ""),
+                            reverse=True)[:NOTION_SNAPSHOT_MAX_ROWS]
+            next_rows = dict(newest)
+        request.remember(database_id, {"rows": next_rows})
+        request.account(len(fetched.rows), notion_explanation(
+            len(fetched.rows), len(out), unchanged, bool(fetched.truncated), limit))
+        return out
+
+
+def chat_explanation(total: int, own: int, blank: int, spaces_read: int, refused: List[str],
+                     truncated: bool, threads_dropped: int) -> str:
+    """Why a Chat read offered fewer messages than it fetched, in a person's words."""
+    bits = []
+    if refused:
+        bits.append(f"{len(refused)} named space(s) refused (not on the allowlist)")
+    if not total:
+        bits.insert(0, f"no new messages in the {spaces_read} space(s) read")
+        return ", ".join(bits)
+    if own:
+        bits.append(f"{own} written by this assistant or a Chat app, skipped")
+    if blank:
+        bits.append(f"{blank} with no text, skipped")
+    if truncated:
+        bits.append("more arrived than the cap, so the oldest in the window were left out")
+    if threads_dropped:
+        bits.append(f"{threads_dropped} older thread(s) not shown")
+    return (f"{total} message(s) across {spaces_read} space(s)" + (", " if bits else "")
+            + ", ".join(bits)) if bits else ""
+
+
+class GoogleChatSource(_BaseSource):
+    """New Google Chat messages in the spaces this card names. Read-only; allowlisted spaces only.
+
+    Spec: ``{"source": "google_chat", "spaces": ["spaces/AAAA..."]}`` (optionally
+    ``"max_messages": 100`` per space). Needs a ``GoogleChatAdapter`` supplied once by the consumer
+    (``UpdateEngine(google_chat=)``), built from the ``google_chat`` block whose ``space_names`` is
+    REQUIRED.
+
+    TWO LOCKS ON WHICH SPACES. A space is read only if the card's spec NAMES it AND the deployment's
+    allowlist (``space_names``) contains it. A domain-wide-delegation credential can see every space
+    its subject is in, so a card naming a space nobody approved is refused before any request is
+    made, and the refusal is reported. With no allowlist nothing is read at all.
+
+    THE ASSISTANT NEVER HEARS ITSELF: messages from any Chat app (``sender.type == "BOT"``) or from
+    a configured ``assistant_senders`` entry are skipped and counted. Messages are grouped by
+    thread (one row per thread: a thread is the conversation), newest threads first, bounded per
+    space, per thread and in length, and what was left out is stated. A message newer than the
+    collection moment is left for the next look, so the watermark never skips one.
+
+    CARD-SCOPED BY WHERE IT IS NAMED, so no relevance judge (the card chose these spaces), and no
+    admission judge (Chat apps are dropped deterministically above). It does not track asks. It is
+    read-only: nothing here can post, so a reply goes in the run's result or on the quest.
+    """
+    name = "google_chat"
+    describes = "new messages in the Google Chat spaces this work names (read-only, allowlisted spaces only)"
+
+    def __init__(self, chat_client: Any = None) -> None:
+        self._client = chat_client
+
+    def collect(self, request: CollectRequest) -> Sequence[ContextUpdate]:
+        client = self._client
+        if client is None:
+            raise SourceGap("google chat is not configured on this deployment (no google_chat "
+                            "block), so no space can be read")
+        spaces = _as_list(request.opt("spaces") or request.opt("space"))
+        if not spaces:
+            raise SourceGap('the spec names no spaces; use {"source": "google_chat", "spaces": '
+                            '["spaces/<id>"]}')
+        allowed = getattr(client, "space_allowed", None)
+        if not callable(allowed):
+            raise SourceGap("the configured Chat client cannot enforce a space allowlist, so "
+                            "no space is read")
+        permitted, refused = [], []
+        for space in dict.fromkeys(spaces):
+            (permitted if allowed(space) else refused).append(space)
+        if not permitted:
+            raise SourceGap("refused: " + ", ".join(refused) + " not on this deployment's "
+                            "google_chat allowlist (space_names), so nothing was read")
+        cap = max(1, min(int(request.opt("max_messages") or CHAT_MAX_MESSAGES), 300))
+        chunks, failures = [], []
+        for space in permitted:
+            try:
+                chunks.append(client.fetch_messages_since(space, request.since, max_messages=cap))
+            except Exception as e:  # noqa: BLE001 -- reported below; the watermark must not move
+                failures.append(f"{space}: {e}")
+        if failures:
+            raise RuntimeError("could not read " + "; ".join(failures))
+
+        is_mine = getattr(client, "is_assistant_message", lambda m: False)
+        total = own = blank = 0
+        truncated = False
+        threads: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        for chunk in chunks:
+            truncated = truncated or bool(getattr(chunk, "truncated", False))
+            for message in getattr(chunk, "messages", []) or []:
+                total += 1
+                if is_mine(message):
+                    own += 1
+                    continue
+                text = " ".join(str(message.get("text") or "").split())
+                if not text:
+                    blank += 1
+                    continue
+                when = _as_utc(message.get("createTime"))
+                if when and when > request.now:
+                    continue          # arrived after this look began; the next look gets it
+                sender = message.get("sender") or {}
+                who = str(sender.get("displayName") or sender.get("name") or "someone")
+                key = (chunk.space, str((message.get("thread") or {}).get("name") or chunk.space))
+                slot = threads.setdefault(key, {"space": chunk.space,
+                                                "display": chunk.display_name or chunk.space,
+                                                "messages": []})
+                slot["messages"].append((when, who, text))
+        rows = []
+        for (space, thread), slot in threads.items():
+            msgs = sorted(slot["messages"], key=lambda m: m[0] or _OLDEST)
+            rows.append((msgs[-1][0] or _OLDEST, space, thread, slot["display"], msgs))
+        rows.sort(key=lambda r: r[0], reverse=True)
+        dropped = max(0, len(rows) - CHAT_MAX_THREADS)
+        out: List[ContextUpdate] = []
+        for last, space, thread, display, msgs in rows[:CHAT_MAX_THREADS]:
+            shown = msgs[-CHAT_MESSAGES_PER_THREAD:]
+            body = " | ".join(f"{who}: {_clip(text, CHAT_LINE_CHARS)}" for _w, who, text in shown)
+            if len(msgs) > len(shown):
+                body = f"[{len(msgs) - len(shown)} earlier message(s) in this thread not shown] " + body
+            out.append(ContextUpdate(
+                source=self.name,
+                kind="chat",
+                item_id=thread,
+                title=f"{len(msgs)} new message(s) in {display}",
+                body=body,
+                verbatim=True,      # their words
+                excerpt=msgs[0][2],
+                author=msgs[-1][1],
+                occurred_at=last if last != _OLDEST else None,
+                location=display,
+                how_to_respond=("this channel is read-only and cannot post in Chat; answer in your "
+                                "result or on the quest, and say so if someone there is waiting on it"),
+                needs_response=False,
+                raw={"space": space, "thread": thread, "messages": len(msgs)},
+            ))
+        request.account(total, chat_explanation(total, own, blank, len(permitted), refused,
+                                                truncated, dropped))
+        return out
+
+
+# ---------------------------------------------------------------------------------------------
 # Relevance: the engine's job, not the run's
 # ---------------------------------------------------------------------------------------------
 
@@ -2647,6 +2997,8 @@ class UpdateEngine:
                  watermarks: Optional[Watermarks] = None,
                  drive_comments: Any = None,
                  inbound_mail: Any = None,
+                 notion: Any = None,
+                 google_chat: Any = None,
                  sources: Optional[Sequence[ContextSource]] = None,
                  always: Sequence[str] = DEFAULT_ALWAYS,
                  spec_resolver: Optional[Callable[[Dict[str, Any]], List[Dict[str, Any]]]] = None,
@@ -2670,7 +3022,8 @@ class UpdateEngine:
         self._max_updates = max(1, int(max_updates))
         self._now_fn = now_fn or _utcnow
         registry: Dict[str, ContextSource] = {}
-        for src in (sources or self._builtin_sources(drive_comments, inbound_mail)):
+        for src in (sources or self._builtin_sources(drive_comments, inbound_mail,
+                                                        notion, google_chat)):
             registry[src.name] = src
         self._sources = registry
         # Cache for user-scoped sources (reflections, insights), keyed by each source's own choice
@@ -2679,7 +3032,8 @@ class UpdateEngine:
         self._cache_filled_at: Optional[datetime] = None
 
     @staticmethod
-    def _builtin_sources(drive_comments: Any, inbound_mail: Any = None) -> List[ContextSource]:
+    def _builtin_sources(drive_comments: Any, inbound_mail: Any = None,
+                         notion: Any = None, google_chat: Any = None) -> List[ContextSource]:
         return [
             ReflectionsSource(),
             InsightsSource(),
@@ -2690,6 +3044,8 @@ class UpdateEngine:
             DriveCommentsSource(drive_comments),
             DriveChangesSource(drive_comments),
             InboundMailSource(inbound_mail),
+            NotionDatabaseSource(notion),
+            GoogleChatSource(google_chat),
         ]
 
     def describe_sources(self) -> Dict[str, str]:
@@ -2905,9 +3261,16 @@ class UpdateEngine:
             request = CollectRequest(
                 card=card, card_id=cid, card_kind=card_kind, spec=spec,
                 card_label=bundle.card_label, since=window, first_look=last_look is None,
-                now=now, client=self._client, cache=self._cache, ledger=self._ledger)
+                now=now, client=self._client, cache=self._cache, ledger=self._ledger,
+                snapshot_reader=(lambda key, n=name: self._watermarks.get_snapshot(cid, n, key)))
             try:
                 found = list(source.collect(request) or [])
+            except SourceGap as e:
+                report.error = str(e)
+                log.info("context updates: source %s has nothing to read for card %s: %s",
+                         name, cid, e)
+                bundle.reports.append(report)
+                continue
             except Exception as e:  # noqa: BLE001 -- one channel never breaks the rest
                 report.error = f"{type(e).__name__}: {e}"
                 log.warning("context updates: source %s failed for card %s: %s", name, cid, e)
@@ -2916,6 +3279,7 @@ class UpdateEngine:
             report.found = len(found)
             report.considered = request.considered
             report.explanation = request.explanation
+            report.snapshots = dict(request.remembered)
             bundle.reports.append(report)
             bundle.updates.extend(found)
 
@@ -2996,6 +3360,8 @@ def build_update_engine(cfg: Any = None, client: Any = None, *,
         relay_log=RelayedItems(relay_path, read_only=read_only),
         drive_comments=getattr(cfg, "drive_comments", None),
         inbound_mail=getattr(cfg, "inbound_mail", None),
+        notion=getattr(cfg, "notion_adapter", None),
+        google_chat=getattr(cfg, "google_chat_adapter", None),
         spec_resolver=consumer_spec_resolver(getattr(cfg, "context_sources_map", None)),
         # A callable, not a provider: this engine is built before the CLI wraps
         # cfg.model_provider with MultiProvider, so resolving it at CALL time is what makes the

@@ -7,6 +7,28 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Notion and Google Chat are first-class, generic, opt-in, read-only context channels, including
+  for the automated context updates autopilot passes use.** New `adapters/notion_adapter.py`
+  (`NotionAdapter`): stdlib-only, injected token (`env_token_provider` / `file_token_provider` /
+  `static_token_provider`), `Notion-Version` pinned, never raises, and read-only by construction (its
+  one request method refuses anything but a `GET` and the `POST` that queries a database). Lists
+  configured databases by alias, queries with simple filters translated to Notion's own filter shape,
+  reads a page (properties plus bounded block text), greps rows, and resolves learned `notion_page`
+  references fresh. Two new built-in context sources in `runner/context_updates.py`:
+  `notion_database` (rows created or edited since the watermark, with WHICH properties changed, from
+  a snapshot stored beside the watermark) and `google_chat` (new messages since the watermark, only in
+  spaces the card names AND the deployment allowlists, skipping the assistant's own and Chat apps'
+  messages, bounded). `GoogleChatAdapter` gained `fetch_messages_since`, `space_allowed` (fails closed
+  with no allowlist) and `assistant_senders`. Declarative `[notion]` (`token_env` or `token_file`,
+  `database_ids`) and `[google_chat]` (`service_account_file`, `subject`, read-only `scopes`,
+  `space_names` REQUIRED, `lookback_days`, `assistant_senders`) blocks, built only when credentials
+  exist, folded into retrieval and handed to the update engine as the same object
+  (`RunnerConfig.notion_adapter` / `google_chat_adapter`). Engine additions: `SourceGap` (an
+  unconfigured or refused source is a reported gap that does not advance the watermark, not an
+  exception), and per-source snapshots on `Watermarks` (`CollectRequest.prior_snapshot` /
+  `remember`, written only by `mark_seen`). Docs: `docs/context-updates.md`, `docs/adapters.md`,
+  `docs/deployment.md`. Tests: `tests/test_notion_adapter.py`,
+  `tests/test_notion_chat_context_sources.py`, `tests/test_config_notion_google_chat.py`.
 - **Deep-run completions name which LLM model actually executed them, in both the terminal and any
   chat/task-detail consumer.** `DeepResult` gained a `model` field (`core/adapters.py`), set by the
   goal loop (`core/orchestrator.py`) from the ladder rung it dispatched each attempt to, and carried

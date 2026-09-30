@@ -118,6 +118,7 @@ _FILE_SCALAR_FIELDS = {
     "context_updates_relay_log_path",
     "rep_context_prefs", "context_preamble_doctrine", "vector_store", "mcp_drive",
     "context_sources_map", "context_sources_file", "drive_comments_auth", "inbound_mail_auth",
+    "notion", "google_chat",
     "feedback_ledger", "feedback_ledger_path",
     "quest_folder_map_file",
     "state_path", "lane_label", "env_files", "env_aliases", "env",
@@ -593,6 +594,18 @@ class RunnerConfig:
     # -- domain-wide delegation can otherwise impersonate ANY mailbox in the domain. See
     # ``adapters.inbound_mail`` for the read-only client this builds.
     inbound_mail_auth: Optional[Dict[str, Any]] = None
+    # Declarative, opt-in, READ-ONLY Notion channel: {token_env = "NAME_OF_ENV_VAR" (or
+    # token_file = "path"), database_ids = {alias = "<database id>"}, max_rows_per_database = 200}.
+    # Resolved into ``notion_adapter`` by ``resolve_config_objects`` ONLY when a token is actually
+    # available AND at least one database is named; otherwise it logs why and wires nothing. The
+    # token itself is never in the file: only the NAME of the environment variable, or a path.
+    notion: Optional[Dict[str, Any]] = None
+    # Declarative, opt-in, READ-ONLY Google Chat channel: {service_account_file = "...", subject =
+    # "...", scopes = [...] (default read-only), space_names = ["spaces/..."] (REQUIRED),
+    # lookback_days = 30, assistant_senders = [...]}. FAILS CLOSED: a block with no ``space_names``
+    # wires nothing and logs why, because a domain-wide-delegation credential can otherwise read
+    # every space its subject is in. Resolved into ``google_chat_adapter``.
+    google_chat: Optional[Dict[str, Any]] = None
     # A JSON file holding {quest_id: folder}. ``quest_folder_map`` takes the dict itself and there
     # was no pointer form, which is the one reason several lanes still read a JSON file in Python.
     quest_folder_map_file: Optional[str] = None
@@ -626,6 +639,14 @@ class RunnerConfig:
     # ``drive_comments`` above. Left None, ``inbound_mail`` contributes nothing until a deployment
     # wires this (directly, or declaratively via ``inbound_mail_auth``).
     inbound_mail: Any = None
+    # The Notion and Google Chat channels as live adapters (``adapters.notion_adapter.NotionAdapter``,
+    # ``adapters.google_chat_adapter.GoogleChatAdapter``), or None. Supplied directly in Python, or
+    # built from the ``notion`` / ``google_chat`` blocks above. ONE object serves both uses: it is
+    # folded into the retrieval stack (so a run can read, grep and query it) and handed to the
+    # context-update engine (so ``notion_database`` / ``google_chat`` card specs work). Left None,
+    # a card naming either source gets an honest gap in its bundle, never an exception.
+    notion_adapter: Any = None
+    google_chat_adapter: Any = None
 
     extra: Dict[str, Any] = field(default_factory=dict)
 
@@ -853,6 +874,13 @@ def resolve_config_objects(cfg: RunnerConfig) -> RunnerConfig:
     # Same pattern, the inbound-mail client.
     if cfg.inbound_mail is None and cfg.inbound_mail_auth:
         cfg.inbound_mail = _build_inbound_mail(cfg.inbound_mail_auth)
+
+    # Notion and Google Chat: same rule, an explicit live adapter beats a description, and a block
+    # whose credentials or allowlist are missing logs why and wires nothing.
+    if cfg.notion_adapter is None and cfg.notion:
+        cfg.notion_adapter = _build_notion(cfg.notion)
+    if cfg.google_chat_adapter is None and cfg.google_chat:
+        cfg.google_chat_adapter = _build_google_chat(cfg.google_chat)
 
     if cfg.mcp_drive:
         _add_drive_mcp_server(cfg)
@@ -1147,6 +1175,131 @@ def _build_inbound_mail(auth: Dict[str, Any]) -> Any:
     except Exception as e:  # noqa: BLE001
         _log.warning("inbound_mail_auth: could not build the client (%s); channel off", e)
         return None
+
+
+def _build_notion(block: Dict[str, Any]) -> Any:
+    """A read-only ``NotionAdapter`` from ``{token_env | token_file, database_ids, ...}``, or None.
+
+    Built only when a token is actually available (the named environment variable is set and
+    non-empty, or the named file holds one) and at least one database id is given. The token is
+    read lazily on every request (so a rotated one is picked up) and never logged.
+    """
+    try:
+        from .adapters.notion_adapter import (
+            NotionAdapter, env_token_provider, file_token_provider, normalize_id)
+    except Exception as e:  # noqa: BLE001 -- an optional channel never blocks a lane starting
+        _log.warning("notion: channel unavailable (%s)", e)
+        return None
+
+    databases = block.get("database_ids")
+    clean = {str(alias).strip(): str(ident).strip() for alias, ident in (databases or {}).items()
+             if str(alias).strip() and normalize_id(ident)} if isinstance(databases, dict) else {}
+    if not clean:
+        _log.warning("notion: no database_ids (alias -> database id); channel off. Nothing is read "
+                     "unless a database is named")
+        return None
+    token_env = str(block.get("token_env") or "").strip()
+    token_file = str(block.get("token_file") or "").strip()
+    providers = []
+    if token_env:
+        providers.append(env_token_provider(token_env))
+    if token_file:
+        providers.append(file_token_provider(token_file))
+    if not providers:
+        _log.warning("notion: needs token_env (the NAME of an environment variable) or token_file; "
+                     "channel off")
+        return None
+
+    def token() -> Optional[str]:
+        for provider in providers:
+            value = provider()
+            if value:
+                return value
+        return None
+
+    if not token():
+        _log.warning("notion: no token available from %s; channel off",
+                     " or ".join(x for x in (f"env {token_env}" if token_env else "",
+                                             f"file {token_file}" if token_file else "") if x))
+        return None
+    try:
+        kwargs: Dict[str, Any] = {}
+        if block.get("max_rows_per_database"):
+            kwargs["max_rows_per_database"] = int(block["max_rows_per_database"])
+        if block.get("cache_ttl_seconds") is not None:
+            kwargs["cache_ttl_seconds"] = float(block["cache_ttl_seconds"])
+        adapter = NotionAdapter(token_provider=token, database_ids=clean, **kwargs)
+    except Exception as e:  # noqa: BLE001
+        _log.warning("notion: could not build the adapter (%s); channel off", e)
+        return None
+    _log.info("Notion wired (read-only, databases: %s)", sorted(clean))
+    return adapter
+
+
+def _build_google_chat(block: Dict[str, Any]) -> Any:
+    """A read-only ``GoogleChatAdapter`` from ``{service_account_file, subject, space_names, ...}``.
+
+    FAILS CLOSED on the allowlist: with no ``space_names`` nothing is wired and the log says why,
+    since domain-wide delegation can otherwise read every space the subject is in. Scopes default
+    to the read-only pair. Built only when the key file exists.
+    """
+    try:
+        from .adapters.google_chat_adapter import (
+            DEFAULT_CHAT_SCOPES, GoogleChatAdapter, service_account_token_provider)
+    except Exception as e:  # noqa: BLE001 -- an optional channel never blocks a lane starting
+        _log.warning("google_chat: channel unavailable (%s)", e)
+        return None
+
+    spaces = [str(x).strip() for x in (block.get("space_names") or []) if str(x).strip()]
+    if not spaces:
+        _log.warning("google_chat: no space_names; channel off -- domain-wide delegation can read "
+                     "every space the subject is in, so a deployment must name which ones this "
+                     "credential may read")
+        return None
+    sa_file = str(block.get("service_account_file") or "").strip()
+    if not sa_file:
+        _log.warning("google_chat: needs a service_account_file; channel off")
+        return None
+    if not Path(sa_file).exists():
+        _log.warning("google_chat: %s does not exist; channel off", sa_file)
+        return None
+    scopes = [str(x) for x in (block.get("scopes") or DEFAULT_CHAT_SCOPES)]
+    subject = str(block.get("subject") or "").strip() or None
+    try:
+        lookback = block.get("lookback_days")
+        adapter = GoogleChatAdapter(
+            token_provider=service_account_token_provider(
+                service_account_file=sa_file, subject=subject, scopes=scopes),
+            space_names=spaces,
+            lookback_days=30 if lookback is None else int(lookback),
+            assistant_senders=[str(x) for x in (block.get("assistant_senders") or [])],
+        )
+    except Exception as e:  # noqa: BLE001
+        _log.warning("google_chat: could not build the adapter (%s); channel off", e)
+        return None
+    _log.info("Google Chat wired (read-only, %d allowlisted space(s))", len(spaces))
+    return adapter
+
+
+def fold_into_retrieval(cfg: RunnerConfig, adapters: List[Any]) -> None:
+    """Add ``adapters`` to ``cfg.retrieval`` as members of a ``CompositeRetrievalAdapter``.
+
+    Idempotent (an adapter already in the stack is not added twice), and the same fold-in the web
+    and MCP wiring use rather than a parallel mechanism.
+    """
+    from .adapters.composite_retrieval_adapter import CompositeRetrievalAdapter as CRA
+
+    existing = list(cfg.retrieval.adapters) if isinstance(cfg.retrieval, CRA) else (
+        [cfg.retrieval] if cfg.retrieval is not None else [])
+    fresh = [a for a in adapters if a is not None and not any(a is e for e in existing)]
+    if not fresh:
+        return
+    if cfg.retrieval is None:
+        cfg.retrieval = fresh[0] if len(fresh) == 1 else CRA(fresh)
+    elif isinstance(cfg.retrieval, CRA):
+        cfg.retrieval = CRA(existing + fresh, max_workers=cfg.retrieval.max_workers)
+    else:
+        cfg.retrieval = CRA([cfg.retrieval, *fresh])
 
 
 def apply_file_defaults(cfg: RunnerConfig, file_cfg: Optional[RunnerConfig]) -> RunnerConfig:
@@ -2487,6 +2640,18 @@ def build_orchestrator(
             _log.info("MCP servers wired into retrieval: %s", [s.alias for s in cfg.mcp_servers])
         except Exception as e:  # noqa: BLE001 — MCP wiring is optional; never break the build
             _log.debug("mcp servers not wired: %s", e)
+
+    # Notion and Google Chat (built by resolve_config_objects, or supplied live): the SAME objects the
+    # context-update engine reads, folded into retrieval so a run can read, grep and query them.
+    # Both are read-only adapters and only ever present when explicitly configured.
+    _opt_in_channels = [a for a in (cfg.notion_adapter, cfg.google_chat_adapter) if a is not None]
+    if _opt_in_channels:
+        try:
+            fold_into_retrieval(cfg, _opt_in_channels)
+            _log.info("Opt-in channels wired into retrieval: %s",
+                      [type(a).__name__ for a in _opt_in_channels])
+        except Exception as e:  # noqa: BLE001 -- optional wiring never breaks the build
+            _log.debug("opt-in channels not wired: %s", e)
 
     # Auto-enable guidance provider if not configured
     guidance = cfg.guidance_provider
