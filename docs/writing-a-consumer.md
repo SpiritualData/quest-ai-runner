@@ -99,7 +99,8 @@ so there is one set of switches and not two:
 |---|---|
 | `QAR_DEEP_WORKING_DIR` | the subprocess cwd. Falls back to `corpus_root`, then the process cwd |
 | `QAR_CLAUDE_PATH` | the worker binary (default `claude`, looked up on PATH) |
-| `QAR_DEEP_TIMEOUT_SECONDS` | wall-clock cap per deep run (default 1 hour) |
+| `QAR_DEEP_TIMEOUT_SECONDS` | optional hard wall-clock cap per deep run (default none) |
+| `QAR_DEEP_REVIEW_INTERVAL_SECONDS` | seconds between LLM liveness reviews of a running deep run (default 300, 0 = off); it stops a run only if stalled, out of tokens or blocked |
 | `QAR_DEEP_MODELS` | the goal loop's escalation ladder (lives on `OrchestratorConfig`) |
 | `QAR_DEEP_AUTO_MODEL` | `0`/`false`/`off` turns off the automatic starting model (on by default, see below) |
 | `QAR_DEEP_MODEL_SIMPLE`, `QAR_DEEP_MODEL_NORMAL`, `QAR_DEEP_MODEL_HARD` | the model a deep run starts on per planner-rated difficulty (defaults `haiku`, `sonnet`, `sonnet`) |

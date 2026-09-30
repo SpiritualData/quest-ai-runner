@@ -831,69 +831,30 @@ def test_subprocess_runner_treats_empty_output_as_not_met(monkeypatch):
 # --- WS1 reliability floor: wall-clock timeout, deterministic session binding, heartbeat ------
 
 def test_resolve_deep_timeout_seconds_env_var_and_config_precedence(monkeypatch):
-    """Explicit SubprocessConfig.timeout_seconds always wins. Otherwise QAR_DEEP_TIMEOUT_SECONDS
-    is used, falling back to the built-in 1-hour default when unset or unparsable — a deep run is
-    never truly untimed."""
+    """The hard cap is OPT-IN. Explicit SubprocessConfig.timeout_seconds wins, then
+    QAR_DEEP_TIMEOUT_SECONDS; unset, zero or garbage means no fixed cap (None)."""
     from quest_ai_runner.core.goal_runner import (
-        DEFAULT_DEEP_TIMEOUT_SECONDS,
         QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR,
         resolve_deep_timeout_seconds,
     )
 
     monkeypatch.delenv(QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, raising=False)
-    assert resolve_deep_timeout_seconds(None) == DEFAULT_DEEP_TIMEOUT_SECONDS
-    assert resolve_deep_timeout_seconds(120.0) == 120.0  # explicit config wins, no env set
+    assert resolve_deep_timeout_seconds(None) is None      # no arbitrary default kill
+    assert resolve_deep_timeout_seconds(120.0) == 120.0
 
     monkeypatch.setenv(QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, "90")
     assert resolve_deep_timeout_seconds(None) == 90.0
     assert resolve_deep_timeout_seconds(5.0) == 5.0       # config still wins over env
 
     monkeypatch.setenv(QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, "not-a-number")
-    assert resolve_deep_timeout_seconds(None) == DEFAULT_DEEP_TIMEOUT_SECONDS  # bad env -> default
+    assert resolve_deep_timeout_seconds(None) is None
+    monkeypatch.setenv(QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, "0")
+    assert resolve_deep_timeout_seconds(None) is None
 
 
-def test_subprocess_runner_applies_default_timeout_when_unconfigured(monkeypatch):
-    """When the consumer leaves SubprocessConfig.timeout_seconds unset, the subprocess wait is
-    still bounded (never truly untimed): it uses QAR_DEEP_TIMEOUT_SECONDS, or the built-in
-    default when that is also unset."""
+def _hung_popen(pids, finish_after=None):
+    """A Popen double whose communicate() times out until ``finish_after`` slices have passed."""
     import subprocess as _sp
-    from quest_ai_runner.core import goal_runner as gr
-
-    monkeypatch.delenv(gr.QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, raising=False)
-    captured = {}
-
-    class _MockPopen:
-        returncode = 0
-        stdin = None
-        pid = 1
-
-        def communicate(self, input=None, timeout=None):
-            captured["timeout"] = timeout
-            return (b"did it", b"")
-
-    monkeypatch.setattr(_sp, "Popen", lambda cmd, **kw: _MockPopen())
-    runner = gr.SubprocessGoalRunner(gr.SubprocessConfig(working_dir="/w", claude_path="/usr/bin/claude"))
-    runner.run_goal(goal="g", brief="b", max_turns=2)
-    assert captured["timeout"] == gr.DEFAULT_DEEP_TIMEOUT_SECONDS
-
-    monkeypatch.setenv(gr.QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, "42")
-    runner.run_goal(goal="g", brief="b", max_turns=2)
-    assert captured["timeout"] == 42.0
-
-
-def test_subprocess_runner_timeout_kills_process_group_and_fails_clearly(monkeypatch):
-    """A hung worker must never wedge forever or look like a silent success: on wall-clock
-    timeout the runner kills the WHOLE process group (not just the top pid) and returns a FAILED
-    result whose message names how long it ran and the configured limit, with no em dash."""
-    import subprocess as _sp
-    from quest_ai_runner.core import goal_runner as gr
-
-    killed = {}
-
-    def fake_kill_process_group(proc):
-        killed["pid"] = proc.pid
-
-    monkeypatch.setattr(gr, "kill_process_group", fake_kill_process_group)
 
     class _MockPopen:
         returncode = 0
@@ -902,23 +863,122 @@ def test_subprocess_runner_timeout_kills_process_group_and_fails_clearly(monkeyp
 
         def __init__(self):
             self.calls = 0
+            self.timeouts = []
 
         def communicate(self, input=None, timeout=None):
             self.calls += 1
-            if self.calls == 1:
-                raise _sp.TimeoutExpired(cmd=["claude"], timeout=timeout)
-            return (b"", b"")  # the post-kill diagnostic drain call
+            self.timeouts.append(timeout)
+            if finish_after is not None and self.calls > finish_after:
+                return (b"did it", b"")
+            if pids.get("killed") and self.calls > 1:
+                return (b"", b"")  # the post-kill drain
+            raise _sp.TimeoutExpired(cmd=["claude"], timeout=timeout)
 
-    monkeypatch.setattr(_sp, "Popen", lambda cmd, **kw: _MockPopen())
+    return _MockPopen()
+
+
+def test_deep_run_has_no_fixed_kill_and_reviews_on_an_interval(monkeypatch):
+    """With no hard cap configured the wait is sliced by the review interval, and a reviewer that
+    says keep going leaves the run alone (it then finishes normally, nothing killed)."""
+    import subprocess as _sp
+    from quest_ai_runner.core import goal_runner as gr
+
+    monkeypatch.delenv(gr.QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, raising=False)
+    killed = {}
+    monkeypatch.setattr(gr, "kill_process_group", lambda proc: killed.setdefault("k", True))
+    procs = []
+    monkeypatch.setattr(_sp, "Popen", lambda cmd, **kw: procs.append(_hung_popen(killed, finish_after=2)) or procs[-1])
+    prompts = []
+    events = []
+
+    def reviewer(prompt):
+        prompts.append(prompt)
+        return '{"stop": false, "reason": "It is monitoring a build, which is slow by nature."}'
+
     runner = gr.SubprocessGoalRunner(gr.SubprocessConfig(
-        working_dir="/w", claude_path="/usr/bin/claude", timeout_seconds=5.0))
+        working_dir="/w", claude_path="/usr/bin/claude", review_interval_seconds=300.0,
+        reviewer=reviewer))
+    res = runner.run_goal(goal="g", brief="b", max_turns=2, emit=events.append)
+
+    assert res.met is True and not killed
+    assert procs[0].timeouts[0] == 300.0
+    assert len(prompts) == 2
+    assert any("Not stopping the deep run: It is monitoring a build" in getattr(e, "text", "")
+               for e in events)
+
+
+def test_deep_run_stopped_only_when_reviewer_says_so_and_reason_is_in_output(monkeypatch):
+    import subprocess as _sp
+    from quest_ai_runner.core import goal_runner as gr
+
+    monkeypatch.delenv(gr.QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, raising=False)
+    killed = {}
+
+    def fake_kill(proc):
+        killed["pid"] = proc.pid
+
+    monkeypatch.setattr(gr, "kill_process_group", fake_kill)
+    monkeypatch.setattr(_sp, "Popen", lambda cmd, **kw: _hung_popen(killed))
+    runner = gr.SubprocessGoalRunner(gr.SubprocessConfig(
+        working_dir="/w", claude_path="/usr/bin/claude", review_interval_seconds=300.0,
+        reviewer=lambda p: '{"stop": true, "reason": "Nothing has been written to the log for 12 minutes."}'))
+    res = runner.run_goal(goal="g", brief="b", max_turns=2)
+
+    assert res.met is False
+    assert killed["pid"] == 4242
+    assert "Nothing has been written to the log for 12 minutes." in res.error
+    assert "—" not in res.error
+
+
+def test_deep_run_review_failure_fails_open(monkeypatch):
+    """A broken or garbled reviewer must never kill a run."""
+    import subprocess as _sp
+    from quest_ai_runner.core import goal_runner as gr
+
+    monkeypatch.delenv(gr.QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, raising=False)
+    killed = {}
+    monkeypatch.setattr(gr, "kill_process_group", lambda proc: killed.setdefault("k", True))
+    monkeypatch.setattr(_sp, "Popen", lambda cmd, **kw: _hung_popen(killed, finish_after=2))
+
+    calls = []
+
+    def flaky(prompt):
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("boom")
+        return "not json"
+
+    runner = gr.SubprocessGoalRunner(gr.SubprocessConfig(
+        working_dir="/w", claude_path="/usr/bin/claude", review_interval_seconds=300.0, reviewer=flaky))
+    res = runner.run_goal(goal="g", brief="b", max_turns=2)
+    assert res.met is True and not killed
+
+
+def test_parse_deep_review():
+    from quest_ai_runner.core.goal_runner import parse_deep_review
+    assert parse_deep_review('ok {"stop": true, "reason": "Out of tokens."}') == (True, "Out of tokens.")
+    assert parse_deep_review('{"stop": "yes"}') is None
+    assert parse_deep_review("nothing") is None
+
+
+def test_subprocess_runner_optional_hard_timeout_kills_process_group_and_fails_clearly(monkeypatch):
+    """An explicitly configured hard cap still works: it kills the WHOLE process group and fails
+    clearly, naming how long it ran and the limit, with no em dash."""
+    import subprocess as _sp
+    from quest_ai_runner.core import goal_runner as gr
+
+    killed = {}
+    monkeypatch.setattr(gr, "kill_process_group", lambda proc: killed.setdefault("pid", proc.pid))
+    monkeypatch.setattr(_sp, "Popen", lambda cmd, **kw: _hung_popen(killed))
+    runner = gr.SubprocessGoalRunner(gr.SubprocessConfig(
+        working_dir="/w", claude_path="/usr/bin/claude", timeout_seconds=5.0,
+        review_interval_seconds=0.0))
     res = runner.run_goal(goal="do a long thing", brief="work", max_turns=3)
 
     assert res.met is False
-    assert killed["pid"] == 4242                 # the whole process group was killed
-    assert "5" in res.error                       # the configured limit is named
-    assert "timeout" in res.error.lower()
-    assert "—" not in res.error                   # no em dashes in user-facing error text
+    assert killed["pid"] == 4242
+    assert "5s" in res.error and "timeout" in res.error.lower()
+    assert "—" not in res.error
 
 
 def test_subprocess_runner_passes_explicit_session_id(monkeypatch):

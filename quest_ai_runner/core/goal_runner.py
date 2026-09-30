@@ -44,12 +44,19 @@ _log = logging.getLogger("quest-ai-runner.goal_runner")
 
 DEFAULT_DEEP_MAX_TURNS = 30
 
-# Wall-clock cap applied to the deep ``claude -p`` subprocess when the consumer's SubprocessConfig
-# leaves ``timeout_seconds`` unset. An untimed subprocess can hang forever and is indistinguishable
-# from one still working (HANDS_FREE_QUEST_AI_DESIGN.md section 2) — this is the reliability floor,
-# not a tuning knob a consumer is expected to set. Overridable via QAR_DEEP_TIMEOUT_SECONDS.
-DEFAULT_DEEP_TIMEOUT_SECONDS = 3600.0
+# A deep run has NO fixed wall-clock kill by default. A long run is often a healthy one (a big
+# refactor, a monitor loop), and a blunt timer killed runs moments before they committed their
+# changes. Instead, every ``DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS`` a quick LLM reads the tail of
+# the run's live session log and decides whether it should still be running (stalled, out of
+# tokens, blocked on a decision). It stops the run only on a yes; otherwise the run continues and
+# the one-sentence reason it was left alone goes to the log. Knobs:
+#   QAR_DEEP_REVIEW_INTERVAL_SECONDS  seconds between reviews (default 300; 0 turns reviews off)
+#   QAR_DEEP_TIMEOUT_SECONDS          OPTIONAL hard wall-clock cap; unset or 0 means no cap
+DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS = 300.0
+QAR_DEEP_REVIEW_INTERVAL_SECONDS_ENV_VAR = "QAR_DEEP_REVIEW_INTERVAL_SECONDS"
 QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR = "QAR_DEEP_TIMEOUT_SECONDS"
+DEFAULT_DEEP_REVIEW_MODEL = "haiku"
+DEEP_REVIEW_CALL_TIMEOUT_SECONDS = 120.0
 
 # How often the progress monitor emits a liveness beat while otherwise quiet (before the session
 # file exists, or while it exists but nothing new has been written since). Design rule: silence
@@ -57,26 +64,71 @@ QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR = "QAR_DEEP_TIMEOUT_SECONDS"
 DEFAULT_MONITOR_HEARTBEAT_SECONDS = 10.0
 
 
-def resolve_deep_timeout_seconds(configured: Optional[float]) -> float:
-    """The effective wall-clock cap for the deep subprocess.
+def _positive_float(raw: Optional[str], name: str) -> Optional[float]:
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    try:
+        value = float(raw)
+    except ValueError:
+        _log.warning("%s=%r is not a valid number, ignoring it", name, raw)
+        return None
+    return value if value > 0 else None
+
+
+def resolve_deep_timeout_seconds(configured: Optional[float]) -> Optional[float]:
+    """The OPTIONAL hard wall-clock cap for the deep subprocess, or None for no cap.
 
     ``configured`` (``SubprocessConfig.timeout_seconds``) wins when the consumer set it
-    explicitly. Otherwise falls back to the ``QAR_DEEP_TIMEOUT_SECONDS`` env var, defaulting to
-    ``DEFAULT_DEEP_TIMEOUT_SECONDS`` (1 hour) so a deep run can never hang forever just because a
-    consumer forgot to configure a timeout.
+    explicitly, else ``QAR_DEEP_TIMEOUT_SECONDS``. Unset or non-positive means no fixed cap: the
+    liveness review (``resolve_deep_review_interval_seconds``) is what decides a run should stop.
     """
     if configured is not None:
-        return float(configured)
-    raw = (os.getenv(QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR) or "").strip()
+        return float(configured) if float(configured) > 0 else None
+    return _positive_float(os.getenv(QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR), QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR)
+
+
+def resolve_deep_review_interval_seconds(configured: Optional[float]) -> Optional[float]:
+    """Seconds between liveness reviews, or None when reviews are off (interval 0)."""
+    if configured is not None:
+        return float(configured) if float(configured) > 0 else None
+    raw = (os.getenv(QAR_DEEP_REVIEW_INTERVAL_SECONDS_ENV_VAR) or "").strip()
     if raw:
-        try:
-            return float(raw)
-        except ValueError:
-            _log.warning(
-                "%s=%r is not a valid number, using default %.0fs",
-                QAR_DEEP_TIMEOUT_SECONDS_ENV_VAR, raw, DEFAULT_DEEP_TIMEOUT_SECONDS,
-            )
-    return DEFAULT_DEEP_TIMEOUT_SECONDS
+        return _positive_float(raw, QAR_DEEP_REVIEW_INTERVAL_SECONDS_ENV_VAR)
+    return DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS
+
+
+DEEP_REVIEW_PROMPT = """You are a watchdog for an AI worker running a long task. Below is the tail of its live session log. Decide whether the worker should STILL be running.
+
+Answer stop=true ONLY if the log shows one of these:
+- nothing has happened for more than 5 minutes (see the idle time below) with no legitimate reason
+- it ran out of Claude/LLM tokens or hit a usage or rate limit
+- it is blocked on the task or is waiting for a human decision it cannot get
+- it is stuck repeating the same failing action
+
+Answer stop=false if it is making progress, or doing a legitimately slow thing for the task such as monitoring, waiting on a build, a test run, or a long command. When unsure, answer stop=false: a wrong stop loses work that was about to finish.
+
+Time the run has been going: {elapsed}s. Seconds since the log last changed: {idle}s.
+
+Recent log (most recent last):
+{tail}
+
+Reply with ONLY one JSON object, no other text: {{"stop": true|false, "reason": "<one plain sentence>"}}"""
+
+
+def parse_deep_review(text: str) -> Optional[tuple]:
+    """(stop, reason) from the reviewer's reply, or None when it cannot be read."""
+    m = re.search(r"\{.*\}", text or "", re.DOTALL)
+    if not m:
+        return None
+    try:
+        obj = json.loads(m.group(0))
+    except Exception:  # noqa: BLE001 — an unreadable verdict means "keep running"
+        return None
+    if not isinstance(obj, dict) or not isinstance(obj.get("stop"), bool):
+        return None
+    reason = " ".join(str(obj.get("reason") or "").split())
+    return obj["stop"], (reason or "No reason was given.")
 
 
 def kill_process_group(proc: "subprocess.Popen") -> None:
@@ -399,10 +451,16 @@ class SubprocessConfig:
     context_preamble: str = ""                # optional org/persona context prepended to the brief
     skip_permissions: bool = True             # --dangerously-skip-permissions for headless runs
     extra_path_dirs: Optional[List[str]] = None   # dirs to prepend to PATH for the subprocess
-    # Hard wall-clock cap on the subprocess. None means "use the runner's own floor": the
-    # QAR_DEEP_TIMEOUT_SECONDS env var, or DEFAULT_DEEP_TIMEOUT_SECONDS (1 hour) if that is also
-    # unset — see resolve_deep_timeout_seconds(). A deep run is never truly untimed.
+    # OPTIONAL hard wall-clock cap on the subprocess. None reads QAR_DEEP_TIMEOUT_SECONDS; if that
+    # is unset too there is no fixed cap and the liveness review decides when a run must stop.
     timeout_seconds: Optional[float] = None
+    # Liveness review (see DEFAULT_DEEP_REVIEW_INTERVAL_SECONDS). ``review_interval_seconds`` None
+    # reads QAR_DEEP_REVIEW_INTERVAL_SECONDS (default 300), 0 turns reviews off. ``reviewer`` is
+    # an optional ``prompt -> reply text`` callable (tests, or a consumer's own cheap model);
+    # unset, a one-shot ``claude -p --model <review_model>`` call is used.
+    review_interval_seconds: Optional[float] = None
+    review_model: str = DEFAULT_DEEP_REVIEW_MODEL
+    reviewer: Optional[Callable[[str], str]] = None
     # Tool gating for the spawned Claude Code worker (generic, optional):
     #   * allowed_tools=None  → don't pass --allowed-tools; the worker has its DEFAULT tool set
     #     (which includes WebSearch/WebFetch). With skip_permissions this is the full, web-capable set.
@@ -971,6 +1029,69 @@ class SubprocessGoalRunner(DeepRunner):
             env["PATH"] = cur
         return env
 
+    def _review_liveness(self, working_dir, session_id, elapsed, emit, run_id):
+        """Ask a quick LLM whether the run should still be running.
+
+        Returns ``(stop, reason, usage_limit)``. Fails open: any problem reaching or reading the
+        reviewer means "keep running", because a wrong stop loses work that was about to land.
+        The one-sentence reason is always logged and, when it lets the run continue, emitted to
+        the progress feed so it is visible next to the run.
+        """
+        path = resolve_session_file(working_dir, session_id)
+        limit = usage_limit.limit_from_session_file(path) if path else None
+        if limit is not None:
+            _log.warning("deep run %s hit the Claude usage limit; stopping it to wait", session_id)
+            return True, f"it hit the Claude usage limit ({limit.message}).", limit
+        idle = -1.0
+        try:
+            if path is not None:
+                idle = max(0.0, time.time() - path.stat().st_mtime)
+        except OSError:
+            pass
+        tail = read_session_activity_tail(working_dir, session_id) or "(the session log is empty or unreadable)"
+        prompt = DEEP_REVIEW_PROMPT.format(
+            elapsed=int(elapsed), idle=("unknown" if idle < 0 else int(idle)), tail=tail)
+        verdict = None
+        try:
+            reply = (self.cfg.reviewer(prompt) if self.cfg.reviewer is not None
+                     else self._call_reviewer_cli(prompt))
+            verdict = parse_deep_review(reply)
+        except Exception as e:  # noqa: BLE001 — a broken reviewer must never kill a healthy run
+            _log.warning("deep run liveness review failed (%s); leaving the run alone", e)
+        if verdict is None:
+            reason = "The liveness review could not be completed, so the run was left alone."
+            stop = False
+        else:
+            stop, reason = verdict
+        _log.info("deep run %s liveness review after %ds: %s (%s)", session_id, int(elapsed),
+                  "STOP" if stop else "keep running", reason)
+        if stop:
+            return True, reason, None
+        if emit is not None:
+            try:
+                emit(ProgressEvent(
+                    type=EVENT_EXEC,
+                    text=f"Not stopping the deep run: {reason}",
+                    data={"run_id": run_id, "phase": "liveness_review", "stopped": False}))
+            except Exception:  # noqa: BLE001 — progress is best effort
+                pass
+        return False, reason, None
+
+    def _call_reviewer_cli(self, prompt: str) -> str:
+        """One-shot headless ``claude -p`` on a cheap model; returns the result text."""
+        cmd = [self.cfg.claude_path, "-p", "--output-format", "json", "--max-turns", "1"]
+        model = cli_safe_model(self.cfg.review_model)
+        if model:
+            cmd += ["--model", model]
+        import tempfile
+        with tempfile.TemporaryDirectory() as neutral:
+            done = subprocess.run(cmd, input=prompt.encode("utf-8"), capture_output=True,
+                                  cwd=neutral, env=self._build_env(),
+                                  timeout=DEEP_REVIEW_CALL_TIMEOUT_SECONDS)
+        raw = done.stdout.decode("utf-8", errors="replace") if done.stdout else ""
+        out = _parse_worker_output(raw)[0]
+        return out or raw
+
     def run_goal(self, *, goal: str, brief: str, model: Optional[str] = None,
                  max_turns: Optional[int] = None,
                  emit: Optional[Callable[[ProgressEvent], None]] = None,
@@ -1057,9 +1178,10 @@ class SubprocessGoalRunner(DeepRunner):
             session_id = str(uuid.uuid4())
             cmd += ["--session-id", session_id]
 
-        # The wall-clock cap for this run: the consumer's SubprocessConfig wins if set, otherwise
-        # QAR_DEEP_TIMEOUT_SECONDS / the 1-hour default. Never truly untimed.
+        # No fixed kill by default: an optional hard cap (config or QAR_DEEP_TIMEOUT_SECONDS) and a
+        # periodic LLM liveness review of the session log decide when a run must stop.
         effective_timeout = resolve_deep_timeout_seconds(self.cfg.timeout_seconds)
+        review_interval = resolve_deep_review_interval_seconds(self.cfg.review_interval_seconds)
 
         # Start monitoring Claude Code session in a background thread if emit is provided.
         stop_monitor = threading.Event()
@@ -1101,41 +1223,67 @@ class SubprocessGoalRunner(DeepRunner):
                 monitor_thread.join(timeout=1)
             return DeepResult(met=False, error=f"permission denied running worker: {e}")
 
-        # Communicate with the process (send prompt and wait for completion). This wait is
-        # ALWAYS bounded by effective_timeout, so a hung worker fails loudly instead of wedging
-        # the task forever and looking identical to one still working.
+        # Communicate with the process (send prompt and wait for completion) in slices of one review
+        # interval. At each slice end a quick LLM reads the live session log and stops the run ONLY
+        # if it should no longer be running; otherwise the one-sentence reason it was left alone
+        # is logged (and shown in the progress feed) and the wait continues.
         proc_start = time.time()
+        stop_reason: Optional[str] = None
+        stop_limit = None
+        pending_input: Optional[bytes] = prompt.encode("utf-8")
         try:
-            raw, err = proc.communicate(
-                input=prompt.encode("utf-8"),
-                timeout=effective_timeout
-            )
-        except subprocess.TimeoutExpired:
-            elapsed = time.time() - proc_start
-            kill_process_group(proc)
-            # Drain whatever the worker had already buffered, purely for diagnostics. The result
-            # below is a hard FAILURE regardless of what (if anything) comes back here.
-            try:
-                proc.communicate(timeout=5)
-            except Exception:  # noqa: BLE001 — best-effort drain after a kill, never raise here
-                pass
-            stop_monitor.set()
-            if monitor_thread:
-                monitor_thread.join(timeout=2)
-            return DeepResult(
-                met=False,
-                session_id=session_id,
-                error=(
-                    f"Deep run exceeded its wall-clock timeout: ran for {elapsed:.0f}s against a "
-                    f"{effective_timeout:.0f}s limit. The worker process group was killed. "
-                    "This is a hard failure, not a silent success, even if partial output exists."
-                ),
-            )
+            while True:
+                now = time.time()
+                slice_s = review_interval
+                if effective_timeout is not None:
+                    left = max(0.0, effective_timeout - (now - proc_start))
+                    slice_s = left if slice_s is None else min(slice_s, left)
+                try:
+                    raw, err = proc.communicate(input=pending_input, timeout=slice_s)
+                    break
+                except subprocess.TimeoutExpired:
+                    pending_input = None  # the prompt is only ever sent on the first call
+                    elapsed = time.time() - proc_start
+                    if effective_timeout is not None and elapsed >= effective_timeout:
+                        stop_reason = (
+                            f"Deep run exceeded its configured wall-clock timeout: ran for "
+                            f"{elapsed:.0f}s against a {effective_timeout:.0f}s limit.")
+                        break
+                    if review_interval is None:
+                        continue
+                    stop_now, reason, stop_limit = self._review_liveness(
+                        effective_working_dir, session_id, elapsed, emit, run_id)
+                    if stop_now:
+                        stop_reason = reason
+                        break
+            if stop_reason is not None:
+                kill_process_group(proc)
+                # Drain whatever the worker had already buffered, purely for diagnostics.
+                try:
+                    proc.communicate(timeout=5)
+                except Exception:  # noqa: BLE001 — best-effort drain after a kill, never raise here
+                    pass
         finally:
             # Stop monitoring thread
             stop_monitor.set()
             if monitor_thread:
                 monitor_thread.join(timeout=2)
+
+        if stop_reason is not None:
+            if stop_limit is not None:
+                stop_limit = usage_limit.record(stop_limit)
+                return DeepResult(met=False, output="", session_id=session_id, usage_limited=True,
+                                  error=f"Claude Code usage limit: {stop_limit.message}")
+            activity = describe_session_activity(effective_working_dir, session_id)
+            return DeepResult(
+                met=False,
+                session_id=session_id,
+                error=(
+                    f"Stopped by the liveness review: {stop_reason} The worker process group was "
+                    "killed. This is a hard failure, not a silent success, even if partial output "
+                    "exists." + (f"\n\n{activity}" if activity else "")
+                ),
+            )
 
         raw = raw.decode("utf-8", errors="replace") if raw else ""
         err = err.decode("utf-8", errors="replace") if err else None
