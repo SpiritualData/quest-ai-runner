@@ -1110,6 +1110,11 @@ class OrchestratorConfig:
     # default. ``max_remediations`` caps the execute-for-real re-runs (only when no action ran).
     verify_claims: bool = True
     max_remediations: int = 1
+    # LAST-RESORT DEEP RUN: when the turn's goal verdict is definitively NOT met and no deep run
+    # was attempted this turn, run ONE deep pass before handing the user a non-answer (for example
+    # "I don't have material on that, which file should I look in?"). Only applies when a deep
+    # execution path is wired. The in-loop ``need_more_context`` escalation still comes first.
+    deep_before_giving_up: bool = True
     # STRUCTURAL SUFFICIENCY GATE (see core/sufficiency.py). The prose SUFFICIENCY gate in the
     # planner prompt is an instruction the model may simply not follow: a real turn answered from a
     # card item that held only a short synthesized SUMMARY of a note, and spent its reply telling
@@ -6259,6 +6264,9 @@ class Orchestrator:
         # recovery probe (see ``quest_open_decision_ids``/``find_new_decision_id``). A multi-quest
         # conversation's ``quest_ids`` is not consulted here: the probe is a best-effort narrowing
         # to ONE quest's decisions, and guessing among several would be worse than skipping it.
+        if ctx_meta is not None:
+            # Turn-level record that a deep run was attempted (see ``deep_before_giving_up``).
+            ctx_meta["deep_attempted"] = True
         quest_id = (ctx_meta or {}).get("quest_id")
         subtasks = (plan.deep_subtasks or [])[: self.cfg.max_deep_subtasks]
         if not subtasks:
@@ -10309,6 +10317,57 @@ class Orchestrator:
                     _attempt += 1
             except Exception:  # noqa: BLE001 — answer verification must never break the turn
                 log.warning("answer goal verification failed", exc_info=True)
+
+        # LAST-RESORT DEEP RUN. The goal is definitively not met, the turn never ran deep work, and a
+        # deep path is wired: use it before giving up. Covers every way the loop above can end
+        # without the in-loop escalation firing (attempts exhausted after a regeneration, the
+        # verifier naming a gap without setting need_more_context, a non-answer like "which file
+        # should I look in?"). One pass only; skipped when something already mutated this turn (a
+        # re-run could double the change) or the human asked us to hold off.
+        if (self.cfg.deep_before_giving_up
+                and not _deferred_handoff_confirmed and not _claim_corrected
+                and not brainstorm_active
+                and _last_verdict is not None and not _last_verdict.get("met")
+                and not _ctx_meta.get("deep_attempted")
+                and self._has_deep_execution_capability()
+                and (exec_record is None or not exec_record.any_mutation_attempted)):
+            try:
+                if emit is not None:
+                    emit.status("Not enough to answer yet, searching deeper before giving up…")
+                _gap = (_last_verdict.get("next_action") or _last_verdict.get("reason")
+                        or "the answer did not meet the goal")
+                _lr_plan = PlanDecision(
+                    action="deep",
+                    goal=_truncate_goal(overall_goal),
+                    deep_brief=(
+                        f"{user_message}\n\n"
+                        "NOTE: The quick answer did not meet the goal and no deep search has been "
+                        f"done yet. What is missing: {_gap}. Search the corpus, cards, notes and "
+                        "files thoroughly and give a definitive answer. Do not ask the user which "
+                        "file or quest to look in; find it yourself. Only say something could not "
+                        "be found after actually searching, and name where you looked."
+                    )[:2000],
+                    rationale="goal not met and no deep run yet: deep run before giving up",
+                    deep_difficulty=getattr(plan, "deep_difficulty", None),
+                    deep_difficulty_reason=getattr(plan, "deep_difficulty_reason", None),
+                )
+                _lr_model = self._answer_model(_lr_plan, "opus", hint=model_hint)
+                _lr_res = self._run_deep(
+                    _lr_plan, user_message, _lr_model,
+                    emit=emit, rep_preamble=rep_preamble, exec_record=exec_record,
+                    gathered=gathered, quality_standards=quality_standards,
+                    pending_inputs=pending_inputs, model_hint=model_hint,
+                    ctx_meta=_ctx_meta, cancel_check=cancel_check,
+                    working_dir_override=working_dir_override,
+                    resume_session_id=take_resume_session())
+                if _lr_res.kind == "cancelled":
+                    return finish(_lr_res)
+                _lr_res.exit_reason = "escalated_deep"
+                _lr_res.goal_verdict = _last_verdict
+                self._kickoff_card_update(_lr_res, _lr_plan, user_message, _ctx_meta, emit)
+                return finish(_lr_res)
+            except Exception:  # noqa: BLE001 — the net must never break the turn
+                log.warning("last-resort deep run failed", exc_info=True)
 
         _exit_reason = "unverified"
         if _deferred_handoff_confirmed:
