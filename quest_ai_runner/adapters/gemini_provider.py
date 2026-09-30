@@ -71,6 +71,12 @@ class GeminiProvider(ModelProviderBase):
         return self._client
 
     @retry_transient(max_retries=3, base_delay=1.0)
+    def resolve_model(self, model: str) -> str:
+        """A bare family name ("gemini-flash") becomes the newest live id of that family; a concrete id
+        passes through. See ``core.model_family``."""
+        from ..core.model_family import is_family_name, resolve_model_name
+        return resolve_model_name(model, self.list_models()) if is_family_name(model) else model
+
     def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any],
              layers: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         """Run the planner with structured JSON output.
@@ -81,6 +87,7 @@ class GeminiProvider(ModelProviderBase):
         the shared prefix caches implicitly; without ``layers`` the plain prompt is sent as before.
         """
         client = self._get_client()
+        model = self.resolve_model(model)
         if layers:
             system_instruction, contents = split_layers_for_gemini(None, layers)
         else:
@@ -124,6 +131,7 @@ class GeminiProvider(ModelProviderBase):
         the-message-list-to-one-string path unchanged.
         """
         client = self._get_client()
+        model = self.resolve_model(model)
         if layers:
             system_instruction, contents = split_layers_for_gemini(system, layers)
             self.call_count += 1
@@ -200,6 +208,7 @@ class GeminiProvider(ModelProviderBase):
         Returns ``{"answer": <grounded text>, "results": [{"title","url","snippet"}, ...]}``.
         """
         client = self._get_client()
+        model = self.resolve_model(model)
         from google.genai import types
 
         tool = types.Tool(google_search=types.GoogleSearch())
@@ -250,6 +259,7 @@ class GeminiProvider(ModelProviderBase):
         Raises when the page could not be retrieved, so callers can fall back to a direct GET.
         """
         client = self._get_client()
+        model = self.resolve_model(model)
         from google.genai import types
 
         ask = instruction or (

@@ -186,12 +186,23 @@ def bucket_top(models: List[str], fallback: Optional[Dict[str, str]] = None) -> 
 
     # Map families to tiers; take the first (newest) model of each family.
     # Priority: more capable families for higher tiers.
+    # Gemini/OpenAI tiers come from FAMILY names ("flash-lite", "flash", "pro"), newest live release,
+    # so a new Gemini or GPT generation is picked up with no edit here.
+    from .model_family import newest_in_family
+    gem_fast = newest_in_family("gemini-flash-lite", models)
+    gem_balanced = newest_in_family("gemini-flash", models)
+    gem_quality = newest_in_family("gemini-pro", models)
+    gpt_fast = newest_in_family("gpt-mini", models)
+    gpt_top = newest_in_family("gpt", models)
     fast_candidates = [
         families.get("claude-haiku", [None])[0],
+        gem_fast,
+        gpt_fast,
         families.get("gemini-1.5", [None])[0],
         families.get("gpt-4o", [None])[0],
     ]
     balanced_candidates = [
+        gem_balanced,
         families.get("gemini-2.0", [None])[0],
         families.get("claude-sonnet", [None])[0],
         families.get("gemini-1.5", [None])[0],
@@ -199,6 +210,8 @@ def bucket_top(models: List[str], fallback: Optional[Dict[str, str]] = None) -> 
     ]
     quality_candidates = [
         families.get("claude-opus", [None])[0],
+        gem_quality,
+        gpt_top,
         families.get("gemini-2.0", [None])[0],
         families.get("gemini-3", [None])[0],
         families.get("o-series", [None])[0],

@@ -46,6 +46,12 @@ class OpenAIProvider(ModelProviderBase):
         return self._client
 
     @retry_transient(max_retries=3, base_delay=1.0)
+    def resolve_model(self, model: str) -> str:
+        """A bare family name ("gpt") becomes the newest live id of that family; a concrete id
+        passes through. See ``core.model_family``."""
+        from ..core.model_family import is_family_name, resolve_model_name
+        return resolve_model_name(model, self.list_models()) if is_family_name(model) else model
+
     def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any],
              layers: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         """Run the planner with JSON mode forced output.
@@ -55,6 +61,7 @@ class OpenAIProvider(ModelProviderBase):
         caller's flattened ``prompt`` is used unchanged.
         """
         client = self._get_client()
+        model = self.resolve_model(model)
 
         def _call() -> str:
             # A FRESH JSON-mode completion each attempt, so a malformed response is re-asked.
@@ -88,6 +95,7 @@ class OpenAIProvider(ModelProviderBase):
         if system:
             api_messages.append({"role": "system", "content": system})
 
+        model = self.resolve_model(model)
         for msg in messages:
             role = msg.get("role", "user")
             content = msg.get("content", "")

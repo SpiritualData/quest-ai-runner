@@ -111,3 +111,20 @@ def test_is_vision_capable_true_for_known_vision_families(model):
 ])
 def test_is_vision_capable_false_for_text_only_or_unknown(model):
     assert is_vision_capable(model) is False
+
+
+def test_family_names_resolve_to_newest_for_every_vendor():
+    from quest_ai_runner.core.model_family import newest_in_family
+    live = ["models/gemini-3.5-flash", "models/gemini-3.1-flash-lite", "models/gemini-2.0-flash",
+            "models/gemini-3.1-pro", "gpt-4o", "gpt-4o-mini", "gpt-5", "gpt-5-mini", "gpt-image-1",
+            "claude-sonnet-4-6", "claude-sonnet-5-5", "claude-haiku-4-5-20251001", "claude-opus-5-5"]
+    assert newest_in_family("gemini-flash", live) == "models/gemini-3.5-flash"
+    assert newest_in_family("gemini-flash-lite", live) == "models/gemini-3.1-flash-lite"
+    assert newest_in_family("gemini-pro", live) == "models/gemini-3.1-pro"
+    assert newest_in_family("gpt", live) == "gpt-5"
+    assert newest_in_family("gpt-mini", live) == "gpt-5-mini"
+    assert newest_in_family("sonnet", live) == "claude-sonnet-5-5"
+    assert newest_in_family("claude-haiku", live) == "claude-haiku-4-5-20251001"
+    assert newest_in_family("gpt-4o", live) is None  # a pinned release is never rewritten
+    assert bucket_top(live)["quality"] == "claude-opus-5-5"
+    assert bucket_top(live)["fast"] == "claude-haiku-4-5-20251001"

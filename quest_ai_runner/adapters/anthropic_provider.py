@@ -74,19 +74,10 @@ class AnthropicProvider(ModelProviderBase):
 
     @retry_transient(max_retries=3, base_delay=1.0)
     def resolve_model(self, model: str) -> str:
-        """Turn a bare family name ("sonnet", "claude-sonnet") into the newest live id of that family.
-
-        A concrete id passes through untouched, so nobody has to edit config when a new release
-        ships: naming the family always means its latest model. If the live list is unreachable the
-        name is returned as given.
-        """
-        low = (model or "").strip().lower()
-        for fam in ("opus", "sonnet", "haiku"):
-            if low in (fam, f"claude-{fam}"):
-                for mid in self.list_models():
-                    if fam in mid.lower():
-                        return mid
-        return model
+        """A bare family name ("sonnet", "claude-opus") becomes the newest live id of that family;
+        a concrete id passes through. See ``core.model_family``."""
+        from ..core.model_family import is_family_name, resolve_model_name
+        return resolve_model_name(model, self.list_models()) if is_family_name(model) else model
 
     def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any],
              layers: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
