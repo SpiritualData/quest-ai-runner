@@ -120,6 +120,8 @@ from .claude_cli_provider import ClaudeCliProvider
 from .claude_conversations_adapter import ClaudeConversationsAdapter
 from .google_chat_adapter import (
     GoogleChatAdapter,
+    ChatSpaces,
+    space_label,
     static_token_provider,
     service_account_token_provider,
 )

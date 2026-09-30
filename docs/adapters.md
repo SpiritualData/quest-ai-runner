@@ -74,6 +74,16 @@ declarative `google_chat` block REQUIRES `space_names` and wires nothing without
 the context source uses (`GoogleChatAdapter.fetch_messages_since`) refuses any space not on that list
 before making a request. Scopes default to the read-only pair.
 
+**Opt-in unrestricted mode.** `all_spaces = true` (constructor arg `all_spaces=True`) lifts the
+allowlist: `space_allowed` then accepts any well-formed `spaces/<id>` name (malformed names are still
+rejected), and `list_member_spaces(max_spaces=...)` enumerates every space, group chat and direct
+message the subject belongs to (paginated, never raises, returns a `ChatSpaces` with `name`,
+`displayName`, a readable `label`, `spaceType` and `lastActiveTime` when the API gives it). DMs and
+unnamed group chats get labels like "direct message" / "group chat" plus a short id. The adapter
+still has no write path. This reads every conversation the subject is in, including direct messages,
+so use it only when the subject owns the deployment or has consented. The default remains the
+allowlist.
+
 Declarative wiring (the same blocks the context-updates doc describes):
 
 ```toml

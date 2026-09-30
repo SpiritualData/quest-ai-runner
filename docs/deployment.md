@@ -91,8 +91,14 @@ tasks = "0123456789abcdef0123456789abcdef"
 [google_chat]
 service_account_file = "/path/to/chat-sa.json"
 subject = "someone@example.org"
-space_names = ["spaces/AAAA1111"]           # required; without it Chat is not wired
+space_names = ["spaces/AAAA1111"]           # required unless all_spaces = true; without either Chat is not wired
+# all_spaces = true                        # opt-in, see below
 ```
+
+`all_spaces = true` replaces `space_names` and gives the deployment read access to every space, group
+chat and direct message the subject belongs to (the start-up log says "ALL spaces the subject belongs
+to"). That includes DMs, so set it only when the subject is the person who owns the deployment or has
+consented. The default remains the `space_names` allowlist.
 
 Each block is built only when its credential is actually there, and the start-up log says what was
 skipped and why (never the token). A quest then opts in per card with `{"source": "notion_database",

@@ -2393,6 +2393,7 @@ NOTION_SNAPSHOT_MAX_ROWS = 500
 NOTION_CHANGE_LINES = 12
 CHAT_MAX_MESSAGES = 100
 CHAT_MAX_THREADS = 10
+CHAT_MAX_SPACES = 100
 CHAT_MESSAGES_PER_THREAD = 30
 CHAT_LINE_CHARS = 500
 
@@ -2559,7 +2560,11 @@ class GoogleChatSource(_BaseSource):
     """New Google Chat messages in the spaces this card names. Read-only; allowlisted spaces only.
 
     Spec: ``{"source": "google_chat", "spaces": ["spaces/AAAA..."]}`` (optionally
-    ``"max_messages": 100`` per space). Needs a ``GoogleChatAdapter`` supplied once by the consumer
+    ``"max_messages": 100`` per space). OPT-IN UNRESTRICTED MODE: when the deployment's adapter was
+    built with ``all_spaces = true``, ``{"source": "google_chat"}`` or ``"spaces": "all"`` reads
+    every space, group chat and DM the subject belongs to that had activity since the watermark
+    (bounded by ``"max_spaces"``, default 100, and the per-space message cap; truncation is
+    reported). In the default restricted mode that spec is a gap naming how to opt in. Needs a ``GoogleChatAdapter`` supplied once by the consumer
     (``UpdateEngine(google_chat=)``), built from the ``google_chat`` block whose ``space_names`` is
     REQUIRED.
 
@@ -2590,19 +2595,51 @@ class GoogleChatSource(_BaseSource):
             raise SourceGap("google chat is not configured on this deployment (no google_chat "
                             "block), so no space can be read")
         spaces = _as_list(request.opt("spaces") or request.opt("space"))
-        if not spaces:
-            raise SourceGap('the spec names no spaces; use {"source": "google_chat", "spaces": '
-                            '["spaces/<id>"]}')
+        wants_all = not spaces or (len(spaces) == 1 and spaces[0].lower() == "all")
+        opted_in = bool(getattr(client, "all_spaces", False))
+        if wants_all and not opted_in:
+            raise SourceGap('the spec names no spaces (or asks for "all"), and this deployment has not opted in '
+                            'to reading every space: name them ({"source": "google_chat", "spaces": '
+                            '["spaces/<id>"]}) or set all_spaces = true in the google_chat block. '
+                            'Nothing was read')
         allowed = getattr(client, "space_allowed", None)
         if not callable(allowed):
             raise SourceGap("the configured Chat client cannot enforce a space allowlist, so "
                             "no space is read")
-        permitted, refused = [], []
-        for space in dict.fromkeys(spaces):
-            (permitted if allowed(space) else refused).append(space)
-        if not permitted:
-            raise SourceGap("refused: " + ", ".join(refused) + " not on this deployment's "
-                            "google_chat allowlist (space_names), so nothing was read")
+        notes: List[str] = []
+        space_cap = max(1, min(int(request.opt("max_spaces") or CHAT_MAX_SPACES), 500))
+        if wants_all:
+            listing = client.list_member_spaces(max_spaces=space_cap)
+            if listing.error:
+                raise RuntimeError(listing.error)
+            cutoff = request.since.timestamp() if request.since is not None else None
+            if cutoff is None:
+                days = getattr(client, "lookback_days", None)
+                cutoff = (request.now.timestamp() - days * 86400.0) if days is not None else None
+            permitted, stale = [], 0
+            for sp in listing.spaces:
+                active = _as_utc(sp.get("lastActiveTime"))
+                if cutoff is not None and active is not None and active.timestamp() <= cutoff:
+                    stale += 1
+                    continue
+                if allowed(sp["name"]):
+                    permitted.append(sp["name"])
+            refused = []
+            notes.append(f"{len(listing.spaces)} space(s) listed, {stale} with no activity since the "
+                         f"last look skipped")
+            if listing.truncated:
+                notes.append(f"more than {space_cap} spaces exist, so only the first {space_cap} "
+                             f"were checked (raise max_spaces to see more)")
+            if not permitted:
+                request.account(0, ", ".join(["no new messages in any space"] + notes))
+                return []
+        else:
+            permitted, refused = [], []
+            for space in dict.fromkeys(spaces):
+                (permitted if allowed(space) else refused).append(space)
+            if not permitted:
+                raise SourceGap("refused: " + ", ".join(refused) + " not on this deployment's "
+                                "google_chat allowlist (space_names), so nothing was read")
         cap = max(1, min(int(request.opt("max_messages") or CHAT_MAX_MESSAGES), 300))
         chunks, failures = [], []
         for space in permitted:
@@ -2666,8 +2703,10 @@ class GoogleChatSource(_BaseSource):
                 needs_response=False,
                 raw={"space": space, "thread": thread, "messages": len(msgs)},
             ))
-        request.account(total, chat_explanation(total, own, blank, len(permitted), refused,
-                                                truncated, dropped))
+        explanation = chat_explanation(total, own, blank, len(permitted), refused, truncated, dropped)
+        if notes:
+            explanation = ", ".join([explanation] + notes) if explanation else ", ".join(notes)
+        request.account(total, explanation)
         return out
 
 

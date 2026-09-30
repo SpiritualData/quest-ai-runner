@@ -120,6 +120,18 @@ next one, so the watermark never skips a message. Optional `"max_messages"` per 
 The channel is read-only: nothing here can post in Chat, and each row says so in its
 `how_to_respond`.
 
+**Opt-in unrestricted mode (`all_spaces = true`).** With `all_spaces = true` in the `google_chat`
+block, `space_names` is not required and the spec `{"source": "google_chat"}` (or `"spaces": "all"`)
+reads every space, group chat and direct message the subject belongs to that had activity since the
+watermark. Spaces whose `lastActiveTime` is older than the watermark are skipped. The run is bounded
+by `"max_spaces"` (default 100) and the per-space message cap, and the report says when spaces or
+messages were left out. Direct messages and unnamed group chats are labelled "direct message" or
+"group chat" plus a short id, so every row names the conversation it came from. Explicit space lists
+still work. **This reads every conversation the subject is in, including direct messages.** Use it
+only when the subject is the person who owns the deployment or has consented. The default remains
+the allowlist: without `all_spaces`, a spec naming no spaces (or `"all"`) is a reported gap that
+tells the operator how to opt in, and nothing is read.
+
 **Both are opt-in, read-only and card-scoped by where they are named.** Neither is always-on,
 neither is put to the relevance judge (the card chose the database or the space; a judge written for
 captures would only be guessing), and neither tracks asks (a row changing or a thread moving is news,
@@ -197,7 +209,7 @@ bundle.mark_seen()
 | `notion_adapter` | `None` | a `NotionAdapter`; without it `notion_database` contributes nothing but a reported gap |
 | `notion` | `None` | declarative form: `{token_env \| token_file, database_ids = {alias = id}}`; built only when a token is available and a database is named, and wired into retrieval too |
 | `google_chat_adapter` | `None` | a `GoogleChatAdapter`; without it `google_chat` contributes nothing but a reported gap |
-| `google_chat` | `None` | declarative form: `{service_account_file, subject, scopes (default read-only), space_names (REQUIRED), lookback_days, assistant_senders}`; with no `space_names` nothing is wired and the log says why |
+| `google_chat` | `None` | declarative form: `{service_account_file, subject, scopes (default read-only), space_names (REQUIRED unless all_spaces = true), all_spaces (default false, opt-in: every space and DM the subject is in), lookback_days, assistant_senders}`; with no `space_names` nothing is wired and the log says why |
 
 Env equivalents: `QAR_CONTEXT_UPDATES`, `QAR_CONTEXT_UPDATES_STATE_PATH`,
 `QAR_CONTEXT_UPDATES_FIRST_LOOK_DAYS`. The rest are TOML-file fields only (no env var), the same
@@ -226,7 +238,8 @@ tasks = "0123456789abcdef0123456789abcdef"
 [google_chat]
 service_account_file = "/path/to/chat-sa.json"
 subject = "someone@example.org"             # the Workspace user the delegation impersonates
-space_names = ["spaces/AAAA1111"]           # REQUIRED; omit it and Chat is not wired
+space_names = ["spaces/AAAA1111"]           # REQUIRED unless all_spaces = true; omit both and Chat is not wired
+# all_spaces = true                        # opt-in: read EVERY space, group chat and DM the subject is in
 lookback_days = 14
 ```
 

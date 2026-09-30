@@ -601,7 +601,8 @@ class RunnerConfig:
     # token itself is never in the file: only the NAME of the environment variable, or a path.
     notion: Optional[Dict[str, Any]] = None
     # Declarative, opt-in, READ-ONLY Google Chat channel: {service_account_file = "...", subject =
-    # "...", scopes = [...] (default read-only), space_names = ["spaces/..."] (REQUIRED),
+    # "...", scopes = [...] (default read-only), space_names = ["spaces/..."] (REQUIRED unless all_spaces = true),
+    # all_spaces = false (opt-in: read EVERY space, group chat and DM the subject is in),
     # lookback_days = 30, assistant_senders = [...]}. FAILS CLOSED: a block with no ``space_names``
     # wires nothing and logs why, because a domain-wide-delegation credential can otherwise read
     # every space its subject is in. Resolved into ``google_chat_adapter``.
@@ -1251,10 +1252,14 @@ def _build_google_chat(block: Dict[str, Any]) -> Any:
         return None
 
     spaces = [str(x).strip() for x in (block.get("space_names") or []) if str(x).strip()]
-    if not spaces:
+    raw_all = block.get("all_spaces", False)
+    if isinstance(raw_all, str):
+        raw_all = raw_all.strip().lower() in ("1", "true", "yes", "on")
+    all_spaces = bool(raw_all)
+    if not spaces and not all_spaces:
         _log.warning("google_chat: no space_names; channel off -- domain-wide delegation can read "
                      "every space the subject is in, so a deployment must name which ones this "
-                     "credential may read")
+                     "credential may read (or opt in to all of them with all_spaces = true)")
         return None
     sa_file = str(block.get("service_account_file") or "").strip()
     if not sa_file:
@@ -1271,13 +1276,17 @@ def _build_google_chat(block: Dict[str, Any]) -> Any:
             token_provider=service_account_token_provider(
                 service_account_file=sa_file, subject=subject, scopes=scopes),
             space_names=spaces,
+            all_spaces=all_spaces,
             lookback_days=30 if lookback is None else int(lookback),
             assistant_senders=[str(x) for x in (block.get("assistant_senders") or [])],
         )
     except Exception as e:  # noqa: BLE001
         _log.warning("google_chat: could not build the adapter (%s); channel off", e)
         return None
-    _log.info("Google Chat wired (read-only, %d allowlisted space(s))", len(spaces))
+    if all_spaces:
+        _log.info("Google Chat wired (read-only, ALL spaces the subject belongs to)")
+    else:
+        _log.info("Google Chat wired (read-only, %d allowlisted space(s))", len(spaces))
     return adapter
 
 

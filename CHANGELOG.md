@@ -7,6 +7,17 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Opt-in unrestricted Google Chat: `[google_chat] all_spaces = true`.** The safe default (an
+  explicit `space_names` allowlist, fails closed) is unchanged. With `all_spaces = true`,
+  `space_names` is not required, `GoogleChatAdapter.space_allowed` accepts any well-formed
+  `spaces/<id>`, and the new `list_member_spaces(max_spaces=...)` enumerates every space, group chat
+  and direct message the subject belongs to (paginated, never raises, unnamed DMs and group chats get
+  a readable "direct message" / "group chat" label). The `google_chat` context source then reads every
+  member space active since the watermark for `{"source": "google_chat"}` or `"spaces": "all"`,
+  bounded by `max_spaces` (default 100) and the per-space message cap, with truncation reported and
+  each row labelled with its conversation. In restricted mode the same spec is a gap naming the
+  opt-in. This reads every conversation the subject is in, including DMs: use it only when the
+  subject owns the deployment or has consented. Tests: `tests/test_google_chat_all_spaces.py`.
 - **Notion and Google Chat are first-class, generic, opt-in, read-only context channels, including
   for the automated context updates autopilot passes use.** New `adapters/notion_adapter.py`
   (`NotionAdapter`): stdlib-only, injected token (`env_token_provider` / `file_token_provider` /

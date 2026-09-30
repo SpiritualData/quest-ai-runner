@@ -174,6 +174,36 @@ class ChatReadError(RuntimeError):
 
 
 @dataclass
+class ChatSpaces:
+    """Every space the subject belongs to, as ``GoogleChatAdapter.list_member_spaces`` read them."""
+    spaces: List[Dict[str, Any]] = field(default_factory=list)   # name, displayName, spaceType, lastActiveTime
+    truncated: bool = False          # more spaces exist than ``max_spaces``; the rest were not listed
+    error: Optional[str] = None      # set when listing failed; ``spaces`` then holds what was read
+
+
+def space_label(name: str, display_name: Optional[str] = None, space_type: Optional[str] = None) -> str:
+    """A readable label for a space: its display name, else "direct message"/"group chat" plus a short id.
+
+    Direct messages and unnamed group chats have no ``displayName``, so a bare resource name would
+    be the only thing a reader sees. Never blank.
+    """
+    shown = str(display_name or "").strip()
+    if shown:
+        return shown
+    tail = str(name or "").rsplit("/", 1)[-1]
+    short = tail[:6] if tail else "?"
+    kind = str(space_type or "").upper()
+    if kind == "DIRECT_MESSAGE":
+        return f"direct message {short}"
+    if kind == "GROUP_CHAT":
+        return f"group chat {short}"
+    return f"space {short}"
+
+
+SPACE_NAME_RE = re.compile(r"^spaces/[A-Za-z0-9_-]+$")
+
+
+@dataclass
 class ChatMessages:
     """The raw messages ``GoogleChatAdapter.fetch_messages_since`` read from one space."""
     space: str = ""
@@ -218,6 +248,7 @@ class GoogleChatAdapter(RetrievalAdapterBase):
         api_base: str = _CHAT_API_BASE,
         card_store: Optional[Any] = None,
         assistant_senders: Optional[List[str]] = None,
+        all_spaces: bool = False,
     ) -> None:
         """
         Args:
@@ -246,7 +277,12 @@ class GoogleChatAdapter(RetrievalAdapterBase):
                 assistant's own voice. ``fetch_messages_since`` (what the ``google_chat`` context
                 source reads through) drops them, as it drops every Chat app (``sender.type ==
                 "BOT"``), so an assistant is never handed its own words back as news.
+            all_spaces: OPT-IN unrestricted mode (default False). When True the typed read accepts
+                any well-formed ``spaces/<id>`` and ``list_member_spaces`` enumerates every space,
+                group chat and direct message the subject belongs to. Reads everything the subject
+                can see, so use it only when the subject owns the deployment or has consented.
         """
+        self._all_spaces = bool(all_spaces)
         self._token_provider = token_provider
         self._card_store = card_store
         self._space_names = list(space_names) if space_names else None
@@ -429,15 +465,80 @@ class GoogleChatAdapter(RetrievalAdapterBase):
         """The spaces this adapter may read by name (its ``space_names`` allowlist), or []."""
         return list(self._space_names or [])
 
+    @property
+    def lookback_days(self) -> Optional[int]:
+        """The lookback window (days) used when a read has no watermark, or None for unbounded."""
+        return self._lookback_days
+
+    @property
+    def all_spaces(self) -> bool:
+        """Whether this adapter is in opt-in unrestricted mode (``all_spaces = true``)."""
+        return self._all_spaces
+
     def space_allowed(self, space: str) -> bool:
-        """Whether ``space`` is on the allowlist. FAILS CLOSED: with no allowlist, nothing is allowed.
+        """Whether ``space`` may be read. FAILS CLOSED: with no allowlist, nothing is allowed.
+
+        In opt-in ``all_spaces`` mode any well-formed ``spaces/<id>`` name passes (malformed names
+        are still rejected). Otherwise only names on the ``space_names`` allowlist pass.
 
         The retrieval methods above may enumerate every space the credential can see when no
         ``space_names`` was given (the long-standing behaviour). The typed read below never does:
         a domain-wide-delegation credential can see every space its subject is in, so the only
         thing standing between an automated pass and all of it is this list.
         """
-        return bool(self._space_names) and str(space or "").strip() in self._space_names
+        name = str(space or "").strip()
+        if self._all_spaces:
+            return bool(SPACE_NAME_RE.match(name))
+        return bool(self._space_names) and name in self._space_names
+
+    def list_member_spaces(self, max_spaces: int = 100) -> "ChatSpaces":
+        """Every space, group chat and direct message the subject belongs to. NEVER raises.
+
+        Paginates ``spaces.list`` up to ``max_spaces``. Each entry has ``name``, ``displayName``
+        (None when the API gives none, as for DMs), ``label`` (always readable, see ``space_label``),
+        ``spaceType`` and, when the API gives it, ``lastActiveTime``. A failure comes back in
+        ``ChatSpaces.error`` (no token, no HTTP body), never as an exception. Only allowed in
+        ``all_spaces`` mode: otherwise it returns an error and makes no request.
+        """
+        if not self._all_spaces:
+            return ChatSpaces(error="refused: listing member spaces needs all_spaces = true")
+        if self._token_provider is None:
+            return ChatSpaces(error="google chat not configured: no token_provider supplied")
+        cap = max(1, int(max_spaces))
+        out: List[Dict[str, Any]] = []
+        truncated = False
+        try:
+            token = self._token_provider()
+            if not token:
+                return ChatSpaces(error="google chat not configured: token_provider returned no token")
+            page_token: Optional[str] = None
+            while True:
+                url = self._build_url("spaces", {"pageSize": min(100, cap), "pageToken": page_token})
+                data = self._get_json(url, token)
+                for sp in data.get("spaces", []) or []:
+                    name = str(sp.get("name") or "")
+                    if not SPACE_NAME_RE.match(name):
+                        continue
+                    if len(out) >= cap:
+                        truncated = True
+                        break
+                    shown = sp.get("displayName") or None
+                    kind = sp.get("spaceType") or sp.get("type")
+                    out.append({"name": name, "displayName": shown,
+                                "label": space_label(name, shown, kind),
+                                "spaceType": kind, "lastActiveTime": sp.get("lastActiveTime")})
+                page_token = data.get("nextPageToken")
+                if truncated or not page_token:
+                    break
+                if len(out) >= cap:
+                    truncated = True
+                    break
+        except urllib.error.HTTPError as exc:
+            return ChatSpaces(spaces=out, truncated=truncated, error=f"HTTP {exc.code} listing spaces")
+        except Exception as exc:  # noqa: BLE001
+            return ChatSpaces(spaces=out, truncated=truncated,
+                              error=f"could not list spaces ({type(exc).__name__})")
+        return ChatSpaces(spaces=out, truncated=truncated)
 
     def is_assistant_message(self, message: Dict[str, Any]) -> bool:
         """Whether a raw Chat message is this assistant's own voice: any Chat app, or a configured sender."""
@@ -484,9 +585,14 @@ class GoogleChatAdapter(RetrievalAdapterBase):
                 page_token = data.get("nextPageToken")
                 if not page_token or len(out) > cap:
                     break
-            display = name
+            display = space_label(name) if self._all_spaces else name
             try:
-                display = str(self._get_json(self._build_url(name), token).get("displayName") or name)
+                info = self._get_json(self._build_url(name), token)
+                if self._all_spaces:
+                    display = space_label(name, info.get("displayName"),
+                                         info.get("spaceType") or info.get("type"))
+                else:
+                    display = str(info.get("displayName") or name)
             except Exception:  # noqa: BLE001 -- a label is nice to have, never a reason to fail the read
                 pass
         except urllib.error.HTTPError as exc:
