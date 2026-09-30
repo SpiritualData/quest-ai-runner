@@ -103,10 +103,10 @@ DEEP_REVIEW_PROMPT = """You are a watchdog for an AI worker running a long task.
 Answer stop=true ONLY if the log shows one of these:
 - nothing has happened for more than 5 minutes (see the idle time below) with no legitimate reason
 - it ran out of Claude/LLM tokens or hit a usage or rate limit
-- it is blocked on the task or is waiting for a human decision it cannot get
+- it is blocked on the task or is asking for or waiting on a human decision, answer, approval, confirmation or credential (nobody is watching this run, so a question to a person will never be answered, however reasonable the question is)
 - it is stuck repeating the same failing action
 
-Answer stop=false if it is making progress, or doing a legitimately slow thing for the task such as monitoring, waiting on a build, a test run, or a long command. When unsure, answer stop=false: a wrong stop loses work that was about to finish.
+Answer stop=false if it is making progress, or doing a legitimately slow thing for the task such as monitoring, waiting on a build, a test run, or a long command. Waiting on a machine or process is legitimate; waiting on a person is not. When unsure, answer stop=false: a wrong stop loses work that was about to finish.
 
 Time the run has been going: {elapsed}s. Seconds since the log last changed: {idle}s.
 

@@ -394,3 +394,11 @@ The measured wins are:
 
 These three properties together justify the context layer as a **cache with correctness
 guarantees** — not as a retrieval engine that must beat grep on every cold query.
+
+## `deep_review_eval.py` — deep-run liveness review (real Haiku, 39 cases)
+
+Every new LLM call needs a labeled classification eval of at least 30 cases that must score 100%.
+This one runs the production liveness-review prompt and CLI call over 39 hand-labeled log tails
+(stop vs keep running) and exits non-zero on any miss. Makes one small Haiku call per case, about
+5 minutes per run: `python evaluation/deep_review_eval.py [--runs N]`. Re-run it after any edit to
+`DEEP_REVIEW_PROMPT`.
