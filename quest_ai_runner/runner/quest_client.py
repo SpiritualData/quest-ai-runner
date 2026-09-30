@@ -1194,6 +1194,29 @@ class QuestClient:
             body["assigned_to_user_id"] = assigned_to_user_id
         return self._request("POST", "/api/planning/goals", body=body) or {}
 
+    def list_assignable_members(self, quest_id: str) -> List[Dict[str, Any]]:
+        """GET /api/planning/quests/{quest_id}/assignable-members: the humans a goal on this quest
+        can be assigned to (``[{user_id, name, email, is_owner}]``). ``[]`` on any failure."""
+        try:
+            resp = self._request(
+                "GET", f"/api/planning/quests/{quest_id}/assignable-members") or {}
+            members = resp.get("members") if isinstance(resp, dict) else None
+            return members if isinstance(members, list) else []
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("list_assignable_members failed for quest %s: %s", quest_id, e)
+            return []
+
+    def set_goal_ai_handling(self, goal_id: str, handling: str, *,
+                             rep_id: Optional[str] = None,
+                             decided_by: str = "rep") -> Dict[str, Any]:
+        """PUT /api/planning/goals/{goal_id}/ai-handling: hand a human-assigned goal to the
+        assignee's AI rep (``handling="rep"``) or keep it with the person (``"me"``). The backend
+        applies the assignee's own preference (auto, ask, never) and may answer ``proposed``."""
+        body: Dict[str, Any] = {"handling": handling, "decided_by": decided_by}
+        if rep_id is not None:
+            body["rep_id"] = rep_id
+        return self._request("PUT", f"/api/planning/goals/{goal_id}/ai-handling", body=body) or {}
+
     def get_quest(self, quest_id: str, *, team_id: Optional[str] = None) -> Dict[str, Any]:
         """GET /api/teams/{team_id}/quests/{quest_id} — fetch a single quest by ID.
 

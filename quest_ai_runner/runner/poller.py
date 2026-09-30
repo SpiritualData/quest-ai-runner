@@ -30,6 +30,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from ..config import RunnerConfig, build_orchestrator, derive_capabilities, resolve_rep_sync_resolver
 from ..core import usage_limit
 from ..resources import ResourceGuard, ResourceLimits
+from .goal_handoff import make_judge
 from .autopilot import (AUTOPILOT_PASS_KIND, OPEN_TASK_STATUSES, AutopilotPass, _parse_dt,
                         cadence_due, persona_entries_on_duty, run_requested)
 from .context_updates import build_update_engine
@@ -346,6 +347,7 @@ class Poller:
             # it the backend makes the quest's human owner the executor and the batch is
             # invisible to every lane -- see AutopilotPass._lane_user_id.
             lane_user_id=config.lane_user_id,
+            judge=make_judge(getattr(config, "model_provider", None)),
         )
         # Capabilities this runner can HONESTLY report, derived from the wired adapters
         # (corpus=FilesAdapter/corpus, code=deep-runner, web=deep-runner can browse via Claude

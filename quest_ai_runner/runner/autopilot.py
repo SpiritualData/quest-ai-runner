@@ -90,6 +90,7 @@ from .local_time import now_in_zone
 # created through ``QuestClient.create_goal``, so the shape it must satisfy is that client's, and a
 # second copy here would be a second thing to keep in step with the backend's period_utils.
 from .quest_client import _PERIOD_RE as _GOAL_PERIOD_RE
+from .goal_handoff import choose_assignee, run_goal_handoff
 from .quest_folder_sync import NextSteps, publish_next_steps, read_next_steps
 from .reflections import DEFAULT_PERIODS, ReflectionContext, collect_reflections
 
@@ -1771,6 +1772,7 @@ class AutopilotPass:
                  quest_folder_map: Optional[Dict[str, str]] = None,
                  update_engine: Optional[UpdateEngine] = None,
                  lane_user_id: Optional[str] = None,
+                 judge: Optional[Callable[[str], str]] = None,
                  now: Optional[Callable[[], datetime]] = None):
         self._client = client
         # The account this lane authenticates as (RunnerConfig.lane_user_id), stamped as the
@@ -1783,6 +1785,9 @@ class AutopilotPass:
         # the pass creates needs it just as much. None keeps the old default-executor behaviour.
         self._lane_user_id = (lane_user_id or "").strip() or None
         self._update_engine = update_engine
+        # prompt -> raw text; used to pick a new goal's assignee and to judge AI handoff. None keeps
+        # the deterministic behaviour (and skips the handoff pass).
+        self._judge = judge
         self._team_id = team_id or ""
         # Which team a given quest's work belongs on, for a lane that serves several teams
         # (RunnerConfig.team_ids). ``None`` -- the default, and what every existing consumer gets
@@ -2067,6 +2072,15 @@ class AutopilotPass:
         # artifact answers "what is next for this quest", and the person's own goals at the scope
         # the quest is working in are that answer, restated rather than re-derived.
         current_goals = list(goal_ladder[0]["goals"]) if goal_ladder else []
+
+        # Human-assigned goals the assignee's AI rep could handle (best-effort, act mode only).
+        if self._judge is not None and mode == "act" and not dry_run:
+            try:
+                run_goal_handoff(self._client, self._judge, goals_payload,
+                                 team_id=self._team_for(quest_id) or None,
+                                 outcome=str(quest.get("outcome") or ""))
+            except Exception:  # noqa: BLE001
+                log.info("autopilot: goal handoff failed for quest %s", quest_id, exc_info=True)
 
         # Recurring tasks the user set up on this quest. Adopted ONLY when the quest opts in:
         # taking over a task someone scheduled themselves is a real change in who executes it.
@@ -2958,10 +2972,28 @@ class AutopilotPass:
         if not callable(create_goal) or mode != "act":
             return None
         period = goal_period_for_scope(scope_label, self._now())
+        assignee, ai_can_do = self._pick_assignee(quest_id, title, description)
         try:
-            created = create_goal(title, quest_id=quest_id, period=period,
-                                  description=description) or {}
-            return created.get("id") if isinstance(created, dict) else None
+            kwargs: Dict[str, Any] = {"quest_id": quest_id, "period": period,
+                                      "description": description}
+            if assignee:
+                kwargs["assigned_to_user_id"] = assignee
+            try:
+                created = create_goal(title, **kwargs) or {}
+            except (TypeError, ValueError):
+                raise
+            except Exception:  # noqa: BLE001 -- a refused assignee must not cost the goal
+                if not assignee:
+                    raise
+                log.info("autopilot: assigned create_goal refused for quest %s; retrying shared",
+                         quest_id, exc_info=True)
+                kwargs.pop("assigned_to_user_id")
+                assignee = None
+                created = create_goal(title, **kwargs) or {}
+            goal_id = created.get("id") if isinstance(created, dict) else None
+            if goal_id and assignee and ai_can_do:
+                self._hand_to_rep(quest_id, goal_id, assignee)
+            return goal_id
         except TypeError:
             # A call this file got wrong, not an endpoint the deployment lacks. Loud, with a
             # traceback, and still not fatal to the pass.
@@ -2972,6 +3004,32 @@ class AutopilotPass:
         except Exception as e:  # noqa: BLE001 -- a missing/misbehaving optional endpoint must not fail the pass
             log.warning("autopilot: create_goal failed for quest %s: %s", quest_id, e)
             return None
+
+    def _pick_assignee(self, quest_id: str, title: str, description: str) -> Tuple[Optional[str], bool]:
+        """(assignee user id or None, ai_can_do) for a goal this pass is about to create."""
+        lister = getattr(self._client, "list_assignable_members", None)
+        if not callable(lister):
+            return None, False
+        try:
+            members = lister(quest_id) or []
+            outcome = ""
+            verdict = choose_assignee(self._judge, members, outcome=outcome, title=title,
+                                      description=description)
+            return verdict["assignee"], bool(verdict["ai_can_do"])
+        except Exception:  # noqa: BLE001 -- assignment is an improvement, never a failure
+            log.info("autopilot: assignee choice failed for quest %s", quest_id, exc_info=True)
+            return None, False
+
+    def _hand_to_rep(self, quest_id: str, goal_id: str, assignee: str) -> None:
+        """Ask the backend to give an AI-doable goal to its assignee's rep. Best-effort."""
+        try:
+            from .goal_handoff import rep_for_user
+            reps = self._client.list_team_reps(team_id=self._team_for(quest_id) or None) or []
+            rep_id = rep_for_user(reps, assignee)
+            if rep_id:
+                self._client.set_goal_ai_handling(goal_id, "rep", rep_id=rep_id, decided_by="rep")
+        except Exception:  # noqa: BLE001
+            log.info("autopilot: rep handoff failed for goal %s", goal_id, exc_info=True)
 
     def _open_proposal(self, quest_id: str) -> Optional[Dict[str, Any]]:
         """A proposed-goal task from an earlier pass that is still waiting on the person, or None.
