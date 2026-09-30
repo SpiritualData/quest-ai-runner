@@ -133,6 +133,9 @@ def run_lane(
         level=logging.DEBUG if args.verbose else logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+    # fastembed (optional qdrant extra) pulls in huggingface_hub, which warns about
+    # unauthenticated requests even when nothing here uses a Hugging Face model directly.
+    logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
     log = logging.getLogger(log_name)
 
     if env_file is not None:

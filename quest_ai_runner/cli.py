@@ -1238,6 +1238,9 @@ def main(argv=None) -> int:
     # Suppress verbose Gemini SDK logs
     logging.getLogger("google_genai.models").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    # fastembed (optional qdrant extra) pulls in huggingface_hub, which warns about
+    # unauthenticated requests even when nothing here uses a Hugging Face model directly.
+    logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
     log = logging.getLogger("quest-ai-runner")
 
     # --- chat -----------------------------------------------------------------
