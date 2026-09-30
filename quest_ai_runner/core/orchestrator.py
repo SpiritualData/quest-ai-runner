@@ -1670,6 +1670,29 @@ VERIFY_GOAL_TOOL: Dict[str, Any] = {
     },
 }
 
+# The worker output the judge reads. A real deliverable (a multi-section brief, a report) runs well
+# past a few thousand characters, and a judge handed only the first slice saw it stop mid-sentence
+# and failed the run as "cut off" when nothing had been cut off. So the cap is generous, and when
+# it still bites the view keeps the HEAD and the TAIL (the ending is where completeness shows) and
+# SAYS that the omission belongs to this view only, never to the worker's output.
+VERIFY_OUTPUT_MAX_CHARS = 40000
+
+
+def verify_output_view(output: Optional[str], max_chars: int = VERIFY_OUTPUT_MAX_CHARS) -> str:
+    text = output or ""
+    if len(text) <= max_chars:
+        return text
+    head = int(max_chars * 0.6)
+    tail = max_chars - head
+    dropped = len(text) - head - tail
+    return (text[:head]
+            + f"\n\n[... {dropped} characters omitted from THIS VIEW ONLY, to keep the judging "
+              "prompt small. The worker's real output is complete and continuous here; the gap "
+              "is NOT a cut-off, truncation or missing content, so never judge the output "
+              "incomplete because of it ...]\n\n"
+            + text[-tail:])
+
+
 VERIFY_GOAL_PROMPT = """\
 You are verifying whether an autonomous worker MET a goal (a checkable done-standard) AT THE REQUIRED
 QUALITY BAR. Judge strictly from the EVIDENCE in the worker's reported output.
@@ -1690,6 +1713,11 @@ running", "are building in parallel", or that the worker "will review/test/commi
 next", the run ended with that work unfinished and unverified (a headless worker's pending
 subagents are killed the moment it stops), so set met=false and say in next_action that the next
 attempt must wait for and verify all delegated work before reporting.
+
+LENGTH OF WHAT YOU SEE: the output below may be shown with a bracketed note saying characters were
+omitted from THIS VIEW. That is a limit of the judging prompt, not of the worker's output. Never
+call the output cut off, truncated, or incomplete because of such a note, and never because it
+ends where a long deliverable naturally ends; judge it only on what is shown.
 
 PLATFORM DELIVERY: when the task says its result is emailed or delivered automatically when the run
 finishes, a requirement to email, send, or deliver the work is MET by the output containing the
@@ -5300,7 +5328,7 @@ class Orchestrator:
             persona=persona, standards=standards, claims_rules=claims_rules, context=context_block,
             goal=(goal or "")[:1000], brief=(brief or "")[:2000],
             transcript=(transcript or "").strip()[:2000] or "(no prior turns)",
-            output=(output or "")[:6000])
+            output=verify_output_view(output))
         # Cache-friendly layered shape (in addition to the flattened ``prompt`` fallback): the rep
         # persona and quality standards ride in the stable L1 head; the SAME rendered context layer the
         # turn's plan/answer/deep call carried rides in the stable L2 (byte-identical to theirs, so a
@@ -5317,7 +5345,7 @@ class Orchestrator:
                 persona="", standards="", claims_rules=claims_rules, context="",
                 goal=(goal or "")[:1000], brief=(brief or "")[:2000],
                 transcript=(transcript or "").strip()[:2000] or "(no prior turns)",
-                output=(output or "")[:6000]),
+                output=verify_output_view(output)),
         ).blocks()
         # The judge runs at ``verify_tier`` (default "best"): this ONE small, hard-capped call
         # gates the whole turn's outcome (done vs needs_you/failed, claim honesty), so it gets the
