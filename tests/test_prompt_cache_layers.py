@@ -290,3 +290,14 @@ def test_gemini_plain_string_answer_unchanged_without_layers():
     assert "System: be brief" in kwargs["contents"]
     assert "hello" in kwargs["contents"]
     assert "config" not in kwargs or not kwargs.get("config")
+
+
+def test_family_name_resolves_to_newest_live_model():
+    """A bare family name always means the newest live model of that family (no edit per release)."""
+    from quest_ai_runner.adapters.anthropic_provider import AnthropicProvider
+    p = AnthropicProvider(api_key="k")
+    p._models_cache = ["claude-opus-9", "claude-sonnet-9-1", "claude-sonnet-9", "claude-haiku-9"]
+    p._models_cached_at = float("inf")
+    assert p.resolve_model("sonnet") == "claude-sonnet-9-1"
+    assert p.resolve_model("claude-opus") == "claude-opus-9"
+    assert p.resolve_model("claude-sonnet-9") == "claude-sonnet-9"

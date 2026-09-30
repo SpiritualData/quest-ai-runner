@@ -100,19 +100,19 @@ def get_provider_and_model(
 
     # Map to provider name
     if backend == "claude_cli":
-        return ("claude_cli", "claude-sonnet-4-6", None)  # default model for CLI
+        return ("claude_cli", "sonnet", None)  # family alias: the CLI always runs the latest Sonnet
     elif backend == "anthropic":
-        # Resolve the model tier to an actual model id
+        # Family names, never release ids: AnthropicProvider resolves each to the newest live model.
         planner_tier = (env.get("QAR_PLANNER_TIER") or "").strip() or "haiku"
         model_map = {
-            "haiku": "claude-haiku-4-5",
-            "sonnet": "claude-sonnet-4-6",
-            "opus": "claude-opus-4-8",
-            "fast": "claude-haiku-4-5",
-            "balanced": "claude-sonnet-4-6",
-            "quality": "claude-opus-4-8",
+            "haiku": "haiku",
+            "sonnet": "sonnet",
+            "opus": "opus",
+            "fast": "haiku",
+            "balanced": "sonnet",
+            "quality": "opus",
         }
-        model = model_map.get(planner_tier, "claude-sonnet-4-6")
+        model = model_map.get(planner_tier, "sonnet")
         api_status = "configured" if anthropic_key else "missing"
         return ("anthropic", model, api_status)
     elif backend == "openai":
@@ -125,7 +125,7 @@ def get_provider_and_model(
         return ("gemini", "gemini-2.0-flash", api_status)
     else:
         # Unknown backend; default to anthropic
-        return ("anthropic", "claude-sonnet-4-6", None)
+        return ("anthropic", "sonnet", None)
 
 
 def get_input_cost_per_mtok(provider: str, model: str) -> Optional[float]:
@@ -133,7 +133,7 @@ def get_input_cost_per_mtok(provider: str, model: str) -> Optional[float]:
 
     Args:
         provider: "anthropic", "openai", "gemini", or "claude_cli"
-        model: the model id (e.g., "claude-sonnet-4-6")
+        model: the model id (e.g., "sonnet")
 
     Returns:
         Cost per 1M input tokens (USD), or None if unknown.
@@ -149,6 +149,11 @@ def get_input_cost_per_mtok(provider: str, model: str) -> Optional[float]:
             if key.replace("-", "").replace("_", "") in model_lower.replace("-", "").replace(
                 "_", ""
             ):
+                return price
+        # A bare family name ("haiku", "claude-opus") or any release not listed above prices by
+        # family, so a new Claude release needs no edit here.
+        for fam, price in (("haiku", 0.8), ("sonnet", 3.0), ("opus", 15.0)):
+            if fam in model_lower:
                 return price
         # Default to Claude 3.5 Sonnet (most common)
         return ANTHROPIC_PRICING.get("claude-3-5-sonnet-20241022", 3.0)

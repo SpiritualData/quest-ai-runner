@@ -73,6 +73,21 @@ class AnthropicProvider(ModelProviderBase):
         return self._client
 
     @retry_transient(max_retries=3, base_delay=1.0)
+    def resolve_model(self, model: str) -> str:
+        """Turn a bare family name ("sonnet", "claude-sonnet") into the newest live id of that family.
+
+        A concrete id passes through untouched, so nobody has to edit config when a new release
+        ships: naming the family always means its latest model. If the live list is unreachable the
+        name is returned as given.
+        """
+        low = (model or "").strip().lower()
+        for fam in ("opus", "sonnet", "haiku"):
+            if low in (fam, f"claude-{fam}"):
+                for mid in self.list_models():
+                    if fam in mid.lower():
+                        return mid
+        return model
+
     def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any],
              layers: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         client = self._get_client()
@@ -81,7 +96,7 @@ class AnthropicProvider(ModelProviderBase):
         # cache_control breakpoints; the volatile tail is the user turn. Without layers, the plain
         # prompt is the user turn exactly as before.
         kwargs: Dict[str, Any] = {
-            "model": model,
+            "model": self.resolve_model(model),
             "max_tokens": self.max_plan_tokens,
             "tools": [tool_schema],
             "tool_choice": {"type": "tool", "name": tool_schema["name"]},
@@ -113,7 +128,7 @@ class AnthropicProvider(ModelProviderBase):
         if layers:
             system_array, tail_text = build_cached_system(system, layers)
             create_kwargs: Dict[str, Any] = {
-                "model": model,
+                "model": self.resolve_model(model),
                 "max_tokens": self.max_answer_tokens,
                 "messages": [{"role": "user", "content": tail_text}],
             }
@@ -134,7 +149,7 @@ class AnthropicProvider(ModelProviderBase):
         # The SDK's messages.create already accepts both shapes, so we pass content THROUGH
         # unflattened — the multimodal handler (core.attachments) produces the image blocks.
         kwargs: Dict[str, Any] = {
-            "model": model,
+            "model": self.resolve_model(model),
             "max_tokens": self.max_answer_tokens,
             "messages": messages,
         }
@@ -163,7 +178,7 @@ class AnthropicProvider(ModelProviderBase):
         max_uses = max(1, min(int(max_results), 5))
         self.call_count += 1
         resp = client.messages.create(
-            model=model,
+            model=self.resolve_model(model),
             max_tokens=self.max_answer_tokens,
             tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": max_uses}],
             messages=[{"role": "user", "content": query}],

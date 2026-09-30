@@ -96,7 +96,7 @@ VISION_FAMILY_PATTERNS = [
         r"claude[-_]?3",
         r"claude[-_]?(?:opus|sonnet|haiku|fable|mythos)[-_]?[3-9]",
         r"claude[-_]?[3-9][-_]?(?:opus|sonnet|haiku|fable|mythos)",
-        r"^(?:opus|sonnet|haiku|fable)$",            # bare CLI family aliases
+        r"^(?:claude[-_]?)?(?:opus|sonnet|haiku|fable)$",   # bare family names/aliases (latest of family)
         # Google Gemini 1.5 / 2.x / 3.x — all vision-capable.
         r"gemini[-_]?(?:1\.5|2|3)",
         # OpenAI multimodal: gpt-4o, gpt-4.1, and the reasoning o-series (o1/o3/o4).
@@ -129,10 +129,9 @@ DEFAULT_FALLBACK_TOP = {
     "fast": "gemini-3.1-flash-lite",
     "balanced": "gemini-3.1-flash-lite",
     "quality": "gemini-3.5-flash",
-    "best": "claude-opus-5-5",  # last-known-good pin, bumped as newer Opus releases confirm (2026-09-26,
-    # Opus 5.5 -- the current strongest Claude family; NOT Fable, which is a different family, not a
-    # stronger tier); the live list_models() path above is what actually keeps pace release-to-release,
-    # this only covers a live-list outage
+    "best": "claude-opus",  # family name, never a release: each provider resolves it to the newest
+    # Opus (the CLI maps it to the `opus` alias, AnthropicProvider.resolve_model to the newest live
+    # id), so a new Opus release needs no edit here. Opus is the strongest Claude family, NOT Fable.
 }
 
 
