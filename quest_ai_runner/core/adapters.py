@@ -364,6 +364,8 @@ class PlanDecision:
     # resolves the decision server-side; anything else, including no deadline at all, "hold"s).
     confirm_kind: Optional[str] = None
     confirm_deadline: Optional[str] = None
+    # OPTIONAL http(s) link to the thing the human should look at to answer (see Escalation.review_url).
+    confirm_review_url: Optional[str] = None
     confirm_default_on_silence: Optional[str] = None
     # action="tool": the direct tool calls to run in-process, in order, each
     # ``{"name": "<tool>", "args": {...}}`` (see core/tools.py). Only ever populated when the
@@ -428,11 +430,11 @@ class DeepResult:
     # every runner gets this for free; a runner that resolves its own model (or a future rung that
     # differs from what was requested) may overwrite it with the truer value.
     model: Optional[str] = None
-
-
     # The full model id the worker's CLI resolved ``model`` to (``sonnet`` -> ``claude-sonnet-...``),
     # read from the run's own session record. None when the runner cannot tell.
     resolved_model: Optional[str] = None
+
+
 # The two ways a deep runner can hand its future-context bullets back. Declared per runner as
 # ``DeepRunner.future_context_channel``; the orchestrator picks the matching brief instruction and
 # reads the result from the matching place. Future context is asked for on BOTH channels: a
@@ -456,6 +458,9 @@ class Escalation:
     # think about deadlines still get one if the deployment wants that; an explicit value here
     # always wins.
     deadline: Optional[datetime] = None
+    # OPTIONAL http(s) page the human should open to decide: the draft, preview, doc or PR the ask
+    # is about. Shown as a prominent link on the ask in Quest's daily reflection and Asks for you.
+    review_url: Optional[str] = None
 
 
 # A short relative form the planner can emit instead of computing a real timestamp itself:

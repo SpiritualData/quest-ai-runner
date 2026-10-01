@@ -347,6 +347,14 @@ CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
   (some parts your sources might answer, some parts only reachable elsewhere) must not hold the
   hand-off hostage to more reading: in ONE step, answer what you already know and put everything
   that lives elsewhere, including the checks, into deferred_deep.
+  YOU ARE NOT LIMITED TO WHAT YOUR READS CAN SEE. The deep runner is a full agent with a shell,
+  the filesystem, the web, and the connected tools and services of this deployment. So when the
+  user points at a local file or folder, a document or spreadsheet link, or a connected service,
+  that is work you HAND OFF, never something you lack access to. NEVER tell the user you cannot
+  access their computer, files, folders, or a link, and NEVER ask them to paste, upload, or copy
+  data over, unless the CONTEXT says plainly that nothing attached can reach that place. A path
+  or link that your own reads cannot open is exactly the case for deferred_deep: say in one short
+  sentence what you will go and read or produce, and hand it off.
   An environment named in the CONTEXT is somewhere you hand work OFF TO, never a place you can
   read, grep, or query FROM: never pass its name, or any other machine/server/repo name, as a
   `scope` or `rel_path` -- that is not a real source and will not work. The same reach applies to
@@ -477,7 +485,10 @@ The four actions:
     (you cannot form a reasonable proposal even after reading), OR risky/irreversible enough that a
     human must approve the DIRECTION first. Prefer "deep" with a concrete proposal whenever the
     context lets you make a sensible one; choose "confirm" only when it genuinely doesn't. Put the
-    question in `confirm_question`. Do NOT also act.
+    question in `confirm_question`. Do NOT also act. When the answer depends on something the
+    person has to LOOK at (a draft, a deployed preview, a doc, a PR), put its full https URL in
+    `confirm_review_url`: the app shows it as a prominent link on the ask, so they can open it
+    first. Never leave it buried in the question text alone, and omit it when there is nothing to open.
 
 MODEL TIER (`model_tier`): always set one of "haiku" | "sonnet" | "opus" -- governs the model
   that GENERATES the answer / deep run (the planner itself always runs cheap). haiku=triage/
@@ -858,6 +869,13 @@ DECIDE_TOOL: Dict[str, Any] = {
                 "description": "When this decision should be resolved by: an ISO datetime, or a "
                                "short relative form like 'in 48h' / 'in 2 days'. Omit for no "
                                "deadline.",
+            },
+            "confirm_review_url": {
+                "type": ["string", "null"],
+                "description": "Optional full http(s) URL the person should open to answer: the "
+                               "draft, preview, doc or PR the question is about. Put it here, not "
+                               "only inside the question text, so the app shows it as a prominent "
+                               "tappable link. Omit when there is nothing to look at.",
             },
             "confirm_default_on_silence": {
                 "type": ["string", "null"],
@@ -1558,6 +1576,10 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
     confirm_kind_raw = confirm_kind_raw.strip() if isinstance(confirm_kind_raw, str) and confirm_kind_raw.strip() else None
     confirm_deadline_raw = raw.get("confirm_deadline")
     confirm_deadline_raw = confirm_deadline_raw.strip() if isinstance(confirm_deadline_raw, str) and confirm_deadline_raw.strip() else None
+    confirm_url_raw = raw.get("confirm_review_url")
+    confirm_url_raw = (confirm_url_raw.strip() if isinstance(confirm_url_raw, str) else "")
+    if not re.match(r"^https?://\S+$", confirm_url_raw):
+        confirm_url_raw = None
     confirm_silence_raw = raw.get("confirm_default_on_silence")
     if not (isinstance(confirm_silence_raw, str) and confirm_silence_raw.strip().lower() in ("hold", "proceed")):
         confirm_silence_raw = None
@@ -1585,6 +1607,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
         card_thread=card_thread_raw,
         confirm_kind=confirm_kind_raw,
         confirm_deadline=confirm_deadline_raw,
+        confirm_review_url=confirm_url_raw,
         confirm_default_on_silence=confirm_silence_raw,
         tool_calls=tool_calls,
     )
@@ -6675,6 +6698,16 @@ class Orchestrator:
                 res = _do_run(run_brief, run_model, active_runner,
                               resume_session_id=resume_session, max_turns=attempt_turns)
                 res.model = res.model or run_model
+                if emit is not None and res.model:
+                    # WHICH model this attempt ran on: the tier it was asked for and the full id the
+                    # CLI resolved it to, as structured data the task feed can show per attempt.
+                    ran_on = (f"{res.model} ({res.resolved_model})"
+                              if res.resolved_model and res.resolved_model != res.model else res.model)
+                    emit.emit(ProgressEvent(
+                        type=EVENT_STATUS, text=f"Deep run used {ran_on}.",
+                        data={"deep_run_model": {"attempt": attempt, "tier": res.model,
+                                                 "model": res.resolved_model or res.model,
+                                                 "run_id": captured_run_id["id"]}}))
                 resume_session = None   # consumed: a continuation is offered per attempt, not sticky
                 if res.decision_id is None and not getattr(res, "deferred", False):
                     recovered = self.find_new_decision_id(quest_id, before_decision_ids)
@@ -6690,16 +6723,6 @@ class Orchestrator:
                 # ``output`` is a "task #N launched"-style sentinel, not work product). Re-verifying
                 # that sentinel against the goal would ALWAYS fail and relaunch a fresh task every
                 # iteration (a runaway loop). Trust the hand-off's own ``met`` and stop; the real
-                if emit is not None and res.model:
-                    # WHICH model this attempt ran on: the tier it was asked for and the full id the
-                    # CLI resolved it to, as structured data the task feed can show per attempt.
-                    ran_on = (f"{res.model} ({res.resolved_model})"
-                              if res.resolved_model and res.resolved_model != res.model else res.model)
-                    emit.emit(ProgressEvent(
-                        type=EVENT_STATUS, text=f"Deep run used {ran_on}.",
-                        data={"deep_run_model": {"attempt": attempt, "tier": res.model,
-                                                 "model": res.resolved_model or res.model,
-                                                 "run_id": captured_run_id["id"]}}))
                 # outcome is verified when it reflects back.
                 if getattr(res, "deferred", False):
                     break
@@ -7925,7 +7948,8 @@ class Orchestrator:
                     kind=plan.confirm_kind or ("clarify" if options or allow_free else "approve"),
                     quest_id=quest_id,
                     default_on_silence=plan.confirm_default_on_silence or "hold",
-                    deadline=parse_deadline(plan.confirm_deadline)))
+                    deadline=parse_deadline(plan.confirm_deadline),
+                    review_url=plan.confirm_review_url))
             except Exception:  # noqa: BLE001
                 decision_id = None
 
@@ -7949,7 +7973,8 @@ class Orchestrator:
                     summary=self._concise_decision_summary(question),
                     kind=plan.confirm_kind or "approve", quest_id=quest_id,
                     default_on_silence=plan.confirm_default_on_silence or "hold",
-                    deadline=parse_deadline(plan.confirm_deadline)))
+                    deadline=parse_deadline(plan.confirm_deadline),
+                    review_url=plan.confirm_review_url))
             except Exception:  # noqa: BLE001 — escalation failure still returns the question
                 decision_id = None
         return OrchestratorResult(kind="confirm", question=question, decision_id=decision_id,
@@ -9756,6 +9781,12 @@ class Orchestrator:
 
         # answer
         model = self._answer_model(plan, "sonnet", hint=model_hint)
+        # Tell the task feed which tier wrote this reply and the model it resolved to.
+        reply_tier = model_hint or plan.model_tier or "sonnet"
+        emit.emit(ProgressEvent(
+            type=EVENT_STATUS,
+            text=f"Replying with the {reply_tier} tier ({model}).",
+            data={"response_model": {"tier": reply_tier, "model": model}}))
 
         def _gen_answer(steering: Optional[str]) -> str:
             # Produce an answer, optionally STEERED by goal-verification feedback (the prior answer
@@ -9773,12 +9804,6 @@ class Orchestrator:
                                          rep_preamble=rep_preamble,
                                          reply_directive=reply_directive)
 
-        # Tell the task feed which tier wrote this reply and the model it resolved to.
-        reply_tier = model_hint or plan.model_tier or "sonnet"
-        emit.emit(ProgressEvent(
-            type=EVENT_STATUS,
-            text=f"Replying with the {reply_tier} tier ({model}).",
-            data={"response_model": {"tier": reply_tier, "model": model}}))
         emit.status(f"Answering {len(plan.subquestions)} parts in parallel…"
                     if len(plan.subquestions) >= 2 else "Answering")
         text = _gen_answer(None)

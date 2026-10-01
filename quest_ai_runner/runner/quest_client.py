@@ -705,7 +705,8 @@ class QuestClient:
                         default_on_silence: str = "hold",
                         team_id: Optional[str] = None,
                         deadline: Optional[datetime] = None,
-                        executable: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+                        executable: Optional[Dict[str, Any]] = None,
+                        review_url: Optional[str] = None) -> Dict[str, Any]:
         # ``assignee`` names a ROLE from config; ``assignee_user_id`` is the raw id. An explicit id
         # wins, so an existing caller is unaffected. Resolution happens OUTSIDE the try/except
         # below on purpose: a misspelled role must raise, not degrade into an unassigned decision.
@@ -741,6 +742,10 @@ class QuestClient:
                 # Accept either a real datetime (the normal case) or an already-ISO string, so a
                 # caller that pre-formatted one for some other reason is not rejected here.
                 body["deadline"] = deadline.isoformat() if hasattr(deadline, "isoformat") else str(deadline)
+            if review_url and re.match(r"^https?://\S+$", str(review_url)):
+                # The page the person should open to decide (draft / preview / doc / PR); Quest
+                # renders it as a prominent link on the ask. Dropped, not rejected, if malformed.
+                body["review_url"] = str(review_url)
             if executable:
                 # An action to APPLY on approval. The server accepts only structured, data-shaped
                 # kinds here (see propose_field_change) and validates the payload at creation, so a
@@ -2683,6 +2688,7 @@ class QuestDecisionSink(EscalationSinkBase):
                 assignee_user_id=assignee_user_id,
                 default_on_silence=escalation.default_on_silence,
                 deadline=self.resolve_deadline(escalation),
+                review_url=escalation.review_url,
             )
             # The API returns the created decision; surface its id (best-effort across field names).
             return str((res or {}).get("decision_id") or (res or {}).get("id") or "")

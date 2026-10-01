@@ -83,3 +83,21 @@ def test_confirm_deadline_garbage_degrades_to_no_deadline():
     res = make_orchestrator(provider, StubRetrieval(), escalation=sink).run(
         "buy item X", quest_id="quest_1")
     assert sink.raised[0].deadline is None
+
+
+def test_confirm_carries_a_valid_review_url_and_drops_a_bad_one():
+    good = StubProvider(decisions=[
+        {"action": "confirm", "confirm_question": "Approve the draft?",
+         "confirm_review_url": "https://qa.spiritualdata.org/draft/1", "rationale": "x"},
+    ])
+    sink = StubEscalation(decision_id="dec_1")
+    make_orchestrator(good, StubRetrieval(), escalation=sink).run("approve draft", quest_id="quest_1")
+    assert sink.raised[0].review_url == "https://qa.spiritualdata.org/draft/1"
+
+    bad = StubProvider(decisions=[
+        {"action": "confirm", "confirm_question": "Approve?",
+         "confirm_review_url": "javascript:alert(1)", "rationale": "x"},
+    ])
+    sink = StubEscalation(decision_id="dec_2")
+    make_orchestrator(bad, StubRetrieval(), escalation=sink).run("approve", quest_id="quest_1")
+    assert sink.raised[0].review_url is None

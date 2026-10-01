@@ -114,13 +114,16 @@ best-effort status note onto the task's own progress stream. See `docs/streaming
 ```
 POST /api/teams/{team_id}/decisions
   { "kind": "approve", "summary": "...", "quest_id": "...", "assigned_to_user_id": "...",
-    "default_on_silence": "hold", "deadline": "2026-09-25T18:00:00+00:00", "executable": {...} }
+    "default_on_silence": "hold", "deadline": "2026-09-25T18:00:00+00:00", "review_url": "https://...", "executable": {...} }
 ```
 Returns a `decision_id`. The executor stamps it onto the task via the `needs_you` report.
 
 - `kind` is 1-64 chars, `^[a-z0-9_:-]+$` (e.g. `approve`, `explicit:spend`, `notice:prod-ops`).
   `QuestClient.create_decision` validates this client-side and falls back to `approve` on a bad
   value, so a malformed/hallucinated kind never loses the whole escalation to a rejected request.
+- `review_url` is optional: one http(s) URL the person should open to decide (a draft, preview, doc,
+  PR). The planner sets it via `PlanDecision.confirm_review_url` (`Escalation.review_url`); Quest
+  rejects any non-http(s) value and the app shows it as a prominent button on the ask.
 - `deadline` is optional, ISO 8601. The planner can specify one as a relative form ("in 48h", "in
   2 days") via `PlanDecision.confirm_deadline`; `core.adapters.parse_deadline` turns that into the
   real datetime sent here. With no deadline given anywhere, `QuestDecisionSink` still applies
