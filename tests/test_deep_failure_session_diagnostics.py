@@ -260,6 +260,27 @@ def test_read_session_activity_tail_only_reads_the_end_of_a_large_file(session_d
     assert "Edit: late.py" in block
 
 
+def test_long_bash_commands_keep_their_distinguishing_end_not_their_shared_start(session_dir):
+    """Regression: two DIFFERENT commands under the same long directory used to render identically.
+
+    Both commands share an 80+ char prefix (``cd`` into the same deep path); only what comes after
+    the prefix tells them apart. Truncating from the start (the old behavior) cut exactly that part
+    off, so the liveness reviewer saw what looked like the same line twice and wrongly concluded
+    the worker was "stuck repeating the same failing action" on a bare, truncated ``cd``.
+    """
+    long_dir = "/opt/some-org/deploy/code/some-really-long-repo-name/quest-ai-runner"
+    lines = [
+        assistant(tool_use("Bash", command=f"cd {long_dir} && grep -rn 'liveness' quest_ai_runner")),
+        assistant(tool_use("Bash", command=f"cd {long_dir} && python -m pytest tests/test_x.py")),
+    ]
+    (session_dir / "sess.jsonl").write_text("\n".join(lines))
+
+    block = read_session_activity_tail(str(session_dir.parents[2]), "sess")
+
+    assert "grep -rn 'liveness'" in block
+    assert "python -m pytest tests/test_x.py" in block
+
+
 def test_resolve_session_file_is_silent_when_nothing_matches(session_dir):
     # A decoy session from an unrelated run: the project dir resolves, but nothing matches OUR id
     # (the binding is by session id, never "whatever jsonl is lying around").

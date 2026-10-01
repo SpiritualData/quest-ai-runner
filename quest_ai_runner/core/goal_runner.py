@@ -104,9 +104,9 @@ Answer stop=true ONLY if the log shows one of these:
 - nothing has happened for more than 5 minutes (see the idle time below) with no legitimate reason
 - it ran out of Claude/LLM tokens or hit a usage or rate limit
 - it is blocked on the task or is asking for or waiting on a human decision, answer, approval, confirmation or credential (nobody is watching this run, so a question to a person will never be answered, however reasonable the question is)
-- it is stuck repeating the same failing action
+- it is stuck repeating the SAME COMPLETE action with no new progress between repeats
 
-Answer stop=false if it is making progress, or doing a legitimately slow thing for the task such as monitoring, waiting on a build, a test run, or a long command. Waiting on a machine or process is legitimate; waiting on a person is not. When unsure, answer stop=false: a wrong stop loses work that was about to finish.
+Answer stop=false if it is making progress, or doing a legitimately slow thing for the task such as monitoring, waiting on a build, a test run, or a long command. Waiting on a machine or process is legitimate; waiting on a person is not. Commands that merely share a long common prefix (several ``cd``/``$`` lines into the same directory tree, or different commands under the same long path) are NOT a repeat; judge repetition only by whether the FULL line, including whatever comes after that shared prefix, is identical across entries. When unsure, answer stop=false: a wrong stop loses work that was about to finish.
 
 Time the run has been going: {elapsed}s. Seconds since the log last changed: {idle}s.
 
@@ -561,6 +561,22 @@ def _hash_line(line: str) -> str:
     return hashlib.md5(line.encode()).hexdigest()
 
 
+def _truncate_keep_end(text: str, limit: int) -> str:
+    """Keep the END of a string that's too long to show in full, not the start.
+
+    The end is the diagnostically important part: a command's distinguishing content (what
+    actually runs, which file, which argument) usually comes AFTER any long, repetitive leading
+    path (``cd`` into the same deep directory tree, a compound ``cd <long path> && <command>``).
+    Truncating from the end instead made every such line render identically — this is what fooled
+    the liveness reviewer into reading genuinely different commands as "stuck repeating the same
+    action" when only their shared prefix was visible.
+    """
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    return "..." + text[-limit:]
+
+
 def _format_message_text(msg: dict) -> str:
     """Extract and format text content from a parsed JSONL message.
 
@@ -599,7 +615,7 @@ def _format_message_text(msg: dict) -> str:
                     inp = block.get("input") or {}
                     if tool_name in ("Bash", "bash") and inp.get("command"):
                         cmd = str(inp["command"]).strip()
-                        brief = (cmd[:80] + "...") if len(cmd) > 80 else cmd
+                        brief = _truncate_keep_end(cmd, 80)
                         text_parts.append(f"$ {brief}")
                     elif tool_name in ("Read", "read", "Write", "write") and inp.get("file_path"):
                         text_parts.append(f"{tool_name}: {inp['file_path']}")
