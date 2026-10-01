@@ -45,6 +45,22 @@ def split_layers_for_gemini(system: Optional[str], layers: List[Dict[str, Any]])
     return system_instruction, contents
 
 
+def _gemini_image_part(block: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """An Anthropic-style image content block as a Gemini ``inline_data`` part, or None.
+
+    Accepts the block shape the multimodal handler builds
+    (``{"type": "image", "source": {"type": "base64", "media_type": ..., "data": ...}}``).
+    Returns None for anything it cannot read (a URL source, say), so the caller can fall back to
+    a text note rather than fail the call.
+    """
+    source = block.get("source") or {}
+    data = source.get("data")
+    if not data or source.get("type") != "base64":
+        return None
+    media_type = source.get("media_type") or "image/png"
+    return {"inline_data": {"mime_type": media_type, "data": data}}
+
+
 class GeminiProvider(ModelProviderBase):
     def __init__(self, *, api_key: Optional[str] = None, cache_seconds: float = 3600.0):
         super().__init__()
@@ -144,8 +160,12 @@ class GeminiProvider(ModelProviderBase):
                 self.tokens_in += getattr(meta, "prompt_token_count", 0) or 0
                 self.tokens_out += getattr(meta, "candidates_token_count", 0) or 0
             return response.text if response and response.text else ""
-        # Convert message list to prompt text
+        # Convert message list to prompt text. An IMAGE block is sent as a real Gemini inline
+        # part, never flattened to a placeholder: Gemini is multimodal, and this is the path the
+        # multimodal handler (core.attachments) uses to describe an image for a text-only
+        # answering model, so dropping the bytes here silently loses the user's picture.
         prompt_parts = []
+        image_parts: List[Dict[str, Any]] = []
         if system:
             prompt_parts.append(f"System: {system}\n")
         for msg in messages:
@@ -160,13 +180,19 @@ class GeminiProvider(ModelProviderBase):
                         if block.get("type") == "text":
                             prompt_parts.append(f"{role.capitalize()}: {block.get('text', '')}\n")
                         elif block.get("type") == "image":
-                            # Gemini SDK will handle image blocks if passed correctly
-                            # For now, just note that an image was present
-                            prompt_parts.append(f"[Image included]\n")
+                            part = _gemini_image_part(block)
+                            if part is not None:
+                                image_parts.append(part)
+                            else:
+                                prompt_parts.append("[Image included]\n")
 
         full_prompt = "".join(prompt_parts).strip()
         self.call_count += 1
-        response = self._generate(client, model, full_prompt, {}, reasoning)
+        if image_parts:
+            contents = [{"role": "user", "parts": [{"text": full_prompt}, *image_parts]}]
+            response = self._generate(client, model, contents, {}, reasoning)
+        else:
+            response = self._generate(client, model, full_prompt, {}, reasoning)
         meta = getattr(response, "usage_metadata", None)
         if meta:
             self.tokens_in += getattr(meta, "prompt_token_count", 0) or 0

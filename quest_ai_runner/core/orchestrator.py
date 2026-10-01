@@ -8961,7 +8961,15 @@ class Orchestrator:
             )
             native_blocks = prepared.native_blocks
             if prepared.text_context:
-                context_view = (context_view + "\n\n" + prepared.text_context if context_view
+                # PREPEND, never append. ``_strip_discovery_section`` builds the ANSWER's grounding
+                # by keeping only what sits BEFORE the "## Discovery" block and dropping the rest,
+                # so anything appended to the end of context_view reaches the PLANNER and is then
+                # cut out of the answer. Appending here meant a described image (the only way a
+                # text-only answering model can see an upload) grounded the plan and vanished from
+                # the reply, and the model answered about the picture from nothing: measured
+                # 2026-10-01, a solid magenta upload was answered "Green". The attachment is the
+                # user's own most salient context, so it belongs at the front either way.
+                context_view = (prepared.text_context + "\n\n" + context_view if context_view
                                 else prepared.text_context)
 
         def budget_exhausted() -> bool:
