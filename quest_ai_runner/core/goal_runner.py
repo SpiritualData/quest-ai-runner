@@ -922,6 +922,41 @@ def resolve_session_file(working_dir: Optional[str], session_id: Optional[str]) 
     return matches[0] if matches else None
 
 
+def resolved_model_from_session(working_dir: Optional[str], session_id: Optional[str],
+                                *, max_bytes: int = 400_000) -> Optional[str]:
+    """The full model id Claude Code actually ran this session with (e.g. ``claude-sonnet-4-5-...``).
+
+    ``--model sonnet`` is an alias the CLI resolves itself, so the id only exists in the run's own
+    session record: every assistant record carries ``message.model``. Reads the tail of the file and
+    returns the most recent real id, skipping Claude Code's ``<synthetic>`` placeholder (its own
+    error messages). None when the file is missing or holds no assistant turn. Never raises.
+    """
+    path = resolve_session_file(working_dir, session_id)
+    if path is None:
+        return None
+    try:
+        size = path.stat().st_size
+        start = max(0, size - max_bytes)
+        with open(path, "rb") as f:
+            if start:
+                f.seek(start)
+            blob = f.read(max_bytes)
+    except Exception as e:  # noqa: BLE001 — unreadable record means no model note, never a failure
+        _log.debug("could not read session file %s: %s", path, e)
+        return None
+    found: Optional[str] = None
+    for line in blob.decode("utf-8", errors="replace").splitlines():
+        try:
+            msg = json.loads(line)
+        except Exception:  # noqa: BLE001 — partial first line or a record mid-write
+            continue
+        inner = msg.get("message") if isinstance(msg, dict) else None
+        model = inner.get("model") if isinstance(inner, dict) else None
+        if isinstance(model, str) and model.strip() and not model.startswith("<"):
+            found = model.strip()
+    return found
+
+
 def read_session_activity_tail(
     working_dir: Optional[str],
     session_id: Optional[str],
@@ -1114,6 +1149,22 @@ class SubprocessGoalRunner(DeepRunner):
                  run_id: Optional[str] = None,
                  working_dir: Optional[str] = None,
                  resume_session_id: Optional[str] = None) -> DeepResult:
+        """Run the goal, then stamp the result with the model id Claude Code resolved it to."""
+        res = self.run_goal_once(goal=goal, brief=brief, model=model, max_turns=max_turns,
+                                 emit=emit, context_preamble=context_preamble, run_id=run_id,
+                                 working_dir=working_dir, resume_session_id=resume_session_id)
+        if res.resolved_model is None and res.session_id:
+            res.resolved_model = resolved_model_from_session(
+                self.cfg.working_dir if working_dir is None else working_dir, res.session_id)
+        return res
+
+    def run_goal_once(self, *, goal: str, brief: str, model: Optional[str] = None,
+                      max_turns: Optional[int] = None,
+                      emit: Optional[Callable[[ProgressEvent], None]] = None,
+                      context_preamble: Optional[str] = None,
+                      run_id: Optional[str] = None,
+                      working_dir: Optional[str] = None,
+                      resume_session_id: Optional[str] = None) -> DeepResult:
         # ``context_preamble`` is an OPTIONAL PER-CALL override of ``self.cfg.context_preamble``.
         # When the orchestrator forwards a per-task preamble (e.g. an AI rep's pulled persona), it
         # is used for THIS run only; otherwise the runner's configured base preamble applies, so

@@ -57,6 +57,7 @@ from .interactive_session import (
     _HELP,
     _SLASH_COMMANDS,
     _Console,
+    _model_display,
     _model_label,
     _parse_skill_frontmatter,
     _BOLD, _CYAN, _DIM, _RESET,
@@ -1827,7 +1828,7 @@ class QuestAITerminal(App):
                 deep_out = data.get("deep_output")
                 if rid and deep_out:
                     self._deep.set_final_output(rid, deep_out)
-                model = data.get("model")
+                model = _model_display(data.get("model"), data.get("resolved_model"))
                 if rid and model:
                     self._deep.set_model(rid, model)
             if text:
@@ -2159,7 +2160,12 @@ class QuestAITerminal(App):
             if tok_in or tok_out:
                 parts.append((f"↥ {_k(tok_in)} in · ↦ {_k(tok_out)} out", "dim"))
 
-        model_lbl = _model_label(getattr(final, "model", None))
+        if final.kind == "deep":
+            model_lbl = ", ".join(sorted({
+                _model_display(getattr(d, "model", None), getattr(d, "resolved_model", None))
+                for d in (final.deep_results or []) if getattr(d, "model", None)}))
+        else:
+            model_lbl = _model_display(getattr(final, "model", None))
         if model_lbl:
             parts.append((model_lbl, "dim"))
         parts.append((f"{elapsed:.1f}s", "dim"))

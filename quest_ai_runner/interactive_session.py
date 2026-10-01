@@ -232,6 +232,21 @@ def _model_label(model_id: Optional[str]) -> str:
     return model_id.split("-")[0]
 
 
+def _model_display(model_id: Optional[str], resolved: Optional[str] = None) -> str:
+    """The tier plus the full model id it resolved to, e.g. ``sonnet (claude-sonnet-4-5-2025...)``.
+
+    ``resolved`` is the id the worker actually ran with; without it (or when it only repeats the
+    tier) the id in ``model_id`` is shown as its tier label plus itself when it is a full id.
+    """
+    full = (resolved or model_id or "").strip()
+    label = _model_label(model_id or resolved)
+    if not full:
+        return ""
+    if not label or full.lower() == label.lower():
+        return full
+    return f"{label} ({full})"
+
+
 class _DeepRunTracker:
     """Track multiple concurrent deep runs and their latest output.
 

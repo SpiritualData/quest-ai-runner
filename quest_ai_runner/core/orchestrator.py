@@ -6690,6 +6690,16 @@ class Orchestrator:
                 # ``output`` is a "task #N launched"-style sentinel, not work product). Re-verifying
                 # that sentinel against the goal would ALWAYS fail and relaunch a fresh task every
                 # iteration (a runaway loop). Trust the hand-off's own ``met`` and stop; the real
+                if emit is not None and res.model:
+                    # WHICH model this attempt ran on: the tier it was asked for and the full id the
+                    # CLI resolved it to, as structured data the task feed can show per attempt.
+                    ran_on = (f"{res.model} ({res.resolved_model})"
+                              if res.resolved_model and res.resolved_model != res.model else res.model)
+                    emit.emit(ProgressEvent(
+                        type=EVENT_STATUS, text=f"Deep run used {ran_on}.",
+                        data={"deep_run_model": {"attempt": attempt, "tier": res.model,
+                                                 "model": res.resolved_model or res.model,
+                                                 "run_id": captured_run_id["id"]}}))
                 # outcome is verified when it reflects back.
                 if getattr(res, "deferred", False):
                     break
@@ -6877,7 +6887,8 @@ class Orchestrator:
                                         data={"goal": goal,
                                               "run_id": captured_run_id["id"],
                                               "deep_output": _strip_future_context(res.output).strip() or None,
-                                              "model": res.model}))
+                                              "model": res.model,
+                                              "resolved_model": res.resolved_model}))
             # WARM recent-context write-back (see core/recent_context.py): record the cards+items
             # THIS goal's context actually included, under every applicable scope key, so a task
             # follow-up (another deep goal on the same quest/conversation, or the next chat turn)
@@ -9754,6 +9765,12 @@ class Orchestrator:
                                          rep_preamble=rep_preamble,
                                          reply_directive=reply_directive)
 
+        # Tell the task feed which tier wrote this reply and the model it resolved to.
+        reply_tier = model_hint or plan.model_tier or "sonnet"
+        emit.emit(ProgressEvent(
+            type=EVENT_STATUS,
+            text=f"Replying with the {reply_tier} tier ({model}).",
+            data={"response_model": {"tier": reply_tier, "model": model}}))
         emit.status(f"Answering {len(plan.subquestions)} parts in parallel…"
                     if len(plan.subquestions) >= 2 else "Answering")
         text = _gen_answer(None)

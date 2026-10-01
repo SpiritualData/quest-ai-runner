@@ -7,6 +7,7 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Deep runs report the model id they resolved to, and replies report their tier.** `DeepResult.resolved_model` is read from the run's own session record (`sonnet` -> `claude-sonnet-...`); the terminal's run record and footer, the task's done note, and a structured `deep_run_model` / `response_model` progress event all show tier plus full id.
 - **Opt-in unrestricted Google Chat: `[google_chat] all_spaces = true`.** The safe default (an
   explicit `space_names` allowlist, fails closed) is unchanged. With `all_spaces = true`,
   `space_names` is not required, `GoogleChatAdapter.space_allowed` accepts any well-formed

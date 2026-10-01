@@ -449,8 +449,15 @@ def _model_used_note(deep: List[Any]) -> str:
     honestly. Consumers (a chat UI, a task detail view) get this for free since it travels inside
     the same text every terminal report already carries -- no extra field or API surface needed.
     """
-    models = sorted({(getattr(d, "model", None) or "").strip() for d in deep
-                     if (getattr(d, "model", None) or "").strip()})
+    models = set()
+    for d in deep:
+        tier = (getattr(d, "model", None) or "").strip()
+        resolved = (getattr(d, "resolved_model", None) or "").strip()
+        if tier and resolved and resolved != tier:
+            models.add(f"{tier} ({resolved})")
+        elif tier or resolved:
+            models.add(tier or resolved)
+    models = sorted(models)
     if not models:
         return ""
     label = "model" if len(models) == 1 else "models"

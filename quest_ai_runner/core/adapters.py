@@ -430,6 +430,9 @@ class DeepResult:
     model: Optional[str] = None
 
 
+    # The full model id the worker's CLI resolved ``model`` to (``sonnet`` -> ``claude-sonnet-...``),
+    # read from the run's own session record. None when the runner cannot tell.
+    resolved_model: Optional[str] = None
 # The two ways a deep runner can hand its future-context bullets back. Declared per runner as
 # ``DeepRunner.future_context_channel``; the orchestrator picks the matching brief instruction and
 # reads the result from the matching place. Future context is asked for on BOTH channels: a
