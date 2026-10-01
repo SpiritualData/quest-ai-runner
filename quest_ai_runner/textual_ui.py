@@ -1644,7 +1644,7 @@ class QuestAITerminal(App):
         try:
             _inbox = getattr(s._orch, "input_inbox", None)
             _sid = self._session_id
-            _pending = (lambda: _inbox.drain(_sid)) if _inbox is not None else None
+            _pending = self._make_pending_drain(_inbox, _sid) if _inbox is not None else None
             preamble, grounding_meta = s.turn_grounding(user_text)
             if s.turn_quest is not None:
                 from .runner.quest_folder_index import describe_match
@@ -1866,6 +1866,34 @@ class QuestAITerminal(App):
             log.write(Text(f"  ┃ {text}", style="bold yellow"))
             self.query_one("#prompt", PromptTextArea).placeholder = _AWAITING_DECISION_PLACEHOLDER
         # done: terminal signal only.
+
+    def _make_pending_drain(self, inbox: "InputInbox", sid: str) -> Callable[[], List[str]]:
+        """Wrap the orchestrator's own ``pending_inputs`` drain so a mid-run pickup is VISIBLE.
+
+        ``inbox.drain`` is called from the worker thread by the orchestrator's own retry/improve
+        loops (a long deep run folding steering into its next attempt). Calling it directly left
+        the "↑ queued (N): ..." line written at queue-time sitting on screen forever with no sign
+        it was ever acted on — the message was in fact picked up, but only the orchestrator's own
+        loop ever knew that. Wrapping it reports the pickup back to the UI thread the same way
+        ``_finish_turn``'s end-of-turn drain already does.
+        """
+        def _drain() -> List[str]:
+            msgs = inbox.drain(sid)
+            if msgs:
+                remaining = len(inbox.peek(sid))
+                self.call_from_thread(self._note_queued_folded_in, msgs, remaining)
+            return msgs
+        return _drain
+
+    def _note_queued_folded_in(self, messages: List[str], remaining: int) -> None:
+        """UI-thread callback: the running turn just picked up queued message(s) mid-run."""
+        n = len(messages)
+        self._tlog.write(Text(
+            f"  ↓ {n} queued message{'s' if n != 1 else ''} picked up mid-run",
+            style="dim yellow",
+        ))
+        self._activity.set_queued(remaining)
+        self.query_one("#prompt", PromptTextArea).placeholder = _busy_placeholder(remaining)
 
     def _drain_queued_inputs(self) -> List[str]:
         """Pull (and clear) whatever this session's messages are still sitting in the inbox.

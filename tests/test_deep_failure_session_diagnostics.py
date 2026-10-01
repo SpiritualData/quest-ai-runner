@@ -281,6 +281,26 @@ def test_long_bash_commands_keep_their_distinguishing_end_not_their_shared_start
     assert "python -m pytest tests/test_x.py" in block
 
 
+def test_long_file_paths_and_urls_also_keep_their_end_not_their_start(session_dir):
+    """Same bug, non-Bash tools: Read/Write/Edit file paths and WebSearch/WebFetch targets used to
+    truncate from the start (``target[:80] + "..."``), so a long, repetitive leading directory hid
+    the actual filename or query that distinguishes one action from the next.
+    """
+    long_dir = "/opt/some-org/deploy/code/some-really-long-repo-name/quest-ai-runner/quest_ai_runner"
+    lines = [
+        assistant(tool_use("Read", file_path=f"{long_dir}/core/goal_runner.py")),
+        assistant(tool_use("Edit", file_path=f"{long_dir}/core/orchestrator.py")),
+        assistant(tool_use("WebFetch", url=f"https://example.com/{'segment/' * 20}final-page")),
+    ]
+    (session_dir / "sess.jsonl").write_text("\n".join(lines))
+
+    block = read_session_activity_tail(str(session_dir.parents[2]), "sess")
+
+    assert "goal_runner.py" in block
+    assert "orchestrator.py" in block
+    assert "final-page" in block
+
+
 def test_resolve_session_file_is_silent_when_nothing_matches(session_dir):
     # A decoy session from an unrelated run: the project dir resolves, but nothing matches OUR id
     # (the binding is by session id, never "whatever jsonl is lying around").

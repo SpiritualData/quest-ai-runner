@@ -618,13 +618,12 @@ def _format_message_text(msg: dict) -> str:
                         brief = _truncate_keep_end(cmd, 80)
                         text_parts.append(f"$ {brief}")
                     elif tool_name in ("Read", "read", "Write", "write") and inp.get("file_path"):
-                        text_parts.append(f"{tool_name}: {inp['file_path']}")
+                        text_parts.append(f"{tool_name}: {_truncate_keep_end(str(inp['file_path']), 80)}")
                     elif tool_name in ("Edit", "edit") and inp.get("file_path"):
-                        text_parts.append(f"Edit: {inp['file_path']}")
+                        text_parts.append(f"Edit: {_truncate_keep_end(str(inp['file_path']), 80)}")
                     elif tool_name in ("WebSearch", "WebFetch") and (inp.get("query") or inp.get("url")):
-                        target = inp.get("query") or inp.get("url", "")
-                        brief = (target[:80] + "...") if len(target) > 80 else target
-                        text_parts.append(f"{tool_name}: {brief}")
+                        target = str(inp.get("query") or inp.get("url", ""))
+                        text_parts.append(f"{tool_name}: {_truncate_keep_end(target, 80)}")
                     else:
                         text_parts.append(f"Using {tool_name}")
                 elif block_type == "tool_result":

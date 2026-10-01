@@ -181,6 +181,44 @@ def test_finish_turn_never_auto_starts_a_turn_after_an_error_even_if_queued():
     assert left_over == ["still there"]  # not silently dropped either -- still there to flush later
 
 
+# --- the mid-run drain must be VISIBLE too, not just the end-of-turn flush ---------------------
+
+def test_mid_run_drain_reports_the_pickup_instead_of_leaving_queued_stale():
+    """Task-reported bug: when the orchestrator's OWN loop (not ``_finish_turn``) drains a queued
+    message mid-run to fold it into a retry, the "queued" line written at queue-time used to sit in
+    the transcript forever with no sign the message was ever picked up -- only the orchestrator's
+    own loop knew. ``_make_pending_drain`` wraps the raw ``inbox.drain`` the orchestrator calls so
+    the UI finds out too.
+
+    Production calls ``pending_inputs`` from the worker thread running the orchestrator stream
+    (``_run_stream``, ``@work(thread=True)``), never the UI thread -- ``call_from_thread`` requires
+    exactly that, so the test mirrors it with ``asyncio.to_thread``.
+    """
+    async def build(app, pilot):
+        inbox = InMemoryInbox()
+        app.sess = _stub_session(inbox)
+        inbox.push(app._session_id, "one more thing")
+
+        pending = app._make_pending_drain(inbox, app._session_id)
+        drained = await asyncio.to_thread(pending)  # mirrors the orchestrator's own worker thread
+        await pilot.pause()
+        return drained, app._activity._queued
+
+    drained, shown_count = run_app(build)
+    assert drained == ["one more thing"]
+    assert shown_count == 0  # nothing left outstanding after the pickup
+
+
+def test_mid_run_drain_is_silent_when_nothing_was_queued():
+    async def build(app, pilot):
+        inbox = InMemoryInbox()
+        app.sess = _stub_session(inbox)
+        pending = app._make_pending_drain(inbox, app._session_id)
+        return await asyncio.to_thread(pending)
+
+    assert run_app(build) == []
+
+
 def test_finish_turn_resets_the_queued_indicator():
     async def build(app, pilot):
         inbox = InMemoryInbox()
