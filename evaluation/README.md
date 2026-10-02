@@ -402,3 +402,25 @@ This one runs the production liveness-review prompt and CLI call over 39 hand-la
 (stop vs keep running) and exits non-zero on any miss. Makes one small Haiku call per case, about
 5 minutes per run: `python evaluation/deep_review_eval.py [--runs N]`. Re-run it after any edit to
 `DEEP_REVIEW_PROMPT`.
+
+## `chat_quest_ops_routing_eval.py` — quest-operation routing + execution (no deep runs)
+
+Answers "is Quest AI chat a good experience for a user with NO external environment, and does it
+still send genuinely-deep work to deep?" 22 labeled cases over 11 areas of quest-database
+operations (reading quest fields, listing goals/habits/entries, daily reflection, habit completion,
+habit timers, collection entries with specific field values, goal create/update, quest notes,
+quest field writes) plus 3 contrast cases that truly need an external environment.
+
+Two arms. `run` drives QAR's own library Orchestrator with `cfg.deep_runner = None`, so a turn the
+planner routes to "deep" is captured as a decision and executes nothing. `run-inapp` drives the
+REAL in-app chat surface (`POST /api/quest-ai/conversations/{id}/messages/stream`) over HTTP, which
+is what a subscriber actually talks to. Every operation is verified independently against the Quest
+REST API, never from the reply text. DEV only (asserts the backend is not prod); the fixture is
+built through the app's own endpoints and `teardown` deletes it and re-fetches to prove it is gone.
+
+    .venv/bin/python3 evaluation/chat_quest_ops_routing_eval.py setup
+    .venv/bin/python3 evaluation/chat_quest_ops_routing_eval.py run-inapp [--only ID,ID]
+    .venv/bin/python3 evaluation/chat_quest_ops_routing_eval.py teardown
+
+Measured results, findings and recommended fixes: **[CHAT_QUEST_OPS_RESULTS.md](CHAT_QUEST_OPS_RESULTS.md)**
+(2026-10-02: routing 14/22, deep contrast 3/3, and 0 of 10 write operations completed inline).
