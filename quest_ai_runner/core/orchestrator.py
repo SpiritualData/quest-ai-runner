@@ -2080,6 +2080,43 @@ def ladder_for_quest_data(ladder: List[Any]) -> List[Any]:
     operations_only = [r for r in kept if getattr(r, "write_surface", WRITE_SURFACE_AGENT) == WRITE_SURFACE_OPERATIONS]
     return operations_only if operations_only else kept
 
+
+def apply_quest_data_ladder_guard(
+    ladder: List[Any], brief: str, *, deliberate_choice: bool
+) -> Tuple[List[Any], str]:
+    """The quest-data guard for a deep goal whose ``deep_target == "quest_data"``.
+
+    Returns ``(ladder, brief)``. A ``deliberate_choice`` ladder (a pinned ``runner_override`` or a
+    classifier-selected named runner) is never re-routed, but if its rung is not the governed-
+    operations rung the brief gains ``QUEST_DATA_WRITE_SURFACE_INSTRUCTION``. Otherwise the default
+    ladder is narrowed by ``ladder_for_quest_data`` (file-editing rungs dropped, operations rungs
+    preferred), and the instruction is appended when no operations rung survived.
+    """
+    def surface(r: Any) -> Any:
+        return getattr(r, "write_surface", WRITE_SURFACE_AGENT)
+
+    if deliberate_choice:
+        rung = ladder[0] if ladder else None
+        if surface(rung) != WRITE_SURFACE_OPERATIONS:
+            brief = brief + QUEST_DATA_WRITE_SURFACE_INSTRUCTION
+        return ladder, brief
+
+    narrowed = ladder_for_quest_data(ladder)
+    if narrowed != ladder:
+        dropped = [r for r in ladder if surface(r) == WRITE_SURFACE_FILES]
+        log.info(
+            "Quest-data ladder guard: dropped %d file-editing rung(s) "
+            "(a file edit cannot change quest data); narrowed ladder to %d "
+            "rung(s) with write_surface=%s",
+            len(dropped), len(narrowed), [surface(r) for r in narrowed],
+        )
+        ladder = narrowed
+    if not any(surface(r) == WRITE_SURFACE_OPERATIONS for r in ladder):
+        # No governed-operations rung survived: the agent worker still runs the goal, but must be
+        # told which tool to use instead of writing code.
+        brief = brief + QUEST_DATA_WRITE_SURFACE_INSTRUCTION
+    return ladder, brief
+
 # The updater's ONE LLM call. It is given the request, what executed, the parsed future-context
 # section, and the user's CURRENT relevant cards, and must return a STRUCTURED edit plan as JSON.
 CARD_UPDATE_TOOL: Dict[str, Any] = {
@@ -6534,35 +6571,9 @@ class Orchestrator:
             # full agent when one is available. Reached only when the planner judged this goal's
             # target is the person's own Quest data; byte-identical otherwise.
             if getattr(plan, "deep_target", None) == "quest_data":
-                if ladder_is_deliberate_choice:
-                    # A pinned/classifier-selected rung is a deliberate routing choice: don't
-                    # re-route it, but still tell it which tool to use if it isn't already the
-                    # governed-operations rung.
-                    rung = runner_ladder[0] if runner_ladder else None
-                    if getattr(rung, "write_surface", WRITE_SURFACE_AGENT) != WRITE_SURFACE_OPERATIONS:
-                        brief = brief + QUEST_DATA_WRITE_SURFACE_INSTRUCTION
-                else:
-                    narrowed_ladder = ladder_for_quest_data(runner_ladder)
-                    if narrowed_ladder != runner_ladder:
-                        dropped = [
-                            r for r in runner_ladder
-                            if getattr(r, "write_surface", WRITE_SURFACE_AGENT) == WRITE_SURFACE_FILES
-                        ]
-                        log.info(
-                            "Quest-data ladder guard: dropped %d file-editing rung(s) "
-                            "(a file edit cannot change quest data); narrowed ladder to %d "
-                            "rung(s) with write_surface=%s",
-                            len(dropped), len(narrowed_ladder),
-                            [getattr(r, "write_surface", WRITE_SURFACE_AGENT) for r in narrowed_ladder],
-                        )
-                        runner_ladder = narrowed_ladder
-                    if not any(
-                        getattr(r, "write_surface", WRITE_SURFACE_AGENT) == WRITE_SURFACE_OPERATIONS
-                        for r in runner_ladder
-                    ):
-                        # No governed-operations rung survived: the agent worker still runs the
-                        # goal, but must be told which tool to use instead of writing code.
-                        brief = brief + QUEST_DATA_WRITE_SURFACE_INSTRUCTION
+                runner_ladder, brief = apply_quest_data_ladder_guard(
+                    runner_ladder, brief, deliberate_choice=ladder_is_deliberate_choice
+                )
 
             # The TERMINAL rung — the runner that has the last word on this goal, and the one whose
             # channel the brief's FUTURE-CONTEXT ask is written for. With the default one-rung
