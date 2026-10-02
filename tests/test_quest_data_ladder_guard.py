@@ -8,8 +8,10 @@ from quest_ai_runner.core.adapters import (
 )
 from quest_ai_runner.core.orchestrator import (
     QUEST_DATA_WRITE_SURFACE_INSTRUCTION,
+    OrchestratorConfig,
     apply_quest_data_ladder_guard,
     ladder_for_quest_data,
+    normalize_decision,
 )
 
 
@@ -74,3 +76,31 @@ def test_deliberate_ops_rung_needs_no_instruction():
     ladder, brief = apply_quest_data_ladder_guard([ops], "BRIEF", deliberate_choice=True)
     assert ladder == [ops]
     assert brief == "BRIEF"
+
+
+def test_a_ladder_of_only_file_rungs_becomes_the_nothing_wired_placeholder():
+    # Dropping the only rung must not leave an empty ladder: the call site reads ladder[-1], and
+    # ``[None]`` is the existing "nothing can execute this" placeholder that reports honestly.
+    ladder, brief = apply_quest_data_ladder_guard([files], "BRIEF", deliberate_choice=False)
+    assert ladder == [None]
+    assert brief.endswith(QUEST_DATA_WRITE_SURFACE_INSTRUCTION)
+
+
+# ---------------------------------------------------------------------------
+# The planner field the guard reads: strict values, fail-safe on anything else.
+# ---------------------------------------------------------------------------
+
+def test_deep_target_parses_known_values():
+    for value in ("quest_data", "code_or_files", "other", " Quest_Data "):
+        d = normalize_decision(
+            {"action": "deep", "rationale": "r", "goal": "g", "deep_target": value},
+            OrchestratorConfig())
+        assert d.deep_target == value.strip().lower()
+
+
+def test_deep_target_absent_or_garbage_is_none():
+    for raw in ({}, {"deep_target": None}, {"deep_target": "quest"}, {"deep_target": 7},
+                {"deep_target": ""}):
+        d = normalize_decision({"action": "deep", "rationale": "r", "goal": "g", **raw},
+                               OrchestratorConfig())
+        assert d.deep_target is None

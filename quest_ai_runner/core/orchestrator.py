@@ -526,10 +526,14 @@ DEEP FAN-OUT (optional, for "deep"): if the work splits into INDEPENDENT subtask
 
 --- RECENT TRANSCRIPT (prior completed exchanges, most recent last) ---
 NOTE: The transcript shows COMPLETED PRIOR WORK. The USER'S MESSAGE above is the NEW, CURRENT
-REQUEST. Focus entirely on that message. Do NOT redo or continue prior tasks unless the user
-explicitly asks you to. EXCEPTION: when the message is a DIRECT FOLLOW-UP about what you JUST said
-(e.g. "what's the filepath?", "which one?", "say that again"), the transcript is exactly where the
-answer lives -- use it and answer from it instead of re-searching the corpus.
+REQUEST, and it is the LATEST thing the person said, so it TAKES PRIORITY. Where it disagrees with,
+redirects, narrows or replaces an earlier request in the transcript, follow the latest message and
+drop the earlier reading of what to do. Carry on with an earlier request ONLY where it is not yet
+completed AND nothing later contradicts it. Work the transcript shows as already done IS done: do
+not run it again, and if they are asking about it, say what it produced. EXCEPTION: when the message
+is a DIRECT FOLLOW-UP about what you JUST said (e.g. "what's the filepath?", "which one?", "say that
+again"), the transcript is exactly where the answer lives -- use it and answer from it instead of
+re-searching the corpus.
 {transcript}
 
 --- CONTEXT (compact; LOCATES content, does NOT replace reading it) ---
@@ -2111,6 +2115,13 @@ def apply_quest_data_ladder_guard(
             len(dropped), len(narrowed), [surface(r) for r in narrowed],
         )
         ladder = narrowed
+    if not ladder:
+        # Every rung could only edit files (a file-editing rung wired with no worker behind it).
+        # ``[None]`` is the ladder's own "nothing can execute this" placeholder, which _do_run
+        # reports honestly; leaving it empty would raise on ``runner_ladder[-1]`` at the call site.
+        log.info("Quest-data ladder guard: no rung can change quest data, so this goal has "
+                 "nothing to execute it")
+        ladder = [None]
     if not any(surface(r) == WRITE_SURFACE_OPERATIONS for r in ladder):
         # No governed-operations rung survived: the agent worker still runs the goal, but must be
         # told which tool to use instead of writing code.

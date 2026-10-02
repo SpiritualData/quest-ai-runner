@@ -156,7 +156,7 @@ def test_standard_send_quest_email_calls_quest_client():
 def test_build_registry_standard_tool_needs_quest_credentials():
     assert build_tool_registry({}).names() == []
     env = {"QUEST_BASE_URL": "https://api.example.org", "QUEST_API_KEY": "qsk_x"}
-    assert build_tool_registry(env).names() == ["send_quest_email"]
+    assert sorted(build_tool_registry(env).names()) == ["send_quest_email", "update_quest_fields"]
     assert build_tool_registry({**env, "QAR_STANDARD_TOOLS": "0"}).names() == []
 
 
@@ -195,7 +195,8 @@ def test_toml_custom_command_tool_and_standard_override(tmp_path):
     env = {"QUEST_BASE_URL": "https://api.example.org", "QUEST_API_KEY": "qsk_x",
            "QAR_TOOLS_FILE": str(toml)}
     reg = build_tool_registry(env)
-    assert sorted(reg.names()) == ["queue_email_for_review", "send_quest_email"]
+    assert sorted(reg.names()) == ["queue_email_for_review", "send_quest_email",
+                                   "update_quest_fields"]
     std = reg.get("send_quest_email")
     assert std.defaults == {"quest_id": "quest_default"}
     assert "default quest" in std.when_to_use
@@ -421,7 +422,8 @@ def test_build_orchestrator_wires_tools_from_config_credentials(monkeypatch):
     monkeypatch.delenv("QUEST_API_URL", raising=False)
     monkeypatch.delenv("QUEST_API_KEY", raising=False)
     cfg = RunnerConfig(quest_base_url="https://api.example.org", quest_api_key="qsk_test")
-    assert resolve_tool_registry(cfg).names() == ["send_quest_email"]
+    assert sorted(resolve_tool_registry(cfg).names()) == ["send_quest_email",
+                                                          "update_quest_fields"]
     # a registry wired in code wins, including an empty one (= no tools)
     cfg.tool_registry = ToolRegistry()
     assert resolve_tool_registry(cfg).names() == []

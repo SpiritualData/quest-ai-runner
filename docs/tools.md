@@ -8,7 +8,11 @@ catalog as shell commands, so it never has to write its own script for a job a t
 There are two kinds, and the model sees both side by side:
 
 - **Standard tools** ship with the library and are on by default for every deployment whose
-  credentials they need are present. Today: `send_quest_email` (needs Quest credentials).
+  credentials they need are present. Today: `send_quest_email` and `update_quest_fields`
+  (both need Quest credentials). `update_quest_fields` is the ONLY way a quest's own fields
+  (outcome/vision statement, acceptance criteria, current state, preferences, purpose,
+  quest goal, completion criteria) change: a field update is never a code or file edit, and
+  the orchestrator's quest-data ladder guard keeps the file-editing deep rungs off that work.
 - **Custom tools** are yours, declared in a TOML file: any command or Python function, described
   with when to use it and when not to.
 
@@ -38,7 +42,7 @@ Safeguards in the loop:
 |---|---|
 | `QAR_STANDARD_TOOLS` | `0` turns every standard tool off. Default on. |
 | `QAR_TOOLS_FILE` | One or more TOML files (`:`-separated) of custom tools and standard-tool overrides. |
-| `QUEST_BASE_URL` (or `QUEST_API_URL`), `QUEST_API_KEY` | Enable `send_quest_email`. A lane configured by file falls back to its `quest_base_url` / `quest_api_key`. |
+| `QUEST_BASE_URL` (or `QUEST_API_URL`), `QUEST_API_KEY` | Enable `send_quest_email` and `update_quest_fields`. A lane configured by file falls back to its `quest_base_url` / `quest_api_key`. |
 
 A consumer building its own `RunnerConfig` can instead pass a ready `ToolRegistry` as
 `RunnerConfig.tool_registry` (from `quest_ai_runner.core.tools`); that wins over the env.

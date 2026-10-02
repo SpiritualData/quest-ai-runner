@@ -7,6 +7,19 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **A quest field update is a tool call, never generated code.** New standard tool
+  `update_quest_fields` (on whenever Quest credentials are present) writes a quest's own fields
+  (`outcome`, `acceptance_criteria`, `current_state`, `preferences`, `purpose`, `quest_goal`,
+  `quest_completion_criteria`) through Quest's governed field route, passes the caller's structured
+  `user_asked_for_this_field` verdict straight through as `userRequested`, refuses any other field
+  name without calling the API, and reports a change the backend held for the owner's approval as
+  NOT applied rather than as a save. Alongside it, the planner now sets `deep_target`
+  (`quest_data` | `code_or_files` | `other`) on a deep decision, every deep runner declares a
+  `write_surface` (`files` | `operations` | `agent`), and `apply_quest_data_ladder_guard` drops
+  file-editing rungs from a quest-data goal, prefers a governed-operations rung, and otherwise tells
+  the agent worker in its brief to use the tool rather than write code. Tests:
+  `tests/test_quest_data_ladder_guard.py`, `tests/test_update_quest_fields_tool.py`.
+
 - **Deep runs report the model id they resolved to, and replies report their tier.** `DeepResult.resolved_model` is read from the run's own session record (`sonnet` -> `claude-sonnet-...`); the terminal's run record and footer, the task's done note, and a structured `deep_run_model` / `response_model` progress event all show tier plus full id.
 - **Opt-in unrestricted Google Chat: `[google_chat] all_spaces = true`.** The safe default (an
   explicit `space_names` allowlist, fails closed) is unchanged. With `all_spaces = true`,
@@ -157,6 +170,17 @@ All notable changes to this project are documented here. The format is based on
 - **A task's explicit `start_at` is honoured as the backend's own hold**: `_due_now_locally` treats a
   task carrying `start_at` as due (the backend only returns it once that instant has passed), so a
   runner in a different timezone from the person no longer re-holds it by its own wall clock.
+
+### Changed
+- **The planner is told the latest message wins.** The RECENT TRANSCRIPT note now says the user's
+  newest message takes priority where it disagrees with, redirects, narrows or replaces an earlier
+  request; an earlier request is only carried on when it is unfinished and nothing later
+  contradicts it; and work the transcript shows as done is not run again.
+- **The bundled default quest instructions** say the quest's measurable outcomes and its
+  outcome/vision statement are the person's own words: not to be rewritten, and not to be proposed
+  for rewriting unless the person asks, with each new goal carrying its own measurable completion
+  criterion instead. Matches quest-backend's `DEFAULT_QUEST_INSTRUCTIONS` verbatim, as its runner
+  contract test requires.
 
 ### Fixed
 - **`ClaudeCliProvider`'s neutral scratch directory was cached forever, so a task failed with

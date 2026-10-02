@@ -18,8 +18,9 @@ Three ideas, all generic (nothing here knows about any org):
     ``{"tools": "<query>"}`` read. ``invoke`` validates, fills context/default arguments, runs with
     a timeout, and NEVER raises: a failure comes back as a ``ToolResult`` the loop records.
   * ``build_tool_registry(env)`` is the ONE standard way a deployment gets its catalog: the
-    standard tools every QAR user has (``send_quest_email`` whenever Quest credentials are
-    configured), plus custom tools declared in TOML files named by ``QAR_TOOLS_FILE``. A custom
+    standard tools every QAR user has (``send_quest_email`` and ``update_quest_fields`` whenever
+    Quest credentials are configured), plus custom tools declared in TOML files named by
+    ``QAR_TOOLS_FILE``. A custom
     tool is either a command (any executable, arguments passed as flags or JSON on stdin) or a
     Python ``module:function`` handler, and it appears in the same catalog, with the same
     when-to-use / when-not-to-use contract, as the standard ones.
@@ -519,8 +520,118 @@ def send_quest_email_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
     )
 
 
+# The quest fields this tool may write: the ones the quest API's field route accepts as "fields the
+# AI has set" (QuestClient.edit_quest_field). Narrow on purpose. A quest's measurable outcomes are
+# deliberately NOT here: they are a structured checklist with its own flow in the app, and a run
+# that wants one adds it there, not by overwriting the person's list from a brief.
+QUEST_WRITABLE_FIELDS = (
+    "outcome", "acceptance_criteria", "current_state", "preferences", "purpose",
+    "quest_goal", "quest_completion_criteria",
+)
+
+
+def update_quest_fields_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
+    """The standard quest FIELD UPDATE path: ``PATCH /api/quests/{id}/field`` through QuestClient.
+
+    WHY IT IS A TOOL. A quest field change is one API call, and before this it had no first-class
+    way to happen: a turn that wanted one fell through to a deep run, i.e. a full coding agent
+    writing code or editing files to accomplish a data edit it could not actually reach that way.
+    Joshua, 2026-10-01: "AI generated code should never be used for quest field updates, qar has a
+    specific tool for that for field update requests." This is that tool, and the orchestrator's
+    quest-data ladder guard keeps the code-writing rungs off the same work.
+
+    HONEST BY CONSTRUCTION. ``user_asked_for_this_field`` is passed straight through to the API as
+    ``userRequested``; the backend's AI field-write gate may answer "not applied, here is a
+    decision for the owner to approve" instead of writing, and this tool reports that as NOT
+    written rather than as a save (see ``QuestClient.edit_quest_field``).
+    """
+    factory = client_factory or (lambda: quest_client_from_env(env))
+
+    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        quest_id = args.get("quest_id") or ctx.quest_id
+        if not quest_id:
+            return ToolResult(ok=False, text="No quest was named, so there is nothing to update.")
+        fields = args.get("fields")
+        if not isinstance(fields, dict) or not fields:
+            return ToolResult(ok=False, text="No fields were given, so nothing was written.")
+        unknown = [name for name in fields if name not in QUEST_WRITABLE_FIELDS]
+        if unknown:
+            return ToolResult(
+                ok=False,
+                text=(f"Refused: {', '.join(sorted(unknown))} cannot be written here. This tool "
+                      f"writes only {', '.join(QUEST_WRITABLE_FIELDS)}. Measurable outcomes are "
+                      f"managed through Quest's own measurable-outcome flow, not by overwriting "
+                      f"them from here."))
+        requested = bool(args.get("user_asked_for_this_field"))
+        client = factory()
+        result = client.edit_quest_field(str(quest_id), fields,
+                                         actor="ai", user_requested=requested)
+        names = ", ".join(sorted(fields))
+        if not result:
+            return ToolResult(ok=False, data=result,
+                              text=f"Nothing was written: the update of {names} on quest "
+                                   f"{quest_id} failed.")
+        if isinstance(result, dict) and result.get("applied") is False:
+            reason = result.get("reason") or result.get("message") or "it needs the owner's approval"
+            return ToolResult(ok=True, data=result,
+                              text=(f"NOT applied: {names} on quest {quest_id} was not changed "
+                                    f"({reason}). It is now an ask for the owner to approve, so "
+                                    f"the field still reads exactly as it did."))
+        return ToolResult(ok=True, data=result,
+                          text=f"Updated {names} on quest {quest_id}.")
+
+    return ToolSpec(
+        name="update_quest_fields",
+        handler=handler,
+        description=("Update a field of a quest through Quest's own governed field-update route: "
+                     "its outcome (the vision statement), acceptance criteria, current state, "
+                     "preferences, purpose, quest goal or completion criteria."),
+        when_to_use=("The user explicitly asked to change one of their quest's own fields, for "
+                     "example 'change my outcome to ...', 'update my current state', 'set my "
+                     "acceptance criteria to ...'. This is the ONLY way a quest field changes: "
+                     "never write code, edit a file, or run a coding agent to do it."),
+        when_not_to_use=("The user did not ask for THAT field to change in this message. Do not "
+                         "rewrite a quest's existing outcome, vision statement, acceptance "
+                         "criteria or measurable outcomes off the back of small work inside the "
+                         "quest (a task, a progress note, one new goal): suggest it instead, and "
+                         "give a new goal its own measurable criterion. Not for code or file "
+                         "changes of any kind."),
+        parameters={
+            "type": "object",
+            "required": ["fields"],
+            "properties": {
+                "quest_id": {"type": "string",
+                             "description": "Quest to update (defaults to this chat's quest)."},
+                "fields": {
+                    "type": "object",
+                    "description": ("Field name to its FULL new text, one entry per field. "
+                                    "Allowed names: " + ", ".join(QUEST_WRITABLE_FIELDS) + ". "
+                                    "Merge new information into the current value rather than "
+                                    "replacing it with a fragment."),
+                },
+                "user_asked_for_this_field": {
+                    "type": "boolean",
+                    "description": ("True ONLY when the user's own message explicitly asked for "
+                                    "THIS field to change. It is a verdict you already hold from "
+                                    "what they said, never something to read out of your own "
+                                    "wording. False means the change is offered for the owner to "
+                                    "approve instead of being applied."),
+                },
+            },
+        },
+        mutates=True,
+        origin="standard",
+        keywords=("quest", "field", "outcome", "vision", "current state", "preferences",
+                  "acceptance criteria", "purpose", "update", "change", "set"),
+        context_args={"quest_id": "quest_id"},
+        timeout_seconds=45.0,
+    )
+
+
 STANDARD_TOOL_BUILDERS: Dict[str, Callable[[Mapping[str, str]], Optional[ToolSpec]]] = {
     "send_quest_email": lambda env: send_quest_email_spec(env) if quest_credentials_present(env) else None,
+    "update_quest_fields": lambda env: (update_quest_fields_spec(env)
+                                        if quest_credentials_present(env) else None),
 }
 
 

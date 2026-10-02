@@ -916,7 +916,9 @@ def test_loop_feeds_lean_view_to_planner_on_replan():
 
 # --- cross-step repeat-context leaning (abbreviate unchanged transcript + context_view) ----------
 
-_TRANSCRIPT = "USER: earlier thing\nASSISTANT: earlier reply\nUSER: the latest message"
+_TRANSCRIPT = "USER: earlier thing\nASSISTANT: earlier reply\nUSER: TRANSCRIPT-TAIL-MARKER"
+# A sentinel, not prose: the planner prompt's own static note now talks about the latest
+# message taking priority, so a natural-language marker here would match that too.
 _CONTEXT = "CONTEXT-MARKER: a long static context block that locates lots of content"
 
 
@@ -940,7 +942,7 @@ def test_repeat_context_off_resends_full_on_replan():
     assert len(provider.plan_prompts) == 4
     for p in provider.plan_prompts[:2]:
         assert _CONTEXT in p
-        assert "the latest message" in p             # full transcript present each step
+        assert "TRANSCRIPT-TAIL-MARKER" in p             # full transcript present each step
     assert "unchanged since step 1" not in provider.plan_prompts[0]
     assert "unchanged since step 1" not in provider.plan_prompts[1]
 
@@ -960,11 +962,11 @@ def test_repeat_context_on_step1_full_replan_abbreviated():
     step1, replan = provider.plan_prompts[0], provider.plan_prompts[1]
     # Step 1: full context + transcript.
     assert _CONTEXT in step1
-    assert "the latest message" in step1
+    assert "TRANSCRIPT-TAIL-MARKER" in step1
     assert "unchanged since step 1" not in step1
     # Re-plan: the unchanged context + transcript are replaced by reference notes.
     assert _CONTEXT not in replan
-    assert "the latest message" not in replan
+    assert "TRANSCRIPT-TAIL-MARKER" not in replan
     assert "unchanged since step 1" in replan
 
 
@@ -978,7 +980,7 @@ def test_repeat_context_on_answer_still_gets_full_context():
     assert res.kind == "answer"
     grounding = "\n".join(m["content"] for m in provider.last_answer_messages)
     assert _CONTEXT in grounding                       # full context_view reaches the answer
-    assert "the latest message" in grounding           # full transcript reaches the answer
+    assert "TRANSCRIPT-TAIL-MARKER" in grounding           # full transcript reaches the answer
     assert "unchanged since step 1" not in grounding   # no abbreviation leaks into the answer
 
 
