@@ -60,6 +60,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from ..core.adapters import (
     EVENT_EXEC,
     FUTURE_CONTEXT_VIA_FIELD,
+    WRITE_SURFACE_FILES,
     DeepResult,
     DeepRunnerBase,
     FileWriter,
@@ -221,6 +222,9 @@ class FastEditRunner(DeepRunnerBase):
     # facts (which files changed) exactly and for free, so it fills ``future_context`` itself
     # rather than being asked to append a section to its payload.
     future_context_channel = FUTURE_CONTEXT_VIA_FIELD
+
+    # This rung can only change files on disk -- it can never satisfy a quest-data change.
+    write_surface = WRITE_SURFACE_FILES
 
     def __init__(self, *, provider: ModelProvider, writer: FileWriter,
                  registry: Optional[ModelRegistry] = None,

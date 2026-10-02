@@ -22,6 +22,9 @@ from .adapters import (
     EVENT_UNDERSTANDING,
     FUTURE_CONTEXT_VIA_FIELD,
     FUTURE_CONTEXT_VIA_OUTPUT,
+    WRITE_SURFACE_AGENT,
+    WRITE_SURFACE_FILES,
+    WRITE_SURFACE_OPERATIONS,
     SURFACING_EVENTS,
     ConversationContext,
     ConversationStore,
@@ -129,6 +132,7 @@ __all__ = [
     "RetrievalAdapterBase", "ModelProviderBase", "DeepRunnerBase", "EscalationSinkBase",
     "Observation", "PlanDecision", "DeepResult", "Escalation",
     "FUTURE_CONTEXT_VIA_OUTPUT", "FUTURE_CONTEXT_VIA_FIELD",
+    "WRITE_SURFACE_FILES", "WRITE_SURFACE_OPERATIONS", "WRITE_SURFACE_AGENT",
     # two product modes + streaming/progress interface
     "Mode", "ProgressEvent", "ProgressSink", "ProgressSinkBase",
     "StreamSink", "MilestoneSink", "FanoutSink", "SURFACING_EVENTS",

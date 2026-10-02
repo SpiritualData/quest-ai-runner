@@ -56,6 +56,7 @@ from typing import Any, Callable, Dict, List, Optional
 from ..core.adapters import (
     EVENT_EXEC,
     FUTURE_CONTEXT_VIA_FIELD,
+    WRITE_SURFACE_OPERATIONS,
     DeepResult,
     DeepRunnerBase,
     ModelProvider,
@@ -132,6 +133,10 @@ class MCPOperationRunner(DeepRunnerBase):
     # facts (which operation ran, with what args) exactly and for free -- same reasoning as
     # FastEditRunner's future_context_channel.
     future_context_channel = FUTURE_CONTEXT_VIA_FIELD
+
+    # This rung changes data only through named, governed operations -- the right rung for a
+    # quest-data change.
+    write_surface = WRITE_SURFACE_OPERATIONS
 
     def __init__(self, *, provider: ModelProvider, writer: OperationWriter,
                  registry: Optional[ModelRegistry] = None,

@@ -332,6 +332,11 @@ class PlanDecision:
     # one (see core/deep_model_selection.py). None = not assessed; the ladder is then unchanged.
     deep_difficulty: Optional[str] = None
     deep_difficulty_reason: Optional[str] = None  # one short clause, logged with the choice
+    # WHAT a "deep" (or deferred_deep) change lands on, judged on the same planning call (zero
+    # extra LLM calls): "quest_data" | "code_or_files" | "other" | None. "quest_data" gates the
+    # deep-runner ladder (see ladder_for_quest_data in core/orchestrator.py) so a quest-data
+    # change never lands on a file-editing rung. None = not assessed; the ladder is unchanged.
+    deep_target: Optional[str] = None
     subquestions: List[str] = field(default_factory=list)
     deep_subtasks: List[Dict[str, Any]] = field(default_factory=list)
     rationale: str = ""
@@ -442,6 +447,16 @@ class DeepResult:
 # schema it touched), so it is never opted out, only routed away from its payload.
 FUTURE_CONTEXT_VIA_OUTPUT = "output"   # DEFAULT: worker ends its prose output with the delimiter
 FUTURE_CONTEXT_VIA_FIELD = "field"     # strict-format runner: worker fills DeepResult.future_context
+
+
+# What a deep runner's WRITE SURFACE is: what kind of change it is capable of making. Declared per
+# runner as ``DeepRunner.write_surface`` (default ``WRITE_SURFACE_AGENT`` on ``DeepRunnerBase``, so
+# an existing third-party runner behaves exactly as today). This is what lets the orchestrator tell
+# a rung that can only edit files apart from one that changes data through a governed operation --
+# a quest-data change must never be satisfied by a file-editing rung standing in for one.
+WRITE_SURFACE_FILES = "files"            # the rung can only change files on disk
+WRITE_SURFACE_OPERATIONS = "operations"  # the rung changes data through named, governed operations
+WRITE_SURFACE_AGENT = "agent"            # a full agent: can do either, including writing code
 
 
 @dataclass
@@ -677,6 +692,14 @@ class DeepRunner(Protocol):
     learns from. See ``DeepRunnerBase.future_context_channel`` for the full contract. It is read with
     ``getattr(..., default)``, so it is deliberately NOT a required Protocol member: a runner that
     never declares it keeps today's prose behaviour.
+
+    OPTIONAL attribute ``write_surface`` (one of ``WRITE_SURFACE_FILES``, ``WRITE_SURFACE_OPERATIONS``,
+    ``WRITE_SURFACE_AGENT``; ``WRITE_SURFACE_AGENT`` by default): declares WHAT KIND of change this
+    rung is capable of making -- files on disk only, named governed operations only, or (the
+    full-agent default) either, including writing code. The orchestrator reads it with
+    ``getattr(..., WRITE_SURFACE_AGENT)`` to keep a quest-data change off a rung that cannot satisfy
+    it (see ``ladder_for_quest_data`` in ``core/orchestrator.py``). A runner that never declares it
+    is treated as a full agent, i.e. today's behaviour.
     """
 
     def run_goal(
@@ -1377,6 +1400,11 @@ class DeepRunnerBase(abc.ABC):
     # learning from exactly those turns. Read generically with ``getattr(runner,
     # "future_context_channel", FUTURE_CONTEXT_VIA_OUTPUT)``, so duck-typed runners keep working.
     future_context_channel: str = FUTURE_CONTEXT_VIA_OUTPUT
+
+    # What kind of change THIS runner is capable of making (see WRITE_SURFACE_* above). Default is
+    # the full agent, so an existing third-party runner that never sets this behaves exactly as
+    # today -- only the two bounded rungs (FastEditRunner, MCPOperationRunner) narrow it.
+    write_surface: str = WRITE_SURFACE_AGENT
 
     @abc.abstractmethod
     def run_goal(self, *, goal, brief, model=None, max_turns=None, emit=None,

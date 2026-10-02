@@ -65,6 +65,9 @@ from .adapters import (
     EVENT_UNDERSTANDING,
     FUTURE_CONTEXT_VIA_FIELD,
     FUTURE_CONTEXT_VIA_OUTPUT,
+    WRITE_SURFACE_AGENT,
+    WRITE_SURFACE_FILES,
+    WRITE_SURFACE_OPERATIONS,
     ContextAssembler,
     ConversationStore,
     DeepResult,
@@ -456,8 +459,15 @@ The four actions:
     or artifacts -- CREATE / ADD / UPDATE / EDIT / DELETE / MARK / SET (e.g. "add a goal", "add a
     measurable outcome", "make this goal more ambitious", "update my X", "create a strategy") -- AND
     code or files: FIX a bug, IMPLEMENT / BUILD / REFACTOR a feature, EDIT or APPLY a change to a
-    file (e.g. "fix the back button", "implement the new endpoint", "add a field to the form"). A
-    coding/file task is ALWAYS "deep": the deep runner edits the real files, so never "answer" a
+    file (e.g. "fix the back button", "implement the new endpoint", "add a field to the form").
+    DEEP TARGET (`deep_target`): when you choose "deep" (or fill `deferred_deep`), set WHAT the
+    change lands on. "quest_data" = the person's own quest records and fields -- the quest's
+    outcome or vision statement, measurable outcomes (like "add a measurable outcome" above),
+    acceptance criteria, current state, preferences, goals, habits, collection entries: these
+    change through Quest's own field-update operation or tool, NEVER by writing code or editing
+    files. "code_or_files" = a change to code, config or files in a repo or corpus (the file
+    examples just above). "other" or leave it null when neither fits.
+    A coding/file task is ALWAYS "deep": the deep runner edits the real files, so never "answer" a
     change request by describing the fix or emitting a patch. This holds even
     mutation must be PROPOSED/EXECUTED, never merely talked about. Provide BOTH `goal` and
     `deep_brief`, and KEEP THEM DISTINCT:
@@ -895,6 +905,19 @@ DECIDE_TOOL: Dict[str, Any] = {
             "deep_difficulty_reason": {
                 "type": ["string", "null"],
                 "description": "One short clause explaining deep_difficulty.",
+            },
+            "deep_target": {
+                "type": ["string", "null"],
+                "enum": ["quest_data", "code_or_files", "other", None],
+                "description": "When action='deep' or deferred_deep is set: WHAT the change "
+                               "lands on. 'quest_data' = the person's own Quest records and "
+                               "fields (the quest's outcome or vision statement, measurable "
+                               "outcomes, acceptance criteria, current state, preferences, "
+                               "goals, habits, collection entries): these change through "
+                               "Quest's own field-update operation or tool, NEVER by writing "
+                               "code or editing files. 'code_or_files' = a change to code, "
+                               "config or files in a repo or corpus. 'other' or null when "
+                               "neither fits.",
             },
             "subquestions": {"type": "array", "items": {"type": "string"}},
             "deep_subtasks": {
@@ -1558,6 +1581,17 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
     else:
         mode_signal = mode_signal.strip().lower()
 
+    # Deep target: what a "deep" (or deferred_deep) change lands on. Same fail-safe shape as
+    # deep_difficulty/mode_signal above -- anything that is not exactly one of the three enum
+    # values (wrong type, empty, garbage, a hallucinated word) normalizes to None, so a detection
+    # failure never changes ladder routing.
+    deep_target_raw = raw.get("deep_target")
+    if isinstance(deep_target_raw, str) and deep_target_raw.strip().lower() in (
+            "quest_data", "code_or_files", "other"):
+        deep_target = deep_target_raw.strip().lower()
+    else:
+        deep_target = None
+
     # Card thread (per-idea threading): only read when the consumer opted in. Kept RAW here (the
     # string the planner emitted); ``core.card_thread.parse_card_thread`` resolves and fail-safes it
     # in run(), where the candidate ids that make an id "known" are in hand. A non-string is dropped
@@ -1597,6 +1631,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
         deep_difficulty_reason=(str(raw.get("deep_difficulty_reason")).strip()[:300]
                                 if isinstance(raw.get("deep_difficulty_reason"), str)
                                 and raw.get("deep_difficulty_reason").strip() else None),
+        deep_target=deep_target,
         subquestions=subs,
         deep_subtasks=deep_subs,
         rationale=(raw.get("rationale") or "").strip(),
@@ -2005,6 +2040,45 @@ DEEP_FUTURE_CONTEXT_FIELD_INSTRUCTION = (
     + "\nAlso name the entities and schema you touched. If nothing is worth remembering, return "
     "'- (none)'. Do not use em dashes; use a comma, a colon, or parentheses instead."
 )
+
+# Appended to a deep process's brief ONLY when the plan's `deep_target == "quest_data"` and the
+# ladder guard (``ladder_for_quest_data`` below) could not narrow the ladder to a governed-
+# operations rung (either nothing on the ladder has that write surface, or the rung was a
+# deliberate runner_override/classifier choice this guard does not re-route). The agent worker
+# still runs the goal, but must be told, in no uncertain terms, which tool to use: a quest field
+# update must go through Quest's own field-update tool/operation, never through generated code or
+# a hand-edited file. (Joshua, 2026-10-01: "AI generated code should never be used for quest field
+# updates, qar has a specific tool for that for field update requests.")
+QUEST_DATA_WRITE_SURFACE_INSTRUCTION = (
+    "\n\n--- THIS CHANGE IS TO THE PERSON'S OWN QUEST DATA ---\n"
+    "Make this change through Quest's own field-update tool or operation (for example the "
+    "`update_quest_fields` tool in the DIRECT TOOLS block below), not by writing code, editing "
+    "files, or hand-editing data. If no such tool is available to you, stop and report that back "
+    "instead of improvising a file or code based substitute."
+)
+
+
+def ladder_for_quest_data(ladder: List[Any]) -> List[Any]:
+    """Narrow a deep-runner ladder to rungs that can actually satisfy a QUEST-DATA change.
+
+    Called only when the plan's ``deep_target == "quest_data"`` (the person's own Quest records
+    and fields: outcome/vision statement, measurable outcomes, acceptance criteria, current
+    state, preferences, goals, habits, collection entries).
+
+    A rung whose ``write_surface`` is ``WRITE_SURFACE_FILES`` can only change files on disk, so it
+    is dropped outright -- a file edit can never change quest data and must never stand in for
+    one. If any ``WRITE_SURFACE_OPERATIONS`` rung remains after that, keep ONLY those: a quest
+    field update goes through the governed operation, never through generated code. Otherwise,
+    keep the remaining rungs (the full-agent worker) unchanged, so the goal can still be executed
+    -- the caller is responsible for telling that worker, via the brief, which tool to use.
+
+    ``write_surface`` is read with ``getattr(rung, "write_surface", WRITE_SURFACE_AGENT)`` so a
+    rung (including ``None``, the "nothing wired" placeholder) that never declares it is treated
+    as a full agent, i.e. unaffected by this guard.
+    """
+    kept = [r for r in ladder if getattr(r, "write_surface", WRITE_SURFACE_AGENT) != WRITE_SURFACE_FILES]
+    operations_only = [r for r in kept if getattr(r, "write_surface", WRITE_SURFACE_AGENT) == WRITE_SURFACE_OPERATIONS]
+    return operations_only if operations_only else kept
 
 # The updater's ONE LLM call. It is given the request, what executed, the parsed future-context
 # section, and the user's CURRENT relevant cards, and must return a STRUCTURED edit plan as JSON.
@@ -6419,6 +6493,12 @@ class Orchestrator:
             # cheaper rung would override a choice the caller/consumer already made.
             runner_ladder: List[Any] = ([runner_override] if runner_override is not None
                                         else list(self.deep_runner_ladder))
+            # True once the ladder has been narrowed to ONE rung by a DELIBERATE routing choice
+            # (a pinned ``runner_override``, or the classifier matching a named runner) rather
+            # than the default multi-rung ladder. The quest-data guard below must not re-route
+            # either of those -- they are the caller's/consumer's own choice of where this goal
+            # belongs -- but it still appends its brief instruction to them when needed.
+            ladder_is_deliberate_choice = runner_override is not None
             if (runner_override is None and self.deep_runners
                     and self.deep_runner_classifier is not None):
                 try:
@@ -6436,6 +6516,7 @@ class Orchestrator:
                         )
                     elif key in self.deep_runners:
                         runner_ladder = [self.deep_runners[key]]
+                        ladder_is_deliberate_choice = True
                         log.debug(f"deep_runner_classifier selected runner {key!r}")
                     else:
                         log.warning(
@@ -6447,6 +6528,42 @@ class Orchestrator:
 
             if not runner_ladder:
                 runner_ladder = [None]  # nothing wired: _do_run reports that honestly, as before
+
+            # QUEST-DATA LADDER GUARD (Joshua, 2026-10-01): a quest-data change must never land on
+            # a rung that can only edit files, and must prefer a governed-operations rung over the
+            # full agent when one is available. Reached only when the planner judged this goal's
+            # target is the person's own Quest data; byte-identical otherwise.
+            if getattr(plan, "deep_target", None) == "quest_data":
+                if ladder_is_deliberate_choice:
+                    # A pinned/classifier-selected rung is a deliberate routing choice: don't
+                    # re-route it, but still tell it which tool to use if it isn't already the
+                    # governed-operations rung.
+                    rung = runner_ladder[0] if runner_ladder else None
+                    if getattr(rung, "write_surface", WRITE_SURFACE_AGENT) != WRITE_SURFACE_OPERATIONS:
+                        brief = brief + QUEST_DATA_WRITE_SURFACE_INSTRUCTION
+                else:
+                    narrowed_ladder = ladder_for_quest_data(runner_ladder)
+                    if narrowed_ladder != runner_ladder:
+                        dropped = [
+                            r for r in runner_ladder
+                            if getattr(r, "write_surface", WRITE_SURFACE_AGENT) == WRITE_SURFACE_FILES
+                        ]
+                        log.info(
+                            "Quest-data ladder guard: dropped %d file-editing rung(s) "
+                            "(a file edit cannot change quest data); narrowed ladder to %d "
+                            "rung(s) with write_surface=%s",
+                            len(dropped), len(narrowed_ladder),
+                            [getattr(r, "write_surface", WRITE_SURFACE_AGENT) for r in narrowed_ladder],
+                        )
+                        runner_ladder = narrowed_ladder
+                    if not any(
+                        getattr(r, "write_surface", WRITE_SURFACE_AGENT) == WRITE_SURFACE_OPERATIONS
+                        for r in runner_ladder
+                    ):
+                        # No governed-operations rung survived: the agent worker still runs the
+                        # goal, but must be told which tool to use instead of writing code.
+                        brief = brief + QUEST_DATA_WRITE_SURFACE_INSTRUCTION
+
             # The TERMINAL rung — the runner that has the last word on this goal, and the one whose
             # channel the brief's FUTURE-CONTEXT ask is written for. With the default one-rung
             # ladder this IS the resolved runner, so nothing changes for any existing consumer. On
