@@ -8,8 +8,10 @@ catalog as shell commands, so it never has to write its own script for a job a t
 There are two kinds, and the model sees both side by side:
 
 - **Standard tools** ship with the library and are on by default for every deployment whose
-  credentials they need are present. Today: `send_quest_email` and `update_quest_fields`
-  (both need Quest credentials). `update_quest_fields` is the ONLY way a quest's own fields
+  credentials they need are present. Today: `send_quest_email`, `file_email_draft` and `update_quest_fields`
+  (all need Quest credentials). `file_email_draft` files one email draft into the key owner's
+  Approval Queue in the Quest app (`POST /api/email-drafts`); nothing is sent until a person
+  approves it there. `update_quest_fields` is the ONLY way a quest's own fields
   (outcome/vision statement, acceptance criteria, current state, preferences, purpose,
   quest goal, completion criteria) change: a field update is never a code or file edit, and
   the orchestrator's quest-data ladder guard keeps the file-editing deep rungs off that work.

@@ -7,6 +7,10 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **File an email draft for human approval.** New standard tool `file_email_draft` (on whenever
+  Quest credentials are present) files one draft into the key owner's Approval Queue in the Quest
+  app through `POST /api/email-drafts` (`QuestClient.create_email_draft`). Nothing is sent; a
+  person approving it in the app sends it through Quest's own send path.
 - **A quest field update is a tool call, never generated code.** New standard tool
   `update_quest_fields` (on whenever Quest credentials are present) writes a quest's own fields
   (`outcome`, `acceptance_criteria`, `current_state`, `preferences`, `purpose`, `quest_goal`,

@@ -1672,6 +1672,28 @@ class QuestClient:
             body_payload["recipients"] = recipients
         return self._request("POST", f"/api/quests/{quest_id}/email", body=body_payload) or {}
 
+    def create_email_draft(self, *, recipient: str, subject: str, body: str,
+                           cc: Optional[List[str]] = None,
+                           task_id: Optional[str] = None) -> Dict[str, Any]:
+        """POST /api/email-drafts - file an email draft into the key owner's Approval Queue.
+
+        NOTHING is sent. The draft waits in the Quest app's Approval Queue (status
+        ``pending_review``) until a person approves it, and only that approval sends it, through
+        Quest's one send path (suppression check, unsubscribe footer, CC screening). The draft
+        belongs to the account the API key authenticates as; the backend never takes the owner
+        from the body. The account's standing Always CC is added by the backend, so callers do
+        not add it. ``task_id`` is recorded as the draft's ``source_task_id`` for tracing.
+
+        RAISES on failure, so a run never believes a draft is waiting when it is not.
+        """
+        self._require()
+        payload: Dict[str, Any] = {"recipient": recipient, "subject": subject, "body": body}
+        if cc:
+            payload["cc"] = cc
+        if task_id:
+            payload["sourceTaskId"] = task_id
+        return self._request("POST", "/api/email-drafts", body=payload) or {}
+
     # --- quest context entries (the quest's own documents; UPDATABLE, unlike notes) ------------
 
     def list_context_entries(self, quest_id: str) -> List[Dict[str, Any]]:

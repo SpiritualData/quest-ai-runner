@@ -18,7 +18,7 @@ Three ideas, all generic (nothing here knows about any org):
     ``{"tools": "<query>"}`` read. ``invoke`` validates, fills context/default arguments, runs with
     a timeout, and NEVER raises: a failure comes back as a ``ToolResult`` the loop records.
   * ``build_tool_registry(env)`` is the ONE standard way a deployment gets its catalog: the
-    standard tools every QAR user has (``send_quest_email`` and ``update_quest_fields`` whenever
+    standard tools every QAR user has (``send_quest_email``, ``file_email_draft`` and ``update_quest_fields`` whenever
     Quest credentials are configured), plus custom tools declared in TOML files named by
     ``QAR_TOOLS_FILE``. A custom
     tool is either a command (any executable, arguments passed as flags or JSON on stdin) or a
@@ -520,6 +520,64 @@ def send_quest_email_spec(env: Mapping[str, str], client_factory=None) -> ToolSp
     )
 
 
+def file_email_draft_spec(env: Mapping[str, str], client_factory=None) -> ToolSpec:
+    """File an email draft into the user's Quest Approval Queue: ``POST /api/email-drafts``.
+
+    Nothing is sent. A person reviews the draft in the Quest app and approving it is what sends
+    it, through Quest's single send path. One draft per recipient: a draft is one message to one
+    person, so several outside readers means several calls.
+    """
+    factory = client_factory or (lambda: quest_client_from_env(env))
+
+    def handler(args: Dict[str, Any], ctx: ToolContext) -> ToolResult:
+        recipient = str(args.get("to") or "").strip()
+        if not recipient:
+            return ToolResult(ok=False, text="No recipient was given, so no draft was filed.")
+        client = factory()
+        result = client.create_email_draft(
+            recipient=recipient, subject=args["subject"], body=args["body"],
+            cc=args.get("cc") or None, task_id=args.get("task_id") or ctx.task_id)
+        draft_id = (result or {}).get("id")
+        if not draft_id:
+            return ToolResult(ok=False, data=result,
+                              text="The draft was not filed: Quest did not return a draft id.")
+        return ToolResult(ok=True, data=result,
+                          text=(f"Filed a draft \"{args['subject']}\" to {recipient} in the "
+                                f"Approval Queue (draft {draft_id}). NOT sent: it goes out only "
+                                f"after the person approves it in the Quest app."))
+
+    return ToolSpec(
+        name="file_email_draft",
+        handler=handler,
+        description=("File an email draft into the user's Approval Queue in the Quest app. "
+                     "Nothing is sent: the person reviews and edits it there, and approving it "
+                     "sends it through Quest's mailer with unsubscribe handling."),
+        when_to_use=("The user asks for an email to someone outside their own team (a donor, "
+                     "partner, applicant, lead, any one-off contact), or asks for a draft to "
+                     "review, or the message is one a person should read before it goes out."),
+        when_not_to_use=("An update to the quest's own people that can go out immediately: use "
+                         "send_quest_email. Never to bulk-mail a list. Never tell the user the "
+                         "email was sent: it is a draft awaiting their approval."),
+        parameters={
+            "type": "object",
+            "required": ["to", "subject", "body"],
+            "properties": {
+                "to": {"type": "string", "description": "The one recipient email address."},
+                "subject": {"type": "string", "description": "Subject line."},
+                "body": {"type": "string",
+                         "description": "Full message body, plain text, ready to send. No em dashes."},
+                "cc": {"type": "array", "items": {"type": "string"},
+                       "description": ("Extra CC addresses. The account's standing Always CC is "
+                                       "added automatically; do not add it yourself.")},
+            },
+        },
+        mutates=True,
+        origin="standard",
+        keywords=("email", "draft", "review", "approval", "queue", "outreach", "external"),
+        timeout_seconds=45.0,
+    )
+
+
 # The quest fields this tool may write: the ones the quest API's field route accepts as "fields the
 # AI has set" (QuestClient.edit_quest_field). Narrow on purpose. A quest's measurable outcomes are
 # deliberately NOT here: they are a structured checklist with its own flow in the app, and a run
@@ -632,6 +690,8 @@ STANDARD_TOOL_BUILDERS: Dict[str, Callable[[Mapping[str, str]], Optional[ToolSpe
     "send_quest_email": lambda env: send_quest_email_spec(env) if quest_credentials_present(env) else None,
     "update_quest_fields": lambda env: (update_quest_fields_spec(env)
                                         if quest_credentials_present(env) else None),
+    "file_email_draft": lambda env: (file_email_draft_spec(env)
+                                     if quest_credentials_present(env) else None),
 }
 
 

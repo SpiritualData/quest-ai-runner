@@ -27,6 +27,7 @@ from quest_ai_runner.core.tools import (
     ToolSpec,
     build_tool_registry,
     command_args_as_flags,
+    file_email_draft_spec,
     send_quest_email_spec,
 )
 
@@ -153,10 +154,52 @@ def test_standard_send_quest_email_calls_quest_client():
                                  task_id="t9", recipients=["j@x.org"])]
 
 
+class FakeDraftClient:
+    def __init__(self, result=None):
+        self.calls = []
+        self.result = {"id": "draft_1", "status": "pending_review"} if result is None else result
+
+    def create_email_draft(self, *, recipient, subject, body, cc=None, task_id=None):
+        self.calls.append(dict(recipient=recipient, subject=subject, body=body, cc=cc,
+                               task_id=task_id))
+        return self.result
+
+
+def test_standard_file_email_draft_files_without_sending():
+    client = FakeDraftClient()
+    reg = ToolRegistry([file_email_draft_spec({}, client_factory=lambda: client)])
+    res = reg.invoke("file_email_draft",
+                     {"to": "donor@x.org", "subject": "Thanks", "body": "Hello", "cc": ["a@x.org"]},
+                     ToolContext(task_id="t9"))
+    assert res.ok and "draft_1" in res.text and "NOT sent" in res.text
+    assert client.calls == [dict(recipient="donor@x.org", subject="Thanks", body="Hello",
+                                 cc=["a@x.org"], task_id="t9")]
+
+
+def test_file_email_draft_without_a_draft_id_is_a_failure():
+    client = FakeDraftClient(result={})
+    reg = ToolRegistry([file_email_draft_spec({}, client_factory=lambda: client)])
+    res = reg.invoke("file_email_draft", {"to": "d@x.org", "subject": "s", "body": "b"})
+    assert not res.ok and "not filed" in res.text
+
+
+def test_quest_client_posts_the_draft_to_the_email_drafts_route():
+    from quest_ai_runner.runner.quest_client import QuestClient
+    seen = {}
+    client = QuestClient(base_url="https://api.example.org", api_key="qsk_x")
+    client._request = lambda method, path, **kw: seen.update(method=method, path=path, **kw) or {"id": "d"}
+    out = client.create_email_draft(recipient="a@x.org", subject="S", body="B", task_id="t1")
+    assert out == {"id": "d"}
+    assert (seen["method"], seen["path"]) == ("POST", "/api/email-drafts")
+    assert seen["body"] == {"recipient": "a@x.org", "subject": "S", "body": "B",
+                            "sourceTaskId": "t1"}
+
+
 def test_build_registry_standard_tool_needs_quest_credentials():
     assert build_tool_registry({}).names() == []
     env = {"QUEST_BASE_URL": "https://api.example.org", "QUEST_API_KEY": "qsk_x"}
-    assert sorted(build_tool_registry(env).names()) == ["send_quest_email", "update_quest_fields"]
+    assert sorted(build_tool_registry(env).names()) == ["file_email_draft", "send_quest_email",
+                                                         "update_quest_fields"]
     assert build_tool_registry({**env, "QAR_STANDARD_TOOLS": "0"}).names() == []
 
 
@@ -195,8 +238,8 @@ def test_toml_custom_command_tool_and_standard_override(tmp_path):
     env = {"QUEST_BASE_URL": "https://api.example.org", "QUEST_API_KEY": "qsk_x",
            "QAR_TOOLS_FILE": str(toml)}
     reg = build_tool_registry(env)
-    assert sorted(reg.names()) == ["queue_email_for_review", "send_quest_email",
-                                   "update_quest_fields"]
+    assert sorted(reg.names()) == ["file_email_draft", "queue_email_for_review",
+                                   "send_quest_email", "update_quest_fields"]
     std = reg.get("send_quest_email")
     assert std.defaults == {"quest_id": "quest_default"}
     assert "default quest" in std.when_to_use
@@ -422,7 +465,7 @@ def test_build_orchestrator_wires_tools_from_config_credentials(monkeypatch):
     monkeypatch.delenv("QUEST_API_URL", raising=False)
     monkeypatch.delenv("QUEST_API_KEY", raising=False)
     cfg = RunnerConfig(quest_base_url="https://api.example.org", quest_api_key="qsk_test")
-    assert sorted(resolve_tool_registry(cfg).names()) == ["send_quest_email",
+    assert sorted(resolve_tool_registry(cfg).names()) == ["file_email_draft", "send_quest_email",
                                                           "update_quest_fields"]
     # a registry wired in code wins, including an empty one (= no tools)
     cfg.tool_registry = ToolRegistry()
