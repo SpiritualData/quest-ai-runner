@@ -228,7 +228,9 @@ def cli_model(model: Optional[str]) -> Optional[str]:
     low = model.strip().lower()
     for fam in _FAMILY_ALIASES:
         if fam in low:
-            return fam
+            # The CLI's own alias can lag a release; prefer the newest live id, alias as fallback.
+            from .claude_live_models import newest_claude_id
+            return newest_claude_id(fam) or fam
     if "claude" not in low and "anthropic" not in low:
         return None
     return model

@@ -36,6 +36,12 @@ def deep_runner_default_is_inert_in_tests(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def claude_live_model_lookup_is_off_in_tests(monkeypatch):
+    """No test reads the developer's Claude login or hits the network for the live model list."""
+    monkeypatch.setenv("QAR_CLAUDE_LIVE_MODELS", "0")
+
+
+@pytest.fixture(autouse=True)
 def tool_catalog_is_empty_unless_a_test_says_otherwise(monkeypatch):
     """No test inherits the developer's tool catalog.
 
