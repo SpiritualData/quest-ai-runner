@@ -169,7 +169,7 @@ _SCOPE_ORDER = ("day", "week", "month", "quarter", "year")
 # Task statuses that count as "this finished" when summarizing the previous period. ``needs_you``
 # is included on purpose: a task waiting on the human is one of the most useful things the next
 # pass can know, since it usually explains why the period produced nothing else.
-_FINISHED_TASK_STATUSES = {"done", "failed", "needs_you"}
+_FINISHED_TASK_STATUSES = {"done", "failed", "incomplete", "needs_you"}
 
 # Cap on how many previous-period tasks are described in a batch's text, newest kept. A busy quest
 # should not push its actual instructions out of the model's attention with old status lines.
@@ -1097,6 +1097,9 @@ def render_last_run_output(task: Dict[str, Any]) -> str:
     status_note = ""
     if status == "needs_you":
         status_note = (" -- it stopped short, waiting on a person, so treat it as an attempt "
+                       "rather than a settled answer")
+    elif status == "incomplete":
+        status_note = (" -- it ran but did not fully reach its goal, so treat it as an attempt "
                        "rather than a settled answer")
     elif status == "failed":
         status_note = (" -- it ended in failure, so treat it as an attempt rather than a settled "

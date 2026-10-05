@@ -106,6 +106,9 @@ class MockQuestClient:
     def report_failed(self, task_id, result):
         self.reports.append((task_id, "failed", result, None))
 
+    def report_incomplete(self, task_id, result):
+        self.reports.append((task_id, "incomplete", result, None))
+
     def post_conversation_message(self, conv_id, content, *, kind="progress", task_id=None,
                                   card_id=None):
         self.posts.append((conv_id, content, kind))
@@ -274,23 +277,25 @@ def test_executor_unverified_deep_reports_disclosure_and_non_done():
         met=False, output="WORK PRODUCT",
         error="Unverified: goal verification did not run (llm outage). Not confirmed complete.")])
     out = ex.report("t5", result, "qaconv_1", request_text="do X")
-    assert out.status == "failed"                       # non-done
-    assert client.reports[0][1] == "failed"
-    # The chat post's kind must match the terminal status (failed), not be posted as "done" --
+    # It RAN (the work is real), so the status is "incomplete": not "done" (unconfirmed) and not
+    # "failed" (a technical error, which this is not).
+    assert out.status == "incomplete"
+    assert client.reports[0][1] == "incomplete"
+    # The chat post's kind must match the terminal status (incomplete), not be posted as "done" --
     # a "done" kind here would make the backend's fold-back think a terminal reply was already
-    # posted and suppress an honest failed message.
-    failed_posts = [t for (_c, t, k) in client.posts if k == "failed"]
-    assert failed_posts, "the chat must still hear the outcome"
-    assert "could NOT verify" in failed_posts[0]
-    assert "unconfirmed" in failed_posts[0]
-    assert "WORK PRODUCT" in failed_posts[0]              # the work is presented, as unconfirmed
+    # posted and suppress an honest closing message.
+    posts = [t for (_c, t, k) in client.posts if k == "incomplete"]
+    assert posts, "the chat must still hear the outcome"
+    assert "could NOT verify" in posts[0]
+    assert "unconfirmed" in posts[0]
+    assert "WORK PRODUCT" in posts[0]              # the work is presented, as unconfirmed
     assert not any(t == "Done." for (_tid, _k, t, _o) in client.progress)
-    assert not any(k == "done" for (_c, _t, k) in client.posts)
+    assert not any(k in ("done", "failed") for (_c, _t, k) in client.posts)
 
 
 def test_executor_unverified_end_to_end_via_execute():
     """Full path: a deep run whose verification cannot run (no scripted verdict -> verifier
-    parse failure -> UNVERIFIED) ends failed with the plain disclosure in the chat."""
+    parse failure -> UNVERIFIED) ends incomplete with the plain disclosure in the chat."""
     provider = StubProvider(decisions=[
         {"action": "deep", "goal": "do X", "deep_brief": "x", "rationale": "work"},
         # No {"met": ...} verdict scripted: the verifier cannot parse -> UNVERIFIED.
@@ -298,9 +303,47 @@ def test_executor_unverified_end_to_end_via_execute():
     client = MockQuestClient([])
     ex = TaskExecutor(client, _brain(provider, deep_runner=StubDeepRunner(met=True, output="WORK")))
     out = ex.execute({"id": "t6", "text": "do X", "conv_id": "qaconv_z"})
-    assert out.status == "failed"
-    failed_posts = [t for (_c, t, k) in client.posts if k == "failed"]
-    assert failed_posts and "could NOT verify" in failed_posts[-1]
+    assert out.status == "incomplete"
+    posts = [t for (_c, t, k) in client.posts if k == "incomplete"]
+    assert posts and "could NOT verify" in posts[-1]
+
+
+def test_executor_ran_but_goal_not_met_reports_incomplete_not_failed():
+    """A deep run that produced real work but fell short of its goal is "incomplete": it ran. Only a
+    run that produced nothing because it errored is "failed" (see the not_met test above)."""
+    client = MockQuestClient([])
+    ex = TaskExecutor(client, _ReportBrain())
+    result = OrchestratorResult(kind="deep", goals=["g"], deep_results=[DeepResult(
+        met=False, output="PARTIAL WORK", error="The goal was not met: step 3 is missing.")])
+    out = ex.report("t9", result, "qaconv_1", request_text="do X")
+    assert out.status == "incomplete"
+    assert client.reports[0][1] == "incomplete"
+    assert "PARTIAL WORK" in client.reports[0][2]
+    assert any(k == "incomplete" for (_c, _t, k) in client.posts)
+    assert not any(k == "failed" for (_c, _t, k) in client.posts)
+
+
+def test_executor_incomplete_falls_back_to_failed_for_a_client_without_report_incomplete():
+    """An older client with no ``report_incomplete`` still gets the outcome, as ``failed``."""
+    class OldClient(MockQuestClient):
+        report_incomplete = None
+    client = OldClient([])
+    ex = TaskExecutor(client, _ReportBrain())
+    result = OrchestratorResult(kind="deep", goals=["g"], deep_results=[DeepResult(
+        met=False, output="PARTIAL WORK", error="not met")])
+    out = ex.report("t10", result, "qaconv_1", request_text="do X")
+    assert out.status == "incomplete"
+    assert client.reports[0][1] == "failed"
+
+
+def test_quest_client_report_incomplete_patches_incomplete_status():
+    from quest_ai_runner.runner.quest_client import QuestClient
+    calls = []
+    qc = QuestClient.__new__(QuestClient)
+    qc._request = lambda method, path, body=None, **kw: calls.append((method, path, body)) or {}
+    qc.report_incomplete("t11", "partial", session_id="s1")
+    assert calls[0][0] == "PATCH" and calls[0][1].endswith("/t11")
+    assert calls[0][2]["status"] == "incomplete" and calls[0][2]["result"] == "partial"
 
 
 def test_executor_forwards_reserved_card_id_on_conv_posts():

@@ -6,8 +6,10 @@ Given a single claimed assistant-task, the executor:
   3. Maps the OrchestratorResult onto the Quest task callback:
        - answer            -> PATCH done   + result (the answer text)
        - deep (met)        -> PATCH done   + result (the run output / summary)
-       - deep (not met)    -> PATCH failed | needs_you  (limit/error -> failed; raised a
-                              decision -> needs_you with the decision_id)
+       - deep (not met)    -> PATCH incomplete | failed | needs_you  (ran and did work but fell
+                              short of the goal -> incomplete; produced nothing because it
+                              errored -> failed; raised a decision -> needs_you with the
+                              decision_id)
        - confirm           -> a decision-request was raised -> PATCH needs_you + decision_id
        - cancelled         -> NO PATCH (the backend already set status=cancelled and appends its
                               own terminal chat message; a PATCH here would just 409) -- a
@@ -173,7 +175,7 @@ NO_ASSUMED_PROGRESS_CONTRACT = (
 def render_run_history(tasks: Optional[List[Dict[str, Any]]], limit: int = 6) -> str:
     """Recent runs on this quest, with what each one produced."""
     rows = [t for t in (tasks or []) if (t or {}).get("status") in
-            ("done", "failed", "needs_you", "in_progress")]
+            ("done", "failed", "incomplete", "needs_you", "in_progress")]
     rows = sorted(rows, key=lambda t: str(t.get("updated_at") or ""))[-limit:]
     if not rows:
         return ""
@@ -434,7 +436,7 @@ def client_accepts_session_id(fn: Any) -> bool:
 @dataclass
 class ExecutionOutcome:
     task_id: str
-    status: str                       # "done" | "needs_you" | "failed" | "cancelled" | "waiting"
+    status: str                       # "done" | "needs_you" | "incomplete" | "failed" | "cancelled" | "waiting"
     result: str = ""
     decision_id: Optional[str] = None
 
@@ -1414,6 +1416,15 @@ class TaskExecutor:
             done_text = text + verdict_suffix if verdict_suffix else text
             done_text = self._with_context_receipt(done_text, request_text,
                                                    autopilot_composed=autopilot_composed)
+            if exit_reason == "max_turns" and goal_verdict:
+                # The run WORKED but its goal was never verified as met: "incomplete", not "done"
+                # (which would overstate it) and not "failed" (which reads as a technical error).
+                self._report_progress(task_id, "done", text="Ran, but the goal is not fully met.",
+                                      output=done_text)
+                self._post_conv(conv_id, done_text, kind="incomplete", task_id=task_id,
+                                card_id=card_id)
+                self.dispatch_incomplete(task_id, done_text, session_id=session_id)
+                return ExecutionOutcome(task_id, "incomplete", done_text)
             self._report_progress(task_id, "done", text="Done.", output=done_text)
             # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
             self._post_conv(conv_id, done_text, kind="done", task_id=task_id, card_id=card_id)
@@ -1472,7 +1483,8 @@ class TaskExecutor:
         # UNVERIFIED is never reported as done, and never as a bare failure either: the work RAN
         # but its verification could not (LLM outage, no verify tier, parse failure), so the
         # outcome is genuinely unknown. The chat message must say that plainly, presenting any
-        # work output as unconfirmed, and the task stays non-done (failed) so a human checks it.
+        # work output as unconfirmed, and the task stays non-done ("incomplete": it ran, its
+        # outcome is unknown) so a human checks it. It is not "failed": nothing broke.
         unverified = [d for d in deep if not d.met and (d.error or "").startswith("Unverified")]
         if unverified:
             reasons = "; ".join((d.error or "").strip() for d in unverified)
@@ -1481,11 +1493,12 @@ class TaskExecutor:
                           f"complete ({reasons}). Treat it as unconfirmed until someone checks "
                           "it. It is not marked done.")
             msg = (work + "\n\n" + disclosure) if work else disclosure
-            self._report_progress(task_id, "error", text=disclosure)
+            self._report_progress(task_id, "done", text="Ran, but the result could not be verified.",
+                                  output=msg)
             # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
-            self._post_conv(conv_id, msg, kind="failed", task_id=task_id, card_id=card_id)
-            self.dispatch_report("report_failed", task_id, msg, session_id=session_id)
-            return ExecutionOutcome(task_id, "failed", msg)
+            self._post_conv(conv_id, msg, kind="incomplete", task_id=task_id, card_id=card_id)
+            self.dispatch_incomplete(task_id, msg, session_id=session_id)
+            return ExecutionOutcome(task_id, "incomplete", msg)
         # Otherwise the run hit a limit / errored.
         errs = "; ".join(d.error for d in deep if d.error) or "the goal was not met"
         if not deep:                 # deep requested but no runner wired -> needs human/runner
@@ -1501,6 +1514,17 @@ class TaskExecutor:
         if work:
             failed_text = (f"{errs}\n\n--- WHAT THE RUN DID BEFORE IT STOPPED (unfinished, not "
                            f"verified) ---\n{work}")
+        if work:
+            # The run did real work and then stopped short of its goal (verifier said not met, turn
+            # or token budget spent): it RAN, so this is "incomplete", with the work attached.
+            # "failed" is reserved for a run that produced nothing because it broke or never ran.
+            self._report_progress(task_id, "done", text="Ran, but the goal is not fully met.",
+                                  output=failed_text)
+            self._post_conv(conv_id, f"I got part of the way but did not fully reach the goal: "
+                                     f"{failed_text}", kind="incomplete", task_id=task_id,
+                            card_id=card_id)
+            self.dispatch_incomplete(task_id, failed_text, session_id=session_id)
+            return ExecutionOutcome(task_id, "incomplete", failed_text)
         self._report_progress(task_id, "error", text=errs, output=failed_text)
         # CHAT FIRST, then the terminal status: see _post_conv's note on ordering.
         self._post_conv(conv_id, f"I couldn't complete this: {failed_text}", kind="failed",
@@ -1692,6 +1716,16 @@ class TaskExecutor:
         if session_id and client_accepts_session_id(fn):
             kwargs["session_id"] = session_id
         self._safe(lambda: fn(task_id, *args, **kwargs))
+
+    def dispatch_incomplete(self, task_id: str, result: str, *,
+                            session_id: Optional[str] = None) -> None:
+        """Report "ran, goal not fully met". A client with no ``report_incomplete`` (an older
+        consumer client or a test double) gets ``report_failed`` instead, so the outcome is never
+        silently dropped; it just keeps the coarser old status.
+        """
+        name = ("report_incomplete" if callable(getattr(self._client, "report_incomplete", None))
+                else "report_failed")
+        self.dispatch_report(name, task_id, result, session_id=session_id)
 
     def _safe(self, fn):
         try:

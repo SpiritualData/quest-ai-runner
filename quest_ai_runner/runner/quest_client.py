@@ -428,6 +428,19 @@ class QuestClient:
             log.warning("report_needs_you failed for task %s: %s", task_id, e)
             return {}
 
+    def report_incomplete(self, task_id: str, result: str,
+                          session_id: Optional[str] = None) -> Dict[str, Any]:
+        """PATCH ``incomplete``: the run WORKED but did not fully reach its goal (or could not be
+        verified as having reached it). Distinct from ``failed``, which means a technical error.
+        """
+        try:
+            return self._request("PATCH", f"/api/assistant-tasks/{task_id}",
+                                 body=self._with_session(
+                                     {"status": "incomplete", "result": result}, session_id))
+        except (QuestApiError, QuestNotConfigured) as e:
+            log.warning("report_incomplete for task %s: %s", task_id, e)
+            return {}
+
     def report_failed(self, task_id: str, result: str,
                       session_id: Optional[str] = None) -> Dict[str, Any]:
         try:

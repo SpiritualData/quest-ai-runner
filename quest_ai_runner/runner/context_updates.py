@@ -1251,7 +1251,7 @@ class _BaseSource:
 # quest, rolled onto the pass that created it, and mailed where the quest mails. Mirrors
 # ``runner.autopilot``'s own set (``needs_you`` included: a question the run stopped on is exactly
 # what the person needs to read).
-DELIVERED_TASK_STATUSES = frozenset({"done", "needs_you", "failed"})
+DELIVERED_TASK_STATUSES = frozenset({"done", "needs_you", "incomplete", "failed"})
 
 
 def _reply_channel(card: Dict[str, Any]) -> str:
