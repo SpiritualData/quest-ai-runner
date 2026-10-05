@@ -31,6 +31,7 @@ from typing import Any, Callable, Dict, List, Optional
 from ..core import usage_limit
 from ..core.adapters import Mode, ProgressEvent
 from ..core.orchestrator import Orchestrator, OrchestratorResult, _strip_future_context
+from ..core.reader_first import READER_FIRST_STANDARD
 from .context_updates import (parse_manifest, parse_usage_notes, render_receipt,
                               strip_usage_block)
 
@@ -110,7 +111,8 @@ RESULT_IS_THE_WORK_CONTRACT = (
     "for word. So put the finished thing IN it, in markdown, written to them: the brief, the "
     "draft, the answer, the decision and why. Say plainly what you did and what is still open. Do "
     "not open with a status banner, do not paste a second copy of anything, and never leave the "
-    "real content somewhere else with only a pointer to it here."
+    "real content somewhere else with only a pointer to it here.\n\n"
+    + READER_FIRST_STANDARD
 )
 
 

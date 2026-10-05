@@ -139,6 +139,7 @@ from .sufficiency import (
     render_abridged_notice,
 )
 from .prompt_layers import PromptLayers, compose_layers, language_instruction, turn_prompt_head
+from .reader_first import READER_FIRST_STANDARD
 from .recent_context import (
     GLOBAL_SCOPE_KEY,
     RecentContextStore,
@@ -2624,8 +2625,7 @@ Never include any of the following. Each one is internal machinery, and it reads
 - Preambles and sign-offs about the reply itself ("Here is my response:", "Hope that helps!").
 
 Style:
-- Lead with the substance. Your first sentence answers them.
-- Concrete and concise. No filler.
+""" + READER_FIRST_STANDARD + """
 - Never use an em dash. Use a comma, a colon, parentheses, or two sentences.
 """ + "\n\n" + language_instruction()
 

@@ -7,6 +7,12 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Reader-first writing standard for everything a person reads.** One shared text
+  (`core/reader_first.py`) now rides on chat replies (`REPLY_VOICE_SYSTEM`, replacing its two
+  overlapping style bullets) and on every task result (`RESULT_IS_THE_WORK_CONTRACT`, so autopilot
+  runs get it too). Answer first, one idea per sentence, cut recaps and restated context, report
+  only what changed since the last report (or say nothing changed in one line), finish the thinking,
+  pick the cheapest format (table, diagram, numbered steps). Narration keeps its own voice.
 - **File an email draft for human approval.** New standard tool `file_email_draft` (on whenever
   Quest credentials are present) files one draft into the key owner's Approval Queue in the Quest
   app through `POST /api/email-drafts` (`QuestClient.create_email_draft`). Nothing is sent; a
