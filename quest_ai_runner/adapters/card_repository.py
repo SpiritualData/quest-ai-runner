@@ -35,6 +35,25 @@ from ..core.file_modes import match_umask
 # ``file_context_store._BOOTSTRAP_META_FILE``.
 _BOOTSTRAP_META_FILE = "bootstrap_meta.json"
 
+# Every sidecar the store keeps NEXT TO its cards. Each one is store state, not a card, and
+# ``bootstrap_meta.json`` used to be the only one excluded: the folder-review cache was enumerated
+# as a card, loaded under the id "folder_review", and scored for keyword matches like any topic.
+# It is a dictionary of folder verdicts, so it could only ever be noise in a context view, and it
+# inflated every card count by one. Kept in sync with ``file_context_store``.
+_SIDECAR_FILES = frozenset({
+    _BOOTSTRAP_META_FILE,
+    "folder_review.json",
+    "discovered_files.json",
+})
+
+# Where the maintenance tool (``scripts/quarantine_cards.py``) MOVES cards it takes out of the
+# index, as ``<cards_dir>/_quarantine/<reason>/<card>.json``. Cards are moved and never deleted,
+# so a wrong call is reversible by moving the files back. The enumeration here is non-recursive,
+# so a subdirectory is already invisible to it; the name is held and checked anyway, because a
+# quarantine that silently came back the next time somebody reached for ``glob("**/*.json")``
+# would be worse than no quarantine at all.
+QUARANTINE_DIR_NAME = "_quarantine"
+
 
 def card_embed_text(card: Dict[str, Any]) -> str:
     """The canonical text to embed/search for a context card. SHARED, single source of truth.
@@ -167,7 +186,8 @@ class FilesystemCardRepository:
         return (
             entry.suffix == ".json"
             and not entry.name.startswith(".")
-            and entry.name != _BOOTSTRAP_META_FILE
+            and entry.name not in _SIDECAR_FILES
+            and QUARANTINE_DIR_NAME not in entry.parts
         )
 
     def load_all(self) -> Dict[str, Dict[str, Any]]:

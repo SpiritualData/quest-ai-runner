@@ -65,6 +65,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import logging
+import os
 import re
 import threading
 import time
@@ -72,6 +73,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from ..core.adapters import AssembledContext, ContextAssemblerBase, VectorHit, VectorStore
 from ..core.scope_tags import scope_tags_allow
+from ..core.vector_scopes import CARD_SEED_SCOPE
 from .card_content_render import (
     MAX_CARD_REF_CHARS,
     MAX_CARD_REFS,
@@ -85,6 +87,28 @@ from .specificity import SpecificityResult, rerank_factor, score_candidates
 # Type alias for a seed source callable: returns a list of items suitable for
 # ``VectorStore.sync()`` (each has id/text/payload/fingerprint keys).
 _SeedSource = Callable[[], List[Dict[str, Any]]]
+
+# Default ceiling on ONE seed pass, i.e. on how many cards may be embedded to make the semantic
+# arm work from cold. A corpus's card store is meant to hold HUNDREDS of cards (that is what the
+# keyword store's own budget enforces), so a thousand is generous headroom rather than a target.
+# It exists because the failure is silent and expensive in the other direction: a store that had
+# inflated to 32,070 cards was seeded in full, every card embedded through a paid embedder, and
+# the association capacity bound then evicted the lot. ``QAR_VECTOR_MAX_SEED_ITEMS=0`` lifts it.
+_MAX_SEED_ITEMS_DEFAULT = 1000
+
+
+def default_max_seed_items() -> int:
+    """The seed ceiling from the environment, else ``_MAX_SEED_ITEMS_DEFAULT``. Never raises."""
+    raw = os.getenv("QAR_VECTOR_MAX_SEED_ITEMS", "").strip()
+    if not raw:
+        return _MAX_SEED_ITEMS_DEFAULT
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("vector seed: QAR_VECTOR_MAX_SEED_ITEMS=%r is not an integer — using %d",
+                       raw, _MAX_SEED_ITEMS_DEFAULT)
+        return _MAX_SEED_ITEMS_DEFAULT
+    return value if value >= 0 else _MAX_SEED_ITEMS_DEFAULT
 
 logger = logging.getLogger(__name__)
 
@@ -181,12 +205,19 @@ class VectorContextAssembler(ContextAssemblerBase):
         default) keeps the prior behavior (no card-reference resolution).
     max_in_view:
         Maximum number of hits to include in the rendered context view.
+    max_seed_items:
+        Maximum number of cards ONE seed pass may embed. ``None`` (default)
+        takes ``default_max_seed_items()``; ``0`` means no ceiling. Applied
+        before ``sync`` is called, so work over the ceiling is never embedded,
+        and logged at WARNING whenever it bites.
     seed_source:
         Optional callable with no arguments that returns a list of items
         suitable for ``VectorStore.sync()`` (each with id/text/payload/
         fingerprint keys).  When set, the FIRST ``assemble()`` call in this
         process seeds the vector store by calling
-        ``self._store.sync(seed_source(), scope=None)`` before searching.
+        ``self._store.sync(seed_source(), scope=CARD_SEED_SCOPE)`` before
+        searching (see ``core/vector_scopes.py`` for why seeded cards get a
+        scope of their own, and ``max_seed_items`` for how many are embedded).
         This solves the cold-start problem: on a fresh repo the store is empty
         and vector orientation does nothing until tasks accumulate. Providing a
         ``FileContextStore.export_for_embedding`` as the seed source embeds the
@@ -209,6 +240,7 @@ class VectorContextAssembler(ContextAssemblerBase):
         max_in_view: int = 8,
         half_life_days: float = 30.0,
         max_associations: int = 500,
+        max_seed_items: Optional[int] = None,
         seed_source: Optional[_SeedSource] = None,
         seed_in_background: bool = False,
         reference_resolvers: Optional[Dict[str, Any]] = None,
@@ -231,6 +263,11 @@ class VectorContextAssembler(ContextAssemblerBase):
         self._max_in_view = max_in_view
         self._half_life_days = half_life_days
         self._max_associations = max_associations
+        # How many cards one seed pass may embed. ``None`` takes the card store's OWN default
+        # budget, so the two cannot drift apart; ``0`` means no cap (a caller that really wants to
+        # embed whatever it is handed must say so).
+        self._max_seed_items = (default_max_seed_items() if max_seed_items is None
+                                else max_seed_items)
         self._seed_source: Optional[_SeedSource] = seed_source
         # Recency-bound limits for resolving a vector-selected card's ``content`` references.
         self._max_card_refs = max_card_refs
@@ -295,8 +332,13 @@ class VectorContextAssembler(ContextAssemblerBase):
             return
         try:
             items = self._seed_source()
+            items = self._seed_items_within_budget(items)
             if items:
-                self._store.sync(items, scope=None)
+                # Seeded cards live in their OWN scope, which the store treats as visible under
+                # every scope but invisible to per-scope capacity accounting. Without that, the
+                # first association ``record()`` wrote evicted the cards this pass had just paid
+                # to embed. See core/vector_scopes.py.
+                self._store.sync(items, scope=CARD_SEED_SCOPE)
                 # Only consider seeding DONE once we actually had items to seed. The keyword
                 # bootstrap runs in a background thread, so an early assemble() can see an empty
                 # source; in that case leave the guard unset so a later assemble() (after
@@ -306,6 +348,30 @@ class VectorContextAssembler(ContextAssemblerBase):
         except Exception:  # noqa: BLE001
             # A hard failure is final (don't retry a broken source forever).
             self._seed_done = True
+
+    def _seed_items_within_budget(self, items: Any) -> List[Dict[str, Any]]:
+        """Truncate the seed to ``max_seed_items``, newest-looking work dropped last.
+
+        Embedding is the expensive half of this arm, so the budget is applied HERE, before
+        ``sync`` is handed anything: work that would not fit is never embedded at all. The store
+        it seeds is the keyword card store, whose own bootstrap budget says a corpus should hold
+        hundreds of cards, not tens of thousands. When the two disagree the smaller wins, loudly:
+        a seed pass that silently embedded 32,070 cards is exactly how this went wrong.
+        """
+        try:
+            seed_items = list(items or [])
+        except TypeError:
+            return []
+        cap = self._max_seed_items
+        if not cap or len(seed_items) <= cap:
+            return seed_items
+        logger.warning(
+            "vector seed: %d card(s) offered but only %d will be embedded (max_seed_items). The "
+            "card store is larger than its own budget; prune it rather than raise this, or the "
+            "seed embeds cards the store should not hold.",
+            len(seed_items), cap,
+        )
+        return seed_items[:cap]
 
     def assemble(
         self, task_text: str, *, meta: Optional[Dict[str, Any]] = None

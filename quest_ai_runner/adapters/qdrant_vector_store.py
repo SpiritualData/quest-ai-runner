@@ -102,6 +102,7 @@ import os
 from typing import Any, Callable, Dict, List, Optional
 
 from ..core.adapters import VectorHit, VectorStoreBase
+from ..core.vector_scopes import CARD_SEED_SCOPE
 
 logger = logging.getLogger(__name__)
 
@@ -511,13 +512,20 @@ class QdrantVectorStore(VectorStoreBase):
         )
 
         shared = IsEmptyCondition(is_empty=PayloadField(key=_SCOPE_KEY))
+        seed_digest = _scope_hash(CARD_SEED_SCOPE)
+        # The seeded-card partition is visibility-shared, like an unscoped point: a card belongs
+        # to the corpus, not to one task's scope. What its own scope buys is that the capacity
+        # accounting in ``count``/``evict_oldest`` (which use the EXACT filter below) can never
+        # reach it. See core/vector_scopes.py.
+        seeded = FieldCondition(key=_SCOPE_KEY, match=MatchValue(value=seed_digest))
         digest = _scope_hash(scope)
-        if digest is None:
-            return Filter(must=[shared])
+        if digest is None or digest == seed_digest:
+            return Filter(should=[shared, seeded])
         return Filter(
             should=[
                 FieldCondition(key=_SCOPE_KEY, match=MatchValue(value=digest)),
                 shared,
+                seeded,
             ]
         )
 

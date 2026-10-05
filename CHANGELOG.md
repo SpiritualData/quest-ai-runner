@@ -6,7 +6,48 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **A corpus of tens of thousands of files makes hundreds of cards, not thousands.** Two real card
+  stores had inflated to 8,557 and 32,070 cards. Three causes, all closed:
+  - A deterministic folder exclusion (a nested repository, a duplicate tree) was not final: a
+    large excluded subtree was re-opened "because it was big", its children were judged
+    individually and kept, and `_has_kept_child` read those keeps as the parent's verdict being
+    superseded. One nested repository of 23k generated files produced 2,082 cards that way. Such a
+    verdict now carries `final: true` and a `source`, nothing under it is judged at any depth,
+    only a model skip the model itself called `mixed` may be re-reviewed, and cached verdicts
+    sitting under a final exclusion are dropped (`drop_verdicts_under_final_exclusions`).
+    `folder_review.json` carries a `version`, and is written even when no provider took part.
+  - Cards covering the same FILE SET were only caught by a keyword gate and an LLM merge call.
+    `collapse_cards_by_file_set` now collapses an identical path set, or an overlap at or above
+    0.8, into one card before any of that, against the existing cards too, keeping the most-used
+    card and otherwise the earliest.
+  - Nothing bounded the store. A file-derived card now needs at least two files; a lone
+    generated/data file is never carded; and there are ceilings of one card per folder, five per
+    area, and a default budget of one card per 25 indexable files (floor 50) when
+    `QAR_BOOTSTRAP_MAX_CARDS` is unset. Every ceiling logs at WARNING when it truncates. Only
+    file-derived cards count against them.
+- **The folder-review cache is no longer loaded as a card.** `FilesystemCardRepository` excluded
+  only `bootstrap_meta.json`, so `folder_review.json` (a dictionary of folder verdicts) was
+  enumerated as a card under the id `folder_review`, keyword-scored like a topic, and counted in
+  every card total. All sidecars are now excluded by name, as is the `_quarantine` directory.
+- **The corpus ROOT is never an excludable folder.** A cached `"."` verdict excluded the whole
+  tree, because `"."` is a prefix of every path composed as `"./child"`: one real corpus walk
+  collected 13 files out of 76,593 and reported success.
+- **Seeding the vector arm no longer embeds cards that are about to be evicted.** Seeded cards
+  were written unscoped and `record()`'s capacity bound counts and evicts exactly the unscoped
+  points, so the first association recorded deleted every card the seed had just paid to embed.
+  Seeded cards now live in `CARD_SEED_SCOPE` (`core/vector_scopes.py`), which the store admits
+  under every scope for SEARCH and never matches for capacity accounting, and a seed pass is
+  capped by `max_seed_items` (`QAR_VECTOR_MAX_SEED_ITEMS`, default 1000) before anything is
+  embedded.
+
 ### Added
+- **`scripts/quarantine_cards.py`: take inflated cards out of a store without deleting any.** Dry
+  run by default, `--apply` to act. Cards MOVE to `<cards_dir>/_quarantine/<reason>/` (which
+  `FilesystemCardRepository` ignores) with printed counts and a JSON manifest. Reasons: compounded
+  import copies, cards wholly inside a folder the review excludes, surplus cards covering the same
+  file set, and single generated-data-file cards. It refuses to move a card carrying `managed_by`,
+  and a used or hand-learned card unless it is provably a compounded copy.
 - **Reader-first writing standard for everything a person reads.** One shared text
   (`core/reader_first.py`) now rides on chat replies (`REPLY_VOICE_SYSTEM`, replacing its two
   overlapping style bullets) and on every task result (`RESULT_IS_THE_WORK_CONTRACT`, so autopilot

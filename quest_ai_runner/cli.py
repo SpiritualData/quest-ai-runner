@@ -125,6 +125,39 @@ Env it reads:
                                                    importing the cards a narrower QAR instance already
                                                    bootstrapped at ``~/hq/.../product``, at zero extra
                                                    LLM cost.
+  --- card-index ceilings (how many cards a corpus may produce) -------------------------------
+  A corpus of tens of thousands of files should hold HUNDREDS of cards. Two real stores reached
+  8,557 and 32,070 because nothing bounded them, so every ceiling below is on by default and says
+  so at WARNING whenever it truncates. Raise one only after reading why it bit; the usual right
+  answer is to prune the store (``scripts/quarantine_cards.py``) rather than let it grow.
+  QAR_BOOTSTRAP_MAX_CARDS (optional)             — hard cap on cards in ONE bootstrap pass. Unset,
+                                                   the default budget below applies instead.
+  QAR_BOOTSTRAP_FILES_PER_CARD (optional)        — the default global budget is one card per this
+                                                   many indexable files (default 25), never below
+                                                   QAR_BOOTSTRAP_CARD_BUDGET_FLOOR.
+  QAR_BOOTSTRAP_CARD_BUDGET_FLOOR (optional)     — floor under that budget so a small corpus is
+                                                   still indexed properly (default 50).
+  QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER (optional)  — cards allowed per folder (default 1; 0 = no cap).
+                                                   A folder is the unit a topic card describes.
+  QAR_BOOTSTRAP_MAX_CARDS_PER_AREA (optional)    — cards allowed per area, an area being the first
+                                                   two path segments of a card's folder (default 5;
+                                                   0 = no cap).
+  QAR_BOOTSTRAP_MAX_FILES (optional)             — stop walking after this many files. No default:
+                                                   a truncated walk leaves the store INCOMPLETE.
+  QAR_FOLDER_REVIEW (optional)                   — "0" turns off the folder relevance review
+                                                   (default: on). Verdicts are cached in
+                                                   ``<cards_dir>/folder_review.json``; a nested
+                                                   repository or a duplicate tree is excluded for
+                                                   good and nothing under it is re-judged. To
+                                                   overturn one by hand, edit that folder's entry
+                                                   and add ``"pinned": true`` so no later pass
+                                                   overwrites your decision.
+  QAR_SKIP_NESTED_REPOS (optional)               — "0" indexes directories carrying their own
+                                                   .git/.hg/.svn (default: skip them).
+  QAR_VECTOR_MAX_SEED_ITEMS (optional)           — cards ONE vector seed pass may embed
+                                                   (default 1000; 0 = no cap). Applied before any
+                                                   embedding call, so work over the cap costs
+                                                   nothing.
   QAR_MAX_MEMORY_PERCENT (optional)              — pause new task pickup when system memory usage
                                                    exceeds this percent; resume when it recovers
   QAR_MIN_FREE_MEMORY_MB (optional)              — pause when available memory drops below this MB

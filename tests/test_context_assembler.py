@@ -1213,12 +1213,15 @@ class TestNestedCardReuse:
         """A card previously imported from a nested store is removed once that store stops
         offering it, so imports never drift from their source."""
         child = self._make_child_repo(tmp_path)
-        (child / "mypackage" / "utils.py").write_text("def helper():\n    pass\n", encoding="utf-8")
+        # The two cards sit in DIFFERENT folders on purpose: one card per folder is the ceiling, so
+        # two same-folder cards would be a test of the ceiling rather than of import pruning.
+        (child / "helpers").mkdir()
+        (child / "helpers" / "utils.py").write_text("def helper():\n    pass\n", encoding="utf-8")
         cards_dir = self._bootstrap_child(child, topics=[
             {"id": "models", "name": "Models", "keywords": ["models"], "summary": "models",
              "files": ["mypackage/models.py"]},
             {"id": "utils", "name": "Utils", "keywords": ["utils"], "summary": "utils",
-             "files": ["mypackage/utils.py"]},
+             "files": ["helpers/utils.py"]},
         ])
 
         parent_cards_dir = tmp_path / "parent_cards"
@@ -1320,6 +1323,9 @@ class TestAncestorCardReuse:
         other.mkdir(parents=True)
         (diss / "chapter1.py").write_text("def thesis():\n    pass\n", encoding="utf-8")
         (other / "note.py").write_text("def note():\n    pass\n", encoding="utf-8")
+        # Two files, because a single-file card whose one file another card already covers is not
+        # written at all. The point of this test is scope trimming, not the minimum card size.
+        (other / "note2.py").write_text("def note2():\n    pass\n", encoding="utf-8")
         self._bootstrap_ancestor(ancestor, topics=[
             {
                 "id": "mixed",
@@ -1336,7 +1342,7 @@ class TestAncestorCardReuse:
                 "name": "Unrelated",
                 "keywords": ["note"],
                 "summary": "Entirely outside the narrower root.",
-                "files": ["stories/other/note.py"],
+                "files": ["stories/other/note.py", "stories/other/note2.py"],
             },
         ])
 
@@ -1402,9 +1408,16 @@ class TestAncestorCardReuse:
         assert cards[0]["id"] == "everything"
         assert "imported_from" not in cards[0]["provenance"]
 
-    def test_orphaned_ancestor_import_pruned_when_ancestor_card_disappears(self, tmp_path):
+    def test_orphaned_ancestor_import_pruned_when_ancestor_card_disappears(self, tmp_path,
+                                                                           monkeypatch):
         """A card previously imported from an ancestor store is removed once that store stops
-        offering it, so imports never drift from their source."""
+        offering it, so imports never drift from their source.
+
+        Needs TWO cards over one folder, which the per-folder ceiling would collapse into one, so
+        the ceiling is lifted here. What is under test is pruning, not how many cards a folder
+        deserves.
+        """
+        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "0")
         ancestor = tmp_path / "hq"
         diss = ancestor / "stories" / "phd" / "dissertation"
         diss.mkdir(parents=True)
@@ -1769,13 +1782,19 @@ class TestConfidenceGate:
             })
         return topics
 
-    def test_strong_match_injected_over_large_bootstrap(self, tmp_path):
+    def test_strong_match_injected_over_large_bootstrap(self, tmp_path, monkeypatch):
         """A distinctive query term that appears in only ONE of ~36 topic cards clears the
         9.0 gate and is injected with the right card.
 
         With max field weights: keyword_weight(3.0) * IDF(1/36 cards ~= 3.92) = 11.76 per
         term, which exceeds the 9.0 gate. Six such terms gives a total score of ~70.
         """
+        # This test needs a deliberately LARGE store (36 cards for 36 files, 35 of them in one
+        # folder) because the IDF maths it checks only holds at that size. That is the exact shape
+        # the per-folder ceiling exists to prevent, so the ceiling is lifted here on purpose
+        # rather than the fixture being reshaped into something that no longer tests the gate.
+        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "0")
+        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_AREA", "0")
         n_noise = 35
         repo = self._make_large_repo(tmp_path, n_noise_files=n_noise)
         cards_dir = tmp_path / "cards"
@@ -2124,21 +2143,42 @@ class TestImportsNeverReimported:
 class TestStaleRegenKeepsOneCard:
     def test_a_changing_file_does_not_grow_its_card_count(self, tmp_path):
         """Regenerating a stale card replaces it in place; extra topics the model returns for the
-        same files must not become new cards (one state file once had 1,296)."""
+        same files must not become new cards (one state file once had 1,296).
+
+        The card here spans two source files because a single generated data file is no longer
+        carded at all (see ``test_a_lone_data_file_is_never_carded``). The behaviour under test is
+        the regen, not the card shape.
+        """
         repo = tmp_path / "repo"
         repo.mkdir()
-        f = repo / "state.json"
-        f.write_text('{"a": 1}', encoding="utf-8")
+        (repo / "pkg").mkdir()
+        changing = repo / "pkg" / "runner.py"
+        changing.write_text("VERSION = 1\n", encoding="utf-8")
+        (repo / "pkg" / "helpers.py").write_text("def helper():\n    return 1\n", encoding="utf-8")
         cards_dir = tmp_path / "cards"
-        one = [{"id": "state", "name": "State", "keywords": ["state"],
-                "summary": "State file.", "files": ["state.json"]}]
+        one = [{"id": "runner", "name": "Runner", "keywords": ["runner"],
+                "summary": "The runner.", "files": ["pkg/runner.py", "pkg/helpers.py"]}]
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
         assert store.bootstrap(root=str(repo), provider=_topic_provider(one)) == 1
         many = one + [
             {"id": f"extra{i}", "name": f"Extra {i}", "keywords": [f"extra{i}"],
-             "summary": "Another take.", "files": ["state.json"]} for i in range(3)]
+             "summary": "Another take.", "files": ["pkg/runner.py", "pkg/helpers.py"]}
+            for i in range(3)]
         for n in range(3):
-            f.write_text('{"a": %d}' % (n + 2), encoding="utf-8")
+            changing.write_text("VERSION = %d\n" % (n + 2), encoding="utf-8")
             store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
             store.bootstrap(root=str(repo), provider=_topic_provider(many))
         assert len(_card_files(cards_dir)) == 1
+
+    def test_a_lone_data_file_is_never_carded(self, tmp_path):
+        """The stronger guarantee that replaced the loop above: a single generated data file is not
+        a topic, so it never gets a card and therefore can never grow a family of them."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "state.json").write_text('{"a": 1}', encoding="utf-8")
+        cards_dir = tmp_path / "cards"
+        one = [{"id": "state", "name": "State", "keywords": ["state"],
+                "summary": "State file.", "files": ["state.json"]}]
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        assert store.bootstrap(root=str(repo), provider=_topic_provider(one)) == 0
+        assert _card_files(cards_dir) == []

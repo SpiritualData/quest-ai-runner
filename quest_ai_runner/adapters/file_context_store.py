@@ -315,6 +315,10 @@ def _optional_positive_int_env(name: str) -> Optional[int]:
 # delete the file to override any decision. ``QAR_FOLDER_REVIEW=0`` turns the whole thing off.
 
 _FOLDER_REVIEW_FILE = "folder_review.json"
+# Bumped when the MEANING of a cached verdict changes. v2 introduced "final" verdicts (see
+# ``verdict_is_final``): before it, a deterministic exclusion could be re-opened and then vetoed
+# by its own children, so one folder could hold two opposite verdicts at once.
+_FOLDER_REVIEW_VERSION = 2
 _FOLDER_REVIEW_BATCH = 40        # folders per LLM call
 _FOLDER_REVIEW_MIN_FILES = 2000  # below this the skip list is enough; do not spend model calls
 _FOLDER_REVIEW_START_DEPTH = 2   # first level judged, relative to the corpus root
@@ -577,10 +581,20 @@ def _duplicate_folders(walk_root: Path, folders: List[str],
 
 
 def _is_excluded_folder(rel: str, excluded: Set[str]) -> bool:
-    """Whether ``rel`` is, or sits under, an excluded folder. ``"."`` is never excluded here."""
+    """Whether ``rel`` is, or sits under, an excluded folder. ``"."`` is never excluded here.
+
+    The CORPUS ROOT is not an excludable folder, and an entry of ``"."`` in ``excluded`` must not
+    be read as one: ``"."`` is a prefix of every relative path written with a leading ``./``, so
+    one such entry excluded the whole corpus. Measured live: a real store's cached review held
+    ``{".": {"index": false, "reason": "root mixes scripts, docs, state, credentials"}}`` and the
+    bootstrap walk then collected 13 files out of 76,593, which looks exactly like a corpus with
+    nothing in it. A verdict about the root is a verdict about its OWN loose files at most, and
+    those are judged with the rest; it can never mean "index nothing".
+    """
     if not rel or rel == ".":
         return False
-    return any(rel == e or rel.startswith(e + "/") for e in excluded)
+    return any(rel == e or rel.startswith(e + "/")
+               for e in excluded if e and e != ".")
 
 
 def _folder_file_count(counts: Dict[str, int], folder: str) -> int:
@@ -592,6 +606,76 @@ def _has_kept_child(verdicts: Dict[str, Dict[str, Any]], folder: str) -> bool:
     """Whether any directly-judged descendant of ``folder`` was kept."""
     prefix = folder + "/"
     return any(f.startswith(prefix) and v.get("index", True) for f, v in verdicts.items())
+
+
+# A verdict's SOURCE decides whether it can be argued with.
+#
+# The two deterministic safeguards (nested repository, fuzzy duplicate) answer a question the
+# model cannot: "does this content belong to this corpus at all". A vendored checkout is not more
+# indexable because the files inside it look like good documentation, and a duplicate tree is not
+# more indexable because its children are individually fine. So those verdicts are FINAL: nothing
+# under them is judged, re-opened, or allowed to veto them.
+#
+# The bug this closes, measured on a real corpus: a nested repository of 23k generated files was
+# correctly excluded, then opened up anyway because it was large, its 1,211 children were judged
+# individually and kept, and ``_has_kept_child`` read those keeps as "the parent's verdict was
+# superseded" and let the whole subtree back in. 2,082 cards of generated subject-matter summaries
+# followed. One folder, two opposite verdicts, from the same bytes.
+#
+# Only a MODEL skip may be re-reviewed, and only when the model itself asked for that by answering
+# "mixed": that is the one case where the verdict is explicitly provisional.
+_FINAL_VERDICT_SOURCES = ("nested_repo", "duplicate")
+
+
+def verdict_is_final(verdict: Optional[Dict[str, Any]]) -> bool:
+    """Whether ``verdict`` was decided deterministically and may not be argued with.
+
+    An explicit ``final`` in the file wins, including ``false``: the cache has always been the
+    surface a human edits to overturn a decision, and a rule that cannot be overturned there is
+    not a rule, it is a wall.
+    """
+    if not isinstance(verdict, dict):
+        return False
+    if "final" in verdict:
+        return bool(verdict.get("final"))
+    return str(verdict.get("source") or "") in _FINAL_VERDICT_SOURCES
+
+
+def verdict_is_pinned(verdict: Optional[Dict[str, Any]]) -> bool:
+    """Whether a human pinned this verdict, so no automatic pass may overwrite or drop it.
+
+    Set ``"pinned": true`` on a folder in ``folder_review.json`` to keep a decision whatever the
+    deterministic safeguards would say about it, e.g. to index a nested repository that genuinely
+    IS this corpus's own work rather than a dependency checkout.
+    """
+    return isinstance(verdict, dict) and bool(verdict.get("pinned"))
+
+
+def final_exclusion_covering(verdicts: Dict[str, Dict[str, Any]], folder: str) -> Optional[str]:
+    """The final-excluded folder at or above ``folder``, or None when there is none."""
+    parts = [p for p in folder.split("/") if p and p != "."]
+    for depth in range(1, len(parts) + 1):
+        candidate = "/".join(parts[:depth])
+        verdict = verdicts.get(candidate)
+        if verdict is not None and not verdict.get("index", True) and verdict_is_final(verdict):
+            return candidate
+    return None
+
+
+def drop_verdicts_under_final_exclusions(verdicts: Dict[str, Dict[str, Any]]) -> List[str]:
+    """Remove every verdict sitting UNDER a final exclusion. Returns the dropped folders.
+
+    This is the cache invalidation for the bug described above: a store written by the buggy path
+    holds model verdicts for folders inside a final exclusion, and keeping them would re-open the
+    subtree on every later pass. Dropping them in CODE (rather than asking somebody to hand-edit
+    the cache) is what makes the fix stick for stores that already exist.
+    """
+    dropped = [f for f in list(verdicts)
+               if not verdict_is_pinned(verdicts.get(f))
+               and final_exclusion_covering(verdicts, f) not in (None, f)]
+    for folder in dropped:
+        verdicts.pop(folder, None)
+    return dropped
 
 
 def _folder_review(walk_root: Path, skip_dirs: Set[str], provider, model: Optional[str],
@@ -638,13 +722,19 @@ def _folder_review(walk_root: Path, skip_dirs: Set[str], provider, model: Option
             #     is right for a vendored dependency and wrong for a project the person works in.
             #     Those are named in the log rather than silently dropped, so the choice is
             #     visible and a person can index them as their own corpus.
+            if verdict_is_pinned(verdicts.get(rel)):
+                continue
             has_own_store = (walk_root / rel / ".quest-context" / "bootstrap_meta.json").exists()
-            verdicts.setdefault(rel, {
-                "index": False, "mixed": False,
+            # ASSIGNED, not setdefault: a deterministic verdict outranks whatever the model (or an
+            # older, buggier pass) recorded for the same folder. Otherwise the first cached model
+            # "index": true survives forever and the safeguard never actually applies. A verdict a
+            # human PINNED is the one exception.
+            verdicts[rel] = {
+                "index": False, "mixed": False, "final": True, "source": "nested_repo",
                 "reason": (f"nested {marker} repository; its own card store is imported instead"
                            if has_own_store
                            else f"nested {marker} repository (separate project, not this corpus)"),
-            })
+            }
             if not has_own_store:
                 unstored.append(rel)
         if unstored:
@@ -659,16 +749,29 @@ def _folder_review(walk_root: Path, skip_dirs: Set[str], provider, model: Option
     # the hashing, and the pair that motivates this is always among the largest.
     biggest = sorted(_roll_up_to_depth(counts, 4), key=lambda f: -_folder_file_count(counts, f))
     for folder, (dup_of, overlap) in _duplicate_folders(walk_root, biggest[:40], counts).items():
-        verdicts.setdefault(folder, {
-            "index": False, "mixed": False,
+        if verdict_is_pinned(verdicts.get(folder)):
+            continue
+        verdicts[folder] = {
+            "index": False, "mixed": False, "final": True, "source": "duplicate",
             "reason": f"{overlap:.0%} duplicate of {dup_of}",
-        })
+        }
+
+    # Cache invalidation: anything cached UNDER a final exclusion was recorded by a pass that let
+    # the subtree be re-opened, and keeping it would re-open it again now. See
+    # ``drop_verdicts_under_final_exclusions``.
+    stale_under_final = drop_verdicts_under_final_exclusions(verdicts)
+    if stale_under_final:
+        _log.info(
+            "context index: dropped %d cached folder verdict(s) that sat inside a folder excluded "
+            "for good (a nested repository or a duplicate tree); their parent's verdict stands",
+            len(stale_under_final),
+        )
 
     # --- Safeguard 3: the model, for what the two above cannot see -------------------------
     if provider is not None:
         depth = _FOLDER_REVIEW_START_DEPTH
         pending = [(f, n) for f, n in _roll_up_to_depth(counts, depth).items()
-                   if f not in verdicts]
+                   if f not in verdicts and final_exclusion_covering(verdicts, f) is None]
         while depth <= _FOLDER_REVIEW_MAX_DEPTH:
             for i in range(0, len(pending), _FOLDER_REVIEW_BATCH):
                 verdicts.update(_review_folder_batch(pending[i:i + _FOLDER_REVIEW_BATCH],
@@ -682,36 +785,68 @@ def _folder_review(walk_root: Path, skip_dirs: Set[str], provider, model: Option
             for folder, n in deeper.items():
                 if folder in verdicts:
                     continue
+                # Nothing beneath a final exclusion is judged at all, at any depth. Checking the
+                # whole ancestor chain (not just the direct parent) is what makes it hold: the
+                # child of a child of an excluded nested repository is still inside it.
+                if final_exclusion_covering(verdicts, folder) is not None:
+                    continue
                 parent = "/".join(folder.split("/")[:-1])
                 parent_v = verdicts.get(parent)
                 if parent_v is None:
                     continue
-                parent_big = _folder_file_count(counts, parent) > _FOLDER_REVIEW_EXPAND_OVER
                 if not parent_v.get("index", True):
-                    # A SKIP is final only for a SMALL folder. Excluding a large subtree on one
-                    # shallow judgement is the most damaging mistake this review can make -- one
-                    # real corpus had its entire company workspace called a "duplicate mirror"
-                    # because a vendored dependency clone sat inside it, which would have thrown
-                    # away every note and document under it. A big folder must earn its exclusion
-                    # at a finer grain, so we open it up and judge the children instead.
-                    if not (parent_big or parent_v.get("mixed")):
+                    # A model SKIP is re-opened only when the model ASKED for that by answering
+                    # "mixed": that is the one case where it said the folder holds both kinds and
+                    # a per-child judgement is wanted. Size used to be enough on its own, which is
+                    # how a deterministic exclusion of a 23k-file vendored tree got re-opened and
+                    # then outvoted by its own children. A model skip of a large folder that was
+                    # NOT called mixed stands; the way to overturn it is to edit the cache file.
+                    if not parent_v.get("mixed"):
                         continue
                 elif not (n > _FOLDER_REVIEW_EXPAND_OVER or parent_v.get("mixed")):
                     continue
                 pending.append((folder, n))
             if not pending:
                 break
+
+    # Written whether or not a model took part: with no provider this pass still re-applies the
+    # deterministic safeguards and drops the verdicts that sat under them, and that correction
+    # belongs on disk rather than being recomputed in memory forever. The file stays what it has
+    # always been, the record a human can read and edit to override any decision.
+    if verdicts:
         try:
             cards_dir.mkdir(parents=True, exist_ok=True)
-            cache_path.write_text(json.dumps({"folders": verdicts}, indent=2), encoding="utf-8")
+            cache_path.write_text(
+                json.dumps({"version": _FOLDER_REVIEW_VERSION, "folders": verdicts}, indent=2),
+                encoding="utf-8",
+            )
         except Exception:  # noqa: BLE001
             pass
 
-    # A parent that was excluded but then opened up (see above) must not veto the children that
-    # were individually kept: its verdict has been superseded by the finer-grained ones.
+    # A MIXED model skip that was opened up must not veto the children that were individually
+    # kept: by answering "mixed" the model said its own verdict was provisional, so the
+    # finer-grained judgements supersede it. Every other exclusion stands on its own, however
+    # many of its children a later pass liked -- see ``verdict_is_final``.
     expanded = {"/".join(f.split("/")[:-1]) for f in verdicts if "/" in f}
-    excluded = {f for f, v in verdicts.items()
-                if not v.get("index", True) and not (f in expanded and _has_kept_child(verdicts, f))}
+    excluded = set()
+    for folder, verdict in verdicts.items():
+        if verdict.get("index", True):
+            continue
+        if not folder or folder == ".":
+            # The root is not an excludable folder. Carried as a verdict for the record, dropped
+            # here, and logged so the judgement is visible rather than silently ignored.
+            _log.info("context index: folder review skipped the corpus ROOT (%s); the root is "
+                      "never excluded, its own loose files are judged with everything else",
+                      verdict.get("reason") or "no reason given")
+            continue
+        superseded = (
+            not verdict_is_final(verdict)
+            and bool(verdict.get("mixed"))
+            and folder in expanded
+            and _has_kept_child(verdicts, folder)
+        )
+        if not superseded:
+            excluded.add(folder)
     if excluded:
         skipped_files = sum(n for f, n in counts.items()
                             if any(f == e or f.startswith(e + "/") for e in excluded))
@@ -1804,6 +1939,13 @@ def _dedup_topic_cards(
 
     existing_cards = existing_cards or []
 
+    # Step 0 -- the FILE SET, before any keyword gate and before any model call. Two cards pinning
+    # the same paths are one card, and no judgement is needed to see that. Runs against the
+    # existing cards too, so a restatement of a card already in the store folds into it.
+    raw_cards = collapse_cards_by_file_set(raw_cards, existing_cards)
+    if not raw_cards:
+        return []
+
     if provider is None:
         # No LLM: keyword-union fallback over the new cards only. (Existing-card dedup needs the
         # LLM's judgment; without it we keep new cards distinct and let id-collision upsert handle
@@ -1849,6 +1991,329 @@ def _dedup_topic_cards(
         seen_ids.add(cid)
         deduped.append(card)
     return deduped
+
+
+# ---------------------------------------------------------------------------
+# Card inflation: three deterministic gates in front of every write
+# ---------------------------------------------------------------------------
+# A corpus of roughly 80,000 indexable files should produce a few HUNDRED cards. Two real stores
+# held 8,557 and 32,070. None of the three causes was exotic: duplicate cards describing the same
+# files under different names, one card per generated data file, and no ceiling of any kind. The
+# gates below are all deterministic (no model call, no keyword gate) because a card that should
+# never exist is not worth a model call to confirm.
+
+# Two cards covering the same FILES are the same card, whatever they are called. Identical path
+# sets collapse, and so does near-identical: at 0.8 the pair is describing one thing with one
+# file's difference, which is how an incremental pass re-describes a folder it already carded.
+_FILE_SET_DEDUP_JACCARD = 0.8
+
+# A file-derived card EARNS its place by relating files to each other. One file is not a topic, it
+# is a file, and the retrieval arms already find a file by its own path and terms.
+_MIN_FILES_PER_CARD = 2
+
+# DATA is never a single-file card: nothing a summary can say about a generated artefact is worth
+# a card, and these are the files that change on every run, so each change used to spawn more
+# cards. Markdown and code keep the single-file exception (a design note or one real module can
+# genuinely be the distinct thing a card is about) provided no other card already covers it.
+_DATA_FILE_EXTS = (".json", ".yaml", ".yml", ".jsonl", ".ndjson", ".csv", ".tsv", ".lock")
+_DATA_FILE_NAMES = (
+    "package.json", "package-lock.json", "composer.lock", "gemfile.lock", "cargo.lock",
+    "poetry.lock", "pnpm-lock.yaml", "yarn.lock", "uv.lock", "pipfile.lock", "go.sum",
+)
+_DATA_PATH_MARKERS = ("local_cache", "node_modules", ".cache", "__pycache__")
+_STATE_FILE_RE = re.compile(r"(?:^|[_.-])state\.json$", re.IGNORECASE)
+
+# Ceilings. Defaults chosen from what a human would expect of an index: one card per folder (a
+# folder IS the unit a topic card describes), a handful per area, and a store that grows with the
+# corpus rather than with the number of passes run over it.
+_FILES_PER_CARD_DEFAULT = 25
+_CARD_BUDGET_FLOOR_DEFAULT = 50
+_MAX_CARDS_PER_FOLDER_DEFAULT = 1
+_MAX_CARDS_PER_AREA_DEFAULT = 5
+_CARD_AREA_DEPTH = 2
+
+
+def _positive_int_env(name: str, default: int) -> int:
+    """A positive int from the environment, or ``default``. ``0`` means "no cap". Never raises."""
+    raw = os.getenv(name, "").strip()
+    if not raw:
+        return default
+    try:
+        value = int(raw)
+    except ValueError:
+        _log.warning("context index: %s=%r is not an integer — using %d", name, raw, default)
+        return default
+    return value if value >= 0 else default
+
+
+def files_per_card() -> int:
+    return max(1, _positive_int_env("QAR_BOOTSTRAP_FILES_PER_CARD", _FILES_PER_CARD_DEFAULT))
+
+
+def card_budget_floor() -> int:
+    return _positive_int_env("QAR_BOOTSTRAP_CARD_BUDGET_FLOOR", _CARD_BUDGET_FLOOR_DEFAULT)
+
+
+def max_cards_per_folder() -> int:
+    return _positive_int_env("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", _MAX_CARDS_PER_FOLDER_DEFAULT)
+
+
+def max_cards_per_area() -> int:
+    return _positive_int_env("QAR_BOOTSTRAP_MAX_CARDS_PER_AREA", _MAX_CARDS_PER_AREA_DEFAULT)
+
+
+def default_card_budget(indexable_files: int) -> int:
+    """How many cards a corpus of ``indexable_files`` files is allowed, absent an explicit cap."""
+    return max(card_budget_floor(), int(indexable_files) // files_per_card())
+
+
+def card_budget_room(
+    existing_cards: List[Dict[str, Any]],
+    *,
+    indexable_files: int,
+    max_cards: Optional[int] = None,
+) -> int:
+    """How many NEW file-derived cards the budget still allows. Can be zero or negative.
+
+    Asked BEFORE topic discovery runs, not after: discovery is the expensive stage (one model call
+    per chunk, then one per area), and spending it to produce cards the ceilings will then drop is
+    the same waste in a different place.
+    """
+    budget = max_cards if max_cards is not None else default_card_budget(indexable_files)
+    held = sum(1 for card in existing_cards if card_folder_key(card))
+    return budget - held
+
+
+def path_is_data_file(rel: str) -> bool:
+    """Whether ``rel`` is generated/derived data rather than something a card can be about."""
+    text = str(rel or "").replace("\\", "/")
+    name = text.rsplit("/", 1)[-1].lower()
+    if name in _DATA_FILE_NAMES or _STATE_FILE_RE.search(name):
+        return True
+    if any(marker in text.lower() for marker in _DATA_PATH_MARKERS):
+        return True
+    return any(name.endswith(ext) for ext in _DATA_FILE_EXTS)
+
+
+def card_folder_key(card: Dict[str, Any]) -> str:
+    """The folder a card is about: the deepest directory common to all its files."""
+    paths = [p.replace("\\", "/") for p in _card_file_paths(card)]
+    if not paths:
+        return ""
+    dirs = [p.rsplit("/", 1)[0] if "/" in p else "." for p in paths]
+    parts = dirs[0].split("/")
+    for d in dirs[1:]:
+        other = d.split("/")
+        keep = 0
+        while keep < min(len(parts), len(other)) and parts[keep] == other[keep]:
+            keep += 1
+        parts = parts[:keep]
+        if not parts:
+            break
+    return "/".join(parts) if parts else "."
+
+
+def card_area_key(card: Dict[str, Any], depth: int = _CARD_AREA_DEPTH) -> str:
+    """The AREA a card sits in: the first ``depth`` segments of its folder."""
+    folder = card_folder_key(card)
+    if not folder:
+        return ""
+    parts = [p for p in folder.split("/") if p and p != "."]
+    return "/".join(parts[:depth]) if parts else "."
+
+
+def card_preference_key(card: Dict[str, Any], index: int) -> Tuple[int, str, int]:
+    """Sort key picking the BEST card of a duplicate group: most used, else earliest, else first.
+
+    "Most used" is the honest signal that a card earns its keep -- something actually retrieved it
+    and the work went well enough to leave the count behind. Creation time breaks the tie so the
+    card other state already points at survives, rather than its newest restatement.
+    """
+    usage = int(card.get("usage_count") or 0)
+    provenance = card.get("provenance")
+    created = ""
+    if isinstance(provenance, dict):
+        created = str(provenance.get("created_at") or "")
+    # An unknown creation time must not count as "earliest": sort it after every known one.
+    return (-usage, created or "~", index)
+
+
+def collapse_cards_by_file_set(
+    new_cards: List[Dict[str, Any]],
+    existing_cards: Optional[List[Dict[str, Any]]] = None,
+    *,
+    threshold: float = _FILE_SET_DEDUP_JACCARD,
+) -> List[Dict[str, Any]]:
+    """Collapse cards covering the same FILES into one. No model call, no keyword gate.
+
+    This runs BEFORE the keyword clustering and the LLM merge decision, because the file set is
+    the one thing about a card that is not a matter of judgement: two cards pinning the same paths
+    are the same card however differently the model named or described them, and the keyword gate
+    (two shared keywords) let plenty of those pairs through. Existing cards take part, so a new
+    card that restates one already in the store is folded INTO it under its own id rather than
+    written as a second copy.
+
+    Returns the cards to write: every group that gained a new card (represented by its best
+    member, files and keywords unioned) plus the new cards that duplicated nothing.
+    """
+    existing_cards = existing_cards or []
+    passthrough: List[Dict[str, Any]] = []
+    entries: List[Tuple[int, Dict[str, Any], bool, Set[str]]] = []
+    index = 0
+    for card in existing_cards:
+        files = set(_card_file_paths(card))
+        if files:
+            entries.append((index, card, True, files))
+        index += 1
+    for card in new_cards:
+        files = set(_card_file_paths(card))
+        if not files:
+            # Not file-derived (a conversation or run card). Nothing here can judge it.
+            passthrough.append(card)
+        else:
+            entries.append((index, card, False, files))
+        index += 1
+
+    # Inverted path -> group index, so each card is compared only against groups it could
+    # possibly match. An overlap at or above any positive threshold requires at least one shared
+    # path, so this is exact, not a heuristic -- and it is the difference between a linear pass and
+    # comparing 32,000 existing cards against every group on every bootstrap.
+    groups: List[Dict[str, Any]] = []
+    group_of_path: Dict[str, Set[int]] = {}
+    for item in entries:
+        _, _, _, files = item
+        candidate_indexes: Set[int] = set()
+        for path in files:
+            candidate_indexes |= group_of_path.get(path, set())
+        target: Optional[int] = None
+        for gi in sorted(candidate_indexes):
+            group = groups[gi]
+            if files == group["files"] or _jaccard(files, group["files"]) >= threshold:
+                target = gi
+                break
+        if target is None:
+            target = len(groups)
+            groups.append({"members": [], "files": set()})
+        groups[target]["members"].append(item)
+        groups[target]["files"] |= files
+        for path in groups[target]["files"]:
+            group_of_path.setdefault(path, set()).add(target)
+
+    out: List[Dict[str, Any]] = []
+    collapsed = 0
+    for group in groups:
+        members = group["members"]
+        has_new = any(not is_existing for _, _, is_existing, _ in members)
+        if not has_new:
+            continue                       # existing cards only: nothing new to write
+        if len(members) == 1:
+            out.append({**members[0][1]})
+            continue
+        ordered = sorted(members, key=lambda m: card_preference_key(m[1], m[0]))
+        keeper = ordered[0][1]
+        rest = [m[1] for m in ordered[1:]]
+        out.append(_merge_card_group([keeper] + rest))
+        collapsed += len(rest)
+    if collapsed:
+        _log.info("context index: %d card(s) collapsed into an existing card covering the same "
+                  "files (identical path set or >= %.0f%% overlap)", collapsed, threshold * 100)
+    return passthrough + out
+
+
+def card_is_too_thin(card: Dict[str, Any], covered_elsewhere: Set[str]) -> str:
+    """Why this file-derived card does not earn a card, or "" when it does.
+
+    A card with no files at all is never judged here (that is a conversation or run card).
+    """
+    paths = _card_file_paths(card)
+    if not paths or len(paths) >= _MIN_FILES_PER_CARD:
+        return ""
+    only = paths[0]
+    if path_is_data_file(only):
+        return "single generated/data file"
+    if only in covered_elsewhere:
+        return "single file already covered by another card"
+    return ""
+
+
+def apply_card_ceilings(
+    new_cards: List[Dict[str, Any]],
+    existing_cards: List[Dict[str, Any]],
+    *,
+    indexable_files: int,
+    max_cards: Optional[int] = None,
+) -> List[Dict[str, Any]]:
+    """Drop NEW cards that would breach the per-folder, per-area or global ceiling.
+
+    A card whose id is already in the store is always kept: it is a refresh of a card that exists,
+    so dropping it would only leave the store stale, never smaller. Existing cards DO count toward
+    every ceiling, because the ceiling is about the size of the store, not the size of one pass.
+
+    Truncation is always logged at WARNING with the numbers. A ceiling nobody is told about is
+    indistinguishable from a bug, which this file has already learned once (see
+    ``QAR_BOOTSTRAP_MAX_FILES``).
+    """
+    per_folder = max_cards_per_folder()
+    per_area = max_cards_per_area()
+    budget = max_cards if max_cards is not None else default_card_budget(indexable_files)
+
+    existing_by_id = {c.get("id"): c for c in existing_cards if c.get("id")}
+    incoming_ids = {c.get("id") for c in new_cards if c.get("id")}
+
+    folder_counts: Dict[str, int] = {}
+    area_counts: Dict[str, int] = {}
+    total = 0
+    file_derived_existing = 0
+    for cid, card in existing_by_id.items():
+        folder = card_folder_key(card)
+        if folder:
+            file_derived_existing += 1
+        if cid in incoming_ids:
+            continue                        # counted when its refreshed version is admitted
+        # Only FILE-DERIVED cards count against the ceilings. A conversation or run card has no
+        # files, occupies no folder, and arrives from being USED rather than from the corpus, so
+        # counting it would make a store full of genuinely learned context refuse to index the
+        # corpus at all.
+        if not folder:
+            continue
+        total += 1
+        folder_counts[folder] = folder_counts.get(folder, 0) + 1
+        area = card_area_key(card)
+        area_counts[area] = area_counts.get(area, 0) + 1
+
+    kept: List[Dict[str, Any]] = []
+    dropped = {"folder": 0, "area": 0, "budget": 0}
+    for card in new_cards:
+        folder = card_folder_key(card)
+        area = card_area_key(card)
+        is_refresh = card.get("id") in existing_by_id
+        if not is_refresh and folder:
+            if budget and total >= budget:
+                dropped["budget"] += 1
+                continue
+            if per_folder and folder_counts.get(folder, 0) >= per_folder:
+                dropped["folder"] += 1
+                continue
+            if per_area and area_counts.get(area, 0) >= per_area:
+                dropped["area"] += 1
+                continue
+        kept.append(card)
+        if folder:
+            total += 1
+            folder_counts[folder] = folder_counts.get(folder, 0) + 1
+            area_counts[area] = area_counts.get(area, 0) + 1
+
+    if any(dropped.values()):
+        _log.warning(
+            "context index: card ceilings dropped %d new card(s) — %d over the per-folder cap of "
+            "%d, %d over the per-area cap of %d, %d over the budget of %d card(s) for %d indexable "
+            "file(s) (store already holds %d); raise QAR_BOOTSTRAP_MAX_CARDS, "
+            "QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER, QAR_BOOTSTRAP_MAX_CARDS_PER_AREA or "
+            "QAR_BOOTSTRAP_FILES_PER_CARD to index more",
+            sum(dropped.values()), dropped["folder"], per_folder, dropped["area"], per_area,
+            dropped["budget"], budget, indexable_files, file_derived_existing,
+        )
+    return kept
 
 
 def _select_representative_files(file_paths: List[str], samples_per_folder: int = 3) -> List[str]:
@@ -2993,6 +3458,10 @@ class FileContextStore(ContextAssemblerBase):
                     here = current_dir.relative_to(walk_root).as_posix()
                 except ValueError:
                     here = ""
+                # ``relative_to`` renders the root as ".", and "./child" matches a "." prefix, so
+                # the root must be the EMPTY string before any path is composed from it.
+                if here == ".":
+                    here = ""
                 if _is_excluded_folder(here, excluded_folders):
                     dirnames[:] = []
                     continue
@@ -3266,6 +3735,25 @@ class FileContextStore(ContextAssemblerBase):
             "— processing", len(uncovered), len(stale_covered),
         )
 
+        # Ask the budget BEFORE paying for discovery. A store already at or over its ceiling
+        # cannot accept a new card, so discovering topics for uncovered files would buy model
+        # calls whose every result is then dropped. Stale cards are still regenerated below: that
+        # keeps what exists correct, which the budget never forbids.
+        room = card_budget_room(existing_cards, indexable_files=len(file_paths),
+                                max_cards=max_cards)
+        if uncovered and room <= 0:
+            _log.warning(
+                "context index: %d uncovered file(s) will NOT be analysed — the store already "
+                "holds %d file-derived card(s), at or over its budget of %d for %d indexable "
+                "file(s). Prune the store (scripts/quarantine_cards.py) or raise "
+                "QAR_BOOTSTRAP_MAX_CARDS / QAR_BOOTSTRAP_FILES_PER_CARD; nothing was discovered, "
+                "so nothing was spent.",
+                len(uncovered), sum(1 for c in existing_cards if card_folder_key(c)),
+                max_cards if max_cards is not None else default_card_budget(len(file_paths)),
+                len(file_paths),
+            )
+            uncovered = []
+
         # --- LLM: identify topic cards for the NEW (uncovered) files, deduping vs existing ---
         topic_cards: List[Dict[str, Any]] = []
         if uncovered and provider is not None:
@@ -3346,6 +3834,13 @@ class FileContextStore(ContextAssemblerBase):
             for mc in tfdfidf_migration_cards:
                 if mc.get("id") not in queued_ids:
                     topic_cards.append(mc)
+
+        # --- The three inflation gates, between "what the model proposed" and "what is written" --
+        # Deliberately here rather than inside the LLM stages: a card can also arrive from the
+        # stale-regen path, the import path or the tfdfidf migration, and every one of them has
+        # grown a store past its budget at some point.
+        topic_cards = self._gate_new_cards(topic_cards, existing_cards,
+                                           indexable_files=len(file_paths), max_cards=max_cards)
 
         if not topic_cards:
             return 0
@@ -3513,6 +4008,55 @@ class FileContextStore(ContextAssemblerBase):
         # Invalidate cache after all writes.
         self._cache_dirty = True
         return cards_written
+
+    def _gate_new_cards(
+        self,
+        topic_cards: List[Dict[str, Any]],
+        existing_cards: List[Dict[str, Any]],
+        *,
+        indexable_files: int,
+        max_cards: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Apply the thin-card rule and the card ceilings to what this pass would write.
+
+        Both gates apply to GENUINELY NEW cards only. A card whose id is already in the store is a
+        refresh: refusing it would leave the store stale without making it any smaller, and the
+        cards that should never have existed are removed by the maintenance tool
+        (``scripts/quarantine_cards.py``), not by quietly declining to update them.
+        """
+        existing_ids = {c.get("id") for c in existing_cards if c.get("id")}
+        covered_elsewhere: Set[str] = set()
+        for card in existing_cards:
+            if card.get("id") in {tc.get("id") for tc in topic_cards}:
+                continue
+            covered_elsewhere.update(_card_file_paths(card))
+        multi_file_new = [tc for tc in topic_cards
+                          if len(_card_file_paths(tc)) >= _MIN_FILES_PER_CARD]
+        for card in multi_file_new:
+            covered_elsewhere.update(_card_file_paths(card))
+
+        kept: List[Dict[str, Any]] = []
+        thin: Dict[str, int] = {}
+        for card in topic_cards:
+            if card.get("id") in existing_ids:
+                kept.append(card)
+                continue
+            reason = card_is_too_thin(card, covered_elsewhere)
+            if reason:
+                thin[reason] = thin.get(reason, 0) + 1
+                continue
+            kept.append(card)
+        if thin:
+            _log.warning(
+                "context index: %d new card(s) not written because one file is not a topic — %s; "
+                "a file-derived card needs at least %d files, and a lone generated/data file is "
+                "never carded", sum(thin.values()),
+                "; ".join(f"{n} x {reason}" for reason, n in sorted(thin.items())),
+                _MIN_FILES_PER_CARD,
+            )
+
+        return apply_card_ceilings(kept, existing_cards, indexable_files=indexable_files,
+                                   max_cards=max_cards)
 
     def _read_discovered(self) -> Dict[str, float]:
         """The discovered-files record (see ``_DISCOVERED_FILE``). Never raises."""

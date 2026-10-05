@@ -8,6 +8,7 @@ skipped when qdrant-client is not installed.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import tempfile
 from pathlib import Path
@@ -23,6 +24,8 @@ from quest_ai_runner.core.adapters import (
     VectorStore,
     VectorStoreBase,
 )
+from quest_ai_runner.core.vector_scopes import CARD_SEED_SCOPE
+from quest_ai_runner.adapters import vector_context_assembler as vca
 from quest_ai_runner.adapters.vector_context_assembler import VectorContextAssembler
 from quest_ai_runner.adapters.hybrid_context_assembler import HybridContextAssembler
 
@@ -39,6 +42,20 @@ class FakeVectorStore(VectorStoreBase):
 
     Also implements the optional capacity methods ``count`` and ``evict_oldest``
     so tests for the capacity bound can use a real in-memory store.
+
+    SCOPE VISIBILITY matches ``QdrantVectorStore``, which is single-collection with a ``_scope``
+    payload filter and deliberately NOT collection-per-scope. Two separate rules, and the whole
+    card-eviction bug lived in the gap between them:
+
+      * SEARCH under a scope sees that scope's points, PLUS unscoped (shared) points, PLUS the
+        ``CARD_SEED_SCOPE`` partition, which is shared for visibility so a card stays reachable
+        from every scope.
+      * ``count`` and ``evict_oldest`` match the EXACT scope only, so ``scope=None`` means
+        unscoped points and can never reach a scoped point, seeded cards included.
+
+    Modelling only the first rule (one bucket per scope, as this fake used to) hides the bug and
+    passes tests the real store would fail, which is the repository's own standing lesson about
+    stubs: fake the backend's filtering, not just its reply shape.
     """
 
     def __init__(self) -> None:
@@ -52,6 +69,14 @@ class FakeVectorStore(VectorStoreBase):
         parts = sorted(f"{k}={v}" for k, v in scope.items())
         return hashlib.sha256("|".join(parts).encode()).hexdigest()[:8]
 
+    def visible_collections(self, scope: Optional[Dict[str, Any]]) -> List[str]:
+        """Buckets a SEARCH under ``scope`` may see: its own, the shared one, and the seed one."""
+        names = [self._coll(None), self._coll(CARD_SEED_SCOPE)]
+        own = self._coll(scope)
+        if own not in names:
+            names.append(own)
+        return names
+
     def search(
         self,
         query: str,
@@ -60,8 +85,9 @@ class FakeVectorStore(VectorStoreBase):
         top_k: int = 8,
     ) -> List[VectorHit]:
         try:
-            coll = self._coll(scope)
-            items = self._data.get(coll, {})
+            items: Dict[str, Dict[str, Any]] = {}
+            for coll in self.visible_collections(scope):
+                items.update(self._data.get(coll, {}))
             hits = []
             q_lower = query.lower()
             for item_id, item in items.items():
@@ -1577,8 +1603,9 @@ class TestVectorContextAssemblerSeedSource:
         asm1.assemble("billing module")
         assert len(call_log) == 1
 
-        # Manually verify the item is in the store with its fingerprint.
-        coll = store._data.get("_default", {})
+        # Manually verify the item is in the store with its fingerprint. Seeded cards live in
+        # the CARD_SEED_SCOPE partition, not the shared one, so that is the bucket to look in.
+        coll = store._data.get(store._coll(CARD_SEED_SCOPE), {})
         assert "card:boot1" in coll, "item should be in store after first seed"
         assert coll["card:boot1"]["fingerprint"] == "fp-stable"
 
@@ -1594,7 +1621,7 @@ class TestVectorContextAssemblerSeedSource:
         assert len(call_log2) == 1, "seed_source should still be called (to check)"
         # But the store's item should still have the same fingerprint (not re-inserted with a
         # different one), meaning sync() detected no change.
-        coll2 = store._data.get("_default", {})
+        coll2 = store._data.get(store._coll(CARD_SEED_SCOPE), {})
         assert coll2["card:boot1"]["fingerprint"] == "fp-stable"
 
     def test_seed_source_none_no_seeding(self):
@@ -2609,3 +2636,306 @@ class TestBackgroundSeed:
         arm.start_seed()
         arm._seed_thread.join(timeout=5)
         assert arm._seed_done is True
+
+
+# ---------------------------------------------------------------------------
+# NEW: CARD_SEED_SCOPE -- the seed pass writes cards under their own scope, never scope=None,
+# so the per-scope capacity accounting used by record()'s association eviction can never reach
+# them. See quest_ai_runner/core/vector_scopes.py for the full rationale.
+# ---------------------------------------------------------------------------
+
+class _ScopeRecordingStore(VectorStoreBase):
+    """Minimal VectorStore that records every ``sync()`` call (its items and its scope).
+
+    Used to verify WHICH scope the seed pass hands to the store, independent of any particular
+    store's own scope-bucketing behavior.
+    """
+
+    def __init__(self) -> None:
+        self.sync_calls: List[Dict[str, Any]] = []
+
+    def search(self, query, *, scope=None, top_k=8):
+        return []
+
+    def upsert(self, items, *, scope=None):
+        pass
+
+    def sync(self, items, *, scope=None):
+        self.sync_calls.append({"items": list(items), "scope": scope})
+        return len(items)
+
+
+class TestSeedSyncsUnderCardSeedScope:
+    """The cold-start seed pass must sync cards under CARD_SEED_SCOPE, never scope=None.
+
+    Before this fix, seeding wrote cards UNSCOPED (scope=None) -- the exact scope
+    record()'s association capacity bound also uses for its default (unscoped) associations.
+    See TestSeedCardsSurviveAssociationEviction below for the eviction this caused.
+    """
+
+    def test_maybe_seed_passes_card_seed_scope_to_sync(self):
+        store = _ScopeRecordingStore()
+        asm = VectorContextAssembler(
+            store,
+            seed_source=lambda: [
+                {"id": "card:x", "text": "billing card", "payload": {}, "fingerprint": "f1"},
+            ],
+            confidence_min_score=0.0,
+        )
+        asm.assemble("anything")
+
+        assert len(store.sync_calls) == 1, "expected exactly one seed sync call"
+        assert store.sync_calls[0]["scope"] == CARD_SEED_SCOPE, (
+            f"seed pass must sync under CARD_SEED_SCOPE, got scope={store.sync_calls[0]['scope']!r}"
+        )
+        assert store.sync_calls[0]["scope"] is not None, (
+            "seed pass must never sync under scope=None (the unscoped/default bucket)"
+        )
+
+    def test_background_seed_also_uses_card_seed_scope(self):
+        """``start_seed()`` (the background path) must use the same scope as the sync path."""
+        store = _ScopeRecordingStore()
+        asm = VectorContextAssembler(
+            store,
+            seed_source=lambda: [
+                {"id": "card:y", "text": "payment card", "payload": {}, "fingerprint": "f2"},
+            ],
+            confidence_min_score=0.0,
+            seed_in_background=True,
+        )
+        asm.start_seed()
+        asm._seed_thread.join(timeout=5)
+        assert store.sync_calls == [
+            {
+                "items": [
+                    {"id": "card:y", "text": "payment card", "payload": {}, "fingerprint": "f2"}
+                ],
+                "scope": CARD_SEED_SCOPE,
+            }
+        ]
+
+
+class TestSeedCardsSurviveAssociationEviction:
+    """Seeded cards must never be evicted by record()'s association capacity bound.
+
+    OLD BEHAVIOR (the bug CARD_SEED_SCOPE fixes): the seed pass wrote cards UNSCOPED
+    (scope=None), and record()'s capacity bound evicted "associations" via
+    count(scope=None) / evict_oldest(..., scope=None) -- an EXACT-scope filter that, with
+    cards also living unscoped, matched the cards too. So the very first association record()
+    wrote evicted every card the seed pass had just paid real embedder cost to write.
+
+    ``FakeVectorStore.count``/``evict_oldest`` already key off an EXACT per-scope bucket (a
+    distinct scope dict gets its own bucket; scope=None is its own separate "_default" bucket)
+    -- the same per-scope accounting semantics ``QdrantVectorStore.count``/``evict_oldest`` use
+    via ``_exact_scope_filter`` -- so this test exercises the real failure mode without needing
+    a real Qdrant.
+    """
+
+    def test_seeding_then_overflowing_associations_never_evicts_the_seeded_cards(self):
+        store = FakeVectorStore()
+        seeded_ids = [f"card:boot-{i}" for i in range(5)]
+
+        def seed() -> List[Dict[str, Any]]:
+            return [
+                {
+                    "id": cid,
+                    "text": f"bootstrap card number {i}",
+                    "payload": {},
+                    "fingerprint": f"fp{i}",
+                }
+                for i, cid in enumerate(seeded_ids)
+            ]
+
+        asm = VectorContextAssembler(
+            store,
+            seed_source=seed,
+            confidence_min_score=0.0,
+            max_associations=2,
+        )
+        # Trigger the seed pass (first assemble()); this is the moment the cards get embedded
+        # and written, at real cost in the production arm.
+        asm.assemble("bootstrap card")
+
+        card_bucket = store._coll(CARD_SEED_SCOPE)
+        assert set(seeded_ids) <= set(store._data.get(card_bucket, {}).keys()), (
+            "seeded cards must exist right after the seed pass"
+        )
+
+        # Record more associations than the cap allows. This is exactly the moment the OLD
+        # (scope=None) seeding would have had count(scope=None)/evict_oldest(scope=None) reach
+        # into the card bucket and delete the cards just paid to embed.
+        for i in range(4):
+            asm.record(f"distinct task number {i}", {"kind": "met", "ts": float(1_000_000 + i)})
+
+        surviving_cards = set(store._data.get(card_bucket, {}).keys())
+        assert set(seeded_ids) <= surviving_cards, (
+            f"seeded cards were evicted by association capacity accounting: {surviving_cards!r}"
+        )
+
+        # The association cap was still enforced, on the DEFAULT (unscoped) bucket only.
+        assoc_bucket = store._data.get("_default", {})
+        assert len(assoc_bucket) <= 2, (
+            f"expected association capacity bound to still be enforced, got {len(assoc_bucket)}"
+        )
+
+
+class TestSeedBudget:
+    """The seed pass never embeds more than ``max_seed_items`` cards in one pass.
+
+    The budget is applied BEFORE ``sync`` is called, so work over the ceiling is never embedded
+    at all (not merely filtered after an expensive embed) -- this is the point of
+    ``_seed_items_within_budget`` living ahead of the store call, not inside it.
+    """
+
+    def test_only_the_budgeted_items_reach_sync_and_a_warning_is_logged(self, caplog):
+        store = _ScopeRecordingStore()
+        offered = [
+            {"id": f"card:{i}", "text": f"card number {i}", "payload": {}, "fingerprint": f"f{i}"}
+            for i in range(10)
+        ]
+        asm = VectorContextAssembler(
+            store,
+            seed_source=lambda: offered,
+            max_seed_items=3,
+            confidence_min_score=0.0,
+        )
+        with caplog.at_level("WARNING"):
+            asm.assemble("anything")
+
+        assert len(store.sync_calls) == 1, "expected exactly one seed sync call"
+        synced_ids = {item["id"] for item in store.sync_calls[0]["items"]}
+        # Only the first 3 offered items were ever handed to sync (and so would ever reach an
+        # embedder) -- the other 7 are never embedded, which is the whole point of the budget.
+        assert synced_ids == {"card:0", "card:1", "card:2"}, (
+            f"expected only the first 3 offered items to reach sync, got {synced_ids!r}"
+        )
+        assert "max_seed_items" in caplog.text and "vector seed" in caplog.text, (
+            f"expected a WARNING naming the seed budget, got: {caplog.text!r}"
+        )
+
+    def test_budget_of_zero_means_no_cap(self):
+        store = _ScopeRecordingStore()
+        offered = [
+            {"id": f"card:{i}", "text": f"card number {i}", "payload": {}, "fingerprint": f"f{i}"}
+            for i in range(10)
+        ]
+        asm = VectorContextAssembler(
+            store,
+            seed_source=lambda: offered,
+            max_seed_items=0,
+            confidence_min_score=0.0,
+        )
+        asm.assemble("anything")
+        assert len(store.sync_calls[0]["items"]) == 10, (
+            "max_seed_items=0 must mean no ceiling at all"
+        )
+
+    def test_offering_fewer_than_the_budget_is_unaffected(self):
+        store = _ScopeRecordingStore()
+        offered = [
+            {"id": "card:only", "text": "one card", "payload": {}, "fingerprint": "f0"},
+        ]
+        asm = VectorContextAssembler(
+            store,
+            seed_source=lambda: offered,
+            max_seed_items=3,
+            confidence_min_score=0.0,
+        )
+        asm.assemble("anything")
+        assert len(store.sync_calls[0]["items"]) == 1
+
+
+class TestDefaultMaxSeedItems:
+    """``default_max_seed_items()`` reads ``QAR_VECTOR_MAX_SEED_ITEMS`` from the environment.
+
+    This is the ceiling a lane uses when it does not pass ``max_seed_items`` explicitly, so the
+    two budgets (constructor default and store-level default) cannot drift apart. See
+    ``vector_context_assembler.py`` for why a ceiling exists at all: a card store that had
+    inflated to 32,070 cards was once seeded in full, every card embedded through a paid
+    embedder, before the capacity bound evicted the lot.
+    """
+
+    def test_no_env_var_uses_the_builtin_default(self, monkeypatch):
+        monkeypatch.delenv("QAR_VECTOR_MAX_SEED_ITEMS", raising=False)
+        assert vca.default_max_seed_items() == vca._MAX_SEED_ITEMS_DEFAULT
+
+    def test_env_var_overrides_the_default(self, monkeypatch):
+        monkeypatch.setenv("QAR_VECTOR_MAX_SEED_ITEMS", "7")
+        assert vca.default_max_seed_items() == 7
+
+    def test_zero_means_no_cap(self, monkeypatch):
+        monkeypatch.setenv("QAR_VECTOR_MAX_SEED_ITEMS", "0")
+        assert vca.default_max_seed_items() == 0
+
+    def test_negative_value_falls_back_to_the_builtin_default(self, monkeypatch):
+        monkeypatch.setenv("QAR_VECTOR_MAX_SEED_ITEMS", "-5")
+        assert vca.default_max_seed_items() == vca._MAX_SEED_ITEMS_DEFAULT
+
+    def test_garbage_value_is_ignored_with_a_warning(self, monkeypatch, caplog):
+        monkeypatch.setenv("QAR_VECTOR_MAX_SEED_ITEMS", "not-a-number")
+        with caplog.at_level("WARNING"):
+            value = vca.default_max_seed_items()
+        assert value == vca._MAX_SEED_ITEMS_DEFAULT
+        assert "QAR_VECTOR_MAX_SEED_ITEMS" in caplog.text
+
+
+class TestSeededCardsRemainRetrievableUnderAnyScope:
+    """Seeding a card under CARD_SEED_SCOPE must not make it invisible to a normal scoped search.
+
+    This is the regression that would make the CARD_SEED_SCOPE fix a disaster: a scope that
+    protects seeded cards from eviction but ALSO hides them from retrieval would be worse than
+    the bug it fixes (a seeded card would be unkillable AND unreachable). ``_visibility_filter``
+    must admit the CARD_SEED_SCOPE digest as a should-clause under EVERY scope (so a seeded card
+    stays retrievable from an unrelated scope), while ``_exact_scope_filter`` (what ``count``
+    and ``evict_oldest`` use) must NOT match the seed digest from scope=None, so association
+    accounting still can never reach the cards. Built the same offline way
+    ``tests/test_qdrant_vector_store_scoping.py`` does: an embedded (on-disk, server-less)
+    Qdrant instance under ``tmp_path`` with a deterministic toy embedder, never a real server.
+    """
+
+    def test_visibility_filter_admits_the_seed_digest_under_an_unrelated_scope(self):
+        pytest.importorskip("qdrant_client")
+        from quest_ai_runner.adapters.qdrant_vector_store import (
+            QdrantVectorStore,
+            _scope_hash,
+        )
+
+        with tempfile.TemporaryDirectory() as td:
+            store = QdrantVectorStore(
+                path=os.path.join(td, "qdrant"),
+                embedder=lambda texts: [[0.1] * 8 for _ in texts],
+                vector_size=8,
+            )
+            seed_digest = _scope_hash(CARD_SEED_SCOPE)
+
+            # A scope entirely unrelated to the seed scope (e.g. one task's goal_id).
+            unrelated_filter = store._visibility_filter({"goal_id": "g1"})
+            should_match_values = {
+                cond.match.value
+                for cond in unrelated_filter.should
+                if getattr(cond, "match", None) is not None
+            }
+            assert seed_digest in should_match_values, (
+                "seeded cards must stay visible (a should-clause) under an unrelated scope"
+            )
+
+    def test_exact_scope_filter_for_scope_none_cannot_match_the_seed_digest(self):
+        pytest.importorskip("qdrant_client")
+        from qdrant_client.models import IsEmptyCondition
+
+        from quest_ai_runner.adapters.qdrant_vector_store import QdrantVectorStore
+
+        with tempfile.TemporaryDirectory() as td:
+            store = QdrantVectorStore(
+                path=os.path.join(td, "qdrant"),
+                embedder=lambda texts: [[0.1] * 8 for _ in texts],
+                vector_size=8,
+            )
+            # count()/evict_oldest() for scope=None (the default/unscoped association bucket)
+            # must require an EMPTY _scope field -- it can never match a seeded (scoped) point,
+            # however that point's digest is computed.
+            exact_none = store._exact_scope_filter(None)
+            assert any(isinstance(cond, IsEmptyCondition) for cond in exact_none.must), (
+                "exact scope filter for scope=None must require an empty _scope field, so "
+                "association eviction with scope=None can never reach seeded card points"
+            )
