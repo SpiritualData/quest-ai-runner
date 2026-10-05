@@ -274,3 +274,61 @@ def test_prewarm_builds_the_cache_the_first_turn_uses(tmp_path, monkeypatch):
                         lambda self, card: calls.append(card["id"]) or {})
     store._scoring_index(store._load_all())
     assert calls == [], "the first turn recomputed weights prewarm already built"
+
+
+def test_two_processes_starting_together_refresh_the_same_folder_once(tmp_path, monkeypatch):
+    """Both lanes restart at the same moment on the daily timer. Only ONE may refresh the shared
+    folder (the stamp is written only when a refresh finishes, so without a lock both saw stale,
+    found the same new files, and each backfilled them); the loser skips, and the lock is released
+    afterwards so a later refresh can run."""
+    import threading
+
+    from quest_ai_runner import config as cfgmod
+    from quest_ai_runner.adapters.file_context_store import (
+        _TFDFIDF_VERSION, _write_bootstrap_meta,
+    )
+
+    cards = tmp_path / "cards"
+    cards.mkdir()
+    (cards / "some-card.json").write_text('{"id": "some-card"}', encoding="utf-8")
+    _write_bootstrap_meta(str(cards), 1, feature_versions={"tfdfidf": _TFDFIDF_VERSION})
+    monkeypatch.setenv("QAR_REFRESH_MIN_INTERVAL_SECONDS", "1800")
+
+    inside = threading.Event()
+    release = threading.Event()
+    calls = []
+
+    def slow_refresh(**kwargs):
+        calls.append(1)
+        inside.set()
+        release.wait(timeout=5)
+        return 0
+
+    first = MagicMock()
+    first.refresh_stale.side_effect = slow_refresh
+    second = MagicMock()
+    second.refresh_stale.side_effect = slow_refresh
+
+    cfgmod._bootstrap_if_needed(first, root=str(tmp_path), cards_dir=str(cards))
+    assert inside.wait(timeout=5), "the first process must be mid-refresh"
+    cfgmod._bootstrap_if_needed(second, root=str(tmp_path), cards_dir=str(cards))
+    for t in list(cfgmod.threading.enumerate()):
+        if t.name == "qar-refresh" and t is not threading.current_thread():
+            if t.is_alive() and second.refresh_stale.call_count == 0:
+                t.join(timeout=0.5)
+    release.set()
+    for t in list(cfgmod.threading.enumerate()):
+        if t.name == "qar-refresh":
+            t.join(timeout=5)
+
+    assert len(calls) == 1, "the folder must be refreshed once, not once per process"
+    assert second.refresh_stale.call_count == 0
+
+    monkeypatch.setenv("QAR_REFRESH_MIN_INTERVAL_SECONDS", "0")
+    third = MagicMock()
+    third.refresh_stale.return_value = 0
+    cfgmod._bootstrap_if_needed(third, root=str(tmp_path), cards_dir=str(cards))
+    for t in list(cfgmod.threading.enumerate()):
+        if t.name == "qar-refresh":
+            t.join(timeout=5)
+    assert third.refresh_stale.call_count == 1, "the lock must be released after the refresh"

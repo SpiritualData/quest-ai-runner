@@ -1656,7 +1656,30 @@ def _bootstrap_if_needed(
             _log.debug("context index: scanning %s for changes (background)", root)
 
             def _bg_refresh() -> None:
+                # ONE refresh per folder at a time, across every process sharing this store (both
+                # SD lanes and the terminal start together on the daily restart). The stamp above
+                # is only written when a refresh FINISHES, so without this lock two processes both
+                # saw "stale", both found the same new files, and each asked the model for cards
+                # for them: duplicate backfill and duplicate cards. A process that loses the race
+                # skips: the winner's result lands in the shared card files it reads anyway.
+                lock_fd = None
                 try:
+                    Path(cards_dir).mkdir(parents=True, exist_ok=True)
+                    lock_fd = open(os.path.join(cards_dir, ".bootstrap.lock"), "w")  # noqa: WPS515
+                    try:
+                        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    except OSError:
+                        _log.debug("context index: another process is refreshing %s; skipping",
+                                   cards_dir)
+                        return
+                    # Re-check under the lock: a process that held it a moment ago may have just
+                    # finished and stamped, in which case there is nothing left to do.
+                    try:
+                        recent = 0 <= time.time() - stamp.stat().st_mtime < min_interval
+                    except OSError:
+                        recent = False
+                    if recent:
+                        return
                     n = keyword.refresh_stale(root=root, provider=provider, model=model)
                     try:
                         stamp.parent.mkdir(parents=True, exist_ok=True)
@@ -1670,6 +1693,13 @@ def _bootstrap_if_needed(
                         _log.debug("context index: all cards up to date")
                 except Exception:  # noqa: BLE001
                     _log.debug("context index: refresh failed", exc_info=True)
+                finally:
+                    if lock_fd is not None:
+                        try:
+                            fcntl.flock(lock_fd, fcntl.LOCK_UN)
+                            lock_fd.close()
+                        except OSError:
+                            pass
 
             _refresh_thread = threading.Thread(target=_bg_refresh, daemon=True, name="qar-refresh")
             _register_index_thread(_refresh_thread, keyword)
