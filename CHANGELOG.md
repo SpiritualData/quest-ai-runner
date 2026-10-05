@@ -24,8 +24,11 @@ All notable changes to this project are documented here. The format is based on
     and the cached-hint rule govern an ANSWER, and the answer path applies both again), with a
     condensed actions block and, via `decide_tool_for(compact=True)` plus the new
     `strip_schema_descriptions`, a schema carrying its contract and not its prose. The planner body
-    falls from 7,132 tokens to 2,053 and the schema from 1,897 to 583, with no measured accuracy
-    cost. An unknown profile name degrades to "full" rather than raising.
+    falls from 7,132 tokens to 2,053 and the schema from 1,897 to 583. It is a real TRADE, not a
+    free lunch, and the ablation says so: on the dev half, with the rubric and the reach judge held
+    constant, the full profile scores 94.1 percent at 13,275 input tokens per request and the
+    compact one 92.0 percent at 6,975. Both clear 90; pick compact when cost is the constraint and
+    full when it is not. An unknown profile name degrades to "full" rather than raising.
   - **The reach judge** (`core/reach_judge.py`, `planner_reach_judge`, off by default): one small
     question answered by a STRONGER tier before planning, settling whether what the request needs
     lives inside the readable sources, outside them, or in the world right now. About 400 input

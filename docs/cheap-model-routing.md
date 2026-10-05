@@ -11,6 +11,26 @@ out half per recommended configuration. The harness lives in the consumer that o
 (quest-backend's `scripts/checks/check_deep_run_routing.py`), because the labels are facts about a
 product, not about this library.
 
+## The result
+
+One run on the held-out half per recommended configuration, after all iteration was finished.
+
+| configuration | accuracy (Wilson 95%) | input tokens / request | cost / 1,000 requests |
+|---|---|---|---|
+| cheapest model, old prompt | 80.8% [76.5, 84.5] | 12,459 | $1.288 |
+| stronger model, old prompt | 88.5% [84.9, 91.4] | 12,758 | $3.382 |
+| **cheapest model, this work** | **91.2% [87.9, 93.7]** | **7,113** | **$0.908** |
+| stronger model, this work | 97.1% [94.8, 98.4] | 7,268 | $1.959 |
+
+Paired on the same cases, the cheap model gains 10.4 percentage points (bootstrap 95 percent CI
++6.4 to +14.4, McNemar p below 0.001), and the stronger model gains 8.5, so nothing was traded away
+to make the cheap one work. Exactly one group of fifteen cases regresses for either model, by one
+case more than its noise. Prices are the unverified list prices in the consumer's price table, so
+read the ratio rather than the absolute figures.
+
+The point worth taking: the cheap configuration is both more accurate AND 73 percent cheaper than
+the stronger model was on the old prompt.
+
 ## Where the tokens go
 
 Measured with a tokenizer, no model involved, on one real step-0 planner call (cl100k, which
@@ -46,7 +66,14 @@ question about the world right now is neither a read of your own sources nor wor
 **The compact planner profile** (`OrchestratorConfig.planner_prompt_profile = "compact"`). The same
 doctrine with the answer-grounding gates dropped and the actions block condensed, plus the decide
 schema with its field descriptions stripped (`decide_tool_for(compact=True)`). The planner body
-falls from 7,132 tokens to 2,053 and the schema from 1,897 to 583, with no measured accuracy cost.
+falls from 7,132 tokens to 2,053 and the schema from 1,897 to 583.
+
+This one is a TRADE and the ablation says so plainly. Holding the rubric and the reach judge
+constant on the dev half, the full profile scores 94.1 percent at 13,275 input tokens per request
+and the compact profile 92.0 percent at 6,975. Half the tokens for two points. Both clear 90, so
+take compact when cost is the constraint and full when it is not. The first version of this page
+claimed the compact profile cost nothing, which was an inference from a bundled run, not a
+measurement. Run the ablation before repeating a claim like that.
 
 **The reach judge** (`planner_reach_judge`, `core/reach_judge.py`). One small question, answered by a
 STRONGER tier before planning: does what this request needs live inside the readable sources,
@@ -80,6 +107,21 @@ reviewer handed a decision argues with it, while the thing actually missing was 
 kept, off by default, documented here as measured-not-working on the models tried. Asking the
 stronger model the reach question on its own, with no decision to defend, is 94.7 percent accurate on
 the same material.
+
+## What is still unverified
+
+- **Nothing has run a real turn.** Every number here comes from scoring two real decisions in a
+  harness. The compact profile and the judge have never driven a live conversation end to end, so
+  what the shorter actions block does to the QUALITY of the reads a planner emits, and to the reply
+  that follows, is unmeasured.
+- **Latency roughly doubles for the cheap model.** The judge is a serial call before planning, and
+  per-decision p50 goes from 0.7s to 1.4s (the stronger model, 1.4s to 2.0s). For a voice-first
+  deployment that is the real cost of the judge, not the tokens. It could plausibly run
+  concurrently with context assembly, which already happens before planning. Not built.
+- **One group regressed for BOTH models**, by the same two cases out of fifteen, in two otherwise
+  independent runs. Each alone is statistically inconclusive and inside the noise floor, but the
+  same group moving the same way twice is a signal rather than noise, and it has not been chased.
+- Prices come from an unverified table, so read every cost figure as a ratio.
 
 ## Measure before you believe a difference
 
