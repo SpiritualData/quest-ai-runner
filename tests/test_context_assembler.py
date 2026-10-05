@@ -2099,3 +2099,23 @@ class TestQuestFolderBoost:
         self._two_cards(cards_dir)
         store = FileContextStore(str(cards_dir), repo_root=str(tmp_path), confidence_threshold=10.0)
         assert store.assemble("academy", meta={"quest_id": "quest_1"}).card_ids == []
+
+
+class TestImportsNeverReimported:
+    def test_stores_that_import_each_other_do_not_compound_ids(self, tmp_path):
+        """A wide store and the store nested in it import from each other; only original cards
+        may cross, so repeated bootstraps never wrap ids in more prefixes."""
+        helper = TestNestedCardReuse()
+        child = helper._make_child_repo(tmp_path)
+        helper._bootstrap_child(child)
+        parent_dir = tmp_path / "parent_cards"
+        parent = FileContextStore(str(parent_dir), repo_root=str(tmp_path), auto_bootstrap=False)
+        parent.bootstrap(root=str(tmp_path))
+        for _ in range(3):
+            child_store = FileContextStore(
+                str(child / ".quest-context"), repo_root=str(child), auto_bootstrap=False)
+            child_store.bootstrap(root=str(child))
+            parent.bootstrap(root=str(tmp_path))
+        ids = [json.loads(p.read_text())["id"] for p in _card_files(parent_dir)]
+        assert len(ids) == 1
+        assert ids[0].count("--") == 1

@@ -2739,6 +2739,12 @@ class FileContextStore(ContextAssemblerBase):
         except Exception:  # noqa: BLE001
             return False
 
+    @staticmethod
+    def _card_imported_from(card: Dict[str, Any]) -> str:
+        """Where a card was imported from (provenance ``imported_from``), or "" for an original."""
+        prov = card.get("provenance")
+        return str(prov.get("imported_from") or "") if isinstance(prov, dict) else ""
+
     def _import_nested_cards(self, nested_root: Path, walk_root: Path) -> List[Dict[str, Any]]:
         """Reuse a nested corpus's already-bootstrapped cards instead of re-discovering them.
 
@@ -2774,6 +2780,15 @@ class FileContextStore(ContextAssemblerBase):
                 # an ancestor store full of these re-seeded the corpus below it on every
                 # bootstrap, silently undoing each prune. Judged on the SOURCE card, before its
                 # paths are rewritten, so the summary and the path are still in the same terms.
+                # Never re-import a card that came FROM the opposite direction (copied down from an ancestor). Two
+                # stores that are each other's ancestor/nested source (spiritual_data over product/)
+                # otherwise re-import each other's imports every bootstrap, each round wrapping the
+                # id in another namespace prefix: ~8,700 real cards became 31,600 copies up to eight
+                # prefixes deep. File paths round-trip unchanged, so the copies were the same cards
+                # under new ids, each embedded and scored separately. Same-direction chains stay
+                # (a nested store reusing ITS nested store is the intended transitive reuse).
+                if self._card_imported_from(card).startswith(".."):
+                    continue
                 if self._card_is_degenerate(card):
                     continue
                 cid = str(card.get("id") or "")
@@ -2871,6 +2886,15 @@ class FileContextStore(ContextAssemblerBase):
                 # an ancestor store full of these re-seeded the corpus below it on every
                 # bootstrap, silently undoing each prune. Judged on the SOURCE card, before its
                 # paths are rewritten, so the summary and the path are still in the same terms.
+                # Never re-import a card that came FROM the opposite direction (copied up from a descendant). Two
+                # stores that are each other's ancestor/nested source (spiritual_data over product/)
+                # otherwise re-import each other's imports every bootstrap, each round wrapping the
+                # id in another namespace prefix: ~8,700 real cards became 31,600 copies up to eight
+                # prefixes deep. File paths round-trip unchanged, so the copies were the same cards
+                # under new ids, each embedded and scored separately. Same-direction chains stay
+                # (a nested store reusing ITS nested store is the intended transitive reuse).
+                if self._card_imported_from(card) and not self._card_imported_from(card).startswith(".."):
+                    continue
                 if self._card_is_degenerate(card):
                     continue
                 cid = str(card.get("id") or "")
