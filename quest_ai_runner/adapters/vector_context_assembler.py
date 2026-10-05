@@ -66,6 +66,7 @@ from __future__ import annotations
 import concurrent.futures
 import logging
 import re
+import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
 
@@ -209,6 +210,7 @@ class VectorContextAssembler(ContextAssemblerBase):
         half_life_days: float = 30.0,
         max_associations: int = 500,
         seed_source: Optional[_SeedSource] = None,
+        seed_in_background: bool = False,
         reference_resolvers: Optional[Dict[str, Any]] = None,
         max_card_refs: int = MAX_CARD_REFS,
         max_card_ref_chars: int = MAX_CARD_REF_CHARS,
@@ -246,6 +248,14 @@ class VectorContextAssembler(ContextAssemblerBase):
             self._resolvers = {}
         # Guard: cold-start seeding runs at most once per process (per instance).
         self._seed_done: bool = False
+        # Seeding exports and fingerprint-checks EVERY card (tens of seconds on a store of ~30k
+        # cards), so a lane that sets ``seed_in_background`` runs it on a daemon thread, started
+        # at wiring time or at the latest by the first assemble(), and a turn searches whatever is
+        # already embedded instead of waiting for it. Default off: a library caller keeps the
+        # simple synchronous cold-start seed.
+        self._seed_in_background = seed_in_background
+        self._seed_lock = threading.Lock()
+        self._seed_thread: Optional[threading.Thread] = None
         # Injectable clock for deterministic tests; defaults to time.time.
         self._clock: Callable[[], float] = _clock if _clock is not None else time.time
 
@@ -259,6 +269,17 @@ class VectorContextAssembler(ContextAssemblerBase):
     # ------------------------------------------------------------------
     # ContextAssemblerBase implementation
     # ------------------------------------------------------------------
+
+    def start_seed(self) -> None:
+        """Start the seed on a background thread (at most once). Never blocks, never raises."""
+        with self._seed_lock:
+            if self._seed_done or self._seed_source is None:
+                return
+            if self._seed_thread is not None and self._seed_thread.is_alive():
+                return
+            self._seed_thread = threading.Thread(
+                target=self._maybe_seed, daemon=True, name="qar-vector-seed")
+            self._seed_thread.start()
 
     def _maybe_seed(self) -> None:
         """Seed the vector store from ``seed_source`` on the first assemble call.
@@ -291,7 +312,10 @@ class VectorContextAssembler(ContextAssemblerBase):
     ) -> AssembledContext:
         """Retrieve and render task-relevant context via vector search.  Never raises."""
         try:
-            self._maybe_seed()
+            if self._seed_in_background:
+                self.start_seed()
+            else:
+                self._maybe_seed()
         except Exception:  # noqa: BLE001
             pass
         try:

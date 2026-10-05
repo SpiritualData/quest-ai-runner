@@ -2578,3 +2578,34 @@ class TestAutoBuiltQdrantDeclaresRealVectorSize:
 
         assert qdrant.called, "openai backend must attempt to construct QdrantVectorStore"
         assert qdrant.call_args.kwargs.get("vector_size") == 1536
+
+
+class TestBackgroundSeed:
+    """A slow seed must never sit on the turn path when ``seed_in_background`` is set."""
+
+    def test_assemble_does_not_wait_for_a_slow_seed(self):
+        import threading
+        import time
+
+        release = threading.Event()
+
+        def slow_seed():
+            release.wait(timeout=5)
+            return []
+
+        arm = VectorContextAssembler(
+            FakeVectorStore(), seed_source=slow_seed, seed_in_background=True)
+        started = time.monotonic()
+        arm.assemble("anything at all")
+        assert time.monotonic() - started < 2.0
+        release.set()
+
+    def test_start_seed_runs_once_and_seeds_the_store(self):
+        store = FakeVectorStore()
+        items = [{"id": "c1", "text": "calendar notes", "payload": {}, "fingerprint": "f1"}]
+        arm = VectorContextAssembler(
+            store, seed_source=lambda: items, seed_in_background=True)
+        arm.start_seed()
+        arm.start_seed()
+        arm._seed_thread.join(timeout=5)
+        assert arm._seed_done is True

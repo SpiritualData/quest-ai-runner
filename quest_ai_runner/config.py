@@ -2337,7 +2337,12 @@ def _resolve_context_assembler_base(
                 # review was a no-op anyway, so this flag is safe unconditionally here).
                 llm_review=False,
                 seed_source=keyword.export_for_embedding,
+                # Seeding walks every card (~12s export + fingerprint check on ~30k cards), which
+                # used to run inside the first turn's vector arm and blow the assembly budget.
+                seed_in_background=True,
             )
+            # Start it now so the store is warm while the session waits for its first message.
+            vector.start_seed()
             # Wire the consolidating LLM pass: one holistic filter over the merged card set that
             # drops/reranks cards across arms and prunes their content items (content stays verbatim).
             # Uses the balanced tier (filtering/judgment work). Falls back to the mechanical merge
