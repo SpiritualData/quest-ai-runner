@@ -22,9 +22,9 @@ def test_standard_follows_the_copy_conventions():
     assert "/home/" not in READER_FIRST_STANDARD
 
 
-def test_chat_replies_stay_in_scope_and_do_not_volunteer():
+def test_chat_replies_are_proactive_only_when_relevant_and_stay_in_scope():
     text = REPLY_VOICE_SYSTEM
-    assert "Do not add research, suggestions, or next steps they did not ask for" in text
+    assert "be proactive where their context makes it worth their time" in text
+    assert "any suggestion they already declined" in text   # past guidance stands
+    assert "Never pad a reply with research or ideas they have no use for" in text
     assert "answer each one\n  separately or ask which they mean" in text
-    # Volunteering is a chat rule only: autopilot work is proactive by design.
-    assert "did not ask for" not in RESULT_IS_THE_WORK_CONTRACT
