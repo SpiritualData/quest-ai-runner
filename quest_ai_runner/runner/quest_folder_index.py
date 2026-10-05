@@ -214,8 +214,30 @@ def discover_quest_folders(corpus_root: Optional[str],
     return list(found.values())
 
 
-def match_quest_folder(message: str, folders: Sequence[QuestFolder]) -> Optional[QuestFolder]:
+def quest_for_directory(directory: str, folders: Sequence[QuestFolder]) -> Optional[QuestFolder]:
+    """The quest whose synced folder is ``directory`` or contains it (the deepest one wins)."""
+    try:
+        here = Path(directory).resolve()
+    except OSError:
+        return None
+    best: Optional[QuestFolder] = None
+    for entry in folders:
+        try:
+            here.relative_to(Path(entry.folder).resolve())
+        except (ValueError, OSError):
+            continue
+        if best is None or len(entry.folder) > len(best.folder):
+            best = entry
+    return best
+
+
+def match_quest_folder(message: str, folders: Sequence[QuestFolder],
+                       home: Optional[QuestFolder] = None) -> Optional[QuestFolder]:
     """The quest this message is clearly about, or None when no quest clearly wins.
+
+    ``home`` is the quest whose folder the person is working in. It is the default: another quest
+    replaces it only when the message actually NAMES that quest (a real hit on its name), never on
+    scattered state words alone. A message that names no quest stays on ``home``.
 
     An explicit quest id in the message decides outright. Otherwise each message word scores its
     rarity across the indexed quests (idf) when it hits the quest's name, and a third of that when it
@@ -250,6 +272,13 @@ def match_quest_folder(message: str, folders: Sequence[QuestFolder]) -> Optional
         # evidence and is strong on its own, in which case it ranks at full weight too.
         total = name_score + (state_score if about_state and not named else state_score / 3)
         scored.append((total, named or about_state, entry))
+    if home is not None:
+        other_named = any(entry is not home and entry.quest_id != home.quest_id
+                          and sum(weights[w] for w in msg_words if w in entry.name_words) >= MIN_NAME_SCORE
+                          for entry in folders)
+        if not other_named:
+            return home
+        scored = [row for row in scored if row[1] or row[2] is home]
     scored.sort(key=lambda s: s[0], reverse=True)
     best_total, qualifies, best = scored[0]
     runner_up = scored[1][0] if len(scored) > 1 else 0.0

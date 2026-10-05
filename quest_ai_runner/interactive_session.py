@@ -881,6 +881,12 @@ class InteractiveSession:
         self.quest_match_mode = ("none" if os.getenv("QAR_QUEST_AUTO_MATCH", "1").strip().lower()
                                  in ("0", "false", "no", "off", "none") else "auto")
         self.pinned_quest = None
+        # The quest whose synced folder this session was started in: the default for every turn.
+        try:
+            from .runner.quest_folder_index import quest_for_directory
+            self.home_quest = quest_for_directory(os.getcwd(), self.quest_folders)
+        except Exception:  # noqa: BLE001 — grounding is a bonus, never a reason to fail startup
+            self.home_quest = None
         self.turn_quest = None  # the quest the latest turn was grounded in, for the UI
         # Quests the Quest account can reach but that have no local folder, for the "/quest" menu.
         # Fetched off-thread: a slow or absent Quest API must never delay the session.
@@ -1028,10 +1034,11 @@ class InteractiveSession:
         if self.quest_match_mode == "none" or not self.quest_folders:
             return None
         from .runner.quest_folder_index import match_quest_folder
-        found = match_quest_folder(user_text, self.quest_folders)
+        home = getattr(self, "home_quest", None)
+        found = match_quest_folder(user_text, self.quest_folders, home=home)
         if found is None and self._session_history:
             found = match_quest_folder(self._session_history[-1][0] + "\n" + user_text,
-                                       self.quest_folders)
+                                       self.quest_folders, home=home)
         return found
 
     def turn_grounding(self, user_text: str) -> Tuple[Optional[str], Optional[dict]]:

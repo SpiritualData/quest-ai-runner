@@ -16,6 +16,7 @@ uncommon as directory-skip hints and are left to the hardcoded baseline.
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Set
 
@@ -94,11 +95,15 @@ def parse_gitignore_names(directory: Path) -> Set[str]:
 def effective_skip_dirs(root: Path) -> Set[str]:
     """Baseline skip set for *root*: hardcoded defaults + root-level .gitignore.
 
+    ``QAR_SKIP_DIRS`` (comma-separated bare directory names) adds a deployment's own never-search
+    directories (backups, archives, data dumps) without editing code.
+
     Cache this once per adapter instance and pass it into ``prune_dirnames``
     on every ``os.walk`` iteration so nested ``.gitignore`` files are also
     honoured without re-reading the root on every step.
     """
-    return _BASE_SKIP_DIRS | parse_gitignore_names(root)
+    extra = {n.strip() for n in os.getenv("QAR_SKIP_DIRS", "").split(",") if n.strip()}
+    return _BASE_SKIP_DIRS | parse_gitignore_names(root) | extra
 
 
 def prune_dirnames(dirnames: list, *, current: Path, base_skip: Set[str]) -> None:

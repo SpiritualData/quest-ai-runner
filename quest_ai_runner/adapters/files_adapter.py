@@ -12,13 +12,37 @@ is load-bearing.
 """
 from __future__ import annotations
 
+import logging
 import os
 import re
+import time
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from ..core.adapters import Observation, RetrievalAdapterBase
 from ._walk import effective_skip_dirs, is_claude_state_file, prune_dirnames
+
+log = logging.getLogger("quest-ai-runner.files_adapter")
+
+
+def grep_budget_seconds() -> float:
+    """Wall-clock budget for one grep. Env ``QAR_GREP_BUDGET_SECONDS`` (default 20), kept well under
+    the orchestrator's per-read timeout so a huge tree returns partial hits instead of timing out."""
+    try:
+        value = float(os.getenv("QAR_GREP_BUDGET_SECONDS", "20"))
+    except ValueError:
+        return 20.0
+    return value if value > 0 else 20.0
+
+
+def grep_max_files() -> int:
+    """Most files one grep opens. Env ``QAR_GREP_MAX_FILES`` (default 20000)."""
+    try:
+        value = int(os.getenv("QAR_GREP_MAX_FILES", "20000"))
+    except ValueError:
+        return 20000
+    return value if value > 0 else 20000
+
 _BINARY_EXTS = {
     ".png", ".jpg", ".jpeg", ".gif", ".pdf", ".zip", ".gz", ".tar", ".mp4", ".mov",
     ".woff", ".woff2", ".ttf", ".ico", ".so", ".pyc", ".bin", ".db", ".sqlite",
@@ -91,7 +115,7 @@ class FilesAdapter(RetrievalAdapterBase):
         self.default_read_max_bytes = default_read_max_bytes
         self.default_grep_max_hits = default_grep_max_hits
         self.grep_max_file_bytes = grep_max_file_bytes
-        self._skip_dirs = effective_skip_dirs(self.root)
+        self.skip_dirs = effective_skip_dirs(self.root)
 
     # --- scope helpers -------------------------------------------------------
 
@@ -192,46 +216,85 @@ class FilesAdapter(RetrievalAdapterBase):
         except re.error as e:
             return Observation(kind="error", pattern=pattern, scope=scope, error=f"bad regex: {e}")
 
-        files: List[Path] = []
-        if search_root.is_file():
-            files = [search_root]
-        else:
-            for dirpath, dirnames, filenames in os.walk(search_root):
-                prune_dirnames(dirnames, current=Path(dirpath), base_skip=self._skip_dirs)
-                for fn in filenames:
-                    if not fn.startswith("."):
-                        files.append(Path(dirpath) / fn)
+        budget = grep_budget_seconds()
+        deadline = time.monotonic() + budget
+        # No scope given: look where the person is working first (the process's own directory, when
+        # it is inside the root and narrower than it), and only widen to the whole root when that
+        # finds nothing. The whole root can hold hundreds of thousands of files.
+        passes: List[Path] = [search_root]
+        if not scope and search_root == self.root:
+            focus = self.focus_dir()
+            if focus is not None:
+                passes = [focus, search_root]
 
-        hits = []
-        truncated = False
-        for path in files:
-            if truncated:
+        hits: List[Dict[str, Any]] = []
+        stats = {"files": 0, "stopped": ""}
+        for pass_root in passes:
+            hits = self.grep_pass(pass_root, rx, max_hits, deadline, stats)
+            if hits or stats["stopped"]:
                 break
-            if not self._readable(path):
-                continue
-            try:
-                if path.stat().st_size > self.grep_max_file_bytes:
+        if stats["stopped"]:
+            log.warning("grep(%r) stopped early (%s) after %d files; pass a narrower scope",
+                        pattern, stats["stopped"], stats["files"])
+        note = (f"Search stopped early ({stats['stopped']}) after {stats['files']} files; "
+                f"results may be incomplete. Retry with a narrower scope." if stats["stopped"] else None)
+        return Observation(kind="grep", pattern=pattern, scope=scope, hits=hits, text=note)
+
+    def focus_dir(self) -> Optional[Path]:
+        try:
+            here = Path.cwd().resolve()
+            here.relative_to(self.root)
+        except (OSError, ValueError):
+            return None
+        return None if here == self.root else here
+
+    def grep_pass(self, pass_root: Path, rx, max_hits: int, deadline: float,
+                  stats: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """One bounded walk of ``pass_root``: stops at ``max_hits``, the time budget, or the file cap."""
+        hits: List[Dict[str, Any]] = []
+        max_files = grep_max_files()
+        if pass_root.is_file():
+            walk = [(str(pass_root.parent), [], [pass_root.name])]
+        else:
+            walk = os.walk(pass_root)
+        for dirpath, dirnames, filenames in walk:
+            prune_dirnames(dirnames, current=Path(dirpath), base_skip=self.skip_dirs)
+            for fn in filenames:
+                if fn.startswith(".") and not pass_root.is_file():
                     continue
-                with open(path, "r", encoding="utf-8", errors="replace") as f:
-                    for line_no, line in enumerate(f, start=1):
-                        if rx.search(line):
-                            snippet = line.rstrip("\n")
-                            if len(snippet) > 300:
-                                snippet = snippet[:300].rstrip() + " …"
-                            hits.append({"rel_path": self._rel(path), "line_no": line_no, "line": snippet})
-                            if len(hits) >= max_hits:
-                                truncated = True
-                                break
-            except OSError:
-                continue
-        return Observation(kind="grep", pattern=pattern, scope=scope, hits=hits)
+                path = Path(dirpath) / fn
+                if not self._readable(path):
+                    continue
+                if time.monotonic() > deadline:
+                    stats["stopped"] = "time budget"
+                    return hits
+                if stats["files"] >= max_files:
+                    stats["stopped"] = "file cap"
+                    return hits
+                stats["files"] += 1
+                try:
+                    if path.stat().st_size > self.grep_max_file_bytes:
+                        continue
+                    with open(path, "r", encoding="utf-8", errors="replace") as f:
+                        for line_no, line in enumerate(f, start=1):
+                            if rx.search(line):
+                                snippet = line.rstrip("\n")
+                                if len(snippet) > 300:
+                                    snippet = snippet[:300].rstrip() + " …"
+                                hits.append({"rel_path": self._rel(path), "line_no": line_no,
+                                             "line": snippet})
+                                if len(hits) >= max_hits:
+                                    return hits
+                except OSError:
+                    continue
+        return hits
 
     # --- discovery -----------------------------------------------------------
 
     def _walk_readable(self, limit: int) -> List[str]:
         names: List[str] = []
         for dirpath, dirnames, filenames in os.walk(self.root):
-            prune_dirnames(dirnames, current=Path(dirpath), base_skip=self._skip_dirs)
+            prune_dirnames(dirnames, current=Path(dirpath), base_skip=self.skip_dirs)
             for fn in filenames:
                 p = Path(dirpath) / fn
                 if not fn.startswith(".") and self._readable(p):

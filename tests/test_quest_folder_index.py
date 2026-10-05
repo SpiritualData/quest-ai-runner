@@ -86,6 +86,21 @@ def test_matching(corpus, message, expected):
     assert (found.quest_id if found else None) == expected
 
 
+def test_home_quest_is_the_default_and_only_a_named_quest_replaces_it(corpus):
+    from quest_ai_runner.runner.quest_folder_index import quest_for_directory
+    folders = discover_quest_folders(str(corpus))
+    (corpus / "quest_subscribers_growth" / "sub").mkdir()
+    home = quest_for_directory(str(corpus / "quest_subscribers_growth" / "sub"), folders)
+    assert home.quest_id == "quest_subs"
+    assert quest_for_directory(str(corpus), folders) is None
+    # A grant question that names no quest stays on the quest being worked in.
+    assert match_quest_folder("what is the status of the grant registration", folders, home=home).quest_id == "quest_subs"
+    # Naming another quest still switches.
+    assert match_quest_folder("status of the wikipedia work", folders, home=home).quest_id == "quest_wiki"
+    # Without a home the same grant question matches nothing.
+    assert match_quest_folder("what is the status of the grant registration", folders) is None
+
+
 def test_quest_card_carries_full_paths_state_and_next_steps(corpus):
     from quest_ai_runner.runner.quest_folder_index import quest_card
     quest = match_quest_folder("1000 subscribers", discover_quest_folders(str(corpus)))

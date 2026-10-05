@@ -99,10 +99,13 @@ class CompositeRetrievalAdapter:
         # Collect all hits, deduped by (hit_text, source adapter)
         all_hits: List[Dict[str, Any]] = []
         seen: set = set()
+        notes: List[str] = []
 
         for adapter, obs in results:
             if obs.kind == "error":
                 continue
+            if obs.text and obs.kind == "grep":
+                notes.append(obs.text)
             adapter_name = self._adapter_name(adapter)
             for hit in obs.hits:
                 # Dedup by hit line + adapter (same line from different adapters is kept)
@@ -116,7 +119,7 @@ class CompositeRetrievalAdapter:
             return Observation(
                 kind="error",
                 pattern=pattern,
-                error=f"pattern not found: {pattern}",
+                error=f"pattern not found: {pattern}" + (f" ({' '.join(notes)})" if notes else ""),
             )
 
         # Limit total hits if requested
@@ -127,6 +130,7 @@ class CompositeRetrievalAdapter:
             kind="grep",
             pattern=pattern,
             hits=all_hits,
+            text=" ".join(notes) or None,
         )
 
     def query(self, spec: Dict[str, Any]) -> Observation:
