@@ -90,7 +90,7 @@ from .local_time import now_in_zone
 # created through ``QuestClient.create_goal``, so the shape it must satisfy is that client's, and a
 # second copy here would be a second thing to keep in step with the backend's period_utils.
 from .quest_client import _PERIOD_RE as _GOAL_PERIOD_RE
-from .goal_handoff import choose_assignee, run_goal_handoff
+from .goal_handoff import choose_assignee, preferences_text, run_goal_handoff
 from .quest_folder_sync import NextSteps, publish_next_steps, read_next_steps
 from .reflections import DEFAULT_PERIODS, ReflectionContext, collect_reflections
 
@@ -2086,7 +2086,7 @@ class AutopilotPass:
                                  team_id=self._team_for(quest_id) or None,
                                  outcome=str(quest.get("outcome") or ""),
                                  current_state=str(quest.get("current_state") or ""),
-                                 preferences=str(quest.get("preferences") or ""))
+                                 preferences=preferences_text(quest.get("preferences")))
             except Exception:  # noqa: BLE001
                 log.info("autopilot: goal handoff failed for quest %s", quest_id, exc_info=True)
 
@@ -3024,7 +3024,7 @@ class AutopilotPass:
             verdict = choose_assignee(
                 self._judge, members, outcome=str(quest.get("outcome") or ""), title=title,
                 description=description, current_state=str(quest.get("current_state") or ""),
-                preferences=str(quest.get("preferences") or ""))
+                preferences=preferences_text(quest.get("preferences")))
             return verdict["assignee"], bool(verdict["ai_can_do"])
         except Exception:  # noqa: BLE001 -- assignment is an improvement, never a failure
             log.info("autopilot: assignee choice failed for quest %s", quest_id, exc_info=True)

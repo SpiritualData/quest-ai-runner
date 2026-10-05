@@ -156,3 +156,36 @@ def test_handoff_prompt_carries_state_and_preferences():
                      team_id="team1", outcome="Close the loan", current_state="Docs signed",
                      preferences="Mornings only")
     assert "Close the loan" in seen[0] and "Docs signed" in seen[0] and "Mornings only" in seen[0]
+
+
+def test_dict_preferences_reach_the_prompt_as_json_not_python_repr():
+    seen = []
+
+    def spy(prompt):
+        seen.append(prompt)
+        return json.dumps({"assignee": "u_bob", "ai_can_do": False})
+
+    class DictPrefsClient(AssignClient):
+        def get_quest(self, quest_id, *, team_id=None):
+            return {"outcome": "Launch", "current_state": "", "preferences": {"no_weekends": True}}
+
+    c = DictPrefsClient(quests=[_quest("q1", mode="act")], members=[ALICE, BOB])
+    _create(c, spy)
+    assert '"no_weekends": true' in seen[0]
+    assert "'no_weekends'" not in seen[0]
+
+
+def test_ai_members_are_never_chosen_or_listed():
+    from quest_ai_runner.runner.goal_handoff import choose_assignee, human_member_ids
+    rep = {"user_id": "u_rep", "name": "Bob's rep", "role": "ai_service"}
+    assert human_member_ids([ALICE, rep]) == ["u_alice"]
+    seen = []
+
+    def judge(prompt):
+        seen.append(prompt)
+        return json.dumps({"assignee": "u_rep", "ai_can_do": True})
+
+    out = choose_assignee(judge, [ALICE, BOB, rep], outcome="o", title="t", description="d")
+    assert out["assignee"] is None and "u_rep" not in seen[0]
+    # one human plus an AI rep still counts as a single-human quest
+    assert choose_assignee(None, [ALICE, rep], outcome="o", title="t", description="d")["assignee"] == "u_alice"

@@ -83,8 +83,35 @@ def _parse(raw: str) -> Dict[str, Any]:
     return data if isinstance(data, dict) else {}
 
 
+AI_MEMBER_ROLES = ("ai_service",)
+
+
+def is_human_member(m: Any) -> bool:
+    """A member entry with an id that is a person: AI representatives are never assignees."""
+    if not isinstance(m, dict) or not m.get("user_id"):
+        return False
+    return str(m.get("role") or "").strip().lower() not in AI_MEMBER_ROLES and not m.get("is_ai")
+
+
+def human_members(members: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [m for m in members or [] if is_human_member(m)]
+
+
 def human_member_ids(members: List[Dict[str, Any]]) -> List[str]:
-    return [str(m.get("user_id")) for m in members if isinstance(m, dict) and m.get("user_id")]
+    return [str(m.get("user_id")) for m in human_members(members)]
+
+
+def preferences_text(value: Any) -> str:
+    """A quest's preferences as prompt text: a string stays as it is, a dict or list is dumped as
+    JSON (str() of a dict is Python repr, which reads badly in a prompt)."""
+    if value in (None, "", {}, []):
+        return ""
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, ensure_ascii=False, indent=1, default=str)
+    except (TypeError, ValueError):
+        return str(value)
 
 
 ROLE_LABELS = {"owner": "quest owner", "admin": "team admin", "member": "team member",
@@ -114,7 +141,7 @@ def choose_assignee(judge: Optional[Callable[[str], str]], members: List[Dict[st
     if judge is None:
         return fallback
     try:
-        listing = "\n".join(member_line(m) for m in members if m.get("user_id"))
+        listing = "\n".join(member_line(m) for m in human_members(members))
         verdict = _parse(judge(ASSIGNEE_PROMPT.format(
             outcome=outcome or "(none)", current_state=current_state or "(none)",
             preferences=preferences or "(none)", title=title,
