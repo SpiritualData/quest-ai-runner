@@ -120,3 +120,39 @@ def test_handoff_stamps_me_when_not_doable_and_survives_judge_failure():
         raise RuntimeError("down")
     c2 = AssignClient(reps=[{"rep_id": "rep_bob", "owner_user_id": "u_bob"}])
     assert run_goal_handoff(c2, boom, payload, team_id="team1") == []
+
+
+def test_assignee_prompt_carries_quest_context_and_member_roles():
+    seen = []
+
+    def spy(prompt):
+        seen.append(prompt)
+        return json.dumps({"assignee": "u_bob", "ai_can_do": False})
+
+    class QuestAwareClient(AssignClient):
+        def get_quest(self, quest_id, *, team_id=None):
+            return {"outcome": "Launch the course", "current_state": "Videos half filmed",
+                    "preferences": "No weekend work"}
+
+    admin_bob = {**BOB, "role": "admin"}
+    c = QuestAwareClient(quests=[_quest("q1", mode="act")], members=[ALICE, admin_bob])
+    _create(c, spy)
+    prompt = seen[0]
+    assert "Launch the course" in prompt and "Videos half filmed" in prompt
+    assert "No weekend work" in prompt
+    assert "u_bob: Bob (team admin)" in prompt and "u_alice: Alice (quest owner)" in prompt
+    assert "—" not in prompt
+
+
+def test_handoff_prompt_carries_state_and_preferences():
+    seen = []
+
+    def spy(prompt):
+        seen.append(prompt)
+        return json.dumps({"ai_can_do": False})
+
+    c = AssignClient(reps=[{"rep_id": "rep_bob", "owner_user_id": "u_bob"}])
+    run_goal_handoff(c, spy, _payload({"id": "g1", "name": "Call the bank", "assigned_to_user_id": "u_bob"}),
+                     team_id="team1", outcome="Close the loan", current_state="Docs signed",
+                     preferences="Mornings only")
+    assert "Close the loan" in seen[0] and "Docs signed" in seen[0] and "Mornings only" in seen[0]

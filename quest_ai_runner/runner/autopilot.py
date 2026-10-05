@@ -2084,7 +2084,9 @@ class AutopilotPass:
             try:
                 run_goal_handoff(self._client, self._judge, goals_payload,
                                  team_id=self._team_for(quest_id) or None,
-                                 outcome=str(quest.get("outcome") or ""))
+                                 outcome=str(quest.get("outcome") or ""),
+                                 current_state=str(quest.get("current_state") or ""),
+                                 preferences=str(quest.get("preferences") or ""))
             except Exception:  # noqa: BLE001
                 log.info("autopilot: goal handoff failed for quest %s", quest_id, exc_info=True)
 
@@ -3018,13 +3020,27 @@ class AutopilotPass:
             return None, False
         try:
             members = lister(quest_id) or []
-            outcome = ""
-            verdict = choose_assignee(self._judge, members, outcome=outcome, title=title,
-                                      description=description)
+            quest = self._quest_context(quest_id)
+            verdict = choose_assignee(
+                self._judge, members, outcome=str(quest.get("outcome") or ""), title=title,
+                description=description, current_state=str(quest.get("current_state") or ""),
+                preferences=str(quest.get("preferences") or ""))
             return verdict["assignee"], bool(verdict["ai_can_do"])
         except Exception:  # noqa: BLE001 -- assignment is an improvement, never a failure
             log.info("autopilot: assignee choice failed for quest %s", quest_id, exc_info=True)
             return None, False
+
+    def _quest_context(self, quest_id: str) -> Dict[str, Any]:
+        """The quest's outcome, current state and preferences for a judgment call; {} on failure."""
+        getter = getattr(self._client, "get_quest", None)
+        if not callable(getter):
+            return {}
+        try:
+            quest = getter(quest_id)
+            return quest if isinstance(quest, dict) else {}
+        except Exception:  # noqa: BLE001 -- context is advice, never a failure
+            log.info("autopilot: could not read quest %s for an assignee choice", quest_id, exc_info=True)
+            return {}
 
     def _hand_to_rep(self, quest_id: str, goal_id: str, assignee: str) -> None:
         """Ask the backend to give an AI-doable goal to its assignee's rep. Best-effort."""

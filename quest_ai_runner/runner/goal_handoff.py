@@ -24,14 +24,18 @@ MAX_HANDOFF_JUDGMENTS_PER_PASS = 5
 ASSIGNEE_PROMPT = """You are deciding who a newly created goal belongs to on a shared quest.
 
 Quest outcome: {outcome}
+Where the quest stands now: {current_state}
+The owner's preferences: {preferences}
 Goal: {title}
 Details: {description}
 
-Human members of the quest (choose only from these ids):
+Human members of the quest, with their role on the team (choose only from these ids):
 {members}
 
 Rules:
-- Assign to the person who should actually do or decide the goal.
+- Assign to the person who should actually do or decide the goal, judging by their role and what
+  they do. Work that needs one specific person's identity, relationships, presence, taste, money
+  or sign-off goes to that person; do not default every goal to the owner.
 - If an AI can do the work itself (research, drafting, audits, documentation, comparisons, for
   example "Identify and document the top 3 'False Balance' misapplications on Wikipedia pages"),
   set ai_can_do to true and still name the human whose AI rep should do it; it must not sit as a
@@ -44,6 +48,8 @@ Answer with one JSON object only: {{"assignee": "<user id or null>", "ai_can_do"
 DOABILITY_PROMPT = """A goal is assigned to a person whose AI representative could handle it instead.
 
 Quest outcome: {outcome}
+Where the quest stands now: {current_state}
+The owner's preferences: {preferences}
 Goal: {title}
 Details: {description}
 
@@ -81,8 +87,21 @@ def human_member_ids(members: List[Dict[str, Any]]) -> List[str]:
     return [str(m.get("user_id")) for m in members if isinstance(m, dict) and m.get("user_id")]
 
 
+ROLE_LABELS = {"owner": "quest owner", "admin": "team admin", "member": "team member",
+               "shared": "shared with the quest, not on the team"}
+
+
+def member_line(m: Dict[str, Any]) -> str:
+    """One roster line: id, name, and the person's role, so the judge can tell a lead from a
+    contributor."""
+    role = ROLE_LABELS.get(str(m.get("role") or ("owner" if m.get("is_owner") else "")), "")
+    label = m.get("name") or m.get("email") or ""
+    return f"- {m.get('user_id')}: {label}" + (f" ({role})" if role else "")
+
+
 def choose_assignee(judge: Optional[Callable[[str], str]], members: List[Dict[str, Any]], *,
-                    outcome: str, title: str, description: str) -> Dict[str, Any]:
+                    outcome: str, title: str, description: str,
+                    current_state: str = "", preferences: str = "") -> Dict[str, Any]:
     """Return ``{"assignee": id|None, "ai_can_do": bool}``. Never raises.
 
     Without a judge: one human member gets it, several leave it shared. A judged id that is not
@@ -95,11 +114,11 @@ def choose_assignee(judge: Optional[Callable[[str], str]], members: List[Dict[st
     if judge is None:
         return fallback
     try:
-        listing = "\n".join(f"- {m.get('user_id')}: {m.get('name') or m.get('email') or ''}"
-                            for m in members if m.get("user_id"))
+        listing = "\n".join(member_line(m) for m in members if m.get("user_id"))
         verdict = _parse(judge(ASSIGNEE_PROMPT.format(
-            outcome=outcome or "(none)", title=title, description=description or "(none)",
-            members=listing)))
+            outcome=outcome or "(none)", current_state=current_state or "(none)",
+            preferences=preferences or "(none)", title=title,
+            description=description or "(none)", members=listing)))
     except Exception:  # noqa: BLE001 -- a judge failure must not fail the pass
         log.info("goal_handoff: assignee judge failed", exc_info=True)
         return fallback
@@ -122,8 +141,8 @@ def rep_for_user(reps: List[Dict[str, Any]], user_id: str) -> Optional[str]:
 
 
 def run_goal_handoff(client: Any, judge: Optional[Callable[[str], str]], goals_payload: Dict[str, Any],
-                     *, team_id: Optional[str], outcome: str = "",
-                     limit: int = MAX_HANDOFF_JUDGMENTS_PER_PASS) -> List[Dict[str, Any]]:
+                     *, team_id: Optional[str], outcome: str = "", current_state: str = "",
+                     preferences: str = "", limit: int = MAX_HANDOFF_JUDGMENTS_PER_PASS) -> List[Dict[str, Any]]:
     """Judge undecided human-assigned goals and ask the backend to hand AI-doable ones to the rep.
 
     Returns one ``{goal_id, handling}`` per call made. Stamping "me" records the decision so the
@@ -151,7 +170,8 @@ def run_goal_handoff(client: Any, judge: Optional[Callable[[str], str]], goals_p
                 continue
             try:
                 verdict = _parse(judge(DOABILITY_PROMPT.format(
-                    outcome=outcome or "(none)", title=g.get("name") or "",
+                    outcome=outcome or "(none)", current_state=current_state or "(none)",
+                    preferences=preferences or "(none)", title=g.get("name") or "",
                     description=g.get("description") or "(none)")))
                 if not verdict:
                     continue
