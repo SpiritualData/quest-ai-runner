@@ -231,6 +231,9 @@ def quest_for_directory(directory: str, folders: Sequence[QuestFolder]) -> Optio
     return best
 
 
+# NOTE: the chat session no longer selects a quest with this lexical scorer. Selection is one LLM
+# judgment (``Orchestrator.judge_quest_for_turn``). The scorer stays only as a cheap helper for
+# callers that explicitly want word-overlap ranking.
 def match_quest_folder(message: str, folders: Sequence[QuestFolder],
                        home: Optional[QuestFolder] = None) -> Optional[QuestFolder]:
     """The quest this message is clearly about, or None when no quest clearly wins.

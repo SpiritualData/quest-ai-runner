@@ -1033,13 +1033,33 @@ class InteractiveSession:
             return self.pinned_quest
         if self.quest_match_mode == "none" or not self.quest_folders:
             return None
-        from .runner.quest_folder_index import match_quest_folder
+        return self.choose_quest(user_text, self.quest_folders)
+
+    def choose_quest(self, user_text: str, choices) -> Optional["QuestFolder"]:
+        """Pick the quest a message is about with ONE LLM judgment over ``choices``.
+
+        An explicit quest id typed in the message decides outright (an exact id, not a guess).
+        Otherwise the judge decides, seeing the previous message so a follow-up stays on its quest
+        and the HOME quest (the folder this session runs in) as the default. Decisions are cached
+        per (previous message, message), so retries and re-renders never call again.
+        """
+        lowered = (user_text or "").lower()
+        for entry in choices:
+            if entry.quest_id and entry.quest_id.lower() in lowered:
+                return entry
+        if not choices:
+            return None
         home = getattr(self, "home_quest", None)
-        found = match_quest_folder(user_text, self.quest_folders, home=home)
-        if found is None and self._session_history:
-            found = match_quest_folder(self._session_history[-1][0] + "\n" + user_text,
-                                       self.quest_folders, home=home)
-        return found
+        previous = self._session_history[-1][0] if self._session_history else ""
+        key = (previous, user_text, tuple(q.quest_id for q in choices))
+        cache = self.__dict__.setdefault("quest_choice_cache", {})
+        if key not in cache:
+            quests = [{"quest_id": q.quest_id, "title": q.title or Path(q.folder).name,
+                       "state": q.current_state} for q in choices]
+            cache[key] = self._orch.judge_quest_for_turn(
+                user_text, previous, quests, home.quest_id if home is not None else None)
+        chosen = cache[key]
+        return next((q for q in choices if q.quest_id == chosen), None)
 
     def turn_grounding(self, user_text: str) -> Tuple[Optional[str], Optional[dict]]:
         """``(rep_preamble, context_meta)`` for a turn, grounded in the quest it is about.
@@ -1090,7 +1110,7 @@ class InteractiveSession:
 
     def cmd_quest(self, arg: str) -> None:
         """/quest [auto|none|<name or id>]: how turns are grounded in a synced quest folder."""
-        from .runner.quest_folder_index import describe_match, match_quest_folder
+        from .runner.quest_folder_index import describe_match
         c = self._console
         arg = arg.strip()
         low = arg.lower()
@@ -1111,7 +1131,7 @@ class InteractiveSession:
         if arg:
             choices = self.quest_choices()
             found = next((q for q in choices if q.quest_id == arg), None) \
-                or match_quest_folder(arg, choices)
+                or self.choose_quest(arg, choices)
             if found is None:
                 c.dim(f"  No synced quest clearly matches {arg!r}. /quest lists them.")
                 return

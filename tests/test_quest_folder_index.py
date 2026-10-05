@@ -155,8 +155,23 @@ def make_session(monkeypatch, corpus, tmp_path, env_default=None):
     from quest_ai_runner.config import RunnerConfig
 
     class FakeOrch:
+        """Stands in for the LLM quest judge: picks the quest whose title shares a word with the
+        message, and records every call so tests can assert the judge was consulted."""
         class cfg:
             instant_ack = False
+
+        def __init__(self):
+            self.judge_calls = []
+
+        def judge_quest_for_turn(self, message, previous, quests, home_quest_id=None):
+            self.judge_calls.append((message, previous, home_quest_id))
+            text = (previous + " " + message).lower() if message.lower().startswith("and ") else message.lower()
+            for q in quests:
+                if any(w in text for w in ("subscribers", "paying")) and q["quest_id"] == "quest_subs":
+                    return q["quest_id"]
+                if "wikipedia" in text and q["quest_id"] == "quest_wiki":
+                    return q["quest_id"]
+            return home_quest_id
 
     monkeypatch.setenv("QAR_CHAT_HISTORY_DIR", str(tmp_path / "convs"))
     monkeypatch.setenv("QAR_STATE_PATH", str(tmp_path / "qar_state.json"))
@@ -285,3 +300,38 @@ def test_goal_id_flag_starts_with_the_quest_selected_and_auto_clears_it(monkeypa
     assert sess.bound_quest_id() == "quest_wiki" and meta["quest_ids"] == ["quest_wiki"]
     sess.cmd_quest("auto")
     assert sess.bound_quest_id() is None
+
+
+def test_every_quest_selection_goes_through_the_llm_judge(monkeypatch, corpus, tmp_path):
+    sess, _ = make_session(monkeypatch, corpus, tmp_path)
+    sess.turn_grounding("where is the 1000 subscribers quest")
+    assert len(sess._orch.judge_calls) == 1
+    # Same message again: cached, no second call. A new message calls the judge again.
+    sess.turn_grounding("where is the 1000 subscribers quest")
+    assert len(sess._orch.judge_calls) == 1
+    sess.turn_grounding("status of the wikipedia work")
+    assert len(sess._orch.judge_calls) == 2 and sess.turn_quest.quest_id == "quest_wiki"
+
+
+def test_session_in_a_quest_folder_defaults_to_it(monkeypatch, corpus, tmp_path):
+    monkeypatch.chdir(corpus / "quest_subscribers_growth")
+    sess, _ = make_session(monkeypatch, corpus, tmp_path)
+    sess.turn_grounding("what is the status of the grant registration")
+    assert sess._orch.judge_calls[-1][2] == "quest_subs"
+    assert sess.turn_quest.quest_id == "quest_subs"
+
+
+def test_judge_failure_falls_back_to_home_quest_never_to_word_overlap():
+    from quest_ai_runner.core.orchestrator import Orchestrator
+    class Boom:
+        def resolve_tier(self, tier):
+            raise RuntimeError("no tier")
+    orch = Orchestrator.__new__(Orchestrator)
+    orch.registry = Boom()
+    class Cfg:
+        intent_judge_tier = "balanced"
+    orch.cfg = Cfg()
+    quests = [{"quest_id": "q1", "title": "Subscribers", "state": ""},
+              {"quest_id": "q2", "title": "Wikipedia", "state": ""}]
+    assert orch.judge_quest_for_turn("wikipedia", "", quests, "q1") == "q1"
+    assert orch.judge_quest_for_turn("wikipedia", "", quests, None) is None
