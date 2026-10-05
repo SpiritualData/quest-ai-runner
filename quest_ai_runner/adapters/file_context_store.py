@@ -3323,9 +3323,13 @@ class FileContextStore(ContextAssemblerBase):
                 }
                 regenerated = _extract_topic_cards(area, set(files), provider, model, walk_root=walk_root)
                 if regenerated:
-                    # Keep the original card id on the first regenerated card so we upsert in place.
+                    # Replace the card IN PLACE with exactly one card under its own id. Any extra
+                    # topics the model returns used to be written as brand-new cards, so a file that
+                    # changes on every run (a state JSON) grew its card count each bootstrap, and
+                    # those new cards went stale and spawned more: one tracker file ended up
+                    # described by 1,296 cards. New topics belong to NEW files (stage 2 above).
                     regenerated[0]["id"] = cid
-                    topic_cards.extend(regenerated)
+                    topic_cards.append(regenerated[0])
                 else:
                     # Extraction failed: keep the card but re-pin (rebuild from its own fields).
                     topic_cards.append({

@@ -2119,3 +2119,26 @@ class TestImportsNeverReimported:
         ids = [json.loads(p.read_text())["id"] for p in _card_files(parent_dir)]
         assert len(ids) == 1
         assert ids[0].count("--") == 1
+
+
+class TestStaleRegenKeepsOneCard:
+    def test_a_changing_file_does_not_grow_its_card_count(self, tmp_path):
+        """Regenerating a stale card replaces it in place; extra topics the model returns for the
+        same files must not become new cards (one state file once had 1,296)."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        f = repo / "state.json"
+        f.write_text('{"a": 1}', encoding="utf-8")
+        cards_dir = tmp_path / "cards"
+        one = [{"id": "state", "name": "State", "keywords": ["state"],
+                "summary": "State file.", "files": ["state.json"]}]
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        assert store.bootstrap(root=str(repo), provider=_topic_provider(one)) == 1
+        many = one + [
+            {"id": f"extra{i}", "name": f"Extra {i}", "keywords": [f"extra{i}"],
+             "summary": "Another take.", "files": ["state.json"]} for i in range(3)]
+        for n in range(3):
+            f.write_text('{"a": %d}' % (n + 2), encoding="utf-8")
+            store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+            store.bootstrap(root=str(repo), provider=_topic_provider(many))
+        assert len(_card_files(cards_dir)) == 1
