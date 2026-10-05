@@ -27,12 +27,10 @@ from quest_ai_runner.adapters.card_repository import (
 )
 from quest_ai_runner.adapters.file_context_store import (
     apply_card_ceilings,
-    card_area_key,
     card_folder_key,
     card_is_too_thin,
     card_preference_key,
     collapse_cards_by_file_set,
-    default_card_budget,
     drop_verdicts_under_final_exclusions,
     final_exclusion_covering,
     path_is_data_file,
@@ -306,61 +304,58 @@ class TestMinimumCardSize:
 # 4. Ceilings, and they are never silent
 # ---------------------------------------------------------------------------
 class TestCardCeilings:
-    def test_the_folder_and_area_of_a_card_are_its_files_common_directory(self):
+    """One rule: a topic card describes a folder, so a folder gets a card.
+
+    There is deliberately NO global budget and no per-area quota. Both existed briefly and both
+    were numbers somebody picked: one card per 25 indexable files with a floor of 50, and five
+    cards per area. On the two stores they were written for, the budget's only lasting effect was
+    to refuse to index anything new forever, and what the number should be became a question for a
+    human. The folder is not a quota, it is what a card is about.
+    """
+
+    def test_the_folder_of_a_card_is_its_files_common_directory(self):
         assert card_folder_key(make_card("c", ["a/b/one.py", "a/b/two.py"])) == "a/b"
         assert card_folder_key(make_card("c", ["a/b/one.py", "a/c/two.py"])) == "a"
+        assert card_folder_key(make_card("c", ["top.py", "other.py"])) == "."
         assert card_folder_key(make_card("c", [])) == ""
-        assert card_area_key(make_card("c", ["a/b/c/one.py", "a/b/c/two.py"])) == "a/b"
 
     def test_one_card_per_folder(self):
         cards = [make_card("first", ["app/one.py", "app/two.py"]),
                  make_card("second", ["app/three.py", "app/four.py"])]
-        kept = apply_card_ceilings(cards, [], indexable_files=10_000)
+        kept = apply_card_ceilings(cards, [])
         assert [c["id"] for c in kept] == ["first"]
 
-    def test_five_cards_per_area(self):
-        # Folders three deep, so each card has its own folder but they share the area
-        # "repo/service" (the first two segments). That is the shape the area cap is for.
+    def test_a_card_per_folder_scales_with_the_corpus_and_nothing_else(self):
+        # 40 folders of real content give 40 cards. No quota anywhere decides this; the corpus
+        # does. This is the test that would fail if an arbitrary budget came back.
         cards = [make_card(f"c{i}", [f"repo/service/sub{i}/one.py",
                                      f"repo/service/sub{i}/two.py"])
-                 for i in range(8)]
-        kept = apply_card_ceilings(cards, [], indexable_files=10_000)
-        assert len(kept) == 5
+                 for i in range(40)]
+        assert len(apply_card_ceilings(cards, [])) == 40
 
-    def test_a_shallow_folder_is_its_own_area_so_the_folder_cap_binds(self):
-        # Worth stating rather than discovering later: when a card's folder is only two segments
-        # deep the area IS the folder, so the per-folder cap of 1 is what limits it and the area
-        # cap of 5 can never come into play. The area cap earns its keep on deeper trees.
-        card = make_card("c", ["repo/service/one.py", "repo/service/two.py"])
-        assert card_folder_key(card) == "repo/service"
-        assert card_area_key(card) == "repo/service"
-
-    def test_the_global_budget_is_one_card_per_twenty_five_files_with_a_floor(self):
-        assert default_card_budget(0) == 50          # the floor, so a small corpus still indexes
-        assert default_card_budget(1_000) == 50
-        assert default_card_budget(2_500) == 100
-        assert default_card_budget(80_000) == 3_200
-
-    def test_the_budget_counts_the_cards_already_in_the_store(self, monkeypatch):
-        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "0")
-        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_AREA", "0")
-        monkeypatch.setenv("QAR_BOOTSTRAP_CARD_BUDGET_FLOOR", "3")
-        existing = [make_card(f"old{i}", [f"old{i}/a.py", f"old{i}/b.py"]) for i in range(3)]
+    def test_a_store_full_of_cards_still_indexes_a_new_folder(self):
+        # The failure the removed budget caused: a store that came out of a cleanup holding more
+        # cards than the budget allowed could never card anything new again.
+        existing = [make_card(f"old{i}", [f"old{i}/a.py", f"old{i}/b.py"]) for i in range(500)]
         fresh = [make_card("new", ["new/a.py", "new/b.py"])]
-        assert apply_card_ceilings(fresh, existing, indexable_files=10) == []
+        assert [c["id"] for c in apply_card_ceilings(fresh, existing)] == ["new"]
 
-    def test_a_card_with_no_files_never_counts_and_is_never_dropped(self, monkeypatch):
-        monkeypatch.setenv("QAR_BOOTSTRAP_CARD_BUDGET_FLOOR", "1")
+    def test_existing_cards_hold_their_own_folder(self):
+        existing = [make_card("already", ["app/one.py", "app/two.py"])]
+        fresh = [make_card("another", ["app/three.py", "app/four.py"])]
+        assert apply_card_ceilings(fresh, existing) == []
+
+    def test_a_card_with_no_files_never_counts_and_is_never_dropped(self):
         # A store full of genuinely learned conversation cards must not refuse to index a corpus.
         existing = [make_card(f"conv{i}", []) for i in range(50)]
         fresh = [make_card("topic", ["app/a.py", "app/b.py"]), make_card("learned", [])]
-        kept = apply_card_ceilings(fresh, existing, indexable_files=10)
+        kept = apply_card_ceilings(fresh, existing)
         assert sorted(c["id"] for c in kept) == ["learned", "topic"]
 
     def test_a_card_already_in_the_store_is_refreshed_not_dropped(self):
         existing = [make_card("known", ["app/one.py", "app/two.py"])]
         refresh = [make_card("known", ["app/one.py", "app/two.py", "app/three.py"])]
-        kept = apply_card_ceilings(refresh, existing, indexable_files=10_000)
+        kept = apply_card_ceilings(refresh, existing)
         assert [c["id"] for c in kept] == ["known"], (
             "refusing a refresh leaves the store stale without making it any smaller"
         )
@@ -369,27 +364,24 @@ class TestCardCeilings:
         cards = [make_card("first", ["app/one.py", "app/two.py"]),
                  make_card("second", ["app/three.py", "app/four.py"])]
         with caplog.at_level(logging.WARNING, logger="quest-ai-runner.context"):
-            apply_card_ceilings(cards, [], indexable_files=10_000)
+            apply_card_ceilings(cards, [])
         warnings = [r for r in caplog.records if r.levelno >= logging.WARNING]
         assert warnings, "a ceiling nobody is told about is indistinguishable from a bug"
-        assert "per-folder cap" in warnings[0].getMessage()
+        assert "folder" in warnings[0].getMessage()
 
-    def test_an_explicit_max_cards_overrides_the_default_budget(self, monkeypatch):
-        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "0")
-        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_AREA", "0")
-        cards = [make_card(f"c{i}", [f"app/one{i}.py", f"app/two{i}.py"]) for i in range(5)]
-        assert len(apply_card_ceilings(cards, [], indexable_files=10_000, max_cards=2)) == 2
-
-    def test_the_per_folder_and_per_area_knobs_turn_the_caps_off(self, monkeypatch):
-        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "0")
-        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_AREA", "0")
+    def test_the_per_folder_knob_raises_or_removes_the_limit(self, monkeypatch):
         cards = [make_card(f"c{i}", [f"app/one{i}.py", f"app/two{i}.py"]) for i in range(7)]
-        assert len(apply_card_ceilings(cards, [], indexable_files=10_000)) == 7
+        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "3")
+        assert len(apply_card_ceilings(cards, [])) == 3
+        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "0")
+        assert len(apply_card_ceilings(cards, [])) == 7
 
-    def test_the_files_per_card_knob_changes_the_budget(self, monkeypatch):
-        monkeypatch.setenv("QAR_BOOTSTRAP_FILES_PER_CARD", "10")
-        monkeypatch.setenv("QAR_BOOTSTRAP_CARD_BUDGET_FLOOR", "1")
-        assert default_card_budget(1_000) == 100
+    def test_an_operator_max_cards_still_caps_one_pass(self, monkeypatch):
+        monkeypatch.setenv("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", "0")
+        cards = [make_card(f"c{i}", [f"app/one{i}.py", f"app/two{i}.py"]) for i in range(5)]
+        assert len(apply_card_ceilings(cards, [], max_cards=2)) == 2
+        # Opt-in only: with no cap passed, nothing limits the pass but the folder rule.
+        assert len(apply_card_ceilings(cards, [])) == 5
 
 
 # ---------------------------------------------------------------------------

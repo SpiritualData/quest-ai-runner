@@ -125,23 +125,20 @@ Env it reads:
                                                    importing the cards a narrower QAR instance already
                                                    bootstrapped at ``~/hq/.../product``, at zero extra
                                                    LLM cost.
-  --- card-index ceilings (how many cards a corpus may produce) -------------------------------
-  A corpus of tens of thousands of files should hold HUNDREDS of cards. Two real stores reached
-  8,557 and 32,070 because nothing bounded them, so every ceiling below is on by default and says
-  so at WARNING whenever it truncates. Raise one only after reading why it bit; the usual right
-  answer is to prune the store (``scripts/quarantine_cards.py``) rather than let it grow.
-  QAR_BOOTSTRAP_MAX_CARDS (optional)             — hard cap on cards in ONE bootstrap pass. Unset,
-                                                   the default budget below applies instead.
-  QAR_BOOTSTRAP_FILES_PER_CARD (optional)        — the default global budget is one card per this
-                                                   many indexable files (default 25), never below
-                                                   QAR_BOOTSTRAP_CARD_BUDGET_FLOOR.
-  QAR_BOOTSTRAP_CARD_BUDGET_FLOOR (optional)     — floor under that budget so a small corpus is
-                                                   still indexed properly (default 50).
-  QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER (optional)  — cards allowed per folder (default 1; 0 = no cap).
-                                                   A folder is the unit a topic card describes.
-  QAR_BOOTSTRAP_MAX_CARDS_PER_AREA (optional)    — cards allowed per area, an area being the first
-                                                   two path segments of a card's folder (default 5;
-                                                   0 = no cap).
+  --- card-index ceiling (how many cards a corpus may produce) ----------------------------------
+  ONE rule, and it is structural rather than a quota: a topic card describes a FOLDER, so a folder
+  gets a card. The size of the index is therefore a fact about the corpus (how many folders of
+  real content it has) and not a number picked in advance. An earlier version carried a global
+  budget of one card per 25 files and five cards per "area"; both were invented, and on a store
+  that already held more cards than the budget allowed, the budget's only effect was to refuse to
+  index anything new forever.
+  QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER (optional)  — cards allowed per folder (default 1; 0 = no
+                                                   limit). Raise it only for a corpus that
+                                                   genuinely holds several topics in one folder.
+  QAR_BOOTSTRAP_MAX_CARDS (optional)             — hard cap on cards in ONE bootstrap pass. Opt-in
+                                                   with NO default, for an operator who wants to
+                                                   bound a single pass; the folder rule is what
+                                                   bounds the store.
   QAR_BOOTSTRAP_MAX_FILES (optional)             — stop walking after this many files. No default:
                                                    a truncated walk leaves the store INCOMPLETE.
   QAR_FOLDER_REVIEW (optional)                   — "0" turns off the folder relevance review

@@ -2023,14 +2023,22 @@ _DATA_FILE_NAMES = (
 _DATA_PATH_MARKERS = ("local_cache", "node_modules", ".cache", "__pycache__")
 _STATE_FILE_RE = re.compile(r"(?:^|[_.-])state\.json$", re.IGNORECASE)
 
-# Ceilings. Defaults chosen from what a human would expect of an index: one card per folder (a
-# folder IS the unit a topic card describes), a handful per area, and a store that grows with the
-# corpus rather than with the number of passes run over it.
-_FILES_PER_CARD_DEFAULT = 25
-_CARD_BUDGET_FLOOR_DEFAULT = 50
+# The ceiling. ONE rule, and it is not a number somebody picked: a topic card describes a FOLDER,
+# so a folder gets a card. The size of the index is then a fact about the corpus (how many folders
+# of real content it has) rather than a quota invented in this file.
+#
+# An earlier version of this carried a global budget of one card per 25 indexable files with a
+# floor of 50, plus five cards per "area". Both were made up. They also behaved badly in exactly
+# the way an arbitrary limit does: the two stores this was written for came out of their cleanup
+# holding more cards than the invented budget allowed, so the budget's only remaining effect was
+# to refuse to index anything new, forever, and the question of what the number should be got
+# handed to a human. A rule that has to be argued about by hand is the wrong rule. Measured after
+# removing it: 198 and 84 folders of indexable content in the two corpora, so one card per folder
+# is a few hundred cards, which is the number that was wanted all along.
+#
+# QAR_BOOTSTRAP_MAX_CARDS still exists for an operator who wants a hard cap on one pass, and it is
+# opt-in with no default.
 _MAX_CARDS_PER_FOLDER_DEFAULT = 1
-_MAX_CARDS_PER_AREA_DEFAULT = 5
-_CARD_AREA_DEPTH = 2
 
 
 def _positive_int_env(name: str, default: int) -> int:
@@ -2046,42 +2054,8 @@ def _positive_int_env(name: str, default: int) -> int:
     return value if value >= 0 else default
 
 
-def files_per_card() -> int:
-    return max(1, _positive_int_env("QAR_BOOTSTRAP_FILES_PER_CARD", _FILES_PER_CARD_DEFAULT))
-
-
-def card_budget_floor() -> int:
-    return _positive_int_env("QAR_BOOTSTRAP_CARD_BUDGET_FLOOR", _CARD_BUDGET_FLOOR_DEFAULT)
-
-
 def max_cards_per_folder() -> int:
     return _positive_int_env("QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER", _MAX_CARDS_PER_FOLDER_DEFAULT)
-
-
-def max_cards_per_area() -> int:
-    return _positive_int_env("QAR_BOOTSTRAP_MAX_CARDS_PER_AREA", _MAX_CARDS_PER_AREA_DEFAULT)
-
-
-def default_card_budget(indexable_files: int) -> int:
-    """How many cards a corpus of ``indexable_files`` files is allowed, absent an explicit cap."""
-    return max(card_budget_floor(), int(indexable_files) // files_per_card())
-
-
-def card_budget_room(
-    existing_cards: List[Dict[str, Any]],
-    *,
-    indexable_files: int,
-    max_cards: Optional[int] = None,
-) -> int:
-    """How many NEW file-derived cards the budget still allows. Can be zero or negative.
-
-    Asked BEFORE topic discovery runs, not after: discovery is the expensive stage (one model call
-    per chunk, then one per area), and spending it to produce cards the ceilings will then drop is
-    the same waste in a different place.
-    """
-    budget = max_cards if max_cards is not None else default_card_budget(indexable_files)
-    held = sum(1 for card in existing_cards if card_folder_key(card))
-    return budget - held
 
 
 def path_is_data_file(rel: str) -> bool:
@@ -2111,15 +2085,6 @@ def card_folder_key(card: Dict[str, Any]) -> str:
         if not parts:
             break
     return "/".join(parts) if parts else "."
-
-
-def card_area_key(card: Dict[str, Any], depth: int = _CARD_AREA_DEPTH) -> str:
-    """The AREA a card sits in: the first ``depth`` segments of its folder."""
-    folder = card_folder_key(card)
-    if not folder:
-        return ""
-    parts = [p for p in folder.split("/") if p and p != "."]
-    return "/".join(parts[:depth]) if parts else "."
 
 
 def card_preference_key(card: Dict[str, Any], index: int) -> Tuple[int, str, int]:
@@ -2240,78 +2205,67 @@ def apply_card_ceilings(
     new_cards: List[Dict[str, Any]],
     existing_cards: List[Dict[str, Any]],
     *,
-    indexable_files: int,
     max_cards: Optional[int] = None,
 ) -> List[Dict[str, Any]]:
-    """Drop NEW cards that would breach the per-folder, per-area or global ceiling.
+    """Drop NEW cards beyond one per folder, and beyond ``max_cards`` when an operator set one.
+
+    The per-folder rule is the whole ceiling, and it is structural rather than numeric: a topic
+    card describes a folder, so the number of cards a corpus can produce is the number of folders
+    of real content it has. Nothing here invents a quota.
 
     A card whose id is already in the store is always kept: it is a refresh of a card that exists,
     so dropping it would only leave the store stale, never smaller. Existing cards DO count toward
-    every ceiling, because the ceiling is about the size of the store, not the size of one pass.
+    the per-folder rule, because it is about the state of the store rather than one pass, but only
+    FILE-DERIVED ones do: a conversation or run card has no files, occupies no folder, and arrives
+    from being used rather than from the corpus.
 
     Truncation is always logged at WARNING with the numbers. A ceiling nobody is told about is
     indistinguishable from a bug, which this file has already learned once (see
     ``QAR_BOOTSTRAP_MAX_FILES``).
     """
     per_folder = max_cards_per_folder()
-    per_area = max_cards_per_area()
-    budget = max_cards if max_cards is not None else default_card_budget(indexable_files)
 
     existing_by_id = {c.get("id"): c for c in existing_cards if c.get("id")}
     incoming_ids = {c.get("id") for c in new_cards if c.get("id")}
 
     folder_counts: Dict[str, int] = {}
-    area_counts: Dict[str, int] = {}
     total = 0
-    file_derived_existing = 0
     for cid, card in existing_by_id.items():
         folder = card_folder_key(card)
-        if folder:
-            file_derived_existing += 1
-        if cid in incoming_ids:
-            continue                        # counted when its refreshed version is admitted
-        # Only FILE-DERIVED cards count against the ceilings. A conversation or run card has no
-        # files, occupies no folder, and arrives from being USED rather than from the corpus, so
-        # counting it would make a store full of genuinely learned context refuse to index the
-        # corpus at all.
-        if not folder:
-            continue
+        if cid in incoming_ids or not folder:
+            continue                        # counted when its refresh is admitted, or not a folder
         total += 1
         folder_counts[folder] = folder_counts.get(folder, 0) + 1
-        area = card_area_key(card)
-        area_counts[area] = area_counts.get(area, 0) + 1
 
     kept: List[Dict[str, Any]] = []
-    dropped = {"folder": 0, "area": 0, "budget": 0}
+    dropped = {"folder": 0, "max_cards": 0}
     for card in new_cards:
         folder = card_folder_key(card)
-        area = card_area_key(card)
         is_refresh = card.get("id") in existing_by_id
         if not is_refresh and folder:
-            if budget and total >= budget:
-                dropped["budget"] += 1
+            if max_cards is not None and total >= max_cards:
+                dropped["max_cards"] += 1
                 continue
             if per_folder and folder_counts.get(folder, 0) >= per_folder:
                 dropped["folder"] += 1
-                continue
-            if per_area and area_counts.get(area, 0) >= per_area:
-                dropped["area"] += 1
                 continue
         kept.append(card)
         if folder:
             total += 1
             folder_counts[folder] = folder_counts.get(folder, 0) + 1
-            area_counts[area] = area_counts.get(area, 0) + 1
 
     if any(dropped.values()):
+        parts = []
+        if dropped["folder"]:
+            parts.append(f"{dropped['folder']} already had {per_folder} card(s) for their folder")
+        if dropped["max_cards"]:
+            parts.append(f"{dropped['max_cards']} over the QAR_BOOTSTRAP_MAX_CARDS cap of "
+                         f"{max_cards}")
         _log.warning(
-            "context index: card ceilings dropped %d new card(s) — %d over the per-folder cap of "
-            "%d, %d over the per-area cap of %d, %d over the budget of %d card(s) for %d indexable "
-            "file(s) (store already holds %d); raise QAR_BOOTSTRAP_MAX_CARDS, "
-            "QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER, QAR_BOOTSTRAP_MAX_CARDS_PER_AREA or "
-            "QAR_BOOTSTRAP_FILES_PER_CARD to index more",
-            sum(dropped.values()), dropped["folder"], per_folder, dropped["area"], per_area,
-            dropped["budget"], budget, indexable_files, file_derived_existing,
+            "context index: %d new card(s) not written: %s. A topic card describes a folder, so "
+            "a folder gets one card; set QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER higher (or 0 for no "
+            "limit) if this corpus genuinely needs more per folder",
+            sum(dropped.values()), "; ".join(parts),
         )
     return kept
 
@@ -3735,25 +3689,6 @@ class FileContextStore(ContextAssemblerBase):
             "— processing", len(uncovered), len(stale_covered),
         )
 
-        # Ask the budget BEFORE paying for discovery. A store already at or over its ceiling
-        # cannot accept a new card, so discovering topics for uncovered files would buy model
-        # calls whose every result is then dropped. Stale cards are still regenerated below: that
-        # keeps what exists correct, which the budget never forbids.
-        room = card_budget_room(existing_cards, indexable_files=len(file_paths),
-                                max_cards=max_cards)
-        if uncovered and room <= 0:
-            _log.warning(
-                "context index: %d uncovered file(s) will NOT be analysed — the store already "
-                "holds %d file-derived card(s), at or over its budget of %d for %d indexable "
-                "file(s). Prune the store (scripts/quarantine_cards.py) or raise "
-                "QAR_BOOTSTRAP_MAX_CARDS / QAR_BOOTSTRAP_FILES_PER_CARD; nothing was discovered, "
-                "so nothing was spent.",
-                len(uncovered), sum(1 for c in existing_cards if card_folder_key(c)),
-                max_cards if max_cards is not None else default_card_budget(len(file_paths)),
-                len(file_paths),
-            )
-            uncovered = []
-
         # --- LLM: identify topic cards for the NEW (uncovered) files, deduping vs existing ---
         topic_cards: List[Dict[str, Any]] = []
         if uncovered and provider is not None:
@@ -3840,7 +3775,7 @@ class FileContextStore(ContextAssemblerBase):
         # stale-regen path, the import path or the tfdfidf migration, and every one of them has
         # grown a store past its budget at some point.
         topic_cards = self._gate_new_cards(topic_cards, existing_cards,
-                                           indexable_files=len(file_paths), max_cards=max_cards)
+                                           max_cards=max_cards)
 
         if not topic_cards:
             return 0
@@ -4014,7 +3949,6 @@ class FileContextStore(ContextAssemblerBase):
         topic_cards: List[Dict[str, Any]],
         existing_cards: List[Dict[str, Any]],
         *,
-        indexable_files: int,
         max_cards: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """Apply the thin-card rule and the card ceilings to what this pass would write.
@@ -4055,8 +3989,7 @@ class FileContextStore(ContextAssemblerBase):
                 _MIN_FILES_PER_CARD,
             )
 
-        return apply_card_ceilings(kept, existing_cards, indexable_files=indexable_files,
-                                   max_cards=max_cards)
+        return apply_card_ceilings(kept, existing_cards, max_cards=max_cards)
 
     def _read_discovered(self) -> Dict[str, float]:
         """The discovered-files record (see ``_DISCOVERED_FILE``). Never raises."""

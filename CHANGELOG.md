@@ -21,11 +21,14 @@ All notable changes to this project are documented here. The format is based on
     `collapse_cards_by_file_set` now collapses an identical path set, or an overlap at or above
     0.8, into one card before any of that, against the existing cards too, keeping the most-used
     card and otherwise the earliest.
-  - Nothing bounded the store. A file-derived card now needs at least two files; a lone
-    generated/data file is never carded; and there are ceilings of one card per folder, five per
-    area, and a default budget of one card per 25 indexable files (floor 50) when
-    `QAR_BOOTSTRAP_MAX_CARDS` is unset. Every ceiling logs at WARNING when it truncates. Only
-    file-derived cards count against them.
+  - Nothing bounded the store. A file-derived card now needs at least two files, a lone
+    generated/data file is never carded, and a folder gets one card. That last rule is the whole
+    ceiling, and it is structural rather than numeric: a topic card describes a folder, so the
+    size of the index is a fact about the corpus (198 and 84 folders of real content in the two
+    corpora this was written for) instead of a quota. `QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER` raises
+    or removes it, `QAR_BOOTSTRAP_MAX_CARDS` still caps one pass as opt-in with no default, and
+    truncation always logs at WARNING. Only file-derived cards count; conversation and run cards
+    do not, so a store full of learned context still indexes the corpus.
 - **The folder-review cache is no longer loaded as a card.** `FilesystemCardRepository` excluded
   only `bootstrap_meta.json`, so `folder_review.json` (a dictionary of folder verdicts) was
   enumerated as a card under the id `folder_review`, keyword-scored like a topic, and counted in
