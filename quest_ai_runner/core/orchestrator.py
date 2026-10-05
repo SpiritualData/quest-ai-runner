@@ -133,6 +133,22 @@ from .deep_model_selection import (
 CONFIGURED_LADDER_SOURCE = "configured deep_model_ladder (e.g. QAR_DEEP_MODELS)"
 FALLBACK_LADDER_SOURCE = "fallback model + Claude-runnable tier resolution"
 from .overseer import OverseerSignal, build_digest, oversee
+from .reach_judge import (
+    REACH_JUDGE_TOOL,
+    judge_prompt,
+    normalize_verdict,
+    parse_judge_text,
+    verdict_block,
+)
+from .planner_cascade import (
+    CONFIDENCE_TOOL_FIELD,
+    PLANNER_CONFIDENCE_INSTRUCTION,
+    REVIEW_TOOL,
+    apply_review,
+    build_review_digest,
+    escalation_spec,
+    should_escalate,
+)
 from .sufficiency import (
     AbridgedTurnState,
     collect_abridged_items,
@@ -224,7 +240,66 @@ DEFAULT_CARD_MERGE_SIMILARITY = 0.85
 # {max_deep}) are substituted; JSON-example braces use the standard {{...}} double-brace form.
 # ===========================================================================
 
-_PLANNER_HEAD = """\
+# The ORDERED DECISION PROCEDURE, and the first thing the planner reads.
+#
+# Why it exists (measured 2026-10-05): the doctrine below it is correct but it is long, and the
+# order a reader meets it in is the order a cheap model applies it in. "CORE PRINCIPLE -- READ REAL
+# CONTENT BEFORE ANSWERING" sat ahead of "REACH OF A READ", so on an eval of 765 labelled messages
+# a small model issued a read for work no read could ever reach on 37 of 76 hand-off cases, and
+# when nothing attached could reach the work it handed it off anyway instead of saying so. The
+# rules were all present; their PRIORITY was not. Priority is what this block states, in the
+# cheapest form a model can hold: stop at the first rule that applies.
+#
+# Keep it SHORT and keep it FIRST. Everything under it refines these rules, it never reorders them.
+PLANNER_DECISION_RUBRIC: str = """\
+DECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below only refines it.
+  1. CURRENT FACTS ABOUT THE WORLD. A question about news, prices, weather, a score, a public
+     fact or anything else happening in the world right now is NOT work for a machine and NOT a
+     read of your own sources. Answer it: say what you reliably know, and say plainly that you
+     cannot check a live source for the current value if you cannot. Never hand such a question
+     to an execution environment, and never grep your sources for it.
+  2. OUT OF REACH. Does this need a place your reads cannot go: a machine and its files, folders,
+     processes, jobs or logs; a code repository; a spreadsheet, document or service held
+     elsewhere? Then do NOT read and do NOT run discovery first, and do not invent a `scope` or
+     `rel_path` for it: a server, repository, folder or spreadsheet NAME is never a source, not
+     even when the CONTEXT names it. If the CONTEXT names somewhere that covers that kind of
+     work, hand it off (answer + deferred_deep). If NOTHING there covers it, say so plainly and
+     hand nothing off. A read that already came back empty for such a request is this same
+     signal, not a reason to read again.
+  3. ALREADY RUNNING. Is this asking about work already in flight? Answer with that work's real
+     status from the records in CONTEXT. Never open a second run of the same thing.
+  4. QUESTION OR STATEMENT. Is this a question, or someone describing a plan, a preference or a
+     piece of context rather than instructing you to act now? Answer it, after reading real
+     content when it is about substance. An action word inside a question does not make it an
+     instruction.
+  5. INSTRUCTION TO ACT. It is a current instruction to produce or change something your deep
+     runner can reach: choose "deep" now, with no read first.
+  6. OTHERWISE. Read what you need, then answer.
+"""
+
+# Fresh, GENERAL boundary examples. They exist because the four hardest calls above are hard in
+# the same way every time: the words of the request look like the other branch. Written to be
+# recognisable shapes, deliberately not drawn from any evaluation set, and short enough that the
+# whole block costs less than one of the paragraphs it replaces the need to re-read.
+PLANNER_BOUNDARY_EXAMPLES: str = """\
+BOUNDARY EXAMPLES (shapes, not phrases to match):
+  "What does the overnight import write to disk?" -> the answer lives on a machine, so rule 2:
+     hand off, or say nothing attached reaches it. Do not grep for it.
+  "Would it be worth splitting that form in two?" -> rule 4, a question. Answer with your view.
+  "Split that form in two." -> rule 5, an instruction. "deep", no read first.
+  "Remind me what we decided about the pricing tiers." -> rule 6: this lives in your own sources,
+     so read, then answer.
+  "Is the overnight import finished yet?" -> rule 3 if a run of it is in CONTEXT (answer its
+     status), otherwise rule 2.
+  "What is the exchange rate today?" -> rule 1. Answer, note you cannot check it live.
+  "I have been thinking we should start tracking churn weekly." -> rule 4, a statement. React to
+     it and ask the one question that would let you act, never open work on your own initiative.
+  Starting a brand new record or project for someone is rule 5 ONLY when they asked for that in
+  this message. Inferring it from a topic they merely discussed is rule 4.
+"""
+
+_PLANNER_HEAD = (
+    """\
 You are the PLANNER for an AI assistant answering a request.
 
 Your job: decide, FAST, the NEXT step to respond WELL. You do NOT write the reply yourself.
@@ -232,7 +307,12 @@ Choose exactly one action via the `decide` tool. You run in a LOOP: after a "rea
 called again with what was read, so you can narrow in -- grep to locate, read the matching
 section, then answer -- exactly like a careful human reading the real source.
 
-QUESTION vs STATEMENT vs COMMAND -- DECIDE THIS FIRST, BEFORE ANYTHING ELSE:
+"""
+    + PLANNER_DECISION_RUBRIC
+    + "\n"
+    + PLANNER_BOUNDARY_EXAMPLES
+    + """
+QUESTION vs STATEMENT vs COMMAND -- the detail behind rules 4 and 5 above:
   Read the user's message and judge what they actually want from you. There are THREE cases,
   and only ONE of them is "deep":
     * A QUESTION / REQUEST FOR INFORMATION -- they want to be TOLD, SHOWN, or ADVISED
@@ -369,6 +449,7 @@ CORE PRINCIPLE -- READ REAL CONTENT BEFORE ANSWERING:
   folder, repo, or codebase that is not one of the reachable sources still names WORK TO HAND OFF,
   not a read to run -- the verb alone never earns a discovery step.
 """
+)
 
 # The deferred_deep semantics sentence injected into the planner doctrine above. Which one a turn
 # gets is decided by ``OrchestratorConfig.deferred_deep_queued`` so the words always match the
@@ -775,6 +856,111 @@ PLANNER_PROMPT = (
 )
 
 
+# ===========================================================================
+# THE COMPACT PLANNER PROFILE
+#
+# Input tokens are what a routing decision costs: a planner call carries thousands of them and
+# returns about a hundred. Measured on the full prompt above (cl100k, 2026-10-05): the head is
+# 3,475 tokens and the actions block 2,289, which together are more than half of one call, while
+# the grounding data is 1,772 and the request itself is 12.
+#
+# This profile is the same doctrine with the parts a PLANNER does not use removed. What goes:
+#   * the long prose behind the ordered rubric, which now states the same priorities in 411 tokens;
+#   * SPECIFICITY_GATE and CACHED_HINT_GATE, which govern how an ANSWER is grounded. The planner
+#     does not write the answer, and the answer path enforces both again on its own
+#     (``_grounding_block``, ``grounding_answer_tail``), so a planner pays for them twice;
+#   * SUFFICIENCY_GATE's checklist, folded into one line of the read action.
+# What stays, in full: the ordered rubric, the boundary examples, the read grammar (the planner has
+# to emit valid reads), the goal-versus-brief distinction, and the model-tier gate.
+#
+# It is OPT IN (``OrchestratorConfig.planner_prompt_profile``, default "full"), so an existing
+# deployment is byte-for-byte unchanged until its operator asks for it.
+# ===========================================================================
+
+_PLANNER_COMPACT_HEAD = """\
+You are the PLANNER for an AI assistant answering a request. Decide the NEXT step, fast. You do
+NOT write the reply yourself. Choose exactly one action via the `decide` tool. You run in a LOOP:
+after a "read" you are called again with what was read, so you can narrow in.
+
+"""
+
+_PLANNER_COMPACT_ACTIONS = """\
+THE ACTIONS:
+  - "read": targeted PARTIAL reads, run IN PARALLEL, up to {max_reads} per step. List any of:
+      {{"rel_path": "...", "heading": "..."}} or {{"rel_path": "...", "start_line": N, "end_line": M}}
+      {{"grep": "regex", "scope": "optional/subpath"}}
+      {{"query": {{...}}}}, optionally with "time_range", "topic_terms", "actor", "content_kind"
+        when the request names a period, topic, who, or kind of content
+      {{"list_sources": true}} / {{"describe_source": "<name>"}} / {{"list_operations": true}} /
+        {{"describe_operation": "<name>"}} / {{"list_guidance": true}} / {{"read_guidance": "<id>"}}
+        when you do not already know the source, field or operation a request needs
+      {{"cards": "<query>"}} / {{"card": "<id>"}} for what this assistant already KNOWS about a
+        topic, person or piece of work, as opposed to a file in the corpus
+    Read again whenever you cannot yet NAME the file or trace the path you would rely on. Stop when
+    a pass adds no new load-bearing fact, and answer or escalate the model tier instead of looping.
+    Never pass a machine, server or repository NAME as a `scope` or `rel_path`: it is not a source.
+  - "answer": you have enough real content, or it is chit-chat. A capability or discovery LISTING
+    is not content: it says only what you could call. Use "answer" to INFORM. Describing a change
+    the user asked you to MAKE, or printing a patch instead of applying it, is a failure.
+    When you have gathered enough and now see that work is needed, use "answer" WITH
+    deferred_deep. {deferred_deep_semantics}
+  - "deep": fulfilling this means PRODUCING or CHANGING an artifact, or the answer lives somewhere
+    your reads cannot reach. Covers the person's own records (create / add / update / edit /
+    delete / mark / set) and code or files (fix, implement, build, refactor, apply). Do not read
+    the codebase first: the deep runner is a full agent with a shell, the filesystem, the web and
+    this deployment's connected services, and it explores and edits itself.
+    Set `deep_target`: "quest_data" for the person's own records and fields (these change through
+    the product's own field-update operation, NEVER by writing code), "code_or_files" for a repo
+    or corpus change, else "other" or null.
+    Give BOTH, and keep them DISTINCT:
+      `goal` = the short CHECKABLE done-standard only, one sentence under 200 characters, the
+        single condition an executor is held to. Not the plan, the analysis, or the request again.
+      `deep_brief` = the self-contained brief with all the detail, preserving the user's own
+        action verb (say "add ...", not "review ...").
+    If the request is actionable but under-specified, do NOT bounce it back: ground in the CONTEXT
+    and author a concrete proposal yourself. A mutating proposal is reviewed before it takes
+    effect, so proposing beats asking. If you are unsure which operation a change targets, make
+    discovery your one read step first so the proposal names the real operation.
+  - "confirm": a genuine FORK only: truly ambiguous even after reading, or risky or irreversible
+    enough that a human must approve the direction. Put it in `confirm_question` and do not also
+    act. When there is something to look at, put its full https URL in `confirm_review_url`.
+"""
+
+# THE RUBRIC GOES FIRST, and that was measured, not assumed. This repo learned the opposite for
+# the TOOLS block (CHANGELOG 2026-09-27: above the planner body, a live Gemini planner filled
+# tool_calls correctly and still chose action "answer"; moving it last fixed every probe), so the
+# same placement was tried here. It is worse: on the 376 scored rows of the dev half,
+# gemini-2.5-flash-lite scored 86.4 percent with the rubric first and 84.6 percent with it last
+# (2026-10-05). The lesson does not transfer, because a tool block is an OPTION the model has to
+# notice while deciding, and a rubric is the FRAME it decides inside.
+PLANNER_PROMPT_COMPACT = (
+    _PLANNER_COMPACT_HEAD
+    + PLANNER_DECISION_RUBRIC
+    + "\n"
+    + PLANNER_BOUNDARY_EXAMPLES
+    + "\n"
+    + _PLANNER_COMPACT_ACTIONS
+    + "\n--- " + MODEL_TIER_GATE.split("\n")[0] + "\n"
+    + "\n".join(MODEL_TIER_GATE.split("\n")[1:]) + "\n\n"
+    + _PLANNER_TAIL
+)
+
+#: The planner prompt variants, by ``OrchestratorConfig.planner_prompt_profile``. Both carry the
+#: identical format slots, so a caller renders either one the same way.
+PLANNER_PROFILES: Dict[str, str] = {"full": PLANNER_PROMPT, "compact": PLANNER_PROMPT_COMPACT}
+DEFAULT_PLANNER_PROMPT_PROFILE = "full"
+
+
+def planner_prompt_for_profile(profile: Optional[str]) -> str:
+    """PUBLIC: the planner prompt for ``profile``, falling back to the full one.
+
+    An unknown name degrades to "full" rather than raising: a planner prompt is not the place for
+    a deployment to fail closed on a typo in an environment variable.
+    """
+    return PLANNER_PROFILES.get((profile or "").strip().lower() or
+                                DEFAULT_PLANNER_PROMPT_PROFILE, PLANNER_PROMPT)
+
+
 def planner_prompt_defaults() -> Dict[str, Any]:
     """PUBLIC: a safe default for EVERY ``PLANNER_PROMPT`` format slot.
 
@@ -1034,18 +1220,38 @@ TOOL_CALLS_TOOL_FIELD: Dict[str, Any] = {
 }
 
 
+def strip_schema_descriptions(schema: Any) -> Any:
+    """PUBLIC: a deep copy of ``schema`` with every ``description`` key removed.
+
+    A schema's field descriptions are instruction, and on a provider that renders the schema into
+    the prompt (every provider without native tool use) they are instruction the caller pays for
+    on EVERY call. Measured 2026-10-05: the decide schema is 1,897 tokens as rendered, 1,192
+    without its descriptions. Only worth doing when the prompt body already states the same thing,
+    which is what the compact planner profile does, so this is reached through
+    ``decide_tool_for(compact=True)`` rather than applied by default.
+    """
+    if isinstance(schema, dict):
+        return {k: strip_schema_descriptions(v) for k, v in schema.items() if k != "description"}
+    if isinstance(schema, list):
+        return [strip_schema_descriptions(v) for v in schema]
+    return schema
+
+
 def decide_tool_for(mode_signals: bool, deferred_queued: bool,
-                    card_thread: bool = False, tools: bool = False) -> Dict[str, Any]:
+                    card_thread: bool = False, tools: bool = False,
+                    compact: bool = False) -> Dict[str, Any]:
     """Return the decide-tool schema variant for this run's configuration.
 
     ``mode_signals`` adds the opt-in ``mode_signal`` field; ``card_thread`` adds the opt-in
     ``card_thread`` field (per-idea threading); ``deferred_queued`` swaps the ``deferred_deep``
     field description for the queued-background wording so the schema always tells the planner what
-    the wired deep runner ACTUALLY does with deferred work.
+    the wired deep runner ACTUALLY does with deferred work. ``compact`` drops the field
+    descriptions (see ``strip_schema_descriptions``), keeping the field names, types, enums and
+    required list, which is the whole contract a response has to satisfy.
     """
     base = DECIDE_TOOL_WITH_MODE_SIGNAL if mode_signals else DECIDE_TOOL
     if not deferred_queued and not card_thread and not tools:
-        return base
+        return strip_schema_descriptions(base) if compact else base
     tool = copy.deepcopy(base)
     if tools:
         props = tool["input_schema"]["properties"]
@@ -1064,7 +1270,7 @@ def decide_tool_for(mode_signals: bool, deferred_queued: bool,
         required = tool["input_schema"].setdefault("required", [])
         if "card_thread" not in required:
             required.append("card_thread")
-    return tool
+    return strip_schema_descriptions(tool) if compact else tool
 
 
 @dataclass
@@ -1122,6 +1328,41 @@ class OrchestratorConfig:
     # short reference note (they were sent in full on step 1). Default off → unchanged behavior.
     # The final ANSWER path is never affected — it always grounds on the full transcript/context.
     planner_abbreviate_repeat_context: bool = DEFAULT_PLANNER_ABBREVIATE_REPEAT_CONTEXT
+    # WHICH PLANNER PROMPT this run sends: "full" (the default, unchanged) or "compact", the same
+    # doctrine with the parts a planner does not use removed. See PLANNER_PROFILES. The reason to
+    # pick "compact" is cost and small-model reliability: a planner call is almost all input
+    # tokens, and the compact profile cuts them by about 40 percent, which matters when the point
+    # of the deployment is to run routing on a cheap model.
+    planner_prompt_profile: str = DEFAULT_PLANNER_PROMPT_PROFILE
+    # THE OVERSEER CASCADE for routing decisions. Off by default. When on, the planner also
+    # reports how sure it is of each decision (one extra enum field on the call it already makes,
+    # zero extra calls), and a decision it is NOT sure of is re-decided by a STRONGER model that
+    # sees only a short digest: the request, the cheap model's choice and reasoning, and the
+    # grounding it needs, rather than the whole planner prompt again. The point is to buy the
+    # strong model's judgment on the few percent of decisions that need it without paying its
+    # input cost on all of them. See core/planner_cascade.py.
+    planner_cascade: bool = False
+    planner_cascade_tier: str = "best"
+    # WHICH DECISIONS get reviewed. A comma list of confidence levels ("low", "low,medium") and
+    # of actions written "action:read". The default is the ACTION signal, not confidence, because
+    # self-reported confidence was measured and did not work: a cheap planner answered "high" on
+    # 84 of 86 decisions including 36 wrong ones (see core/planner_cascade.py). A decision with no
+    # confidence reported is NEVER escalated on the confidence signal, so a parse failure cannot
+    # escalate everything; the action signal has no such hole.
+    planner_cascade_escalate_on: str = "action:read"
+    # Hard ceiling on the digest the stronger model sees, in characters. The whole value of the
+    # cascade is that the second call is small, so this is a real cap, not a hint.
+    planner_cascade_digest_chars: int = 9000
+    # THE REACH JUDGE (see core/reach_judge.py). One small question answered by a STRONGER tier
+    # before planning: does what this request needs live inside the readable sources, outside them,
+    # or in the world right now. Its verdict is stamped into the planner prompt as settled fact.
+    # Off by default, and inert without ``read_reach_summary``, which only a consumer can write.
+    planner_reach_judge: bool = False
+    planner_reach_judge_tier: str = "best"
+    # CONSUMER-SUPPLIED: a short statement of what this deployment's reads can reach, and what its
+    # attached execution environments handle. The library cannot know either, and a judge given a
+    # generic guess would be worse than no judge, so an empty value disables the judge outright.
+    read_reach_summary: str = ""
     # INSTANT ACK: when True, emit an immediate "Looking into this..." status at the top of run()
     # and launch a cheap one-sentence acknowledgment LLM call IN A BACKGROUND THREAD so it runs
     # CONCURRENTLY with context assembly + the first planner step.  The ack is emitted as an
@@ -1625,6 +1866,17 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
     else:
         confirm_silence_raw = confirm_silence_raw.strip().lower()
 
+    # Self-reported confidence in THIS decision. Read only when the consumer opted into the
+    # cascade (the field is not even in the schema otherwise), and strictly validated: anything
+    # that is not one of the three values normalizes to None, which the cascade reads as "not
+    # assessed" and leaves alone. A detection failure must never escalate every decision.
+    confidence_raw = raw.get("confidence") if cfg.planner_cascade else None
+    if isinstance(confidence_raw, str) and confidence_raw.strip().lower() in (
+            "high", "medium", "low"):
+        confidence = confidence_raw.strip().lower()
+    else:
+        confidence = None
+
     return PlanDecision(
         action=action,
         reads=clean_reads,
@@ -1650,6 +1902,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
         confirm_review_url=confirm_url_raw,
         confirm_default_on_silence=confirm_silence_raw,
         tool_calls=tool_calls,
+        confidence=confidence,
     )
 
 
@@ -3918,6 +4171,26 @@ def provider_call_accepts_layers(fn: Any) -> bool:
     return False
 
 
+def provider_call_accepts_tier(fn: Any) -> bool:
+    """Whether a provider's ``plan`` accepts an explicit ``tier``, for the cascade's review call.
+
+    Some consumers resolve a call's model from their OWN tier config and ignore the model id the
+    orchestrator hands them (a planner that "always runs cheap" is the common and correct shape).
+    On such a provider the cascade could not reach a stronger model at all, so it asks for a TIER
+    when the provider can take one, and falls back to the model id when it cannot. Signature
+    inspection, same opt-in discipline as ``provider_call_accepts_layers``, so an older provider
+    keeps working unchanged.
+    """
+    try:
+        sig = inspect.signature(fn)
+    except (ValueError, TypeError):
+        return False
+    for p in sig.parameters.values():
+        if p.name == "tier" or p.kind is inspect.Parameter.VAR_KEYWORD:
+            return True
+    return False
+
+
 # --- WS1 reliability floor: configurable, loud timeouts (see docs/HANDS_FREE_QUEST_AI_DESIGN.md) --
 
 def read_op_timeout_seconds() -> float:
@@ -5137,10 +5410,32 @@ class Orchestrator:
             brainstorm_note = _BRAINSTORM_PLANNER_NOTE
             if self.cfg.mode_signals_enabled:
                 brainstorm_note += _BRAINSTORM_EXIT_SIGNAL_NOTE
+        # The compact profile also sends the compact SCHEMA: the field descriptions repeat what
+        # its own actions block already says, and on a provider that renders the schema into the
+        # prompt they are paid for on every call.
+        compact_plan = (self.cfg.planner_prompt_profile or "").strip().lower() == "compact"
         decide_tool = decide_tool_for(self.cfg.mode_signals_enabled,
                                       self.cfg.deferred_deep_queued,
                                       self.cfg.card_thread_enabled,
-                                      tools=self.tools is not None)
+                                      tools=self.tools is not None,
+                                      compact=compact_plan)
+        # THE CASCADE'S ONE EXTRA FIELD, present only when a consumer opted in, so a deployment
+        # that does not use the cascade pays nothing for it. Copied before mutating: the schemas
+        # above are module-level singletons on the no-variant path.
+        if getattr(self.cfg, "planner_cascade", False):
+            decide_tool = copy.deepcopy(decide_tool)
+            decide_tool["input_schema"]["properties"]["confidence"] = dict(CONFIDENCE_TOOL_FIELD)
+            # REQUIRED, not optional, and that was measured. Offered as an optional field with the
+            # instruction in the prompt body, a live planner left it null on 381 of 384 decisions
+            # (2026-10-05), so nothing could ever escalate. This is the same finding the card
+            # thread field already recorded: an optional field is one a model quietly omits, and
+            # every omission lands on the fail-safe. The fail-safe here (no confidence means no
+            # escalation) is unchanged and still catches a malformed value; it just stops being
+            # the norm. The description stays even under the compact schema, since this is the one
+            # field whose whole purpose is a judgment rather than a value.
+            required = decide_tool["input_schema"].setdefault("required", [])
+            if "confidence" not in required:
+                required.append("confidence")
         # The TOOLS block: only the tools relevant to THIS request (the registry narrows a large
         # catalog; the rest are searchable with a {"tools": ...} read). Layered in like the
         # brainstorm note so PLANNER_PROMPT keeps its format slots; absent entirely with no tools.
@@ -5152,7 +5447,8 @@ class Orchestrator:
         # ONCE per turn by run() and passed in. Empty string when the consumer did not opt in, so
         # the prompt is byte-identical to a build without the feature.
         thread_block = card_thread_block if self.cfg.card_thread_enabled else ""
-        prompt = PLANNER_PROMPT.format(
+        planner_template = planner_prompt_for_profile(self.cfg.planner_prompt_profile)
+        prompt = planner_template.format(
             user_message=user_message,
             transcript=plan_transcript or "(no prior messages)",
             context_view=plan_context or "(no context)",
@@ -5188,6 +5484,16 @@ class Orchestrator:
         # the right call but still chose "answer", so nothing ran.
         if tools_block:
             prompt = prompt + "\n\n" + tools_block
+        if getattr(self.cfg, "planner_cascade", False):
+            prompt = prompt + "\n\n" + PLANNER_CONFIDENCE_INSTRUCTION
+        # THE REACH VERDICT, judged once per turn on a stronger tier and cached for the re-plan
+        # steps, so a multi-step turn pays for it once. Appended AFTER the body: it is a fact about
+        # THIS request, not doctrine, and it belongs beside the request rather than above the
+        # action list.
+        reach = self.reach_verdict(user_message)
+        reach_text = verdict_block(reach)
+        if reach_text:
+            prompt = prompt + "\n\n" + reach_text
         model = self.registry.resolve_tier(self.cfg.planner_tier)
         provider = self.get_provider_for_model(model)
         # Cache-friendly layered shape (in addition to the flattened ``prompt`` fallback above): the
@@ -5198,7 +5504,7 @@ class Orchestrator:
         # a provider without the layered surface is byte-for-byte unchanged.
         plan_kwargs: Dict[str, Any] = {"model": model, "tool_schema": decide_tool}
         if provider_call_accepts_layers(provider.plan):
-            plan_body = PLANNER_PROMPT.format(
+            plan_body = planner_template.format(
                 user_message=user_message,
                 transcript=plan_transcript or "(no prior messages)",
                 context_view="(provided in the CONTEXT section above)",
@@ -5225,13 +5531,92 @@ class Orchestrator:
             tail_parts.append(plan_body)
             if tools_block:
                 tail_parts.append(tools_block)
+            if reach_text:
+                tail_parts.append(reach_text)
             plan_kwargs["layers"] = compose_layers(
                 persona=(persona if (narrate and persona.strip()) else ""),
                 context=plan_context or "",
                 tail="\n\n".join(tail_parts),
             ).blocks()
         raw = provider.plan(prompt, **plan_kwargs)
-        return normalize_decision(raw or {}, self.cfg, tools_enabled=self.tools is not None)
+        decision = normalize_decision(raw or {}, self.cfg, tools_enabled=self.tools is not None)
+        return self.cascade_review(decision, user_message, plan_context, gathered)
+
+    # --- the reach judge (opt in; see core/reach_judge.py) --------------------
+
+    def reach_verdict(self, user_message: str) -> Optional[Dict[str, Any]]:
+        """The stronger tier's answer to where what this request needs lives, or None.
+
+        Cached per turn on the message itself, so the re-plan steps of a multi-step turn reuse the
+        one verdict rather than paying for it again. Every failure path returns None, which leaves
+        the planner prompt byte-identical to a run with no judge: this is an optimisation and must
+        never be able to take a turn down.
+        """
+        if not getattr(self.cfg, "planner_reach_judge", False):
+            return None
+        summary = (getattr(self.cfg, "read_reach_summary", "") or "").strip()
+        if not summary:
+            return None
+        cache = getattr(self, "reach_verdict_cache", None)
+        if cache is None:
+            cache = self.reach_verdict_cache = {}
+        key = (user_message or "")[:500]
+        if key in cache:
+            return cache[key]
+        verdict = None
+        try:
+            model = self.registry.resolve_tier(self.cfg.planner_reach_judge_tier)
+            provider = self.get_provider_for_model(model)
+            kwargs: Dict[str, Any] = {"model": model, "tool_schema": REACH_JUDGE_TOOL}
+            if provider_call_accepts_tier(provider.plan):
+                kwargs["tier"] = self.cfg.planner_reach_judge_tier
+            raw = provider.plan(judge_prompt(user_message, summary), **kwargs)
+            verdict = normalize_verdict(raw) or parse_judge_text(raw)
+        except Exception as e:  # noqa: BLE001
+            log.warning("Reach judge failed, planning without a verdict: %s: %s",
+                        type(e).__name__, str(e)[:200])
+        cache[key] = verdict
+        if verdict:
+            log.info("Reach verdict: %s (covered_by=%s)", verdict["reach"], verdict["covered_by"])
+        return verdict
+
+    # --- the overseer cascade (opt in; see core/planner_cascade.py) ------------
+
+    def cascade_review(self, decision: PlanDecision, user_message: str, context_view: str,
+                       gathered: List[Dict[str, Any]]) -> PlanDecision:
+        """Re-decide a LOW-CONFIDENCE routing decision on a stronger model, from a short digest.
+
+        Off unless ``cfg.planner_cascade``. Returns ``decision`` untouched when the cascade is off,
+        when the planner reported no confidence or a confidence the operator did not ask to review,
+        or when the review call fails: a failed overseer is never a failed turn.
+        """
+        self.planner_cascade_reviews = getattr(self, "planner_cascade_reviews", 0)
+        self.last_plan_cascaded = False
+        if not getattr(self.cfg, "planner_cascade", False):
+            return decision
+        if not should_escalate(decision, escalation_spec(self.cfg.planner_cascade_escalate_on)):
+            return decision
+        digest = build_review_digest(
+            user_message, decision, PLANNER_DECISION_RUBRIC, context_view, gathered,
+            max_chars=self.cfg.planner_cascade_digest_chars)
+        model = self.registry.resolve_tier(self.cfg.planner_cascade_tier)
+        review_provider = self.get_provider_for_model(model)
+        review_kwargs: Dict[str, Any] = {"model": model, "tool_schema": REVIEW_TOOL}
+        if provider_call_accepts_tier(review_provider.plan):
+            review_kwargs["tier"] = self.cfg.planner_cascade_tier
+        try:
+            raw = review_provider.plan(digest, **review_kwargs)
+        except Exception as e:  # noqa: BLE001
+            log.warning("Planner cascade review failed, keeping the cheap decision: %s: %s",
+                        type(e).__name__, str(e)[:200])
+            return decision
+        self.planner_cascade_reviews += 1
+        self.last_plan_cascaded = True
+        reviewed = apply_review(decision, raw if isinstance(raw, dict) else None)
+        if reviewed is not decision:
+            log.info("Planner cascade corrected %s -> %s (confidence %s)",
+                     decision.action, reviewed.action, decision.confidence)
+        return reviewed
 
     # --- answer generation (grounded; optional parallel sub-questions) -------
 

@@ -376,6 +376,14 @@ class PlanDecision:
     # ``{"name": "<tool>", "args": {...}}`` (see core/tools.py). Only ever populated when the
     # orchestrator was given a tool registry; otherwise "tool" is not an action the planner has.
     tool_calls: List[Dict[str, Any]] = field(default_factory=list)
+    # HOW SURE the planner is of THIS decision, judged on the same planning call (zero extra LLM
+    # calls): "high" | "medium" | "low" | None. Present only when the consumer opted into the
+    # cascade (OrchestratorConfig.planner_cascade), because a field nobody reads is input tokens
+    # on every call for nothing. It is a STRUCTURED self-report the planner fills in, which is why
+    # it is an acceptable escalation signal where scanning the planner's own prose would not be
+    # (see CLAUDE.md hard rule #3). None = not assessed, and the cascade then leaves the decision
+    # alone rather than escalating everything.
+    confidence: Optional[str] = None
 
 
 @dataclass

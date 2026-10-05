@@ -6,6 +6,47 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Routing can run reliably on a cheap model, and costs about half as much input to do it.**
+  A planner call is almost entirely input tokens (thousands in, about a hundred out), so accuracy
+  and cost are one problem. Measured on a consumer's fixed set of 765 labelled messages, split
+  50/50 by a stable hash of the message and stratified by group, iterating on the dev half only.
+  Full account and the negative results in [`docs/cheap-model-routing.md`](docs/cheap-model-routing.md).
+  - `PLANNER_DECISION_RUBRIC` and `PLANNER_BOUNDARY_EXAMPLES`, an ordered decision procedure at the
+    top of the planner prompt, in both profiles. The rules were already present; their PRIORITY was
+    not, and the order a reader meets them in is the order a cheap model applies them in. It also
+    names the case the doctrine had no branch for: a question about the world right now is neither a
+    read of your own sources nor work to hand to a machine. Placement was measured, not assumed:
+    the rubric FIRST scores 86.4 percent against 84.6 percent last, which is the opposite of the
+    settled finding for the tools block.
+  - `OrchestratorConfig.planner_prompt_profile` ("full", the unchanged default, or "compact").
+    The compact profile is the same doctrine without the gates a PLANNER never uses (`SPECIFICITY`
+    and the cached-hint rule govern an ANSWER, and the answer path applies both again), with a
+    condensed actions block and, via `decide_tool_for(compact=True)` plus the new
+    `strip_schema_descriptions`, a schema carrying its contract and not its prose. The planner body
+    falls from 7,132 tokens to 2,053 and the schema from 1,897 to 583, with no measured accuracy
+    cost. An unknown profile name degrades to "full" rather than raising.
+  - **The reach judge** (`core/reach_judge.py`, `planner_reach_judge`, off by default): one small
+    question answered by a STRONGER tier before planning, settling whether what the request needs
+    lives inside the readable sources, outside them, or in the world right now. About 400 input
+    tokens, cached per turn, and every failure path plans as if there were no judge. Its verdict is
+    stamped into the planner prompt as settled fact; an "inside" verdict adds nothing. It needs one
+    piece of consumer config, `read_reach_summary`, because only a consumer knows what its own
+    reads reach. This is the largest accuracy win measured: on the hand-off groups, 78 percent
+    against 60 percent, and 12 of 12 on code work.
+  - `PlanDecision.confidence` and the opt-in overseer cascade (`core/planner_cascade.py`,
+    `planner_cascade`, off by default): re-decide a flagged routing decision on a stronger model
+    from a bounded digest. **Shipped off, and documented as measured-not-working on the models
+    tried**: self-reported confidence was uncalibrated (a cheap planner answered "high" on 84 of 86
+    decisions, 36 of them wrong), and escalating every read instead sent 44 percent of decisions for
+    review and scored WORSE than no review at all. Kept because it is generic and may calibrate
+    elsewhere, but the reach judge is the thing to reach for.
+  - `provider_call_accepts_tier`, the same signature-inspection opt-in as
+    `provider_call_accepts_layers`. A consumer that resolves a call's model from its own tier
+    config and ignores the model id it is handed (a planner that "always runs cheap" is the common
+    and correct shape) would otherwise answer a cascade or judge call on the cheap tier too, which
+    is the one thing those features exist to avoid.
+
 ### Fixed
 - **A corpus of tens of thousands of files makes hundreds of cards, not thousands.** Two real card
   stores had inflated to 8,557 and 32,070 cards. Three causes, all closed:

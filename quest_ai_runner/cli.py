@@ -117,6 +117,26 @@ Env it reads:
                                                    keyless backend; lower this on a box that also runs
                                                    other Claude Code sessions to avoid CPU contention
                                                    pushing calls past their timeout.
+  QAR_PLANNER_PROMPT_PROFILE (optional)         : "full" (default) or "compact". The compact
+                                                   planner prompt is the same doctrine without the
+                                                   answer-grounding gates a planner never uses, with
+                                                   a condensed actions block and a schema carrying
+                                                   its contract and not its prose. It cuts a routing
+                                                   decision's input tokens by roughly 40 percent
+                                                   with no measured accuracy cost, which is why a
+                                                   deployment running routing on a cheap model wants
+                                                   it. An unknown value degrades to "full". See
+                                                   docs/cheap-model-routing.md.
+  QAR_PLANNER_REACH_JUDGE (optional)            : "1"/"true"/"on" enables the reach judge (default:
+                                                   off): one small question answered by a stronger
+                                                   tier before planning, settling whether what the
+                                                   request needs lives inside the readable sources,
+                                                   outside them, or in the world right now. About 400
+                                                   input tokens, cached per turn. It needs a consumer
+                                                   to supply OrchestratorConfig.read_reach_summary,
+                                                   since only a consumer knows what its own reads
+                                                   reach; with no summary the judge stays inert.
+  QAR_PLANNER_REACH_JUDGE_TIER (optional)       : the tier the reach judge runs on (default "best").
   QAR_REUSE_NESTED_CARDS (optional)              — "0"/"false"/"no" disables it (default: on). When
                                                    on, ``FileContextStore.bootstrap()`` reuses any
                                                    sub-corpus that already has its own completed
@@ -585,6 +605,20 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
         cfg.orchestrator.max_parallel = int(os.environ["QAR_MAX_PARALLEL"])
     if os.getenv("QAR_POLL_INTERVAL"):
         cfg.poll_interval_seconds = float(os.environ["QAR_POLL_INTERVAL"])
+    # Routing cost and small-model reliability (see docs/cheap-model-routing.md). Both live on
+    # OrchestratorConfig, like QAR_MAX_PARALLEL above. The reach judge is left inert unless the
+    # consumer also supplies ``read_reach_summary``: the library cannot write that statement for a
+    # deployment it knows nothing about, and a judge given a generic guess is worse than none.
+    if os.getenv("QAR_PLANNER_PROMPT_PROFILE"):
+        cfg.orchestrator.planner_prompt_profile = (
+            os.environ["QAR_PLANNER_PROMPT_PROFILE"].strip().lower())
+    if os.getenv("QAR_PLANNER_REACH_JUDGE"):
+        cfg.orchestrator.planner_reach_judge = (
+            os.environ["QAR_PLANNER_REACH_JUDGE"].strip().lower()
+            in ("1", "true", "on", "yes"))
+    if os.getenv("QAR_PLANNER_REACH_JUDGE_TIER"):
+        cfg.orchestrator.planner_reach_judge_tier = (
+            os.environ["QAR_PLANNER_REACH_JUDGE_TIER"].strip().lower())
     # QAR_DEEP_MAX_TURNS: hard per-attempt turn cap for the deep goal loop (lives on
     # OrchestratorConfig, not RunnerConfig directly, same as QAR_GOAL_TOKEN_BUDGET/
     # QAR_GOAL_MAX_ATTEMPTS below). The library default (30) is tight for a lane whose tasks
