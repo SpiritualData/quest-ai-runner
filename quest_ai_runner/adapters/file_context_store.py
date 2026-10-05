@@ -472,16 +472,31 @@ def _review_folder_batch(batch: List[Tuple[str, int]], walk_root: Path, provider
         _log.info("context index: folder review returned no usable JSON; those folders default "
                   "to INDEXED")
         return {}
+    # Only the folders this batch ASKED about are accepted. The model is answering a question, so
+    # a key it was not asked for is not an answer, and merging one writes a verdict for a folder
+    # nothing judged. The case that matters: an unsolicited entry for a path inside a folder
+    # already excluded for good would land in the cache for that pass, even though nothing under
+    # a final exclusion is supposed to have a verdict at all. Cheaper and more honest to refuse
+    # the key than to clean up after it.
+    requested = {folder for folder, _ in batch}
     out: Dict[str, Dict[str, Any]] = {}
+    unsolicited: List[str] = []
     for entry in parsed:
         if not isinstance(entry, dict):
             continue
         folder = str(entry.get("folder") or "").strip()
         if not folder:
             continue
+        if folder not in requested:
+            unsolicited.append(folder)
+            continue
         out[folder] = {"index": bool(entry.get("index", True)),
                        "mixed": bool(entry.get("mixed", False)),
                        "reason": str(entry.get("reason") or "")[:120]}
+    if unsolicited:
+        _log.info("context index: folder review returned %d verdict(s) for folder(s) it was not "
+                  "asked about; ignored: %s", len(unsolicited),
+                  ", ".join(sorted(unsolicited)[:5]))
     return out
 
 

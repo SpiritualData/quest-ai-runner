@@ -183,6 +183,40 @@ class TestFolderReviewKeepsNestedRepoExcluded:
             "children of a final exclusion must never be sent to the model at all"
         )
 
+    def test_a_verdict_for_a_folder_nobody_asked_about_is_ignored(self, tmp_path):
+        """The model answers a question; a key it was not asked for is not an answer.
+
+        Found by review: a provider that answers its real batch honestly but volunteers one extra
+        entry for a path inside a folder already excluded for good had that stray verdict merged
+        and written into folder_review.json, even though nothing under a final exclusion is
+        supposed to carry a verdict at all. It did not re-open the subtree (the parent's own
+        verdict stays final, which short-circuits the superseded check) and it self-healed on the
+        next load, but refusing the key is cheaper and more honest than cleaning up after it.
+        """
+        corpus = tmp_path / "corpus"
+        self.build_corpus(corpus, nested_files=2100)
+        cards_dir = tmp_path / "cards"
+
+        class VolunteersExtra:
+            def answer(self, messages, model=None, **kwargs):
+                prompt = messages[0]["content"]
+                asked = [line.split('"')[1] for line in prompt.splitlines()
+                         if line.startswith('- "')]
+                answers = [{"folder": f, "index": True, "mixed": False, "reason": "curated"}
+                           for f in asked]
+                answers.append({"folder": "code/vendored/perspectives/alpha", "index": True,
+                                "mixed": False, "reason": "unsolicited"})
+                answers.append({"folder": "a/folder/that/does/not/exist", "index": True,
+                                "mixed": False, "reason": "unsolicited"})
+                return json.dumps(answers)
+
+        excluded = _folder_review(corpus, effective_skip_dirs(corpus), VolunteersExtra(), None,
+                                  cards_dir)
+        cached = json.loads((cards_dir / "folder_review.json").read_text(encoding="utf-8"))
+        assert "code/vendored/perspectives/alpha" not in cached["folders"]
+        assert "a/folder/that/does/not/exist" not in cached["folders"]
+        assert _is_excluded_folder("code/vendored/perspectives/alpha", excluded)
+
     def test_a_non_mixed_model_skip_is_not_overturned_by_a_kept_child(self, tmp_path):
         # Re-opening a large SKIP on size alone is how the 23k-file subtree got back in. Only a
         # skip the model itself called "mixed" is provisional.
