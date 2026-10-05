@@ -137,3 +137,19 @@ def test_web_search_falls_back_too():
     result = mp.web_search("weather today", model="gemini-3.5-flash")
 
     assert result["answer"] == "answered by gemini-3.1-flash-lite"
+
+
+def test_exhausted_model_is_skipped_during_cooldown():
+    flaky = FlakyProvider({"gemini-3.5-flash": QUOTA_ERROR})
+    calls = []
+    orig = flaky.answer
+
+    def counting(messages, *, model, system=None, layers=None):
+        calls.append(model)
+        return orig(messages, model=model, system=system, layers=layers)
+
+    flaky.answer = counting
+    mp = MultiProvider(flaky, providers={"gemini": flaky}, registry=FakeRegistry(TOP))
+    mp.answer([], model="gemini-3.5-flash")
+    mp.answer([], model="gemini-3.5-flash")
+    assert calls == ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.1-flash-lite"]

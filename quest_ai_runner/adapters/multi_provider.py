@@ -12,6 +12,8 @@ needing to know about multi-provider setup.
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from typing import Any, Callable, Dict, List, Optional
 
 from ..core.adapters import ModelProvider, ThreadLocalCounter, answer_with_reasoning
@@ -62,6 +64,14 @@ class MultiProvider(ModelProvider):
         self.tokens_out = 0
         self._usage_tracker = usage_tracker
         self._registry = registry
+        # model -> monotonic time until which it is skipped after a quota/rate-limit error, so
+        # an exhausted model is tried once per cooldown instead of once per call (a per-model
+        # daily quota does not recover in seconds; retrying it on every call just burns latency
+        # and floods the log).
+        self._cooldown_until: Dict[str, float] = {}
+        self._cooldown_lock = threading.Lock()
+
+    COOLDOWN_SECONDS = 600.0
 
     def set_tier_registry(self, registry: Optional[Any]) -> None:
         """Attach (or replace) the ModelRegistry used for quota-exhaustion tier fallback.
@@ -132,13 +142,27 @@ class MultiProvider(ModelProvider):
         supply what "make the call" means for their own signature; none of them
         duplicate the retry logic itself.
         """
+        now = time.monotonic()
+        with self._cooldown_lock:
+            cooling = self._cooldown_until.get(model, 0.0) > now
+        if cooling:
+            skip_to = self._tier_fallback_model(model, Exception("429 quota cooldown"))
+            if skip_to is not None:
+                return self._call_with_tier_fallback(skip_to, make_call)
         try:
             return make_call(model)
         except Exception as exc:
             fallback_model = self._tier_fallback_model(model, exc)
             if fallback_model is None:
                 raise
-            _log.warning(f"{model} hit a quota/rate limit; falling back to {fallback_model}")
+            with self._cooldown_lock:
+                first = self._cooldown_until.get(model, 0.0) <= time.monotonic()
+                self._cooldown_until[model] = time.monotonic() + self.COOLDOWN_SECONDS
+            if first:
+                _log.warning(
+                    f"{model} hit a quota/rate limit; using {fallback_model} for the next "
+                    f"{int(self.COOLDOWN_SECONDS // 60)} minutes"
+                )
             return self._call_with_tier_fallback(fallback_model, make_call)
 
     def _get_provider_for_model(self, model: str) -> ModelProvider:
