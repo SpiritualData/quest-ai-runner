@@ -5,6 +5,7 @@ model name prefix:
 - claude-* → Anthropic
 - gemini-* or models/* → Gemini
 - gpt-* → OpenAI
+- deepseek* → DeepSeek (registered only when DEEPSEEK_API_KEY is set)
 
 Any code using this provider automatically gets intelligent routing without
 needing to know about multi-provider setup.
@@ -185,6 +186,10 @@ class MultiProvider(ModelProvider):
             if "openai" in self.providers:
                 _log.debug(f"Routing GPT model '{model}' to OpenAI provider")
                 return self.providers["openai"]
+        elif model_lower.startswith("deepseek"):
+            if "deepseek" in self.providers:
+                _log.debug(f"Routing DeepSeek model '{model}' to DeepSeek provider")
+                return self.providers["deepseek"]
 
         # Fallback to primary provider
         _log.debug(f"Model '{model}' routing to primary provider ({type(self.primary).__name__})")

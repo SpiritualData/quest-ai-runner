@@ -4668,6 +4668,7 @@ class Orchestrator:
         - claude-* → Anthropic provider
         - gemini-* or models/* → Gemini provider (models/* is Gemini's convention)
         - gpt-* → OpenAI provider
+        - deepseek* → DeepSeek provider (only when DEEPSEEK_API_KEY is set)
         Falls back to primary provider if no multi-provider setup or no match.
         """
         if not model:
@@ -4694,6 +4695,12 @@ class Orchestrator:
             if "openai" in providers:
                 log.debug(f"Routing GPT model '{model}' to OpenAI provider")
                 return providers["openai"]
+        elif model_lower.startswith("deepseek"):
+            if "deepseek" in providers:
+                log.debug(f"Routing DeepSeek model '{model}' to DeepSeek provider")
+                return providers["deepseek"]
+            log.warning(f"DeepSeek model '{model}' requested but DeepSeek provider not registered "
+                        f"(set DEEPSEEK_API_KEY). Available: {list(providers.keys())}")
 
         # Fallback to primary provider
         log.debug(f"Model '{model}' falling back to primary provider ({type(self.provider).__name__})")

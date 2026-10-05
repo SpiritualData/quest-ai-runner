@@ -20,9 +20,16 @@ from .retry_utils import parse_json_with_retry, retry_transient
 
 
 class OpenAIProvider(ModelProviderBase):
-    def __init__(self, *, api_key: Optional[str] = None, cache_seconds: float = 3600.0):
+    # Subclass hooks for OpenAI-compatible vendors (see DeepSeekProvider).
+    key_env_name = "OPENAI_API_KEY"
+    model_id_marker = "gpt"
+    fallback_models: List[str] = ["gpt-4o", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo"]
+
+    def __init__(self, *, api_key: Optional[str] = None, cache_seconds: float = 3600.0,
+                 base_url: Optional[str] = None):
         super().__init__()
-        self._api_key = api_key or os.getenv("OPENAI_API_KEY")
+        self._api_key = api_key or os.getenv(self.key_env_name)
+        self._base_url = base_url
         self.cache_seconds = cache_seconds
         self._client = None
         self._models_cache: Optional[List[str]] = None
@@ -41,9 +48,16 @@ class OpenAIProvider(ModelProviderBase):
                     "Install it with: pip install openai"
                 )
             if not self._api_key:
-                raise RuntimeError("OPENAI_API_KEY is not configured")
-            self._client = OpenAI(api_key=self._api_key)
+                raise RuntimeError(f"{self.key_env_name} is not configured")
+            kwargs: Dict[str, Any] = {"api_key": self._api_key}
+            if self._base_url:
+                kwargs["base_url"] = self._base_url
+            self._client = OpenAI(**kwargs)
         return self._client
+
+    def extra_create_kwargs(self) -> Dict[str, Any]:
+        """Extra keyword arguments for every chat completion (vendor-specific; none for OpenAI)."""
+        return {}
 
     @retry_transient(max_retries=3, base_delay=1.0)
     def resolve_model(self, model: str) -> str:
@@ -69,6 +83,7 @@ class OpenAIProvider(ModelProviderBase):
                 model=model,
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
+                **self.extra_create_kwargs(),
             )
             if hasattr(response, "usage"):
                 self.tokens_in += getattr(response.usage, "prompt_tokens", 0) or 0
@@ -105,6 +120,7 @@ class OpenAIProvider(ModelProviderBase):
         response = client.chat.completions.create(
             model=model,
             messages=api_messages,
+            **self.extra_create_kwargs(),
         )
         if hasattr(response, "usage"):
             self.tokens_in += getattr(response.usage, "prompt_tokens", 0) or 0
@@ -119,7 +135,7 @@ class OpenAIProvider(ModelProviderBase):
         models = client.models.list()
         return [
             m.id for m in models.data
-            if hasattr(m, "id") and ("gpt" in m.id.lower())
+            if hasattr(m, "id") and (self.model_id_marker in m.id.lower())
         ]
 
     def list_models(self) -> List[str]:
@@ -135,6 +151,6 @@ class OpenAIProvider(ModelProviderBase):
             return model_ids
         except Exception:  # noqa: BLE001
             # Return fallback model list if API fails
-            self._models_cache = ["gpt-4o", "gpt-4-turbo", "gpt-4", "gpt-3.5-turbo"]
+            self._models_cache = list(self.fallback_models)
             self._models_cached_at = now
             return self._models_cache

@@ -253,3 +253,15 @@ cfg = RunnerConfig(
 
 See [writing-a-consumer.md](writing-a-consumer.md) for the full config and
 [ARCHITECTURE_STANDARDS.md](ARCHITECTURE_STANDARDS.md) for how the brain calls these in its loop.
+
+## DeepSeek provider
+
+`DeepSeekProvider` (`adapters/deepseek_provider.py`) is the OpenAI adapter pointed at the
+OpenAI-compatible DeepSeek API. It is registered only when `DEEPSEEK_API_KEY` is set, and model
+ids starting with `deepseek` route to it (orchestrator and `MultiProvider`). `DEEPSEEK_BASE_URL`
+overrides the default `https://api.deepseek.com`. Thinking is off by default (the API default is
+on, which is slower and bills reasoning tokens); set `DEEPSEEK_THINKING=1` to enable it.
+
+DeepSeek ids are never auto-bucketed into fast/balanced/quality/best, so adding the key changes no
+existing deployment's tiers. To use it, pin the tiers: `QAR_MODEL_FAST=<id>`, and so on. List the
+current ids from the provider's `/models` endpoint.

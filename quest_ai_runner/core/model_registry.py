@@ -159,6 +159,9 @@ def bucket_top(models: List[str], fallback: Optional[Dict[str, str]] = None) -> 
 
     # Auto-bucket the live list by family; infer tier assignment from family name + position
     families = {}  # family -> [model, model, ...]
+    # DeepSeek ids are never auto-bucketed into a tier: a deployment opts in by pinning
+    # QAR_MODEL_<TIER>, so registering the DeepSeek provider cannot change an existing lane's tiers.
+    models = [m for m in models if not m.lower().startswith("deepseek")]
     for m in models:
         # Infer family from model name (exact patterns depend on provider)
         if "claude" in m.lower():

@@ -193,6 +193,12 @@ except ImportError:
     _OPENAI_AVAILABLE = False
     OpenAIProvider = None  # type: ignore[assignment,misc]
 
+# DeepSeekProvider (OpenAI-compatible API) shares the openai optional package.
+try:
+    from .deepseek_provider import DeepSeekProvider
+except ImportError:
+    DeepSeekProvider = None  # type: ignore[assignment,misc]
+
 # BM25ContentStore requires the [bm25] optional extra (bm25s).
 # Guard the import so that ``import quest_ai_runner.adapters`` works even without
 # bm25s installed.  Consumers that want BM25ContentStore must install the extra.
@@ -279,6 +285,7 @@ __all__ = [
     "ClaudeCliProvider",
     "GeminiProvider",
     "OpenAIProvider",
+    "DeepSeekProvider",
     "FileContextStore",
     "ReferenceResolver",
     "NoteResolver",

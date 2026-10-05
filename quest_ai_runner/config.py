@@ -2531,6 +2531,18 @@ def resolve_tool_registry(cfg: RunnerConfig):
         return None
 
 
+def register_deepseek(providers: dict) -> None:
+    """Add the DeepSeek provider to ``providers`` only when DEEPSEEK_API_KEY is set."""
+    if not (os.getenv("DEEPSEEK_API_KEY") or "").strip():
+        return
+    try:
+        from .adapters import DeepSeekProvider
+        if DeepSeekProvider is not None:
+            providers["deepseek"] = DeepSeekProvider()
+    except Exception as e:  # noqa: BLE001
+        _log.debug(f"DeepSeek provider unavailable: {type(e).__name__}")
+
+
 def build_orchestrator(
     cfg: RunnerConfig,
     *,
@@ -2585,6 +2597,10 @@ def build_orchestrator(
         _log.debug("Registered OpenAI provider")
     except Exception as e:  # noqa: BLE001
         _log.debug(f"OpenAI provider unavailable: {type(e).__name__}")
+    # DeepSeek is opt-in: registered ONLY when its key is set, and never auto-bucketed into a tier
+    # (a deployment pins QAR_MODEL_<TIER>=deepseek-... to use it), so adding the key changes no
+    # existing lane's tiers.
+    register_deepseek(all_providers)
 
     # Always update config with all available providers (overwrite any existing)
     # This ensures multi-provider routing works correctly. Only apply when the primary
