@@ -314,6 +314,7 @@ def test_run_forever_starts_and_stops_the_fast_lane_thread():
         quest_base_url="http://x", quest_api_key="qsk_test", team_id="team1",
         retrieval=StubRetrieval({"README.md": "fact"}), model_provider=provider,
         poll_interval_seconds=0.01, wait_channel_enabled=False, context_poll_seconds=0,
+        dispatch_interval_seconds=0,  # legacy: the scan itself dispatches
     )
     poller = Poller(cfg, state_path=None, client=client)
     stop_event = threading.Event()

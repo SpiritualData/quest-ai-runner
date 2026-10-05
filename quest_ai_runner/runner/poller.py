@@ -370,10 +370,17 @@ class Poller:
     # --- one scan ------------------------------------------------------------
 
     def run_once(self) -> List[str]:
-        """One discover -> claim -> run -> report pass. Returns the task ids handled this scan."""
+        """One housekeeping + dispatch pass (``poll --once``). Returns the task ids handled."""
+        if not self._housekeeping():
+            return []
+        return self._dispatch_due()
+
+    def _housekeeping(self) -> bool:
+        """The slow-cadence bookkeeping: heartbeat, orphan recovery, quest-folder/goal sync and the
+        autopilot pass producer. Returns False when the client is unconfigured (nothing to do)."""
         if not self.client.configured:
             log.info("Quest key not configured — nothing to poll. Exiting cleanly.")
-            return []
+            return False
         # Heartbeat FIRST each cycle so the backend always knows the env is live + what it can do,
         # even on a scan that finds no due tasks. Best-effort, like progress-posting: a failed
         # heartbeat is logged and never blocks discovery/execution.
@@ -391,13 +398,22 @@ class Poller:
         # opted in. Like the folder sync above, this is light bookkeeping rather than agentic work,
         # so it runs before the resource/token gates that hold back task PICKUP.
         self._ensure_autopilot_pass()
-        # Resource gate AFTER the heartbeat (the backend should still see the env as live) but
-        # BEFORE discovery/claiming: an overloaded host takes on NO new work this scan. Skipping
+        return True
+
+    def _dispatch_due(self, pool: Optional[ThreadPoolExecutor] = None) -> List[str]:
+        """Discover due tasks, claim them in priority order and run them.
+
+        THE one dispatch path for every task (scheduled, delegated, real-time). Without ``pool``
+        it runs the batch and waits for it (``poll --once``). With a long-lived ``pool`` it only
+        submits as many tasks as there are free worker slots and returns at once, so the dispatch
+        loop (``_dispatch_loop``) keeps picking up new work while earlier runs are still going."""
+        # Resource gate BEFORE discovery/claiming: an overloaded host takes on NO new work this scan. Skipping
         # is lossless — unclaimed tasks stay queued and fire on a later scan once resources
         # recover (in_progress work is never touched).
         if self.resources.check():
-            log.info("host overloaded — skipping task pickup this scan; queued tasks will run "
-                     "once resources recover")
+            (log.debug if pool is not None else log.info)(
+                "host overloaded — skipping task pickup this scan; queued tasks will run "
+                "once resources recover")
             return []
         # Daily token budget gate: pause new pickup when the day's API token limit is exceeded.
         # Lossless for the same reason: unclaimed tasks stay queued and run on a later scan (or
@@ -413,7 +429,8 @@ class Poller:
                 now=datetime.now(timezone.utc), team_ids=self.discovery_team_ids(),
                 env_id=self.cfg.env_id)
         except (QuestApiError, QuestNotConfigured) as e:
-            log.info("discovery unavailable (%s) — will retry next scan", e)
+            (log.debug if pool is not None else log.info)(
+                "discovery unavailable (%s) — will retry next scan", e)
             return []
 
         # The backend's due filter is date-granular, so it hands back tomorrow-morning's work as
@@ -423,10 +440,18 @@ class Poller:
         # already refreshed above, by ``_ensure_autopilot_pass``, before this call).
         due, deferred = _due_now_locally(due, tz_for=self._pass_timezone_for)
         if deferred:
-            log.info("holding %d task(s) until their local scheduled time: %s", len(deferred),
-                     ", ".join(self._deferred_task_desc(t) for t in deferred))
+            held = ", ".join(self._deferred_task_desc(t) for t in deferred)
+            # The dispatch loop scans every few seconds: say it once per change, not per tick.
+            if pool is None or held != getattr(self, "_last_held_log", None):
+                self._last_held_log = held
+                log.info("holding %d task(s) until their local scheduled time: %s",
+                         len(deferred), held)
 
         fresh = [t for t in due if not self.state.seen(_task_signature(t))]
+        # Priority, not a separate lane: a task a person is waiting on goes first, then oldest first.
+        fresh.sort(key=lambda t: (not t.get("real_time"), str(t.get("created_at") or "")))
+        if pool is not None:
+            return self._submit_to_pool(pool, fresh)
         if not fresh:
             return []
         log.info("%d due task(s), %d new to handle", len(due), len(fresh))
@@ -446,6 +471,59 @@ class Poller:
                 except Exception as e:  # noqa: BLE001 — one bad task never kills the scan
                     log.error("task handling crashed: %s", e)
         return handled
+
+    def _submit_to_pool(self, pool: ThreadPoolExecutor, fresh: List[Dict[str, Any]]) -> List[str]:
+        """Claim and submit the highest-priority ``fresh`` tasks, up to the free worker slots.
+
+        The rest are left untouched (still queued, not marked seen), so a later tick takes them
+        as slots free up. The slot is claimed here, at submit time, so the next tick's own
+        discovery cannot hand the same task out twice and the free-slot count stays honest."""
+        submitted: List[str] = []
+        for task in fresh:
+            task_id = str(task.get("id") or task.get("task_id") or "")
+            with self._inflight_lock:
+                if len(self._inflight) >= max(1, self.cfg.max_concurrent_tasks):
+                    break
+            if not self._claim_slot(task_id):
+                continue
+            pool.submit(self._run_claimed, task)
+            submitted.append(task_id)
+        if submitted:
+            log.info("dispatching %d task(s): %s", len(submitted), ", ".join(submitted))
+        return submitted
+
+    def _run_claimed(self, task: Dict[str, Any]) -> Optional[str]:
+        """Run a task whose in-process slot ``_submit_to_pool`` already claimed."""
+        task_id = str(task.get("id") or task.get("task_id") or "")
+        try:
+            return self._handle_one(task)
+        except Exception:  # noqa: BLE001 -- one bad task never kills the dispatch loop
+            log.error("task %s crashed", task_id, exc_info=True)
+            return None
+        finally:
+            self._release_slot(task_id)
+            self.state.release_in_flight(task_id)
+
+    def _dispatch_loop(self, stop_event: threading.Event) -> None:
+        """Background thread: pick up due tasks every ``dispatch_interval_seconds`` (seconds, not
+        the minutes-long housekeeping scan), so a new task starts almost at once."""
+        interval = self.cfg.dispatch_interval_seconds
+        pool = ThreadPoolExecutor(max_workers=max(1, self.cfg.max_concurrent_tasks),
+                                  thread_name_prefix="qar-task")
+        try:
+            while not stop_event.is_set():
+                try:
+                    if self.client.configured:
+                        with self._inflight_lock:
+                            full = len(self._inflight) >= max(1, self.cfg.max_concurrent_tasks)
+                        if not full:
+                            self._dispatch_due(pool)
+                except Exception:  # noqa: BLE001 -- the dispatch loop must never die
+                    log.error("dispatch iteration failed", exc_info=True)
+                if stop_event.wait(interval):
+                    return
+        finally:
+            pool.shutdown(wait=False)
 
     def _recover_orphans(self) -> None:
         """Re-queue tasks a previous life of this runner claimed and never reported.
@@ -1939,6 +2017,17 @@ class Poller:
         )
         fast_thread.start()
 
+        # ONE dispatch path at a short cadence; the long scan below then only does housekeeping.
+        # dispatch_interval_seconds <= 0 keeps the old behaviour (the scan dispatches too).
+        dispatch_thread = None
+        dispatch_stop = threading.Event()
+        split = self.cfg.dispatch_interval_seconds > 0
+        if split:
+            dispatch_thread = threading.Thread(
+                target=self._dispatch_loop, args=(dispatch_stop,),
+                name="qar-dispatch", daemon=True)
+            dispatch_thread.start()
+
         interval = self.cfg.poll_interval_seconds
         try:
             while True:
@@ -1947,7 +2036,10 @@ class Poller:
                 if not self.resources.wait_until_ok(stop_event=stop_event):
                     return  # stopped while paused
                 try:
-                    self.run_once()
+                    if split:
+                        self._housekeeping()
+                    else:
+                        self.run_once()
                 except Exception as e:  # noqa: BLE001 — a transient error must not kill the loop
                     log.error("scan failed: %s", e)
                 if stop_event is not None and stop_event.wait(interval):
@@ -1956,3 +2048,4 @@ class Poller:
                     time.sleep(interval)
         finally:
             fast_stop.set()
+            dispatch_stop.set()

@@ -104,7 +104,7 @@ _FILE_SCALAR_FIELDS = {
     "channel_allowed_senders", "channel_ack_after_seconds", "channel_progress_min_seconds",
     "channel_turn_timeout_seconds", "channel_state_path",
     "corpus_root", "context_preamble",
-    "poll_interval_seconds", "poll_lookahead_minutes", "max_concurrent_tasks",
+    "poll_interval_seconds", "dispatch_interval_seconds", "poll_lookahead_minutes", "max_concurrent_tasks",
     "default_assignee_user_id", "decision_assignees", "decision_default_deadline_hours",
     "wait_channel_enabled", "context_poll_seconds", "wait_timeout_seconds",
     "rep_sync_direction",
@@ -334,6 +334,11 @@ class RunnerConfig:
     # --- tuning ---
     orchestrator: OrchestratorConfig = field(default_factory=OrchestratorConfig)
     poll_interval_seconds: float = 900.0
+    # How often due tasks are discovered and started. The long ``poll_interval_seconds`` scan then
+    # only does housekeeping (heartbeat, folder/goal sync, autopilot pass producer), so a task
+    # created now starts in seconds on the SAME dispatch path as scheduled work, real-time first.
+    # <= 0 puts dispatch back on the long scan (the pre-split behaviour).
+    dispatch_interval_seconds: float = 10.0
     poll_lookahead_minutes: float = 30.0
     max_concurrent_tasks: int = 2
     default_assignee_user_id: Optional[str] = None   # decision routing default
