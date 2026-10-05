@@ -20,3 +20,11 @@ def test_standard_asks_for_the_behaviours_that_cut_reader_cost():
 def test_standard_follows_the_copy_conventions():
     assert "—" not in READER_FIRST_STANDARD
     assert "/home/" not in READER_FIRST_STANDARD
+
+
+def test_chat_replies_stay_in_scope_and_do_not_volunteer():
+    text = REPLY_VOICE_SYSTEM
+    assert "Do not add research, suggestions, or next steps they did not ask for" in text
+    assert "answer each one\n  separately or ask which they mean" in text
+    # Volunteering is a chat rule only: autopilot work is proactive by design.
+    assert "did not ask for" not in RESULT_IS_THE_WORK_CONTRACT

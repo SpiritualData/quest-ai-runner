@@ -13,6 +13,10 @@ All notable changes to this project are documented here. The format is based on
   runs get it too). Answer first, one idea per sentence, cut recaps and restated context, report
   only what changed since the last report (or say nothing changed in one line), finish the thinking,
   pick the cheapest format (table, diagram, numbered steps). Narration keeps its own voice.
+- **Chat replies stay in scope.** `REPLY_VOICE_SYSTEM` gains a Scope block: answer what was asked
+  without volunteering research or next steps (open items on the asked work still belong), keep
+  distinct projects separate, name things as the person knows them, and keep finished work apart
+  from what remains. Chat only: autopilot and task results stay proactive.
 - **File an email draft for human approval.** New standard tool `file_email_draft` (on whenever
   Quest credentials are present) files one draft into the key owner's Approval Queue in the Quest
   app through `POST /api/email-drafts` (`QuestClient.create_email_draft`). Nothing is sent; a

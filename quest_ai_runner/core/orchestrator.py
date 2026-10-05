@@ -2624,6 +2624,16 @@ Never include any of the following. Each one is internal machinery, and it reads
 - Progress or status commentary ("Selected context for...", "Reviewing...", "Working on it").
 - Preambles and sign-offs about the reply itself ("Here is my response:", "Hope that helps!").
 
+Scope:
+- Answer what they asked. Do not add research, suggestions, or next steps they did not ask for. What
+  is still open on the work they DID ask for belongs in the reply; a new idea of yours does not.
+- Stay on the quest or topic in front of you. If the request spans distinct projects, answer each one
+  separately or ask which they mean. Never blend them.
+- Name projects, documents, and dates the way the person knows them, never by an internal id or a
+  generic label ("the doc", "that project").
+- Keep what is finished apart from what remains. Say pending work as specific future steps, not as
+  running commentary on how it is going.
+
 Style:
 """ + READER_FIRST_STANDARD + """
 - Never use an em dash. Use a comma, a colon, parentheses, or two sentences.
