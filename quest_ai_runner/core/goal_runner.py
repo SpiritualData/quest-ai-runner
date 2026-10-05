@@ -497,37 +497,60 @@ class SubprocessConfig:
         return True
 
 
-def _find_claude_project_dir(working_dir: Optional[str] = None) -> Optional[Path]:
-    """Find ANY .claude/projects directory with JSONL files.
+def _claude_project_bases(working_dir: Optional[str] = None) -> List[Path]:
+    """Every ``projects`` directory a Claude Code session could be written under, best first.
 
-    Claude stores sessions in {base}/.claude/projects/{project-key}/*.jsonl
-    We don't know the exact project-key, so search for any dir with JSONL files.
+    Claude Code writes sessions to ``$CLAUDE_CONFIG_DIR/projects`` (``~/.claude/projects`` when
+    unset), so that location leads. The working dir's own ``.claude/projects`` and the home one
+    follow for lanes that run Claude Code with a different config dir than the runner's.
     """
-    candidates = []
-
-    # Check working_dir's .claude/projects
+    bases: List[Path] = []
+    config_dir = os.environ.get("CLAUDE_CONFIG_DIR")
+    if config_dir:
+        bases.append(Path(config_dir) / "projects")
     if working_dir:
-        local_projects = Path(working_dir) / ".claude" / "projects"
-        if local_projects.exists():
-            candidates.append(local_projects)
-            _log.info("_find_claude_project_dir: found .claude/projects in working_dir")
+        bases.append(Path(working_dir) / ".claude" / "projects")
+    bases.append(Path.home() / ".claude" / "projects")
+    unique: List[Path] = []
+    for base in bases:
+        if base not in unique:
+            unique.append(base)
+    return unique
 
-    # Check home .claude/projects
-    home_projects = Path.home() / ".claude" / "projects"
-    if home_projects.exists():
-        candidates.append(home_projects)
-        _log.info("_find_claude_project_dir: found .claude/projects in home")
 
-    # Search each candidate for any JSONL files (recursive)
-    for base in candidates:
+def _find_claude_project_dir(working_dir: Optional[str] = None) -> Optional[Path]:
+    """Find a .claude/projects directory that holds JSONL files.
+
+    Claude stores sessions in {base}/projects/{project-key}/*.jsonl; the project-key is not known
+    here, so any base with JSONL files qualifies. See ``_claude_project_bases`` for the order.
+    """
+    for base in _claude_project_bases(working_dir):
         try:
-            if list(base.rglob("*.jsonl")):
+            if base.exists() and next(base.rglob("*.jsonl"), None) is not None:
                 _log.info("_find_claude_project_dir: ✓ found .claude/projects with JSONL: %s", base)
                 return base
         except Exception as e:
             _log.debug("_find_claude_project_dir: error searching %s: %s", base, e)
 
     _log.warning("_find_claude_project_dir: ✗ no .claude/projects dir with JSONL files found")
+    return None
+
+
+def _find_session_file(session_id: str, working_dir: Optional[str] = None) -> Optional[Path]:
+    """The JSONL of the session launched with ``--session-id``, searched under EVERY base.
+
+    Resolving one base first and then looking inside it is wrong when two bases exist and the
+    worker wrote to the other one: the monitor would wait on a file that never appears there and
+    the live view would show only heartbeats.
+    """
+    for base in _claude_project_bases(working_dir):
+        try:
+            if base.exists():
+                match = next(base.rglob(f"{session_id}.jsonl"), None)
+                if match is not None:
+                    return match
+        except Exception as e:
+            _log.debug("_find_session_file: error searching %s: %s", base, e)
     return None
 
 
@@ -783,9 +806,9 @@ def _monitor_claude_session(
             try:
                 if session_id:
                     if target_file is None:
-                        matches = list(project_dir.rglob(f"{session_id}.jsonl"))
-                        if matches:
-                            target_file = matches[0]
+                        found = _find_session_file(session_id, working_dir)
+                        if found is not None:
+                            target_file = found
                             _log.info("✓ bound to deep run's own session file: %s", target_file)
                     candidate_files = [target_file] if target_file is not None else []
                 else:
@@ -906,20 +929,16 @@ SESSION_TAIL_THIN_OUTPUT_CHARS = 40
 def resolve_session_file(working_dir: Optional[str], session_id: Optional[str]) -> Optional[Path]:
     """The session JSONL file for ``session_id``, or None if it can't be located.
 
-    Uses ``_find_claude_project_dir`` — the monitor thread's own resolution — on purpose: two
+    Uses ``_find_session_file`` — the monitor thread's own resolution — on purpose: two
     independent implementations of "find the session file" would drift apart. Never raises.
     """
     if not session_id:
         return None
     try:
-        project_dir = _find_claude_project_dir(working_dir)
-        if project_dir is None:
-            return None
-        matches = list(project_dir.rglob(f"{session_id}.jsonl"))
+        return _find_session_file(session_id, working_dir)
     except Exception as e:  # noqa: BLE001 — diagnostics must never become a new failure mode
         _log.debug("could not resolve session file for %s: %s", session_id, e)
         return None
-    return matches[0] if matches else None
 
 
 def resolved_model_from_session(working_dir: Optional[str], session_id: Optional[str],

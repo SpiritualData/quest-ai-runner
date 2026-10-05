@@ -1794,7 +1794,8 @@ class QuestAITerminal(App):
             run_id = data.get("run_id") or "default"
             goal = (data.get("goal") or "").strip()
             goal = goal[:1].upper() + goal[1:] if goal else ""
-            if run_id not in self._deep_seen:
+            first_event_of_run = run_id not in self._deep_seen
+            if first_event_of_run:
                 self._deep_seen.add(run_id)
                 self._deep.add_run(run_id, goal or "Executing work…")
             elif goal:
@@ -1805,9 +1806,10 @@ class QuestAITerminal(App):
                 self._deep.update_run_output(run_id, text)
                 # Push to detail panel live (it scrolls / holds full history).
                 self._deep_detail.push_line(run_id, text)
-            # Throttle dashboard redraws to every 10 events to avoid flicker.
+            # Show a run's dashboard the moment its first event lands (a run with fewer than ten
+            # events used to show nothing live), then throttle redraws to avoid flicker.
             self._deep_event_count += 1
-            if self._deep_event_count % 10 == 0:
+            if first_event_of_run or self._deep_event_count % 10 == 0:
                 self._refresh_deep_dashboard()
             self._activity.set_status("Executing…")
             # A terminal phase means this deep task is finished: persist its full
