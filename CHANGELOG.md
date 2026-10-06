@@ -6,7 +6,25 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **The reach judge no longer adds wall clock.** `run()` starts it at the top of the turn
+  (`Orchestrator.prefetch_reach_verdict`), concurrently with request understanding, context
+  assembly and guidance, and the first plan only collects it, bounded by the new
+  `OrchestratorConfig.planner_reach_judge_timeout_seconds` (default 20s; a judge still running
+  plans without a verdict, and that settles it for the rest of the turn). Live: first planning step
+  p50 1.63s to 0.96s. The verdict cache is now bounded (256 entries). A turn that ends before
+  planning still pays for the one judge call.
+- **claude_cli: optional thinking cap on routing decisions.** `ClaudeCliProvider(plan_thinking_tokens=N)`
+  / `QAR_CLI_PLAN_THINKING_TOKENS` sets `MAX_THINKING_TOKENS` on `plan()` calls only (routing, the
+  reach judge, and overseer or cascade reviews when they run on this provider). Haiku as the
+  planner: 94% at 36.9s p50 with thinking, 93% at 3.3s with it off, on 100 labelled decisions.
+
 ### Fixed
+- **The compact planner profile no longer drops hand-offs.** Its schema had stripped every field
+  description, including `deferred_deep`'s, and a cheap planner then wrote "this needs the dev
+  server" as its answer with the field empty. That description is kept
+  (`COMPACT_SCHEMA_KEPT_DESCRIPTIONS`) and the compact actions block says a hand-off is the field.
+  Hand-off groups on the dev half: 24/38 to 32/38, and 14/38 to 36/38 after an empty read.
 - **A deep run is no longer failed, or retried into a release request, because its change is not
   on production yet.** The goal verifier (`VERIFY_GOAL_PROMPT`) now treats a code, config, or
   prompt change as done once it is committed and verified where the task works, and never tells

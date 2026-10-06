@@ -138,8 +138,10 @@ Env it reads:
                                                    reach; with no summary the judge stays inert.
   QAR_PLANNER_REACH_JUDGE_TIER (optional)       : the tier the reach judge runs on (default "best").
   QAR_CLI_PLAN_THINKING_TOKENS (optional)       : claude_cli backend only. Caps extended thinking on
-                                                   routing decisions (plan calls, incl. the reach
-                                                   judge) via MAX_THINKING_TOKENS; "0" turns it off.
+                                                   every plan() call (routing decisions, the reach
+                                                   judge, overseer/cascade reviews) via
+                                                   MAX_THINKING_TOKENS; "0" turns it off. Measured on
+                                                   routing only.
                                                    Answers and deep runs are never affected. Unset
                                                    leaves the CLI default.
   QAR_REUSE_NESTED_CARDS (optional)              — "0"/"false"/"no" disables it (default: on). When

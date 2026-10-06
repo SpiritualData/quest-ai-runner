@@ -435,3 +435,15 @@ def test_run_starts_the_judge_before_context_assembly_finishes():
     # Serial (the old shape), the judge could only start at the first plan, after assembly.
     assert assembler.judge_running_during_assembly is True
     assert provider.judge_calls == 1
+
+
+def test_a_timed_out_judge_is_waited_on_once_per_turn_not_once_per_step():
+    provider = SlowJudgeProvider(1.0, reach_response={"reach": "outside", "covered_by": "x"},
+                                 decide_response={"action": "answer"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.",
+                 planner_reach_judge_timeout_seconds=0.2)
+    assert orch.reach_verdict("restart the service") is None
+    started = time.monotonic()
+    assert orch.reach_verdict("restart the service") is None   # a re-plan step: no second wait
+    assert time.monotonic() - started < 0.1
+    assert provider.judge_calls == 1

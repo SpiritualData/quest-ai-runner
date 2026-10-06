@@ -5643,6 +5643,15 @@ class Orchestrator:
         except FuturesTimeoutError:
             log.warning("Reach judge still running after %.1fs, planning without a verdict",
                         timeout)
+            # Settle it as "no verdict" for the rest of the turn, so a stuck judge costs this one
+            # wait and not one per re-plan step.
+            settled: Future = Future()
+            settled.set_result(None)
+            key = (user_message or "")[:500]
+            with self.__dict__.setdefault("reach_verdict_lock", threading.Lock()):
+                cache = self.__dict__.setdefault("reach_verdict_cache", OrderedDict())
+                if cache.get(key) is future:
+                    cache[key] = settled
         except Exception as e:  # noqa: BLE001
             log.warning("Reach judge failed, planning without a verdict: %s: %s",
                         type(e).__name__, str(e)[:200])
@@ -9119,6 +9128,8 @@ class Orchestrator:
         # need to wait for understanding, context or guidance. Run serially in front of the first
         # plan it measured +0.7s p50 per turn on a cheap planner (2026-10-05); started here, the
         # first _plan() only collects a result that is normally already there. No-op when off.
+        # Known cost, accepted: a turn that ends before planning (an understanding clarify) has
+        # paid for one judge call (~1k input tokens) that nobody reads.
         self.prefetch_reach_verdict(user_message)
 
         # --- ContextAssembler: pre-flight context injection (optional fifth adapter) -----------

@@ -380,9 +380,10 @@ class ClaudeCliProvider(ModelProviderBase):
         plan_thinking_tokens: Optional[int] = None,
     ):
         super().__init__()
-        # Cap on extended thinking for plan() calls only (routing decisions, the reach judge),
-        # passed to the CLI as MAX_THINKING_TOKENS. None leaves the CLI's default alone. Answers
-        # and deep runs are never affected. Measured 2026-10-06 with haiku as the planner on 100
+        # Cap on extended thinking for plan() calls only, passed to the CLI as MAX_THINKING_TOKENS.
+        # Every plan() call on this provider gets it: routing decisions and the reach judge, and
+        # also the overseer and cascade reviews when those run here (measured only on routing).
+        # None leaves the CLI's default alone. Answers and deep runs are never affected. Measured 2026-10-06 with haiku as the planner on 100
         # labelled routing decisions: thinking on, 94% at 36.9s p50 and ~4,000 output tokens a
         # decision; thinking capped at 0, 93% at 3.3s p50 and ~160 (7 discordant, 4 against 3).
         self.plan_thinking_tokens = plan_thinking_tokens
