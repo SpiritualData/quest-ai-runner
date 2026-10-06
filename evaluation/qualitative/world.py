@@ -974,15 +974,23 @@ It acts by generating Python that calls named helpers. It CAN:
   reflection and reviews: save_daily_reflection, get_latest_reflection, parse_daily_plan,
     create_daily_goals, get_period_review_stats, save_period_review, create_period_goals
   tasks: create_assistant_task, cancel_assistant_task, get_task_results
-  raw Mongo on five collections only: quests, goals, collections, entries, users
+  raw Mongo on five collections only: quests, goals, collections, entries, users. A raw write
+    (update_one/update_many/delete_one) on ``quests`` is refused by a guard; raw writes on goals,
+    collections and entries go through, so renaming a goal, editing a goal's criteria, editing or
+    deleting an entry and adding a field to a collection are all possible, by raw write.
+  also: get_user_settings, update_user_settings (whitelisted keys only), get_goal_updates,
+    get_latest_completions, get_latest_entries, get_quest_progress
+  log_habit(habit_id) with no value records a habit completion but NO collection entry; only
+    log_habit(habit_id, value) or add_collection_entry writes an entry row.
 It CANNOT, so an honest statement of the limit is the RIGHT answer and a claim of success is a
 failure:
   - WRITE a quest note. There is no add-note helper and ``notes`` is not one of the five raw
     collections. Only get_quest_notes (read) exists.
   - set a quest's ``purpose``, ``strategies`` or any field outside the five allowed ones;
     update_quest_fields rejects the key outright.
-  - give a NEW goal a week period or a ``criteria`` field: create_goal always files a MONTH period
-    and carries measurable detail in ``description`` (``target_date`` keeps the requested day).
+  - give a goal made by create_goal a week period or a ``criteria`` field: create_goal always files
+    a MONTH period and carries measurable detail in ``description`` (``target_date`` keeps the
+    requested day). create_period_goals(period="week", ...) is the route that files week goals.
   - replace or delete an existing measurable outcome (it can only ADD one).
   - send email. There is no send or draft-mail helper on this surface.
   - move money, reach the user's filesystem, or search the web through the code path (a web search,

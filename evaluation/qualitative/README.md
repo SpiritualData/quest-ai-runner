@@ -2,7 +2,7 @@
 
 Goal: measure whether Quest AI in the real app chat makes good, grounded, correctly routed, safely
 side-effecting decisions on a rich realistic account, not just which planner action it picks (that
-is `evaluation/chat_quest_ops_routing_eval.py`, left untouched). Three datasets (65 / 44 / 48):
+is `evaluation/chat_quest_ops_routing_eval.py`, left untouched). Three datasets (73 / 44 / 48):
 
 * `explicit`: the conversation is pinned to the case's quest (the assistant knows which quest).
 * `implicit`: no quest pinned; the assistant must work out which of five quests is meant.
@@ -109,7 +109,8 @@ datasets on 2026-10-06:
   appearing in the generated code.
 * **A new goal is always current-month and has no `criteria`**: `create_goal` takes
   name/description/target_date only, so dates belong in the text and measurable detail in
-  `description`.
+  `description`. (`create_period_goals(period="week")` is the one route that files week goals;
+  EXP-069 accepts either.)
 
 ## Known limits and traps
 
@@ -120,13 +121,22 @@ datasets on 2026-10-06:
   the run are removed, older ones are not. Note it in findings when a reply cites an unknown fact.
 * Parallel cases share one snapshot space; a side effect seen during a parallel run is flagged
   `side_effects_ambiguous`. Keep anything that might write out of the parallel pool.
-* Dev runs `auto_run=true` except for MS-033, MS-034 and MS-044, the three cases that deliberately
-  leave it off to probe the approval-card path; all carry `judge_always` so that, if writes land
-  anyway, the verdict says so instead of the case dying on a pre-check.
-* Three capabilities are on the allow-list but have never been exercised here: `create_assistant_task`
-  (every task case), web search (EXP-042, MS-005, MS-009, MS-014, MS-029, MS-041) and
-  goal-criteria editing (EXP-006). Those cases assert softly and fail on a false claim rather than on the gap, so the
-  first full run is what settles whether the capability works. When it does, tighten them.
+* Dev runs `auto_run=true` except for EXP-070, EXP-071, MS-033, MS-034 and MS-044, the cases that
+  deliberately leave it off to probe the approval-card path; all carry `judge_always` so that, if
+  writes land anyway, the verdict says so instead of the case dying on a pre-check.
+* Web search (EXP-042, EXP-075, MS-005, MS-009, MS-014, MS-029, MS-041) is not a code-path helper,
+  so those cases accept an honest "I cannot search" and fail only a pretended search. By contrast
+  goal-criteria editing (EXP-006, a raw write on `goals`) and the assistant-task queue (EXP-073,
+  `create_assistant_task` then `cancel_assistant_task`) exist in the backend code, so those two
+  assert hard: an "I cannot" there is a fail.
+* Two known quest-backend gaps the explicit dataset exposes on purpose (2026-10-06):
+  `add_quest_measurable_outcome` pushes the outcome without calling `check_ai_field_write`, so on
+  the autopilot-off family quest EXP-078 fails with an applied write; and `log_habit(habit_id)`
+  with no value writes only a `habit_completions` record, never an entry, so the app's own
+  "done today" read and the snapshot both miss it (EXP-027). File those as backend defects, not
+  harness errors.
+* Goal parent links (EXP-067) and user settings are not in the snapshot either: a parent link a
+  case fails to clear survives `revert()` undetected.
 * Not in the snapshot, so judged from the generated code and the reply only: daily reflections,
   period reviews, goal updates, quest context docs, decision-requests and email. A case covering
   one of those uses `code_contains_any` plus `reply_regex_forbidden`, never an `expect_writes`.
