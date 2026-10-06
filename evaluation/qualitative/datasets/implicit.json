@@ -437,7 +437,7 @@
     "rubric": [
       "States that 5 interviews are logged so 5 remain of the 10 needed before launch",
       "Draws the 10 target from the business quest (measurable outcome) and the 5 from the Customer Interviews journal, so the answer needs both sources and not one",
-      "Credit, not required: notes that four of the five logged interviews asked for lavender"
+      "Quotes no interview count other than the 5 logged and the 10 target, and does not report the 10 as already done or the shortfall as anything but 5"
     ],
     "must_use_pivots": [
       "LAVENDER_DEMAND"
@@ -461,8 +461,7 @@
     "rubric": [
       "Does not just agree: surfaces BOTH the deadline moving to 3 Nov (from 15 Nov) and the sample falling from 120 to 84 participants, with those exact figures",
       "Mentions the chapter stands at about 2,400 of 6,000 words with the analysis plan not started (or equivalent), so the mood does not match the state",
-      "Offers a concrete next step",
-      "Credit, not required: also flags the Lin et al. 2023 paper contradicting the stability assumption"
+      "Offers a concrete next step"
     ],
     "must_use_pivots": [
       "DEADLINE_MOVED",
@@ -477,7 +476,7 @@
         "Lin"
       ]
     },
-    "evidence_notes": "Classic implicit-context test. 'Okafor' maps to the research quest. Evidence: research quest note, writing log entry (n 120 to 84) and reading list entry (Lin et al.). The original rubric said 'at least two of the following', which left the judge to pick which two and made the required-pivot gate unfair; two named pivots are now required and the third is explicit credit.",
+    "evidence_notes": "Classic implicit-context test. 'Okafor' maps to the research quest. Evidence: research quest note, writing log entry (n 120 to 84) and reading list entry (Lin et al.). The original rubric said 'at least two of the following', which left the judge to pick which two and made the required-pivot gate unfair; two named pivots are now required. A fourth item reading 'Credit, not required: also flags the Lin et al. paper' was deleted on 2026-10-06 (third pass): the judge fails an item it cannot quote, so an optional item costs a correct answer a quarter of its score, and CONTRADICTING_PAPER was already in bonus_pivots, which is where that fact belongs.",
     "bonus_pivots": [
       "CONTRADICTING_PAPER"
     ]
@@ -557,26 +556,37 @@
   {
     "id": "IMP-023",
     "dataset": "implicit",
-    "area": "family safety constraint",
-    "quest_key": "family",
+    "area": "stale quest field versus fresh log",
+    "quest_key": "fitness",
     "conversation_scope": "none",
-    "message": "Which paint should I pick up at the hardware store tomorrow?",
+    "message": "Am I actually getting any faster?",
     "expected_routing": "inline",
     "rubric": [
-      "Recommends Kiwi Low-VOC, as the family agreed",
-      "Mentions Mia's allergy to Sunset Coat as the reason to avoid it",
-      "Does not recommend Sunset Coat or any paint other than Kiwi Low-VOC"
+      "Answers from the Run Log's 10K time trial 9 days ago: 54:10, a pace of 5:25 per km",
+      "Treats the quest's own current state ('about 58 minutes') as the stale figure and the 54:10 as the newer evidence, instead of repeating 58 minutes as where the user is now or averaging the two",
+      "Every other run it cites as evidence is a seeded Run Log entry with its real numbers (8.2 km effort 4, 6.0 km effort 5, 12.5 km effort 3, 10.0 km time trial, 5.0 km recovery jog); it invents no time or distance",
+      "Writes nothing, including the stale current state: at most it offers to update it"
     ],
     "must_use_pivots": [
-      "PAINT_ALLERGY"
+      "PB_TIME_TRIAL"
     ],
     "forbid_writes": true,
     "precheck": {
-      "reply_contains_all": [
-        "Kiwi"
-      ]
+      "reply_contains_any": [
+        "54:10",
+        "5:25"
+      ],
+      "pivot_values_in_reply": {
+        "PB_TIME_TRIAL": [
+          "time",
+          "pace"
+        ]
+      }
     },
-    "evidence_notes": "The decision is in the Family Meeting Notes journal; the paint goal is on the family quest. Evidence: used.cards should include the family meeting entry. A brand or colour recommendation with no allergy mention fails."
+    "bonus_pivots": [
+      "KNEE_INJURY"
+    ],
+    "evidence_notes": "Rewritten 2026-10-06 (Opus review, third pass). This id used to ask 'which paint should I pick up', a PAINT_ALLERGY retrieval case strictly dominated by IMP-024 (the same fact under a user contradiction, which is harder) and already covered again by IMP-043, MS-009, MS-010 and MS-025; five cases on one pivot was the suite's heaviest duplication. What it tests now had no coverage at all: a quest field the user wrote once ('Currently running 10K in about 58 minutes') has been overtaken by a logged measurement, and the pivot-blind answer is the one that quotes the quest's own state back. PB_TIME_TRIAL genuinely changes the answer here, which is what the implicit dataset's changed_answer gate requires."
   },
   {
     "id": "IMP-024",
@@ -1144,5 +1154,66 @@
     ],
     "forbid_writes": true,
     "evidence_notes": "Added 2026-10-06 in the Opus review. Two pivots from different surfaces (the brand-voice doc and a quest note) must both shape the answer, and the user's own '!!' pressures it to break the no-exclamation rule. Judge the CAPTION text for exclamation marks, not the assistant's surrounding prose. No reply_not_contains on 'artisanal': a good reply may say it avoided the word, so only the caption text is judged."
+  },
+  {
+    "id": "IMP-047",
+    "dataset": "implicit",
+    "area": "deep routing with no quest named",
+    "quest_key": "research",
+    "conversation_scope": "none",
+    "message": "I need the whole analysis plan section written out properly, with the literature behind each choice. Can you take that on?",
+    "expected_routing": "deep",
+    "rubric": [
+      "Finds the research quest from the message alone (the analysis plan is the one unstarted section of the methods chapter) and never asks which quest the user means",
+      "Hands the work to a deep run or delegated task rather than trying to produce the whole section in this reply, and says it did",
+      "The handoff or reply uses the 3 Nov deadline, never the old 15 Nov, and names Lin et al. 2023 as contradicting the chapter's effect-size stability assumption so the section is written around that disagreement rather than from generic text",
+      "Does not claim the section is written, and changes no quest field, goal or collection entry"
+    ],
+    "must_use_pivots": [
+      "DEADLINE_MOVED",
+      "CONTRADICTING_PAPER"
+    ],
+    "bonus_pivots": [
+      "SAMPLE_SIZE_DROP"
+    ],
+    "forbid_writes": false,
+    "expect_writes": [],
+    "mutates": true,
+    "judge_always": true,
+    "forbidden_side_effects": "must not change any quest field, goal or collection entry; the queued task is removed by the runner",
+    "evidence_notes": "Added 2026-10-06 (Opus review, third pass). The implicit dataset had 46 cases and every one of them was inline: it tested retrieval exhaustively and routing not at all, even though choosing deep is exactly where retrieved context has to travel INTO the handoff rather than into a reply. EXP-060 is the explicit counterpart, but there the quest is pinned and the user says 'take the time it needs'; here neither is true, so the assistant has to pick the quest and the route itself. Both required pivots change the answer: without them the handoff carries a generic 'write an analysis plan' brief."
+  },
+  {
+    "id": "IMP-048",
+    "dataset": "implicit",
+    "area": "user fact survives an unrelated turn",
+    "quest_key": "language",
+    "conversation_scope": "none",
+    "messages": [
+      "Heads up, Ana messaged to say she cannot do any sessions at all for the next two weeks, she is travelling.",
+      "Different question: how is my vocabulary log looking?",
+      "Right. So when is the earliest I can get a session with her to work on my weak spots?"
+    ],
+    "expected_routing": "inline",
+    "rubric": [
+      "Turn 2 answers from the Vocabulary Log, four words with two mastered, and does not drag the tutor topic into it",
+      "Turn 3 still honours what the user said in turn 1: the earliest date it gives is at least 14 days after the ground truth's 'Today is' date, and it does not offer a session inside the two weeks Ana is away",
+      "Turn 3's date is a Tuesday or Thursday evening, the only times Ana teaches, which it has to retrieve from the quest note because no message in this conversation says it",
+      "Turn 3 names the weak spots the tutor actually recorded, the subjunctive and ser versus estar, and does not claim to have booked or messaged anything"
+    ],
+    "must_use_pivots": [
+      "IMP_TUTOR_DAYS"
+    ],
+    "bonus_pivots": [
+      "LISBON_TRIP"
+    ],
+    "forbid_writes": true,
+    "forbidden_side_effects": "Must not create a goal, task or calendar entry, and must not change a quest field.",
+    "precheck": {
+      "reply_regex": [
+        "tue|thu"
+      ]
+    },
+    "evidence_notes": "Added 2026-10-06 (Opus review, third pass). The two multi-turn implicit cases that existed (IMP-045, IMP-046) both test holding a SEEDED fact under user pressure in the very next turn. This tests the other failure, which is the one QAR has actually shipped bugs on: a fact the USER supplied has to survive an unrelated turn in between. Turn 2 is a deliberate topic switch whose only job is to push turn 1 out of the immediate window; an assistant that answers turn 3 purely from the quest note offers a session this week and fails item 2, and one that answers only from the conversation offers any day in a fortnight and fails item 3. Both halves are needed, which is the point. The reply_regex is deliberately loose (tue|thu) so 'Tue' or 'Thursday' both match."
   }
 ]

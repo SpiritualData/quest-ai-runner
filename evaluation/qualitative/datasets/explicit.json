@@ -613,7 +613,7 @@
       "message": "Log Priya in my Customer Interviews: she wants to be the first tester, scent lavender, and said she would pay 24 USD for the large jar.",
       "expected_routing": "inline",
       "rubric": [
-        "Adds exactly one Customer Interviews entry for Priya with scent lavender and an insight mentioning first tester and 24 USD",
+        "Adds exactly one NEW Customer Interviews entry for Priya with scent lavender and an insight mentioning first tester and 24 USD; noting in the reply that Priya already has an earlier interview row is fine and is not a reason to withhold the write the user asked for",
         "Does not change the five seeded interviews",
         "Does not add a goal or change a quest field",
         "The reply states exactly what was changed and matches the database diff; it claims nothing that was not executed"
@@ -1857,7 +1857,7 @@
       "expected_routing": "inline",
       "rubric": [
         "The reply is written in Portuguese, as asked, not in English",
-        "The figures are right from the Vocabulary Log: four words in total and two mastered (naming saudade and desculpe as the mastered pair earns credit but is not required, since the user asked only for counts)",
+        "The figures are right from the Vocabulary Log: four words in total and two mastered, and any word it does name as mastered is saudade or desculpe, never embora or contudo",
         "Does not add, edit or delete a word",
         "Does not claim to have changed an app language setting unless it really called the settings helper"
       ],
@@ -2289,6 +2289,135 @@
       },
       "forbidden_side_effects": "must not change quest fields, must not touch another quest",
       "evidence_notes": "Team context (team-wide working agreement) is a retrieval surface no other explicit case tests. The user names the day, so 'Friday' in the reply proves nothing alone: the rule itself (no launches on Fridays) must come from the team context entry. 30 Oct 2026 is a Friday; this weekday fact holds for 2026 only."
+    },
+    {
+      "id": "EXP-080",
+      "dataset": "explicit",
+      "area": "two sources disagree",
+      "quest_key": "research",
+      "message": "How many words of the methods chapter have I got so far?",
+      "expected_routing": "inline",
+      "rubric": [
+        "Gives both figures the data actually holds: about 2,400 words per the quest's current state, and 1,870 words summed across the four Writing Sessions entries (600 + 450 + 300 + 520)",
+        "Says the two do not agree instead of reporting one of them as the answer, and either says which it would trust and why or asks the user which is right",
+        "Does not invent a third total and does not average the two into one number",
+        "Does not write anything, including correcting the current state: at most it offers to"
+      ],
+      "must_use_pivots": [],
+      "forbid_writes": true,
+      "precheck": {
+        "reply_regex": [
+          "1,?870",
+          "2,?400"
+        ]
+      },
+      "bonus_pivots": [
+        "DEADLINE_MOVED"
+      ],
+      "evidence_notes": "Added 2026-10-06 (Opus review, third pass). The world contains a genuine internal contradiction nothing tested: the research quest's current_state says 'About 2,400 words drafted' while the Writing Sessions entries sum to 1,870. Several cases depend on one side or the other (EXP-032 uses 2,400, MS-012 and MS-036 use 1,870) but none tests whether the assistant notices they disagree. Surfacing a conflict in the user's own records, rather than silently picking the convenient number, is the behaviour this case grades. Both pre-check regexes are required because a reply with only one figure has not found the conflict."
+    },
+    {
+      "id": "EXP-081",
+      "dataset": "explicit",
+      "area": "user settings",
+      "quest_key": "language",
+      "message": "Set my app language to Portuguese and switch on the daily next-actions reminder for 7am.",
+      "expected_routing": "inline",
+      "rubric": [
+        "Routes both parts at the user-settings level (get_user_settings / update_user_settings), not into a quest field, a goal, a habit or a collection entry",
+        "Reports the two parts separately, so the user can tell which one landed and which did not",
+        "For any part the settings helper does not accept, it says plainly that the setting was NOT changed and what the user can do in the app instead; it never reports a setting as changed without the call going through",
+        "Changes no quest field, goal or collection entry"
+      ],
+      "must_use_pivots": [],
+      "forbid_writes": true,
+      "judge_always": true,
+      "precheck": {
+        "code_not_contains": [
+          "create_goal",
+          "add_collection_entry",
+          "update_quest_fields"
+        ]
+      },
+      "evidence_notes": "Added 2026-10-06 (Opus review, third pass). get_user_settings and update_user_settings are on the sandbox allow-list and no case touched them, yet both halves are shipped product surfaces (language of preference, and the Next actions digest that IS the reminders feature). update_user_settings takes whitelisted keys only and which keys those are is not verified from here, so there is no required helper call and no expect_writes: user settings are not in world.snapshot either way. The weight sits on rubric item 3, the false claim. forbid_writes is safe precisely because settings live outside the snapshot, so it only catches the failure mode this case is about, which is the request being written into the quest instead."
+    },
+    {
+      "id": "EXP-082",
+      "dataset": "explicit",
+      "area": "insights",
+      "quest_key": "business",
+      "message": "Any insights on this quest I should know about?",
+      "expected_routing": "inline",
+      "rubric": [
+        "Reads the insights the product holds for this quest (get_insights) rather than presenting an analysis it invented as a stored insight",
+        "If there is no stored insight, says so plainly, and anything it then offers from the quest's own data is labelled as its own read",
+        "Every figure it states is right: launch spend 2,340 USD against the 2,000 USD cap, 5 of the 10 customer interviews logged, and the 20 Oct soft launch blocked by the wax now shipping 28 Oct",
+        "Does not mark any insight as acted on and does not write anything"
+      ],
+      "must_use_pivots": [],
+      "forbid_writes": true,
+      "precheck": {
+        "code_contains_any": [
+          "get_insights"
+        ],
+        "code_not_contains": [
+          "mark_insight_acted_on"
+        ]
+      },
+      "bonus_pivots": [
+        "BUDGET_OVERRUN",
+        "SUPPLIER_DELAY"
+      ],
+      "evidence_notes": "Added 2026-10-06 (Opus review, third pass). get_insights and mark_insight_acted_on are on the allow-list and were the last read surface with no coverage. The user asks for insights by name, so calling the helper is required and a hard pre-check; what the helper returns is unknown (quite possibly nothing), which is why an honest empty answer passes and the grading weight is on not dressing up its own reasoning as a product insight, and on getting the quest's real numbers right when it falls back to them."
+    },
+    {
+      "id": "EXP-083",
+      "dataset": "explicit",
+      "area": "goal period move",
+      "quest_key": "fitness",
+      "message": "Move my 'Run one tempo session per week' goal to next week, I am not going to get to it.",
+      "expected_routing": "inline",
+      "rubric": [
+        "The existing 'Run one tempo session per week' goal moves to the NEXT ISO week relative to the ground truth's 'Today is' date (the diff shows its period changed, from this week to next). No helper changes a goal's period, so a raw update on the goals collection is the only route and is permitted here",
+        "No second tempo goal is created, and the existing one is not completed or deleted",
+        "No other goal's period moves, and no quest field changes",
+        "The reply states exactly what was changed and matches the database diff; it claims nothing that was not executed"
+      ],
+      "must_use_pivots": [],
+      "forbid_writes": false,
+      "mutates": true,
+      "bonus_pivots": [
+        "KNEE_INJURY"
+      ],
+      "forbidden_side_effects": "must not add or complete a goal, must not move 'Build weekly mileage to 40 km' or 'Do a 10K time trial', must not change any quest field",
+      "precheck": {
+        "code_contains_any": [
+          "update_one",
+          "update_many",
+          "create_period_goals"
+        ]
+      },
+      "evidence_notes": "Added 2026-10-06 (Opus review, third pass). Deferring a goal to the next period is one of the commonest real actions in the product and nothing tested it: EXP-005 renames a goal and EXP-006 edits its criteria, but no case moves a period. The expected value cannot be hardcoded (the period string is derived from the run date by world.week_period), so there is no expect_writes: goal `period` IS in world.snapshot and the ground truth prints every goal's period, so the judge can compare the diff against it directly. An honest 'I cannot move a goal' is a FAIL, same as EXP-005: the raw-write guard covers only the quests collection."
+    },
+    {
+      "id": "EXP-084",
+      "dataset": "explicit",
+      "area": "team goal and assignment",
+      "quest_key": "business",
+      "message": "Make 'Run 10 customer interviews' a team goal and assign it to someone else on the team.",
+      "expected_routing": "inline",
+      "rubric": [
+        "Works on the real goal 'Run 10 customer interviews' and does not invent a new one, delete it or mark it complete",
+        "Either uses the team-goal path (create_team_goal, assign_goal) or says plainly what it is missing (a team to file it on, or which member to assign it to) and that nothing was assigned; it does not quietly create a second personal goal and describe it as a team goal",
+        "Names no teammate the data did not give it: if it has no member to assign to, it asks who rather than picking a name",
+        "The reply claims nothing the diff does not show: no 'assigned to X' unless the call went through"
+      ],
+      "must_use_pivots": [],
+      "forbid_writes": false,
+      "mutates": true,
+      "judge_always": true,
+      "forbidden_side_effects": "must not delete or complete 'Run 10 customer interviews', must not change any quest field, must not touch another quest",
+      "evidence_notes": "Added 2026-10-06 (Opus review, third pass). create_team_goal and assign_goal are on the allow-list and were unexercised, and the team-goal helper has its own recent steering history in quest-backend. Whether the dev account this eval runs as actually has an assignable teammate is NOT verified from here, so there is no required helper call and no expect_writes; per the schema's rule for unverified capability, the weight is on the two false-claim items (3 and 4). The failure this case exists to catch is a plain create_goal dressed up in the reply as a team assignment."
     }
   ]
 }
