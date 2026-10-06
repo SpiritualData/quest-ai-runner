@@ -767,6 +767,8 @@ def snapshot(world=None):
             "outcome": state.get("outcome"),
             "current_state": state.get("current_state"),
             "acceptance_criteria": state.get("acceptance_criteria"),
+            "preferences": state.get("preferences") or None,
+            "purpose": state.get("purpose") or None,
             "measurable_outcomes": [
                 (m.get("text"), bool(m.get("completed"))) for m in
                 (state.get("measurable_outcomes") or measurable_outcomes_of(qid))],
@@ -777,9 +779,15 @@ def snapshot(world=None):
                     "completed": bool(g.get("completed")),
                     "criteria": g.get("criteria")} for g in goals},
         }
+    meta_by_id = {c.get("id"): c for c in list_collections()}
+    snap["collection_meta"] = {}
     for key, cid in world["collections"].items():
         snap["collections"][key] = {
             e.get("id"): entry_values(e) for e in entries_of(cid) if e.get("id")}
+        c = meta_by_id.get(cid) or {}
+        snap["collection_meta"][key] = {
+            "name": c.get("name"),
+            "fields": sorted(str(f.get("id") or f.get("name")) for f in (c.get("custom_fields") or []))}
     return snap
 
 
@@ -788,7 +796,7 @@ def diff(before, after):
     changes = []
     for key, now in after["quests"].items():
         was = before["quests"].get(key, {})
-        for field in ("outcome", "current_state", "acceptance_criteria"):
+        for field in ("outcome", "current_state", "acceptance_criteria", "preferences", "purpose"):
             if was.get(field) != now.get(field):
                 changes.append(f"quest[{key}].{field}: {was.get(field)!r} -> {now.get(field)!r}")
         if was.get("measurable_outcomes") != now.get("measurable_outcomes"):
@@ -822,6 +830,10 @@ def diff(before, after):
         for eid, values in was.items():
             if eid not in now:
                 changes.append(f"collection[{key}] ENTRY REMOVED: {values}")
+    for key, now in after.get("collection_meta", {}).items():
+        was = before.get("collection_meta", {}).get(key)
+        if was is not None and was != now:
+            changes.append(f"collection[{key}] SCHEMA CHANGED: {was} -> {now}")
     for qid in sorted(set(after["all_quest_ids"]) - set(before["all_quest_ids"])):
         changes.append(f"QUEST CREATED outside the world: {qid}")
     for qid in sorted(set(before["all_quest_ids"]) - set(after["all_quest_ids"])):
@@ -897,6 +909,10 @@ def revert(before, after, world=None):
         for field in ("outcome", "current_state", "acceptance_criteria"):
             if was.get(field) != now.get(field) and was.get(field) is not None:
                 api("PATCH", f"/api/quests/{qid}/field", {"field_name": field, "value": was[field]})
+        # preferences and purpose are seeded empty: a case that set one is cleared (best effort).
+        for field in ("preferences", "purpose"):
+            if was.get(field) is None and now.get(field) is not None:
+                api("PATCH", f"/api/quests/{qid}/field", {"field_name": field, "value": ""})
         for nid in set(now["notes"]) - set(was.get("notes", {})):
             api("DELETE", f"/api/quests/{qid}/notes/{nid}")
         for gid, goal in now["goals"].items():
@@ -916,6 +932,9 @@ def revert(before, after, world=None):
             elif was[eid] != values:
                 api("PUT", f"/api/data/entries/{eid}", {"field_values": was[eid]},
                     params={"collection_id": cid})
+    # collections the chat created (an explicit "create a collection" request) are deleted
+    for cid in set(after["all_collection_ids"]) - set(before["all_collection_ids"]):
+        api("DELETE", f"/api/data/collections/{cid}")
     again = snapshot(world)
     return not diff(before, again)
 
