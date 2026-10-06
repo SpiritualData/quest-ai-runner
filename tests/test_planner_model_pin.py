@@ -86,3 +86,42 @@ def test_env_reaches_the_config(monkeypatch):
     monkeypatch.setenv("QUEST_TEAM_ID", "team-test")
     cfg = cli._config_from_env()
     assert cfg.orchestrator.planner_model == "some-cheap-model-1"
+
+
+def test_reach_summary_from_env_or_file(monkeypatch, tmp_path):
+    from quest_ai_runner import cli
+    monkeypatch.setenv("QUEST_API_KEY", "test-key")
+    monkeypatch.setenv("QUEST_TEAM_ID", "team-test")
+    monkeypatch.setenv("QAR_READ_REACH_SUMMARY", "Reads reach the notes folder.")
+    assert cli._config_from_env().orchestrator.read_reach_summary == "Reads reach the notes folder."
+    f = tmp_path / "reach.md"
+    f.write_text("Reads reach the corpus and the task list.\n")
+    monkeypatch.setenv("QAR_READ_REACH_SUMMARY_FILE", str(f))
+    assert (cli._config_from_env().orchestrator.read_reach_summary
+            == "Reads reach the corpus and the task list.")
+    monkeypatch.setenv("QAR_READ_REACH_SUMMARY_FILE", str(tmp_path / "missing.md"))
+    # an unreadable file keeps the inline summary rather than silently disabling the judge
+    assert cli._config_from_env().orchestrator.read_reach_summary == "Reads reach the notes folder."
+    monkeypatch.delenv("QAR_READ_REACH_SUMMARY")
+    assert cli._config_from_env().orchestrator.read_reach_summary == ""
+
+
+class EmptyThenDecides(RecordingProvider):
+    """A pinned model that answers nothing; the tier answers."""
+
+    def plan(self, prompt, *, model, tool_schema, tier=None):
+        if tool_schema.get("name") == "decide" and model == "some-broken-model":
+            self.calls.append({"model": model, "tool": "decide", "tier": tier})
+            return {}
+        return super().plan(prompt, model=model, tool_schema=tool_schema, tier=tier)
+
+
+def test_a_pinned_model_that_answers_nothing_falls_back_to_the_tier_once():
+    provider = EmptyThenDecides()
+    orch = build(provider, planner_model="some-broken-model")
+    decision = orch._plan("what is on my list", "", "", [])
+    models = [c["model"] for c in decide_calls(provider)]
+    assert models[0] == "some-broken-model"
+    assert models[1] == ModelRegistry(provider).resolve_tier(OrchestratorConfig().planner_tier)
+    assert len(models) == 2
+    assert decision.action == "answer"

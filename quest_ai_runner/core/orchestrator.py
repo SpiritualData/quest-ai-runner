@@ -3906,6 +3906,11 @@ def _render_gathered_for_planner(gathered: List[Dict[str, Any]],
     ``gathered`` is unaffected and is what the final ANSWER is still synthesized from."""
     if not gathered:
         return "[]"
+    notes = [o for o in gathered if isinstance(o, dict) and o.get("planner_only")]
+    if notes:
+        content = gathered_content(gathered)
+        body = _render_gathered_for_planner(content, recent_full, compress_over) if content else ""
+        return (body + "\n\n" if body else "") + _render_gathered(notes)
     n = len(gathered)
     recent_full = max(0, recent_full)
     if n <= compress_over or n <= recent_full:
@@ -4430,16 +4435,37 @@ def split_repeated_reads(reads: Optional[List[Any]], executed: Dict[str, int]
     return fresh, repeated
 
 
-def repeated_read_observation(spec: Dict[str, Any], step: int) -> Dict[str, Any]:
-    """The gathered note that stands in for a read that was not run again."""
-    note = Observation(
-        kind="query", locator="repeated_read",
-        text=(f"NOT RUN AGAIN: {describe_read_spec(spec)} with these exact arguments already ran "
-              f"at step {step} of this turn, and its result is in what you gathered above. The "
-              "same read returns the same result. Use that result, read something DIFFERENT, or "
-              "choose another action.")).to_dict()
+def planner_note_observation(text: str, locator: str) -> Dict[str, Any]:
+    """A ``planner_only`` gathered entry: a remark for the planner about the turn itself. It is
+    rendered after the planner's reads, never counted as something gathered, and never grounds an
+    answer, a deep brief, or the turn's returned ``gathered``."""
+    note = Observation(kind="query", locator=locator, text=text).to_dict()
     note["planner_only"] = True
     return note
+
+
+def repeated_read_observation(spec: Dict[str, Any], step: int) -> Dict[str, Any]:
+    """The gathered note that stands in for a read that was not run again."""
+    return planner_note_observation(
+        f"NOT RUN AGAIN: {describe_read_spec(spec)} with these exact arguments already ran at "
+        f"step {step} of this turn, and its result is shown in full in what you gathered above. "
+        "The same read returns the same result. Use that result, read something DIFFERENT, or "
+        "choose another action.", "repeated_read")
+
+
+def gathered_content(gathered: List[Any]) -> List[Any]:
+    """``gathered`` without ``planner_only`` notes: what the turn actually read."""
+    return [o for o in (gathered or []) if not (isinstance(o, dict) and o.get("planner_only"))]
+
+
+def planner_full_view_start(content_count: int, recent_full: int, compress_over: int) -> int:
+    """Index (among real observations) from which the per-step planner sees reads IN FULL; older
+    ones are one-line summaries there (``_render_gathered_for_planner``). A read whose result is
+    only a summary now may be run again: refusing it would leave the planner unable to see it."""
+    recent_full = max(0, recent_full)
+    if content_count <= compress_over or content_count <= recent_full:
+        return 0
+    return content_count - recent_full
 
 
 def context_assembly_timeout_seconds() -> float:
@@ -5740,6 +5766,17 @@ class Orchestrator:
                 tail="\n\n".join(tail_parts),
             ).blocks()
         raw = provider.plan(prompt, **plan_kwargs)
+        if not raw and (getattr(self.cfg, "planner_model", "") or "").strip():
+            # A pinned routing model that answered nothing (a mistyped id, an outage) gets ONE
+            # retry on the planner tier, instead of every step silently taking the fail-safe.
+            log.warning("Pinned planner model %r returned no decision; retrying on tier %r",
+                        model, self.cfg.planner_tier)
+            model = self.registry.resolve_tier(self.cfg.planner_tier)
+            provider = self.get_provider_for_model(model)
+            plan_kwargs["model"] = model
+            if not provider_call_accepts_layers(provider.plan):
+                plan_kwargs.pop("layers", None)
+            raw = provider.plan(prompt, **plan_kwargs)
         decision = normalize_decision(raw or {}, self.cfg, tools_enabled=self.tools is not None,
                                       web_enabled=self.web is not None)
         return self.cascade_review(decision, user_message, plan_context, gathered)
@@ -10006,7 +10043,7 @@ class Orchestrator:
 
         def finish(res: OrchestratorResult) -> OrchestratorResult:
             res.steps = steps
-            res.gathered = gathered
+            res.gathered = gathered_content(gathered)
             res.execution_record = exec_record
             res.retrieval_constraints = retrieval_constraints
             res.mode_signal = mode_signal_detected
@@ -10187,9 +10224,10 @@ class Orchestrator:
         plan: Optional[PlanDecision] = None
         steps = 0
         consecutive_reads = 0  # Track how many steps in a row chose "read"
-        # REPEATED READS: canonical spec -> the step it ran at, and how many steps asked for
-        # nothing new. Cleared after a tool step, since a write can change what a read returns.
-        executed_reads: Dict[str, int] = {}
+        # REPEATED READS: canonical spec -> (the step it ran at, its index among real observations),
+        # and how many CONSECUTIVE steps asked for nothing new. Cleared after a tool step, since a
+        # write can change what a read returns. Only a read that returned something is recorded.
+        executed_reads: Dict[str, Tuple[int, int]] = {}
         repeat_only_steps = 0
         # Set by an OVERSEER signal that decided the terminal path this run, so finish() can stamp
         # the exit_reason ("overseer_answer_now" | "overseer_escalated_deep" |
@@ -10522,11 +10560,17 @@ class Orchestrator:
                                          meta=dict(_ctx_meta)))
                 tool_calls_ran = True
                 executed_reads.clear()
+                repeat_only_steps = 0
                 if budget_exhausted():
                     break
                 continue
             if plan.action == "read":
-                fresh_reads, repeated_reads = split_repeated_reads(plan.reads, executed_reads)
+                visible_from = planner_full_view_start(
+                    len(gathered_content(gathered)), cfg.planner_recent_full,
+                    cfg.planner_compress_over)
+                fresh_reads, repeated_reads = split_repeated_reads(
+                    plan.reads, {k: ran[0] for k, ran in executed_reads.items()
+                                 if ran[1] >= visible_from})
                 # The per-step cap _do_reads applies, applied here so a spec it would drop is
                 # never recorded as having run.
                 fresh_reads = fresh_reads[: cfg.max_reads_per_step]
@@ -10534,6 +10578,8 @@ class Orchestrator:
                     gathered.append(repeated_read_observation(spec, ran_at))
                 if repeated_reads and not fresh_reads:
                     repeat_only_steps += 1
+                elif fresh_reads:
+                    repeat_only_steps = 0
                 if not plan.reads:
                     plan.action = "answer"
                 elif not fresh_reads and repeat_only_steps >= 2:
@@ -10556,10 +10602,19 @@ class Orchestrator:
                         emit.status("Reading a web page…")
                     else:
                         emit.status("Searching…" if any(r.get("grep") for r in plan.reads) else "Reading…")
+                    content_before = len(gathered_content(gathered))
                     new_obs = self._do_reads(fresh_reads, guidance_selected_ids, card_context)
                     gathered.extend(new_obs)
-                    for spec in fresh_reads:
-                        executed_reads[read_spec_key(spec)] = steps
+                    # Recorded only when each spec's own observation is known and is not an error:
+                    # a failed or timed-out read stays retryable.
+                    if len(new_obs) == len(fresh_reads):
+                        for j, (spec, obs) in enumerate(zip(fresh_reads, new_obs)):
+                            if isinstance(obs, dict) and obs.get("kind") != "error":
+                                executed_reads[read_spec_key(spec)] = (steps, content_before + j)
+                    for obs in new_obs:
+                        if isinstance(obs, dict) and obs.get("planner_note"):
+                            gathered.append(planner_note_observation(
+                                str(obs["planner_note"]), "not_answered_by"))
                     # The turn's REAL record of what was fetched, for the sufficiency gate above:
                     # these specs actually executed, whoever chose them (the planner on its own, or
                     # the gate). Recorded here, at the one place reads run, so the gate can never be
@@ -10739,8 +10794,7 @@ class Orchestrator:
                     last_plan.deep_brief = (last_plan.deep_brief
                                             or last_plan.deferred_deep.get("brief"))
             # A planner_only note (a repeated read) is not something gathered.
-            if ((any(not (isinstance(o, dict) and o.get("planner_only")) for o in gathered)
-                    or brainstorm_active) and not must_execute):
+            if (gathered_content(gathered) or brainstorm_active) and not must_execute:
                 emit.status("Wrapping up with a best-effort answer…")
                 model = self._answer_model(plan, "balanced", hint=model_hint)
                 # The wrap-up reply ENDS the turn, and the answerer is not otherwise told so: a
@@ -10760,7 +10814,7 @@ class Orchestrator:
             plan.action = final = "deep"
             plan.goal = _truncate_goal(plan.goal or f"Fully address the request: {user_message}")
             plan.deep_brief = plan.deep_brief or user_message
-            if gathered:
+            if gathered_content(gathered):
                 emit.status("This asks for a change, so doing the work instead of wrapping up "
                             "with an answer…")
 

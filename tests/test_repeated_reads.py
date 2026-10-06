@@ -96,3 +96,74 @@ def test_a_new_read_alongside_a_repeat_still_runs():
     orch, provider, retrieval = build([READ_NOTES, mixed, {"action": "answer", "rationale": "ok"}])
     orch.run("what is the plan in my notes?")
     assert retrieval.read_calls == ["notes.md", "plan.md"]
+
+
+def test_a_failed_read_stays_retryable():
+    class FlakyRetrieval(StubRetrieval):
+        def read_section(self, rel_path, **kw):
+            self.read_calls.append(rel_path)
+            if len(self.read_calls) == 1:
+                from quest_ai_runner.core.adapters import Observation
+                return Observation(kind="error", rel_path=rel_path, error="timed out")
+            return super().read_section(rel_path, **kw)
+    provider = StubProvider([READ_NOTES, READ_NOTES, {"action": "answer", "rationale": "ok"}])
+    config = OrchestratorConfig(max_steps=6)
+    config.overseer = False
+    retrieval = FlakyRetrieval({"notes.md": "GROUNDING the notes"})
+    Orchestrator(retrieval=retrieval, provider=provider, registry=ModelRegistry(provider),
+                 config=config).run("what is the plan in my notes?")
+    # The failed first read ran again (a later read may follow from the answer path's own gate).
+    assert retrieval.read_calls[:2] == ["notes.md", "notes.md"]
+
+
+def test_a_read_the_planner_now_sees_only_as_a_summary_may_run_again():
+    """Once older reads are compressed to one line in the planner's view, refusing a re-read
+    would leave the planner unable to see that result in full."""
+    others = [{"action": "read", "reads": [{"rel_path": f"f{i}.md"}], "rationale": "more"}
+              for i in range(3)]
+    files = {"notes.md": "GROUNDING the notes", **{f"f{i}.md": f"file {i}" for i in range(3)}}
+    provider = StubProvider([READ_NOTES] + others + [READ_NOTES,
+                            {"action": "answer", "rationale": "ok"}])
+    config = OrchestratorConfig(max_steps=8, planner_recent_full=2, planner_compress_over=3)
+    config.overseer = False
+    retrieval = StubRetrieval(files)
+    Orchestrator(retrieval=retrieval, provider=provider, registry=ModelRegistry(provider),
+                 config=config).run("what is the plan in my notes?")
+    assert retrieval.read_calls.count("notes.md") == 2
+
+
+def test_repeat_only_steps_must_be_consecutive():
+    """Two repeats separated by a step that read something new do not end the loop."""
+    other = {"action": "read", "reads": [{"rel_path": "plan.md"}], "rationale": "other"}
+    orch, provider, retrieval = build([READ_NOTES, READ_NOTES, other, READ_NOTES,
+                                       {"action": "answer", "rationale": "done"}])
+    res = orch.run("what is the plan in my notes?")
+    assert res.exit_reason != "read_budget"
+    assert retrieval.read_calls == ["notes.md", "plan.md"]
+
+
+def test_notes_are_not_in_the_returned_gathered():
+    orch, provider, retrieval = build([READ_NOTES, READ_NOTES,
+                                       {"action": "answer", "rationale": "have it"}])
+    res = orch.run("what is the plan in my notes?")
+    assert res.gathered and not any(o.get("planner_only") for o in res.gathered)
+
+
+def test_a_planner_note_on_an_observation_reaches_the_planner_only():
+    from quest_ai_runner.core.adapters import Observation
+
+    class NotingRetrieval(StubRetrieval):
+        def query(self, spec):
+            return Observation(kind="query", text="GROUNDING loose hits",
+                               planner_note="Not answered by: db: needs an operation")
+    provider = StubProvider([{"action": "read", "reads": [{"query": {"kind": "x"}}],
+                              "rationale": "look"},
+                             {"action": "answer", "rationale": "ok"}])
+    config = OrchestratorConfig(max_steps=4)
+    config.overseer = False
+    res = Orchestrator(retrieval=NotingRetrieval({}), provider=provider,
+                       registry=ModelRegistry(provider), config=config).run("q")
+    assert any("Not answered by: db" in p for p in provider.plan_prompts)
+    answer_text = "\n".join(m["content"] for m in provider.last_answer_messages)
+    assert "Not answered by" not in answer_text
+    assert not any(o.get("planner_only") for o in res.gathered)

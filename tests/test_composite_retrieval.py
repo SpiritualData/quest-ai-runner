@@ -394,8 +394,9 @@ def test_composite_query_reports_an_adapter_refusal_beside_other_results():
 
     obs = CompositeRetrievalAdapter([Refuses(), Finds()]).query({"kind": "x"})
     assert obs.kind == "query"
-    assert "some loosely matching history" in obs.text
-    assert "this query names no operation" in obs.text
+    assert obs.text == "[Finds]\nsome loosely matching history"   # results untouched
+    assert "this query names no operation" in obs.planner_note       # refusal for the planner
+    assert obs.to_dict()["planner_note"] == obs.planner_note
 
 
 def test_composite_query_all_refusals_is_still_an_error():

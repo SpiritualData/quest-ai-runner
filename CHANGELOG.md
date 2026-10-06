@@ -46,6 +46,10 @@ All notable changes to this project are documented here. The format is based on
   Empty (default) keeps resolving `planner_tier`. A model id there is sent verbatim on the decide
   call alone, so routing can run on a cheaper model than the calls that share `planner_tier`
   (request understanding, card updates, summaries); the reach judge keeps its own tier.
+- **`QAR_READ_REACH_SUMMARY` / `QAR_READ_REACH_SUMMARY_FILE`**: a CLI lane can now supply the
+  `read_reach_summary` the reach judge needs (inline or from a file); an unreadable file leaves the
+  judge inert. Measured on haiku, compact WITHOUT the judge does not hold up (91% against 93% for
+  the full prompt and 96 to 97% for compact + judge), so a lane needs this before compact.
 
 ### Fixed
 - **A read the turn already ran is not run again.** Live whole turns showed planners on two
@@ -53,9 +57,15 @@ All notable changes to this project are documented here. The format is based on
   (same keys and values, any order) that already ran this turn and tells the planner so in a
   `planner_only` note that never reaches the answer or a deep brief; a second step that asks for
   nothing new ends the read loop through the read-budget wrap-up. A tool step clears the record.
+  Review follow-ups: a failed read stays retryable, a read the planner now sees only as a
+  one-line summary may run again, the repeat count is consecutive, notes take no full-view slot,
+  and `OrchestratorResult.gathered` never contains them.
 - **`CompositeRetrievalAdapter.query` no longer hides a refusal.** When one adapter returned an
   error and another returned text, the error was dropped, so the planner never learned its query
-  shape was wrong. Refusals now travel with the results under `[not answered by]`.
+  shape was wrong. Refusals now ride on the new `Observation.planner_note`, which the run loop turns
+  into a planner-only note: the planner sees it, an answer never grounds on it.
+- **A pinned `planner_model` that returns no decision** (a mistyped id, an outage) is retried once
+  on `planner_tier` instead of every step silently taking the fail-safe.
 
 ### Changed
 - **One explicit token budget for the deep prompt, spent by priority (`core/prompt_budget.py`).**

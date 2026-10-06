@@ -306,10 +306,13 @@ class Observation:
     scope: Optional[str] = None
     hits: List[Dict[str, Any]] = field(default_factory=list)  # for grep
     error: Optional[str] = None
+    # A remark for the PLANNER only, never answer content (e.g. a composite's "not answered by"
+    # refusals beside another adapter's results). The run loop turns it into a planner_only note.
+    planner_note: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d = {"kind": self.kind}
-        for k in ("rel_path", "locator", "text", "pattern", "scope", "error"):
+        for k in ("rel_path", "locator", "text", "pattern", "scope", "error", "planner_note"):
             v = getattr(self, k)
             if v is not None:
                 d[k] = v

@@ -140,6 +140,12 @@ Env it reads:
                                                    since only a consumer knows what its own reads
                                                    reach; with no summary the judge stays inert.
   QAR_PLANNER_REACH_JUDGE_TIER (optional)       : the tier the reach judge runs on (default "best").
+  QAR_READ_REACH_SUMMARY / QAR_READ_REACH_SUMMARY_FILE (optional)
+                                                : the read_reach_summary the reach judge needs,
+                                                   inline or from a file: what this lane's reads
+                                                   reach and which environments take hand-offs.
+                                                   Name EVERYTHING readable; anything left out
+                                                   reads as "outside".
   QAR_CLI_PLAN_THINKING_TOKENS (optional)       : claude_cli backend only. Caps extended thinking on
                                                    every plan() call (routing decisions, the reach
                                                    judge, overseer/cascade reviews) via
@@ -626,6 +632,26 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     if os.getenv("QAR_PLANNER_REACH_JUDGE_TIER"):
         cfg.orchestrator.planner_reach_judge_tier = (
             os.environ["QAR_PLANNER_REACH_JUDGE_TIER"].strip().lower())
+    # What THIS lane's reads reach, for the reach judge: inline, or a file (the usual form, since
+    # it is a paragraph about the lane's own corpus and the environments it hands work to). A file
+    # that cannot be read is logged and ignored, which leaves the judge inert, never guessing.
+    reach_summary = (os.getenv("QAR_READ_REACH_SUMMARY") or "").strip()
+    reach_file = (os.getenv("QAR_READ_REACH_SUMMARY_FILE") or "").strip()
+    if reach_file:
+        try:
+            from_file = Path(reach_file).expanduser().read_text(encoding="utf-8").strip()
+        except OSError as e:
+            from_file = ""
+            logging.getLogger("quest-ai-runner.cli").warning(
+                "QAR_READ_REACH_SUMMARY_FILE could not be read (%s)", e)
+        if from_file:
+            reach_summary = from_file
+        else:
+            logging.getLogger("quest-ai-runner.cli").warning(
+                "QAR_READ_REACH_SUMMARY_FILE gave no summary; %s", "using QAR_READ_REACH_SUMMARY"
+                if reach_summary else "the reach judge stays inert")
+    if reach_summary:
+        cfg.orchestrator.read_reach_summary = reach_summary
     # QAR_DEEP_MAX_TURNS: hard per-attempt turn cap for the deep goal loop (lives on
     # OrchestratorConfig, not RunnerConfig directly, same as QAR_GOAL_TOKEN_BUDGET/
     # QAR_GOAL_MAX_ATTEMPTS below). The library default (30) is tight for a lane whose tasks
