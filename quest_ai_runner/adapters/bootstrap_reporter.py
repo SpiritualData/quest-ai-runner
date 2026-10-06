@@ -165,15 +165,21 @@ def generate_bootstrap_report(
     stats = get_corpus_stats(cards_dir)
     prev_state = _read_report_state(cards_dir)
 
-    subject = "Monthly QAR Bootstrap Report"
+    # Format timestamp for readability
+    indexed_dt = datetime.fromisoformat(stats["indexed_at"])
+    formatted_date = indexed_dt.strftime("%B %d, %Y at %I:%M %p UTC")
+
+    subject = "Your QAR Corpus Monthly Summary"
     body_parts = [
-        "# QAR Monthly Bootstrap Report",
+        "# QAR Corpus Monthly Summary",
         "",
-        "## Corpus Statistics",
+        "Your quest AI runner (QAR) corpus was indexed and is ready to use in your Q&A system.",
         "",
-        f"- **Cards Indexed**: {stats['card_count']}",
-        f"- **Files Tracked**: {stats['file_count']}",
-        f"- **Report Generated**: {stats['indexed_at']}",
+        "## Current State",
+        "",
+        f"- **Indexed Cards**: {stats['card_count']} topic cards",
+        f"- **Files Tracked**: {stats['file_count']} files across all cards",
+        f"- **Generated**: {formatted_date}",
         "",
     ]
 
@@ -184,31 +190,43 @@ def generate_bootstrap_report(
     if prev_card_count > 0:
         card_diff = stats["card_count"] - prev_card_count
         file_diff = stats["file_count"] - prev_file_count
-        body_parts.extend([
-            "## Changes Since Last Report",
-            "",
-            f"- Cards: {card_diff:+d} ({'new' if card_diff > 0 else 'removed' if card_diff < 0 else 'unchanged'})",
-            f"- Files: {file_diff:+d}",
-            "",
-        ])
+        change_desc = []
+        if card_diff != 0:
+            change_desc.append(f"{abs(card_diff)} card(s) {'added' if card_diff > 0 else 'removed'}")
+        if file_diff != 0:
+            change_desc.append(f"{abs(file_diff)} file(s) {'indexed' if file_diff > 0 else 'removed'}")
+
+        if change_desc:
+            body_parts.extend([
+                "## Changes Since Last Month",
+                "",
+                f"- {'; '.join(change_desc)}",
+                "",
+            ])
 
     # Warnings and remediation
     warnings = []
     if stats["card_count"] == 0:
         warnings.append(
-            "**No cards indexed**: The corpus may be empty or bootstrap hasn't completed. "
-            "Ensure the corpus root is set correctly and contains indexable files."
+            "No cards have been indexed yet. Ensure your corpus root is correctly configured "
+            "and contains files to index."
         )
 
     if stats["file_count"] == 0 and stats["card_count"] > 0:
         warnings.append(
-            "**No files tracked**: Cards were created but no files are associated. "
-            "This may indicate a data structure issue."
+            "Cards were created but no files are associated. This may indicate a data structure issue. "
+            "Review your corpus configuration."
+        )
+
+    if stats["card_count"] > 100:
+        warnings.append(
+            f"You have {stats['card_count']} indexed cards. Consider whether your corpus can be better organized. "
+            "Review the card summaries to identify potential topic consolidation."
         )
 
     if warnings:
         body_parts.extend([
-            "## Warnings",
+            "## Things to Review",
             "",
         ])
         for warning in warnings:
@@ -217,20 +235,20 @@ def generate_bootstrap_report(
 
     # Recommendations
     body_parts.extend([
-        "## Recommendations",
+        "## Next Steps",
         "",
-        "- Review the card summaries to ensure topics are accurately identified",
-        "- Verify file coverage: inspect cards to confirm all important files are indexed",
-        "- Use `qar search-context` to test card retrieval and keyword matching",
-        "- Check card staleness: cards with many stale files may need re-indexing",
+        "- Review cards to confirm topics are accurately identified for your use case",
+        "- Test retrieval with qar search-context to verify keyword matching works well",
+        "- Monitor indexing performance and make adjustments to your corpus structure as needed",
         "",
     ])
 
     body_parts.extend([
         "---",
         "",
-        "This is an automated monthly report from your QAR corpus. "
-        "To disable these reports, set the QUEST_BOOTSTRAP_REPORTS environment variable to 0.",
+        "This is an automated monthly summary from your QAR corpus indexing system. "
+        "It reports on the state of your indexed content and helps you monitor coverage and quality. "
+        "For support or to adjust report settings, contact your system administrator.",
     ])
 
     body = "\n".join(body_parts)
