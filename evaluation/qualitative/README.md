@@ -28,6 +28,7 @@ PY=.venv/bin/python3        # from the quest-ai-runner repo root
 $PY evaluation/qualitative/runner.py setup --wait 900   # files 5 quest-approval asks, waits for a person
 $PY evaluation/qualitative/world.py show                # ids, pivots
 # author evaluation/qualitative/datasets/{explicit,implicit,multistep}.json (see schema.md)
+$PY evaluation/qualitative/runner.py validate           # schema-check the datasets: no world, no network
 $PY evaluation/qualitative/runner.py run --dataset explicit --only EXP-001,EXP-002   # try a few
 $PY evaluation/qualitative/runner.py run --dataset all --workers 4
 $PY evaluation/qualitative/runner.py report             # RESULTS.md

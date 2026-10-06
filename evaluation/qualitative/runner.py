@@ -1,5 +1,6 @@
 """Qualitative QAR evaluation runner: real in-app Quest AI chat, DB side-effect diffs, LLM judge.
 
+    .venv/bin/python3 evaluation/qualitative/runner.py validate      # datasets only, no world, no network
     .venv/bin/python3 evaluation/qualitative/runner.py setup [--wait SECONDS] [--partial]
     .venv/bin/python3 evaluation/qualitative/runner.py run [--dataset explicit|implicit|multistep|all]
                                                            [--only ID,ID] [--workers N] [--no-judge]
@@ -111,6 +112,31 @@ def load_cases(dataset="all", only=None):
         cases = [c for c in cases if c["dataset"] == dataset]
     if only:
         cases = [c for c in cases if c["id"] in set(only)]
+    return cases
+
+
+def validate_datasets():
+    """Load and validate every dataset without touching the world or the network.
+
+    Authoring guard: `run` validates on load too, but only after a world exists and a backend is
+    reachable, so a schema mistake used to surface minutes into a session (or on someone else's
+    machine). This is the cheap check to run after editing a dataset file.
+    """
+    cases = load_cases("all")
+    examples = load_example_cases()
+    per_dataset = {ds: sum(1 for c in cases if c["dataset"] == ds) for ds in DATASETS}
+    pivot_use = sum(1 for c in cases if c.get("must_use_pivots"))
+    writes = sum(1 for c in cases if c.get("expect_writes"))
+    print(f"datasets    : {', '.join(f'{ds}={n}' for ds, n in per_dataset.items())}")
+    print(f"cases       : {len(cases)} valid, no duplicate ids ({len(examples)} example cases too)")
+    print(f"             {pivot_use} with required pivots, {writes} with expect_writes, "
+          f"{sum(1 for c in cases if c.get('forbid_writes'))} write-forbidden")
+    unused = sorted(set(W.PIVOTS) - {p for c in cases
+                                     for p in (c.get("must_use_pivots") or [])
+                                     + (c.get("bonus_pivots") or [])})
+    if unused:
+        print(f"NOTE: pivots no case references: {unused}")
+    print("VALIDATION OK")
     return cases
 
 
@@ -398,7 +424,8 @@ def write_report():
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["setup", "run", "teardown", "report", "reset"])
+    parser.add_argument("command",
+                        choices=["setup", "run", "teardown", "report", "reset", "validate"])
     parser.add_argument("--dataset", default="all", choices=["all", *DATASETS])
     parser.add_argument("--only", default=None, help="comma-separated case ids")
     parser.add_argument("--workers", type=int, default=1,
@@ -414,7 +441,9 @@ def main():
     global RESULTS_JSON, RESULTS_MD
     if args.examples:  # smoke runs never pollute the real results or RESULTS.md
         RESULTS_JSON, RESULTS_MD = WORK_DIR / "results_examples.json", WORK_DIR / "RESULTS_examples.md"
-    if args.command == "setup":
+    if args.command == "validate":
+        validate_datasets()
+    elif args.command == "setup":
         W.setup_partial() if args.partial else W.setup(args.wait)
     elif args.command == "reset":
         W.reset()

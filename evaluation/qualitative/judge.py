@@ -460,8 +460,16 @@ def render_scope(case):
                   "never told this. A reply or a write aimed at another quest is wrong unless a "
                   "rubric item says otherwise.")
     else:
-        target = ("\nNo quest is the right target: nothing in the user's data is relevant to this "
-                  "message, and forcing the user's quests into the answer is the failure.")
+        # quest_key is null for two different kinds of case, and the judge must not be told the
+        # stronger claim ("nothing in the user's data is relevant") for the first kind: a message
+        # answerable only from TEAM-WIDE context, or one whose right answer is "your data does not
+        # contain that", both have no single right quest while still resting on the user's data.
+        target = ("\nNo single quest is the right target. The correct answer may rest on team-wide "
+                  "context, on noticing that the user's data does NOT contain what was asked "
+                  "about, or on general knowledge alone. Pinning the answer to one of the user's "
+                  "quests that the message is not about, or inventing data to fit the question, is "
+                  "the failure. Check the MUST and BONUS pivot sections above: a pivot listed "
+                  "there is still required even though no quest is.")
     return f"conversation pinned to: {pinned}{target}"
 
 
