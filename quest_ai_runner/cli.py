@@ -137,6 +137,11 @@ Env it reads:
                                                    since only a consumer knows what its own reads
                                                    reach; with no summary the judge stays inert.
   QAR_PLANNER_REACH_JUDGE_TIER (optional)       : the tier the reach judge runs on (default "best").
+  QAR_CLI_PLAN_THINKING_TOKENS (optional)       : claude_cli backend only. Caps extended thinking on
+                                                   routing decisions (plan calls, incl. the reach
+                                                   judge) via MAX_THINKING_TOKENS; "0" turns it off.
+                                                   Answers and deep runs are never affected. Unset
+                                                   leaves the CLI default.
   QAR_REUSE_NESTED_CARDS (optional)              — "0"/"false"/"no" disables it (default: on). When
                                                    on, ``FileContextStore.bootstrap()`` reuses any
                                                    sub-corpus that already has its own completed
@@ -380,6 +385,11 @@ def _model_provider_from_env() -> ModelProvider:
         # per-call wall-clock cap above the conservative default rather than failing the run.
         if os.getenv("QAR_ANSWER_TIMEOUT"):
             kwargs["timeout_seconds"] = float(os.environ["QAR_ANSWER_TIMEOUT"])
+        # Cap extended thinking on routing decisions only (see ClaudeCliProvider and
+        # docs/cheap-model-routing.md): "0" turns it off, which measured 11x faster on haiku at the
+        # same accuracy. Unset leaves the CLI default.
+        if (os.getenv("QAR_CLI_PLAN_THINKING_TOKENS") or "").strip().isdigit():
+            kwargs["plan_thinking_tokens"] = int(os.environ["QAR_CLI_PLAN_THINKING_TOKENS"].strip())
         return ClaudeCliProvider(**kwargs)
     elif backend == "anthropic":
         return AnthropicProvider()
