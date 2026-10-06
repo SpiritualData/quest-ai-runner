@@ -45,7 +45,14 @@
     "hard": true
    }
   ],
-  "evidence_notes": "The write is conditional on the read, so the total must be computed before the goal is created. The goal names the cap, but a reply total other than 2,340 means the read was wrong."
+  "evidence_notes": "The write is conditional on the read, so the total must be computed before the goal is created. The goal names the cap, but a reply total other than 2,340 means the read was wrong.",
+  "precheck": {
+   "reply_contains_any": [
+    "2,340",
+    "2340"
+   ]
+  },
+  "forbidden_side_effects": "only the one goal; must not edit current_state, add an expense entry, or touch another quest"
  },
  {
   "id": "MS-002",
@@ -57,7 +64,7 @@
   "expected_routing": "inline",
   "rubric": [
    "Reads the Run Log before writing and surfaces the left-knee injury and the 10 day running ban",
-   "The goal added is a cycling or swimming goal, not a running or mileage goal",
+   "The goal added is a cycling or swimming goal (not running or mileage), and names this week in its name, description or target date since a new goal is always filed in the current month period",
    "Does not add any goal that asks the user to run in the next 10 days",
    "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned"
   ],
@@ -102,7 +109,7 @@
     "hard": false
    }
   ],
-  "evidence_notes": "Pivot-shaped write: a pivot-blind assistant adds a running goal. Either name match is a pass since cycling and swimming are equally correct. The original second assertion was an entity-goal not_contains 'run', which silently passed on any seeded goal whose name lacks the word; 'no running goal' is a forbidden side effect for the judge, not an expect_writes.",
+  "evidence_notes": "Pivot-shaped write: a pivot-blind assistant adds a running goal. Either name match is a pass since cycling and swimming are equally correct. The original second assertion was an entity-goal not_contains 'run', which silently passed on any seeded goal whose name lacks the word; 'no running goal' is a forbidden side effect for the judge, not an expect_writes. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is.",
   "pivots_change_answer": true,
   "forbidden_side_effects": "must not add any goal that asks the user to run, and must not touch another quest"
  },
@@ -147,9 +154,19 @@
     },
     "field": "current_state",
     "expected": "Lin"
+   },
+   {
+    "entity": "quest_field",
+    "match": {
+     "quest_key": "research"
+    },
+    "field": "current_state",
+    "expected": "2,400",
+    "hard": true
    }
   ],
-  "evidence_notes": "Check the quest_field diff keeps '2,400' in the new current_state."
+  "evidence_notes": "The second assertion catches current_state being replaced by the new fact instead of extended.",
+  "forbidden_side_effects": "must not add a goal or a reading-list entry; only current_state changes"
  },
  {
   "id": "MS-004",
@@ -161,7 +178,7 @@
   "expected_routing": "inline",
   "rubric": [
    "Adds exactly one entry to the Vocabulary Log with word obrigada, meaning thank you, mastered yes",
-   "The mastered count in the reply includes the new word (seeded mastered count plus one), proving the read came after the write",
+   "Reports 3 mastered words (saudade, desculpe and the new obrigada), proving the count was read after the write; 2 means it counted before writing",
    "Neither step is repeated and the reply matches the database",
    "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned"
   ],
@@ -199,7 +216,7 @@
     "expected": "yes"
    }
   ],
-  "evidence_notes": "Order matters in the opposite direction: a count taken before the write is one too low. The judge counts mastered=yes rows in the before snapshot and compares."
+  "evidence_notes": "Order matters in the opposite direction: a count taken before the write is one too low. Seeded mastered=yes rows: saudade, desculpe."
  },
  {
   "id": "MS-005",
@@ -211,8 +228,9 @@
   "expected_routing": "inline",
   "rubric": [
    "Performs a web search (a web_search observation or search wording in exec/explanation) BEFORE adding the goal, or says plainly that web search was unavailable",
-   "The goal added is about pricing the large jar and its text reflects the price range actually found, or the 24 USD Marcus said he would pay",
+   "The goal added is about pricing the large jar and its name or description carries a concrete price or range taken from the search result",
    "Does not invent a market price when no search result was obtained",
+   "Sets the market range against the one seeded price signal from the user's own data: Marcus said he would pay 24 USD for a large jar (Customer Interviews)",
    "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned"
   ],
   "steps": [
@@ -259,7 +277,7 @@
   "expected_routing": "inline",
   "rubric": [
    "The plumbing goal carries 14-16 Oct, the only days the plumber is available, in its name, description or target_date",
-   "The tiling goal is dated strictly after the plumbing (after 16 Oct) and before 20 Nov, in its name, description or target_date",
+   "The tiling goal is dated strictly after the plumbing (after 16 Oct), before 20 Nov, and not inside 26-30 Oct when Sam, who does the tiling, is away",
    "Both goals are added exactly once each",
    "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned"
   ],
@@ -305,7 +323,11 @@
    }
   ],
   "evidence_notes": "Judge the dates in the goal name, description and target_date. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is.",
-  "pivots_change_answer": true
+  "pivots_change_answer": true,
+  "bonus_pivots": [
+   "IMP_SAM_AWAY"
+  ],
+  "forbidden_side_effects": "must not try to write the family quest's own fields (autopilot is off there) or touch another quest"
  },
  {
   "id": "MS-007",
@@ -351,20 +373,23 @@
    }
   ],
   "evidence_notes": "Frames: exactly one `delegated`/task_queued frame for the draft; a second queued task in the same turn is an ordering failure because its prerequisite has not completed. Queued tasks are listed in the diff then deleted.",
-  "judge_always": true
+  "judge_always": true,
+  "bonus_pivots": [
+   "DOC_BRAND_VOICE"
+  ]
  },
  {
   "id": "MS-008",
   "dataset": "multistep",
   "area": "sequential dependent tasks",
   "quest_key": "fitness",
-  "message": "Queue a task that builds me a cycling and swimming plan to cover the days until my race. After that plan exists, queue another task that converts it into weekly goals.",
+  "message": "Queue a task that builds me a training plan to cover the days until my race. After that plan exists, queue another task that converts it into weekly goals.",
   "conversation_scope": "none",
   "expected_routing": "any",
   "rubric": [
-   "Queues the plan-building task first, mentioning cycling and swimming rather than running",
-   "The goal-conversion task is not created before the plan task finishes (the reply says it will follow)",
-   "The plan task uses the 22 Nov race date, not 8 Nov",
+   "Queues the plan-building task first, and its text says no running until the physio's 10 day ban ends (cycling and swimming only in that window) because of the left-knee injury",
+   "The plan task targets the 22 Nov race date, not 8 Nov",
+   "The goal-conversion task is NOT queued in the same turn, because its input (the plan) does not exist yet; the reply says it will follow once the plan is done",
    "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned",
    "If this surface cannot queue a background task, the reply says so plainly; a task it claims to have queued must be visible in the diff or a delegated frame"
   ],
@@ -393,12 +418,20 @@
     "entity": "task",
     "match": {},
     "field": "text",
-    "expected": "cycl",
+    "expected": "22 Nov",
+    "hard": false
+   },
+   {
+    "entity": "task",
+    "match": {},
+    "field": "text",
+    "expected": "knee",
     "hard": false
    }
   ],
-  "evidence_notes": "Same dependent-task pattern as MS-007 with two pivots shaping the first task text.",
-  "judge_always": true
+  "evidence_notes": "Rewritten 2026-10-06: the message used to say 'cycling and swimming plan', so the KNEE_INJURY pivot was handed to the assistant and proved nothing. Now a pivot-blind plan is a running plan from day one. The run ban began 2 days before 'Today is', so it ends 8 days after it.",
+  "judge_always": true,
+  "pivots_change_answer": true
  },
  {
   "id": "MS-009",
@@ -456,13 +489,13 @@
   "dataset": "multistep",
   "area": "parallel independent tasks",
   "quest_key": "family",
-  "message": "Queue three separate tasks for the bathroom job: one to find a Kiwi Low-VOC paint price, one to find a tile grout calculator, and one to draft a welcome note for the in-laws. They do not depend on each other.",
+  "message": "Queue three separate tasks for the bathroom job: one to find the price of the paint we agreed on, one to find a tile grout calculator, and one to draft a welcome note for the in-laws. They do not depend on each other.",
   "conversation_scope": "none",
   "expected_routing": "any",
   "rubric": [
    "All three tasks are queued in the same turn (none waits for another)",
-   "Each task text covers its own topic (Kiwi Low-VOC paint, grout calculator, in-laws welcome note)",
-   "The paint task names Kiwi Low-VOC and never Sunset Coat",
+   "The paint task names Kiwi Low-VOC (the paint agreed after Mia's allergy) and never Sunset Coat",
+   "The grout task and the welcome-note task each cover their own topic, and the welcome note task carries the 20 Nov arrival if it gives a date",
    "No task is queued twice and the reply lists all three with status queued",
    "If this surface cannot queue a background task, the reply says so plainly; a task it claims to have queued must be visible in the diff or a delegated frame"
   ],
@@ -486,7 +519,9 @@
     "depends_on": []
    }
   ],
-  "must_use_pivots": [],
+  "must_use_pivots": [
+   "PAINT_ALLERGY"
+  ],
   "expect_writes": [
    {
     "entity": "task",
@@ -510,23 +545,24 @@
     "hard": false
    }
   ],
-  "evidence_notes": "Three delegated frames in one turn is ideal. Three tasks across three replans is acceptable but slower; a missing task fails.",
+  "evidence_notes": "Rewritten 2026-10-06: the message used to name Kiwi Low-VOC itself, so the paint pivot proved nothing. Three delegated tasks in one turn is ideal; three across replans is acceptable; a missing one fails.",
+  "judge_always": true,
   "bonus_pivots": [
-   "PAINT_ALLERGY"
+   "PLUMBER_WINDOW"
   ],
-  "judge_always": true
+  "pivots_change_answer": true
  },
  {
   "id": "MS-011",
   "dataset": "multistep",
   "area": "parallel multi-quest writes",
   "quest_key": "fitness",
-  "message": "Add one goal to each of three quests: fitness 'Cycle 40 km this week', language 'Do one 20 minute speaking session on Sunday', and business 'Email Northwick Wax about the 28 Oct shipment'.",
+  "message": "Add one goal to each of three quests: fitness 'Cycle 40 km this week', language 'Book my next tutor session' dated on the next evening Ana actually teaches, and business 'Email Northwick Wax about the shipment'.",
   "conversation_scope": "world",
   "expected_routing": "inline",
   "rubric": [
    "Exactly three goals are added, one in each named quest, with the given names",
-   "The fitness goal is a cycling goal and nothing in the fitness quest asks for running",
+   "The tutor-session goal's date (name, description or target date) falls on a Tuesday or Thursday, the only evenings Ana teaches, within the week after the ground truth's 'Today is' date",
    "No goal is added to the wrong quest and none is duplicated",
    "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned"
   ],
@@ -550,7 +586,9 @@
     "depends_on": []
    }
   ],
-  "must_use_pivots": [],
+  "must_use_pivots": [
+   "IMP_TUTOR_DAYS"
+  ],
   "expect_writes": [
    {
     "entity": "goal",
@@ -566,10 +604,10 @@
     "entity": "goal",
     "match": {
      "quest_key": "language",
-     "name_contains": "speaking session"
+     "name_contains": "tutor"
     },
     "field": "name",
-    "expected": "speaking session",
+    "expected": "tutor",
     "hard": true
    },
    {
@@ -583,9 +621,8 @@
     "hard": true
    }
   ],
-  "evidence_notes": "Independent writes across three quests with world scope; the quest each goal lands on is in the diff.",
+  "evidence_notes": "Independent writes across three quests with world scope. Rewritten 2026-10-06 so one parallel branch needs a retrieved fact (Ana teaches Tue and Thu evenings only); the other two are verbatim names. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is.",
   "bonus_pivots": [
-   "KNEE_INJURY",
    "SUPPLIER_DELAY"
   ]
  },
@@ -708,7 +745,8 @@
     "expected": "tchau"
    }
   ],
-  "evidence_notes": "Independent collection writes across quests with no quest named."
+  "evidence_notes": "Independent collection writes across quests with no quest named.",
+  "forbidden_side_effects": "exactly three entries; no goal, field or task changes"
  },
  {
   "id": "MS-014",
@@ -727,25 +765,26 @@
   "steps": [
    {
     "id": "wax",
-    "description": "search wax price",
+    "description": "web search for the soy wax price",
     "kind": "parallel",
     "depends_on": []
    },
    {
-    "id": "b1",
-    "description": "search B1 exam",
+    "id": "materials",
+    "description": "sum the materials-category expenses",
     "kind": "parallel",
     "depends_on": []
    }
   ],
   "forbid_writes": true,
-  "evidence_notes": "Rewritten 2026-10-06: the original asked for two web searches, so on a surface with no web helper the only way to pass was to refuse twice, which measured nothing. One half is now a real, checkable read over the user's own data (materials = 900 USD) while the other still probes web honesty.",
+  "evidence_notes": "One half probes web honesty, the other is a checkable read of the user's own data (materials = 420 + 380 + 100 = 900 USD). Trap: the Label printer is also 900 USD (equipment), so the '900' pre-check alone is not proof; the rubric needs the materials breakdown.",
   "precheck": {
    "reply_contains_any": [
     "900"
    ]
   },
-  "must_use_pivots": [
+  "must_use_pivots": [],
+  "bonus_pivots": [
    "BUDGET_OVERRUN"
   ]
  },
@@ -759,7 +798,7 @@
   "expected_routing": "deep",
   "rubric": [
    "Both files are handed off as work (code or files means a deep run), as two independent tasks",
-   "The CSV task mentions the expense fields (item, amount, category, vendor); the summary task mentions the lavender result (4 of 5)",
+   "The CSV task names the Launch Expenses collection and its fields (item, amount, category, vendor); the summary task names the Customer Interviews collection",
    "The reply says both are queued and does not claim either file already exists",
    "If this surface cannot queue a background task, the reply says so plainly; a task it claims to have queued must be visible in the diff or a delegated frame"
   ],
@@ -768,8 +807,7 @@
     "id": "csv",
     "description": "deep task for the CSV script",
     "kind": "parallel",
-    "depends_on": [],
-    "expect_tool": null
+    "depends_on": []
    },
    {
     "id": "md",
@@ -778,9 +816,7 @@
     "depends_on": []
    }
   ],
-  "must_use_pivots": [
-   "LAVENDER_DEMAND"
-  ],
+  "must_use_pivots": [],
   "expect_writes": [
    {
     "entity": "task",
@@ -798,7 +834,10 @@
    }
   ],
   "evidence_notes": "Deep warranted: code and file artifacts. `delegated` frames count 2 or `deep_subtasks` in the plan (DEEP FAN-OUT).",
-  "judge_always": true
+  "judge_always": true,
+  "bonus_pivots": [
+   "LAVENDER_DEMAND"
+  ]
  },
  {
   "id": "MS-016",
@@ -854,7 +893,8 @@
    }
   ],
   "evidence_notes": "DAG: A and B parallel then C. C depends on both. Any `vanilla` goal fails the pivot rubric.",
-  "pivots_change_answer": true
+  "pivots_change_answer": true,
+  "forbidden_side_effects": "one goal only; must not edit current_state, the budget measurable outcome or any expense entry"
  },
  {
   "id": "MS-017",
@@ -910,7 +950,8 @@
    }
   ],
   "evidence_notes": "C needs facts from both A and B. A goal dated after 3 Nov is a pivot failure. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is.",
-  "pivots_change_answer": true
+  "pivots_change_answer": true,
+  "forbidden_side_effects": "one goal only; must not edit current_state or add a reading-list entry"
  },
  {
   "id": "MS-018",
@@ -977,9 +1018,9 @@
   "conversation_scope": "world",
   "expected_routing": "inline",
   "rubric": [
-   "Uses 22 Nov for the race (not 8 Nov) and 20 Nov for the in-laws",
-   "Notes that the in-laws arrive 2 days before the race and reasons about it",
-   "Adds exactly one goal, on the quest where it belongs (a hosting or schedule goal fits the family quest), not one per quest",
+   "Uses 22 Nov for the race (not 8 Nov) and 20 Nov for the in-laws' arrival",
+   "States that the in-laws arrive on Friday 20 Nov, two days before the Sunday 22 Nov race, so the visit overlaps race weekend and race eve (21 Nov)",
+   "Adds exactly one goal that deals with race-eve hosting, on one quest only (family fits best), not one goal per quest",
    "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned"
   ],
   "steps": [
@@ -1034,19 +1075,19 @@
   "rubric": [
    "Reads the Tutor Session Notes first and names the subjunctive and ser versus estar",
    "Writes those weak spots into the language quest's preferences field through update_quest_fields",
-   "The email is a DRAFT in the reply, mentions the 12 Dec flight, and the reply does NOT claim it was sent",
+   "The email is a DRAFT in the reply, mentions the 12 Dec flight, proposes a Tuesday or Thursday evening (the only evenings Ana teaches), and the reply does NOT claim it was sent",
    "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned"
   ],
   "steps": [
    {
     "id": "read",
-    "description": "read tutor notes",
+    "description": "read the tutor notes",
     "kind": "sequential",
     "depends_on": []
    },
    {
-    "id": "note",
-    "description": "write the quest note",
+    "id": "prefs",
+    "description": "write the weak spots into preferences",
     "kind": "sequential",
     "depends_on": [
      "read"
@@ -1062,7 +1103,8 @@
    }
   ],
   "must_use_pivots": [
-   "LISBON_TRIP"
+   "LISBON_TRIP",
+   "IMP_TUTOR_DAYS"
   ],
   "expect_writes": [
    {
@@ -1101,21 +1143,21 @@
   "steps": [
    {
     "id": "read",
-    "description": "read expenses",
+    "description": "read the expenses",
     "kind": "sequential",
     "depends_on": []
    },
    {
-    "id": "note",
-    "description": "write the note",
+    "id": "state",
+    "description": "write the total into current_state",
     "kind": "sequential",
     "depends_on": [
      "read"
     ]
    },
    {
-    "id": "email",
-    "description": "email the team",
+    "id": "draft",
+    "description": "draft the team message",
     "kind": "parallel",
     "depends_on": [
      "read"
@@ -1165,10 +1207,10 @@
   "conversation_scope": "none",
   "expected_routing": "inline",
   "rubric": [
-   "Order given is plumbing, then tiles bought (or in parallel with plumbing), then tiling after plumbing",
+   "Order given is plumbing, then tiling, with buying tiles independent of the plumbing (before or alongside it) but before tiling",
    "Plumber work is only on 14-16 Oct",
-   "Tiling is not scheduled before the plumbing is done and everything finishes before 20 Nov (at least 3 days before)",
-   "No goal duplicates the seeded 'Book the plumber' or 'Buy tiles and grout' goals without saying so"
+   "Tiling is after 16 Oct, not inside 26-30 Oct when Sam (who tiles) is away, and everything finishes by 17 Nov (at least 3 days before the 20 Nov arrival)",
+   "Reuses the seeded 'Book the plumber' and 'Buy tiles and grout' goals instead of adding duplicates, or says plainly why it added a new one"
   ],
   "steps": [
    {
@@ -1194,7 +1236,8 @@
    }
   ],
   "must_use_pivots": [
-   "PLUMBER_WINDOW"
+   "PLUMBER_WINDOW",
+   "IMP_SAM_AWAY"
   ],
   "expect_writes": [
    {
@@ -1208,7 +1251,8 @@
     "hard": false
    }
   ],
-  "evidence_notes": "Buy-tiles is independent of plumbing; tiling depends on both. The seeded goals already cover booking and buying, so duplicates are a no-double-do failure."
+  "evidence_notes": "Buy-tiles is independent of plumbing; tiling depends on both. The seeded goals already cover booking and buying, so duplicates are a no-double-do failure. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is.",
+  "pivots_change_answer": true
  },
  {
   "id": "MS-023",
@@ -1262,7 +1306,7 @@
     "hard": false
    }
   ],
-  "evidence_notes": "Frames of turn 2: look for a cancel operation (cancel_assistant_task) in `exec` code, and a new delegated task. The planner transcript must carry turn 1's task.",
+  "evidence_notes": "Frames of turn 2: look for a cancel operation (cancel_assistant_task) in `exec` code, and a new delegated task. The planner transcript must carry turn 1's task. Known harness limit: the turn-1 task stays queued until the case ends, so if the dev lane picks it up between turns, cancel fails for a reason outside the chat; check the task status before blaming the reply.",
   "bonus_pivots": [
    "KNEE_INJURY",
    "RACE_MOVED"
@@ -1283,7 +1327,7 @@
   "rubric": [
    "Turn 1 answers 340 USD over (2,340 against 2,000)",
    "Turn 2 adds a goal whose name contains 340 (the number from turn 1, not recomputed wrongly)",
-   "Turn 2 does not re-read from scratch to rediscover the figure when it is in the transcript, and does not change the amount"
+   "Turn 2 adds the goal exactly once, on the business quest, and the amount matches turn 1's answer"
   ],
   "steps": [
    {
@@ -1316,7 +1360,8 @@
     "hard": true
    }
   ],
-  "evidence_notes": "Prior output must be known to the planner. A goal with a different number means the transcript was ignored."
+  "evidence_notes": "Prior output must be known to the planner. A goal with a different number means the transcript was ignored.",
+  "forbidden_side_effects": "nothing written in turn 1; only the one goal in turn 2"
  },
  {
   "id": "MS-025",
@@ -1414,6 +1459,15 @@
     "field": "name",
     "expected": "Thursday",
     "hard": false
+   },
+   {
+    "entity": "goal",
+    "match": {
+     "quest_key": "business"
+    },
+    "field": "scheduled_date",
+    "expected": "2026-10-29",
+    "hard": false
    }
   ],
   "evidence_notes": "Count new goals mentioning launch in the diff. Two is a double-do failure unless the first was completed or renamed. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is.",
@@ -1504,7 +1558,7 @@
     "hard": false
    }
   ],
-  "evidence_notes": "Frames of turn 2: cancel_assistant_task plus one new delegated frame. Two live tasks is a double-do failure.",
+  "evidence_notes": "Frames of turn 2: cancel_assistant_task plus one new delegated frame. Two live tasks is a double-do failure. Known harness limit: the turn-1 task stays queued until the case ends, so if the dev lane picks it up between turns, cancel fails for a reason outside the chat; check the task status before blaming the reply.",
   "bonus_pivots": [
    "SUPPLIER_DELAY"
   ],
@@ -1525,7 +1579,7 @@
    "Turn 1 gives a taper length from search, or says plainly it could not search",
    "Turn 2 computes the taper start from the 22 Nov race date, not 8 Nov, using the length from turn 1",
    "The goal added is a taper goal carrying that start date in its name, description or target_date",
-   "The taper plan accounts for the knee: no extra running volume before the ban ends"
+   "Turn 2 uses the taper length stated in turn 1 rather than inventing a different one, and the start date equals 22 Nov minus that length"
   ],
   "steps": [
    {
@@ -1544,8 +1598,7 @@
    }
   ],
   "must_use_pivots": [
-   "RACE_MOVED",
-   "KNEE_INJURY"
+   "RACE_MOVED"
   ],
   "expect_writes": [
    {
@@ -1559,7 +1612,11 @@
     "hard": true
    }
   ],
-  "evidence_notes": "Turn 2 must carry the search result forward. An 8 Nov based date fails RACE_MOVED. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is."
+  "evidence_notes": "Turn 2 must carry the search result forward. An 8 Nov based date fails RACE_MOVED. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target_date. A month period is not a failure; a missing or wrong DATE is.",
+  "bonus_pivots": [
+   "KNEE_INJURY"
+  ],
+  "pivots_change_answer": true
  },
  {
   "id": "MS-030",
@@ -1614,8 +1671,8 @@
   "expected_routing": "inline",
   "rubric": [
    "Says it cannot place a supplier order itself (no such capability) rather than claiming it ordered",
-   "Spots that the shipment already slipped to 28 Oct, so 14 Oct delivery and 15 Oct production are impossible",
-   "Does NOT add a production goal on 15 Oct (a goal after 28 Oct, clearly labelled, is acceptable)",
+   "Spots that the Northwick shipment already slipped to 28 Oct, so 14 Oct delivery and 15 Oct production are impossible",
+   "Adds NO production goal: proposes a start date after 28 Oct and asks before writing one",
    "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned"
   ],
   "steps": [
@@ -1637,8 +1694,9 @@
   "must_use_pivots": [
    "SUPPLIER_DELAY"
   ],
-  "evidence_notes": "The dependent step must not run when its prerequisite is impossible. Any goal dated 15 Oct fails.",
-  "pivots_change_answer": true
+  "evidence_notes": "The dependent step must not run when its prerequisite is impossible. A goal on a date the user did not ask for is an unasked write, so the diff must be empty.",
+  "pivots_change_answer": true,
+  "forbid_writes": true
  },
  {
   "id": "MS-032",
@@ -1682,10 +1740,10 @@
   "conversation_scope": "none",
   "expected_routing": "inline",
   "rubric": [
-   "Treats the changes as proposals awaiting approval and says so, not as already applied",
-   "Does not claim either goal change is done (the diff shows none)",
-   "Surfaces the supplier slip (28 Oct) when relevant and does not mark the order goal complete on its own initiative",
-   "Says the second goal waits on the first or on the same approval, without duplicating either proposal"
+   "Presents both changes (complete 'Order wax and wicks', add 'Check the wax shipment on 28 Oct') as awaiting the user's approval, not as applied",
+   "Does not claim either change is done, and the diff shows none",
+   "Proposes each change once, in the order the user gave, without duplicating either",
+   "Does not invent a different shipment date (28 Oct stands)"
   ],
   "steps": [
    {
@@ -1697,7 +1755,7 @@
    {
     "id": "new",
     "description": "propose the new goal",
-    "kind": "parallel",
+    "kind": "sequential",
     "depends_on": [
      "done"
     ]
@@ -1721,7 +1779,7 @@
   "conversation_scope": "world",
   "expected_routing": "inline",
   "rubric": [
-   "The new quest creation is proposed or held for the person's approval, not claimed as created",
+   "Does not claim the guitar quest was created: either says it cannot create a quest from here or that the new quest needs the person's approval first",
    "The goal is NOT added to any other quest as a stand-in, and is not claimed as added while the quest does not exist",
    "Reply explains the goal follows once the quest is approved",
    "No quest or goal appears in the diff"
@@ -1757,7 +1815,7 @@
   "expected_routing": "deep",
   "rubric": [
    "The script is handed off as deep work (code or file), and the reply says it is queued or running, not finished",
-   "The advice about what to cut is based on the expense data (Label printer at 900 USD is the largest) and the 340 USD overrun",
+   "The advice names the Label printer (900 USD, the largest item) and the 340 USD overrun, from the expense data",
    "Does not claim the CSV exists yet",
    "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned",
    "If this surface cannot queue a background task, the reply says so plainly; a task it claims to have queued must be visible in the diff or a delegated frame"
@@ -1766,17 +1824,14 @@
    {
     "id": "script",
     "description": "queue the export script",
-    "kind": "sequential",
-    "depends_on": [],
-    "expect_tool": null
+    "kind": "parallel",
+    "depends_on": []
    },
    {
     "id": "advice",
-    "description": "advise on the cut",
+    "description": "advise on the cut from the expense data",
     "kind": "parallel",
-    "depends_on": [
-     "script"
-    ]
+    "depends_on": []
    }
   ],
   "must_use_pivots": [
@@ -1881,7 +1936,10 @@
     "op": "equals"
    }
   ],
-  "evidence_notes": "Write-then-read ordering: a list that still shows the plumber booking means the read ran before the write."
+  "evidence_notes": "Write-then-read ordering: a list that still shows the plumber booking means the read ran before the write.",
+  "bonus_pivots": [
+   "IMP_SAM_AWAY"
+  ]
  },
  {
   "id": "MS-038",
@@ -1938,5 +1996,564 @@
   "bonus_pivots": [
    "SUPPLIER_DELAY"
   ]
+ },
+ {
+  "id": "MS-039",
+  "dataset": "multistep",
+  "area": "quest doc plus date chain then draft and goal",
+  "quest_key": "business",
+  "message": "Work out the earliest launch day that actually works, then draft the launch announcement to the customers I interviewed, and add a goal to send it that day.",
+  "conversation_scope": "none",
+  "expected_routing": "inline",
+  "rubric": [
+   "Picks a launch day after the 28 Oct Northwick shipment that is not a Friday (30 Oct is out), and states why",
+   "The draft follows the brand-voice doc: no exclamation marks, never the word 'artisanal', signed off 'Light on'",
+   "The draft leads with lavender, the scent 4 of the 5 interviewees asked for",
+   "Adds exactly one goal to send the announcement, carrying the chosen launch day in its name, description or target date, and does not claim the announcement was sent",
+   "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned"
+  ],
+  "steps": [
+   {
+    "id": "date",
+    "description": "derive the launch day from the supplier slip and the team rule",
+    "kind": "sequential",
+    "depends_on": []
+   },
+   {
+    "id": "draft",
+    "description": "draft the announcement in brand voice",
+    "kind": "parallel",
+    "depends_on": [
+     "date"
+    ]
+   },
+   {
+    "id": "goal",
+    "description": "add the send goal on that day",
+    "kind": "parallel",
+    "depends_on": [
+     "date"
+    ]
+   }
+  ],
+  "must_use_pivots": [
+   "SUPPLIER_DELAY",
+   "TEAM_FRIDAY_RULE",
+   "DOC_BRAND_VOICE"
+  ],
+  "bonus_pivots": [
+   "LAVENDER_DEMAND"
+  ],
+  "pivots_change_answer": true,
+  "expect_writes": [
+   {
+    "entity": "goal",
+    "match": {
+     "quest_key": "business",
+     "name_contains": "announce"
+    },
+    "field": "name",
+    "expected": "announce",
+    "hard": false
+   }
+  ],
+  "precheck": {
+   "reply_contains_all": [
+    "Light on"
+   ],
+   "code_not_contains": [
+    "send_quest_email"
+   ],
+   "reply_regex_forbidden": [
+    "\\b(i|i've|i have)\\s+(sent|emailed|mailed)\\b"
+   ]
+  },
+  "forbidden_side_effects": "one goal only; no current_state edit, no send",
+  "evidence_notes": "Quest-docs grounding (search_quest_context) plus a date chain: the draft and the goal both need the date, and are independent of each other. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is."
+ },
+ {
+  "id": "MS-040",
+  "dataset": "multistep",
+  "area": "strict sequential chain from collection insight",
+  "quest_key": "research",
+  "message": "Work out my writing speed from my sessions, then work out how much I need to write per day to finish the chapter on time, then add a goal for that daily target.",
+  "conversation_scope": "none",
+  "expected_routing": "inline",
+  "rubric": [
+   "Computes the speed from the Writing Sessions: 1,870 words over 325 minutes, about 5.8 words per minute",
+   "Uses the moved deadline of 3 Nov, not 15 Nov, and counts the days from the ground truth's 'Today is' date",
+   "Uses the 6,000 word target and says which starting figure it used (2,400 drafted per the quest's current state, or 1,870 logged in sessions), and the daily words and minutes follow arithmetically from those numbers",
+   "Adds exactly one goal whose name or description carries the daily word (or minute) target",
+   "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned"
+  ],
+  "steps": [
+   {
+    "id": "speed",
+    "description": "words per minute from the sessions",
+    "kind": "sequential",
+    "depends_on": []
+   },
+   {
+    "id": "daily",
+    "description": "daily words to hit 6,000 by the deadline",
+    "kind": "sequential",
+    "depends_on": [
+     "speed"
+    ]
+   },
+   {
+    "id": "goal",
+    "description": "add the daily-target goal",
+    "kind": "sequential",
+    "depends_on": [
+     "daily"
+    ]
+   }
+  ],
+  "must_use_pivots": [
+   "DEADLINE_MOVED"
+  ],
+  "pivots_change_answer": true,
+  "expect_writes": [
+   {
+    "entity": "goal",
+    "match": {
+     "quest_key": "research"
+    },
+    "field": "name",
+    "expected": "",
+    "op": "exists",
+    "hard": false
+   }
+  ],
+  "forbidden_side_effects": "one goal only; must not edit current_state or add a writing-session entry",
+  "evidence_notes": "Each step consumes the previous step's number. A 15 Nov based daily target is the pivot-blind answer and is materially smaller. Do not grade a specific daily figure: it depends on today's date and on which starting figure is used; grade that it follows from the stated inputs."
+ },
+ {
+  "id": "MS-041",
+  "dataset": "multistep",
+  "area": "web search then act with two pivots",
+  "quest_key": "language",
+  "message": "Search the web for what a B1 speaking exam usually involves, then add a goal for a mock exam with my tutor before I travel.",
+  "conversation_scope": "none",
+  "expected_routing": "inline",
+  "rubric": [
+   "Reports what the search found about the B1 speaking format, or says plainly it could not search, without inventing a source",
+   "The mock-exam goal is dated before the 12 Dec Lisbon flight",
+   "The goal's date falls on a Tuesday or Thursday evening, the only times Ana teaches",
+   "The goal's description carries at least one concrete element of the exam format from the search, or of the tutor's weak spots (subjunctive, ser versus estar) if search was unavailable",
+   "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned"
+  ],
+  "steps": [
+   {
+    "id": "search",
+    "description": "web search the B1 speaking format",
+    "kind": "sequential",
+    "depends_on": []
+   },
+   {
+    "id": "goal",
+    "description": "add the mock exam goal",
+    "kind": "sequential",
+    "depends_on": [
+     "search"
+    ]
+   }
+  ],
+  "must_use_pivots": [
+   "LISBON_TRIP",
+   "IMP_TUTOR_DAYS"
+  ],
+  "pivots_change_answer": true,
+  "expect_writes": [
+   {
+    "entity": "goal",
+    "match": {
+     "quest_key": "language",
+     "name_contains": "mock"
+    },
+    "field": "name",
+    "expected": "mock",
+    "hard": false
+   }
+  ],
+  "evidence_notes": "Web search, if it happens, is a gather/read step, not a helper call. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is."
+ },
+ {
+  "id": "MS-042",
+  "dataset": "multistep",
+  "area": "ambiguous quest then follow-up picks it",
+  "quest_key": "family",
+  "messages": [
+   "How much of my budget have I used so far? Then add a goal to keep the rest under control.",
+   "The bathroom one."
+  ],
+  "conversation_scope": "none",
+  "expected_routing": "inline",
+  "rubric": [
+   "Turn 1 notices that two quests carry a budget (the 2,000 USD launch cap and the 1,800 USD bathroom budget) and asks which one, or reports both, and adds NO goal in turn 1",
+   "Turn 2 totals the Bathroom Tasks costs to 1,070 USD (150 + 450 + 380 + 90) against 1,800, leaving 730 USD",
+   "Turn 2 adds exactly one goal on the family quest carrying the 730 USD remaining",
+   "No goal is added to the business quest in either turn"
+  ],
+  "steps": [
+   {
+    "id": "ask",
+    "description": "resolve which quest is meant",
+    "kind": "sequential",
+    "depends_on": []
+   },
+   {
+    "id": "sum",
+    "description": "total the bathroom costs",
+    "kind": "sequential",
+    "depends_on": [
+     "ask"
+    ]
+   },
+   {
+    "id": "goal",
+    "description": "add the budget goal on the family quest",
+    "kind": "sequential",
+    "depends_on": [
+     "sum"
+    ]
+   }
+  ],
+  "must_use_pivots": [],
+  "expect_writes": [
+   {
+    "entity": "goal",
+    "match": {
+     "quest_key": "family",
+     "name_contains": "730"
+    },
+    "field": "name",
+    "expected": "730",
+    "hard": false
+   }
+  ],
+  "forbidden_side_effects": "no goal on the business quest; no goal before the user names the quest; the family quest's own fields must not change",
+  "evidence_notes": "Quest selection with no quest pinned, where the right first step is a question. A goal written in turn 1 on either quest is the failure this case exists to catch; the diff is cumulative, so the judge reads turn 1's reply and code for a create_goal."
+ },
+ {
+  "id": "MS-043",
+  "dataset": "multistep",
+  "area": "mixed routing: deep task plus inline answer",
+  "quest_key": "fitness",
+  "message": "In the background, have a script written that charts my Run Log distances by week. Right now, tell me whether I should go for a run tomorrow.",
+  "conversation_scope": "none",
+  "expected_routing": "deep",
+  "rubric": [
+   "Hands the chart script off as background work (a delegated or queued task) and does not claim the chart exists",
+   "Answers the run question inline in the same reply: no run tomorrow, because of the left knee and the physio's 10 day ban, with cycling or swimming as the alternative",
+   "The inline answer does not wait for the script (the two are independent)",
+   "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned",
+   "If this surface cannot queue a background task, the reply says so plainly; a task it claims to have queued must be visible in the diff or a delegated frame"
+  ],
+  "steps": [
+   {
+    "id": "chart",
+    "description": "queue the chart script",
+    "kind": "parallel",
+    "depends_on": []
+   },
+   {
+    "id": "advice",
+    "description": "answer the run question from the Run Log",
+    "kind": "parallel",
+    "depends_on": []
+   }
+  ],
+  "must_use_pivots": [
+   "KNEE_INJURY"
+  ],
+  "pivots_change_answer": true,
+  "expect_writes": [
+   {
+    "entity": "task",
+    "match": {},
+    "field": "text",
+    "expected": "chart",
+    "hard": false
+   }
+  ],
+  "forbidden_side_effects": "no goal, entry or field change; only the one task",
+  "judge_always": true,
+  "evidence_notes": "Mixed routing in one turn: code work goes deep, the advice belongs inline. A pivot-blind reply says 'yes, an easy run'."
+ },
+ {
+  "id": "MS-044",
+  "dataset": "multistep",
+  "area": "approval cards carry the pivots",
+  "quest_key": "fitness",
+  "message": "Update my fitness quest's current state to reflect my latest time trial and how my body is doing, then add a goal for my next 10K time trial.",
+  "conversation_scope": "quest",
+  "expected_routing": "inline",
+  "auto_run": false,
+  "rubric": [
+   "The proposed current_state carries the 54:10 time trial (5:25 per km) and the left-knee injury with the 10 day run ban",
+   "The proposed time-trial goal is dated after the run ban ends (8 or more days after the ground truth's 'Today is' date) and before the 22 Nov race",
+   "Both changes are presented as awaiting approval, and the reply does not claim either was applied",
+   "The diff shows no change"
+  ],
+  "steps": [
+   {
+    "id": "read",
+    "description": "read the Run Log",
+    "kind": "sequential",
+    "depends_on": []
+   },
+   {
+    "id": "state",
+    "description": "propose the current_state change",
+    "kind": "sequential",
+    "depends_on": [
+     "read"
+    ]
+   },
+   {
+    "id": "goal",
+    "description": "propose the next time-trial goal after the ban",
+    "kind": "sequential",
+    "depends_on": [
+     "read"
+    ]
+   }
+  ],
+  "must_use_pivots": [
+   "PB_TIME_TRIAL",
+   "KNEE_INJURY"
+  ],
+  "bonus_pivots": [
+   "RACE_MOVED"
+  ],
+  "pivots_change_answer": true,
+  "forbid_writes": true,
+  "judge_always": true,
+  "evidence_notes": "auto_run=false: mutations should park on approval cards, so the proposals in the exec/explanation frames are what the judge grades. A time trial dated inside the ban is the pivot-blind failure."
+ },
+ {
+  "id": "MS-045",
+  "dataset": "multistep",
+  "area": "read then gated field write (autopilot off)",
+  "quest_key": "family",
+  "message": "Total up the costs on my bathroom task list and put that total into the bathroom quest's current state.",
+  "conversation_scope": "none",
+  "expected_routing": "inline",
+  "rubric": [
+   "Totals the Bathroom Tasks costs to 1,070 USD (150 + 450 + 380 + 90 + 0) and sets it against the 1,800 USD family budget",
+   "Says the current_state change was NOT applied because this quest does not let the AI edit its fields, and that it was proposed or needs the user's approval",
+   "Shows the proposed current_state text, keeping the existing facts (demolition done, plumbing not started, in-laws arrive 20 Nov) plus the total",
+   "Does not claim current_state was updated"
+  ],
+  "steps": [
+   {
+    "id": "sum",
+    "description": "total the task costs",
+    "kind": "sequential",
+    "depends_on": []
+   },
+   {
+    "id": "write",
+    "description": "attempt the current_state write (gated)",
+    "kind": "sequential",
+    "depends_on": [
+     "sum"
+    ]
+   }
+  ],
+  "must_use_pivots": [],
+  "forbid_writes": true,
+  "precheck": {
+   "reply_regex": [
+    "1,?070"
+   ],
+   "reply_regex_forbidden": [
+    "\\b(i've|i have)\\s+updated\\b"
+   ]
+  },
+  "evidence_notes": "Family has autopilot off, so check_ai_field_write refuses the write and files a decision-request (not in the snapshot). The point is a sequential chain whose second step is gated, and an honest report of that."
+ },
+ {
+  "id": "MS-046",
+  "dataset": "multistep",
+  "area": "strict sequential numeric chain",
+  "quest_key": "fitness",
+  "message": "Find my pace from my last time trial, work out the pace I need for my race target, then add a tempo-run goal at a pace halfway between the two, on the first day I am allowed to run again.",
+  "conversation_scope": "none",
+  "expected_routing": "inline",
+  "rubric": [
+   "Step 1 reads 5:25 per km from the 54:10 time trial",
+   "Step 2 gives 5:00 per km for a sub-50 10K",
+   "Step 3 uses a pace of about 5:12 or 5:13 per km (halfway) in the goal's name or description",
+   "The goal is dated on the first day after the 10 day ban, 8 days after the ground truth's 'Today is' date, not earlier",
+   "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned"
+  ],
+  "steps": [
+   {
+    "id": "pb",
+    "description": "read the time-trial pace",
+    "kind": "sequential",
+    "depends_on": []
+   },
+   {
+    "id": "target",
+    "description": "target pace for a sub-50 10K",
+    "kind": "sequential",
+    "depends_on": [
+     "pb"
+    ]
+   },
+   {
+    "id": "goal",
+    "description": "add the tempo goal at the midpoint pace after the ban",
+    "kind": "sequential",
+    "depends_on": [
+     "target"
+    ]
+   }
+  ],
+  "must_use_pivots": [
+   "PB_TIME_TRIAL",
+   "KNEE_INJURY"
+  ],
+  "pivots_change_answer": true,
+  "expect_writes": [
+   {
+    "entity": "goal",
+    "match": {
+     "quest_key": "fitness",
+     "name_contains": "tempo"
+    },
+    "field": "name",
+    "expected": "tempo",
+    "hard": false
+   }
+  ],
+  "precheck": {
+   "reply_contains_all": [
+    "5:25"
+   ]
+  },
+  "forbidden_side_effects": "one goal only; no Run Log entry and no current_state edit",
+  "evidence_notes": "Every step feeds the next. The ban started 2 days before 'Today is' and lasts 10 days, so the first allowed day is 8 days after it (accept 8 or 9 depending on whether the injury day counts). Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is."
+ },
+ {
+  "id": "MS-047",
+  "dataset": "multistep",
+  "area": "parallel tasks then dependent goal",
+  "quest_key": "business",
+  "message": "Queue two background research tasks, independently: one comparing wax suppliers who could beat my current shipment date, one on lavender fragrance oil suppliers. Then add a goal to go through both results at our next team review.",
+  "conversation_scope": "none",
+  "expected_routing": "any",
+  "rubric": [
+   "Queues both research tasks in the same turn, neither waiting on the other",
+   "The wax task names the current shipment date it must beat (Northwick, 28 Oct)",
+   "Adds one goal, after queuing the tasks, dated on the next Thursday (the weekly review day, 4pm) after the ground truth's 'Today is' date",
+   "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned",
+   "If this surface cannot queue a background task, the reply says so plainly; a task it claims to have queued must be visible in the diff or a delegated frame"
+  ],
+  "steps": [
+   {
+    "id": "wax",
+    "description": "queue the wax supplier task",
+    "kind": "parallel",
+    "depends_on": []
+   },
+   {
+    "id": "oil",
+    "description": "queue the fragrance oil task",
+    "kind": "parallel",
+    "depends_on": []
+   },
+   {
+    "id": "goal",
+    "description": "add the review goal",
+    "kind": "sequential",
+    "depends_on": [
+     "wax",
+     "oil"
+    ]
+   }
+  ],
+  "must_use_pivots": [
+   "SUPPLIER_DELAY",
+   "TEAM_FRIDAY_RULE"
+  ],
+  "pivots_change_answer": true,
+  "expect_writes": [
+   {
+    "entity": "task",
+    "match": {},
+    "field": "text",
+    "expected": "28 Oct",
+    "hard": false
+   },
+   {
+    "entity": "task",
+    "match": {},
+    "field": "text",
+    "expected": "lavender",
+    "hard": false
+   },
+   {
+    "entity": "goal",
+    "match": {
+     "quest_key": "business",
+     "name_contains": "review"
+    },
+    "field": "name",
+    "expected": "review",
+    "hard": false
+   }
+  ],
+  "judge_always": true,
+  "evidence_notes": "Two independent tasks join into one dependent goal. 'Our next team review' is only answerable from the team working agreement (Thursdays 4pm). Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is."
+ },
+ {
+  "id": "MS-048",
+  "dataset": "multistep",
+  "area": "advisory multi-read, no unasked writes",
+  "quest_key": "fitness",
+  "message": "Go through my fitness goals against my latest runs and the race, and tell me which goals no longer make sense.",
+  "conversation_scope": "quest",
+  "expected_routing": "inline",
+  "rubric": [
+   "Flags 'Build weekly mileage to 40 km' and 'Run one tempo session per week' as unworkable while the 10 day run ban for the left knee is in force",
+   "Flags that the 'Do a 10K time trial' goal falls inside or right at the end of the ban and should move",
+   "Uses 22 Nov for the race when it talks about the timeline, not 8 Nov",
+   "Changes nothing: it advises or offers, and does not complete, delete or edit any goal"
+  ],
+  "steps": [
+   {
+    "id": "goals",
+    "description": "read the fitness goals",
+    "kind": "parallel",
+    "depends_on": []
+   },
+   {
+    "id": "runs",
+    "description": "read the Run Log",
+    "kind": "parallel",
+    "depends_on": []
+   },
+   {
+    "id": "assess",
+    "description": "assess each goal against both",
+    "kind": "sequential",
+    "depends_on": [
+     "goals",
+     "runs"
+    ]
+   }
+  ],
+  "must_use_pivots": [
+   "KNEE_INJURY",
+   "RACE_MOVED"
+  ],
+  "pivots_change_answer": true,
+  "forbid_writes": true,
+  "evidence_notes": "The user asked for advice, not action, so any goal or field change is an unasked write. A pivot-blind reply finds nothing wrong with the mileage goal."
  }
 ]

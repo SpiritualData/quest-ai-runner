@@ -2,7 +2,7 @@
 
 Goal: measure whether Quest AI in the real app chat makes good, grounded, correctly routed, safely
 side-effecting decisions on a rich realistic account, not just which planner action it picks (that
-is `evaluation/chat_quest_ops_routing_eval.py`, left untouched). Three datasets (65 / 44 / 38):
+is `evaluation/chat_quest_ops_routing_eval.py`, left untouched). Three datasets (65 / 44 / 48):
 
 * `explicit`: the conversation is pinned to the case's quest (the assistant knows which quest).
 * `implicit`: no quest pinned; the assistant must work out which of five quests is meant.
@@ -120,12 +120,12 @@ datasets on 2026-10-06:
   the run are removed, older ones are not. Note it in findings when a reply cites an unknown fact.
 * Parallel cases share one snapshot space; a side effect seen during a parallel run is flagged
   `side_effects_ambiguous`. Keep anything that might write out of the parallel pool.
-* Dev runs `auto_run=true` except for MS-033 and MS-034, the two cases that deliberately leave it
-  off to probe the approval-card path; both carry `judge_always` so that, if writes land anyway,
-  the verdict says so instead of the case dying on a pre-check.
+* Dev runs `auto_run=true` except for MS-033, MS-034 and MS-044, the three cases that deliberately
+  leave it off to probe the approval-card path; all carry `judge_always` so that, if writes land
+  anyway, the verdict says so instead of the case dying on a pre-check.
 * Three capabilities are on the allow-list but have never been exercised here: `create_assistant_task`
-  (every task case), web search (EXP-042, MS-005, MS-009, MS-014, MS-029) and goal-criteria editing
-  (EXP-006). Those cases assert softly and fail on a false claim rather than on the gap, so the
+  (every task case), web search (EXP-042, MS-005, MS-009, MS-014, MS-029, MS-041) and
+  goal-criteria editing (EXP-006). Those cases assert softly and fail on a false claim rather than on the gap, so the
   first full run is what settles whether the capability works. When it does, tighten them.
 * Not in the snapshot, so judged from the generated code and the reply only: daily reflections,
   period reviews, goal updates, quest context docs, decision-requests and email. A case covering
