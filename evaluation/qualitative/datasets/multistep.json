@@ -38,14 +38,15 @@
     "entity": "goal",
     "match": {
      "quest_key": "business",
-     "name_contains": "2,000 USD cap"
+     "name_contains": "cap"
     },
     "field": "name",
-    "expected": "2,000 USD cap",
+    "expected": "cut spend.*2,?000 ?usd cap",
+    "op": "regex",
     "hard": true
    }
   ],
-  "evidence_notes": "The write is conditional on the read, so the total must be computed before the goal is created. The goal names the cap, but a reply total other than 2,340 means the read was wrong.",
+  "evidence_notes": "The write is conditional on the read, so the total must be computed before the goal is created. The goal names the cap, but a reply total other than 2,340 means the read was wrong. The name is asserted as a regex since the second pass on 2026-10-06: it was a literal '2,000 USD cap', so a goal named 'Cut spend back under the 2000 USD cap' (no thousands comma, which is what a model writing its own copy often does) hard-failed a case it had actually got right.",
   "precheck": {
    "reply_contains_any": [
     "2,340",
@@ -161,7 +162,8 @@
      "quest_key": "research"
     },
     "field": "current_state",
-    "expected": "2,400",
+    "expected": "2,?400",
+    "op": "regex",
     "hard": true
    }
   ],
@@ -1174,7 +1176,8 @@
      "quest_key": "business"
     },
     "field": "current_state",
-    "expected": "2,340",
+    "expected": "2,?340",
+    "op": "regex",
     "hard": true
    },
    {
@@ -1183,11 +1186,12 @@
      "quest_key": "business"
     },
     "field": "current_state",
-    "expected": "2,000",
+    "expected": "2,?000",
+    "op": "regex",
     "hard": true
    }
   ],
-  "evidence_notes": "Read, dependent field write, independent draft. The second assertion is what catches current_state being replaced by the total instead of extended. Rewritten 2026-10-06 away from a quest note (impossible) and an instruction to send mail (unsafe on dev).",
+  "evidence_notes": "Read, dependent field write, independent draft. The second assertion is what catches current_state being replaced by the total instead of extended. Rewritten 2026-10-06 away from a quest note (impossible) and an instruction to send mail (unsafe on dev). Both assertions are regexes rather than literal strings since the second pass that day: a correct write that says '2340' or '2000 USD cap' without the thousands comma was hard-failing a case about whether the field was extended.",
   "precheck": {
    "code_not_contains": [
     "send_quest_email"
@@ -1859,7 +1863,7 @@
   "expected_routing": "inline",
   "rubric": [
    "Total words 1,870 is computed from the Writing Sessions entries",
-   "Updates current_state inline (a quest field edit, no code or files), keeping the 2,400 words drafted statement or replacing it knowingly with the total",
+   "Updates current_state inline (a quest field edit, no code or files) and the new text keeps the rest of the seeded state (sampling and instruments done, analysis plan not started) as the user asked. If it drops the 'about 2,400 words drafted' figure it says in the reply that the total replaces it",
    "No deep run or delegated task is created for this simple data update"
   ],
   "steps": [

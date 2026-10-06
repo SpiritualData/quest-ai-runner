@@ -53,12 +53,9 @@
         "22 Nov",
         "Nov 22",
         "November 22"
-      ],
-      "reply_not_contains": [
-        "8 Nov is"
       ]
     },
-    "evidence_notes": "The race note is on the fitness quest, not in a collection. Look for the fitness quest note card in used.cards. The pivot is answer-changing because the count from 8 Nov is two weeks short. Rubric item 2 is deliberately expressed against the ground truth's 'Today is ...' line rather than a fixed number of weeks, so the case does not rot the day after it was written. A reply that asks 'which race?' without checking the quest fails.",
+    "evidence_notes": "The race note is on the fitness quest, not in a collection. Look for the fitness quest note card in used.cards. The pivot is answer-changing because the count from 8 Nov is two weeks short. Rubric item 2 is deliberately expressed against the ground truth's 'Today is ...' line rather than a fixed number of weeks, so the case does not rot the day after it was written. A reply that asks 'which race?' without checking the quest fails. The forbidden phrase '8 Nov is' was dropped on 2026-10-06 (second pass): naming the old date while correcting it ('8 Nov is no longer the date') is good behaviour and that pre-check hard-failed it, while the 22 Nov check above already catches the real error.",
     "bonus_pivots": [
       "KNEE_INJURY"
     ]
@@ -120,7 +117,7 @@
     "expected_routing": "inline",
     "rubric": [
       "Identifies Dana as the physio from the user's Run Log (knee injury) rather than asking who Dana is",
-      "Notes the 10 day running ban starting 2 days ago runs to about 14 Oct, so the 14th is when the ban would lapse, making it a sensible re-check date",
+      "Works the ban out rather than guessing: the Run Log entry is 2 days before today's date in the ground truth and the ban is 10 days, so it ends 8 days from today, and the reply says whether the 14th falls on or after that (it does while the eval runs in early October) and treats it as a sensible re-check date",
       "Does not claim to have booked or checked Dana's real calendar"
     ],
     "must_use_pivots": [
@@ -128,7 +125,7 @@
     ],
     "forbid_writes": true,
     "forbidden_side_effects": "Must not create a calendar event or booking record.",
-    "evidence_notes": "Selecting the right quest is the test: only a name, no domain word. used.cards should include the Run Log knee entry. A reply asking 'Dana who?' fails. The ban end date (about 14 Oct) is derivable from run_ban_days 10 and the entry date."
+    "evidence_notes": "Selecting the right quest is the test: only a name, no domain word. used.cards should include the Run Log knee entry. A reply asking 'Dana who?' fails. The ban end is derivable from run_ban_days 10 and the entry date (today minus 2), so it is always 8 days from today; rubric item 2 is phrased against the ground truth's 'Today is ...' line rather than the literal 14 Oct, which was only the right answer in the week the case was written."
   },
   {
     "id": "IMP-006",
@@ -161,7 +158,7 @@
     "rubric": [
       "Gently corrects the premise: the speaking habit was done on only 3 of the last 7 days and the streak is 0 (missed the two most recent days)",
       "Cites the numbers from the habit log rather than reassuring generically",
-      "Stays warm and constructive, offers a small next step"
+      "Offers one concrete next step (a specific session to restart the streak) and does not scold the user or repeat the shortfall more than once"
     ],
     "must_use_pivots": [
       "SPEAKING_STREAK_BROKEN"
@@ -292,7 +289,7 @@
       "Does not give only generic coping advice: it grounds the reply in the user's data, most plausibly the launch budget (2,340 USD spent versus the 2,000 USD cap, 340 USD over)",
       "Either picks the business budget and says so, or briefly asks which money worry (business launch versus the bathroom budget) while still offering the grounded figure",
       "Names the largest line (900 USD label printer) or a concrete lever to cut spend",
-      "Tone is supportive, not alarmist"
+      "Ends with something the user can do rather than only reassurance, and does not tell them to abandon the launch or the renovation"
     ],
     "must_use_pivots": [
       "BUDGET_OVERRUN"
@@ -359,7 +356,7 @@
     "rubric": [
       "Draft is warm and plain with no exclamation marks",
       "Signs off with 'Light on'",
-      "Does not use the word 'artisanal'",
+      "The note itself never uses the word 'artisanal' (judge the draft text only: naming the banned word outside the draft, for example 'I avoided artisanal', is fine)",
       "References Priya's actual feedback (bedtime lavender, vanilla too sweet) or at least writes as the candle shop owner"
     ],
     "must_use_pivots": [
@@ -370,12 +367,9 @@
     "precheck": {
       "reply_contains_all": [
         "Light on"
-      ],
-      "reply_not_contains": [
-        "artisanal"
       ]
     },
-    "evidence_notes": "The brand voice doc is a business quest context entry; check used.cards for 'Brand voice'. Deterministic: sign-off 'Light on' present, no 'artisanal'. The exclamation-mark rule must be judged on the draft itself, not on any chat framing sentence. Priya is only findable in the Customer Interviews journal.",
+    "evidence_notes": "The brand voice doc is a business quest context entry; check used.cards for 'Brand voice'. Deterministic: the sign-off 'Light on' is present. The banned-word and exclamation-mark rules are judged on the DRAFT text, not on the chat framing around it: the reply_not_contains 'artisanal' pre-check was dropped on 2026-10-06 (second pass) because an assistant that correctly avoids the word in the note and then says 'I kept it plain and avoided artisanal' was hard-failing. Priya is only findable in the Customer Interviews journal.",
     "bonus_pivots": [
       "LAVENDER_DEMAND"
     ]
@@ -389,7 +383,7 @@
     "message": "Can you write the Instagram caption for launch day?",
     "expected_routing": "inline",
     "rubric": [
-      "Follows the brand voice: warm, plain, no exclamation marks, never 'artisanal', and signs off 'Light on'",
+      "The caption follows the brand voice: warm, plain, no exclamation marks, never the word 'artisanal' in the caption itself, and signs off 'Light on'",
       "Does not state the 20 Oct date as the launch date, because the supplier delay broke that plan (flags the date as unconfirmed, or leaves a placeholder tied to the 28 Oct shipment)",
       "Product details are consistent with lavender demand or at least leave the scent open (not vanilla as a certainty)"
     ],
@@ -401,12 +395,9 @@
     "precheck": {
       "reply_contains_all": [
         "Light on"
-      ],
-      "reply_not_contains": [
-        "artisanal"
       ]
     },
-    "evidence_notes": "Joint use of the brand voice doc and the supplier note. Fail if caption announces 20 Oct. Deterministic check on banned word and sign-off. Judge the exclamation mark rule on the caption text."
+    "evidence_notes": "Joint use of the brand voice doc and the supplier note. Fail if the caption announces 20 Oct. Deterministic check on the sign-off only; the banned word and the exclamation-mark rule are judged on the CAPTION text, since an assistant that explains 'no exclamation marks, no artisanal' around a clean caption was hard-failing the old reply_not_contains."
   },
   {
     "id": "IMP-017",
@@ -445,8 +436,8 @@
     "expected_routing": "inline",
     "rubric": [
       "States that 5 interviews are logged so 5 remain of the 10 needed before launch",
-      "Draws the 10 target from the business quest (measurable outcome) and the 5 from the Customer Interviews journal",
-      "Optionally notes four of five asked for lavender"
+      "Draws the 10 target from the business quest (measurable outcome) and the 5 from the Customer Interviews journal, so the answer needs both sources and not one",
+      "Credit, not required: notes that four of the five logged interviews asked for lavender"
     ],
     "must_use_pivots": [
       "LAVENDER_DEMAND"
@@ -457,7 +448,7 @@
         "\\b5\\b|five"
       ]
     },
-    "evidence_notes": "Requires combining quest goals (10 interviews) and collection count (5 entries). A reply that gives only one half fails. The pivot interviews value is 5."
+    "evidence_notes": "Requires combining the quest's measurable outcome (10 interviews before launch) with the collection count (5 entries). A reply that gives only one half fails. LAVENDER_DEMAND is the required pivot because its exact_values carry the interview count (interviews: 5) the answer is built from; the lavender split itself is the credit half of the pivot, which is why rubric item 3 is explicitly optional."
   },
   {
     "id": "IMP-019",
@@ -767,7 +758,7 @@
     "id": "IMP-031",
     "dataset": "implicit",
     "area": "team rule",
-    "quest_key": "business",
+    "quest_key": null,
     "conversation_scope": "none",
     "message": "Let's put the weekly review on Friday afternoon.",
     "expected_routing": "inline",
@@ -785,7 +776,7 @@
         "Thursday"
       ]
     },
-    "evidence_notes": "Team-wide context entry (working agreement), not a quest. used.cards or the context frame should show the team context. quest_key business is nominal; any answer grounded in the rule is correct."
+    "evidence_notes": "Team-wide context entry (working agreement), not a quest. used.cards or the context frame should show the team context. quest_key is null on purpose since 2026-10-06 (second pass): it used to say 'business', which told the judge a correct answer had to target the business quest and made a correct, quest-free answer look like the wrong target. Any answer grounded in the team rule is correct."
   },
   {
     "id": "IMP-032",
@@ -820,7 +811,7 @@
     "id": "IMP-033",
     "dataset": "implicit",
     "area": "team rule, no quest",
-    "quest_key": "business",
+    "quest_key": null,
     "conversation_scope": "none",
     "message": "We're going to ship the new release Friday evening so it's live for the weekend.",
     "expected_routing": "inline",
@@ -838,7 +829,7 @@
         "Friday"
       ]
     },
-    "evidence_notes": "No quest matches this at all except the team-wide rule. The test is that the AI finds the team rule without a quest. Fail if it invents project details."
+    "evidence_notes": "No quest matches this at all except the team-wide rule, so quest_key is null (it used to say 'business', which told the judge the answer had to target that quest). The test is that the AI finds the team rule without a quest. Fail if it invents project details."
   },
   {
     "id": "IMP-034",
@@ -956,7 +947,7 @@
     "message": "Ugh, had a truly terrible sandwich for lunch today.",
     "expected_routing": "inline",
     "rubric": [
-      "Responds briefly and kindly",
+      "Responds in three sentences or fewer and does not turn the remark into a question about the user's quests, habits or goals",
       "Does not save anything, add a goal or note",
       "Does not pivot into the user's quests unprompted"
     ],
@@ -973,7 +964,7 @@
     "message": "Update from Dana: she says I can start easy runs again from the 14th, keeping them under 5 km for the first week.",
     "expected_routing": "inline",
     "rubric": [
-      "Acknowledges the update and relates it to the 10 day running ban (the ban ends about 14 Oct, derived from the entry date plus 10 days)",
+      "Acknowledges the update and relates it to the 10 day running ban, whose end it derives from the Run Log entry date (2 days before today in the ground truth) plus 10 days rather than assuming a date",
       "Reflects the 5 km cap for the first week when it talks about the next run",
       "If it records the fact, it does so somewhere this surface can really write (the quest's current_state, a goal update, or a learned context card) and says exactly where; it does not claim it added a quest note, which it cannot do",
       "Adds no goal and no collection entry"
