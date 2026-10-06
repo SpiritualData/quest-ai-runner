@@ -25,6 +25,9 @@ Env it reads:
   QAR_PLANNER_TIER (optional)                    — model tier for the planner step that picks
                                                    read/answer/deep (default balanced; use fast
                                                    to reduce cost, best for complex routing)
+  QAR_PLANNER_MODEL (optional)                   — a model id for the routing decision ALONE
+                                                   (the decide call); other calls that share
+                                                   QAR_PLANNER_TIER keep that tier's model
   QAR_STATE_PATH (optional)                      — signature store path (default: ./qar_state.json)
   QAR_POLL_INTERVAL (optional, seconds)          — loop cadence (default 900)
   QAR_RUNNER_LABEL (optional)                    — human-readable tag sent on the env heartbeat
@@ -734,6 +737,11 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     planner_tier = (os.getenv("QAR_PLANNER_TIER") or "").strip().lower()
     if planner_tier:
         cfg.orchestrator.planner_tier = planner_tier
+    # QAR_PLANNER_MODEL pins the ROUTING DECISION alone to one model id, leaving everything else
+    # on QAR_PLANNER_TIER's model (docs/cheap-model-routing.md).
+    planner_model = (os.getenv("QAR_PLANNER_MODEL") or "").strip()
+    if planner_model:
+        cfg.orchestrator.planner_model = planner_model
 
     # --- Deep goal loop tuning (our own /goal replacement) -------------------------------------
     # The deep worker is Claude Code, so it can ONLY run Claude models. QAR_DEEP_MODELS is the

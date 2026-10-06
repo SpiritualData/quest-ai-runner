@@ -1362,6 +1362,13 @@ class OrchestratorConfig:
     # tokens, and the compact profile cuts them by about 40 percent, which matters when the point
     # of the deployment is to run routing on a cheap model.
     planner_prompt_profile: str = DEFAULT_PLANNER_PROMPT_PROFILE
+    # THE ROUTING DECISION'S OWN MODEL. Empty (the default) resolves ``planner_tier`` as before.
+    # A model id here is used verbatim for the decide call ONLY, so a deployment can put the
+    # routing decision on a different model from everything else that shares ``planner_tier``
+    # (card updates, request understanding, summaries, fallbacks). Routing is mostly input
+    # tokens, so it is the call most worth moving to a cheap model, and it is the only one that
+    # was measured there (docs/cheap-model-routing.md).
+    planner_model: str = ""
     # THE OVERSEER CASCADE for routing decisions. Off by default. When on, the planner also
     # reports how sure it is of each decision (one extra enum field on the call it already makes,
     # zero extra calls), and a decision it is NOT sure of is re-decided by a STRONGER model that
@@ -5533,7 +5540,8 @@ class Orchestrator:
         reach_text = verdict_block(reach)
         if reach_text:
             prompt = prompt + "\n\n" + reach_text
-        model = self.registry.resolve_tier(self.cfg.planner_tier)
+        model = ((getattr(self.cfg, "planner_model", "") or "").strip()
+                 or self.registry.resolve_tier(self.cfg.planner_tier))
         provider = self.get_provider_for_model(model)
         # Cache-friendly layered shape (in addition to the flattened ``prompt`` fallback above): the
         # persona rides in the stable L1 head, the context view is the stable L2 layer, and the

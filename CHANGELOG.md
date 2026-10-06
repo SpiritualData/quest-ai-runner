@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **`OrchestratorConfig.planner_model` / `QAR_PLANNER_MODEL`: the routing decision's own model.**
+  Empty (default) keeps resolving `planner_tier`. A model id there is sent verbatim on the decide
+  call alone, so routing can run on a cheaper model than the calls that share `planner_tier`
+  (request understanding, card updates, summaries); the reach judge keeps its own tier.
+
 ### Changed
 - **The reach judge no longer adds wall clock.** `run()` starts it at the top of the turn
   (`Orchestrator.prefetch_reach_verdict`), concurrently with request understanding, context
