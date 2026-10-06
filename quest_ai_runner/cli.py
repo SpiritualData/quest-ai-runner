@@ -1872,6 +1872,27 @@ def main(argv=None) -> int:
         print(f"Time: {elapsed_time:.0f}s (~{int(elapsed_time // 60)}m)")
         print()
 
+        # Attempt to send monthly email report if Quest API is configured
+        try:
+            from .bootstrap_email import send_monthly_bootstrap_email
+            user_email = os.getenv("QAR_BOOTSTRAP_EMAIL_USER")
+            if send_monthly_bootstrap_email(
+                cards_created=n,
+                corpus_path=corpus_abs,
+                cards_dir=cards_dir,
+                tokens_used=tokens_in,
+                cost_usd=measured or cost,
+                elapsed_seconds=elapsed_time,
+                model=model,
+                provider=prov,
+                user_email=user_email,
+            ):
+                log.info("monthly bootstrap report email sent")
+            else:
+                log.debug("monthly bootstrap report email not sent (not configured or recently sent)")
+        except Exception as e:
+            log.warning("failed to send monthly bootstrap email: %s", e)
+
         return 0
 
     # --- paste-context: save context from args or stdin to a card ---------------
