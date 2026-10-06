@@ -511,6 +511,9 @@ class VectorContextAssembler(ContextAssemblerBase):
 
         Returns a list of query strings (may be empty on failure).  Never raises.
         """
+        # The gist of the task is what query generation needs, never a whole composed brief.
+        from ..core.prompt_budget import decision_excerpt
+        task_text = decision_excerpt(task_text)
         if self._provider is None:
             return []
         try:

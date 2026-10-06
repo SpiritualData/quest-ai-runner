@@ -177,8 +177,11 @@ class TurnContextStore:
             if self._provider is not None and selected_indices:
                 try:
                     from .card_filter import filter_cards_by_relevance
+                    # Each candidate is named by its opening, not its whole text: a past turn's
+                    # user side can be an entire composed brief.
                     candidate_dicts = [
-                        {"id": str(i), "title": cards[i].get("user", ""), "files": [], "adapter": "turn"}
+                        {"id": str(i), "title": turn_excerpt(cards[i].get("user", ""), 200),
+                         "files": [], "adapter": "turn"}
                         for i in selected_indices
                     ]
                     kept_ids = {m.id for m in filter_cards_by_relevance(

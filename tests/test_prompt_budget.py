@@ -455,3 +455,34 @@ def test_a_relevance_judge_gets_the_gist_not_the_whole_brief():
 
     assert seen and all(len(p) < 8_000 for p in seen)
     assert "Act as Zee." in seen[0] and "Today: plan." in seen[0]
+
+
+def test_a_threads_run_record_is_one_card_and_never_retrieved_by_that_thread(tmp_path):
+    """The run-recorded card used to be keyed by each pass's whole brief: a new card every day,
+    and the top match for the thread's next pass (self-retrieval)."""
+    from quest_ai_runner.adapters.file_context_store import FileContextStore
+
+    store = FileContextStore(cards_dir=str(tmp_path / "cards"), repo_root=str(tmp_path))
+    for day in (1, 2):
+        store.record(f"Write the funding hour plan for day {day}. " + "grant " * 50,
+                     {"kind": "deep", "task_id": "atask_thread", "files": []})
+    cards = list((tmp_path / "cards").rglob("*.json"))
+    assert len([c for c in cards if "thread" in c.name or "record" in c.name]) <= 1
+
+    own = store.assemble("funding hour plan grant", meta={"task_id": "atask_thread"})
+    assert "atask_thread" not in (own.context_view or "")
+    assert not any("record" in cid for cid in (own.card_ids or []))
+
+
+def test_the_goal_condition_judge_gets_the_gist(monkeypatch):
+    provider = StubProvider(decisions=[])
+    seen: List[str] = []
+    provider.answer = lambda messages, **kw: seen.append(messages[-1]["content"]) or ""
+    orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider,
+                        registry=ModelRegistry(provider), deep_runner=None)
+    brief = "Act as Zee. " + ("middle " * 30_000) + "Today: the plan."
+
+    condition, _ = orch._derive_goal_condition(brief)
+
+    assert seen and len(seen[0]) < 10_000
+    assert len(condition) < 6_000, "a failed derivation must not hand the whole brief onward"

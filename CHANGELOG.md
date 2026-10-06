@@ -37,7 +37,14 @@ All notable changes to this project are documented here. The format is based on
 - **Autopilot receipts close what they account for.** The pass leaves the ref-to-item map with the
   feedback ledger (`ContextUpdates.remember_offer`), and the executor records the run's
   dispositions against it, so finished items stop coming back "still owed" every pass.
-- **Card relevance/consolidation judges get the gist of the request** (`prompt_budget.decision_excerpt`).
+- **Judges and selectors get the gist of the request, not the whole brief**
+  (`prompt_budget.decision_excerpt`): card relevance, file ranking and consolidation, the
+  turn-history filter (candidates named by their opening), goal-condition derivation (whose
+  fallback is the gist, not the raw brief), the persona explicit-ask judge, and vector query
+  generation. The deep verifier already clipped its inputs.
+- **A thread's run record is one card, never retrieved by that thread.** `FileContextStore.record`
+  keys a run on a thread by its task id (not each pass's whole brief), takes keywords from the
+  request's gist, and `assemble` skips cards recorded from the asking thread.
 - **A deep request for a model family ("opus") is no longer run on a different family** when the
   lane's tier for that alias resolves elsewhere (e.g. `QAR_MODEL_QUALITY=haiku`).
 - **The reach judge no longer adds wall clock.** `run()` starts it at the top of the turn

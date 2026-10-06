@@ -4266,9 +4266,14 @@ class FileContextStore(ContextAssemblerBase):
         # it -- covers BOTH candidate-loading paths above (native search_cards and the in-app
         # _load_all() scan) in one place. Untagged cards and turns with no scope_tags are unaffected.
         turn_scope_tags = (meta or {}).get("scope_tags")
+        # And never the run's own thread: a card recorded from this thread's earlier runs is its
+        # previous brief, already in front of the run through its own history.
+        own_task = str((meta or {}).get("task_id") or "")
         cards = {
             cid: c for cid, c in cards.items()
             if scope_tags_allow(c.get("scope_tags"), turn_scope_tags)
+            and not (own_task and str(((c.get("provenance") or {}) if isinstance(
+                c.get("provenance"), dict) else {}).get("task_id") or "") == own_task)
         }
         # PRIORITY CARDS: ids the caller already knows this turn needs (the matched quest's card,
         # or a task's explicitly attached cards). Always selected, first, past the confidence gate
@@ -4895,7 +4900,14 @@ class FileContextStore(ContextAssemblerBase):
         return not self._dry_run
 
     def _record_inner(self, task_text: str, outcome: Dict[str, Any]) -> None:
-        card_id = _card_slug(task_text)
+        # A run on a THREAD (a recurring or autopilot task) records onto one card per thread, not
+        # one per pass: each pass's composed brief differs, so keying by its text minted a new card
+        # every day, and that card, keyed on the whole brief's vocabulary, was then the top match
+        # for the next pass of the same thread (self-retrieval, 2026-10-06). Keywords come from the
+        # request's gist, never every word of a composed brief.
+        from ..core.prompt_budget import decision_excerpt
+        own_task = str(outcome.get("task_id") or "")
+        card_id = _card_slug(f"thread record {own_task}") if own_task else _card_slug(task_text)
 
         # Load existing card or start fresh.
         loaded = self._repo.read(card_id)
@@ -4903,7 +4915,7 @@ class FileContextStore(ContextAssemblerBase):
 
         # Ensure required fields exist.
         card.setdefault("id", card_id)
-        card.setdefault("keywords", sorted(_tokenize(task_text)))
+        card.setdefault("keywords", sorted(_tokenize(decision_excerpt(task_text))))
         # NOT the raw task text: for a persona run its first 200 characters are scaffolding that
         # is identical across every run (see _record_summary).
         card.setdefault("summary", _record_summary(task_text, outcome, card.get("name", "")))
@@ -4916,6 +4928,9 @@ class FileContextStore(ContextAssemblerBase):
             "created_at": "",
             "last_verified_at": "",
         })
+        if own_task:
+            # Which thread this card records, so that thread's own later runs never retrieve it.
+            card["provenance"]["task_id"] = own_task
 
         # Re-pin file fingerprints when outcome supplies a file list.
         file_paths: List[str] = outcome.get("files") or []

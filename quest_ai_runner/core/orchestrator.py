@@ -8726,17 +8726,22 @@ class Orchestrator:
         # echoed above the reply. Skip the call: the message IS its own done-standard.
         if is_small_talk(user_message):
             return user_message, None
+        # The gist, never the whole brief: a fast judgment call does not need a 110K-character
+        # composed brief, and when it fails the fallback becomes the retrieval query, which must
+        # not be the whole brief either (``prompt_budget.decision_excerpt``).
+        from .prompt_budget import decision_excerpt
+        gist = decision_excerpt(user_message)
         try:
             model = self.registry.resolve_tier("fast")
             prompt = DERIVE_GOAL_CONDITION_PROMPT.format(
-                user_message=user_message, now_block=_format_now_block(now))
+                user_message=gist, now_block=_format_now_block(now))
             out = self.provider.answer(
                 [{"role": "user", "content": prompt}], model=model,
                 system=GOAL_CONDITION_SYSTEM)
             goal_condition, constraints = parse_goal_condition_reply(out or "")
-            return (goal_condition or user_message), constraints
+            return (goal_condition or gist), constraints
         except Exception:  # noqa: BLE001 — must never break the run
-            return user_message, None
+            return gist, None
 
     def _run_clarify(self, plan: PlanDecision, *, quest_id: Optional[str] = None,
                      emit: Optional[_Emitter] = None) -> OrchestratorResult:
