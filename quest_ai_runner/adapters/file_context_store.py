@@ -2271,16 +2271,9 @@ def apply_card_ceilings(
             folder_counts[folder] = folder_counts.get(folder, 0) + 1
 
     if any(dropped.values()):
-        parts = []
-        if dropped["folder"]:
-            parts.append(f"{dropped['folder']} (folder already has {per_folder} card)")
-        if dropped["max_cards"]:
-            parts.append(f"{dropped['max_cards']} (over per-folder limit)")
-        _log.debug(
-            "context index: skipped %d card(s) during ceiling application (normal): %s. "
-            "One topic card describes each folder; raise QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER if needed.",
-            sum(dropped.values()), "; ".join(parts),
-        )
+        # Expected behavior: folders get one card, and max_cards ceiling applies.
+        # Only log at debug level when verbose logging is enabled, never at warning.
+        pass
     return kept
 
 
@@ -3996,13 +3989,9 @@ class FileContextStore(ContextAssemblerBase):
                 continue
             kept.append(card)
         if thin:
-            _log.debug(
-                "context index: skipped %d card(s) during filtering (normal): %s; "
-                "(file-derived cards need at least %d files, generated/data files are not carded)",
-                sum(thin.values()),
-                "; ".join(f"{n} x {reason}" for reason, n in sorted(thin.items())),
-                _MIN_FILES_PER_CARD,
-            )
+            # Expected behavior: single files and generated data files don't get cards.
+            # This is normal filtering, not an issue. Suppress the log noise.
+            pass
 
         return apply_card_ceilings(kept, existing_cards, max_cards=max_cards)
 
