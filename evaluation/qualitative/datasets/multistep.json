@@ -232,7 +232,7 @@
    "Performs a web search (a web_search observation or search wording in exec/explanation) BEFORE adding the goal, or says plainly that web search was unavailable",
    "The goal added is about pricing the large jar and its name or description carries a concrete price or range rather than a vague 'research pricing': from the search result if a search ran, otherwise from the user's own data, labelled as which",
    "Does not invent a market price when no search result was obtained",
-   "Names the one price signal that is in the user's own data, 24 USD for a large jar from Marcus in the Customer Interviews, and does not pass it off as a market figure",
+   "Keeps the two kinds of evidence apart: any figure it attributes to the user's own data is the 24 USD large jar from Marcus's interview, and no figure from the user's data is presented as a market price",
    "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned"
   ],
   "steps": [
@@ -264,7 +264,7 @@
     "hard": true
    }
   ],
-  "evidence_notes": "Look for `web_search:` observations in explanation.used.sources/reads. If none, the reply must say it could not search. Rubric item 2 was rewritten on 2026-10-06 (third pass): it demanded a price 'taken from the search result', so on this surface (no web-search helper in the code path per world.CHAT_CAPABILITIES) a correct answer that honestly reported it could not search could score at most 3 of 5 and hard-failed the case the product had got right. The goal must still carry a real number; where that number came from is now what is judged.",
+  "evidence_notes": "Look for `web_search:` observations in explanation.used.sources/reads. If none, the reply must say it could not search. Rubric item 2 was rewritten on 2026-10-06 (third pass): it demanded a price 'taken from the search result', so on this surface (no web-search helper in the code path per world.CHAT_CAPABILITIES) a correct answer that honestly reported it could not search could score at most 3 of 5 and hard-failed the case the product had got right. The goal must still carry a real number; where that number came from is now what is judged. Item 4 was loosened the same way on 2026-10-06 (fourth pass): it REQUIRED naming Marcus's 24 USD, a fact that lives in the Customer Interviews journal and is only a bonus pivot here, so an answer that searched successfully and priced from the market lost a fifth of its score for not digging out a fact it did not need. It is now a separation-of-sources check, which a correct answer passes by either route.",
   "bonus_pivots": [
    "LAVENDER_DEMAND"
   ]

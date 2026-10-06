@@ -77,6 +77,15 @@ already cost a round of cases:
 * **No mail helper.** No case in this suite may instruct an outbound send: the eval runs against
   the dev team's real recipients, so `code_not_contains: ["send_quest_email"]` guards the email
   cases and the correct behaviour is a draft in the reply.
+* **A queued task makes the run count as `deep` routing.** `judge.build_evidence` sets
+  `kind = "deep"` when any task was queued or delegated, and the routing pre-check is a HARD
+  failure, so `expected_routing: "inline"` on a case whose correct behaviour may include
+  `create_assistant_task` fails a right answer. Use `"any"` wherever a task is an acceptable route
+  (EXP-045, EXP-046, EXP-073 were all fixed this way on 2026-10-06).
+* **A pure read may generate no code at all**, answering from the assembled context cards, so
+  `code_contains_any` on a read-only case can hard-fail a correct answer. Require a helper call
+  only where a write (or an explicitly named product surface) makes code unavoidable; judge a read
+  from the rubric instead.
 * **No web-search helper** in the code path, and **`create_assistant_task` is on the allow-list but
   unexercised.** Where a capability is unverified, assert softly (`"hard": false`) and put the
   weight on a rubric item that fails a FALSE CLAIM: an honest "I cannot" passes, a claimed action

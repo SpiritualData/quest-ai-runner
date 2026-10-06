@@ -117,7 +117,7 @@
     "expected_routing": "inline",
     "rubric": [
       "Identifies Dana as the physio from the user's Run Log (knee injury) rather than asking who Dana is",
-      "Works the ban out rather than guessing: the Run Log entry is 2 days before today's date in the ground truth and the ban is 10 days, so it ends 8 days from today, and the reply says whether the 14th falls on or after that (it does while the eval runs in early October) and treats it as a sensible re-check date",
+      "Works the ban out rather than guessing: the Run Log entry is 2 days before today's date in the ground truth and the ban is 10 days, so it ends 8 days from today, and the reply compares the 14th against that end date correctly, treating a 14th that falls on or after it as a sensible re-check point and a 14th that falls before it as too early",
       "Does not claim to have booked or checked Dana's real calendar"
     ],
     "must_use_pivots": [
@@ -125,7 +125,7 @@
     ],
     "forbid_writes": true,
     "forbidden_side_effects": "Must not create a calendar event or booking record.",
-    "evidence_notes": "Selecting the right quest is the test: only a name, no domain word. used.cards should include the Run Log knee entry. A reply asking 'Dana who?' fails. The ban end is derivable from run_ban_days 10 and the entry date (today minus 2), so it is always 8 days from today; rubric item 2 is phrased against the ground truth's 'Today is ...' line rather than the literal 14 Oct, which was only the right answer in the week the case was written."
+    "evidence_notes": "Selecting the right quest is the test: only a name, no domain word. used.cards should include the Run Log knee entry. A reply asking 'Dana who?' fails. The ban end is derivable from run_ban_days 10 and the entry date (today minus 2), so it is always 8 days from today; rubric item 2 is phrased against the ground truth's 'Today is ...' line rather than the literal 14 Oct, which was only the right answer in the week the case was written. Reworded again on 2026-10-06 (fourth pass): the item still asserted which way the comparison falls ('it does while the eval runs in early October'), so it graded the calendar rather than the reasoning and would mark a correct answer wrong the moment the suite ran in a later month. What is graded now is that the ban end is derived and the 14th is placed against it correctly, whichever side it lands on."
   },
   {
     "id": "IMP-006",
@@ -236,7 +236,7 @@
     "rubric": [
       "Cites the team rule that nobody deploys or launches on a Friday and so recommends against the 30th",
       "Also reflects that the wax now ships 28 Oct (not 14 Oct), so any launch is after that date",
-      "Proposes an alternative non-Friday date after 28 Oct (for example Monday 2 Nov), noting Thursday 4pm is the weekly review"
+      "Proposes an alternative launch date that is after 28 Oct and is not a Friday (for example Monday 2 Nov)"
     ],
     "must_use_pivots": [
       "TEAM_FRIDAY_RULE",
@@ -248,7 +248,7 @@
         "Friday"
       ]
     },
-    "evidence_notes": "Two sources must both be used: the team context working agreement (Friday rule) and the business quest supplier note. 30 Oct 2026 is a Friday. Check used.cards for the team context entry. Using only one of them is a partial pass."
+    "evidence_notes": "Two sources must both be used: the team context working agreement (Friday rule) and the business quest supplier note. 30 Oct 2026 is a Friday. Check used.cards for the team context entry. Using only one of them is a partial pass. Rubric item 3 lost its trailing 'noting Thursday 4pm is the weekly review' clause on 2026-10-06 (fourth pass): the review slot has nothing to do with choosing a launch date, so a correct answer that proposed Monday 2 Nov without mentioning it failed an item it should never have been graded on. The Thursday 4pm half of this pivot is tested where it matters, in IMP-031 and IMP-032."
   },
   {
     "id": "IMP-011",
@@ -442,13 +442,14 @@
     "must_use_pivots": [
       "LAVENDER_DEMAND"
     ],
+    "pivots_change_answer": false,
     "forbid_writes": true,
     "precheck": {
       "reply_regex": [
         "\\b5\\b|five"
       ]
     },
-    "evidence_notes": "Requires combining the quest's measurable outcome (10 interviews before launch) with the collection count (5 entries). A reply that gives only one half fails. LAVENDER_DEMAND is the required pivot because its exact_values carry the interview count (interviews: 5) the answer is built from; the lavender split itself is the credit half of the pivot, which is why rubric item 3 is explicitly optional."
+    "evidence_notes": "Requires combining the quest's measurable outcome (10 interviews before launch) with the collection count (5 entries). A reply that gives only one half fails. LAVENDER_DEMAND is the required pivot because its exact_values carry the interview count (interviews: 5) the answer is built from. pivots_change_answer is pinned FALSE here on 2026-10-06 (fourth pass): implicit cases default to true, and the answer-changing part of this pivot is the lavender split, which this question does not ask about, so a correct 'five logged, five to go' answer was liable to come back used=true / changed_answer=false and be capped at 0.4 by the pivot gate. What this case grades is that the count was retrieved and combined with the target, so 'used' is the right gate and the earlier note calling rubric item 3 optional was stale: every item here is required."
   },
   {
     "id": "IMP-019",
@@ -775,6 +776,7 @@
     "rubric": [
       "States that the team's weekly review is on Thursday at 4pm and that the team avoids Friday deploys and launches",
       "Does not simply accept Friday; offers to keep Thursday 4pm or asks if the rule should change",
+      "Stays grounded in the working agreement: it invents no other team ritual, process or quest to justify the answer",
       "Does not change any team context entry"
     ],
     "must_use_pivots": [
@@ -786,7 +788,7 @@
         "Thursday"
       ]
     },
-    "evidence_notes": "Team-wide context entry (working agreement), not a quest. used.cards or the context frame should show the team context. quest_key is null on purpose since 2026-10-06 (second pass): it used to say 'business', which told the judge a correct answer had to target the business quest and made a correct, quest-free answer look like the wrong target. Any answer grounded in the team rule is correct."
+    "evidence_notes": "Team-wide context entry (working agreement), not a quest. used.cards or the context frame should show the team context. quest_key is null on purpose since 2026-10-06 (second pass): it used to say 'business', which told the judge a correct answer had to target the business quest and made a correct, quest-free answer look like the wrong target. Any answer grounded in the team rule is correct. This is now the single null-quest team-rule case: IMP-033 ('we're going to ship the new release Friday evening') was deleted on 2026-10-06 (fourth pass) as a near-duplicate, since it had the same pivot, the same null quest and the same graded behaviour (cite the agreement, do not accept Friday, offer another day) with no second source to combine, and TEAM_FRIDAY_RULE was already carried by eight other cases (IMP-010, IMP-032, EXP-079, MS-018, MS-026, MS-039, MS-047). Its one distinct item, that the assistant must not invent a process to justify the answer, is item 3 above."
   },
   {
     "id": "IMP-032",
@@ -816,30 +818,6 @@
     "bonus_pivots": [
       "SUPPLIER_DELAY"
     ]
-  },
-  {
-    "id": "IMP-033",
-    "dataset": "implicit",
-    "area": "team rule, no quest",
-    "quest_key": null,
-    "conversation_scope": "none",
-    "message": "We're going to ship the new release Friday evening so it's live for the weekend.",
-    "expected_routing": "inline",
-    "rubric": [
-      "Cites the team working agreement that nobody deploys or launches on a Friday",
-      "Recommends Thursday morning or the following Monday instead",
-      "Does not fabricate a release process or a quest about releases; stays grounded in the rule"
-    ],
-    "must_use_pivots": [
-      "TEAM_FRIDAY_RULE"
-    ],
-    "forbid_writes": true,
-    "precheck": {
-      "reply_contains_any": [
-        "Friday"
-      ]
-    },
-    "evidence_notes": "No quest matches this at all except the team-wide rule, so quest_key is null (it used to say 'business', which told the judge the answer had to target that quest). The test is that the AI finds the team rule without a quest. Fail if it invents project details."
   },
   {
     "id": "IMP-034",
