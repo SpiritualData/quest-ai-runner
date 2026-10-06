@@ -559,7 +559,9 @@ The four actions:
         returns to the previous screen", "a backdated habit entry no longer counts toward today").
         ONE sentence, ideally under 200 characters. It is NOT a place for the task details, the
         analysis, the plan, code, or a restatement of the whole request -- a long or dumped `goal`
-        is WRONG and will be rejected by the executor.
+        is WRONG and will be rejected by the executor. Never make a production release, deploy, or
+        production test part of it unless the user's own message explicitly asked for one; asking
+        to fix, build, or improve something does not.
       * `deep_brief` = the clear self-contained brief with the details, which PRESERVES the user's
         action verb (say "add/update ...", not "look up/review ..."). All the context goes HERE,
         never in `goal`.
@@ -916,6 +918,8 @@ THE ACTIONS:
     Give BOTH, and keep them DISTINCT:
       `goal` = the short CHECKABLE done-standard only, one sentence under 200 characters, the
         single condition an executor is held to. Not the plan, the analysis, or the request again.
+        Never make a production release, deploy, or production test part of it unless the user's
+        own message explicitly asked for one; asking to fix or improve something does not.
       `deep_brief` = the self-contained brief with all the detail, preserving the user's own
         action verb (say "add ...", not "review ...").
     If the request is actionable but under-specified, do NOT bounce it back: ground in the CONTEXT
@@ -2045,6 +2049,12 @@ PLATFORM DELIVERY: when the task says its result is emailed or delivered automat
 finishes, a requirement to email, send, or deliver the work is MET by the output containing the
 finished work itself. Never set met=false because the worker did not send it separately, and never
 tell the next attempt to send it: that is how the person receives the same thing twice.
+
+RELEASES: a code, config, or prompt change is done once it is committed where the task works and
+verified there. Never set met=false because the change is not yet released, deployed, or tested on
+production, and never tell the next attempt to request, ask someone for, or wait on a release. The
+ONLY exception is a goal or original request that explicitly asked for a production release,
+deploy, or production test; asking to fix, build, or improve something is not such a request.
 
 CRITICAL: Absence of context can be the correct answer. If the goal asks about prior conversation
 history, prior messages, or what was previously said, and the CONVERSATION HISTORY below confirms

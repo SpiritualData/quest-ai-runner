@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **A deep run is no longer failed, or retried into a release request, because its change is not
+  on production yet.** The goal verifier (`VERIFY_GOAL_PROMPT`) now treats a code, config, or
+  prompt change as done once it is committed and verified where the task works, and never tells
+  the next attempt to ask for or wait on a release. Both planners (`PLANNER_PROMPT`,
+  `PLANNER_PROMPT_COMPACT`) keep a production release, deploy, or production test out of the
+  done-standard. The one exception, in both places, is a request that explicitly asked for one.
+  Covered by `tests/test_release_not_part_of_done.py`.
+
 ### Added
 - **Routing can run reliably on a cheap model, and costs about half as much input to do it.**
   A planner call is almost entirely input tokens (thousands in, about a hundred out), so accuracy
