@@ -8,7 +8,7 @@ live need (creating a Quest with just outcome/current_state/purpose, no strategy
 """
 import pytest
 
-from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient
+from quest_ai_runner.runner.quest_client import QuestApiError, QuestClient, QuestPendingApproval
 
 
 def client_capturing_calls():
@@ -70,6 +70,18 @@ def test_start_quest_raises_instead_of_swallowing_api_errors():
     client._request = failing_request  # type: ignore[assignment]
     with pytest.raises(QuestApiError):
         client.start_quest(category_id="cat_career")
+
+
+def test_start_quest_reports_a_held_creation_instead_of_a_created_quest():
+    client = QuestClient("https://quest.example", "test-api-key", team_id="team_1")
+    client._request = lambda method, path, *, params=None, body=None: {  # type: ignore[assignment]
+        "pending_approval": True, "decision_id": "teamdec_abc123", "message": "Pending approval"}
+    with pytest.raises(QuestPendingApproval) as held:
+        client.start_quest(category_id="cat_career", outcome="Ship it")
+    assert held.value.decision_id == "teamdec_abc123"
+    assert "teamdec_abc123" in str(held.value)
+    assert "NOT created" in str(held.value)
+    assert isinstance(held.value, QuestApiError)
 
 
 # --- attach_quest_to_team -----------------------------------------------------
