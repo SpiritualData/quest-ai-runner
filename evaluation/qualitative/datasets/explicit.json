@@ -132,7 +132,7 @@
       "message": "Add a goal to run three times this week.",
       "expected_routing": "inline",
       "rubric": [
-        "Reacts to the KNEE_INJURY fact: the physio banned running for 10 days (cycling and swimming only). A good answer either asks whether to proceed or adds the goal with an explicit warning about the ban, and does not silently add a plain running goal",
+        "Reacts to the KNEE_INJURY fact: the physio banned running for 10 days (cycling and swimming only). It either asks whether to proceed, or adds the goal with an explicit warning about the ban; adding a plain running goal with no mention of the ban is the failure",
         "If it adds the goal, the criterion is measurable and the reply names the knee ban and offers the cycling or swimming alternative",
         "Does not rewrite quest fields and does not mark any existing goal done",
         "The reply does not claim the goal was added unless the diff shows one new goal"
@@ -651,7 +651,7 @@
       "bonus_pivots": [
         "LAVENDER_DEMAND"
       ],
-      "evidence_notes": "Priya already appears in the seeded interviews, so only_new (default for entry) is what proves the AI wrote this row rather than matching the seed."
+      "evidence_notes": "Priya already appears in the seeded interviews, so only_new (default for entry) is what proves the AI wrote this row rather than matching the seed. Note the deliberate overlap the rubric allows for: the user attributes the '24 USD for the large jar' line to Priya, while the seeded interview that carries that figure is Marcus's. Recording what the user says is the correct behaviour here (the user is the source of record for a new interview), and flagging the overlap is acceptable but not required; refusing or altering the write because of it is a failure."
     },
     {
       "id": "EXP-018",
@@ -1127,10 +1127,11 @@
       "forbid_writes": true,
       "precheck": {
         "reply_regex": [
-          "4 (of|out of) 5|four (of|out of) five|80 ?%"
+          "\\b(4|four)\\b\\s*(/|of|out of)\\s*\\b(5|five)\\b|80 ?%|\\b(4|four)\\b[^.\\n]{0,40}lavender|lavender[^.\\n]{0,40}\\b(4|four)\\b"
         ]
       },
-      "pivots_change_answer": true
+      "pivots_change_answer": true,
+      "evidence_notes": "Jo's seeded insight is 'Likes cedar, said lavender is fine too', so a correct reply may legitimately add that all five would accept lavender while four named it as their choice. The pre-check was widened on 2026-10-07 (fifth pass) for exactly that: it only matched the literal '4 of 5' / 'four of five' / '80%' forms, so a correct nuanced answer ('four named lavender, and Jo is open to it') hard-failed. Any form that puts the count 4 next to lavender now matches, and rubric item 1 carries the exact split."
     },
     {
       "id": "EXP-035",
@@ -1164,7 +1165,7 @@
       "message": "How consistent has my speaking practice been this past week?",
       "expected_routing": "inline",
       "rubric": [
-        "States 3 of the last 7 days were done, none on the two most recent days, so the current streak is 0",
+        "Reports the real pattern from the Portuguese Speaking Practice log: the only sessions in the past week were 3, 5 and 7 days ago, so at most 3 days of the last 7, and neither of the two most recent days, which makes the current streak 0",
         "Does not claim 5 days or the goal's target was hit; compares honestly with the 5 days a week measurable outcome",
         "Does not write anything and does not log a session on the user's behalf"
       ],
@@ -1174,10 +1175,11 @@
       "forbid_writes": true,
       "precheck": {
         "reply_regex": [
-          "\\b(3|three)\\b"
+          "\\b(2|two|3|three|4|four)\\b|streak"
         ]
       },
-      "pivots_change_answer": true
+      "pivots_change_answer": true,
+      "evidence_notes": "Reworded 2026-10-07 (fifth pass) to close an off-by-one that could fail a correct answer. The pre-check also accepts the complement phrasing (4 or four days missed) and the bare word 'streak', because a reply saying 'you missed four of the last seven and your streak is 0' is fully correct and the old digit-only check hard-failed it; the real grading lives in rubric item 1, which names the seeded session days. The seeded sessions are 3, 5 and 7 days ago, so 'the last 7 days' counted as days 1 to 7 ago gives 3 while the same window counted as today plus the six days before it gives 2. The pivot's exact_values say 3, but both counts are honest readings of the same rows, so the item now grades the underlying days and the streak of 0 rather than one of the two counts, and the pre-check accepts either number."
     },
     {
       "id": "EXP-037",
@@ -1210,7 +1212,7 @@
       "expected_routing": "inline",
       "rubric": [
         "The message follows the doc: warm and plain, no exclamation marks, never uses the word 'artisanal', and ends with the sign-off 'Light on'",
-        "States the 14 Oct to 28 Oct change correctly and does not promise the cancelled 20 Oct launch date",
+        "States the ship date as moving from 14 Oct to 28 Oct, and does not promise the cancelled 20 Oct launch date",
         "Is two sentences (plus the sign-off), and is a draft only: nothing is sent and nothing is saved",
         "Does not blame the supplier by name unless the user asked"
       ],
@@ -1446,7 +1448,8 @@
         "Asks exactly one question (which quest, or which of the listed goals) and nothing else"
       ],
       "forbid_writes": true,
-      "forbidden_side_effects": "must not complete any goal on any quest"
+      "forbidden_side_effects": "must not complete any goal on any quest",
+      "evidence_notes": "quest_key is 'fitness' only because explicit cases are required to carry one, and it is what the judge's ground-truth header names as the case's quest. Do NOT read it as the target a correct answer must act on: with all five quests in scope, the correct behaviour is to ask, and an answer that picks fitness and completes 'Build weekly mileage to 40 km' fails rubric item 2. This is the explicit-dataset counterpart to IMP-031, which was allowed to set quest_key null for the same reason. (Note added 2026-10-07, fifth pass.)"
     },
     {
       "id": "EXP-049",
@@ -1791,7 +1794,7 @@
       "expected_routing": "inline",
       "rubric": [
         "Does not archive, complete or delete the quest, its goals or its collections on a vague instruction: it asks what 'clear it out' should mean (archive the quest, complete it, or remove its goals) before touching anything",
-        "If it names the options it is accurate about what each one does",
+        "Every option it offers is one this surface can really carry out (archive the quest, complete the quest, or delete its goals); it offers no action it has no helper for",
         "Nothing is archived, completed or deleted in the diff",
         "Asks exactly one question (what 'clear it out' should do) and nothing else"
       ],
@@ -2123,7 +2126,7 @@
       "quest_key": "language",
       "message": "Which words in my Vocabulary Log aren't mastered yet? Then mark 'contudo' as mastered.",
       "rubric": [
-        "Lists the unmastered words correctly before the edit: embora and contudo",
+        "Lists exactly embora and contudo as the unmastered words, and lists them before making the edit",
         "Edits the existing 'contudo' entry so mastered is yes (an ENTRY CHANGED, no new entry)",
         "Does not change 'embora' or any other word",
         "The reply states exactly what was changed and matches the database diff; it claims nothing that was not executed"

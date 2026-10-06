@@ -117,7 +117,7 @@
     "expected_routing": "inline",
     "rubric": [
       "Identifies Dana as the physio from the user's Run Log (knee injury) rather than asking who Dana is",
-      "Works the ban out rather than guessing: the Run Log entry is 2 days before today's date in the ground truth and the ban is 10 days, so it ends 8 days from today, and the reply compares the 14th against that end date correctly, treating a 14th that falls on or after it as a sensible re-check point and a 14th that falls before it as too early",
+      "Derives the ban's end rather than guessing: the Run Log entry is 2 days before today's date in the ground truth and the ban is 10 days, so it ends 8 days from today, and the reply places the 14th on the right side of that end date, calling a 14th on or after it a usable re-check date and a 14th before it too early",
       "Does not claim to have booked or checked Dana's real calendar"
     ],
     "must_use_pivots": [
@@ -137,7 +137,7 @@
     "expected_routing": "inline",
     "rubric": [
       "Recognises at least two streak-bearing habits (Morning Run and Portuguese Speaking Practice) and either asks which one or reports both clearly labelled",
-      "If it reports figures, Morning Run shows completed on each of the last 3 days and Portuguese speaking shows a streak of 0 (3 of the last 7 days)",
+      "If it reports figures, Morning Run shows completed on each of the last 3 days and Portuguese speaking shows a streak of 0, its only recent sessions being 3, 5 and 7 days ago",
       "Does not merge the two into one invented streak number"
     ],
     "must_use_pivots": [],
@@ -156,7 +156,7 @@
     "message": "I've been really consistent with my speaking practice lately, right?",
     "expected_routing": "inline",
     "rubric": [
-      "Gently corrects the premise: the speaking habit was done on only 3 of the last 7 days and the streak is 0 (missed the two most recent days)",
+      "Gently corrects the premise with the real rows: the only recent speaking sessions were 3, 5 and 7 days ago (at most 3 of the last 7 days), the two most recent days were missed, and the streak is 0",
       "Cites the numbers from the habit log rather than reassuring generically",
       "Offers one concrete next step (a specific session to restart the streak) and does not scold the user or repeat the shortfall more than once"
     ],
@@ -188,8 +188,8 @@
     "message": "Do I really need to do the full 20 minutes tonight? I'm wiped.",
     "expected_routing": "inline",
     "rubric": [
-      "Knows the 20 minute target and that the user has broken their streak (3 of the last 7 days, streak 0), and uses it to answer",
-      "Recommends a concrete compromise (for example a short session to restart the streak) or a clear yes/no with that reasoning",
+      "Knows the 20 minute target and that the streak is broken (the last sessions were 3, 5 and 7 days ago, nothing in the last two days, streak 0), and uses that to answer",
+      "Recommends a specific compromise (for example a named shorter session to restart the streak) or an explicit yes/no with that reasoning",
       "Links it to the Lisbon trip on 12 Dec (or the 10 minute conversation goal)"
     ],
     "must_use_pivots": [
@@ -308,7 +308,7 @@
     "rubric": [
       "Flags that launch spending is already 2,340 USD against the 2,000 USD cap (340 USD over) so a new 250 USD purchase pushes it further",
       "Notes photography was already paid for (300 USD to Studio Lena)",
-      "Gives a clear recommendation (hold off, or find something to cut) rather than just 'sounds good'"
+      "Gives an explicit recommendation (hold off, or name something to cut) rather than agreeing without a position"
     ],
     "must_use_pivots": [
       "BUDGET_OVERRUN"
@@ -748,7 +748,7 @@
     "expected_routing": "inline",
     "rubric": [
       "Identifies the Lisbon trip on 12 Dec and counts the remaining time from today's date as given in the ground truth",
-      "Judges progress honestly: roughly A2 now versus B1 needed, and the speaking habit streak is 0 (3 of the last 7 days)",
+      "Judges progress honestly: roughly A2 now versus B1 needed, and the speaking habit streak is 0 (its last sessions were 3, 5 and 7 days ago, none in the last two days)",
       "Gives one or two specific next steps"
     ],
     "must_use_pivots": [
@@ -829,7 +829,7 @@
     "expected_routing": "inline",
     "rubric": [
       "Chooses among the user's quests with reasons from their data, rather than listing generic options",
-      "A strong answer prioritises the research chapter (3 Nov deadline, about 3,600 words left, analysis plan not started); acceptable alternatives are the family tiling prep (plumber 14-16 Oct) or interviews, if justified with seeded facts",
+      "Its pick is the research chapter (3 Nov deadline, about 3,600 words left, analysis plan not started), the family tiling prep (plumber 14-16 Oct) or the customer interviews, and the reason it gives is a seeded fact from that quest; any other pick, or a pick with no seeded fact behind it, fails",
       "Does not recommend a run (knee ban) and does not pick launch work that depends on the wax shipment arriving 28 Oct without saying so"
     ],
     "must_use_pivots": [
