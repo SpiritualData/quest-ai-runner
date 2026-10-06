@@ -336,11 +336,18 @@ def send_bootstrap_report_via_quest(
         # Send via Quest if client is available
         try:
             quest_client = quest_client_factory()
-            quest_client.send_email(
-                to=[user_id],
+            # Use Spiritual Data team quest for bootstrap reports
+            # Requires Quest API to have proper email configuration
+            team_quest_id = os.getenv("QAR_TEAM_QUEST_ID")
+            if not team_quest_id:
+                _log.debug("QAR_TEAM_QUEST_ID not configured, cannot send bootstrap report")
+                return False
+
+            quest_client.send_quest_email(
+                quest_id=team_quest_id,
                 subject=report["subject"],
                 body=report["body"],
-                quest_id=None,
+                recipients=[user_id],
             )
             # Mark as sent
             mark_report_sent(

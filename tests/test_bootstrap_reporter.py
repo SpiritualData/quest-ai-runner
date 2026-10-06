@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 from quest_ai_runner.adapters.bootstrap_reporter import (
     check_should_send_monthly_report,
@@ -189,18 +191,25 @@ def test_send_report_succeeds_after_bootstrap():
 
         def mock_quest_factory():
             class MockClient:
-                def send_email(self, **kwargs):
-                    emails_sent.append(kwargs)
+                def send_quest_email(self, quest_id: str, *, subject: str, body: str,
+                                     recipients: list = None, **kwargs):
+                    emails_sent.append({
+                        "quest_id": quest_id,
+                        "subject": subject,
+                        "body": body,
+                        "recipients": recipients,
+                    })
             return MockClient()
 
-        result = send_bootstrap_report_via_quest(
-            tmpdir, tmpdir, "user@example.com", mock_quest_factory
-        )
+        with patch.dict(os.environ, {"QAR_TEAM_QUEST_ID": "test_quest_id"}):
+            result = send_bootstrap_report_via_quest(
+                tmpdir, tmpdir, "user@example.com", mock_quest_factory
+            )
 
-        assert result
-        assert len(emails_sent) == 1
-        assert "QAR Corpus Monthly Summary" in emails_sent[0]["subject"]
-        assert "user@example.com" in emails_sent[0]["to"]
+            assert result
+            assert len(emails_sent) == 1
+            assert "QAR Corpus Monthly Summary" in emails_sent[0]["subject"]
+            assert "user@example.com" in emails_sent[0]["recipients"]
 
 
 def test_send_report_not_due_within_30_days():
@@ -211,7 +220,7 @@ def test_send_report_not_due_within_30_days():
 
         def mock_quest_factory():
             class MockClient:
-                def send_email(self, **kwargs):
+                def send_quest_email(self, **kwargs):
                     raise AssertionError("Should not send email")
             return MockClient()
 

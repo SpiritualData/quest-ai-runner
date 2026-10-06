@@ -1872,26 +1872,35 @@ def main(argv=None) -> int:
         print(f"Time: {elapsed_time:.0f}s (~{int(elapsed_time // 60)}m)")
         print()
 
-        # Attempt to send monthly email report if Quest API is configured
+        # Send monthly email report after bootstrap completion
         try:
-            from .bootstrap_email import send_monthly_bootstrap_email
-            user_email = os.getenv("QAR_BOOTSTRAP_EMAIL_USER")
-            if send_monthly_bootstrap_email(
-                cards_created=n,
-                corpus_path=corpus_abs,
-                cards_dir=cards_dir,
-                tokens_used=tokens_in,
-                cost_usd=measured or cost,
-                elapsed_seconds=elapsed_time,
-                model=model,
-                provider=prov,
-                user_email=user_email,
-            ):
-                log.info("monthly bootstrap report email sent")
-            else:
-                log.debug("monthly bootstrap report email not sent (not configured or recently sent)")
+            from .adapters.bootstrap_reporter import (
+                mark_bootstrap_completed,
+                send_bootstrap_report_via_quest,
+            )
+            from .runner.quest_client import quest_client_from_env
+
+            mark_bootstrap_completed(cards_dir)
+
+            try:
+                quest_client = quest_client_from_env(os.environ)
+                user_id = os.getenv("QAR_BOOTSTRAP_EMAIL_USER")
+                if user_id:
+                    if send_bootstrap_report_via_quest(
+                        cards_dir=cards_dir,
+                        corpus_root=corpus_abs,
+                        user_id=user_id,
+                        quest_client_factory=lambda: quest_client,
+                    ):
+                        log.info("monthly bootstrap report email sent")
+                    else:
+                        log.debug("monthly bootstrap report email not sent (not configured or recently sent)")
+            except ImportError:
+                log.debug("Quest client not available, skipping monthly bootstrap email")
+            except Exception as e:
+                log.debug("failed to send monthly bootstrap email: %s", e)
         except Exception as e:
-            log.warning("failed to send monthly bootstrap email: %s", e)
+            log.debug("bootstrap reporter setup failed: %s", e)
 
         return 0
 
