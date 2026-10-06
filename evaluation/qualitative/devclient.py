@@ -31,9 +31,62 @@ QUEST_TEAM = DEV_ENV.get("QUEST_TEAM_ID") or ""
 assert "batmanhq" in QUEST_BASE and "spiritualdata.org" not in QUEST_BASE, (
     f"REFUSING TO RUN: {QUEST_BASE} is not the dev Quest backend")
 
+# QUAL_INPROCESS=1: serve every call from quest-backend's app in this process (see inprocess.py),
+# so one run can pin its own models without touching the shared dev server's config.
+INPROCESS = os.environ.get("QUAL_INPROCESS") == "1"
+
 TAG = "ZZQEVAL"
 WORK_DIR = Path("/tmp/qualeval")
 WORK_DIR.mkdir(parents=True, exist_ok=True)
+
+
+LOCK_PATH = WORK_DIR / "world.lock"
+
+
+class WorldLock:
+    """Exclusive ownership of the eval world for one command (setup/reset/run/teardown).
+
+    The world lives on one dev ACCOUNT, so two runs always collide: one run's reset tears down the
+    other's world mid-case, and every diff picks up the other run's writes (seen 2026-10-06: a
+    teardown racing another agent's reset deleted 8 of its 12 collections and invalidated its
+    78-case run). An advisory ``fcntl`` lock on ``world.lock``, held for the whole command, refuses
+    a second command with the holder's pid, command and start time. The kernel drops it when the
+    holder exits, so a crashed run never leaves a stale lock."""
+
+    def __init__(self, command):
+        self.command = command
+        self.handle = None
+
+    def __enter__(self):
+        import datetime
+        import fcntl
+        self.handle = open(LOCK_PATH, "a+")
+        try:
+            fcntl.flock(self.handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            self.handle.seek(0)
+            holder = self.handle.read().strip() or "unknown holder"
+            self.handle.close()
+            raise SystemExit(f"REFUSING: the eval world is in use by another command ({holder}). "
+                             "Two runs on one dev account corrupt each other; wait for it to "
+                             "finish.")
+        self.handle.seek(0)
+        self.handle.truncate()
+        self.handle.write(json.dumps({
+            "pid": os.getpid(), "command": self.command,
+            "started": datetime.datetime.now().isoformat(timespec="seconds")}))
+        self.handle.flush()
+        return self
+
+    def __exit__(self, *exc):
+        import fcntl
+        try:
+            self.handle.seek(0)
+            self.handle.truncate()
+            fcntl.flock(self.handle, fcntl.LOCK_UN)
+        finally:
+            self.handle.close()
+        return False
 
 
 def api(method, path, body=None, params=None, timeout=120, retries=6):
@@ -49,6 +102,9 @@ def api(method, path, body=None, params=None, timeout=120, retries=6):
 
 def api_once(method, path, body=None, params=None, timeout=120):
     """(status, body, retry_after_seconds or None)."""
+    if INPROCESS:
+        import inprocess
+        return inprocess.api_once(method, path, QUEST_KEY, body, params, timeout)
     url = QUEST_BASE + path
     if params:
         url += "?" + urllib.parse.urlencode(params)
@@ -147,6 +203,10 @@ def list_quests():
 
 def sse_send(conv_id, content, *, auto_run=True, timeout=600):
     """POST one chat turn to the in-app streaming route and collect every SSE event."""
+    if INPROCESS:
+        import inprocess
+        return inprocess.sse_send(f"/api/quest-ai/conversations/{conv_id}/messages/stream",
+                                  QUEST_KEY, {"content": content, "auto_run": auto_run}, timeout)
     url = f"{QUEST_BASE}/api/quest-ai/conversations/{conv_id}/messages/stream"
     data = json.dumps({"content": content, "auto_run": auto_run}).encode()
     req = urllib.request.Request(url, data=data, method="POST")

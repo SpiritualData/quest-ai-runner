@@ -29,7 +29,7 @@ sys.path.insert(0, str(HERE))
 import judge as J  # noqa: E402
 import world as W  # noqa: E402
 from devclient import (  # noqa: E402
-    QUEST_BASE, WORK_DIR, api, create_conversation, delete_conversation, sse_send)
+    QUEST_BASE, WORK_DIR, WorldLock, api, create_conversation, delete_conversation, sse_send)
 
 DATASET_DIR = HERE / "datasets"
 RAW_DIR = WORK_DIR / "raw"
@@ -459,16 +459,21 @@ def main():
     global RESULTS_JSON, RESULTS_MD
     if args.examples:  # smoke runs never pollute the real results or RESULTS.md
         RESULTS_JSON, RESULTS_MD = WORK_DIR / "results_examples.json", WORK_DIR / "RESULTS_examples.md"
-    if args.command == "validate":
-        validate_datasets()
-    elif args.command == "setup":
+    if args.command in ("validate", "report"):
+        validate_datasets() if args.command == "validate" else write_report()
+        return
+    with WorldLock(f"runner.py {' '.join(sys.argv[1:])}"):
+        run_command(args)
+
+
+def run_command(args):
+    """setup/reset/teardown/run, each holding the world lock (see devclient.WorldLock)."""
+    if args.command == "setup":
         W.setup_partial() if args.partial else W.setup(args.wait, args.approve_own_asks)
     elif args.command == "reset":
         W.reset()
     elif args.command == "teardown":
         sys.exit(0 if W.teardown(args.keep_quests, args.decline_asks) else 1)
-    elif args.command == "report":
-        write_report()
     else:
         only = args.only.split(",") if args.only else None
         cases = load_example_cases() if args.examples else load_cases(args.dataset, only)

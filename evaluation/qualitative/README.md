@@ -59,7 +59,21 @@ the account it is assigned to. It never declines. These are test fixtures: nobod
 for them.
 
 The world is per ACCOUNT, so two agents running the harness on the same dev account collide
-(shared snapshot space; one run's `reset` tears down the other's world). Coordinate before running.
+(shared snapshot space; one run's `reset` tears down the other's world). `setup`, `reset`, `run`
+and `teardown` (in `runner.py` and `world.py`) therefore hold an exclusive `fcntl` lock on
+`/tmp/qualeval/world.lock` for their whole duration and refuse, naming the holder's pid, command
+and start time, while another holds it. The kernel releases it when the holder exits.
+
+### Per-run model comparison without touching the shared dev server
+
+The dev server's models are its `.env`, shared by everyone. To compare models, run the harness
+in-process with quest-backend's interpreter: `QUAL_INPROCESS=1 [QUAL_INPROCESS_MODEL=<id>]
+<quest-backend>/venv/bin/python3 evaluation/qualitative/runner.py run ... --workers 1`. Every call
+(REST and chat stream) is then served by the backend app in that process (`inprocess.py`,
+TestClient, same dev database, startup hooks not run), with every tier pinned to `<id>` for that
+run only; without a model it uses the backend `.env`, i.e. dev's current config. Run both arms of a
+comparison this way so the transport is identical, and copy `/tmp/qualeval/raw` aside between
+arms. `inprocess_usage.json` records calls and tokens per model actually served.
 
 `setup --partial` builds a smoke world with no quests (four unlinked collections) so the pipeline
 can be exercised without approvals; it cannot serve the datasets. Use `run --examples` with it.

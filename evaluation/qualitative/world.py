@@ -1269,12 +1269,15 @@ if __name__ == "__main__":
     parser.add_argument("--decline-asks", action="store_true",
                         help="teardown: decline any still-open quest-creation asks")
     args = parser.parse_args()
-    if args.cmd == "setup":
-        setup_partial() if args.partial else setup(args.wait, args.approve_own_asks)
-    elif args.cmd == "teardown":
-        ok = teardown(args.keep_quests, args.decline_asks)
-        sys.exit(0 if ok else 1)
-    elif args.cmd == "reset":
-        reset()
-    else:
+    if args.cmd == "show":
         show()
+        sys.exit(0)
+    from devclient import WorldLock
+    with WorldLock(f"world.py {' '.join(sys.argv[1:])}"):
+        if args.cmd == "setup":
+            setup_partial() if args.partial else setup(args.wait, args.approve_own_asks)
+        elif args.cmd == "teardown":
+            ok = teardown(args.keep_quests, args.decline_asks)
+            sys.exit(0 if ok else 1)
+        else:
+            reset()
