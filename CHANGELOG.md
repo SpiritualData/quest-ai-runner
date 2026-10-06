@@ -12,6 +12,16 @@ All notable changes to this project are documented here. The format is based on
   call alone, so routing can run on a cheaper model than the calls that share `planner_tier`
   (request understanding, card updates, summaries); the reach judge keeps its own tier.
 
+### Fixed
+- **A read the turn already ran is not run again.** Live whole turns showed planners on two
+  models re-issuing the identical read spec up to fourteen times. The run loop now skips a spec
+  (same keys and values, any order) that already ran this turn and tells the planner so in a
+  `planner_only` note that never reaches the answer or a deep brief; a second step that asks for
+  nothing new ends the read loop through the read-budget wrap-up. A tool step clears the record.
+- **`CompositeRetrievalAdapter.query` no longer hides a refusal.** When one adapter returned an
+  error and another returned text, the error was dropped, so the planner never learned its query
+  shape was wrong. Refusals now travel with the results under `[not answered by]`.
+
 ### Changed
 - **One explicit token budget for the deep prompt, spent by priority (`core/prompt_budget.py`).**
   Incident 2026-10-06: an autopilot work thread's prompt grew 367K -> 548K -> 838K characters over

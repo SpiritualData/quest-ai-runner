@@ -159,6 +159,12 @@ class CompositeRetrievalAdapter:
             error_msg = "; ".join(seen_errors) if seen_errors else "no results from any adapter"
             return Observation(kind="error", error=error_msg)
 
+        # An adapter that REFUSED the spec is reported beside the others' results, never dropped:
+        # found live (2026-10-06), a planner sent a query shape one adapter rejects with a
+        # correcting message, saw only another adapter's loosely matching search hits, and sent
+        # the same query again fourteen times. The refusal is what tells it to change the query.
+        if seen_errors:
+            combined_text_parts.append("[not answered by]\n" + "\n".join(seen_errors))
         combined_text = "\n\n".join(combined_text_parts)
         return Observation(
             kind="query",

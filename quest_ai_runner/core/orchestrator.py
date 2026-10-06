@@ -3601,8 +3601,10 @@ def _is_discovery_spec(spec: Any) -> bool:
 
 
 def _is_discovery_obs(obs: Any) -> bool:
-    """True if a gathered observation is a tagged discovery/capability listing (menu, not content)."""
-    return isinstance(obs, dict) and bool(obs.get("discovery"))
+    """True if a gathered observation is a tagged discovery/capability listing (menu, not content),
+    or a ``planner_only`` note about the turn itself (``repeated_read_observation``). Either way
+    the answer and a deep worker's brief never ground on it."""
+    return isinstance(obs, dict) and bool(obs.get("discovery") or obs.get("planner_only"))
 
 
 def _render_gathered(gathered: List[Dict[str, Any]]) -> str:
@@ -3624,7 +3626,9 @@ def _render_gathered(gathered: List[Dict[str, Any]]) -> str:
             )
         elif kind in ("read", "query"):
             loc = obs.get("locator", "")
-            if _is_discovery_obs(obs):
+            if obs.get("planner_only"):
+                parts.append(f"NOTE [{loc}]: {obs.get('text', '')}")
+            elif _is_discovery_obs(obs):
                 # A capability/source MENU, labeled so the reader treats it as "what I could call",
                 # not as facts gathered. (The answer path drops these entirely; see _grounding_block.)
                 parts.append(
@@ -4393,6 +4397,51 @@ def verify_context_max_chars() -> int:
     except ValueError:
         return 24000
     return value if value > 0 else 24000
+# REPEATED READS (found in live turns, 2026-10-06): a planner on a cheap OR a mid model re-issued
+# the SAME read spec up to fourteen times in one turn when its result did not hold what it hoped,
+# paying a read and a planning call each time and burying the gathered context in copies. The test
+# is structural, on the planner's own read specs (never on words it wrote): the same keys and
+# values, in any order, already ran this turn. Such a read is not run again; the planner is told
+# so, and a second step that asks for nothing new answers from what was gathered.
+def read_spec_key(spec: Dict[str, Any]) -> str:
+    """Canonical identity of a read spec: the same spec in any key order is the same read."""
+    try:
+        return json.dumps(spec, sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        return repr(spec)
+
+
+def split_repeated_reads(reads: Optional[List[Any]], executed: Dict[str, int]
+                         ) -> Tuple[List[Dict[str, Any]], List[Tuple[Dict[str, Any], int]]]:
+    """``(fresh, repeated)``: specs to run now, and specs that already ran this turn paired with
+    the step they ran at. A spec listed twice in one step runs once."""
+    fresh: List[Dict[str, Any]] = []
+    repeated: List[Tuple[Dict[str, Any], int]] = []
+    now: set = set()
+    for spec in reads or []:
+        if not isinstance(spec, dict):
+            continue
+        key = read_spec_key(spec)
+        if key in executed:
+            repeated.append((spec, executed[key]))
+        elif key not in now:
+            now.add(key)
+            fresh.append(spec)
+    return fresh, repeated
+
+
+def repeated_read_observation(spec: Dict[str, Any], step: int) -> Dict[str, Any]:
+    """The gathered note that stands in for a read that was not run again."""
+    note = Observation(
+        kind="query", locator="repeated_read",
+        text=(f"NOT RUN AGAIN: {describe_read_spec(spec)} with these exact arguments already ran "
+              f"at step {step} of this turn, and its result is in what you gathered above. The "
+              "same read returns the same result. Use that result, read something DIFFERENT, or "
+              "choose another action.")).to_dict()
+    note["planner_only"] = True
+    return note
+
+
 
 
 def truncate_verify_context(text: str, max_chars: Optional[int] = None) -> str:
@@ -10138,6 +10187,10 @@ class Orchestrator:
             # return nothing for it, and it does so exactly when the turn is busy: a real run had the
             # planner omit the topic on a "back to the launch plan" turn while it was planning reads,
             # which landed the fail-safe (continue) and filed that turn under the idea the user was
+        # REPEATED READS: canonical spec -> the step it ran at, and how many steps asked for
+        # nothing new. Cleared after a tool step, since a write can change what a read returns.
+        executed_reads: Dict[str, int] = {}
+        repeat_only_steps = 0
             # explicitly leaving. So a FELL-BACK decision is not treated as an answer: it is held as
             # the current best, and a later plan step in the SAME turn may still supply the real one.
             # If no step ever does, the fail-safe stands, which is the standing rule (any parse
@@ -10357,13 +10410,13 @@ class Orchestrator:
                         emit.status("Exploring…")
                     else:
                         emit.status("Searching…" if any(r.get("grep") for r in plan.reads) else "Reading…")
-                    new_obs = self._do_reads(plan.reads, guidance_selected_ids, card_context)
+                    new_obs = self._do_reads(fresh_reads, guidance_selected_ids, card_context)
                     gathered.extend(new_obs)
                     # The turn's REAL record of what was fetched, for the sufficiency gate above:
                     # these specs actually executed, whoever chose them (the planner on its own, or
                     # the gate). Recorded here, at the one place reads run, so the gate can never be
                     # satisfied by a plan that merely mentioned a fetch.
-                    abridged_state.record_reads(plan.reads)
+                    abridged_state.record_reads(fresh_reads)
                     _sources: List[str] = []
                     for _o in new_obs:
                         if not isinstance(_o, dict):
@@ -10387,7 +10440,7 @@ class Orchestrator:
                             if _rp:
                                 _sources.append(_rp)
                     emit.emit(ProgressEvent(type=EVENT_READ, step=steps,
-                                            data={"reads": len(plan.reads),
+                                            data={"reads": len(fresh_reads),
                                                   "sources": _sources[:8]}))
                     if budget_exhausted():
                         break
@@ -10468,12 +10521,29 @@ class Orchestrator:
         #     as open work, unless the user explicitly reopens it.
         reply_directive: Optional[str] = brainstorm_ack_note
         if cfg.card_thread_enabled:
+                executed_reads.clear()
             reply_directive = (CARD_LIFECYCLE_GATE + "\n\n" + brainstorm_ack_note
                                if brainstorm_ack_note else CARD_LIFECYCLE_GATE)
 
         def _answer_grounding(steering: Optional[str] = None) -> str:
+                fresh_reads, repeated_reads = split_repeated_reads(plan.reads, executed_reads)
+                # The per-step cap _do_reads applies, applied here so a spec it would drop is
+                # never recorded as having run.
+                fresh_reads = fresh_reads[: cfg.max_reads_per_step]
+                for spec, ran_at in repeated_reads:
+                    gathered.append(repeated_read_observation(spec, ran_at))
+                if repeated_reads and not fresh_reads:
+                    repeat_only_steps += 1
             # The L2 grounding EVERY reply this turn is built on.
             cv = context_view
+                elif not fresh_reads and repeat_only_steps >= 2:
+                    # Nothing new can arrive: end the loop exactly as a spent read budget does, so
+                    # the wrap-up below still honors a prepared hand-off and answers best-effort.
+                    break
+                elif not fresh_reads:
+                    if budget_exhausted():
+                        break
+                    continue
             if steering:
                 cv = ((context_view + "\n\n" if context_view else "")
                       + "--- IMPROVE YOUR ANSWER (it did not yet meet the goal) ---\n" + steering)
@@ -10488,6 +10558,8 @@ class Orchestrator:
 
         # Cap/budget fallback: still in read mode -> best-effort answer or escalate to deep.
         # In brainstorm mode escalation is unavailable, so a budget-capped turn always wraps up
+                    for spec in fresh_reads:
+                        executed_reads[read_spec_key(spec)] = steps
         # with a best-effort grounded answer (even with nothing gathered) instead of acting -- and
         # it grounds through ``_answer_grounding``, so it carries the no-action acknowledgment too.
         # A CHANGE REQUEST never wraps up with words when escalation is available: a budget-capped
@@ -10526,7 +10598,9 @@ class Orchestrator:
                     last_plan.goal = last_plan.goal or last_plan.deferred_deep.get("goal")
                     last_plan.deep_brief = (last_plan.deep_brief
                                             or last_plan.deferred_deep.get("brief"))
-            if (gathered or brainstorm_active) and not must_execute:
+            # A planner_only note (a repeated read) is not something gathered.
+            if ((any(not (isinstance(o, dict) and o.get("planner_only")) for o in gathered)
+                    or brainstorm_active) and not must_execute):
                 emit.status("Wrapping up with a best-effort answer…")
                 model = self._answer_model(plan, "balanced", hint=model_hint)
                 # The wrap-up reply ENDS the turn, and the answerer is not otherwise told so: a
