@@ -34,6 +34,7 @@ import re
 import threading
 import time
 from datetime import datetime, timezone
+from collections import OrderedDict
 from concurrent.futures import Future
 from concurrent.futures import TimeoutError as FuturesTimeoutError
 from dataclasses import dataclass, field
@@ -1364,6 +1365,11 @@ class OrchestratorConfig:
     # Off by default, and inert without ``read_reach_summary``, which only a consumer can write.
     planner_reach_judge: bool = False
     planner_reach_judge_tier: str = "best"
+    # The judge starts at the top of run(), concurrently with request understanding and context
+    # assembly, and the first plan only COLLECTS it. This is how long that collect may wait before
+    # planning proceeds without a verdict (exactly as with the judge off). It bounds a stuck judge;
+    # it is not a latency target, since the judge normally finishes before context assembly does.
+    planner_reach_judge_timeout_seconds: float = 20.0
     # CONSUMER-SUPPLIED: a short statement of what this deployment's reads can reach, and what its
     # attached execution environments handle. The library cannot know either, and a judge given a
     # generic guess would be worse than no judge, so an empty value disables the judge outright.
@@ -5555,25 +5561,74 @@ class Orchestrator:
 
     # --- the reach judge (opt in; see core/reach_judge.py) --------------------
 
+    #: How many distinct requests' verdicts one Orchestrator keeps. A long-lived orchestrator serves
+    #: many turns, and an unbounded per-message cache is a slow leak.
+    REACH_VERDICT_CACHE_SIZE = 256
+
+    def reach_judge_active(self) -> bool:
+        return bool(getattr(self.cfg, "planner_reach_judge", False)
+                    and (getattr(self.cfg, "read_reach_summary", "") or "").strip())
+
+    def prefetch_reach_verdict(self, user_message: str) -> Optional[Future]:
+        """Start the reach judge in the background and return its future (None when it is off).
+
+        The judge's only inputs are the literal request and the consumer's reach summary, both
+        known at the top of a turn, so there is no reason for it to sit serially in front of the
+        first plan: run() starts it here, it overlaps request understanding and context assembly,
+        and ``reach_verdict`` collects it. Idempotent per message: a second call for the same
+        request returns the SAME future, so a turn never pays for the judge twice. The pool is a
+        usage-scoped one created on the calling thread, so the judge's tokens are billed to the
+        turn that asked for them.
+        """
+        if not self.reach_judge_active():
+            return None
+        key = (user_message or "")[:500]
+        lock = self.__dict__.setdefault("reach_verdict_lock", threading.Lock())
+        with lock:
+            cache = self.__dict__.setdefault("reach_verdict_cache", OrderedDict())
+            future = cache.get(key)
+            if future is not None:
+                cache.move_to_end(key)
+                return future
+            pool = ThreadPoolExecutor(max_workers=1)
+            try:
+                future = pool.submit(self.judge_reach, user_message)
+            finally:
+                # wait=False: the submitted judge still runs to completion; this only stops the
+                # pool from accepting more work, so its thread exits when the judge returns.
+                pool.shutdown(wait=False)
+            cache[key] = future
+            while len(cache) > self.REACH_VERDICT_CACHE_SIZE:
+                cache.popitem(last=False)
+            return future
+
     def reach_verdict(self, user_message: str) -> Optional[Dict[str, Any]]:
         """The stronger tier's answer to where what this request needs lives, or None.
 
-        Cached per turn on the message itself, so the re-plan steps of a multi-step turn reuse the
-        one verdict rather than paying for it again. Every failure path returns None, which leaves
-        the planner prompt byte-identical to a run with no judge: this is an optimisation and must
-        never be able to take a turn down.
+        Collects the judge run() already started (see ``prefetch_reach_verdict``), or starts it now
+        for a caller that plans without run(). Cached on the message itself, so the re-plan steps
+        of a multi-step turn reuse the one verdict rather than paying for it again. Every failure
+        path returns None, including a judge still running after
+        ``planner_reach_judge_timeout_seconds``, which leaves the planner prompt byte-identical to
+        a run with no judge: this is an optimisation and must never be able to take a turn down.
         """
-        if not getattr(self.cfg, "planner_reach_judge", False):
+        future = self.prefetch_reach_verdict(user_message)
+        if future is None:
             return None
+        timeout = float(getattr(self.cfg, "planner_reach_judge_timeout_seconds", 20.0) or 20.0)
+        try:
+            return future.result(timeout=timeout)
+        except FuturesTimeoutError:
+            log.warning("Reach judge still running after %.1fs, planning without a verdict",
+                        timeout)
+        except Exception as e:  # noqa: BLE001
+            log.warning("Reach judge failed, planning without a verdict: %s: %s",
+                        type(e).__name__, str(e)[:200])
+        return None
+
+    def judge_reach(self, user_message: str) -> Optional[Dict[str, Any]]:
+        """Ask the judging tier the one reach question. Never raises; None on any failure."""
         summary = (getattr(self.cfg, "read_reach_summary", "") or "").strip()
-        if not summary:
-            return None
-        cache = getattr(self, "reach_verdict_cache", None)
-        if cache is None:
-            cache = self.reach_verdict_cache = {}
-        key = (user_message or "")[:500]
-        if key in cache:
-            return cache[key]
         verdict = None
         try:
             model = self.registry.resolve_tier(self.cfg.planner_reach_judge_tier)
@@ -5586,7 +5641,6 @@ class Orchestrator:
         except Exception as e:  # noqa: BLE001
             log.warning("Reach judge failed, planning without a verdict: %s: %s",
                         type(e).__name__, str(e)[:200])
-        cache[key] = verdict
         if verdict:
             log.info("Reach verdict: %s (covered_by=%s)", verdict["reach"], verdict["covered_by"])
         return verdict
@@ -9037,6 +9091,13 @@ class Orchestrator:
             except Exception:  # noqa: BLE001
                 pass
             narrator.begin(user_message)
+
+        # --- THE REACH JUDGE, started now so it overlaps everything before the first plan -------
+        # Its inputs are only the literal request and the consumer's reach summary, so it does not
+        # need to wait for understanding, context or guidance. Run serially in front of the first
+        # plan it measured +0.7s p50 per turn on a cheap planner (2026-10-05); started here, the
+        # first _plan() only collects a result that is normally already there. No-op when off.
+        self.prefetch_reach_verdict(user_message)
 
         # --- ContextAssembler: pre-flight context injection (optional fifth adapter) -----------
         # When a ContextAssembler is wired, call assemble() once before the loop so task-specific

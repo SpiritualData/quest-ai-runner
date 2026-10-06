@@ -20,8 +20,11 @@ real LLM call is made anywhere in this file.
 """
 from __future__ import annotations
 
+import threading
+import time
 from typing import Any, Dict, List, Optional
 
+from quest_ai_runner.core.adapters import AssembledContext
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import (
     Orchestrator,
@@ -333,3 +336,102 @@ def test_plan_sends_no_verdict_heading_at_all_for_an_inside_verdict():
     orch._plan("what is still open on my list", "", "", [])
     main_prompt = provider.prompts[-1]
     assert VERDICT_HEADING not in main_prompt
+
+
+# ---------------------------------------------------------------------------
+# The judge overlaps the turn instead of sitting in front of the first plan
+# ---------------------------------------------------------------------------
+
+class SlowJudgeProvider(DispatchingProvider):
+    """Sleeps on the judge's call only, and records when the judge started."""
+
+    def __init__(self, delay: float, **kwargs: Any):
+        super().__init__(**kwargs)
+        self.delay = delay
+        self.judge_started = threading.Event()
+        self.judge_calls = 0
+
+    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any],
+             tier: Optional[str] = None) -> Any:
+        if tool_schema.get("name") == "reach":
+            self.judge_calls += 1
+            self.judge_started.set()
+            time.sleep(self.delay)
+        return super().plan(prompt, model=model, tool_schema=tool_schema, tier=tier)
+
+
+def test_prefetch_returns_the_same_future_for_the_same_request_and_judges_once():
+    provider = SlowJudgeProvider(0.0, reach_response={"reach": "world"},
+                                 decide_response={"action": "answer"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    first = orch.prefetch_reach_verdict("what is the weather today")
+    assert first is orch.prefetch_reach_verdict("what is the weather today")
+    assert orch.reach_verdict("what is the weather today") == {"reach": "world", "covered_by": None}
+    assert provider.judge_calls == 1
+
+
+def test_prefetch_is_a_no_op_when_the_judge_is_off():
+    provider = SlowJudgeProvider(0.0, reach_response={"reach": "world"},
+                                 decide_response={"action": "answer"})
+    orch = build(provider, planner_reach_judge=False, read_reach_summary="Can read local notes.")
+    assert orch.prefetch_reach_verdict("anything") is None
+    assert provider.judge_calls == 0
+
+
+def test_a_prefetched_verdict_costs_the_first_plan_no_wait():
+    provider = SlowJudgeProvider(0.3, reach_response={"reach": "world"},
+                                 decide_response={"action": "answer"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    orch.prefetch_reach_verdict("who won last night")
+    time.sleep(0.4)  # stands in for request understanding and context assembly
+    started = time.monotonic()
+    orch._plan("who won last night", "", "", [])
+    assert time.monotonic() - started < 0.2
+    assert provider.judge_calls == 1
+
+
+def test_a_judge_that_overruns_its_timeout_leaves_the_plan_without_a_verdict():
+    provider = SlowJudgeProvider(1.0, reach_response={"reach": "outside", "covered_by": "x"},
+                                 decide_response={"action": "answer"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.",
+                 planner_reach_judge_timeout_seconds=0.05)
+    started = time.monotonic()
+    assert orch.reach_verdict("restart the service") is None
+    assert time.monotonic() - started < 0.5
+
+
+def test_the_verdict_cache_is_bounded():
+    provider = SlowJudgeProvider(0.0, reach_response={"reach": "inside"},
+                                 decide_response={"action": "answer"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    orch.REACH_VERDICT_CACHE_SIZE = 3
+    for i in range(10):
+        orch.reach_verdict(f"request number {i}")
+    assert len(orch.reach_verdict_cache) == 3
+    assert list(orch.reach_verdict_cache) == [f"request number {i}"[:500] for i in (7, 8, 9)]
+
+
+class WaitingAssembler:
+    """A context assembler that records whether the judge had already started while it ran."""
+
+    def __init__(self, provider: SlowJudgeProvider):
+        self.provider = provider
+        self.judge_running_during_assembly: Optional[bool] = None
+
+    def assemble(self, message: str, meta: Optional[Dict[str, Any]] = None) -> AssembledContext:
+        self.judge_running_during_assembly = self.provider.judge_started.wait(timeout=2.0)
+        return AssembledContext(context_view="")
+
+
+def test_run_starts_the_judge_before_context_assembly_finishes():
+    provider = SlowJudgeProvider(0.0, reach_response={"reach": "inside"},
+                                 decide_response={"action": "answer", "rationale": "ok"})
+    assembler = WaitingAssembler(provider)
+    orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider,
+                        registry=ModelRegistry(provider), context_assembler=assembler,
+                        config=OrchestratorConfig(planner_reach_judge=True,
+                                                  read_reach_summary="Can read local notes."))
+    orch.run("what is still open on my list")
+    # Serial (the old shape), the judge could only start at the first plan, after assembly.
+    assert assembler.judge_running_during_assembly is True
+    assert provider.judge_calls == 1
