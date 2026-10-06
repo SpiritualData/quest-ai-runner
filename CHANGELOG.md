@@ -7,6 +7,41 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Fast, token-efficient live web search (`WebResearch`, `core/adapters.py`).** Web search was
+  previously a `RetrievalAdapter` folded INTO `CompositeRetrievalAdapter`, which broadcasts every
+  grep/query to every member adapter -- so an ordinary corpus grep also fired a paid, slow web
+  search, the planner had no web read shape (it had to discover "web" via `list_sources` first),
+  and a `claude_cli` lane's provider had no `supports_web_search`, so it got no web search at all.
+  Now:
+  - `adapters/web_research.py`'s `WebResearchAdapter` (`build_web_research_from_env`) is a
+    snippet-first search (`search(queries, fresh=)`, one or several queries run in parallel, ~5
+    results with title/url/snippet plus a short summary and a "cite as [title](url)" note) and a
+    bounded single-page fetch (`fetch(url, focus=, fresh=)`, passage selection to roughly 800
+    tokens) over backends auto-selected from whichever key/config is present: Serper, Brave,
+    Tavily, SearXNG, or Gemini grounding (`QAR_WEB_SEARCH_MODEL`, default
+    `gemini-2.5-flash-lite`) -- the last of these is what gives a `claude_cli` lane (no Anthropic
+    `web_search` tool) shallow web search for the first time. A disk/memory cache
+    (`adapters/web_cache.py`) and a daily call cap keep repeat queries and page fetches free.
+    `QAR_WEB_SEARCH_BACKEND` pins one explicitly; `WEB_SEARCH_ENABLED=false` disables the whole
+    feature. See `docs/web-search.md`.
+  - `Orchestrator.web` (new constructor kwarg, `core/adapters.WebResearch` Protocol) is wired by
+    `build_orchestrator` from `RunnerConfig.web_research` (auto-built from env when unset) and
+    reached ONLY through the planner's own `{"web": "<query>"}` / `{"web_page": "<url>", "focus":
+    "<...>"}` read keys, dispatched directly in `Orchestrator._exec_one_read` -- NEVER folded into
+    `CompositeRetrievalAdapter`, which fixes the broadcast problem. The planner gets a short WEB
+    block (placed, like the tools block, AFTER the planner body) and the matching
+    `web`/`web_page`/`focus`/`fresh` decide-schema fields ONLY when a web adapter is actually
+    wired, so an unconfigured deployment pays zero extra prompt tokens. The reach judge's "world"
+    verdict now tells the planner a current public fact is reachable through a `{"web": ...}` read
+    instead of a hand-off or a guess, when a web adapter is configured. An unconfigured `{"web":
+    ...}` read degrades to a named "not configured" error, never a crash or a silent drop. The
+    legacy `ProviderWebSearchAdapter` fold-in (Anthropic/Gemini native search, folded into
+    retrieval) is kept as a fallback for the rare case `WebResearchAdapter` could not be built, so
+    no deployment regresses to no web capability.
+  - Costs: a search call is a few hundred input tokens (cached per query/TTL); a page fetch is
+    bounded to roughly 800 tokens of extracted passages; the Gemini-grounding backend bills to
+    that key, every other backend is billed by the search provider itself (several offer a free
+    tier).
 - **`OrchestratorConfig.planner_model` / `QAR_PLANNER_MODEL`: the routing decision's own model.**
   Empty (default) keeps resolving `planner_tier`. A model id there is sent verbatim on the decide
   call alone, so routing can run on a cheaper model than the calls that share `planner_tier`

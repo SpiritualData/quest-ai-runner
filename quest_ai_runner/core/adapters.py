@@ -621,6 +621,50 @@ class RetrievalAdapter(Protocol):
         ``ReferenceResolver`` for ``reference_type``. Default (unsupported): ``None``."""
 
 
+@runtime_checkable
+class WebResearch(Protocol):
+    """Fast, token-efficient LIVE WEB access: the generic interface a consumer wires once (see
+    hard rule #2) so the brain can read the public web the SAME way it reads any other source,
+    without a special case inside ``core``.
+
+    This is deliberately NOT folded into ``RetrievalAdapter``/``CompositeRetrievalAdapter``: that
+    composite BROADCASTS every grep/query to every member adapter, which would fire a paid, slow
+    web search on every ordinary corpus grep or DB query. ``Orchestrator.web`` is wired
+    separately, and the planner reaches it only through its own two read keys (``{"web": ...}``,
+    ``{"web_page": ...}``), dispatched by ``Orchestrator._exec_one_read`` before the retrieval
+    adapter is even consulted.
+
+    A reference implementation lives in ``adapters/web_research.py``
+    (``build_web_research_from_env`` builds one from env: backend auto-selection, a snippet-first
+    search, bounded page-extract fetch, and a cache). Never raises; a failure degrades to an
+    ``Observation(kind="error", ...)``.
+    """
+
+    @property
+    def backend_name(self) -> str:
+        """Short id of the backend actually in use (e.g. "serper", "brave", "tavily",
+        "searxng", "gemini", "provider"), for logging/status -- never user-facing prose."""
+
+    def search(self, queries: Any, *, max_results: Optional[int] = None,
+               fresh: bool = False) -> Observation:
+        """Live web search for one query (``str``) or several (``List[str]``, run in parallel).
+
+        Returns ``Observation(kind="query", rel_path="web_search:<q>", text=<compact results with
+        a "cite as [title](url)" note>, hits=[{"title","url","snippet","query","source"}, ...])``.
+        ``fresh`` bypasses any cache (facts that change by the hour). Never raises."""
+
+    def fetch(self, url: str, *, focus: Optional[str] = None, fresh: bool = False) -> Observation:
+        """Fetch ONE web page and extract the passages relevant to ``focus`` (or the page's own
+        gist with no focus), bounded to roughly 800 tokens.
+
+        Returns ``Observation(kind="read", rel_path=url, locator="web extract: <url>",
+        text=<the relevant passages>)``. ``fresh`` bypasses the page cache. Never raises."""
+
+    def describe(self) -> str:
+        """One short line naming the backend/capability, for the planner prompt's WEB block
+        (e.g. "web search (serper)"). Never raises."""
+
+
 def accepts_reasoning_hint(provider: Any) -> bool:
     """Whether ``provider.answer`` declares a ``reasoning`` keyword (or ``**kwargs``). Never raises."""
     import inspect

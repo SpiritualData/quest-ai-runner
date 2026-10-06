@@ -54,6 +54,7 @@ READ_SPEC_KEYS = (
     "list_sources", "describe_source", "list_operations", "describe_operation",
     "list_guidance", "read_guidance",
     "cards", "card",
+    "web", "web_page",
 )
 
 ABRIDGED_NOTICE_HEADER = (

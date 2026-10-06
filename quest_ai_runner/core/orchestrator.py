@@ -1229,6 +1229,33 @@ TOOL_CALLS_TOOL_FIELD: Dict[str, Any] = {
 }
 
 
+# The opt-in LIVE WEB read-spec fields (Orchestrator.web is wired, core/adapters.WebResearch):
+# added to ``reads.items.properties`` ONLY when configured, so a deployment with no web adapter
+# pays zero schema tokens for fields it could never use. See the WEB block (PLANNER_WEB_HEAD)
+# for the planner-facing usage rules; these are just the shapes the schema accepts.
+_WEB_READ_SPEC_FIELDS: Dict[str, Dict[str, Any]] = {
+    "web": {
+        "type": ["string", "array"],
+        "items": {"type": "string"},
+        "description": "A live web search query, or a list of queries (run in parallel).",
+    },
+    "web_page": {
+        "type": "string",
+        "description": "Fetch ONE web page by its URL (from a prior web result) and extract "
+                       "the relevant passages.",
+    },
+    "focus": {
+        "type": "string",
+        "description": "With web_page: what you need from that page.",
+    },
+    "fresh": {
+        "type": "boolean",
+        "description": "With web/web_page: bypass the cache (only for facts that change by "
+                       "the hour).",
+    },
+}
+
+
 def strip_schema_descriptions(schema: Any) -> Any:
     """PUBLIC: a deep copy of ``schema`` with every ``description`` key removed.
 
@@ -1248,24 +1275,31 @@ def strip_schema_descriptions(schema: Any) -> Any:
 
 def decide_tool_for(mode_signals: bool, deferred_queued: bool,
                     card_thread: bool = False, tools: bool = False,
-                    compact: bool = False) -> Dict[str, Any]:
+                    compact: bool = False, web: bool = False) -> Dict[str, Any]:
     """Return the decide-tool schema variant for this run's configuration.
 
     ``mode_signals`` adds the opt-in ``mode_signal`` field; ``card_thread`` adds the opt-in
     ``card_thread`` field (per-idea threading); ``deferred_queued`` swaps the ``deferred_deep``
     field description for the queued-background wording so the schema always tells the planner what
-    the wired deep runner ACTUALLY does with deferred work. ``compact`` drops the field
+    the wired deep runner ACTUALLY does with deferred work. ``web`` adds the opt-in
+    ``web``/``web_page``/``focus``/``fresh`` read-spec fields (``Orchestrator.web`` is wired) --
+    same discipline as ``tools``: a deployment with no web adapter exposes no web vocabulary at
+    all, so the planner cannot emit a read it could never execute. ``compact`` drops the field
     descriptions (see ``strip_schema_descriptions``), keeping the field names, types, enums and
     required list, which is the whole contract a response has to satisfy.
     """
     base = DECIDE_TOOL_WITH_MODE_SIGNAL if mode_signals else DECIDE_TOOL
-    if not deferred_queued and not card_thread and not tools:
+    if not deferred_queued and not card_thread and not tools and not web:
         return compact_decide_schema(base) if compact else base
     tool = copy.deepcopy(base)
     if tools:
         props = tool["input_schema"]["properties"]
         props["action"]["enum"] = list(props["action"]["enum"]) + ["tool"]
         props["tool_calls"] = copy.deepcopy(TOOL_CALLS_TOOL_FIELD)
+    if web:
+        read_props = tool["input_schema"]["properties"]["reads"]["items"]["properties"]
+        for name, field_schema in _WEB_READ_SPEC_FIELDS.items():
+            read_props[name] = copy.deepcopy(field_schema)
     if deferred_queued:
         tool["input_schema"]["properties"]["deferred_deep"]["description"] = (
             DEFERRED_DEEP_FIELD_DESC_QUEUED)
@@ -1775,7 +1809,7 @@ class OrchestratorResult:
 # ---------------------------------------------------------------------------
 
 def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
-                       tools_enabled: bool = False) -> PlanDecision:
+                       tools_enabled: bool = False, web_enabled: bool = False) -> PlanDecision:
     # A provider's structured output is not guaranteed to be a dict: some models/SDKs return a LIST
     # (e.g. multiple tool calls, or a JSON array). Coerce to a dict so a stray shape degrades to a
     # safe "answer" instead of raising 'list' object has no attribute 'get' from the planner.
@@ -1811,6 +1845,7 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
                 or r.get("list_guidance") or r.get("read_guidance")
                 or r.get("cards") or r.get("card")
                 or (tools_enabled and r.get("tools"))
+                or (web_enabled and (r.get("web") is not None or r.get("web_page")))
             ):
                 clean_reads.append(r)
 
@@ -3594,6 +3629,46 @@ PLANNER_TOOLS_HEAD = (
     "\"tool_calls\". To find a tool that is not listed below, use a read spec "
     "{\"tools\": \"<what you need>\"}.\n")
 
+# The planner's LIVE WEB block (``Orchestrator.web`` is wired, ``core/adapters.WebResearch``).
+# Rendered via ``.format(describe=...)`` with the adapter's own ``describe()`` string. Placed
+# AFTER the planner body (see the ``tools_block``/``PLANNER_TOOLS_HEAD`` placement note above and
+# ``tests/test_tools.py::test_tools_block_comes_after_the_planner_body``): a block placed BEFORE
+# the action list gets noticed but not chosen. Absent entirely when no web adapter is wired, so
+# the prompt is byte-for-byte unchanged for a deployment that never configures one.
+PLANNER_WEB_HEAD = (
+    "--- LIVE WEB (via {describe}) ---\n"
+    "For public facts that may have changed or aren't in your sources (news, prices, schedules, "
+    "releases, people, events, docs), read the web instead of handing off or guessing:\n"
+    "{{\"web\": \"<query>\"}} -> ~5 results (title, url, snippet) plus a short summary. Write the "
+    "query yourself: key terms, names, and a year/date for anything time-sensitive (today's date "
+    "is in the context). Several {{\"web\": ...}} reads in one step run in parallel; use more than "
+    "one only when the question has genuinely separate parts.\n"
+    "{{\"web_page\": \"<url from the results>\", \"focus\": \"<what you need>\"}} -> the relevant "
+    "passages of ONE page, only when the snippets don't already answer.\n"
+    "Add \"fresh\": true only for hourly facts (live scores, today's prices, breaking news).\n"
+    "Never web-search the user's own data, this deployment's files, or chit-chat. Cite web facts "
+    "inline as [title](url), using only URLs from the results.\n"
+)
+
+
+def _web_describe_safe(web: Any) -> str:
+    """``web.describe()``, defensively: a WebResearch adapter's ``describe()`` is documented as
+    never-raising, but the planner prompt must never break on a misbehaving custom adapter."""
+    try:
+        text = web.describe()
+        if isinstance(text, str) and text.strip():
+            return text.strip()
+    except Exception:  # noqa: BLE001
+        pass
+    return "web search"
+
+
+def planner_web_block(web: Any) -> str:
+    """The WEB block for a wired ``web`` adapter, or ``""`` for ``web is None``."""
+    if web is None:
+        return ""
+    return PLANNER_WEB_HEAD.format(describe=_web_describe_safe(web))
+
 
 def _is_discovery_spec(spec: Any) -> bool:
     """True if a read spec only DISCOVERS capabilities/sources (a menu), not real content."""
@@ -3877,7 +3952,8 @@ def _is_orchestrator_command(text: str) -> bool:
         # Check for known orchestrator command keys
         orchestrator_keys = {
             "list_operations", "describe_operation", "list_sources", "describe_source",
-            "grep", "rel_path", "query", "list_guidance", "read_guidance", "cards", "card"
+            "grep", "rel_path", "query", "list_guidance", "read_guidance", "cards", "card",
+            "web", "web_page",
         }
         return any(k in obj for k in orchestrator_keys)
     except (json.JSONDecodeError, ValueError, TypeError):
@@ -4306,6 +4382,10 @@ def describe_read_spec(spec: Dict[str, Any]) -> str:
         return f"cards({spec['cards']!r})"
     if spec.get("card") is not None:
         return f"card({spec['card']})"
+    if spec.get("web") is not None:
+        return f"web({spec['web']!r})"
+    if spec.get("web_page"):
+        return f"web_page({spec['web_page']!r})"
     if spec.get("grep"):
         return f"grep({spec['grep']!r})"
     if spec.get("query") is not None:
@@ -4923,6 +5003,7 @@ class Orchestrator:
         recent_context: Optional[RecentContextStore] = None,
         anticipator: Optional[Anticipator] = None,
         tools: Optional[ToolRegistry] = None,
+        web: Optional[Any] = None,
     ):
         self.retrieval = retrieval
         self.provider = provider
@@ -5006,6 +5087,16 @@ class Orchestrator:
         # briefs list the same tools with the shell command that calls them. None/empty = the
         # loop is exactly what it was before tools existed.
         self.tools: Optional[ToolRegistry] = tools if tools else None
+        # Optional LIVE WEB adapter (the ``WebResearch`` interface, ``core/adapters.py``). When
+        # wired, the planner gains its own two read keys -- {"web": "<query>"} and
+        # {"web_page": "<url>", "focus": "<...>"} -- dispatched directly in ``_exec_one_read``,
+        # NEVER broadcast through ``self.retrieval``/``CompositeRetrievalAdapter`` (that composite
+        # fans every grep/query out to every member adapter, which would fire a paid, slow web
+        # search on an ordinary corpus read). None (the default) means exactly today's behavior:
+        # no WEB block in the planner prompt, no web/web_page read keys in the decide schema, and
+        # a stray {"web": ...} spec from a model that hallucinated one returns a named "not
+        # configured" error instead of being silently dropped.
+        self.web: Optional[Any] = web
         # The single-flight handle for the turn-end anticipation learn/plan thread (see
         # _kickoff_anticipation): while it is alive, further kickoffs are skipped, not queued.
         self._anticipation_thread: Optional[threading.Thread] = None
@@ -5079,6 +5170,30 @@ class Orchestrator:
             return Observation(kind="query", locator=f"tools({query})",
                                text="TOOLS MATCHING YOUR SEARCH (call with action \"tool\"):\n"
                                     + text)
+        # LIVE WEB (the WebResearch adapter, core/adapters.py): dispatched directly here, BEFORE
+        # the retrieval-None guard below, because this never goes through ``self.retrieval`` --
+        # folding it into CompositeRetrievalAdapter would broadcast every grep/query to it too,
+        # firing a paid, slow web search on an ordinary corpus read. ``self.web is None`` returns
+        # a NAMED error Observation (never raises, never silently drops the spec) so the planner
+        # learns web search is unavailable here and moves on instead of retrying the same spec.
+        if spec.get("web") is not None:
+            if self.web is None:
+                return Observation(kind="error",
+                                    error="Web search is not configured in this deployment.")
+            queries = spec["web"]
+            try:
+                return self.web.search(queries, fresh=bool(spec.get("fresh")))
+            except Exception as e:  # noqa: BLE001 — a web adapter must never break the loop
+                return Observation(kind="error", error=f"web search failed: {e}")
+        if spec.get("web_page"):
+            if self.web is None:
+                return Observation(kind="error",
+                                    error="Web search is not configured in this deployment.")
+            try:
+                return self.web.fetch(str(spec["web_page"]), focus=spec.get("focus") or None,
+                                      fresh=bool(spec.get("fresh")))
+            except Exception as e:  # noqa: BLE001 — a web adapter must never break the loop
+                return Observation(kind="error", error=f"web page fetch failed: {e}")
         # No retrieval adapter: gracefully report unsupported rather than crashing. The brain
         # can still answer from transcript/context_view; it just cannot ground on a corpus.
         if self.retrieval is None and not (
@@ -5494,7 +5609,8 @@ class Orchestrator:
                                       self.cfg.deferred_deep_queued,
                                       self.cfg.card_thread_enabled,
                                       tools=self.tools is not None,
-                                      compact=compact_plan)
+                                      compact=compact_plan,
+                                      web=self.web is not None)
         # THE CASCADE'S ONE EXTRA FIELD, present only when a consumer opted in, so a deployment
         # that does not use the cascade pays nothing for it. Copied before mutating: the schemas
         # above are module-level singletons on the no-variant path.
@@ -5517,6 +5633,10 @@ class Orchestrator:
         # brainstorm note so PLANNER_PROMPT keeps its format slots; absent entirely with no tools.
         tools_block = (PLANNER_TOOLS_HEAD + self.tools.render_planner_block(user_message)
                        if self.tools is not None else "")
+        # The WEB block: same AFTER-the-body placement as tools_block above, for the same reason
+        # (a block placed before the action list is noticed but not chosen). Empty with no web
+        # adapter wired, so the prompt is byte-for-byte unchanged for a deployment without one.
+        web_block = planner_web_block(self.web)
         deferred_semantics = (DEFERRED_DEEP_QUEUED_SEMANTICS if self.cfg.deferred_deep_queued
                               else DEFERRED_DEEP_INLINE_SEMANTICS)
         # Per-idea threading: the TOPIC block (doctrine + this turn's candidate prior) is rendered
@@ -5560,6 +5680,8 @@ class Orchestrator:
         # the right call but still chose "answer", so nothing ran.
         if tools_block:
             prompt = prompt + "\n\n" + tools_block
+        if web_block:
+            prompt = prompt + "\n\n" + web_block
         if getattr(self.cfg, "planner_cascade", False):
             prompt = prompt + "\n\n" + PLANNER_CONFIDENCE_INSTRUCTION
         # THE REACH VERDICT, judged once per turn on a stronger tier and cached for the re-plan
@@ -5567,7 +5689,7 @@ class Orchestrator:
         # THIS request, not doctrine, and it belongs beside the request rather than above the
         # action list.
         reach = self.reach_verdict(user_message)
-        reach_text = verdict_block(reach)
+        reach_text = verdict_block(reach, web_configured=self.web is not None)
         if reach_text:
             prompt = prompt + "\n\n" + reach_text
         model = ((getattr(self.cfg, "planner_model", "") or "").strip()
@@ -5608,6 +5730,8 @@ class Orchestrator:
             tail_parts.append(plan_body)
             if tools_block:
                 tail_parts.append(tools_block)
+            if web_block:
+                tail_parts.append(web_block)
             if reach_text:
                 tail_parts.append(reach_text)
             plan_kwargs["layers"] = compose_layers(
@@ -5616,7 +5740,8 @@ class Orchestrator:
                 tail="\n\n".join(tail_parts),
             ).blocks()
         raw = provider.plan(prompt, **plan_kwargs)
-        decision = normalize_decision(raw or {}, self.cfg, tools_enabled=self.tools is not None)
+        decision = normalize_decision(raw or {}, self.cfg, tools_enabled=self.tools is not None,
+                                      web_enabled=self.web is not None)
         return self.cascade_review(decision, user_message, plan_context, gathered)
 
     # --- the reach judge (opt in; see core/reach_judge.py) --------------------
@@ -10425,6 +10550,10 @@ class Orchestrator:
                            or r.get("list_guidance") or r.get("read_guidance")
                            for r in plan.reads):
                         emit.status("Exploring…")
+                    elif any(r.get("web") is not None for r in plan.reads):
+                        emit.status("Searching the web…")
+                    elif any(r.get("web_page") for r in plan.reads):
+                        emit.status("Reading a web page…")
                     else:
                         emit.status("Searching…" if any(r.get("grep") for r in plan.reads) else "Reading…")
                     new_obs = self._do_reads(fresh_reads, guidance_selected_ids, card_context)
@@ -10441,20 +10570,31 @@ class Orchestrator:
                         if not isinstance(_o, dict):
                             continue
                         _kind = _o.get("kind", "")
+                        _o_hits = _o.get("hits") or []
                         if _kind == "grep":
                             # Show matched file paths; on empty show a "(no matches)" marker
-                            _hits = _o.get("hits") or []
                             _seen_rp: set = set()
-                            for _h in _hits:
+                            for _h in _o_hits:
                                 _rp = _h.get("rel_path")
                                 if _rp and _rp not in _seen_rp:
                                     _seen_rp.add(_rp)
                                     _sources.append(_rp)
-                            if not _hits:
+                            if not _o_hits:
                                 _pat = _o.get("pattern") or ""
                                 if _pat:
                                     _sources.append(f"(searched {_pat!r} — nothing found)")
+                        elif _o_hits and any(isinstance(_h, dict) and _h.get("url") for _h in _o_hits):
+                            # A web search observation: show the RESULT URLs, not the synthetic
+                            # "web_search:<query>" rel_path the adapter stamps on it.
+                            _seen_u: set = set()
+                            for _h in _o_hits:
+                                _u = _h.get("url") if isinstance(_h, dict) else None
+                                if _u and _u not in _seen_u:
+                                    _seen_u.add(_u)
+                                    _sources.append(_u)
                         else:
+                            # A web PAGE fetch has no hits and ``rel_path`` is the fetched URL
+                            # itself, so it falls through here unchanged.
                             _rp = _o.get("rel_path") or _o.get("pattern")
                             if _rp:
                                 _sources.append(_rp)

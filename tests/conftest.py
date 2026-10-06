@@ -54,6 +54,33 @@ def tool_catalog_is_empty_unless_a_test_says_otherwise(monkeypatch):
     monkeypatch.delenv("QAR_TOOLS_FILE", raising=False)
 
 
+#: Every env var ``select_search_backend``/``build_web_research_from_env``
+#: (``adapters/web_research.py``) reads to decide a live-web backend is available.
+_WEB_BACKEND_ENV_VARS = (
+    "QAR_WEB_SEARCH_BACKEND", "QAR_WEB_SEARCH_PROVIDER_MODEL", "QAR_WEB_SEARCH_MODEL",
+    "SERPER_API_KEY", "BRAVE_SEARCH_API_KEY", "BRAVE_API_KEY",
+    "TAVILY_API_KEY", "WEB_SEARCH_API_KEY", "SEARXNG_URL",
+    "GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_AI_API_KEY",
+)
+
+
+@pytest.fixture(autouse=True)
+def no_web_research_backend_unless_a_test_says_otherwise(monkeypatch):
+    """No test inherits the developer's/host's live-web backend keys.
+
+    ``build_orchestrator`` auto-wires ``cfg.web_research`` from the environment whenever ANY
+    backend's key/config is present (including this org's own ``GOOGLE_API_KEY``/
+    ``GOOGLE_AI_API_KEY``, routinely set in a dev shell for the Gemini model backend). Without
+    this, a test that builds through ``config.build_orchestrator`` picks up a REAL, live
+    WebResearchAdapter depending on whose machine runs the suite -- a host-environment leak, not a
+    real behavior difference. Tests of the web-research wiring itself set their own env (and
+    should still explicitly clear the vars they are not testing) or pass ``web_research=``/stub
+    the builder directly.
+    """
+    for name in _WEB_BACKEND_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture(autouse=True)
 def no_background_index_survives_a_test():
     """No context-index thread may outlive the test that started it.

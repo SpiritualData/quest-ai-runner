@@ -102,12 +102,21 @@ OUTSIDE_UNCOVERED_LINE = (
     "run discovery for it, do not invent a scope or a path, and do not hand it off to anything. "
     "Answer, and say plainly that you cannot reach it from here."
 )
-#: What the planner is told when the request is about the world right now.
+#: What the planner is told when the request is about the world right now, and no live web
+#: adapter is wired: the old behaviour, answer from what you know and say so plainly.
 WORLD_LINE = (
     "This request asks for a current public fact about the world. That is not work for a machine "
     "and not in any source you can read. This was judged separately and is settled: answer it. "
     "Say what you reliably know, and say plainly that you cannot check a live source for the "
     "current value. Do not hand it off and do not search your own sources for it."
+)
+#: Same verdict, but a live web adapter IS wired (``Orchestrator.web``): the fact is reachable,
+#: so the planner is told to read it rather than answer from memory or hand it off.
+WORLD_LINE_WEB = (
+    "This request asks for a current public fact about the world. That is not work for a machine "
+    "and not in any source you can read, but it IS reachable: this was judged separately and is "
+    "settled, so issue a {\"web\": \"<query>\"} read for it instead of answering from memory or "
+    "handing it off."
 )
 
 VERDICT_HEADING = "--- WHERE WHAT THIS REQUEST NEEDS ACTUALLY LIVES (already settled) ---\n"
@@ -138,18 +147,24 @@ def judge_prompt(message: str, reach_summary: str, max_message_chars: int = 2000
                                      message=(message or "")[:max_message_chars])
 
 
-def verdict_block(verdict: Optional[Dict[str, Any]]) -> str:
+def verdict_block(verdict: Optional[Dict[str, Any]], *, web_configured: bool = False) -> str:
     """The block appended to the planner prompt, or "" when nothing should change.
 
     An "inside" verdict deliberately adds NOTHING. It is the common case, so saying "this is
     reachable" on every ordinary request would spend tokens to tell the planner what it already
     assumes, and would give it a sentence to over-read on the requests that are genuinely mixed.
+
+    ``web_configured`` (default False, so an existing caller is byte-for-byte unchanged) is
+    whether a live web adapter is wired (``Orchestrator.web``). It changes ONLY the "world"
+    wording: with no web adapter the planner is told to answer from what it knows (``WORLD_LINE``,
+    unchanged); with one wired, a current public fact is reachable through a read, not a hand-off
+    or a guess (``WORLD_LINE_WEB``). A structural flag, never a keyword check on model output.
     """
     if not verdict:
         return ""
     reach = verdict.get("reach")
     if reach == "world":
-        return VERDICT_HEADING + WORLD_LINE + "\n"
+        return VERDICT_HEADING + (WORLD_LINE_WEB if web_configured else WORLD_LINE) + "\n"
     if reach != "outside":
         return ""
     covered = verdict.get("covered_by")
