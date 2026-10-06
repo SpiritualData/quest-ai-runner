@@ -29,6 +29,7 @@ DEV ONLY (devclient refuses to load otherwise).
 """
 import datetime
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -628,15 +629,45 @@ def request_quest(spec, cats):
     raise RuntimeError(f"quest creation failed: {status} {body}")
 
 
-def ensure_quests(wait_seconds=0):
+BACKEND_DIR = Path(os.environ.get("QUAL_BACKEND_DIR")
+                   or Path(__file__).resolve().parents[3] / "quest-backend")
+
+
+def approve_own_asks(decision_ids):
+    """DEV ONLY: approve the world's OWN quest-creation asks via quest-backend's human resolve path.
+
+    These asks are test fixtures this harness filed on the dev backend, so no person is asked to
+    sign in for them. ``approve_own_asks.py`` runs inside a quest-backend checkout
+    (``QUAL_BACKEND_DIR``, default: a sibling ``quest-backend``) with its interpreter
+    (``QUAL_BACKEND_PYTHON``, default ``venv/bin/python3`` there) and itself refuses unless that
+    backend is development with a local Mongo and each ask is an open, tagged quest-creation ask
+    the harness's own account requested. devclient has already refused any non-dev base URL."""
+    import subprocess
+    if not decision_ids:
+        return
+    python = os.environ.get("QUAL_BACKEND_PYTHON") or str(BACKEND_DIR / "venv" / "bin" / "python3")
+    script = Path(__file__).resolve().parent / "approve_own_asks.py"
+    proc = subprocess.run([python, str(script), *decision_ids], cwd=BACKEND_DIR,
+                          capture_output=True, text=True, timeout=300)
+    lines = [ln for ln in proc.stdout.splitlines() if ln.startswith("{")]
+    for line in lines:
+        print(f"  approve-own-asks: {line}")
+    if proc.returncode != 0:
+        raise SystemExit(f"approve-own-asks failed (exit {proc.returncode}): "
+                         f"{(proc.stderr or '').strip().splitlines()[-1:]}")
+
+
+def ensure_quests(wait_seconds=0, approve_own=False):
     """Make sure every world quest exists. Files the approval asks for missing ones, then polls up
-    to ``wait_seconds`` for a person to approve them. Returns ({key: quest_id}, {key: decision_id})
-    where the second dict is what is still pending."""
+    to ``wait_seconds`` for a person to approve them (or, with ``approve_own`` on dev, approves the
+    harness's own asks itself; see ``approve_own_asks``). Returns ({key: quest_id},
+    {key: decision_id}) where the second dict is what is still pending."""
     import time
     cats = category_lookup()
     asks = json.loads(ASKS_PATH.read_text()) if ASKS_PATH.exists() else {}
     quests, pending = {}, {}
     deadline = time.time() + wait_seconds
+    approved_once = False
     while True:
         quests, pending = {}, {}
         for key, spec in QUESTS.items():
@@ -653,6 +684,11 @@ def ensure_quests(wait_seconds=0):
                 asks[key] = decision
             pending[key] = asks[key]
         ASKS_PATH.write_text(json.dumps(asks, indent=1))
+        if pending and approve_own and not approved_once:
+            approve_own_asks(list(pending.values()))
+            approved_once = True
+            deadline = max(deadline, time.time() + 60)  # let the quest listing catch up
+            continue
         if not pending or time.time() >= deadline:
             return quests, pending
         time.sleep(10)
@@ -707,12 +743,13 @@ def fresh_state():
             "contents_built": False, "pivots": PIVOTS, "built": datetime.datetime.now().isoformat()}
 
 
-def setup(wait_seconds=0):
-    """Build the world. Needs one-time PERSON approval of the five quest creations (see
-    request_quest). Exits 3 if any are still pending; re-run `setup` after approving."""
+def setup(wait_seconds=0, approve_own=False):
+    """Build the world. Needs one-time approval of the five quest creations (see request_quest):
+    by a person, or on dev by the harness itself with ``approve_own``. Exits 3 if any are still
+    pending; re-run `setup` after approving."""
     if STATE_PATH.exists() and json.loads(STATE_PATH.read_text()).get("contents_built"):
         raise SystemExit(f"{STATE_PATH} exists: a world is already built. Run teardown or reset.")
-    quests, pending = ensure_quests(wait_seconds)
+    quests, pending = ensure_quests(wait_seconds, approve_own)
     if pending:
         print("\nQUEST APPROVALS PENDING. A person must approve these on dev (the app's "
               "'Asks for you', signed in; an API key cannot approve):")
@@ -1226,12 +1263,14 @@ if __name__ == "__main__":
     parser.add_argument("--wait", type=int, default=0,
                         help="setup: seconds to poll for a person to approve the quest asks")
     parser.add_argument("--partial", action="store_true", help="setup: smoke world, no quests")
+    parser.add_argument("--approve-own-asks", action="store_true",
+                        help="setup, DEV ONLY: approve the world's own quest asks via quest-backend")
     parser.add_argument("--keep-quests", action="store_true", help="teardown: keep approved quests")
     parser.add_argument("--decline-asks", action="store_true",
                         help="teardown: decline any still-open quest-creation asks")
     args = parser.parse_args()
     if args.cmd == "setup":
-        setup_partial() if args.partial else setup(args.wait)
+        setup_partial() if args.partial else setup(args.wait, args.approve_own_asks)
     elif args.cmd == "teardown":
         ok = teardown(args.keep_quests, args.decline_asks)
         sys.exit(0 if ok else 1)

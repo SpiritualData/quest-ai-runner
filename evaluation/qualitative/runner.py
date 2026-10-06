@@ -331,7 +331,14 @@ def run_cases(cases, use_judge=True, workers=1):
     W.delete_new_cards(world.get("cards_baseline"))
     for case in mutating:
         r = run_case(case, world, use_judge)
-        world = restore_world(r, world)
+        try:
+            world = restore_world(r, world)
+        except SystemExit as stop:  # reset aborted: keep this case's record, then stop the run
+            r["world_reset_failed"] = str(stop)
+            save_result(r)
+            print_row(r)
+            merge_results(records + [r])
+            raise
         W.delete_new_cards(world.get("cards_baseline"))
         records.append(r)
         save_result(r)
@@ -443,6 +450,9 @@ def main():
                         help="run datasets/_example.json (pipeline smoke test) instead of datasets")
     parser.add_argument("--wait", type=int, default=0, help="setup: seconds to wait for approvals")
     parser.add_argument("--partial", action="store_true", help="setup: smoke world, no quests")
+    parser.add_argument("--approve-own-asks", action="store_true",
+                        help="setup, DEV ONLY: approve the world's own quest-creation asks through "
+                             "quest-backend's resolve path (refuses on a non-dev backend)")
     parser.add_argument("--keep-quests", action="store_true")
     parser.add_argument("--decline-asks", action="store_true")
     args = parser.parse_args()
@@ -452,7 +462,7 @@ def main():
     if args.command == "validate":
         validate_datasets()
     elif args.command == "setup":
-        W.setup_partial() if args.partial else W.setup(args.wait)
+        W.setup_partial() if args.partial else W.setup(args.wait, args.approve_own_asks)
     elif args.command == "reset":
         W.reset()
     elif args.command == "teardown":

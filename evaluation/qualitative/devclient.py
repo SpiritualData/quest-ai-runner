@@ -36,7 +36,19 @@ WORK_DIR = Path("/tmp/qualeval")
 WORK_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def api(method, path, body=None, params=None, timeout=120):
+def api(method, path, body=None, params=None, timeout=120, retries=6):
+    """One REST call. A 429 (the dev API's rate limit, hit by setup's burst of seeding writes) is
+    retried with backoff, honoring Retry-After, instead of surfacing as a failed seed write."""
+    for attempt in range(retries + 1):
+        status, out, wait = api_once(method, path, body, params, timeout)
+        if status != 429 or attempt == retries:
+            return status, out
+        time.sleep(wait or min(30, 2 ** attempt))
+    return status, out
+
+
+def api_once(method, path, body=None, params=None, timeout=120):
+    """(status, body, retry_after_seconds or None)."""
     url = QUEST_BASE + path
     if params:
         url += "?" + urllib.parse.urlencode(params)
@@ -47,11 +59,16 @@ def api(method, path, body=None, params=None, timeout=120):
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             raw = resp.read().decode()
-            return resp.status, (json.loads(raw) if raw.strip() else None)
+            return resp.status, (json.loads(raw) if raw.strip() else None), None
     except urllib.error.HTTPError as e:
-        return e.code, e.read().decode()[:1500]
+        retry_after = e.headers.get("Retry-After") if e.headers else None
+        try:
+            retry_after = min(60.0, float(retry_after)) if retry_after else None
+        except ValueError:
+            retry_after = None
+        return e.code, e.read().decode()[:1500], retry_after
     except Exception as e:  # noqa: BLE001
-        return 0, f"{type(e).__name__}: {e}"
+        return 0, f"{type(e).__name__}: {e}", None
 
 
 def unwrap_list(body, *keys):
@@ -113,8 +130,12 @@ def list_collections():
 
 
 def notes_of(quest_id):
+    """A quest's notes, each with ``id`` set. The API names the key ``note_id``; reading ``id``
+    collapsed every note into one ``None`` key in snapshots and left teardown/revert unable to
+    delete any note (reset then aborted on "still has N notes")."""
     status, body = api("GET", f"/api/quests/{quest_id}/notes")
-    return unwrap_list(body, "notes", "items") if status == 200 else []
+    notes = unwrap_list(body, "notes", "items") if status == 200 else []
+    return [dict(n, id=n.get("id") or n.get("note_id")) for n in notes if isinstance(n, dict)]
 
 
 def list_quests():

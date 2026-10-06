@@ -25,7 +25,8 @@ DEV ONLY. Credentials come from the dev lane env file (relative to this checkout
 
 ```
 PY=.venv/bin/python3        # from the quest-ai-runner repo root
-$PY evaluation/qualitative/runner.py setup --wait 900   # files 5 quest-approval asks, waits for a person
+$PY evaluation/qualitative/runner.py setup --approve-own-asks  # dev: files 5 quest asks and approves them itself
+$PY evaluation/qualitative/runner.py setup --wait 900   # or: waits for a person to approve them
 $PY evaluation/qualitative/world.py show                # ids, pivots
 # author evaluation/qualitative/datasets/{explicit,implicit,multistep}.json (see schema.md)
 $PY evaluation/qualitative/runner.py validate           # schema-check the datasets: no world, no network
@@ -46,6 +47,19 @@ tag), then builds everything else. Approve once; after that use `reset` or `tear
 which keep the five quests and need no approval again. A full `teardown` deletes the quests, so the
 next `setup` needs approving again (an identical declined ask is refused for 30 days: do not decline
 them, use `--decline-asks` only deliberately).
+
+**On dev the harness approves its own asks:** `setup --approve-own-asks` resolves exactly the asks
+it filed for its own world, through quest-backend's human resolve path
+(`resolve_decision_request(..., "approve")`, so the quest is created with all its side effects),
+by running `approve_own_asks.py` inside a quest-backend checkout (`QUAL_BACKEND_DIR`, default a
+sibling `quest-backend`; interpreter `QUAL_BACKEND_PYTHON`, default its `venv/bin/python3`). It
+refuses unless that backend's `ENVIRONMENT` is development with a Mongo on this machine, and
+approves only an open `machine_quest_creation` ask that carries the eval tag and was requested by
+the account it is assigned to. It never declines. These are test fixtures: nobody needs to sign in
+for them.
+
+The world is per ACCOUNT, so two agents running the harness on the same dev account collide
+(shared snapshot space; one run's `reset` tears down the other's world). Coordinate before running.
 
 `setup --partial` builds a smoke world with no quests (four unlinked collections) so the pipeline
 can be exercised without approvals; it cannot serve the datasets. Use `run --examples` with it.
@@ -156,6 +170,46 @@ datasets on 2026-10-06:
 * One run per case, one judge call per case: report variance honestly, rerun disputed cases.
 * The judge is sonnet through the subscription CLI; a usage-limit refusal surfaces as `JUDGE ERROR`
   and the case is reported unjudged, never passed.
+
+## Known dataset gaps (static review, 2026-10-07, fifth pass)
+
+The datasets have never been run end to end, so there is no `RESULTS.md` yet and everything below
+comes from reading the cases against `world.py` and `judge.py`, not from observed failures. The
+fifth pass verified every arithmetic ground truth in every rubric against the seeded world (the
+2,340 expense total and the equipment/materials tie at 900 each, 41.7 km across five Run Log
+entries with three at effort 4 or higher, 1,870 words over 325 minutes, the 1,070 bathroom total,
+four vocabulary words with two mastered, the 35 percent outcome example) and every 2026 weekday
+fact the rubrics lean on (30 Oct Friday, 29 Oct Thursday, 28 Oct Wednesday, 20 Nov Friday,
+22 Nov Sunday). All of them check out, so none of the remaining gaps is an arithmetic error.
+
+What is still open, in rough order of how likely it is to matter:
+
+* **Five web-search cases grade nearly the same thing.** MS-005, MS-009, MS-014, MS-029 and
+  MS-041, plus EXP-075, all turn on "search honestly or say plainly that you could not", because
+  there is no web-search helper in the code path. Each pairs it with a different dependent action
+  (a price goal, a cure-time schedule, a date computed from the result, a tutor-day booking), so
+  they are not strict duplicates, but MS-005 and MS-041 are close: both search, then write a goal
+  whose description must carry a concrete element from the search or from the user's own data. If a
+  run shows them failing or passing together for the same reason, collapse them into one.
+* **`pivots_change_answer` is conservative on write cases with a hard assertion.** MS-003 and
+  MS-021 both derive their entire written value from a required pivot, which argues for setting the
+  gate, but each already proves retrieval through a hard `expect_writes` on the pivot's own text, so
+  the gate would add a second way to fail and a judge that reports `used` without `changed_answer`
+  would cap a correct run. Left off deliberately. Revisit only with real verdicts in hand.
+* **Three cases depend on a seeded window still being in the future.** IMP-025, IMP-026 and MS-006
+  reason from the plumber's 14-16 Oct availability. The dates themselves are stable seed data, but
+  the cases read naturally only while that window has not passed. They are not wrong in a later
+  month, just stranger to grade.
+* **Cases judged from code and reply alone, with nothing in the diff.** Daily reflections, period
+  reviews, goal updates, decision-requests, user settings, goal parent links and email all sit
+  outside `world.snapshot`, and MS-027's habit write may leave the diff empty because of the
+  `log_habit` gap EXP-027 documents. These are correctly built (no `expect_writes`, weight on the
+  false-claim rubric item), but they are the cases where a disputed verdict is hardest to settle,
+  so read the raw frames before re-authoring any of them.
+* **Two cases exist to expose quest-backend defects and are expected to fail.** EXP-078 (the
+  sandbox `add_quest_measurable_outcome` never calls `check_ai_field_write`, so the autopilot-off
+  gate does not hold) and EXP-027 (the `log_habit` record the app's own read cannot see). Do not
+  soften either when the first run comes back red.
 
 ## Iterating (for the next AI)
 
