@@ -13,6 +13,33 @@ All notable changes to this project are documented here. The format is based on
   (request understanding, card updates, summaries); the reach judge keeps its own tier.
 
 ### Changed
+- **One explicit token budget for the deep prompt, spent by priority (`core/prompt_budget.py`).**
+  Incident 2026-10-06: an autopilot work thread's prompt grew 367K -> 548K -> 838K characters over
+  three passes and the worker refused it ("Prompt is too long"). `compose_goal_prompt` now fits the
+  preamble's blocks to `SubprocessConfig.prompt_token_budget` / `QAR_DEEP_PROMPT_TOKEN_BUDGET`
+  (default 60K tokens, always capped at the model window minus the worker's reserve): request
+  first, then doctrine/persona, fresh updates, goals, plan of record, history, retrieval cards;
+  lowest tier compressed then dropped first, every cut logged and announced. `compose_batch_text`
+  fits its own parts through the same mechanism (`AUTOPILOT_BRIEF_TOKEN_BUDGET`). Exactly one
+  context-updates block survives per prompt (the newest), and `parse_manifest` reads the newest.
+- **Autopilot work threads start each pass fresh** (`executor.across_pass_resume`); a usage-limit
+  pause still resumes its own session. Any other resume is skipped when the session's transcript
+  plus the new prompt would not fit the window (`goal_runner.session_replay_tokens`). A launch
+  refused as "Prompt is too long" retries without the transcript, then at half the budget, and
+  only then fails with a plain cause.
+- **Past turns are pointers, fenced, and rendered once.** `TurnContextStore` shows a past turn's
+  opening (600 chars, context-updates blocks removed), records its quest `scope_tags` and task id,
+  never returns a turn from another quest or from the same thread, and the poller no longer renders
+  the rep turn store when the lane's assembler already renders turns
+  (`turn_context_store.assembler_renders_turns`, on the shared `composite_assembler.find_assembler`).
+  Quest tasks (quest id in `goal_id`) now carry quest scope tags (`executor.task_scope_tags`).
+- **The request reaches the deep worker once**, not as both `USER'S REQUEST` and the TASK brief.
+- **Autopilot receipts close what they account for.** The pass leaves the ref-to-item map with the
+  feedback ledger (`ContextUpdates.remember_offer`), and the executor records the run's
+  dispositions against it, so finished items stop coming back "still owed" every pass.
+- **Card relevance/consolidation judges get the gist of the request** (`prompt_budget.decision_excerpt`).
+- **A deep request for a model family ("opus") is no longer run on a different family** when the
+  lane's tier for that alias resolves elsewhere (e.g. `QAR_MODEL_QUALITY=haiku`).
 - **The reach judge no longer adds wall clock.** `run()` starts it at the top of the turn
   (`Orchestrator.prefetch_reach_verdict`), concurrently with request understanding, context
   assembly and guidance, and the first plan only collects it, bounded by the new

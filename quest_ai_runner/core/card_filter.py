@@ -11,6 +11,7 @@ from collections import OrderedDict
 from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Optional
 
+from . import prompt_budget
 from .adapters import ModelProvider, answer_with_reasoning
 
 _log = logging.getLogger("quest-ai-runner.card-filter")
@@ -349,6 +350,8 @@ def consolidate_context(
     ``model_provider`` is None, or the call/parse/validation fails, returns keep-all with
     deliver=paste in the original order (identical to the mechanical merge). Never raises.
     """
+    # A judge needs the gist of the request, never the whole brief (``prompt_budget``).
+    task = prompt_budget.decision_excerpt(task)
     if not cards:
         return []
     if model_provider is None:
@@ -470,6 +473,8 @@ def _rank_files_batched(
     it is passed through so this ranking uses the SAME cheap tier as the card-level pass instead of
     silently defaulting to the provider's most expensive model.
     """
+    # A judge needs the gist of the request, never the whole brief (``prompt_budget``).
+    task = prompt_budget.decision_excerpt(task)
     if not cards_with_files:
         return {}
     blocks: List[str] = []
@@ -572,6 +577,8 @@ def filter_cards_by_relevance(
     Returns:
         Filtered CardMetadata list, ordered by card id (stable); relevance_score carries rank.
     """
+    # A judge needs the gist of the request, never the whole brief (``prompt_budget``).
+    task = prompt_budget.decision_excerpt(task)
     if not candidate_cards:
         return []
 

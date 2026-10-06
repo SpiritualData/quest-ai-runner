@@ -349,6 +349,10 @@ class FeedbackStore(Protocol):
     def save(self, payload: Dict[str, Any]) -> None: ...
 
 
+# How many composed briefs' offers the ledger keeps waiting for their runs (``remember_offer``).
+MAX_REMEMBERED_OFFERS = 300
+
+
 class FeedbackLedger:
     """Every tracked item for this lane.
 
@@ -381,6 +385,9 @@ class FeedbackLedger:
         # second class.
         self._requires_acceptance = bool(requires_acceptance)
         self._items: Dict[str, FeedbackItem] = {}
+        # ``{task_id: {"card_id", "offered", "at"}}``: what a composed brief offered, by ref, kept
+        # until the run that works it reports (see ``remember_offer``).
+        self._offers: Dict[str, Dict[str, Any]] = {}
         self._lock = threading.Lock()
         self._stamp: Tuple[int, int] = (-1, -1)
         self._load()
@@ -495,6 +502,9 @@ class FeedbackLedger:
             except (json.JSONDecodeError, OSError) as e:
                 log.warning("feedback ledger unreadable (%s); starting empty", e)
                 return
+        offers = payload.get("offers") if isinstance(payload, dict) else None
+        if isinstance(offers, dict):
+            self._offers = {str(k): v for k, v in offers.items() if isinstance(v, dict)}
         rows = payload.get("items") if isinstance(payload, dict) else None
         if not isinstance(rows, dict):
             return
@@ -512,6 +522,8 @@ class FeedbackLedger:
         if self._read_only:
             return
         payload = {"items": {k: asdict(v) for k, v in sorted(self._items.items())}}
+        if self._offers:
+            payload["offers"] = self._offers
         if self._store is not None:
             try:
                 self._store.save(payload)
@@ -529,6 +541,41 @@ class FeedbackLedger:
             self._stamp = self._file_stamp()
         except OSError as e:
             log.warning("could not persist the feedback ledger: %s", e)
+
+    # --- what a composed brief offered, for the run that works it -------------------------
+
+    def remember_offer(self, task_id: str, card_id: str,
+                       offered: Sequence[Tuple[str, str, str]],
+                       at: Optional[datetime] = None) -> None:
+        """Keep which item each ref in a composed brief was, until that brief's run reports.
+
+        An autopilot pass composes the brief and the executor runs it later, possibly in another
+        process, holding only the task. The ref-to-item map lived on the pass's bundle and was
+        lost with it, so a work run's receipt ("[U3] done: ...") could never be recorded, and every
+        item it closed came back "still owed" on every later pass (2026-10-06: 18 of 20 refs in a
+        38K-character block were such re-offers). Keyed by task id, newest offer wins, bounded.
+        """
+        if not task_id or self._read_only:
+            return
+        with self._exclusive():
+            self._offers[str(task_id)] = {
+                "card_id": card_id,
+                "offered": [list(t) for t in offered if t and len(t) == 3],
+                "at": (at or _utcnow()).isoformat()}
+            if len(self._offers) > MAX_REMEMBERED_OFFERS:
+                oldest = sorted(self._offers, key=lambda k: str(self._offers[k].get("at") or ""))
+                for k in oldest[: len(self._offers) - MAX_REMEMBERED_OFFERS]:
+                    self._offers.pop(k, None)
+            self._save()
+
+    def offer_for(self, task_id: str) -> Optional[Tuple[str, List[Tuple[str, str, str]]]]:
+        """``(card_id, offered)`` remembered for ``task_id``, or None."""
+        with self._fresh():
+            row = self._offers.get(str(task_id or ""))
+        if not row:
+            return None
+        offered = [tuple(t) for t in (row.get("offered") or []) if isinstance(t, list) and len(t) == 3]
+        return str(row.get("card_id") or ""), offered  # type: ignore[return-value]
 
     # --- reads ---------------------------------------------------------------------------
 

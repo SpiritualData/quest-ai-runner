@@ -58,7 +58,7 @@ def _guidance_manager_of(cfg: Any) -> Any:
         if found is not None:
             return found
     return None
-from .executor import TaskExecutor
+from .executor import TaskExecutor, task_scope_tags
 from .local_time import now_in_zone, scheduled_moment, today_in_zone
 from .quest_client import QuestApiError, QuestClient, QuestDecisionSink, QuestNotConfigured
 # StateStore lives in its own module (runner/state_store.py) so the channel-runner lane can reuse
@@ -947,12 +947,23 @@ class Poller:
             task_text = task.get("text") or task.get("title") or ""
             note_ctx = note_store.assemble(task_text)
             rep_turn_store = TurnContextStore(turns_dir=rep_turns_dir)
-            turn_ctx = rep_turn_store.assemble(task_text)
+            # ONE history per prompt. When the lane's own context assembler already renders past
+            # turns (the org-wide store, fenced and relevance-filtered per goal), the rep's copy of
+            # the same turns is not rendered again. Otherwise it is, fenced to this task's quest:
+            # a rep works many quests, and its turns on one must not ride into a run on another.
+            from ..core.turn_context_store import assembler_renders_turns
+            lane_assembler = getattr(self._orch(), "context_assembler", None)
+            turn_view = ""
+            if not assembler_renders_turns(lane_assembler):
+                turn_view = rep_turn_store.assemble(
+                    task_text, meta={"scope_tags": task_scope_tags(task),
+                                     "task_id": task.get("task_id") or task.get("id")}
+                ).context_view
 
             return self._build_rep_preamble(
                 skill_text, compose_deep_preamble, parse_skill_file,
                 note_ctx_view=note_ctx.context_view,
-                turn_ctx_view=turn_ctx.context_view,
+                turn_ctx_view=turn_view,
             )
         except Exception as e:  # noqa: BLE001 — best-effort, like progress posting/heartbeat
             log.info("rep pull for %s failed (%s) — running with existing skill file", user_id, e)
@@ -1025,7 +1036,9 @@ class Poller:
             task_text = task.get("text") or task.get("title") or ""
             result_text = (getattr(outcome, "result", None) or "").strip()
             rep_turn_store = TurnContextStore(turns_dir=rep_turns_dir)
-            rep_turn_store.record(task_text, {"response": result_text})
+            rep_turn_store.record(task_text, {"response": result_text,
+                                              "scope_tags": task_scope_tags(task),
+                                              "task_id": task.get("task_id") or task.get("id")})
         except Exception as e:  # noqa: BLE001 — best-effort; never fails the task
             log.info("rep turn record for %s failed (%s) — continuing", user_id, e)
 

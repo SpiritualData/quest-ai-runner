@@ -123,7 +123,7 @@ from .answer_explanation import (
     render_record_for_prompt,
     trace_from_result,
 )
-from .model_registry import TIERS, ModelRegistry
+from .model_registry import LEGACY_TIER_ALIASES, TIERS, ModelRegistry
 from .deep_model_selection import (
     DEFAULT_AUTO_DEEP_LADDER,
     DEFAULT_DIFFICULTY_MODELS,
@@ -3567,33 +3567,14 @@ def _card_update_store(assembler: Any) -> Optional[Any]:
     ``HybridContextAssembler``'s ``_keyword``/``_vector`` arms) and returns the first capable inner
     store it finds. Returns None when nothing card-update-capable is reachable.
     """
+    from .composite_assembler import find_assembler
+
     def _is_capable(obj: Any) -> bool:
         return bool(obj is not None
                     and callable(getattr(obj, "update_card", None))
                     and callable(getattr(obj, "add_content", None)))
 
-    try:
-        seen: set = set()
-        stack: List[Any] = [assembler]
-        while stack:
-            obj = stack.pop()
-            if obj is None or id(obj) in seen:
-                continue
-            seen.add(id(obj))
-            if _is_capable(obj):
-                return obj
-            # Unwrap known wrapper shapes (duck-typed, so a custom composite with the same
-            # attribute is handled too without importing concrete classes).
-            inner = getattr(obj, "_assemblers", None)
-            if isinstance(inner, (list, tuple)):
-                stack.extend(inner)
-            for attr in ("_keyword", "_vector", "_store", "_inner", "_delegate"):
-                child = getattr(obj, attr, None)
-                if child is not None:
-                    stack.append(child)
-    except Exception:  # noqa: BLE001
-        return None
-    return None
+    return find_assembler(assembler, _is_capable)
 
 
 # Discovery specs return a CAPABILITY/SOURCE MENU (what the assistant CAN call or look in), not
@@ -6464,6 +6445,22 @@ class Orchestrator:
                 log.info("Deep-worker model ladder: pinned to %r (explicit per-task model id, used "
                          "verbatim); escalation intentionally disabled.", pinned)
                 return [pinned], True
+        # A per-task request that names a Claude FAMILY by its legacy alias ("opus", "sonnet",
+        # "haiku") means that family for the deep worker, even though the registry reads the same
+        # word as a tier. When this lane's tier config resolves that tier to a DIFFERENT family,
+        # the family the request named wins. Live (2026-10-06): the SD shared lane pins every
+        # shallow tier to haiku (QAR_MODEL_QUALITY=haiku, so cheap planning stays cheap), and an
+        # autopilot thread whose deep_run_model is "opus" was run on haiku, logged as "an
+        # explicit per-task model request". A tier that resolves within the family (opus ->
+        # claude-opus-4-8) is still honoured as resolved, so a lane's version pin keeps working.
+        requested_family = (model_hint or "").strip().lower()
+        if (requested_family in LEGACY_TIER_ALIASES and fallback and _is_claude_model(fallback)
+                and requested_family not in str(fallback).lower()):
+            log.info("Deep-worker model ladder: pinned to %r (explicit per-task model request; "
+                     "this lane's tier for it resolves to %r, a different Claude family, so the "
+                     "family the request names is used); escalation intentionally disabled.",
+                     requested_family, fallback)
+            return [requested_family], True
         # A per-task TIER request (or a model id this worker cannot run): ``fallback`` is that
         # request resolved through the registry. Pin it when the worker can run it; in a non-Claude
         # deployment the resolved hint is not worker-runnable, so we fall through to the ladder
@@ -7124,6 +7121,11 @@ class Orchestrator:
             # loses sight of what the user wants while pursuing its specific piece. (Its OWN process
             # goal/done-standard is added separately by compose_goal_prompt.) This header is baked
             # into the base brief, so every retry keeps it alongside the prior output + feedback.
+            # The request is shown ONCE. When no plan wrote a separate brief, the brief IS the
+            # request (a queued task's whole text), and repeating it under TASK sent the same
+            # 110K-character brief twice in one prompt (2026-10-06).
+            if brief == (user_message or "").strip():
+                brief = "Work the request above, in full: it is this task's whole brief."
             _hdr = [f"USER'S REQUEST (the top-level goal):\n{user_message}"]
             if multi and overall_goal and overall_goal != goal:
                 _hdr.append(f"OVERALL GOAL (this process is ONE subgoal serving it, stay aligned):\n"

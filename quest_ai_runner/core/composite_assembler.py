@@ -11,6 +11,41 @@ def _accepts_meta(assembler: Any) -> bool:
         return False
 
 
+# The attributes the library's wrapper assemblers keep their inner assemblers under: a
+# composite's list, a hybrid's two arms, and the single-delegate shapes.
+WRAPPED_ATTRS = ("_keyword", "_vector", "_store", "_inner", "_delegate")
+
+
+def find_assembler(assembler: Any, predicate: Any) -> Optional[Any]:
+    """The first assembler reachable from ``assembler`` (itself included) matching ``predicate``.
+
+    Unwraps the known wrapper shapes duck-typed (a composite's ``_assemblers`` list, a hybrid's
+    ``_keyword``/``_vector`` arms, a single ``_store``/``_inner``/``_delegate``), so a consumer's own
+    wrapper with the same attributes is handled too. The one walker for "is there a store of this
+    kind inside the wired assembler". None when nothing matches. Never raises.
+    """
+    try:
+        seen: set = set()
+        stack: List[Any] = [assembler]
+        while stack:
+            obj = stack.pop()
+            if obj is None or id(obj) in seen:
+                continue
+            seen.add(id(obj))
+            if predicate(obj):
+                return obj
+            inner = getattr(obj, "_assemblers", None)
+            if isinstance(inner, (list, tuple)):
+                stack.extend(inner)
+            for attr in WRAPPED_ATTRS:
+                child = getattr(obj, attr, None)
+                if child is not None:
+                    stack.append(child)
+    except Exception:  # noqa: BLE001
+        return None
+    return None
+
+
 class CompositeContextAssembler:
     """Wraps multiple ContextAssembler instances into one.
 

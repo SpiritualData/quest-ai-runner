@@ -423,6 +423,44 @@ def _autopilot_composed_text(task: Dict[str, Any]) -> bool:
     return str(task.get("task_kind") or "").strip().lower() == AUTOPILOT_WORK_KIND
 
 
+def task_scope_tags(task: Dict[str, Any]) -> List[str]:
+    """The quest scope tags (``core.scope_tags``) a task's run carries, from its quest and goal ids.
+
+    A task created against a quest holds the quest's id in ``goal_id`` and leaves ``quest_id``
+    empty (see ``_build_context_view``), so a scope derived from ``quest_id`` alone left every such
+    run unscoped, and every fenced context arm (past turns, recent context, vector hits) served it
+    material from any quest. Both ids are tagged: whichever names the quest, the run is fenced to it.
+    """
+    from ..core.recent_context import quest_scope_key
+    ids = [task.get("quest_id"), task.get("goal_id")]
+    return list(dict.fromkeys(quest_scope_key(str(i)) for i in ids if i))
+
+
+def across_pass_resume(task: Dict[str, Any], resume_session_id: Optional[str]) -> Optional[str]:
+    """The session this task's run should resume, or None for a fresh start.
+
+    AN AUTOPILOT WORK THREAD STARTS EACH PASS FRESH. Its brief is composed anew every pass and
+    already carries the compact carry-over a resume was meant to provide: what the last run
+    produced, the thread's recent run results, and what changed since. Resuming the previous
+    pass's session on top replays every earlier pass's whole transcript, which grows without bound:
+    on 2026-10-06 two threads resumed 5 MB transcripts holding every earlier pass's prompt, and the
+    model refused the run ("Prompt is too long").
+
+    The exception is a pass that was PAUSED on the Claude usage limit (``limit_hit_count`` > 0,
+    which the backend counts only while one waiting episode lasts): that is the same pass picking up
+    where it stopped, and its session is exactly what it needs. Every other task keeps its resume,
+    still subject to the deep runner's size check (``SubprocessGoalRunner.run_goal_once``).
+    """
+    if not resume_session_id or not _autopilot_composed_text(task):
+        return resume_session_id
+    if int(task.get("limit_hit_count") or 0) > 0:
+        return resume_session_id
+    log.info("task %s is an autopilot work thread: starting this pass fresh instead of resuming "
+             "session %s (the brief carries the carry-over)", task.get("task_id") or task.get("id"),
+             resume_session_id)
+    return None
+
+
 def terminal_session_id(result: OrchestratorResult) -> Optional[str]:
     """The session id THIS run leaves behind for the next run on the same thread, or None.
 
@@ -772,6 +810,9 @@ class TaskExecutor:
         # session Claude Code no longer holds degrades to a cold start inside the deep runner and
         # the run still completes (see ``SubprocessGoalRunner.run_goal``).
         resume_session_id: Optional[str] = str(task.get("resume_session_id") or "").strip() or None
+        resume_session_id = across_pass_resume(task, resume_session_id)
+        # Which task a receipt recorded at the end of this run belongs to (``_record_dispositions``).
+        self._receipt_task_id = str(task.get("task_id") or task.get("id") or "")
         if not text:
             self._report_progress(task_id, "error", text="task had no instruction text to run")
             self._safe_report_failed(task_id, "task had no text/description to run")
@@ -859,6 +900,10 @@ class TaskExecutor:
         context_meta: Optional[Dict[str, Any]] = {"goal_id": goal_id} if goal_id else None
         if task_id:
             context_meta = {**(context_meta or {}), "task_id": task_id}
+        # The quest fence for every scoped context arm (see ``task_scope_tags``).
+        run_scope_tags = task_scope_tags(task)
+        if run_scope_tags:
+            context_meta = {**(context_meta or {}), "scope_tags": run_scope_tags}
 
         # Cooperative mid-run cancellation: a THROTTLED check (see _build_cancel_check) threaded
         # into the orchestrator so a human hitting "stop" while this task is in_progress can abort
@@ -1628,13 +1673,25 @@ class TaskExecutor:
         # test may reach on an object that never went through this executor's own __init__.
         bundle = getattr(self, "_context_bundle", None)
         ledger = getattr(bundle, "_ledger", None) if bundle is not None else None
-        if bundle is None or ledger is None:
-            return
+        card_id = getattr(bundle, "card_id", "") if bundle is not None else ""
+        offered = bundle.offered_keys() if ledger is not None else []
+        if ledger is None:
+            # A brief the autopilot pass composed: the pass collected its updates, so this
+            # executor holds no bundle. The pass left the ref-to-item map with the ledger, keyed
+            # by this task, and that is what the receipt is recorded against. Without it every
+            # item the run closed was re-offered as "still owed" on every later pass.
+            engine = getattr(self, "_update_engine", None)
+            ledger = getattr(engine, "_ledger", None) if engine is not None else None
+            remembered = (ledger.offer_for(getattr(self, "_receipt_task_id", ""))
+                          if ledger is not None and hasattr(ledger, "offer_for") else None)
+            if not remembered:
+                return
+            card_id, offered = remembered
         try:
             from .context_updates import parse_dispositions
             from .feedback_ledger import record_run_account
             moved = record_run_account(
-                ledger, card_id=bundle.card_id, offered=bundle.offered_keys(),
+                ledger, card_id=card_id, offered=offered,
                 dispositions=parse_dispositions(account),
                 guidance_writer=self._guidance_writer())
             if moved:
