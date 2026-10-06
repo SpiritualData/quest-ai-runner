@@ -170,6 +170,21 @@ PIVOTS = {
         "exact_values": {"banned_word": "artisanal", "signoff": "Light on",
                         "punctuation": "no exclamation marks"},
     },
+    # IMP_ pivots: added for the implicit-context dataset (seeded in the quest notes below).
+    "IMP_TUTOR_DAYS": {
+        "quest_key": "language",
+        "where": "language quest note",
+        "description": ("A quest note says tutor Ana only teaches on Tuesday and Thursday evenings, "
+                        "so any tutor session must be booked on one of those evenings."),
+        "exact_values": {"tutor": "Ana", "days": "Tuesday and Thursday evenings"},
+    },
+    "IMP_SAM_AWAY": {
+        "quest_key": "family",
+        "where": "family quest note",
+        "description": ("A quest note says Sam, who does the tiling and painting, is away for work "
+                        "from 26 to 30 Oct, so nothing Sam does can be scheduled in that window."),
+        "exact_values": {"person": "Sam", "away": "26-30 Oct"},
+    },
 }
 
 
@@ -280,6 +295,8 @@ QUESTS = {
         ],
         "notes": [
             ("The plumber can only come 14-16 Oct. Tiling has to wait for that.", "PLUMBER_WINDOW"),
+            ("Heads up: Sam is away for work 26-30 Oct, so no tiling or painting those days.",
+             "IMP_SAM_AWAY"),
         ],
     },
     "language": {
@@ -300,6 +317,8 @@ QUESTS = {
         ],
         "notes": [
             ("Flights booked: I fly to Lisbon on 12 Dec. That is the real deadline.", "LISBON_TRIP"),
+            ("Ana only teaches on Tuesday and Thursday evenings, so book sessions on those days.",
+             "IMP_TUTOR_DAYS"),
         ],
     },
 }
