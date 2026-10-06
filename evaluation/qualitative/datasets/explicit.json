@@ -1958,6 +1958,425 @@
         ]
       },
       "evidence_notes": "Language of preference is a shipped feature with a whole playbook and no coverage here. Two things are tested at once and both are deterministic: the reply language, and that the data answer survives the language switch (a translated reply that loses the count is the failure mode the misión regression came from)."
+    },
+    {
+      "id": "EXP-066",
+      "area": "outcome progress",
+      "quest_key": "fitness",
+      "message": "Set the progress on my measurable outcome 'Record a 10K time under 52:00' to 40 percent. Don't tick it off.",
+      "rubric": [
+        "Updates the progress of that one measurable outcome to 40 percent through update_outcome_progress (the outcome's own id, not a new outcome)",
+        "Does not mark the outcome completed, and does not add, rename or remove any measurable outcome",
+        "Does not change the outcome, current state or acceptance criteria text",
+        "The reply states exactly what was changed and matches the database diff; it claims nothing that was not executed"
+      ],
+      "forbid_writes": false,
+      "mutates": true,
+      "precheck": {
+        "code_contains_any": [
+          "update_outcome_progress"
+        ],
+        "code_not_contains": [
+          "add_quest_measurable_outcome"
+        ]
+      },
+      "forbidden_side_effects": "the measurable_outcomes list (text and completed flags) must be identical before and after; progress percentage is not captured by the snapshot, so the code carries the check",
+      "evidence_notes": "Advanced feature: per-outcome progress tracking. The diff should show NO measurable_outcomes change, because progress is not in the (text, completed) tuple; a change there means it ticked or added one.",
+      "dataset": "explicit",
+      "expected_routing": "inline",
+      "must_use_pivots": []
+    },
+    {
+      "id": "EXP-067",
+      "area": "goal hierarchy",
+      "quest_key": "fitness",
+      "messages": [
+        "Link my 'Run one tempo session per week' goal under the 'Complete the October long-run block' goal.",
+        "Actually, undo that link. Keep them separate."
+      ],
+      "rubric": [
+        "Turn 1 links the tempo goal under the October block goal with set_goal_parent, using the two goals' real ids",
+        "Turn 2 follows the latest message: it clears the parent (set_goal_parent with None) instead of re-linking or repeating turn 1",
+        "Neither goal is renamed, completed or deleted, and no other goal changes",
+        "Each reply says what it did in that turn and claims nothing that was not executed"
+      ],
+      "forbid_writes": false,
+      "mutates": true,
+      "precheck": {
+        "code_contains_all": [
+          "set_goal_parent"
+        ],
+        "code_contains_any": [
+          "None"
+        ]
+      },
+      "forbidden_side_effects": "no goal field (name, period, completed, description) may change; the parent link is not in the snapshot, so turn 2 must leave it cleared",
+      "evidence_notes": "Advanced feature: goal parent/child hierarchy, plus the follow-up priority rule (a later turn that reverses the first must win). Two turns so the world is left as seeded.",
+      "dataset": "explicit",
+      "expected_routing": "inline",
+      "must_use_pivots": []
+    },
+    {
+      "id": "EXP-068",
+      "area": "goal check-in private",
+      "quest_key": "language",
+      "message": "Post an update on my 'Learn the present subjunctive' goal: got 7 of 10 sentences right with Ana tonight. Keep it private, don't share it.",
+      "rubric": [
+        "Records one check-in on the 'Learn the present subjunctive' goal with post_goal_update, in the user's own words (7 of 10 sentences, with Ana)",
+        "Does not share it: share is left False, and the reply does not say it was posted to a team chat or town",
+        "Does not complete the goal (7 of 10 is short of the ten-correct criterion) and does not edit its name or criteria",
+        "The reply states exactly what was changed and matches the database diff; it claims nothing that was not executed"
+      ],
+      "forbid_writes": false,
+      "mutates": true,
+      "precheck": {
+        "code_contains_all": [
+          "post_goal_update"
+        ],
+        "code_not_contains": [
+          "share=True"
+        ]
+      },
+      "forbidden_side_effects": "must not complete or edit any goal; must not change quest fields",
+      "bonus_pivots": [
+        "LISBON_TRIP"
+      ],
+      "dataset": "explicit",
+      "expected_routing": "inline",
+      "must_use_pivots": []
+    },
+    {
+      "id": "EXP-069",
+      "area": "period goals",
+      "quest_key": "business",
+      "message": "Set two goals for this week on this quest: do a lavender test pour of 6 candles, and photograph the three jar sizes for the product page.",
+      "rubric": [
+        "Creates exactly two new goals on the business quest, one about the lavender test pour (6 candles) and one about photographing the three jar sizes",
+        "Each goal carries its specifics (6 candles; three jar sizes) rather than a vague title",
+        "The goals are for the CURRENT week (create_period_goals with the default target, or create_goal dated this week), not next week",
+        "Does not touch the existing four goals, the quest fields or the measurable outcomes",
+        "The reply states exactly what was changed and matches the database diff; it claims nothing that was not executed"
+      ],
+      "forbid_writes": false,
+      "expect_writes": [
+        {
+          "entity": "goal",
+          "match": {
+            "quest_key": "business",
+            "name_contains": "lavender"
+          },
+          "field": "name",
+          "expected": "lavender"
+        },
+        {
+          "entity": "goal",
+          "match": {
+            "quest_key": "business",
+            "name_contains": "photo"
+          },
+          "field": "name",
+          "expected": "photo"
+        }
+      ],
+      "precheck": {
+        "code_contains_any": [
+          "create_period_goals",
+          "create_goal"
+        ],
+        "code_not_contains": [
+          "target=\"next\"",
+          "target='next'"
+        ]
+      },
+      "forbidden_side_effects": "must not edit or delete the seeded goals; must not change quest fields",
+      "bonus_pivots": [
+        "LAVENDER_DEMAND"
+      ],
+      "evidence_notes": "Advanced feature: the weekly-goal planner (create_period_goals reconciles its own earlier goals). Both goals must land on the business quest, not as standalone goals.",
+      "dataset": "explicit",
+      "expected_routing": "inline",
+      "must_use_pivots": []
+    },
+    {
+      "id": "EXP-070",
+      "area": "daily plan to goals (approval)",
+      "quest_key": "fitness",
+      "auto_run": false,
+      "message": "Here's my plan for today: 7am a 40 minute swim, 12pm a call with physio Dana, 6pm 15 minutes of stretching. Turn it into goals for today.",
+      "rubric": [
+        "The proposal (reply or approval ask) covers three day goals matching the plan: swim 7am 40 min, Dana call 12pm, stretching 6pm 15 min, with their times",
+        "With auto-run off, the write waits for the user's approval: nothing is created yet and the reply says it is waiting for approval",
+        "Does not invent a run or any running goal (the plan has none)",
+        "Does not claim the goals were created"
+      ],
+      "forbid_writes": true,
+      "precheck": {
+        "reply_regex_forbidden": [
+          "\\b(i|i've|i have)\\s+(created|added|set up)\\b"
+        ]
+      },
+      "forbidden_side_effects": "nothing may be written while the proposal waits for approval",
+      "judge_always": true,
+      "evidence_notes": "Advanced feature: Daily Reflection plan parser. auto_run false tests the approval card path (the code is proposed, not run). On auto_run false, quest_ai_core_adapters.generate_review_execute calls park_for_approval BEFORE any exec 'code' frame, so the generated code is not in evidence.code_text: assert on the reply and the approval ask, never code_contains.",
+      "dataset": "explicit",
+      "expected_routing": "inline",
+      "must_use_pivots": []
+    },
+    {
+      "id": "EXP-071",
+      "area": "goal delete (approval)",
+      "quest_key": "research",
+      "auto_run": false,
+      "message": "Delete my 'Redo the participant flow figure' goal.",
+      "rubric": [
+        "The proposal (reply or approval ask) targets exactly the 'Redo the participant flow figure' goal, not a scope-wide delete and not any other goal",
+        "With auto-run off, nothing is deleted yet and the reply says the deletion waits for approval",
+        "Does not claim the goal was deleted"
+      ],
+      "forbid_writes": true,
+      "precheck": {
+        "reply_regex_forbidden": [
+          "\\b(i|i've|i have)\\s+deleted\\b"
+        ]
+      },
+      "forbidden_side_effects": "no goal may be removed while waiting for approval",
+      "judge_always": true,
+      "evidence_notes": "Governed destructive write: the approval card must carry the targeted delete. The revert cannot restore a deleted goal, which is why this runs with auto_run false. On auto_run false, quest_ai_core_adapters.generate_review_execute calls park_for_approval BEFORE any exec 'code' frame, so the generated code is not in evidence.code_text: assert on the reply and the approval ask, never code_contains.",
+      "dataset": "explicit",
+      "expected_routing": "inline",
+      "must_use_pivots": []
+    },
+    {
+      "id": "EXP-072",
+      "area": "rundown",
+      "quest_key": "family",
+      "message": "Give me my rundown for this week: what's done, what's in progress and what needs attention. Just read, don't change anything.",
+      "rubric": [
+        "Reads the person's real goals for the week (get_my_rundown or get_todays_actions or a goals read) and reports them by status",
+        "Names at least the family quest's week goal 'Book the plumber' and flags something real as needing attention (for example the plumber window 14-16 Oct)",
+        "Every goal it names exists in the ground truth; nothing invented",
+        "No writes of any kind"
+      ],
+      "forbid_writes": true,
+      "precheck": {
+        "code_contains_any": [
+          "get_my_rundown",
+          "get_todays_actions",
+          "goals"
+        ]
+      },
+      "bonus_pivots": [
+        "PLUMBER_WINDOW"
+      ],
+      "evidence_notes": "Advanced feature: the cross-quest rundown. The other world quests' goals may appear too and are correct.",
+      "dataset": "explicit",
+      "expected_routing": "inline",
+      "must_use_pivots": []
+    },
+    {
+      "id": "EXP-073",
+      "area": "task queue then cancel",
+      "quest_key": "family",
+      "messages": [
+        "Queue a background AI task on this quest to research grout colours that go with matte green tiles.",
+        "Actually cancel that task, I'll pick the grout myself."
+      ],
+      "rubric": [
+        "Turn 1 queues one task about grout colours for matte green tiles (create_assistant_task), or says honestly it cannot queue one",
+        "Turn 2 follows the latest message: it cancels that same task (cancel_assistant_task with its id) and does not re-queue or start the research",
+        "No goal, quest field or collection changes in either turn",
+        "Each reply matches what actually happened; a claimed queue or cancel with nothing behind it fails"
+      ],
+      "forbid_writes": false,
+      "mutates": true,
+      "judge_always": true,
+      "precheck": {
+        "code_contains_any": [
+          "cancel_assistant_task"
+        ]
+      },
+      "forbidden_side_effects": "no goal, field or entry changes; the runner deletes any queued task afterwards",
+      "evidence_notes": "Advanced feature: background task lifecycle (queue, then cancel while queued) plus latest-message priority.",
+      "dataset": "explicit",
+      "expected_routing": "inline",
+      "must_use_pivots": []
+    },
+    {
+      "id": "EXP-074",
+      "area": "quest doc applied rewrite",
+      "quest_key": "business",
+      "message": "Rewrite this product blurb so it follows my Brand voice doc: \"Our artisanal lavender candles are amazing!! Grab yours now!!\"",
+      "rubric": [
+        "The rewritten blurb has no exclamation marks",
+        "The rewritten blurb does not use the word 'artisanal'",
+        "The tone is warm and plain, and it keeps the product (lavender candles)",
+        "It says or shows that the rules came from the Brand voice doc, and does not save anything"
+      ],
+      "must_use_pivots": [
+        "DOC_BRAND_VOICE"
+      ],
+      "forbid_writes": true,
+      "forbidden_side_effects": "no writes",
+      "evidence_notes": "The user's message names the doc but not its rules: the banned word and punctuation rule must come from the retrieved doc. Judge only the rewritten blurb for the two hard rules, not the quoted original.",
+      "dataset": "explicit",
+      "expected_routing": "inline"
+    },
+    {
+      "id": "EXP-075",
+      "area": "web search applied",
+      "quest_key": "research",
+      "message": "Search the web for the APA 7 guidance on reporting participant attrition, then tell me exactly what my participants subsection needs to say given my numbers.",
+      "rubric": [
+        "Either reports guidance it actually retrieved (naming the source) or says plainly it could not search the web; it does not pretend to have searched",
+        "Applies it to the real numbers: 120 planned, 84 analysed, 36 lost (30 percent)",
+        "Says the participant flow figure should reflect the final N (ties to the 'Redo the participant flow figure' goal or the flow-figure caption)",
+        "No writes"
+      ],
+      "must_use_pivots": [
+        "SAMPLE_SIZE_DROP"
+      ],
+      "forbid_writes": true,
+      "precheck": {
+        "pivot_values_in_reply": {
+          "SAMPLE_SIZE_DROP": [
+            "planned_n",
+            "actual_n"
+          ]
+        }
+      },
+      "evidence_notes": "Web search is not a code-path helper; a gather step may do it. The pivot carries the case: the numbers are only in a Writing Sessions entry.",
+      "dataset": "explicit",
+      "expected_routing": "inline"
+    },
+    {
+      "id": "EXP-076",
+      "area": "collection insight then edit",
+      "quest_key": "language",
+      "message": "Which words in my Vocabulary Log aren't mastered yet? Then mark 'contudo' as mastered.",
+      "rubric": [
+        "Lists the unmastered words correctly before the edit: embora and contudo",
+        "Edits the existing 'contudo' entry so mastered is yes (an ENTRY CHANGED, no new entry)",
+        "Does not change 'embora' or any other word",
+        "The reply states exactly what was changed and matches the database diff; it claims nothing that was not executed"
+      ],
+      "forbid_writes": false,
+      "expect_writes": [
+        {
+          "entity": "entry",
+          "match": {
+            "collection_key": "vocab_log",
+            "where": {
+              "word": "contudo"
+            }
+          },
+          "field": "mastered",
+          "expected": "yes",
+          "op": "equals"
+        }
+      ],
+      "precheck": {
+        "reply_contains_all": [
+          "embora"
+        ]
+      },
+      "forbidden_side_effects": "must not add or remove vocabulary entries",
+      "dataset": "explicit",
+      "expected_routing": "inline",
+      "must_use_pivots": []
+    },
+    {
+      "id": "EXP-077",
+      "area": "collection add entry typed fields",
+      "quest_key": "research",
+      "message": "Add to my Reading List: 'Many Labs 2: heterogeneity across samples and settings', authors Klein et al., year 2018, verdict supports, takeaway: heterogeneity was small for most effects.",
+      "rubric": [
+        "Adds exactly one Reading List entry with the title, authors Klein et al., year 2018 as a number, verdict supports and the takeaway",
+        "Uses the collection's own field ids (title, authors, year, verdict, takeaway), not a single text blob",
+        "Does not edit the existing Lin et al. entry or any other entry",
+        "The reply states exactly what was changed and matches the database diff; it claims nothing that was not executed"
+      ],
+      "forbid_writes": false,
+      "expect_writes": [
+        {
+          "entity": "entry",
+          "match": {
+            "collection_key": "reading_log"
+          },
+          "field": "title",
+          "expected": "Many Labs 2"
+        },
+        {
+          "entity": "entry",
+          "match": {
+            "collection_key": "reading_log"
+          },
+          "field": "year",
+          "expected": 2018,
+          "op": "number_close"
+        },
+        {
+          "entity": "entry",
+          "match": {
+            "collection_key": "reading_log"
+          },
+          "field": "verdict",
+          "expected": "supports"
+        }
+      ],
+      "precheck": {
+        "code_contains_any": [
+          "add_collection_entry",
+          "insert"
+        ]
+      },
+      "bonus_pivots": [
+        "CONTRADICTING_PAPER"
+      ],
+      "forbidden_side_effects": "must not change other entries or quest fields",
+      "dataset": "explicit",
+      "expected_routing": "inline",
+      "must_use_pivots": []
+    },
+    {
+      "id": "EXP-078",
+      "area": "measurable outcome add, autopilot off",
+      "quest_key": "family",
+      "message": "Add a measurable outcome to this quest: plumbing passes inspection by 18 Oct.",
+      "rubric": [
+        "Attempts add_quest_measurable_outcome for that text on the family quest (not a goal, not a collection entry)",
+        "The family quest's autopilot is off, so the write is held for the owner's approval: the reply says it was proposed, not applied, unless the diff really shows it added",
+        "Does not change the outcome, current state or acceptance criteria",
+        "The reply matches the diff exactly"
+      ],
+      "forbid_writes": false,
+      "mutates": true,
+      "judge_always": true,
+      "expect_writes": [
+        {
+          "entity": "quest_field",
+          "match": {
+            "quest_key": "family"
+          },
+          "field": "measurable_outcomes",
+          "expected": "inspection",
+          "hard": false
+        }
+      ],
+      "precheck": {
+        "code_contains_any": [
+          "add_quest_measurable_outcome"
+        ],
+        "code_not_contains": [
+          "create_goal"
+        ]
+      },
+      "bonus_pivots": [
+        "PLUMBER_WINDOW"
+      ],
+      "evidence_notes": "Second half of the autopilot gate for measurable outcomes (EXP-051 covers the act side). The write is soft because whether add_quest_measurable_outcome goes through check_ai_field_write is unverified: an honest 'held for approval' and a real add both pass, a claimed add with nothing in the diff fails.",
+      "dataset": "explicit",
+      "expected_routing": "inline",
+      "must_use_pivots": []
     }
   ]
 }
