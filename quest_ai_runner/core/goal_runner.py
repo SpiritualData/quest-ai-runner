@@ -1005,6 +1005,50 @@ def resolved_model_from_session(working_dir: Optional[str], session_id: Optional
     return found
 
 
+def subagent_work_in_flight(path: Optional[Path], *, fresh_seconds: float = 300.0) -> Optional[str]:
+    """Why a quiet parent session is NOT idle: a subagent is doing the work, or None.
+
+    A foreground ``Agent``/``Task`` call blocks the parent, whose log then stays unchanged for the
+    whole subagent run while the subagent writes its own file under ``<session>/subagents/``. Two
+    signals, either one is enough: a subagent file touched within ``fresh_seconds``, or an
+    ``Agent``/``Task`` tool_use in the parent's tail with no matching tool_result yet. Never raises.
+    """
+    if path is None:
+        return None
+    try:
+        sub_dir = path.with_suffix("") / "subagents"
+        if sub_dir.is_dir():
+            now = time.time()
+            for f in sub_dir.glob("*.jsonl"):
+                if now - f.stat().st_mtime < fresh_seconds:
+                    return f"subagent {f.stem} wrote to its log {int(now - f.stat().st_mtime)}s ago"
+        size = path.stat().st_size
+        with open(path, "rb") as fh:
+            fh.seek(max(0, size - 400_000))
+            blob = fh.read()
+        pending: dict = {}
+        for line in blob.decode("utf-8", errors="replace").splitlines():
+            try:
+                rec = json.loads(line)
+            except Exception:  # noqa: BLE001 — partial first line or a record mid-write
+                continue
+            content = (rec.get("message") or {}).get("content") if isinstance(rec, dict) else None
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "tool_use" and block.get("name") in ("Agent", "Task"):
+                    pending[block.get("id")] = block.get("name")
+                elif block.get("type") == "tool_result":
+                    pending.pop(block.get("tool_use_id"), None)
+        if pending:
+            return f"a {next(iter(pending.values()))} tool call is still running"
+    except Exception as e:  # noqa: BLE001 — a failed check falls back to the normal review
+        _log.debug("subagent in-flight check failed for %s: %s", path, e)
+    return None
+
+
 def read_session_activity_tail(
     working_dir: Optional[str],
     session_id: Optional[str],
@@ -1146,6 +1190,13 @@ class SubprocessGoalRunner(DeepRunner):
                 idle = max(0.0, time.time() - path.stat().st_mtime)
         except OSError:
             pass
+        # A quiet parent log while a subagent works is real work, never idleness: skip the LLM.
+        busy = subagent_work_in_flight(path)
+        if busy is not None:
+            reason = f"The worker is waiting on a subagent ({busy})."
+            _log.info("deep run %s liveness review after %ds: keep running (%s)",
+                      session_id, int(elapsed), reason)
+            return False, reason, None
         tail = read_session_activity_tail(working_dir, session_id) or "(the session log is empty or unreadable)"
         prompt = DEEP_REVIEW_PROMPT.format(
             elapsed=int(elapsed), idle=("unknown" if idle < 0 else int(idle)), tail=tail)

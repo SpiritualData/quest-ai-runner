@@ -89,6 +89,40 @@ def email_contract(quest_id: str, rep_id: Optional[str] = None) -> str:
 # as its result (correct: the result is the mail), the verifier ruled it unmet because nothing
 # had been emailed, and the retry sent it by hand -- so the person got the hand-sent copy AND the
 # automatic one. Stating delivery in the task text is what both the worker and the verifier read.
+EARLIER_RUN_EVENT_LIMIT = 25
+EARLIER_RUN_TEXT_CHARS = 240
+EARLIER_RUN_RESULT_CHARS = 1500
+
+
+def earlier_run_block(task: Dict[str, Any], resume_session_id: Optional[str] = None) -> str:
+    """What a re-run of a task is told about the run before it, or "" for a first run.
+
+    Same material the person sees on the task: how the earlier run ended (its stored result, which
+    carries the stop or failure reason, e.g. a watchdog stop) and the tail of its progress feed.
+    A re-queued task otherwise starts blind, so a resumed session never learns why it was stopped.
+    """
+    prior = str(task.get("result") or "").strip()
+    events = [e for e in (task.get("progress") or []) if isinstance(e, dict)]
+    if not (resume_session_id or (prior and any(e.get("kind") == "started" for e in events))):
+        return ""
+    lines = []
+    for e in events[-EARLIER_RUN_EVENT_LIMIT:]:
+        txt = " ".join(str(e.get("text") or "").split())
+        if not txt or e.get("kind") == "understanding":
+            continue
+        lines.append(f"- {str(e.get('at') or '')[:19]} [{e.get('kind')}] {txt[:EARLIER_RUN_TEXT_CHARS]}")
+    parts = ["EARLIER RUN OF THIS TASK (read first): this task already ran and was run again. "
+             "Continue from where it left off; do not redo finished work, and check files and "
+             "notes it already wrote before writing more."]
+    if resume_session_id:
+        parts.append("You hold that run's own session, so what it read and did is already in context.")
+    if prior:
+        parts.append(f"How it ended:\n{prior[:EARLIER_RUN_RESULT_CHARS]}")
+    if lines:
+        parts.append("Its recent progress feed, as the person sees it:\n" + "\n".join(lines))
+    return "\n\n".join(parts)
+
+
 AUTOMATIC_DELIVERY_NOTE = (
     "DELIVERY (set by this quest, not by you): when this run finishes, your result is emailed to "
     "the quest's people automatically. Any instruction above to email, send, or deliver the work "
@@ -783,6 +817,9 @@ class TaskExecutor:
         # happens to contain the block's marker string: a task whose text merely QUOTES a prior
         # brief (someone pasting a previous run's output into chat, which the backend files as its
         # own task) is not autopilot-composed and must still get fresh context collected.
+        _earlier = earlier_run_block(task, resume_session_id)
+        if _earlier:
+            text = f"{text}\n\n{_earlier}"
         composed_by_autopilot = _autopilot_composed_text(task)
         if (goal_id or quest_id) and self._mailing_quest_id(goal_id, quest_id):
             text = f"{text}\n\n{AUTOMATIC_DELIVERY_NOTE}"

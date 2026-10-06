@@ -2273,14 +2273,12 @@ def apply_card_ceilings(
     if any(dropped.values()):
         parts = []
         if dropped["folder"]:
-            parts.append(f"{dropped['folder']} already had {per_folder} card(s) for their folder")
+            parts.append(f"{dropped['folder']} (folder already has {per_folder} card)")
         if dropped["max_cards"]:
-            parts.append(f"{dropped['max_cards']} over the QAR_BOOTSTRAP_MAX_CARDS cap of "
-                         f"{max_cards}")
+            parts.append(f"{dropped['max_cards']} (over per-folder limit)")
         _log.debug(
-            "context index: %d new card(s) not written: %s. A topic card describes a folder, so "
-            "a folder gets one card; set QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER higher (or 0 for no "
-            "limit) if this corpus genuinely needs more per folder",
+            "context index: skipped %d card(s) during ceiling application (normal): %s. "
+            "One topic card describes each folder; raise QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER if needed.",
             sum(dropped.values()), "; ".join(parts),
         )
     return kept
@@ -3999,9 +3997,9 @@ class FileContextStore(ContextAssemblerBase):
             kept.append(card)
         if thin:
             _log.debug(
-                "context index: %d new card(s) not written because one file is not a topic — %s; "
-                "a file-derived card needs at least %d files, and a lone generated/data file is "
-                "never carded", sum(thin.values()),
+                "context index: skipped %d card(s) during filtering (normal): %s; "
+                "(file-derived cards need at least %d files, generated/data files are not carded)",
+                sum(thin.values()),
                 "; ".join(f"{n} x {reason}" for reason, n in sorted(thin.items())),
                 _MIN_FILES_PER_CARD,
             )
