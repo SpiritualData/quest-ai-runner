@@ -75,6 +75,7 @@ from .card_content_render import (
     render_card_content_blocks,
     tokenize as _tokenize,
 )
+from .bootstrap_reporter import mark_bootstrap_completed
 from .card_repository import CardRepository, FilesystemCardRepository, card_embed_text
 from .tfdfidf_sampling import extract_terms as tfdfidf_extract_terms, select_representatives
 from ..core.file_modes import match_umask
@@ -2276,7 +2277,7 @@ def apply_card_ceilings(
         if dropped["max_cards"]:
             parts.append(f"{dropped['max_cards']} over the QAR_BOOTSTRAP_MAX_CARDS cap of "
                          f"{max_cards}")
-        _log.warning(
+        _log.debug(
             "context index: %d new card(s) not written: %s. A topic card describes a folder, so "
             "a folder gets one card; set QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER higher (or 0 for no "
             "limit) if this corpus genuinely needs more per folder",
@@ -2860,6 +2861,7 @@ class FileContextStore(ContextAssemblerBase):
                 self._count_cards_on_disk(),
                 feature_versions=self._completed_feature_versions(),
             )
+            mark_bootstrap_completed(str(self._cards_dir))
         return n
 
     def _completed_feature_versions(self) -> Dict[str, int]:
@@ -3996,7 +3998,7 @@ class FileContextStore(ContextAssemblerBase):
                 continue
             kept.append(card)
         if thin:
-            _log.warning(
+            _log.debug(
                 "context index: %d new card(s) not written because one file is not a topic — %s; "
                 "a file-derived card needs at least %d files, and a lone generated/data file is "
                 "never carded", sum(thin.values()),

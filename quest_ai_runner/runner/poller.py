@@ -27,6 +27,12 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from ..adapters.bootstrap_reporter import (
+    check_should_send_monthly_report,
+    generate_bootstrap_report,
+    mark_report_sent,
+    get_corpus_stats,
+)
 from ..config import RunnerConfig, build_orchestrator, derive_capabilities, resolve_rep_sync_resolver
 from ..core import usage_limit
 from ..resources import ResourceGuard, ResourceLimits
@@ -404,6 +410,10 @@ class Poller:
         # opted in. Like the folder sync above, this is light bookkeeping rather than agentic work,
         # so it runs before the resource/token gates that hold back task PICKUP.
         self._ensure_autopilot_pass()
+        # Monthly bootstrap report (opt-in): send a report if the corpus is ready and a month
+        # has passed since the last report, or if this is the first report. Like folder sync,
+        # this is light bookkeeping not gated by resource/token limits.
+        self._send_bootstrap_report_if_due()
         return True
 
     def _dispatch_due(self, pool: Optional[ThreadPoolExecutor] = None) -> List[str]:
@@ -1785,6 +1795,47 @@ class Poller:
             except Exception as e:  # noqa: BLE001 -- one quest's retire failure never blocks another
                 log.warning("autopilot: could not retire quest %s's pass %s (%s) — will retry "
                             "next scan", quest_id, task_id, e)
+
+    def _send_bootstrap_report_if_due(self) -> None:
+        """Send monthly bootstrap reports for the corpus, if configured.
+
+        This is a light, best-effort housekeeping task that runs once per scan. It tracks when
+        bootstrap completes and sends a monthly email report with corpus statistics, changes,
+        warnings, and remediation suggestions. Reports are opt-in via
+        QUEST_BOOTSTRAP_REPORTS=1 and require a cards_dir and quest id to send to.
+        """
+        if not self.client.configured or not self.cfg.quest_api_key:
+            return
+
+        cards_dir = getattr(self.cfg, "cards_dir", None)
+        if not cards_dir:
+            return
+
+        try:
+            if not check_should_send_monthly_report(cards_dir):
+                return
+
+            quest_id = getattr(self.cfg, "team_quest_id", None) or self.cfg.team_id
+            if not quest_id:
+                return
+
+            report = generate_bootstrap_report(cards_dir, str(Path(cards_dir).parent.parent))
+            stats = get_corpus_stats(cards_dir)
+
+            try:
+                self.client.send_quest_email(
+                    quest_id,
+                    subject=report["subject"],
+                    body=report["body"],
+                    rep_id="qar",
+                )
+                mark_report_sent(cards_dir, stats["card_count"], stats["file_count"])
+                log.info("bootstrap report sent for quest %s (cards: %d, files: %d)",
+                         quest_id, stats["card_count"], stats["file_count"])
+            except Exception as e:  # noqa: BLE001 -- email failure never blocks the lane
+                log.debug("bootstrap report not sent: %s", e)
+        except Exception as e:  # noqa: BLE001 -- never block housekeeping on report errors
+            log.debug("bootstrap report check failed: %s", e)
 
     def _sync_all_quest_folders(self) -> None:
         """Best-effort: sync EVERY entry in ``cfg.quest_folder_map``, independent of whether a

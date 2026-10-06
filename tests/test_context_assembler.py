@@ -52,7 +52,8 @@ def _write_card(cards_dir: Path, card: Dict[str, Any]) -> Path:
 
 def _card_files(cards_dir: Path) -> List[Path]:
     """Card JSON files, excluding the ``bootstrap_meta.json`` sidecar bootstrap() writes."""
-    return [p for p in cards_dir.glob("*.json") if p.name != "bootstrap_meta.json"]
+    return [p for p in cards_dir.glob("*.json")
+            if p.name not in ("bootstrap_meta.json", "bootstrap_report_state.json")]
 
 
 def _topic_provider(topics: List[Dict[str, Any]]):
