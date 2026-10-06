@@ -1580,6 +1580,52 @@ class QuestClient:
             log.warning("list_quest_notes failed for quest %s: %s", quest_id, e)
             return []
 
+    def update_outcome_progress(self, quest_id: str, outcome_id: str, progress_pct: Any,
+                                note: str, current_value: Any = None) -> Dict[str, Any]:
+        """POST /api/quests/{quest_id}/measurable-outcomes/{outcome_id}/ai-progress
+
+        Record how far one measurable outcome has come, as the AI. The backend applies the evidence
+        rules (a generic, thin or repeated note is refused; a rise over 25 points or any drop needs
+        a longer note saying what changed) and logs the writer as ``ai:<user id>``. Returns the
+        stored outcome. Only progress fields change; the outcome's text and done flag never do.
+
+        ``progress_pct`` and ``current_value`` may arrive as strings (the shell CLI passes
+        positionals as text); they are converted here. A refused write RAISES ``QuestApiError``
+        whose message is ``Not done: <the backend's reason, verbatim>``, so the caller (a model,
+        through ``quest-ai-runner quest update_outcome_progress ... --write``) reads exactly why and
+        can rewrite the note with new specifics instead of resending it.
+        """
+        try:
+            body: Dict[str, Any] = {"progress_pct": float(progress_pct), "note": note}
+            if current_value is not None:
+                body["current_value"] = float(current_value)
+        except (TypeError, ValueError):
+            raise QuestApiError("Not done: progress_pct and current_value must be numbers "
+                                "(progress_pct is 0 to 100)")
+        try:
+            result = self._request(
+                "POST", f"/api/quests/{quest_id}/measurable-outcomes/{outcome_id}/ai-progress",
+                body=body)
+        except QuestApiError as e:
+            if e.status not in (400, 403, 404, 422):
+                raise
+            raise QuestApiError(f"Not done: {self.error_detail(e)}", status=e.status) from e
+        return (result or {}).get("outcome") or {}
+
+    @staticmethod
+    def error_detail(error: QuestApiError) -> str:
+        """The backend's own ``detail`` text from a ``QuestApiError`` raised by ``_request``
+        (message shape ``Quest API POST /path -> 400: {"detail": "..."}``), else the body as sent."""
+        text = str(error)
+        body = text.split(" -> ", 1)[1].partition(": ")[2] if " -> " in text else text
+        try:
+            detail = json.loads(body).get("detail")
+        except (ValueError, AttributeError):
+            return body
+        if isinstance(detail, str):
+            return detail
+        return json.dumps(detail) if detail is not None else body
+
     def add_quest_note(self, quest_id: str, text: str,
                        *, author_label: Optional[str] = None,
                        relayed_author_email: Optional[str] = None) -> List[Dict[str, Any]]:
