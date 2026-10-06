@@ -6,6 +6,7 @@ env file, found relative to this checkout (product/setup/sd-dev-runner/.env) or 
 QUAL_DEV_ENV_FILE. The module refuses to load unless the base URL is the dev backend.
 """
 import json
+import time
 import os
 import urllib.error
 import urllib.parse
@@ -95,9 +96,20 @@ def measurable_outcomes_of(quest_id):
     return unwrap_list(body, "outcomes", "items")
 
 
+def must_get(path, attempts=3):
+    """GET for a SNAPSHOT read: retry, then raise. Reading an error as an empty list made a slow
+    dev backend look like every quest was created during the case (EX-READ-1, 2026-10-06)."""
+    status, body = 0, None
+    for attempt in range(attempts):
+        status, body = api("GET", path)
+        if status == 200:
+            return body
+        time.sleep(2 * (attempt + 1))
+    raise RuntimeError(f"snapshot read {path} failed after {attempts} tries: {status} {str(body)[:200]}")
+
+
 def list_collections():
-    status, body = api("GET", "/api/data/collections")
-    return unwrap_list(body, "collections", "items") if status == 200 else []
+    return unwrap_list(must_get("/api/data/collections"), "collections", "items")
 
 
 def notes_of(quest_id):
@@ -106,8 +118,10 @@ def notes_of(quest_id):
 
 
 def list_quests():
-    status, body = api("GET", "/api/quests/me")
-    return body if status == 200 and isinstance(body, list) else []
+    body = must_get("/api/quests/me")
+    if not isinstance(body, list):
+        raise RuntimeError(f"/api/quests/me returned {type(body).__name__}, not a list")
+    return body
 
 
 def sse_send(conv_id, content, *, auto_run=True, timeout=600):

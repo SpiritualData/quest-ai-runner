@@ -796,7 +796,13 @@ def snapshot(world=None):
             "tasks": world_task_ids(world)}
     mine = {q.get("quest_id"): q for q in list_quests()}
     snap["all_quest_ids"] = sorted(mine)
-    snap["all_collection_ids"] = sorted(c.get("id") for c in list_collections())
+    listed = list_collections()
+    snap["all_collection_ids"] = sorted(c.get("id") for c in listed)
+    # The listing is cached server-side and can show an OLD collection only on the second read;
+    # diff() reports a creation only when the collection's own created_at is after this moment.
+    snap["taken_at"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    snap["collection_created_at"] = {
+        c.get("id"): str(c.get("createdAt") or c.get("created_at") or "") for c in listed}
     for key, qid in world["quests"].items():
         state = (mine.get(qid) or {}).get("state") or quest_state(qid)
         goals = goals_of(qid)
@@ -828,7 +834,7 @@ def snapshot(world=None):
                     "scheduled_date": g.get("scheduled_date"),
                     "deadline": g.get("deadline")} for g in goals},
         }
-    meta_by_id = {c.get("id"): c for c in list_collections()}
+    meta_by_id = {c.get("id"): c for c in listed}
     snap["collection_meta"] = {}
     for key, cid in world["collections"].items():
         snap["collections"][key] = {
@@ -838,6 +844,21 @@ def snapshot(world=None):
             "name": c.get("name"),
             "fields": sorted(str(f.get("id") or f.get("name")) for f in (c.get("custom_fields") or []))}
     return snap
+
+
+def collection_predates(snap, cid, since):
+    """True when ``cid``'s own created_at is before ``since``: it only surfaced in a stale listing."""
+    created = (snap.get("collection_created_at") or {}).get(cid)
+    if not created or not since:
+        return False
+    try:
+        c = datetime.datetime.fromisoformat(created.replace("Z", "+00:00"))
+        t = datetime.datetime.fromisoformat(since.replace("Z", "+00:00"))
+        if c.tzinfo is None:
+            c = c.replace(tzinfo=datetime.timezone.utc)
+        return c < t
+    except ValueError:
+        return False
 
 
 def diff(before, after):
@@ -889,6 +910,8 @@ def diff(before, after):
     for qid in sorted(set(before["all_quest_ids"]) - set(after["all_quest_ids"])):
         changes.append(f"QUEST DELETED: {qid}")
     for cid in sorted(set(after["all_collection_ids"]) - set(before["all_collection_ids"])):
+        if collection_predates(after, cid, before.get("taken_at")):
+            continue
         changes.append(f"COLLECTION CREATED: {cid}")
     for cid in sorted(set(before["all_collection_ids"]) - set(after["all_collection_ids"])):
         changes.append(f"COLLECTION DELETED: {cid}")

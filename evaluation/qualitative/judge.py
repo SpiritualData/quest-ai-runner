@@ -131,7 +131,15 @@ def build_evidence(turns, tasks=None):
     out["actions"] = [p["action"] for t in out["turns"] for p in t["plans"] if p["action"]]
     out["tools"] = [x.get("tool") for t in out["turns"] for x in t["execs"] if x.get("tool")]
     out["delegated"] = any(t["delegated"] for t in out["turns"]) or bool(out["tasks"])
-    out["kind"] = "deep" if ("deep" in out["actions"] or out["delegated"]) else "answer"
+    # The planner's "deep" action is also how the chat runs a Quest DATA OPERATION inline (the
+    # command engine generates and executes the code in this turn). Only a real hand-off, a
+    # ``delegated`` frame or a task the chat queued, is routing "deep"; inline work is "act".
+    if out["delegated"]:
+        out["kind"] = "deep"
+    elif "deep" in out["actions"]:
+        out["kind"] = "act"
+    else:
+        out["kind"] = "answer"
     out["errors"] = [e for t in out["turns"] for e in t["errors"]]
     return out
 

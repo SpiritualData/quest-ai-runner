@@ -145,6 +145,14 @@ datasets on 2026-10-06:
   are stable, but "about 6 weeks" or "about 130 words a day" is only true on the day it was
   written: express those against the ground truth's "Today is ..." line, as IMP-002, IMP-020 and
   IMP-030 now do. The weekday facts (30 Oct is a Friday) hold for 2026 only.
+* Routing: the planner's `deep` action is ALSO how the chat runs a Quest data operation inline,
+  so evidence `kind` is `deep` only for a real hand-off (a `delegated` frame or a queued task),
+  `act` for an inline data operation and `answer` otherwise. `expected_routing: inline` accepts
+  `act` and `answer`.
+* Snapshot reads retry and then raise (`devclient.must_get`): an error is never read as an empty
+  quest or collection list. A case whose snapshot cannot be read is reported as an error, unjudged.
+* Never run cases while another process is building, resetting or tearing down the same dev world
+  (one dev account, one world): its writes land in your diff as this case's side effects.
 * One run per case, one judge call per case: report variance honestly, rerun disputed cases.
 * The judge is sonnet through the subscription CLI; a usage-limit refusal surfaces as `JUDGE ERROR`
   and the case is reported unjudged, never passed.
