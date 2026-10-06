@@ -91,3 +91,13 @@ already cost a round of cases:
 * Use the PIVOTS: a case where the correct answer CHANGES because of a seeded fact is the point
   of the exercise. Ask for advice a pivot-blind answer would get wrong.
 * Check what the world actually contains with `python3 evaluation/qualitative/world.py show`.
+
+## Every rubric item is required
+
+The judge scores each rubric item pass/fail and fails one it has nothing to quote for, so an
+optional item ("may mention X", "(bonus)", "optionally") fails a correct answer that leaves X out;
+on a 3-item rubric that is 0.67, under the 0.7 pass threshold. Write each item so a correct answer
+always passes it (for example "does not invent X", "if it mentions X, X is labelled correctly") and
+put the optional fact in `bonus_pivots`. `runner.py validate` refuses optional wording.
+Don't make a hard `reply_not_contains` of a word the assistant may legitimately quote while
+explaining itself (a banned brand word, a wrong date it is correcting); judge that in the rubric.

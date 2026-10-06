@@ -378,7 +378,12 @@
   "judge_always": true,
   "bonus_pivots": [
    "DOC_BRAND_VOICE"
-  ]
+  ],
+  "precheck": {
+   "code_not_contains": [
+    "send_quest_email"
+   ]
+  }
  },
  {
   "id": "MS-008",
@@ -445,7 +450,7 @@
   "expected_routing": "inline",
   "rubric": [
    "Web search (or an honest statement that it could not search) happens before the goal is written",
-   "The goal starts after tiling could be done (after the 14-16 Oct plumbing) plus the cure time, and finishes before 20 Nov, with those dates in its name, description or target_date",
+   "The goal starts after the 14-16 Oct plumbing plus the cure time it stated (from search, or labelled as an assumption when it could not search), finishes before 20 Nov, and carries those dates in its name, description or target_date",
    "Names the paint as Kiwi Low-VOC rather than Sunset Coat if it mentions a paint brand",
    "The reply names every step and its real status (done, queued, proposed, blocked or skipped), and each claim matches the side-effect diff: nothing is reported done that the diff does not show, and nothing that was done is left unmentioned"
   ],
@@ -626,7 +631,12 @@
   "evidence_notes": "Independent writes across three quests with world scope. Rewritten 2026-10-06 so one parallel branch needs a retrieved fact (Ana teaches Tue and Thu evenings only); the other two are verbatim names. Every new goal is filed in the CURRENT MONTH period by the only helper available (create_goal takes name, description and target_date, and has no period or criteria parameter), so the required date must appear in the goal's name, description or target date (scheduled_date in the diff). A month period is not a failure; a missing or wrong DATE is.",
   "bonus_pivots": [
    "SUPPLIER_DELAY"
-  ]
+  ],
+  "precheck": {
+   "code_not_contains": [
+    "send_quest_email"
+   ]
+  }
  },
  {
   "id": "MS-012",
@@ -1583,7 +1593,7 @@
    "Turn 1 gives a taper length from search, or says plainly it could not search",
    "Turn 2 computes the taper start from the 22 Nov race date, not 8 Nov, using the length from turn 1",
    "The goal added is a taper goal carrying that start date in its name, description or target_date",
-   "Turn 2 uses the taper length stated in turn 1 rather than inventing a different one, and the start date equals 22 Nov minus that length"
+   "Turn 2 uses the taper length stated in turn 1; if turn 1 could not search, turn 2 states the length it assumes and labels it general guidance rather than a search result. The start date equals 22 Nov minus that length"
   ],
   "steps": [
    {

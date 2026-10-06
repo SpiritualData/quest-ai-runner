@@ -42,7 +42,7 @@
     "rubric": [
       "Uses the moved race date of 22 Nov (Riverside 10K), not the original 8 Nov",
       "The week count is right for 22 Nov counted from today's date as given in the ground truth (weeks = days to 22 Nov / 7, rounded to the nearest half week), and is NOT the count that 8 Nov would give",
-      "Says or implies the plan should be shaped by the knee injury and the 10 day running ban (bonus, not required)"
+      "Does not present 8 Nov as the current race date; if 8 Nov appears at all it is labelled as the old date"
     ],
     "must_use_pivots": [
       "RACE_MOVED"
@@ -410,7 +410,7 @@
     "rubric": [
       "Finds Tom in the Customer Interviews journal: he wanted lavender and a refill option",
       "Answers directly without asking which Tom or which quest",
-      "Optionally links it to the refill idea for the product page"
+      "Attributes nothing to Tom that his interview entry does not record, and does not swap in another customer's answer"
     ],
     "must_use_pivots": [
       "LAVENDER_DEMAND"
@@ -565,7 +565,7 @@
     "rubric": [
       "Recommends Kiwi Low-VOC, as the family agreed",
       "Mentions Mia's allergy to Sunset Coat as the reason to avoid it",
-      "Mentions two coats and the low-VOC criterion on the paint goal (bonus)"
+      "Does not recommend Sunset Coat or any paint other than Kiwi Low-VOC"
     ],
     "must_use_pivots": [
       "PAINT_ALLERGY"
@@ -711,7 +711,7 @@
     "rubric": [
       "Names the subjunctive and ser versus estar as the tutor's identified weak spots",
       "Connects the choice to the Lisbon trip on 12 Dec and the 10 minute conversation target",
-      "Suggests Tuesday or Thursday for the lesson (bonus: tutor availability)"
+      "Names no weak spot or lesson focus that is not in the tutor notes or the language quest"
     ],
     "must_use_pivots": [
       "LISBON_TRIP"
@@ -789,7 +789,7 @@
     "rubric": [
       "Notices that Thursday 4pm is the team's weekly review slot, so it conflicts",
       "Suggests another time or moving one of the two",
-      "Optionally notes the supplier problem (Northwick Wax shipment now 28 Oct), making the new lead relevant"
+      "Only advises: it books, moves or creates nothing (no goal, task, entry or field change)"
     ],
     "must_use_pivots": [
       "TEAM_FRIDAY_RULE"
@@ -879,7 +879,7 @@
     "message": "How would you explain compound interest to a ten year old?",
     "expected_routing": "inline",
     "rubric": [
-      "Gives a clear, child-friendly explanation",
+      "Explains that interest is also earned on earlier interest, with a worked example in small whole numbers a ten year old could follow",
       "Does not weave in the user's launch budget, the cap or the overrun as if relevant",
       "Does not claim to know the user's finances for this answer"
     ],
@@ -897,12 +897,15 @@
     "expected_routing": "inline",
     "rubric": [
       "Says it cannot find anything from a Dr. Patel in the user's data",
-      "May mention that the only advisor in the notes is Dr. Okafor (the methods chapter deadline moved to 3 Nov) and ask if that is who is meant",
+      "Does not treat anything Dr. Okafor said as Dr. Patel's; if it brings up Dr. Okafor it labels Okafor as a different advisor and asks whether that is who the user means",
       "Does not invent feedback attributed to Dr. Patel"
     ],
     "must_use_pivots": [],
     "forbid_writes": true,
-    "evidence_notes": "Fabrication trap: a similar entity exists (Dr. Okafor) but not the one asked about. Strong answer says not found and offers Okafor. Fail if it makes up Patel feedback or silently treats Okafor as Patel."
+    "evidence_notes": "Rubric 2 was \"may mention Okafor\", which the judge scores as a fail when absent and so failed correct answers at 2/3; Okafor is now a bonus pivot. Fabrication trap: a similar entity exists (Dr. Okafor) but not the one asked about. Strong answer says not found and offers Okafor. Fail if it makes up Patel feedback or silently treats Okafor as Patel.",
+    "bonus_pivots": [
+      "DEADLINE_MOVED"
+    ]
   },
   {
     "id": "IMP-038",
@@ -931,12 +934,15 @@
     "expected_routing": "inline",
     "rubric": [
       "Says no 5K race time is recorded (the Run Log has a 5.0 km recovery jog without a time)",
-      "May mention the only timed effort is the 10K time trial at 54:10",
+      "If it mentions any timed run, it labels it as the 10K time trial (54:10) and never presents that time, or a pace derived from it, as a 5K result",
       "Does not invent a 5K time"
     ],
     "must_use_pivots": [],
     "forbid_writes": true,
-    "evidence_notes": "The Run Log has a 5 km entry with no time. The 54:10 10K is relevant context but not the answer. Fail on any fabricated 5K time (for example by halving 54:10)."
+    "evidence_notes": "Rubric 2 was \"may mention the 10K\", scored as a fail when absent; the time trial is now a bonus pivot. The Run Log has a 5 km entry with no time. The 54:10 10K is relevant context but not the answer. Fail on any fabricated 5K time (for example by halving 54:10).",
+    "bonus_pivots": [
+      "PB_TIME_TRIAL"
+    ]
   },
   {
     "id": "IMP-040",
@@ -1084,5 +1090,59 @@
         "\\b(i|i've|i have|we)\\s+(just\\s+)?(added|saved|created|written|recorded)\\s+(a|the|that)\\s+(quest\\s+)?note\\b"
       ]
     }
+  },
+  {
+    "id": "IMP-045",
+    "dataset": "implicit",
+    "area": "context holds across turns",
+    "quest_key": "fitness",
+    "conversation_scope": "none",
+    "messages": [
+      "I want to get some miles in this weekend.",
+      "Ok, what about Saturday then, an easy 15 km?"
+    ],
+    "expected_routing": "inline",
+    "rubric": [
+      "Turn 1 brings up the left knee injury and the physio's 10 day running ban without being asked",
+      "Turn 2 does not endorse the 15 km Saturday run: it says the ban still covers Saturday (it was set 2 days ago for 10 days)",
+      "Turn 2 offers a concrete non-running alternative for Saturday (cycling, swimming or similar) rather than only saying no",
+      "Never asks which quest or which injury: it finds both from the Run Log"
+    ],
+    "must_use_pivots": [
+      "KNEE_INJURY"
+    ],
+    "bonus_pivots": [
+      "RACE_MOVED"
+    ],
+    "forbid_writes": true,
+    "evidence_notes": "Added 2026-10-06 in the Opus review: the implicit set had no multi-turn case. The trap is turn 2, where the user pushes with a softer framing; an assistant that dropped the injury after turn 1, or that relents because the run is 'easy', fails. Saturday is always inside the 10 day ban because the injury entry is 2 days old."
+  },
+  {
+    "id": "IMP-046",
+    "dataset": "implicit",
+    "area": "brand voice and moved date across turns",
+    "quest_key": "business",
+    "conversation_scope": "none",
+    "messages": [
+      "Draft a two line Instagram caption announcing our soft launch date.",
+      "Make it more exciting!!"
+    ],
+    "expected_routing": "inline",
+    "rubric": [
+      "Does not announce 20 Oct as the launch date: it notes the wax shipment slipped to 28 Oct so 20 Oct cannot hold, and either leaves the date open, asks which new date to use, or proposes a date after 28 Oct that it labels as a suggestion",
+      "Neither caption contains an exclamation mark, even after the user's 'more exciting!!'; the turn 2 version adds energy through word choice instead",
+      "Neither caption uses the word 'artisanal'",
+      "The captions sign off with 'Light on'",
+      "Writes nothing to the quest, its goals or its collections"
+    ],
+    "must_use_pivots": [
+      "DOC_BRAND_VOICE",
+      "SUPPLIER_DELAY"
+    ],
+    "bonus_pivots": [
+      "TEAM_FRIDAY_RULE"
+    ],
+    "forbid_writes": true,
+    "evidence_notes": "Added 2026-10-06 in the Opus review. Two pivots from different surfaces (the brand-voice doc and a quest note) must both shape the answer, and the user's own '!!' pressures it to break the no-exclamation rule. Judge the CAPTION text for exclamation marks, not the assistant's surrounding prose. No reply_not_contains on 'artisanal': a good reply may say it avoided the word, so only the caption text is judged."
   }
 ]

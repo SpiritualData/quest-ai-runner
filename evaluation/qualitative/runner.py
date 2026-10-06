@@ -15,6 +15,7 @@ the assistant must find the right quest itself. See README.md and datasets/schem
 """
 import argparse
 import json
+import re
 import sys
 import threading
 import time
@@ -48,6 +49,7 @@ PRECHECK_KEYS = frozenset({
     "reply_regex_forbidden", "code_contains_all", "code_contains_any", "code_not_contains",
     "tools_called", "tools_not_called", "pivot_values_in_reply"})
 WRITE_ENTITIES = frozenset({"quest_field", "quest_note", "goal", "entry", "task"})
+OPTIONAL_RUBRIC = re.compile(r"\(bonus|\bbonus:|\boptionally\b|\bmay (?:mention|note|say|add)\b", re.I)
 WRITE_OPS = frozenset({"contains", "equals", "number_close", "gte", "lte", "regex", "exists",
                        "not_contains"})
 
@@ -67,6 +69,12 @@ def validate_case(case, source):
         problems.append(f"bad conversation_scope {case.get('conversation_scope')}")
     if case.get("expected_routing") not in (None, "inline", "deep", "delegated", "any"):
         problems.append(f"bad expected_routing {case.get('expected_routing')}")
+    # The judge scores every rubric item pass/fail and fails one it cannot quote, so an optional
+    # item ("may mention X") fails a correct answer that leaves X out: on a 3-item rubric that is
+    # 0.67, under the pass threshold. Optional facts belong in bonus_pivots.
+    for item in case.get("rubric") or []:
+        if OPTIONAL_RUBRIC.search(item):
+            problems.append(f"optional rubric item (move it to bonus_pivots): {item[:60]!r}")
     for key in ("must_use_pivots", "bonus_pivots"):
         for name in case.get(key) or []:
             if name not in W.PIVOTS:

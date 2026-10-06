@@ -221,7 +221,7 @@
       "rubric": [
         "Marks exactly the 'Book the plumber' goal completed and no other goal",
         "Does not rewrite the current state ('Plumbing not started') on its own initiative; at most it offers to update it",
-        "Reply is accurate and short, and may note the plumber window of 14-16 Oct without inventing a booking date",
+        "Does not invent a booking date or time for the plumber; any date it gives for the plumber is inside the seeded 14-16 Oct window",
         "The reply states exactly what was changed and matches the database diff; it claims nothing that was not executed"
       ],
       "must_use_pivots": [],
@@ -495,7 +495,7 @@
         "The change is made by calling the quest field helper update_quest_fields (visible in the generated code or as a tool call), never by editing a file, shelling out, raw HTTP, a raw write to the quests collection, or handing the edit to a coding agent",
         "Both fields are updated in the same request: the outcome gains the 3 Nov start and the current state records 28 Oct, 3 Nov and lavender",
         "Acceptance criteria are not changed",
-        "Lavender is consistent with the interview evidence (4 of 5 asked for it); the reply may mention it but must not invent other numbers",
+        "States no interview count, date or figure that is absent from the user's message and the seeded data",
         "The reply states exactly what was changed and matches the database diff; it claims nothing that was not executed"
       ],
       "must_use_pivots": [],
@@ -1091,7 +1091,7 @@
       "rubric": [
         "Total distance is 41.7 km across 5 entries",
         "Three entries had effort 4 or higher (8.2 km at 4, 6.0 km at 5, 10.0 km at 5)",
-        "Stays accurate to the seeded entries; no invented entries, and the knee injury note on the 6 km run may be mentioned",
+        "Lists or counts no entry that is not in the seeded Run Log, and every distance it quotes matches a seeded entry",
         "Does not write anything"
       ],
       "must_use_pivots": [],
@@ -1256,7 +1256,7 @@
       "expected_routing": "inline",
       "rubric": [
         "Says History lists the last 20 changes to that outcome, newest first, with when, who made it, the change and the reason",
-        "Says the percentage and reason stay with Quest AI while the user can set target, unit, current value and optionally a starting value",
+        "Says the percentage and reason stay with Quest AI while the user can set target, unit, current value and an optional starting value",
         "Does not write anything"
       ],
       "forbid_writes": true,
