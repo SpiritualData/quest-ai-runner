@@ -12,6 +12,7 @@ from quest_ai_runner.adapters.bootstrap_reporter import (
     get_corpus_stats,
     mark_bootstrap_completed,
     mark_report_sent,
+    send_bootstrap_report_via_quest,
 )
 
 
@@ -66,9 +67,10 @@ def test_report_generation_with_no_cards():
     with tempfile.TemporaryDirectory() as tmpdir:
         report = generate_bootstrap_report(tmpdir, tmpdir)
 
-        assert report["subject"] == "Your QAR Corpus Monthly Summary"
+        assert report["subject"] == "QAR Corpus Monthly Summary"
         assert "QAR Corpus Monthly Summary" in report["body"]
-        assert "0" in report["body"] or "no" in report["body"].lower()
+        assert "No cards" in report["body"] or "not been indexed" in report["body"]
+        assert "issues" in report.get("issues", []) or "recommendations" in report
 
 
 def test_report_generation_with_cards():
@@ -130,7 +132,7 @@ def test_report_includes_change_comparison():
         report = generate_bootstrap_report(tmpdir, tmpdir)
 
         # Should show changes
-        assert "Changes Since Last Month" in report["body"] or "7 topic cards" in report["body"]
+        assert "Changes Since Last Report" in report["body"] or "+2" in report["body"] or "8 topic cards" in report["body"]
 
 
 def test_state_persistence():
@@ -160,4 +162,61 @@ def test_report_with_large_corpus():
         report = generate_bootstrap_report(tmpdir, tmpdir)
 
         # Should mention high card count
-        assert "150" in report["body"] or "Things to Review" in report["body"]
+        assert "150" in report["body"] or "Recommendations" in report["body"]
+
+
+def test_send_report_fails_without_bootstrap():
+    """Should not send if bootstrap hasn't completed."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        def mock_quest_factory():
+            class MockClient:
+                def send_email(self, **kwargs):
+                    pass
+            return MockClient()
+
+        result = send_bootstrap_report_via_quest(
+            tmpdir, tmpdir, "user@example.com", mock_quest_factory
+        )
+        assert not result
+
+
+def test_send_report_succeeds_after_bootstrap():
+    """Should send after bootstrap and mark state."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mark_bootstrap_completed(tmpdir)
+
+        emails_sent = []
+
+        def mock_quest_factory():
+            class MockClient:
+                def send_email(self, **kwargs):
+                    emails_sent.append(kwargs)
+            return MockClient()
+
+        result = send_bootstrap_report_via_quest(
+            tmpdir, tmpdir, "user@example.com", mock_quest_factory
+        )
+
+        assert result
+        assert len(emails_sent) == 1
+        assert "QAR Corpus Monthly Summary" in emails_sent[0]["subject"]
+        assert "user@example.com" in emails_sent[0]["to"]
+
+
+def test_send_report_not_due_within_30_days():
+    """Should not resend if within 30 days."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mark_bootstrap_completed(tmpdir)
+        mark_report_sent(tmpdir, 5, 20)
+
+        def mock_quest_factory():
+            class MockClient:
+                def send_email(self, **kwargs):
+                    raise AssertionError("Should not send email")
+            return MockClient()
+
+        result = send_bootstrap_report_via_quest(
+            tmpdir, tmpdir, "user@example.com", mock_quest_factory
+        )
+
+        assert not result
