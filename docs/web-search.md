@@ -15,6 +15,23 @@ It is a small, deliberately asymmetric two-method surface, not a general `Retrie
 
 Neither method ever raises. Every failure comes back as `Observation(kind="error", error=...)`.
 
+## Relationship to `WebSearchAdapter` / `ProviderWebSearchAdapter`
+
+This repo also ships two older, simpler web-search `RetrievalAdapter`s: `WebSearchAdapter`
+(Tavily) and `ProviderWebSearchAdapter` (the model provider's own native web search -- Claude's
+`web_search` tool or Gemini grounding -- reusing the LLM key, no separate search key). Either one
+is wired automatically today whenever a provider/key supports it, via the ordinary
+`query`/`grep`/discovery `RetrievalAdapter` surface, and they still work exactly as before; nothing
+here removes or changes them.
+
+`WebResearchAdapter` is a separate, newer surface purpose-built for the planner's dedicated
+`{"web": ...}` / `{"web_page": ...}` read shapes (see below), not a drop-in replacement: it adds
+a pluggable multi-backend chain with fallback/cooldown, a real on-disk cache, an SSRF-checked page
+fetch with focus-scored passage extraction, and a daily cost guard, all absent from the older
+adapters. A consumer decides how the two coexist (e.g. `WebResearchAdapter` for the planner's
+explicit web reads, falling back to or alongside the native/Tavily adapter for the general
+retrieval stack) -- see `core/orchestrator.py`'s wiring for the decision actually shipped.
+
 ## The read shapes a consumer wires into its orchestrator
 
 This library's `core/orchestrator.py` does not know about `WebResearchAdapter` -- a consumer
