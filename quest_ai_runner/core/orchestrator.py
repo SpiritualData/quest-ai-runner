@@ -908,6 +908,9 @@ THE ACTIONS:
     the user asked you to MAKE, or printing a patch instead of applying it, is a failure.
     When you have gathered enough and now see that work is needed, use "answer" WITH
     deferred_deep. {deferred_deep_semantics}
+    A HAND-OFF IS THE `deferred_deep` FIELD, NOT THE WORDS: a reply that says it is handing work
+    off (to an environment, a runner, a background task) MUST fill `deferred_deep` with its
+    `goal` and `brief`. Saying it with `deferred_deep` empty hands off nothing and nothing runs.
   - "deep": fulfilling this means PRODUCING or CHANGING an artifact, or the answer lives somewhere
     your reads cannot reach. Covers the person's own records (create / add / update / edit /
     delete / mark / set) and code or files (fix, implement, build, refactor, apply). Do not read
@@ -1257,7 +1260,7 @@ def decide_tool_for(mode_signals: bool, deferred_queued: bool,
     """
     base = DECIDE_TOOL_WITH_MODE_SIGNAL if mode_signals else DECIDE_TOOL
     if not deferred_queued and not card_thread and not tools:
-        return strip_schema_descriptions(base) if compact else base
+        return compact_decide_schema(base) if compact else base
     tool = copy.deepcopy(base)
     if tools:
         props = tool["input_schema"]["properties"]
@@ -1276,7 +1279,26 @@ def decide_tool_for(mode_signals: bool, deferred_queued: bool,
         required = tool["input_schema"].setdefault("required", [])
         if "card_thread" not in required:
             required.append("card_thread")
-    return strip_schema_descriptions(tool) if compact else tool
+    return compact_decide_schema(tool) if compact else tool
+
+
+#: Fields whose description survives the compact schema. Measured 2026-10-06 on the dev half
+#: (gemini-2.5-flash-lite, reach judge on): with every description stripped, 14 of 38 hand-off
+#: decisions wrote "I will hand this to the environment" as the answer and left `deferred_deep`
+#: empty, so nothing ran. The field that carries the hand-off keeps saying what it is for.
+COMPACT_SCHEMA_KEPT_DESCRIPTIONS = ("deferred_deep",)
+
+
+def compact_decide_schema(tool: Dict[str, Any]) -> Dict[str, Any]:
+    """The decide schema with field descriptions stripped, except ``COMPACT_SCHEMA_KEPT_DESCRIPTIONS``."""
+    compact = strip_schema_descriptions(tool)
+    full_props = (tool.get("input_schema") or {}).get("properties") or {}
+    props = (compact.get("input_schema") or {}).get("properties") or {}
+    for name in COMPACT_SCHEMA_KEPT_DESCRIPTIONS:
+        desc = (full_props.get(name) or {}).get("description")
+        if desc and name in props:
+            props[name]["description"] = desc
+    return compact
 
 
 @dataclass

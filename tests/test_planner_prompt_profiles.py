@@ -198,7 +198,9 @@ def test_decide_tool_for_compact_strips_on_every_variant():
     for queued in (False, True):
         for threaded in (False, True):
             tool = decide_tool_for(False, queued, threaded, tools=False, compact=True)
-            assert descriptions_in(tool) == 0, (queued, threaded)
+            # Only the hand-off field keeps its description (COMPACT_SCHEMA_KEPT_DESCRIPTIONS).
+            assert descriptions_in(tool) == 1, (queued, threaded)
+            assert tool["input_schema"]["properties"]["deferred_deep"].get("description")
             assert descriptions_in(
                 decide_tool_for(False, queued, threaded, tools=False, compact=False)) > 0
 
@@ -223,7 +225,7 @@ def test_a_compact_run_sends_the_compact_prompt_and_the_compact_schema():
     assert "THE ACTIONS:" in prompt
     assert "SPECIFICITY (answer about the SPECIFIC subject" not in prompt
     assert PLANNER_DECISION_RUBRIC in prompt
-    assert descriptions_in(provider.schemas[0]) == 0
+    assert descriptions_in(provider.schemas[0]) == 1
 
 
 def test_a_compact_run_is_smaller_than_a_default_run_on_the_same_message():
@@ -234,3 +236,13 @@ def test_a_compact_run_is_smaller_than_a_default_run_on_the_same_message():
         build(provider, planner_prompt_profile=profile)._plan(message, "", "some context", [])
         sizes[profile] = token_estimate(provider.prompts[0])
     assert sizes["compact"] < sizes["full"] * 0.5, sizes
+
+
+def test_the_compact_schema_keeps_the_hand_off_fields_description_and_the_prompt_says_why():
+    """Measured 2026-10-06: with no description on `deferred_deep`, a cheap planner wrote "I will
+    hand this off" as its answer and left the field empty on 14 of 38 hand-off decisions."""
+    tool = decide_tool_for(False, True, False, tools=False, compact=True)
+    props = tool["input_schema"]["properties"]
+    assert "background task queue" in props["deferred_deep"]["description"]
+    assert "description" not in props["action"]
+    assert "A HAND-OFF IS THE `deferred_deep` FIELD, NOT THE WORDS" in PLANNER_PROFILES["compact"]
