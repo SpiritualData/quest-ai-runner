@@ -64,6 +64,9 @@ __all__ = ["Poller", "StateStore"]
 
 log = logging.getLogger("quest-ai-runner.poller")
 
+# How long dispatch leaves a task alone after its claim fails (see ``_submit_to_pool``).
+CLAIM_RETRY_COOLDOWN_SECONDS = 600.0
+
 _DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
@@ -361,6 +364,9 @@ class Poller:
         # a race WITHIN this one process.
         self._inflight_lock = threading.Lock()
         self._inflight: set = set()
+        # task_id -> monotonic time before which dispatch skips it: a task whose claim failed
+        # (another account owns it, so the PATCH 404s) must not keep taking a worker slot.
+        self._claim_cooldown: Dict[str, float] = {}
 
     def _orch(self):
         if self._orchestrator is None:
@@ -479,8 +485,14 @@ class Poller:
         as slots free up. The slot is claimed here, at submit time, so the next tick's own
         discovery cannot hand the same task out twice and the free-slot count stays honest."""
         submitted: List[str] = []
+        now = time.monotonic()
         for task in fresh:
             task_id = str(task.get("id") or task.get("task_id") or "")
+            # Oldest-first order means an unclaimable old task (404 on claim, owned by another
+            # account) would take a slot every tick and starve everything behind it: that is how
+            # the 2026-10-06 autopilot passes never ran. Skip it until its cooldown lapses.
+            if self._claim_cooldown.get(task_id, 0.0) > now:
+                continue
             with self._inflight_lock:
                 if len(self._inflight) >= max(1, self.cfg.max_concurrent_tasks):
                     break
@@ -702,7 +714,9 @@ class Poller:
         # re-fire loop — the backend claim (in_progress) is the second guard either way.
         if self.client.claim(task_id, handler=handler) is None:
             log.info("could not claim task %s — skipping (will be re-offered later)", task_id)
+            self._claim_cooldown[task_id] = time.monotonic() + CLAIM_RETRY_COOLDOWN_SECONDS
             return None
+        self._claim_cooldown.pop(task_id, None)
         self.state.mark(sig)
         # Persist WHAT WE ARE HOLDING before running it. The claim above has already PATCHed the
         # row to in_progress, so from here until a terminal report the backend believes this
