@@ -177,7 +177,19 @@ STEP_CAP = 15  # QuestCommandRunner's read-step cap (quest-backend playbook); us
 # Dev Quest REST client (setup, independent verification, teardown). Real endpoints only.
 # ---------------------------------------------------------------------------------------------
 
-def api(method, path, body=None, params=None):
+def api(method, path, body=None, params=None, attempts=5):
+    """One REST call. A 429 (the dev backend's shared per-account rate limit, which other
+    harnesses on the same account also spend) is retried with backoff instead of being read as a
+    real failure of the fixture or of a verifier."""
+    for attempt in range(attempts):
+        status, payload = api_once(method, path, body, params)
+        if status != 429 or attempt == attempts - 1:
+            return status, payload
+        time.sleep(10 * (attempt + 1))
+    return status, payload
+
+
+def api_once(method, path, body=None, params=None):
     url = QUEST_BASE + path
     if params:
         url += "?" + urllib.parse.urlencode(params)
@@ -627,6 +639,7 @@ def setup():
 
     out["created_task_ids"] = []
     out["created_decision_ids"] = []
+    out["created_conversation_ids"] = []
 
     STATE_PATH.write_text(json.dumps(out, indent=1))
     print("fixture written to", STATE_PATH)
@@ -652,6 +665,13 @@ def teardown(fx=None):
             report.append(("decision-decline", decision_id,
                            resolve_decision(decision_id, "decline",
                                             "evaluation harness cleanup")[0]))
+
+    # 0b. Delete every chat conversation this pass opened. Left behind, they are the account's
+    # own Quest AI history: once the fixture quest is deleted they outlive it, and every later
+    # run (or a real chat on the same account) can recall them as context.
+    for conv_id in fx.get("created_conversation_ids") or []:
+        report.append(("conversation", conv_id,
+                       api("DELETE", f"/api/quest-ai/conversations/{conv_id}")[0]))
 
     # 1. Restore (or delete) the account-level daily-reflection entry for today.
     snap = fx.get("daily_reflection_snapshot") or {"existed": False}
@@ -1437,6 +1457,10 @@ class InAppResult:
         self.exec_phases = [f.get("phase") for f in self.exec_frames if f.get("phase")]
         self.exec_errors = [f.get("error") for f in self.exec_frames
                             if f.get("phase") == "error" and f.get("error")]
+        # The programs the turn actually generated (truncated), so a failed case can be diagnosed
+        # from the results file alone, without the backend's log.
+        self.exec_codes = [str(f.get("code"))[:1500] for f in self.exec_frames
+                           if f.get("phase") == "code" and f.get("code")]
 
         read_events = [e for e in events if name(e) == "read"]
         self.read_frame_count = len(read_events)
@@ -1527,6 +1551,7 @@ def run_inapp_once(fx, dataset, *, auto_run_mode="on"):
         assert status == 201, (status, body)
         conv = body.get("conversation_id") or body.get("id") or (body.get("data") or {}).get("id")
         fx["last_conv_id"] = conv
+        fx.setdefault("created_conversation_ids", []).append(conv)
 
         started = time.time()
         apply_before_hooks(fx, case)
@@ -1576,7 +1601,7 @@ def run_inapp_once(fx, dataset, *, auto_run_mode="on"):
             delegated=res.delegated, task_ids=res.task_ids, routing_ok=routing_ok,
             correct=bool(correct), note=note, errors=res.errors,
             reply=(res.text or "")[:1500], seconds=round(took, 1),
-            exec_phases=res.exec_phases, exec_errors=res.exec_errors,
+            exec_phases=res.exec_phases, exec_errors=res.exec_errors, exec_codes=res.exec_codes,
             read_frame_count=res.read_frame_count, max_step=res.max_step,
             hit_step_cap=res.hit_step_cap, pending_undo=res.pending_undo,
             pending_suggestion=res.pending_suggestion, done_data_keys=res.done_data_keys,
