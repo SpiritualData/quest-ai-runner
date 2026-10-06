@@ -343,6 +343,35 @@ def _parse_worker_output(raw: str) -> tuple:
     return text, 0, 0.0, False, ""
 
 
+def envelope_reports_no_work(raw: str) -> bool:
+    """True when the worker's JSON envelope says it FAILED having used no model tokens at all.
+
+    That is the shape of a worker that never started its goal: Claude Code rejected the run before
+    its first model call (an unrecognized model id, bad credentials, a refused flag) and reports
+    ``is_error`` with zero input and output tokens. Only a parsed envelope that carries ``usage``
+    counts: plain-text output, or a worker killed before it printed its envelope, says nothing
+    about how much work happened, so it is never classified as a launch failure here. Never raises.
+    """
+    try:
+        data = json.loads(raw or "")
+    except Exception:  # noqa: BLE001: not an envelope, so not a statement about work done
+        return False
+    if not isinstance(data, dict) or not data.get("is_error"):
+        return False
+    usage = data.get("usage")
+    if not isinstance(usage, dict):
+        return False
+    # Cache traffic counts as work too: a turn served largely from the prompt cache can report
+    # very few plain input tokens.
+    keys = ("input_tokens", "output_tokens", "cache_read_input_tokens",
+            "cache_creation_input_tokens")
+    try:
+        used = sum(int(usage.get(k) or 0) for k in keys)
+    except (TypeError, ValueError):
+        return False
+    return used == 0
+
+
 def compose_goal_prompt(goal: str, brief: str, *, preamble: str = "") -> str:
     """Compose the headless worker prompt: an optional preamble + the TASK brief + the GOAL stated
     as a plain-text done-standard.
@@ -1301,12 +1330,15 @@ class SubprocessGoalRunner(DeepRunner):
             stop_monitor.set()
             if monitor_thread:
                 monitor_thread.join(timeout=1)
-            return DeepResult(met=False, error=f"worker binary not found: {self.cfg.claude_path}")
+            return DeepResult(met=False, launch_failed=True,
+                              error=f"The deep worker could not start: binary not found "
+                                    f"({self.cfg.claude_path}).")
         except PermissionError as e:
             stop_monitor.set()
             if monitor_thread:
                 monitor_thread.join(timeout=1)
-            return DeepResult(met=False, error=f"permission denied running worker: {e}")
+            return DeepResult(met=False, launch_failed=True,
+                              error=f"The deep worker could not start: permission denied ({e}).")
 
         # Communicate with the process (send prompt and wait for completion) in slices of one review
         # interval. At each slice end a quick LLM reads the live session log and stops the run ONLY
@@ -1446,6 +1478,18 @@ class SubprocessGoalRunner(DeepRunner):
                           "needs -p).")
             return DeepResult(met=True, output=out, tokens=tokens, cost_usd=cost,
                               session_id=session_id)
+        # THE WORKER NEVER STARTED. Claude Code refused before its first model turn (an
+        # unrecognized ``--model``, bad credentials, a rejected flag): it exits non-zero with an
+        # error envelope that reports ZERO tokens used, and its ``result`` is the CLI's own error
+        # message ("There's an issue with the selected model ..."). That text is not work product.
+        # Handed on as ordinary output, the goal loop verified it, called it "goal not met" and
+        # retried on a stronger model, all within a couple of seconds, which reads to a person as
+        # a deep run that ran and fell short. It is a launch failure, and it says so.
+        if envelope_reports_no_work(raw):
+            reason = (out or "").strip() or (err or "").strip() or f"exit {proc.returncode}"
+            return DeepResult(
+                met=False, output="", session_id=session_id, launch_failed=True,
+                error=f"The deep worker could not start: {reason[:600]}")
         if not err:
             # No stderr to quote. Say exactly that rather than ASSERTING a cause: the old wording
             # ("likely hit the turn/budget limit") was a guess printed as fact, and it is the text

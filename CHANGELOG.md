@@ -51,6 +51,26 @@ All notable changes to this project are documented here. The format is based on
     is the one thing those features exist to avoid.
 
 ### Fixed
+- **A deep run's status lines say what really happened.** Reported from a consumer's chat: within a
+  few seconds the status said a deep run was starting on sonnet, then "Goal not met", then that it
+  was retrying with opus, and there was no deep run to find. Two causes, both closed:
+  - A worker that NEVER STARTED (Claude Code refusing an unrecognized `--model`, bad credentials, a
+    missing binary) handed the CLI's error text back as output, which the goal loop verified, called
+    "Goal not met" and escalated on. `SubprocessGoalRunner` now returns
+    `DeepResult(launch_failed=True)` for a missing or non-executable binary and for an error envelope
+    that reports zero tokens used (`envelope_reports_no_work`), with the CLI's reason in `error` and
+    no output. The goal loop reports it as the error it is, never verifies it and never escalates the
+    model on it (a further runner rung still gets its turn).
+  - A runner that does not run the deep-model ladder (a consumer's in-process answerer, or a queue
+    hand-off whose lane picks its own model) was announced and escalated exactly like a Claude Code
+    worker. `DeepRunnerBase.uses_deep_model` (default True) and `runner_uses_deep_model()` let such a
+    runner say so; for it the goal loop announces no starting model, emits no "Deep run used", names
+    no model in a retry and climbs no tier. The starting-model announcement is now made once the
+    goal's runner is resolved, not before.
+  - "Goal not met yet, retrying" is said only after the verifier judged a completed attempt not met,
+    never before a launch-failure fall-through, an empty-run fall-through or a continuation, each of
+    which announces itself.
+  Tests: `tests/test_deep_run_status_honesty.py`.
 - **A corpus of tens of thousands of files makes hundreds of cards, not thousands.** Two real card
   stores had inflated to 8,557 and 32,070 cards. Three causes, all closed:
   - A deterministic folder exclusion (a nested repository, a duplicate tree) was not final: a

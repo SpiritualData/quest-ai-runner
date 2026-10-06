@@ -438,6 +438,14 @@ class DeepResult:
     # rung is a Claude model, so another rung would be refused too) and the task executor requeues
     # the task instead of reporting it. ``session_id`` still names the session to continue.
     usage_limited: bool = False
+    # The worker NEVER STARTED the goal: the binary is missing or not executable, or the CLI refused
+    # before its first model turn (an unrecognized model id, bad credentials, a rejected flag), so
+    # it consumed nothing and did nothing. Its ``output`` (if any) is the CLI's own error text, not
+    # work product. The goal loop treats this as a hard error: it never sends that text to the
+    # verifier (which would dress the launch failure up as "goal not met") and never escalates the
+    # model on it (a stronger model was never the problem). Structural, set by the runner from the
+    # process outcome and its reported usage, never inferred from the wording of the output.
+    launch_failed: bool = False
     # The model this run actually executed with, when known. Set by the goal loop from the ladder
     # rung it dispatched to (``core/orchestrator.py``'s ``run_one``), not by the runner itself, so
     # every runner gets this for free; a runner that resolves its own model (or a future rung that
@@ -1414,9 +1422,27 @@ class DeepRunnerBase(abc.ABC):
     # today -- only the two bounded rungs (FastEditRunner, MCPOperationRunner) narrow it.
     write_surface: str = WRITE_SURFACE_AGENT
 
+    # Whether THIS runner actually runs the deep-model ladder's ``model`` (see
+    # ``runner_uses_deep_model``). True by default, so every existing runner keeps today's
+    # behaviour. A runner that answers in-process with its own fixed model (or queues the work for
+    # another lane, which picks its own) sets False: the goal loop then never tells a person the
+    # work "ran on sonnet" or is "retrying with opus", because neither would be true.
+    uses_deep_model: bool = True
+
     @abc.abstractmethod
     def run_goal(self, *, goal, brief, model=None, max_turns=None, emit=None,
                  context_preamble=None, run_id=None) -> DeepResult: ...
+
+
+def runner_uses_deep_model(runner: Any) -> bool:
+    """Whether ``runner`` executes with the deep-model ladder's ``model`` argument.
+
+    Read with ``getattr(..., True)`` so a duck-typed runner that never declares
+    ``uses_deep_model`` keeps today's behaviour. ``None`` (no runner wired) is False: nothing runs,
+    so no model can be claimed for it."""
+    if runner is None:
+        return False
+    return bool(getattr(runner, "uses_deep_model", True))
 
 
 class EscalationSinkBase(abc.ABC):

@@ -65,6 +65,7 @@ from .adapters import (
     EVENT_UNDERSTANDING,
     FUTURE_CONTEXT_VIA_FIELD,
     FUTURE_CONTEXT_VIA_OUTPUT,
+    runner_uses_deep_model,
     WRITE_SURFACE_AGENT,
     WRITE_SURFACE_FILES,
     WRITE_SURFACE_OPERATIONS,
@@ -6988,7 +6989,21 @@ class Orchestrator:
             model_hint, quality_standards, model,
             difficulty=getattr(plan, "deep_difficulty", None),
             difficulty_reason=getattr(plan, "deep_difficulty_reason", None))
-        if deep_selection is not None and emit is not None:
+        # ANNOUNCED ONLY FOR A RUNNER THAT RUNS THE MODEL, and so only once a goal's runner is
+        # resolved (inside ``run_one`` below). A consumer's named runner may answer in-process with
+        # its own fixed model, or queue the work for another lane that picks its own; announcing
+        # "Starting on sonnet, with a stronger model ready" for those told a person a deep run was
+        # starting when none was. Once per deep run, whichever subgoal reaches it first.
+        selection_announced = threading.Event()
+        selection_lock = threading.Lock()
+
+        def announce_model_selection(runner: Any) -> None:
+            if deep_selection is None or emit is None or not runner_uses_deep_model(runner):
+                return
+            with selection_lock:
+                if selection_announced.is_set():
+                    return
+                selection_announced.set()
             level = deep_selection.get("difficulty")
             start_text = f"Starting on {deep_selection['start_model']}"
             if level:
@@ -7124,6 +7139,7 @@ class Orchestrator:
             # from an instruction in its brief, while the terminal rung is a prose worker that does
             # need to be asked.
             terminal_runner = runner_ladder[-1]
+            announce_model_selection(terminal_runner)
 
             # FUTURE-CONTEXT ask, routed by the RESOLVED runner's channel. When the async card updater
             # is active, EVERY runner is asked for future context (a code generator knows the most
@@ -7339,6 +7355,11 @@ class Orchestrator:
                                 f"same session with a larger budget ({attempt_turns} turns)…")
                 return True
 
+            # True only right after the VERIFIER judged a completed attempt not met. The "Goal not
+            # met yet, retrying" line is said for that case alone: a launch failure, an empty run
+            # falling through to the next rung, or a continuation each announce themselves, and
+            # none of them is a goal that was checked and fell short.
+            verified_not_met = False
             for attempt in range(1, max_iters + 1):
                 # Cooperative cancellation, checked before starting each new attempt (a retry can be
                 # a full agentic subprocess run, so this is the natural point to stop rather than
@@ -7353,9 +7374,14 @@ class Orchestrator:
                 rung_idx = min(attempt - 1, len(runner_ladder) - 1)
                 active_runner = runner_ladder[rung_idx]
                 has_more_rungs = rung_idx < len(runner_ladder) - 1
-                if emit is not None and attempt > 1:
+                # Whether THIS rung runs the ladder's model at all. Every model claim below (which
+                # model a retry uses, "Deep run used X", a tier switch) is made only when it does.
+                model_applies = runner_uses_deep_model(active_runner)
+                if emit is not None and attempt > 1 and verified_not_met:
                     emit.status("Goal not met yet, retrying"
-                                + (f" with {run_model}" if run_model else "") + "…")
+                                + (f" with {run_model}" if run_model and model_applies else "")
+                                + "…")
+                verified_not_met = False
                 # Fold in any NEW user messages that arrived since the run started, so this process
                 # (the first attempt or a retry) acts on the latest input, not a stale request.
                 _new = self._drain_pending(pending_inputs)
@@ -7366,8 +7392,9 @@ class Orchestrator:
                 before_decision_ids = self.quest_open_decision_ids(quest_id)
                 res = _do_run(run_brief, run_model, active_runner,
                               resume_session_id=resume_session, max_turns=attempt_turns)
-                res.model = res.model or run_model
-                if emit is not None and res.model:
+                if model_applies:
+                    res.model = res.model or run_model
+                if emit is not None and res.model and not res.launch_failed:
                     # WHICH model this attempt ran on: the tier it was asked for and the full id the
                     # CLI resolved it to, as structured data the task feed can show per attempt.
                     ran_on = (f"{res.model} ({res.resolved_model})"
@@ -7403,6 +7430,17 @@ class Orchestrator:
                     if emit is not None:
                         emit.status("Claude Code reached its usage limit; pausing this work "
                                     "until it resets.")
+                    break
+                # THE WORKER NEVER STARTED (``DeepResult.launch_failed``): nothing ran, so there is
+                # nothing to verify, and a stronger model was never the problem. Verifying the CLI's
+                # error text produced "Goal not met" and a retry on the next model within seconds,
+                # which read as a deep run that ran and fell short. Say what happened instead, and
+                # stop. A further RUNG is a different runner, so it still gets its turn.
+                if getattr(res, "launch_failed", False):
+                    if emit is not None:
+                        emit.status(res.error or "The deep run could not start.")
+                    if has_more_rungs:
+                        continue
                     break
                 # TURN-BUDGET CONTINUATION, decided BEFORE the terminal guard below, because a
                 # worker stopped by ``--max-turns`` produces EXACTLY the shape that guard calls a
@@ -7547,20 +7585,23 @@ class Orchestrator:
                 # when it names a real tier; otherwise step one rung up the deep-model ladder, since a
                 # capability gap is a common cause of a not-met goal. Either way the next attempt runs
                 # at the chosen tier.
-                _vt = verdict.get("next_tier")
+                # A rung that does not run the ladder's model has no tier to switch: the next
+                # attempt is the same runner with the verifier's feedback, and is described as such.
+                _vt = verdict.get("next_tier") if model_applies else None
                 _resolved_tier = self._resolved_deep_tier(_vt, deep_models) if _vt else None
                 if _resolved_tier is not None:
                     run_model = _resolved_tier
                     deep_models[min(tier_idx, len(deep_models) - 1)] = _resolved_tier
                     if emit is not None:
                         emit.status(f"Switching model tier to {_vt} for the next attempt…")
-                elif tier_idx < len(deep_models) - 1:
+                elif model_applies and tier_idx < len(deep_models) - 1:
                     tier_idx += 1  # a capability gap is a common cause; try a stronger model next
                 if budget is not None and tokens_used >= budget:
                     if emit is not None:
                         emit.status(f"Deep token budget reached ({tokens_used}/{budget}); stopping.")
                     break
                 current_brief = self._augment_brief(base_brief, res.output or "", verdict)
+                verified_not_met = True
 
             # res.met is now the brain-verified outcome (not just the worker's exit code). The fact
             # records it for the broken-promise guard; a verified-not-met run is a confirmed failure.
