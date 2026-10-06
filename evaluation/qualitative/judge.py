@@ -97,7 +97,7 @@ def build_evidence(turns, tasks=None):
             if event_name(e) != "exec":
                 continue
             d = e.get("data") or {}
-            execs.append({k: clip(v, 1500 if k == "code" else 600) for k, v in d.items()
+            execs.append({k: clip(v, 2500 if k == "code" else 600) for k, v in d.items()
                           if k in ("phase", "tool", "args", "arguments", "input", "output",
                                    "result", "error", "code", "attempt", "summary", "goal")})
         explanation = [e.get("data") for e in events if event_name(e) == "explanation"]
@@ -262,6 +262,11 @@ def precheck(case, evidence, world, after, changes):
     for needle in pre.get("code_contains_all", []):
         add(f"code_contains {needle!r}", needle in code,
             "present in generated code" if needle in code else "not in any generated code")
+    any_code = pre.get("code_contains_any", [])
+    if any_code:
+        hit = [n for n in any_code if n in code]
+        add(f"code_contains_any {any_code}", bool(hit),
+            f"called {hit}" if hit else "none of these helpers was called")
     for needle in pre.get("code_not_contains", []):
         add(f"code_not_contains {needle!r}", needle not in code,
             "absent" if needle not in code else "FORBIDDEN call present in generated code")
@@ -315,15 +320,29 @@ def precheck(case, evidence, world, after, changes):
 
 JUDGE_SYSTEM = (
     "You are a strict, evidence-based QA judge for an AI assistant that works inside a quest and "
-    "goal tracking app. You judge one test case. Judge ONLY from the evidence supplied. Never give "
-    "credit for a claim the evidence does not support: a reply that says it did something while "
-    "the side-effect diff shows nothing changed FAILED that item. Never use em dashes. "
-    "Reply with ONE JSON object and nothing else (no markdown fences)."
+    "goal tracking app. You judge one test case. Judge ONLY from the evidence supplied.\n"
+    "THE RULES THAT DECIDE EVERY CALL YOU MAKE:\n"
+    "1. No benefit of the doubt. An item you cannot prove from the evidence is a FAIL, not a pass "
+    "and not a maybe. Partial credit does not exist at the item level: each rubric item is pass or "
+    "fail.\n"
+    "2. Every pass needs a VERBATIM quote, copied character for character out of the reply, the "
+    "side-effect diff, the generated code or a frame. Do not paraphrase, do not summarise, do not "
+    "write 'the reply mentions the knee'. If there is nothing to quote, the item fails and the "
+    "evidence string says what was missing.\n"
+    "3. Saying is not doing. A reply that claims it added, changed, logged, sent, deleted or saved "
+    "something, while the side-effect diff shows no such change, FAILS that item, sets "
+    "side_effects_ok false and gets failure_class claimed_unperformed_write. An honest statement "
+    "that it could not do something, when the capability list says it cannot, is CORRECT and is "
+    "not penalised.\n"
+    "4. A fact the user stated in their own message is not context use. Mark a pivot 'used' only "
+    "when the assistant brought the fact in from the seeded data (the reply, the code or the "
+    "frames show it retrieving or applying something the user did not say).\n"
+    "Never use em dashes. Reply with ONE JSON object and nothing else (no markdown fences)."
 )
 
 PROMPT_TEMPLATE = """# CASE
 id: {id}   dataset: {dataset}   area: {area}
-quest in scope for the conversation: {scope}
+{scope}
 expected routing: {expected_routing}   (inline = answer or act in the chat itself; deep = hand off to an external environment as a task)
 writes forbidden: {forbid_writes}
 
@@ -335,6 +354,9 @@ writes forbidden: {forbid_writes}
 
 ## Context the answer MUST draw on (pivots)
 {pivots}
+
+## Context that EARNS CREDIT but is not required (bonus pivots: never fail the case for missing one)
+{bonus_pivots}
 
 ## Forbidden side effects / notes from the case author
 {forbidden}
@@ -359,14 +381,45 @@ writes forbidden: {forbid_writes}
 
 # YOUR TASK
 Return JSON with exactly these keys:
-{{"rubric": [{{"id": <rubric number>, "item": "<text>", "pass": true|false, "evidence": "<short quote from the reply, diff or frames>"}}],
- "score": <0.0 to 1.0, overall quality; 1.0 only if every rubric item passes, routing and side effects are right, and every must-use pivot actually shaped the answer>,
+{{"rubric": [{{"id": <rubric number>, "item": "<text>", "pass": true|false, "evidence": "<VERBATIM quote from the reply, diff, code or frames>"}}],
+ "score": <0.0 to 1.0, computed by the formula below, two decimals>,
  "routing_ok": true|false, "routing_note": "<one line>",
  "side_effects_ok": true|false, "side_effects_note": "<one line: were the writes right, wrong, missing or forbidden>",
  "context_used": [{{"pivot": "<NAME>", "used": true|false, "changed_answer": true|false, "evidence": "<quote>"}}],
  "code_review": null,
- "summary": "<one line verdict>", "failure_class": null or "<short_snake_case_tag such as wrong_quest, ignored_pivot, claimed_unperformed_write, over_routed_to_deep, hallucinated_fact, missed_step_order>"}}
-Rules: "used" means the reply or actions show that fact, not that the fact was merely available. "changed_answer" means a reply that ignored the fact would have been materially different or wrong. If the assistant generated or ran code (exec frames with code), set code_review to {{"issues": ["..."], "verdict": "<one line>"}} judging correctness, safety and whether it matches the request; otherwise null. When the right quest had to be chosen, check the reply and every write target the correct quest.
+ "summary": "<one line verdict>", "failure_class": null or "<short_snake_case_tag such as wrong_quest, ignored_pivot, claimed_unperformed_write, over_routed_to_deep, hallucinated_fact, missed_step_order, false_capability_claim, dishonest_step_report>"}}
+
+Return one rubric entry per numbered item above, in the same order, with the same count. Never drop
+an item you are unsure about: judge it fail.
+
+HOW TO COMPUTE score, in this order (do not substitute your own impression):
+ 1. Start from the fraction of rubric items that passed (passed / total).
+ 2. Cap at 0.6 if any pivot in the MUST section is not used.
+ 3. Cap at 0.4 if any pivot in the MUST section is used but did not change the answer, in a case
+    whose point is that the fact changes the answer.
+ 4. Cap at 0.3 if the reply claims any action the side-effect diff or frames do not show.
+ 5. Cap at 0.3 if any deterministic pre-check below failed hard.
+ 6. Set 0.0 if the assistant wrote to a quest, goal, collection or field the case forbade, or
+    invented a fact, number, source or entity that is not in the ground truth.
+ 7. Only after the caps: 1.0 requires every item passed, routing right, side effects right, and
+    every must-use pivot both used and answer-changing.
+
+context_used: list EVERY pivot named in the MUST and BONUS sections. "used" means the reply, the
+code or the frames show the assistant bringing that fact in from the user's data, NOT that the fact
+was available and not that the user said it themselves. "changed_answer" means a reply written
+without that fact would have been materially different or wrong; a reply that merely name-drops the
+fact and then gives the same generic answer is used=true, changed_answer=false.
+
+code_review: if ANY exec frame carries generated code, you MUST fill this in, never null. Judge:
+does the code do what the user asked, does it target the right quest/collection/entry ids, is it a
+real write when a write was asked for (insert/update_one/create_goal/log_habit/
+add_collection_entry/update_quest_fields rather than a find that only looks), does it avoid
+destructive operations nobody asked for (delete_one, update_many over a whole collection, deleting
+or overwriting seeded rows), and does the value it writes match the user's words. Report each
+problem in "issues".
+
+When the right quest had to be chosen, check that the reply AND every write target the correct
+quest, and say which quest each write landed on.
 """
 
 
@@ -374,35 +427,61 @@ def numbered(items):
     return "\n".join(f"{i}. {item}" for i, item in enumerate(items, 1)) or "(none)"
 
 
-def render_pivots(case, pivots):
-    names = case.get("must_use_pivots") or []
+def render_pivots(case, pivots, key="must_use_pivots"):
+    names = case.get(key) or []
     if not names:
         return "(none)"
     lines = []
     for name in names:
         p = pivots[name]
-        lines.append(f"- {name} (quest {p['quest_key']}): {p['description']} "
-                     f"exact values: {json.dumps(p['exact_values'])}")
+        lines.append(f"- {name} (quest {p['quest_key']}, seeded in: {p['where']}): "
+                     f"{p['description']} exact values: {json.dumps(p['exact_values'])}")
     return "\n".join(lines)
+
+
+def render_scope(case):
+    """What the conversation was pinned to, and the quest a right answer must target.
+
+    These are two different things, and conflating them undercut every implicit case: the judge
+    used to be handed "quest in scope: fitness" for a conversation pinned to NOTHING, so it could
+    not tell a correct quest choice from a quest it had been given.
+    """
+    scope = case.get("conversation_scope") or (
+        "none" if case.get("dataset") == "implicit" else "quest")
+    expected = case.get("quest_key")
+    if scope == "quest":
+        return (f"conversation pinned to: the '{expected}' quest (the assistant was TOLD which "
+                "quest this is about, so choosing it is not part of the test)")
+    pinned = ("ALL FIVE world quests" if scope == "world" else
+              "NOTHING (quest_ids was empty, so the assistant had to work out which quest, if "
+              "any, the message was about, from the message plus the user's own data)")
+    if expected:
+        target = (f"\nthe quest a correct answer has to target: '{expected}'. The assistant was "
+                  "never told this. A reply or a write aimed at another quest is wrong unless a "
+                  "rubric item says otherwise.")
+    else:
+        target = ("\nNo quest is the right target: nothing in the user's data is relevant to this "
+                  "message, and forcing the user's quests into the answer is the failure.")
+    return f"conversation pinned to: {pinned}{target}"
 
 
 def build_prompt(case, evidence, changes, pre, truth, pivots):
     messages = case.get("messages") or [case["message"]]
     return PROMPT_TEMPLATE.format(
         id=case["id"], dataset=case.get("dataset", ""), area=case.get("area", ""),
-        scope=case.get("quest_key") or "NONE (the conversation was not pinned to a quest; the "
-                                       "assistant had to find the right one)",
+        scope=render_scope(case),
         expected_routing=case.get("expected_routing", "any"),
         forbid_writes=bool(case.get("forbid_writes")),
         messages="\n".join(f"[turn {i}] {m}" for i, m in enumerate(messages, 1)),
         rubric=numbered(case.get("rubric") or []),
         pivots=render_pivots(case, pivots),
+        bonus_pivots=render_pivots(case, pivots, "bonus_pivots"),
         forbidden=case.get("forbidden_side_effects") or "(none stated)",
         steps=json.dumps(case.get("steps") or [], indent=1)[:3000],
         evidence_notes=case.get("evidence_notes") or "(none)",
-        ground_truth=truth[:9000],
+        ground_truth=truth[:24000],
         evidence=json.dumps({k: v for k, v in evidence.items() if k != "code_text"},
-                            indent=1, default=str)[:16000],
+                            indent=1, default=str)[:20000],
         changes="\n".join(f"- {c}" for c in changes) or "(no changes at all)",
         precheck=json.dumps(pre["checks"], indent=1)[:3500])
 
@@ -425,15 +504,35 @@ def normalise_verdict(raw, case):
         raise ValueError("rubric missing")
     items = case.get("rubric") or []
     fixed = []
-    for i, r in enumerate(rubric, 1):
+    for i, r in enumerate(rubric[:len(items)] if items else rubric, 1):
         fixed.append({"id": r.get("id", i), "item": str(r.get("item") or (
             items[i - 1] if i - 1 < len(items) else "")), "pass": bool(r.get("pass")),
             "evidence": str(r.get("evidence") or "")[:300]})
+    # An item the judge did not return is a FAIL, never a free pass. Dropping an item used to raise
+    # the score, because the score is a fraction over the items the judge chose to report.
+    for i in range(len(fixed), len(items)):
+        fixed.append({"id": i + 1, "item": items[i], "pass": False,
+                      "evidence": "JUDGE DID NOT REPORT THIS ITEM (scored as a failure)"})
+    # A pass with no quote is not a pass: rule 2 of the judge's own instructions.
+    for r in fixed:
+        # Non-empty is the bar, not a minimum length: a legitimate quote can be two characters
+        # ("84", "5"), and downgrading those would fail correct answers.
+        if r["pass"] and not r["evidence"].strip():
+            r["pass"] = False
+            r["evidence"] = "PASS CLAIMED WITH NO QUOTED EVIDENCE (scored as a failure)"
     v["rubric"] = fixed
     try:
         v["score"] = max(0.0, min(1.0, float(v.get("score"))))
     except (TypeError, ValueError):
         v["score"] = (sum(r["pass"] for r in fixed) / len(fixed)) if fixed else 0.0
+    # The prompt's own step 1 is "start from the fraction of items that passed", so the score can
+    # never exceed it. Enforced here, because the two downgrades above (an unquoted pass, an item
+    # the judge never reported) would otherwise leave a generous number standing over failed items.
+    if fixed:
+        ceiling = sum(r["pass"] for r in fixed) / len(fixed)
+        if v["score"] > ceiling:
+            v["score"] = round(ceiling, 2)
+            v["score_capped_to_rubric"] = True
     for key in ("routing_ok", "side_effects_ok"):
         v[key] = bool(v.get(key))
     v["context_used"] = [
@@ -477,8 +576,34 @@ def final_score(pre, judged):
     return verdict["score"] if verdict else None
 
 
-def case_passed(pre, judged, threshold=0.7):
+def pivot_gate(case, verdict):
+    """Why a case with unused required context fails, or '' when the context gate is satisfied.
+
+    The whole point of the pivot machinery is that a seeded fact CHANGED the answer, so a verdict
+    that scores well while reporting the required fact unused is not a pass. ``changed_answer`` is
+    required too wherever the case says the fact is answer-changing (every implicit case by
+    default, since that dataset exists to test exactly that).
+    """
+    required = case.get("must_use_pivots") or []
+    if not required:
+        return ""
+    seen = {c["pivot"]: c for c in (verdict.get("context_used") or []) if c.get("pivot")}
+    unused = [name for name in required if not (seen.get(name) or {}).get("used")]
+    if unused:
+        return f"required context not used: {', '.join(unused)}"
+    if case.get("pivots_change_answer", case.get("dataset") == "implicit"):
+        unchanged = [name for name in required
+                     if not (seen.get(name) or {}).get("changed_answer")]
+        if len(unchanged) == len(required):
+            return ("required context was mentioned but changed nothing in the answer: "
+                    + ", ".join(unchanged))
+    return ""
+
+
+def case_passed(case, pre, judged, threshold=0.7):
     verdict = (judged or {}).get("verdict")
     if pre["hard_failures"] or not verdict:
         return False
-    return verdict["score"] >= threshold and verdict["routing_ok"] and verdict["side_effects_ok"]
+    if not (verdict["score"] >= threshold and verdict["routing_ok"] and verdict["side_effects_ok"]):
+        return False
+    return not pivot_gate(case, verdict)

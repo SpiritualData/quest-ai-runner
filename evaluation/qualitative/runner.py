@@ -42,6 +42,15 @@ RESET_LOCK = threading.Lock()
 # Datasets
 # ---------------------------------------------------------------------------------------------
 
+PRECHECK_KEYS = frozenset({
+    "reply_contains_all", "reply_contains_any", "reply_not_contains", "reply_regex",
+    "reply_regex_forbidden", "code_contains_all", "code_contains_any", "code_not_contains",
+    "tools_called", "tools_not_called", "pivot_values_in_reply"})
+WRITE_ENTITIES = frozenset({"quest_field", "quest_note", "goal", "entry", "task"})
+WRITE_OPS = frozenset({"contains", "equals", "number_close", "gte", "lte", "regex", "exists",
+                       "not_contains"})
+
+
 def validate_case(case, source):
     problems = []
     for key in ("id", "area", "rubric"):
@@ -53,12 +62,33 @@ def validate_case(case, source):
         problems.append(f"dataset must be one of {DATASETS}")
     if case.get("dataset") == "explicit" and not case.get("quest_key"):
         problems.append("explicit cases need quest_key")
-    for name in case.get("must_use_pivots") or []:
-        if name not in W.PIVOTS:
-            problems.append(f"unknown pivot {name}")
+    if case.get("conversation_scope") not in (None, "quest", "none", "world"):
+        problems.append(f"bad conversation_scope {case.get('conversation_scope')}")
+    if case.get("expected_routing") not in (None, "inline", "deep", "delegated", "any"):
+        problems.append(f"bad expected_routing {case.get('expected_routing')}")
+    for key in ("must_use_pivots", "bonus_pivots"):
+        for name in case.get(key) or []:
+            if name not in W.PIVOTS:
+                problems.append(f"unknown pivot {name} in {key}")
+    overlap = set(case.get("must_use_pivots") or []) & set(case.get("bonus_pivots") or [])
+    if overlap:
+        problems.append(f"pivots in both must_use and bonus: {sorted(overlap)}")
+    # A misspelled pre-check key used to be silently ignored, so the case looked strict and
+    # asserted nothing at all.
+    for key in (case.get("precheck") or {}):
+        if key not in PRECHECK_KEYS:
+            problems.append(f"unknown precheck key {key!r}")
     for spec in case.get("expect_writes") or []:
-        if spec.get("entity") not in ("quest_field", "quest_note", "goal", "entry", "task"):
+        if spec.get("entity") not in WRITE_ENTITIES:
             problems.append(f"bad expect_writes entity {spec.get('entity')}")
+        if spec.get("op", "contains") not in WRITE_OPS:
+            problems.append(f"bad expect_writes op {spec.get('op')}")
+        if spec.get("entity") == "entry" and not (spec.get("match") or {}).get("collection_key"):
+            problems.append("an entry expect_writes needs match.collection_key")
+        if spec.get("entity") == "quest_note":
+            problems.append("quest_note writes are impossible on this surface: the chat has no "
+                            "add-note helper and `notes` is not one of the five raw collections "
+                            "(see world.CHAT_CAPABILITIES). Assert on the reply instead.")
     if problems:
         raise ValueError(f"{source}: case {case.get('id')!r}: {'; '.join(problems)}")
 
@@ -117,6 +147,26 @@ def conversation_quests(case, world):
     raise ValueError(f"bad conversation_scope {scope}")
 
 
+def ground_truth_keys(case):
+    """Which quests' seeded data the judge is shown, the case's quest FIRST.
+
+    A pinned (explicit) case only needs its own quest. A case the assistant had to choose a quest
+    for needs them ALL, or the judge cannot tell a right choice from a wrong one, and cannot check
+    the figures on the quest the case says is the wrong target (IMP-014 asks about both the launch
+    total and the bathroom total, and only ever saw one of them).
+    """
+    scope = case.get("conversation_scope") or (
+        "none" if case["dataset"] == "implicit" else "quest")
+    key = case.get("quest_key")
+    if scope == "quest" and key:
+        return [key]
+    keys = list(W.QUESTS)
+    if key in keys:
+        keys.remove(key)
+        keys.insert(0, key)
+    return keys
+
+
 def run_case(case, world, use_judge=True, parallel=False):
     started = time.time()
     record = {"id": case["id"], "dataset": case["dataset"], "area": case["area"],
@@ -139,19 +189,26 @@ def run_case(case, world, use_judge=True, parallel=False):
             tid = W.task_id_of(task)
             if not any(tid in c for c in changes):
                 changes.append(f"TASK QUEUED via chat {tid}: {(task.get('text') or '')[:160]!r}")
+            # A task the chat queued is only in ``after["tasks"]`` when it happens to carry the
+            # tag or sit on a world quest, so every expect_writes on a task used to look for a row
+            # the snapshot never held. Put it there before the pre-checks read it.
+            after["tasks"].setdefault(tid, (task.get("text") or "")[:160])
             api("DELETE", f"/api/assistant-tasks/{tid}")  # never let the dev lane execute it
         evidence = J.build_evidence(turns, queued)
         pre = J.precheck(case, evidence, world, after, changes)
         record.update({"evidence": evidence, "changes": changes, "precheck": pre,
                        "side_effects_ambiguous": bool(parallel and changes)})
         if use_judge:
-            truth = W.ground_truth([case["quest_key"]] if case.get("quest_key") else None)
+            truth = W.ground_truth(ground_truth_keys(case))
             if pre["hard_failures"] and not case.get("judge_always", False):
                 record["judged"] = {"skipped": "hard pre-check failure"}
             else:
                 record["judged"] = J.judge(case, evidence, changes, pre, truth, W.PIVOTS)
         record["score"] = J.final_score(pre, record.get("judged"))
-        record["passed"] = J.case_passed(pre, record.get("judged"), PASS_THRESHOLD)
+        record["passed"] = J.case_passed(case, pre, record.get("judged"), PASS_THRESHOLD)
+        verdict = (record.get("judged") or {}).get("verdict")
+        if verdict:
+            record["pivot_gate"] = J.pivot_gate(case, verdict)
         record["_before_after"] = (before, after)
     except Exception as e:  # noqa: BLE001
         record["error"] = f"{type(e).__name__}: {e}"
@@ -199,6 +256,8 @@ def print_row(r):
     pre = r.get("precheck") or {}
     if pre.get("hard_failures"):
         print(f"           hard fail: {pre['hard_failures'][:4]}")
+    if r.get("pivot_gate"):
+        print(f"           context gate: {r['pivot_gate']}")
     if judged.get("summary"):
         print(f"           {judged['summary']}")
     elif (r.get("judged") or {}).get("error"):
@@ -329,7 +388,7 @@ def write_report():
             f"| {r['id']} | {r['dataset']} | {r['area']} | {'yes' if r.get('passed') else 'NO'} | "
             f"{fmt(r.get('score'))} | {'ok' if v.get('routing_ok', True) else 'BAD'} | "
             f"{'ok' if v.get('side_effects_ok', True) else 'BAD'} | {r.get('seconds')} | "
-            f"{one_line(r.get('error') or v.get('summary') or (r.get('precheck') or {}).get('hard_failures'))} |")
+            f"{one_line(r.get('error') or (r.get('precheck') or {}).get('hard_failures') or r.get('pivot_gate') or v.get('summary'))} |")
     RESULTS_MD.write_text("\n".join(lines) + "\n")
     print(f"report written to {RESULTS_MD}")
 

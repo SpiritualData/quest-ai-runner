@@ -2,7 +2,7 @@
 
 Goal: measure whether Quest AI in the real app chat makes good, grounded, correctly routed, safely
 side-effecting decisions on a rich realistic account, not just which planner action it picks (that
-is `evaluation/chat_quest_ops_routing_eval.py`, left untouched). Three datasets of 30+ cases each:
+is `evaluation/chat_quest_ops_routing_eval.py`, left untouched). Three datasets (65 / 44 / 38):
 
 * `explicit`: the conversation is pinned to the case's quest (the assistant knows which quest).
 * `implicit`: no quest pinned; the assistant must work out which of five quests is meant.
@@ -62,8 +62,16 @@ can be exercised without approvals; it cannot serve the datasets. Use `run --exa
 7. context cards the turn learned are deleted (they persist per user and would leak into the next
    case); the conversation is deleted
 
-A case passes when score >= 0.7, no hard pre-check failure, and the judge says routing and side
-effects are right.
+A case passes when score >= 0.7, no hard pre-check failure, the judge says routing and side effects
+are right, **and the context gate holds**: every pivot in `must_use_pivots` came back `used`, and
+(for implicit cases, or any case with `pivots_change_answer`) at least one of them came back
+`changed_answer`. Without that gate a case could score 0.75 while the judge itself reported that
+the seeded fact the case exists to test was never used.
+
+The judge is held to evidence: a pass needs a verbatim quote, a pass with no quote is downgraded to
+a fail in `normalise_verdict`, an item the judge fails to report is scored as a failure rather than
+dropped from the average, and the score is a stated formula with caps (unused required pivot 0.6,
+claimed-but-unperformed write 0.3, forbidden write or invented fact 0.0) instead of an impression.
 
 ## What the chat exposes as evidence (SSE frames)
 
@@ -79,6 +87,30 @@ assumptions/limitations). The explanation is the best evidence of which cards an
 actually leveraged. Pivots are NOT tagged in any frame: the judge decides "used" from the reply,
 code and output.
 
+## What the chat can actually do, and the autopilot step
+
+The datasets are only fair if every case is passable. `world.CHAT_CAPABILITIES` holds the verified
+capability list (read out of quest-backend's `_SANDBOX_HELPER_NAMES` and `app/prompts/ai_commands.yaml`)
+and it is handed to the judge with the ground truth, so an honest "I cannot do that" scores as the
+right answer and a claim the surface cannot make scores as a lie. The four that reshaped the
+datasets on 2026-10-06:
+
+* **A quest field write needs autopilot on.** `check_ai_field_write` refuses any AI write to
+  `outcome`, `current_state`, `acceptance_criteria`, `preferences`, `timeline_days` or the
+  measurable outcomes while the quest's `autopilot.mode` is `off`, which is the default, and files
+  a decision-request instead. `setup` now arms four quests with `mode="act"` and leaves **family**
+  off deliberately (`world.AUTOPILOT_BY_QUEST`), so both halves of the gate are tested. Before this,
+  every field case was unpassable.
+* **A quest note cannot be written at all** (no helper, and `notes` is not one of the five raw
+  collections). `runner.validate_case` now refuses a `quest_note` assertion outright.
+* **No mail helper, and no case may ask for a send.** EXP-043 used to instruct a real
+  `send_quest_email` to the dev team, which meant running the suite mailed whoever that team
+  carries. It is now a draft-only case, and the email cases hard-fail on `send_quest_email`
+  appearing in the generated code.
+* **A new goal is always current-month and has no `criteria`**: `create_goal` takes
+  name/description/target_date only, so dates belong in the text and measurable detail in
+  `description`.
+
 ## Known limits and traps
 
 * A timer habit's seconds cannot be seeded (the backend derives them from session records); seeded
@@ -88,7 +120,20 @@ code and output.
   the run are removed, older ones are not. Note it in findings when a reply cites an unknown fact.
 * Parallel cases share one snapshot space; a side effect seen during a parallel run is flagged
   `side_effects_ambiguous`. Keep anything that might write out of the parallel pool.
-* Dev runs `auto_run=true` only; the approval-card path is untested here.
+* Dev runs `auto_run=true` except for MS-033 and MS-034, the two cases that deliberately leave it
+  off to probe the approval-card path; both carry `judge_always` so that, if writes land anyway,
+  the verdict says so instead of the case dying on a pre-check.
+* Three capabilities are on the allow-list but have never been exercised here: `create_assistant_task`
+  (every task case), web search (EXP-042, MS-005, MS-009, MS-014, MS-029) and goal-criteria editing
+  (EXP-006). Those cases assert softly and fail on a false claim rather than on the gap, so the
+  first full run is what settles whether the capability works. When it does, tighten them.
+* Not in the snapshot, so judged from the generated code and the reply only: daily reflections,
+  period reviews, goal updates, quest context docs, decision-requests and email. A case covering
+  one of those uses `code_contains_any` plus `reply_regex_forbidden`, never an `expect_writes`.
+* Rubrics must never bake in a date arithmetic answer. Seeded absolute dates (22 Nov, 28 Oct, 3 Nov)
+  are stable, but "about 6 weeks" or "about 130 words a day" is only true on the day it was
+  written: express those against the ground truth's "Today is ..." line, as IMP-002, IMP-020 and
+  IMP-030 now do. The weekday facts (30 Oct is a Friday) hold for 2026 only.
 * One run per case, one judge call per case: report variance honestly, rerun disputed cases.
 * The judge is sonnet through the subscription CLI; a usage-limit refusal surfaces as `JUDGE ERROR`
   and the case is reported unjudged, never passed.

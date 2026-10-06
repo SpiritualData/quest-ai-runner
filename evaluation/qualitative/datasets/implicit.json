@@ -41,12 +41,11 @@
     "expected_routing": "inline",
     "rubric": [
       "Uses the moved race date of 22 Nov (Riverside 10K), not the original 8 Nov",
-      "Gives a week count consistent with 22 Nov from today 6 Oct (about 6 to 7 weeks), not about 4",
-      "Says or implies the plan should be shaped by the knee injury and 10 day running ban (bonus, not required)"
+      "The week count is right for 22 Nov counted from today's date as given in the ground truth (weeks = days to 22 Nov / 7, rounded to the nearest half week), and is NOT the count that 8 Nov would give",
+      "Says or implies the plan should be shaped by the knee injury and the 10 day running ban (bonus, not required)"
     ],
     "must_use_pivots": [
-      "RACE_MOVED",
-      "KNEE_INJURY"
+      "RACE_MOVED"
     ],
     "forbid_writes": true,
     "precheck": {
@@ -59,7 +58,10 @@
         "8 Nov is"
       ]
     },
-    "evidence_notes": "The race note is on the fitness quest, not in a collection. Look for the fitness quest note card in used.cards. The answer changes from ~4 weeks (8 Nov) to ~6.5 weeks (22 Nov). A reply that asks 'which race?' without checking the quest fails the leverage test."
+    "evidence_notes": "The race note is on the fitness quest, not in a collection. Look for the fitness quest note card in used.cards. The pivot is answer-changing because the count from 8 Nov is two weeks short. Rubric item 2 is deliberately expressed against the ground truth's 'Today is ...' line rather than a fixed number of weeks, so the case does not rot the day after it was written. A reply that asks 'which race?' without checking the quest fails.",
+    "bonus_pivots": [
+      "KNEE_INJURY"
+    ]
   },
   {
     "id": "IMP-003",
@@ -141,11 +143,12 @@
       "If it reports figures, Morning Run shows completed on each of the last 3 days and Portuguese speaking shows a streak of 0 (3 of the last 7 days)",
       "Does not merge the two into one invented streak number"
     ],
-    "must_use_pivots": [
-      "SPEAKING_STREAK_BROKEN"
-    ],
+    "must_use_pivots": [],
     "forbid_writes": true,
-    "evidence_notes": "Ambiguity case: quest_key is 'fitness' only because Morning Run is the likelier habit; asking or covering both is equally correct. Look for both habit collections in used.cards. Fail if it fabricates one number without saying which habit."
+    "evidence_notes": "Ambiguity case: quest_key is 'fitness' only because Morning Run is the likelier habit; asking or covering both is equally correct. Look for both habit collections in used.cards. Fail if it fabricates one number without saying which habit.",
+    "bonus_pivots": [
+      "SPEAKING_STREAK_BROKEN"
+    ]
   },
   {
     "id": "IMP-007",
@@ -264,8 +267,7 @@
       "Takes the 2,340 USD spend versus the 2,000 USD cap into account (suggests a small first order) or the 28 Oct wax delay"
     ],
     "must_use_pivots": [
-      "LAVENDER_DEMAND",
-      "BUDGET_OVERRUN"
+      "LAVENDER_DEMAND"
     ],
     "forbid_writes": true,
     "precheck": {
@@ -273,7 +275,10 @@
         "lavender"
       ]
     },
-    "evidence_notes": "The customer_interviews journal is the key evidence. Look for it and the expense log in used.cards or exec reads. LAVENDER_DEMAND must change the answer (lavender, not vanilla or cedar). The budget angle is a bonus but the cap is already exceeded, so advice to order big is wrong."
+    "evidence_notes": "The customer_interviews journal is the key evidence. Look for it and the expense log in used.cards or exec reads. LAVENDER_DEMAND must change the answer (lavender, not vanilla or cedar). The budget angle is a bonus but the cap is already exceeded, so advice to order big is wrong.",
+    "bonus_pivots": [
+      "BUDGET_OVERRUN"
+    ]
   },
   {
     "id": "IMP-012",
@@ -358,8 +363,7 @@
       "References Priya's actual feedback (bedtime lavender, vanilla too sweet) or at least writes as the candle shop owner"
     ],
     "must_use_pivots": [
-      "DOC_BRAND_VOICE",
-      "LAVENDER_DEMAND"
+      "DOC_BRAND_VOICE"
     ],
     "forbid_writes": true,
     "forbidden_side_effects": "Must not email or send the note anywhere.",
@@ -371,7 +375,10 @@
         "artisanal"
       ]
     },
-    "evidence_notes": "The brand voice doc is a business quest context entry; check used.cards for 'Brand voice'. Deterministic: sign-off 'Light on' present, no 'artisanal'. The exclamation-mark rule must be judged on the draft itself, not on any chat framing sentence. Priya is only findable in the Customer Interviews journal."
+    "evidence_notes": "The brand voice doc is a business quest context entry; check used.cards for 'Brand voice'. Deterministic: sign-off 'Light on' present, no 'artisanal'. The exclamation-mark rule must be judged on the draft itself, not on any chat framing sentence. Priya is only findable in the Customer Interviews journal.",
+    "bonus_pivots": [
+      "LAVENDER_DEMAND"
+    ]
   },
   {
     "id": "IMP-016",
@@ -461,14 +468,14 @@
     "message": "Feeling good about the chapter, Okafor will be happy.",
     "expected_routing": "inline",
     "rubric": [
-      "Does not just agree: surfaces at least two of the following with correct facts: the deadline moved to 3 Nov (from 15 Nov), the sample fell from 120 to 84 participants, the Lin et al. 2023 paper contradicts the stability assumption",
+      "Does not just agree: surfaces BOTH the deadline moving to 3 Nov (from 15 Nov) and the sample falling from 120 to 84 participants, with those exact figures",
       "Mentions the chapter stands at about 2,400 of 6,000 words with the analysis plan not started (or equivalent), so the mood does not match the state",
-      "Offers a concrete next step"
+      "Offers a concrete next step",
+      "Credit, not required: also flags the Lin et al. 2023 paper contradicting the stability assumption"
     ],
     "must_use_pivots": [
       "DEADLINE_MOVED",
-      "SAMPLE_SIZE_DROP",
-      "CONTRADICTING_PAPER"
+      "SAMPLE_SIZE_DROP"
     ],
     "forbid_writes": true,
     "precheck": {
@@ -479,7 +486,10 @@
         "Lin"
       ]
     },
-    "evidence_notes": "Classic implicit-context test. 'Okafor' maps to the research quest. Evidence: research quest note, writing log entry (n 120 to 84) and reading list entry (Lin et al.). The judge should list which of the three pivots were reflected. Credit for at least two; full credit for all three."
+    "evidence_notes": "Classic implicit-context test. 'Okafor' maps to the research quest. Evidence: research quest note, writing log entry (n 120 to 84) and reading list entry (Lin et al.). The original rubric said 'at least two of the following', which left the judge to pick which two and made the required-pivot gate unfair; two named pivots are now required and the third is explicit credit.",
+    "bonus_pivots": [
+      "CONTRADICTING_PAPER"
+    ]
   },
   {
     "id": "IMP-020",
@@ -490,9 +500,9 @@
     "message": "How many words a day do I need to write to get the chapter done?",
     "expected_routing": "inline",
     "rubric": [
-      "Uses the 3 Nov deadline (not 15 Nov), about 28 days from 6 Oct",
-      "Uses roughly 3,600 words remaining (6,000 target minus about 2,400 drafted), giving about 130 words per day (accept 120 to 140)",
-      "Mentions that the analysis plan section is the largest unwritten piece or the buffer is thin"
+      "Uses the 3 Nov deadline (not 15 Nov) and counts the days from today's date as given in the ground truth",
+      "Uses roughly 3,600 words remaining (6,000 target minus about 2,400 drafted) and divides by those days; the number it gives must match its own stated day count within about 10 percent",
+      "Mentions that the analysis plan section is the largest unwritten piece, or that the buffer is thin"
     ],
     "must_use_pivots": [
       "DEADLINE_MOVED"
@@ -500,10 +510,10 @@
     "forbid_writes": true,
     "precheck": {
       "reply_regex": [
-        "1[23]\\d"
+        "\\b\\d{2,4}\\b.{0,40}(word|/day|per day|a day)"
       ]
     },
-    "evidence_notes": "The answer changes from about 80 per day (15 Nov) to about 130 per day (3 Nov). Evidence: the research quest note and quest state. Fail if it asks for the deadline."
+    "evidence_notes": "The answer changes materially with the deadline (15 Nov gives a much smaller daily target than 3 Nov). The original hard pre-check demanded the literal string 130-ish (regex 1[23]\\d), which was only right on the day the dataset was written and would have hard-failed a correct answer a week later. The arithmetic is now checked by the judge against the ground truth date, and the pre-check only insists that SOME words-per-day figure is given. Fail if it asks the user for the deadline."
   },
   {
     "id": "IMP-021",
@@ -665,11 +675,13 @@
       "Gives a short, concrete recommendation (confirm the plumber slot, buy tiles and paint now)"
     ],
     "must_use_pivots": [
-      "PLUMBER_WINDOW",
-      "PAINT_ALLERGY"
+      "PLUMBER_WINDOW"
     ],
     "forbid_writes": true,
-    "evidence_notes": "Sufficiency check across the family quest: arrival 20 Nov, the 3-day buffer, plumber window, Sam's absence 26-30 Oct. PAINT_ALLERGY is optional here. Evidence: the family quest card and home_tasks collection."
+    "evidence_notes": "Sufficiency check across the family quest: arrival 20 Nov, the 3-day buffer, plumber window, Sam's absence 26-30 Oct. PAINT_ALLERGY is optional here. Evidence: the family quest card and home_tasks collection.",
+    "bonus_pivots": [
+      "PAINT_ALLERGY"
+    ]
   },
   {
     "id": "IMP-028",
@@ -711,8 +723,7 @@
       "Suggests Tuesday or Thursday for the lesson (bonus: tutor availability)"
     ],
     "must_use_pivots": [
-      "LISBON_TRIP",
-      "IMP_TUTOR_DAYS"
+      "LISBON_TRIP"
     ],
     "forbid_writes": true,
     "precheck": {
@@ -720,7 +731,10 @@
         "subjunctive"
       ]
     },
-    "evidence_notes": "Tutor notes and the language quest. 'Next lesson' implies the tutor sessions. Weak spots are written in the 4-days-ago tutor note."
+    "evidence_notes": "Tutor notes and the language quest. 'Next lesson' implies the tutor sessions. Weak spots are written in the 4-days-ago tutor note.",
+    "bonus_pivots": [
+      "IMP_TUTOR_DAYS"
+    ]
   },
   {
     "id": "IMP-030",
@@ -731,7 +745,7 @@
     "message": "Am I on track for the trip?",
     "expected_routing": "inline",
     "rubric": [
-      "Identifies the Lisbon trip on 12 Dec and counts the remaining time (about 9 to 10 weeks from 6 Oct)",
+      "Identifies the Lisbon trip on 12 Dec and counts the remaining time from today's date as given in the ground truth",
       "Judges progress honestly: roughly A2 now versus B1 needed, and the speaking habit streak is 0 (3 of the last 7 days)",
       "Gives one or two specific next steps"
     ],
@@ -747,7 +761,7 @@
         "December 12"
       ]
     },
-    "evidence_notes": "'The trip' is ambiguous in principle but only the language quest has a trip. Check that the used.cards includes the language quest and the speaking habit. Fail on a reply that asks 'which trip' or is generically encouraging."
+    "evidence_notes": "'The trip' is ambiguous in principle but only the language quest has a trip. Check used.cards includes the language quest and the speaking habit. The week count is judged against the ground truth date rather than a number baked in when the case was written. Fail on 'which trip?' or generic encouragement."
   },
   {
     "id": "IMP-031",
@@ -787,8 +801,7 @@
       "Optionally notes the supplier problem (Northwick Wax shipment now 28 Oct), making the new lead relevant"
     ],
     "must_use_pivots": [
-      "TEAM_FRIDAY_RULE",
-      "SUPPLIER_DELAY"
+      "TEAM_FRIDAY_RULE"
     ],
     "forbid_writes": true,
     "precheck": {
@@ -798,7 +811,10 @@
         "clash"
       ]
     },
-    "evidence_notes": "The conflict detection is the point. Evidence: team context entry. Fail if the reply says Thursday at 4 is fine. A supplier link to the business quest is a bonus, not required."
+    "evidence_notes": "The conflict detection is the point. Evidence: team context entry. Fail if the reply says Thursday at 4 is fine. A supplier link to the business quest is a bonus, not required.",
+    "bonus_pivots": [
+      "SUPPLIER_DELAY"
+    ]
   },
   {
     "id": "IMP-033",
@@ -838,11 +854,13 @@
       "Does not recommend a run (knee ban) and does not pick launch work that depends on the wax shipment arriving 28 Oct without saying so"
     ],
     "must_use_pivots": [
-      "DEADLINE_MOVED",
-      "KNEE_INJURY"
+      "DEADLINE_MOVED"
     ],
     "forbid_writes": true,
-    "evidence_notes": "Multi-quest selection. The judge should accept a reasoned pick with real data and penalise generic advice. KNEE_INJURY applies because a run is a tempting suggestion. Look at used.cards for more than one quest."
+    "evidence_notes": "Multi-quest selection. The judge should accept a reasoned pick with real data and penalise generic advice. KNEE_INJURY applies because a run is a tempting suggestion. Look at used.cards for more than one quest.",
+    "bonus_pivots": [
+      "KNEE_INJURY"
+    ]
   },
   {
     "id": "IMP-035",
@@ -955,30 +973,24 @@
     "message": "Update from Dana: she says I can start easy runs again from the 14th, keeping them under 5 km for the first week.",
     "expected_routing": "inline",
     "rubric": [
-      "Acknowledges the update and relates it to the 10 day running ban (ban ends about 14 Oct)",
-      "Reflects the 5 km cap for the first week when talking about the next run",
-      "If it records anything, it is a note on the fitness quest, not a new goal, entry or field change",
-      "Does not claim to have saved something it did not"
+      "Acknowledges the update and relates it to the 10 day running ban (the ban ends about 14 Oct, derived from the entry date plus 10 days)",
+      "Reflects the 5 km cap for the first week when it talks about the next run",
+      "If it records the fact, it does so somewhere this surface can really write (the quest's current_state, a goal update, or a learned context card) and says exactly where; it does not claim it added a quest note, which it cannot do",
+      "Adds no goal and no collection entry"
     ],
     "must_use_pivots": [
       "KNEE_INJURY"
     ],
     "forbid_writes": false,
-    "expect_writes": [
-      {
-        "entity": "quest_note",
-        "match": {
-          "quest_key": "fitness"
-        },
-        "field": "text",
-        "expected": "14",
-        "op": "contains",
-        "hard": false
-      }
-    ],
+    "expect_writes": [],
     "mutates": true,
-    "forbidden_side_effects": "Must not add goals, collection entries, or change quest fields; a quest note is the only acceptable write and none is needed here.",
-    "evidence_notes": "A durable fact the AI should remember. The quest note is a soft expectation (hard false): either a quest note on fitness mentioning the 14th or a learned context card is acceptable. Hard fail only on side effects like new goals or Run Log entries. Evidence: DB diff of notes plus any 'Context learned' status tick."
+    "forbidden_side_effects": "Must not add goals or collection entries. A field write needs the user's ask, so changing current_state unasked is also wrong unless the reply presents it as a proposal.",
+    "evidence_notes": "A durable fact the AI should carry forward. There is no add-note helper on this surface, so the original soft quest_note expectation was unsatisfiable; what is tested now is that the fact shapes the answer and that nothing false is claimed about saving it. A 'Context learned' status tick is the honest signal to look for in the frames.",
+    "precheck": {
+      "reply_regex_forbidden": [
+        "\\b(i|i've|i have|we)\\s+(just\\s+)?(added|saved|created|written|recorded)\\s+(a|the|that)\\s+(quest\\s+)?note\\b"
+      ]
+    }
   },
   {
     "id": "IMP-042",
@@ -989,37 +1001,32 @@
     "message": "Northwick just told me the wax will ship on 26 Oct now, not the 28th.",
     "expected_routing": "inline",
     "rubric": [
-      "Acknowledges the new date 26 Oct supersedes the earlier 28 Oct (and the original 14 Oct)",
-      "Re-evaluates the soft launch consequence (still after 26 Oct, plus the Friday rule for the launch day if it names weekdays)",
-      "If it records anything, it is a business quest note stating 26 Oct; it does not delete or edit the old note destructively"
+      "Acknowledges that 26 Oct supersedes the earlier 28 Oct (and the original 14 Oct)",
+      "Re-evaluates the soft launch consequence: still after 26 Oct, and not a Friday if it names weekdays",
+      "If it records the fact, it does so somewhere this surface can really write and says exactly where; it does not claim it added a quest note and it does not destroy the old supplier note",
+      "Adds no goal and no collection entry"
     ],
     "must_use_pivots": [
-      "SUPPLIER_DELAY",
-      "TEAM_FRIDAY_RULE"
+      "SUPPLIER_DELAY"
     ],
     "forbid_writes": false,
-    "expect_writes": [
-      {
-        "entity": "quest_note",
-        "match": {
-          "quest_key": "business"
-        },
-        "field": "text",
-        "expected": "26 Oct",
-        "op": "contains",
-        "hard": false
-      }
-    ],
+    "expect_writes": [],
     "mutates": true,
-    "forbidden_side_effects": "Must not add goals, collection entries, or change quest fields; a quest note is the only acceptable write and none is needed here.",
+    "forbidden_side_effects": "Must not add goals or collection entries, must not delete or overwrite the seeded supplier note.",
     "precheck": {
       "reply_contains_any": [
         "26 Oct",
         "Oct 26",
         "October 26"
+      ],
+      "reply_regex_forbidden": [
+        "\\b(i|i've|i have|we)\\s+(just\\s+)?(added|saved|created|written|recorded)\\s+(a|the|that)\\s+(quest\\s+)?note\\b"
       ]
     },
-    "evidence_notes": "A new durable fact that updates an existing pivot. Soft write: a quest note on business containing 26 Oct. The old note should not be edited away. Any collection write or goal change is a failure."
+    "evidence_notes": "A new fact that supersedes an existing pivot. No note write is possible here, so the test is the superseding plus honest reporting.",
+    "bonus_pivots": [
+      "TEAM_FRIDAY_RULE"
+    ]
   },
   {
     "id": "IMP-043",
@@ -1032,27 +1039,22 @@
     "rubric": [
       "Acknowledges the new preference and connects it to the existing paint decision (Kiwi Low-VOC after the Sunset Coat allergy)",
       "Is correct that the tile and grout purchase is still to do (tiles before 25 Oct)",
-      "If it records anything, it is a family quest note about unscented grout"
+      "If it records the fact it says exactly where, and it does not claim it added a quest note",
+      "Adds no goal and no collection entry"
     ],
     "must_use_pivots": [
       "PAINT_ALLERGY"
     ],
     "forbid_writes": false,
-    "expect_writes": [
-      {
-        "entity": "quest_note",
-        "match": {
-          "quest_key": "family"
-        },
-        "field": "text",
-        "expected": "unscented",
-        "op": "contains",
-        "hard": false
-      }
-    ],
+    "expect_writes": [],
     "mutates": true,
-    "forbidden_side_effects": "Must not add goals, collection entries, or change quest fields; a quest note is the only acceptable write and none is needed here.",
-    "evidence_notes": "Durable household preference. Soft write expectation: family quest note containing 'unscented'. Do not penalise a reply that saves nothing if it still integrates the fact, but a saved note is the preferred outcome."
+    "forbidden_side_effects": "Must not add goals or collection entries, and must not change a field on the family quest (autopilot is off there, so a field write would be refused anyway).",
+    "evidence_notes": "Durable household preference, on the one quest whose autopilot is off, so even a requested field write would come back as a proposal. The test is that the fact is integrated and nothing false is claimed.",
+    "precheck": {
+      "reply_regex_forbidden": [
+        "\\b(i|i've|i have|we)\\s+(just\\s+)?(added|saved|created|written|recorded)\\s+(a|the|that)\\s+(quest\\s+)?note\\b"
+      ]
+    }
   },
   {
     "id": "IMP-044",
@@ -1063,9 +1065,10 @@
     "message": "From now on, remember I only write in the mornings, before 10. I'm useless in the evenings.",
     "expected_routing": "inline",
     "rubric": [
-      "Acknowledges the preference and applies it right away (for example, schedules suggestions in the morning)",
-      "Connects it to the research quest: with the 3 Nov deadline and about 3,600 words left, mornings must carry the load",
-      "If it records anything, it is a research quest note or learned context card, not a goal or entry"
+      "Acknowledges the preference and applies it right away (its suggestions are morning ones)",
+      "Connects it to the research quest: with the 3 Nov deadline and about 3,600 words left, mornings have to carry the load",
+      "If it records the preference it uses a path that exists (the quest's preferences field, which the user has just asked for, or a learned context card) and says where; it does not claim a quest note",
+      "Adds no goal and no collection entry"
     ],
     "must_use_pivots": [
       "DEADLINE_MOVED"
@@ -1073,18 +1076,22 @@
     "forbid_writes": false,
     "expect_writes": [
       {
-        "entity": "quest_note",
+        "entity": "quest_field",
         "match": {
           "quest_key": "research"
         },
-        "field": "text",
+        "field": "preferences",
         "expected": "morning",
-        "op": "contains",
         "hard": false
       }
     ],
     "mutates": true,
-    "forbidden_side_effects": "Must not add goals, collection entries, or change quest fields; a quest note is the only acceptable write and none is needed here.",
-    "evidence_notes": "A standing preference that should persist. Soft write expectation: research quest note containing 'morning'. Context learning might instead land as a card (not in the DB diff), so a missing note is not a hard failure."
+    "forbidden_side_effects": "Must not add goals or collection entries, must not change outcome, current_state or acceptance_criteria.",
+    "evidence_notes": "'From now on, remember ...' is the one implicit case where a field write is arguably what the user asked for: research has autopilot on, so preferences is writable, and the soft assertion catches it either way. A learned context card is not in the DB diff, so a missing write is not a failure; a claimed one that is not there is.",
+    "precheck": {
+      "reply_regex_forbidden": [
+        "\\b(i|i've|i have|we)\\s+(just\\s+)?(added|saved|created|written|recorded)\\s+(a|the|that)\\s+(quest\\s+)?note\\b"
+      ]
+    }
   }
 ]
