@@ -1588,6 +1588,8 @@ class QuestClient:
         rules (a generic, thin or repeated note is refused; a rise over 25 points or any drop needs
         a longer note saying what changed) and logs the writer as ``ai:<user id>``. Returns the
         stored outcome. Only progress fields change; the outcome's text and done flag never do.
+        When the user's permission for this is "ask first" the backend answers 202 and the return
+        value is ``{"pending_approval": True, "decision_id", "message"}``: nothing was written yet.
 
         ``progress_pct`` and ``current_value`` may arrive as strings (the shell CLI passes
         positionals as text); they are converted here. A refused write RAISES ``QuestApiError``
@@ -1610,6 +1612,11 @@ class QuestClient:
             if e.status not in (400, 403, 404, 422):
                 raise
             raise QuestApiError(f"Not done: {self.error_detail(e)}", status=e.status) from e
+        if (result or {}).get("pending_approval"):
+            # The user's permission for this is "ask first": the write is parked on a decision and has
+            # NOT happened. Say so; never hand back an empty outcome that reads like a silent success.
+            return {"pending_approval": True, "decision_id": result.get("decision_id"),
+                    "message": result.get("message") or "Waiting for a person to approve this change."}
         return (result or {}).get("outcome") or {}
 
     @staticmethod

@@ -35,6 +35,26 @@ def test_posts_to_the_ai_progress_route_with_numbers_and_returns_the_outcome():
     assert result == {"id": "o1", "progress_pct": 40.0}
 
 
+def test_an_ask_first_answer_is_returned_as_pending_not_as_an_empty_success():
+    def handler(method, path, *, params=None, body=None, timeout_override=None):
+        return {"quest_id": "q1", "pending_approval": True, "decision_id": "teamdec_1",
+                "message": "Pending approval (decision_id=teamdec_1): not written yet."}
+
+    result = client_with(handler).update_outcome_progress("q1", "o1", 10, "Two partners signed today")
+    assert result["pending_approval"] is True and result["decision_id"] == "teamdec_1"
+    assert "not written yet" in result["message"]
+
+
+def test_a_never_grant_is_a_refusal_the_model_can_read():
+    def handler(method, path, *, params=None, body=None, timeout_override=None):
+        raise QuestApiError(f'Quest API {method} {path} -> 403: {{"detail":"permission is set to never"}}',
+                            status=403)
+
+    with pytest.raises(QuestApiError) as caught:
+        client_with(handler).update_outcome_progress("q1", "o1", 10, "Two partners signed today")
+    assert str(caught.value) == "Not done: permission is set to never"
+
+
 def test_current_value_is_omitted_when_not_given():
     captured = {}
 
