@@ -86,6 +86,14 @@ from .adapters import (
     ProgressSink,
     parse_deadline,
     RetrievalAdapter,
+    answer_with_reasoning,
+    plan_with_step,
+    STEP_JUDGE,
+    STEP_PLAN,
+    STEP_REPLY,
+    STEP_SUMMARIZE,
+    STEP_UNDERSTAND,
+    STEP_VERIFY,
 )
 from .card_filter import _extract_json
 from .card_learning import (
@@ -5068,7 +5076,7 @@ class Narrator:
             user += "What you've already said out loud this turn:\n" + "\n".join(self._said) + "\n\n"
         user += f"What just happened: {moment}\n\nSay the next line of your thinking (or empty)."
         msgs.append({"role": "user", "content": user})
-        return self._provider.answer(msgs, model=self._model)
+        return answer_with_reasoning(self._provider, msgs, model=self._model, step=STEP_REPLY)
 
     def _say(self, line: Optional[str]) -> None:
         if not line:
@@ -5738,9 +5746,11 @@ class Orchestrator:
         try:
             model = self.registry.resolve_tier("haiku")
             provider = self.get_provider_for_model(model)
-            result = provider.answer(
+            result = answer_with_reasoning(
+                provider,
                 [{"role": "user", "content": classify_prompt}],
-                model=model
+                model=model,
+                step=STEP_JUDGE,
             )
             return result and "EXECUTION" in result.upper()
         except Exception:  # noqa: BLE001 — classification failure → assume not an execution directive
@@ -5975,7 +5985,7 @@ class Orchestrator:
                 context=plan_context or "",
                 tail="\n\n".join(tail_parts),
             ).blocks()
-        raw = provider.plan(prompt, **plan_kwargs)
+        raw = plan_with_step(provider, prompt, step=STEP_PLAN, **plan_kwargs)
         if not raw and (getattr(self.cfg, "planner_model", "") or "").strip():
             # A pinned routing model that answered nothing (a mistyped id, an outage) gets ONE
             # retry on the planner tier, instead of every step silently taking the fail-safe.
@@ -5986,7 +5996,7 @@ class Orchestrator:
             plan_kwargs["model"] = model
             if not provider_call_accepts_layers(provider.plan):
                 plan_kwargs.pop("layers", None)
-            raw = provider.plan(prompt, **plan_kwargs)
+            raw = plan_with_step(provider, prompt, step=STEP_PLAN, **plan_kwargs)
         decision = normalize_decision(raw or {}, self.cfg, tools_enabled=self.tools is not None,
                                       web_enabled=self.web is not None)
         return self.cascade_review(decision, user_message, plan_context, gathered)
@@ -6120,8 +6130,9 @@ class Orchestrator:
             kwargs: Dict[str, Any] = {"model": model, "tool_schema": REACH_JUDGE_TOOL}
             if provider_call_accepts_tier(provider.plan):
                 kwargs["tier"] = self.cfg.planner_reach_judge_tier
-            raw = provider.plan(judge_prompt(user_message, summary,
-                                             web_configured=self.web is not None), **kwargs)
+            raw = plan_with_step(provider, judge_prompt(user_message, summary,
+                                                        web_configured=self.web is not None),
+                                 step=STEP_JUDGE, **kwargs)
             verdict = normalize_verdict(raw) or parse_judge_text(raw)
         except Exception as e:  # noqa: BLE001
             log.warning("Reach judge failed, planning without a verdict: %s: %s",
@@ -6155,7 +6166,7 @@ class Orchestrator:
         if provider_call_accepts_tier(review_provider.plan):
             review_kwargs["tier"] = self.cfg.planner_cascade_tier
         try:
-            raw = review_provider.plan(digest, **review_kwargs)
+            raw = plan_with_step(review_provider, digest, step=STEP_JUDGE, **review_kwargs)
         except Exception as e:  # noqa: BLE001
             log.warning("Planner cascade review failed, keeping the cheap decision: %s: %s",
                         type(e).__name__, str(e)[:200])
@@ -6235,7 +6246,7 @@ class Orchestrator:
                 context=grounding_context_layer(context_view),
                 tail="\n\n".join(tail_parts),
             ).blocks()
-        return provider.answer(messages, **answer_kwargs)
+        return answer_with_reasoning(provider, messages, step=STEP_REPLY, **answer_kwargs)
 
     def _synthesize_after_deep(self, user_message: str, *, prior_answer: str, deep_output: str,
                                transcript: str, model: str,
@@ -6262,7 +6273,8 @@ class Orchestrator:
                 messages.append({"role": "user", "content": transcript})
             messages.append({"role": "user", "content": prompt})
             provider = self.get_provider_for_model(model)
-            synthesized = provider.answer(messages, model=model, system=REPLY_VOICE_SYSTEM)
+            synthesized = answer_with_reasoning(provider, messages, model=model,
+                                                step=STEP_REPLY, system=REPLY_VOICE_SYSTEM)
             if isinstance(synthesized, str) and synthesized.strip():
                 return synthesized.strip()
         except Exception:  # noqa: BLE001 — synthesis must never break the turn
@@ -6293,7 +6305,8 @@ class Orchestrator:
                 messages.append({"role": "user", "content": transcript})
             messages.append({"role": "user", "content": prompt})
             provider = self.get_provider_for_model(model)
-            synthesized = provider.answer(messages, model=model, system=REPLY_VOICE_SYSTEM)
+            synthesized = answer_with_reasoning(provider, messages, model=model,
+                                                step=STEP_REPLY, system=REPLY_VOICE_SYSTEM)
             if isinstance(synthesized, str) and synthesized.strip():
                 return synthesized.strip()
         except Exception:  # noqa: BLE001 — synthesis must never break the turn
@@ -6378,7 +6391,8 @@ class Orchestrator:
                 provider = self.get_provider_for_model(model)
                 # A single surviving sub-answer is returned to them verbatim (see below), so each one
                 # is written under the same voice contract as a whole reply.
-                return {"q": sub, "a": provider.answer(msgs, model=model, system=sub_system)}
+                return {"q": sub, "a": answer_with_reasoning(provider, msgs, model=model,
+                                                             step=STEP_REPLY, system=sub_system)}
             except Exception as e:  # noqa: BLE001
                 log.warning(f"Sub-question answer generation failed: {type(e).__name__}: {e}", exc_info=True)
                 return None
@@ -6405,13 +6419,15 @@ class Orchestrator:
             # The old wording here opened with "The user asked: ...", which handed the model a
             # third-person frame and invited it to narrate the split back ("The user asked about X,
             # here is the merged answer"). Address it as their message, and say the split is internal.
-            return self.provider.answer(
+            return answer_with_reasoning(
+                self.provider,
                 [{"role": "user", "content": (
                     f"Their message was:\n\n{user_message}\n\nYou answered its independent parts "
                     "below. The split is INTERNAL scaffolding: merge the parts into ONE coherent, "
                     "non-repetitive reply written straight to them, and never mention the split, "
                     "the sub-questions, or the headings below.\n\n" + merged)}],
                 model=model,
+                step=STEP_REPLY,
                 system=sub_system,     # the merge writes the reply too, so it obeys the directive
             )
         except Exception:  # noqa: BLE001
@@ -6609,7 +6625,7 @@ class Orchestrator:
                 verify_kwargs: Dict[str, Any] = {"model": model, "tool_schema": VERIFY_GOAL_TOOL}
                 if provider_call_accepts_layers(provider.plan):
                     verify_kwargs["layers"] = verify_layers
-                raw = provider.plan(prompt, **verify_kwargs)
+                raw = plan_with_step(provider, prompt, step=STEP_VERIFY, **verify_kwargs)
                 # A tool-schema provider returns the structured dict directly; a provider that can
                 # only return text (no forced tool_choice) returns a string. Reuse the repo's
                 # JSON-from-LLM helper to recover the object in that case.
@@ -6687,7 +6703,8 @@ class Orchestrator:
         if model:
             try:
                 provider = self.get_provider_for_model(model)
-                raw = provider.plan(prompt, model=model, tool_schema=EXPLAIN_TOOL)
+                raw = plan_with_step(provider, prompt, model=model, tool_schema=EXPLAIN_TOOL,
+                                     step=STEP_SUMMARIZE)
                 if isinstance(raw, str):
                     raw = json.loads(_extract_json(raw) or "{}")
                 if isinstance(raw, dict):
@@ -6731,7 +6748,8 @@ class Orchestrator:
 
         def call_judge() -> Dict[str, Any]:
             provider = self.get_provider_for_model(model)
-            raw = provider.plan(prompt, model=model, tool_schema=INTENT_DIRECTIVE_TOOL)
+            raw = plan_with_step(provider, prompt, model=model, tool_schema=INTENT_DIRECTIVE_TOOL,
+                                step=STEP_JUDGE)
             if isinstance(raw, str):
                 raw = json.loads(_extract_json(raw) or "{}")
             return raw if isinstance(raw, dict) else {}
@@ -6794,7 +6812,8 @@ class Orchestrator:
 
         def call_judge() -> Dict[str, Any]:
             provider = self.get_provider_for_model(model)
-            raw = provider.plan(prompt, model=model, tool_schema=QUEST_SELECTION_TOOL)
+            raw = plan_with_step(provider, prompt, model=model, tool_schema=QUEST_SELECTION_TOOL,
+                                step=STEP_JUDGE)
             if isinstance(raw, str):
                 raw = json.loads(_extract_json(raw) or "{}")
             return raw if isinstance(raw, dict) else {}
@@ -6867,7 +6886,8 @@ class Orchestrator:
 
         def call_judge() -> Dict[str, Any]:
             provider = self.get_provider_for_model(model)
-            raw = provider.plan(prompt, model=model, tool_schema=MODE_RELEASE_TOOL)
+            raw = plan_with_step(provider, prompt, model=model, tool_schema=MODE_RELEASE_TOOL,
+                                step=STEP_JUDGE)
             if isinstance(raw, str):
                 raw = json.loads(_extract_json(raw) or "{}")
             return raw if isinstance(raw, dict) else {}
@@ -8652,14 +8672,16 @@ class Orchestrator:
         raw: Any = None
         try:
             if hasattr(self.provider, "plan"):
-                raw = self.provider.plan(prompt, model=model, tool_schema=CARD_UPDATE_TOOL)
+                raw = plan_with_step(self.provider, prompt, model=model,
+                                     tool_schema=CARD_UPDATE_TOOL, step=STEP_SUMMARIZE)
         except Exception:  # noqa: BLE001 — fall through to the text path
             raw = None
         # plan() may return a dict, a bare list (tool args as an array), or None. Only fall back to
         # the text path when it gave us nothing usable.
         if not isinstance(raw, (dict, list)) or (isinstance(raw, list) and not raw):
             try:
-                txt = self.provider.answer([{"role": "user", "content": prompt}], model=model)
+                txt = answer_with_reasoning(self.provider, [{"role": "user", "content": prompt}],
+                                            model=model, step=STEP_SUMMARIZE)
             except Exception:  # noqa: BLE001
                 return []
             try:
@@ -9268,9 +9290,11 @@ class Orchestrator:
             return s
         try:
             model = self.registry.resolve_tier(self.cfg.planner_tier)
-            out = self.provider.answer(
+            out = answer_with_reasoning(
+                self.provider,
                 [{"role": "user", "content": _CONDENSE_DECISION_PROMPT.format(text=s[:6000])}],
                 model=model,
+                step=STEP_SUMMARIZE,
             )
             if isinstance(out, str) and out.strip():
                 return out.strip()[:_CONCISE_DECISION_LIMIT]
@@ -9387,9 +9411,9 @@ class Orchestrator:
                 # Same contract as _derive_goal_condition: this call resolves a request into a
                 # done-standard, it does not talk to anyone. Without it, a model handed a bare
                 # message answers it, and that answer gets labelled "Understood as: ...".
-                out = self.provider.answer(
-                    [{"role": "user", "content": prompt}], model=model,
-                    system=GOAL_CONDITION_SYSTEM)
+                out = answer_with_reasoning(
+                    self.provider, [{"role": "user", "content": prompt}], model=model,
+                    step=STEP_UNDERSTAND, system=GOAL_CONDITION_SYSTEM)
             except Exception:  # noqa: BLE001 — provider error degrades to "no resolution"
                 return ""
             return (out or "").strip()
@@ -9475,9 +9499,9 @@ class Orchestrator:
             model = self.registry.resolve_tier("fast")
             prompt = DERIVE_GOAL_CONDITION_PROMPT.format(
                 user_message=gist, now_block=_format_now_block(now))
-            out = self.provider.answer(
-                [{"role": "user", "content": prompt}], model=model,
-                system=GOAL_CONDITION_SYSTEM)
+            out = answer_with_reasoning(
+                self.provider, [{"role": "user", "content": prompt}], model=model,
+                step=STEP_UNDERSTAND, system=GOAL_CONDITION_SYSTEM)
             goal_condition, constraints = parse_goal_condition_reply(out or "")
             return (goal_condition or gist), constraints
         except Exception:  # noqa: BLE001 — must never break the run

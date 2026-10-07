@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **An optional ``step`` hint, mirroring the existing ``reasoning`` hint, so a consumer's own
+  provider can choose a model and/or sampling profile per call ROLE.** `core/adapters.py` adds
+  seven small constants (`STEP_PLAN`, `STEP_VERIFY`, `STEP_REPLY`, `STEP_SELECT`, `STEP_JUDGE`,
+  `STEP_UNDERSTAND`, `STEP_SUMMARIZE`) naming the role a given `plan`/`answer` call plays this turn,
+  plus `accepts_step_hint(fn)` (does this callable declare a `step` keyword or `**kwargs`),
+  `plan_with_step(provider, prompt, step=..., **kwargs)` (the `plan` sibling of the existing
+  `answer_with_reasoning`), and `answer_with_reasoning` itself now also takes an optional `step=`
+  alongside `reasoning=`. Every planner/verify/reply/judge/select/understand/summarize call site in
+  `core/orchestrator.py`, `core/overseer.py`, `core/card_filter.py`, and
+  `adapters/vector_context_assembler.py` now threads the matching `STEP_*` constant through one of
+  these two helpers, and `adapters/multi_provider.py`'s `MultiProvider.plan`/`.answer` forward a
+  given `step` to the wrapped provider under the same accepts-check. Fully backward compatible: the
+  hint is NEVER sent to a provider (real or test fake) whose `plan`/`answer` does not declare a
+  `step` parameter, so an unmodified provider is called exactly as before. This library never bakes
+  a model name or temperature to a step; it only plumbs the role name through for the CONSUMER's own
+  provider to act on. Tests: `tests/test_step_hint.py`.
+
 ### Fixed
 - **A deferred run that failed is never written up as done, and a fan-out sibling that never ran
   is named as not done yet.** The parked-decision fix below kept every non-parked result in the

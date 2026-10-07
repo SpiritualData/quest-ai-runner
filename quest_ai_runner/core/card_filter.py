@@ -12,7 +12,7 @@ from dataclasses import dataclass, field, replace
 from typing import Any, Dict, List, Optional
 
 from . import prompt_budget
-from .adapters import ModelProvider, answer_with_reasoning
+from .adapters import ModelProvider, STEP_SELECT, answer_with_reasoning
 
 _log = logging.getLogger("quest-ai-runner.card-filter")
 
@@ -410,7 +410,7 @@ def consolidate_context(
                 card_lines.append(f"  - ({iid}) {itype}" + (f": {meta}" if meta else ""))
         prompt = _CONSOLIDATE_PROMPT.format(task=task, cards_block="\n".join(card_lines))
         raw = answer_with_reasoning(model_provider, [{"role": "user", "content": prompt}],
-                                    model=model, reasoning="minimal")
+                                    model=model, reasoning="minimal", step=STEP_SELECT)
         parsed = json.loads(_extract_json(raw or "") or "[]")
         result = _validate_consolidation(parsed, cards)
         if result is None:
@@ -487,7 +487,7 @@ def _rank_files_batched(
     prompt = _RANK_FILES_PROMPT.format(task=task, cards_block="\n\n".join(blocks))
     try:
         raw = answer_with_reasoning(model_provider, [{"role": "user", "content": prompt}],
-                                    model=model, reasoning="minimal")
+                                    model=model, reasoning="minimal", step=STEP_SELECT)
         parsed = json.loads(_extract_json(raw or "") or "{}")
     except Exception as e:  # noqa: BLE001
         _log.debug("batched file ranking failed, using original file order: %s", e)
@@ -642,6 +642,7 @@ Return ONLY cards with score >= 0.5."""
             [{"role": "user", "content": card_prompt}],
             model=model,
             reasoning="minimal",
+            step=STEP_SELECT,
         )
         card_scores_raw = json.loads(_extract_json(card_scores_json or "") or "{}")
         card_scores = {c["id"]: c["score"] for c in (card_scores_raw.get("cards") or [])}

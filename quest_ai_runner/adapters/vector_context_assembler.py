@@ -71,7 +71,15 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-from ..core.adapters import AssembledContext, ContextAssemblerBase, VectorHit, VectorStore
+from ..core.adapters import (
+    AssembledContext,
+    ContextAssemblerBase,
+    STEP_SELECT,
+    STEP_SUMMARIZE,
+    VectorHit,
+    VectorStore,
+    answer_with_reasoning,
+)
 from ..core.card_filter import _memo_get, _memo_put, _selection_key
 from ..core.scope_tags import scope_tags_allow
 from ..core.vector_scopes import CARD_SEED_SCOPE
@@ -485,9 +493,11 @@ class VectorContextAssembler(ContextAssemblerBase):
                     f"and which code region it touches.  No lists.\n\n"
                     f"Task: {task_text}\nRegion: {region_desc}"
                 )
-                llm_summary = self._provider.answer(
+                llm_summary = answer_with_reasoning(
+                    self._provider,
                     [{"role": "user", "content": prompt}],
                     model=self._query_model,
+                    step=STEP_SUMMARIZE,
                 )
                 llm_summary = llm_summary.strip()
                 if llm_summary:
@@ -579,9 +589,11 @@ class VectorContextAssembler(ContextAssemblerBase):
                 f"Output one query per line, no numbering, no extra text.\n\n"
                 f"Task: {task_text}"
             )
-            raw = self._provider.answer(
+            raw = answer_with_reasoning(
+                self._provider,
                 [{"role": "user", "content": prompt}],
                 model=self._query_model,
+                step=STEP_SELECT,
             )
             queries = [
                 line.strip()
@@ -675,9 +687,11 @@ class VectorContextAssembler(ContextAssemblerBase):
                 f"Output ONLY the indices (comma-separated) of the items that are genuinely "
                 f"relevant to the task. If none are relevant, output 'none'."
             )
-            raw = self._provider.answer(
+            raw = answer_with_reasoning(
+                self._provider,
                 [{"role": "user", "content": prompt}],
                 model=self._query_model,
+                step=STEP_SELECT,
             )
             raw = raw.strip().lower()
             if raw == "none" or not raw:

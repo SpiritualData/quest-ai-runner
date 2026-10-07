@@ -723,16 +723,65 @@ def accepts_reasoning_hint(provider: Any) -> bool:
     return any(p.name == "reasoning" or p.kind is p.VAR_KEYWORD for p in params)
 
 
-def answer_with_reasoning(provider: Any, messages: List[Dict[str, Any]], *, model: Optional[str],
-                          reasoning: Optional[str] = None, **kwargs: Any) -> str:
-    """``provider.answer(...)``, passing the ``reasoning`` hint only when the provider takes it.
+# --- step hints: which ROLE this one LLM call plays in a turn --------------
+#
+# Mirrors ``reasoning`` above: an OPTIONAL keyword a provider MAY declare on ``plan``/``answer`` so
+# the CONSUMER's own provider implementation can choose a model and/or sampling profile per call
+# role (e.g. a stronger model on REPLY/VERIFY, low/deterministic temperature on JUDGE/SELECT).
+# This library never bakes a model name or temperature to a step; it only plumbs the role name
+# through. Keep this vocabulary SMALL -- do not add a constant without a real new role.
+STEP_PLAN = "plan"              # the planner's own decision of what to do next this turn.
+STEP_VERIFY = "verify"          # goal verification: did the work meet the goal.
+STEP_REPLY = "reply"            # the user-facing reply/answer text.
+STEP_SELECT = "select"          # relevance filters, query generation, selection among candidates.
+STEP_JUDGE = "judge"            # reach/intent/directive/quest-for-turn/mode-release judges, overseer.
+STEP_UNDERSTAND = "understand"  # understanding/interpreting input.
+STEP_SUMMARIZE = "summarize"    # concise summaries, explanations, card/content updates.
 
-    The one place that decides whether the hint is forwarded, so a provider (or test fake, or
-    wrapper) that predates it keeps working unchanged. See ``ModelProvider.answer``.
+
+def accepts_step_hint(fn: Any) -> bool:
+    """Whether a provider callable (``provider.plan`` or ``provider.answer``) declares a ``step``
+    keyword (or ``**kwargs``). Never raises.
+
+    Takes the callable itself, not the provider, since the step hint applies to BOTH ``plan`` and
+    ``answer`` (unlike ``accepts_reasoning_hint`` above, which only ever checks ``answer``).
     """
+    import inspect
+    try:
+        params = inspect.signature(fn).parameters.values()
+    except (TypeError, ValueError, AttributeError):
+        return False
+    return any(p.name == "step" or p.kind is p.VAR_KEYWORD for p in params)
+
+
+def answer_with_reasoning(provider: Any, messages: List[Dict[str, Any]], *, model: Optional[str],
+                          reasoning: Optional[str] = None, step: Optional[str] = None,
+                          **kwargs: Any) -> str:
+    """``provider.answer(...)``, passing the ``reasoning`` and/or ``step`` hints only when the
+    provider takes them.
+
+    The one place that decides whether either hint is forwarded, so a provider (or test fake, or
+    wrapper) that predates one or both keeps working unchanged. See ``ModelProvider.answer``.
+    """
+    call_kwargs: Dict[str, Any] = dict(kwargs)
     if reasoning and accepts_reasoning_hint(provider):
-        return provider.answer(messages, model=model, reasoning=reasoning, **kwargs)
-    return provider.answer(messages, model=model, **kwargs)
+        call_kwargs["reasoning"] = reasoning
+    if step and accepts_step_hint(provider.answer):
+        call_kwargs["step"] = step
+    return provider.answer(messages, model=model, **call_kwargs)
+
+
+def plan_with_step(provider: Any, prompt: str, *, step: Optional[str] = None,
+                   **kwargs: Any) -> Dict[str, Any]:
+    """``provider.plan(...)``, passing the ``step`` hint only when the provider takes it.
+
+    Sibling of ``answer_with_reasoning`` for ``plan`` (which has no ``reasoning`` hint to carry):
+    the same accepts-check, so a provider (or test fake, or wrapper) that predates ``step`` keeps
+    working unchanged. See ``ModelProvider.plan``.
+    """
+    if step and accepts_step_hint(provider.plan):
+        return provider.plan(prompt, step=step, **kwargs)
+    return provider.plan(prompt, **kwargs)
 
 
 @runtime_checkable
@@ -751,6 +800,12 @@ class ModelProvider(Protocol):
         prefix instead of re-sending it. A provider that supports no caching (or is given no
         ``layers``) MUST behave exactly as before, using ``prompt``; callers always pass a faithful
         flattened ``prompt`` as well, so ignoring ``layers`` is a safe, no-behavior-change fallback.
+
+        A provider MAY also accept an optional ``step`` keyword (one of the ``STEP_*`` constants
+        above, e.g. ``STEP_PLAN``/``STEP_JUDGE``/``STEP_VERIFY``): never required, it names the ROLE
+        this call plays so the provider can pick its own model/sampling for that role. It is never
+        passed to a provider whose ``plan`` does not declare it; callers go through
+        ``plan_with_step`` below, which checks.
         """
 
     def answer(self, messages: List[Dict[str, str]], *, model: str, system: Optional[str] = None,
@@ -768,6 +823,10 @@ class ModelProvider(Protocol):
         reasoning, so a model with a configurable thinking budget should spend as little as it
         allows. It is never passed to a provider whose ``answer`` does not declare it; callers go
         through ``answer_with_reasoning`` below, which checks.
+
+        A provider MAY also accept an optional ``step`` keyword, the same ``STEP_*`` role hint
+        ``plan`` above takes: never required, and never passed to a provider whose ``answer`` does
+        not declare it (``answer_with_reasoning`` checks this too, alongside ``reasoning``).
         """
 
     def list_models(self) -> List[str]:

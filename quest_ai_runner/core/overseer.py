@@ -30,6 +30,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
+from .adapters import STEP_JUDGE, plan_with_step
+
 
 # ===========================================================================
 # The signal — the overseer's whole output.
@@ -347,7 +349,8 @@ def oversee(provider: Any, model: str, digest: str) -> OverseerSignal:
     """
     try:
         prompt = OVERSEER_PROMPT.format(digest=digest or "")
-        raw = provider.plan(prompt, model=model, tool_schema=OVERSEE_TOOL)
+        raw = plan_with_step(provider, prompt, model=model, tool_schema=OVERSEE_TOOL,
+                            step=STEP_JUDGE)
         if not isinstance(raw, dict):
             return OverseerSignal("proceed", degraded=True)
         signal = str(raw.get("signal") or "").strip().lower()
