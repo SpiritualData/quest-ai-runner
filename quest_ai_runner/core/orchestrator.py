@@ -2139,43 +2139,24 @@ VERIFY_GOAL_TOOL: Dict[str, Any] = {
     "input_schema": {
         "type": "object",
         "properties": {
-            "met": {"type": "boolean",
-                    "description": "True ONLY if the output gives concrete evidence the goal is fully "
-                                   "satisfied AND meets the quality standards."},
-            "reason": {"type": "string", "description": "One sentence: why it is or is not met."},
-            "next_action": {"type": "string",
-                            "description": "If not met: a SHORT, specific instruction for the next attempt "
-                                           "(what to fix, what context/file to look at, or why it failed)."},
+            "met": {"type": "boolean", "description": "True only per the rules above."},
+            "reason": {"type": "string", "description": "One sentence: why."},
+            "next_action": {"type": "string", "description": "If not met: a short, specific next step."},
             "need_more_context": {"type": "boolean",
-                                  "description": "True if the worker fell short because it did NOT have "
-                                                 "enough context (it lacked a file, a prior message, or a "
-                                                 "fact it needed). False if it had what it needed but did "
-                                                 "the work wrong or incompletely."},
+                                  "description": "True only if context was missing, not if the work was poor."},
             "context_query": {"type": "string",
-                              "description": "If need_more_context is true: a SHORT search query naming "
-                                             "the missing context to pull (e.g. a file, topic, or term)."},
+                              "description": "If need_more_context: a short query naming what to pull."},
             "next_tier": {"type": "string",
-                          "description": "Optional. The model tier the next attempt should use, one of: "
-                                         "fast, balanced, quality, best (or haiku, sonnet, opus). Omit to "
-                                         "keep the current tier. Raise it when the failure looks like a "
-                                         "reasoning/capability gap."},
+                          "description": "Optional stronger tier (fast/balanced/quality/best) for a "
+                                         "capability gap. Omit to keep the current tier."},
             "blocker": {"type": "string", "enum": ["more_work", "evidence_only", "needs_person"],
-                        "description": "Only when met=false. more_work: the work is genuinely "
-                                       "incomplete or wrong and another attempt can fix it. "
-                                       "evidence_only: the output states the work is complete and "
-                                       "names the specifics, and the ONLY gap is proof beyond what "
-                                       "the request asked for. needs_person: it cannot finish without "
-                                       "a specific input only a person can give."},
+                        "description": "Only when met=false; see the rules above."},
             "question": {"type": "string",
-                         "description": "If blocker is needs_person: the ONE specific question for "
-                                        "that person, answerable in a sentence. If blocker is "
-                                        "evidence_only: what was not independently confirmed."},
+                         "description": "If blocker is needs_person or evidence_only: the one gap, per "
+                                        "the rules above."},
             "claims_unexecuted": {"type": "boolean",
-                                  "description": "True if the output CLAIMS it completed a change "
-                                                 "(edited a file, saved data, sent something, changed "
-                                                 "configuration) that the EXECUTION RECORD does not "
-                                                 "show succeeding. False when no such claim is made, "
-                                                 "or every claimed change is backed by the record."},
+                                  "description": "True if the output claims a completed change the "
+                                                 "execution record does not back."},
         },
         "required": ["met"],
     },
@@ -2717,17 +2698,13 @@ CARD_UPDATE_TOOL: Dict[str, Any] = {
                     "type": "object",
                     "properties": {
                         "card_id": {"type": "string",
-                                    "description": "The id of an existing card to update, or a new "
-                                                   "short slug to create one."},
-                        "name": {"type": ["string", "null"],
-                                 "description": "Optional new card name (re-embeds the card)."},
+                                    "description": "Existing card id to update, or a new short slug."},
+                        "name": {"type": ["string", "null"], "description": "Optional new name (re-embeds)."},
                         "description": {"type": ["string", "null"],
-                                        "description": "Optional new card description (re-embeds)."},
+                                        "description": "Optional new description (re-embeds)."},
                         "add": {
                             "type": "array",
-                            "description": "Content items to ADD. PREFER a resolvable reference "
-                                           "(a collection with name+id) over a copied snapshot; use "
-                                           "a note ONLY when there is nothing external to point at.",
+                            "description": "Items to add; see the rules above for the preferred shape.",
                             "items": {
                                 "type": "object",
                                 "properties": {
@@ -2735,12 +2712,8 @@ CARD_UPDATE_TOOL: Dict[str, Any] = {
                                              "enum": ["collection", "file", "conversation",
                                                       "query", "note"]},
                                     "locator": {"type": "object",
-                                                "description": "For collection: {name,id}. For "
-                                                               "note: {text}, plus full_ref (the "
-                                                               "read spec that re-fetches the FULL "
-                                                               "source) whenever the note only "
-                                                               "summarizes something fetchable. "
-                                                               "For file: {path}."},
+                                                "description": "collection: {name,id}; file: {path}; "
+                                                               "note: {text[, full_ref]}."},
                                     "why": {"type": "string"},
                                 },
                                 "required": ["type"],
@@ -2748,8 +2721,7 @@ CARD_UPDATE_TOOL: Dict[str, Any] = {
                         },
                         "replace": {
                             "type": "array",
-                            "description": "Corrections of existing items: each {item_id, item} "
-                                           "where item is the corrected content item.",
+                            "description": "{item_id, item} corrections.",
                             "items": {
                                 "type": "object",
                                 "properties": {
@@ -2761,7 +2733,7 @@ CARD_UPDATE_TOOL: Dict[str, Any] = {
                         },
                         "remove": {
                             "type": "array",
-                            "description": "Ids of stale items to drop from the card.",
+                            "description": "Ids of stale items to drop.",
                             "items": {"type": "string"},
                         },
                     },
@@ -2817,16 +2789,6 @@ Rules:
     durable fact, you MUST return at least one edit that captures it. An empty edits list is correct
     ONLY when the future-context is genuinely empty or purely transient (nothing reusable).
   - Do not use em dashes. Use a comma, a colon, or parentheses instead.
-
-EXAMPLE: if the future-context says the dream journal is the collection "Dream Journal" (id col_123)
-and stress is tracked in "Daily Mood" (id col_456), return:
-  {{"edits": [
-    {{"card_id": "dreams", "name": "Dreams and stress",
-      "add": [
-        {{"type": "collection", "locator": {{"name": "Dream Journal", "id": "col_123"}}, "why": "the user's dream entries"}},
-        {{"type": "collection", "locator": {{"name": "Daily Mood", "id": "col_456"}}, "why": "daily stress levels to correlate"}}
-      ]}}
-  ]}}
 
 --- THE USER'S REQUEST / GOAL ---
 {request}

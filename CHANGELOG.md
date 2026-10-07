@@ -6,7 +6,57 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **A fan-out that parks one subgoal no longer throws away the siblings that already did their
+  work.** The one-ask filter added in the entry below kept ONLY the parked result, so in a live
+  run where all three requested items had actually landed, the single thing the person read was a
+  bare "please approve these changes to proceed": every landed subgoal's own text and receipts
+  were dropped, and the ask was all that was left. `Orchestrator._run_deep`'s aggregation now
+  drops only the EXTRA asks (every parked result after the first, by subtask order) and keeps
+  every sibling that reported something of its own, ordering them before the single ask so the
+  reply reads: what happened, then the one ask, then the short code-written continuation sentence
+  (`CONTINUE_AFTER_DECISION_NOTE`). A sibling that was stopped before it ever ran leaves an empty
+  placeholder result; `_result_reports_something` keeps that out of the reply, judged on
+  structure and emptiness only (output text, a verified outcome, a usage-limit wait), never on
+  what any wording says. A single-goal turn and a fan-out where nothing parks remain unaffected.
+  Tests: `tests/test_orchestrator.py`
+  (`test_fan_out_reports_what_landed_as_well_as_the_one_ask`,
+  `test_fan_out_drops_only_the_extra_asks_not_the_finished_work`).
+
 ### Changed
+- **Round-2 token cut on the five schema-driven "planning function" calls (goal verifier, card
+  updater, answer-explanation, overseer, reach judge) and nothing else in that family.** Every one
+  of these goes through `provider.plan()`, which renders its `tool_schema` as the system prompt
+  (`QuestModelProvider.plan`, quest-backend); the schema's own field `description`s were restating
+  rules the matching prompt BODY already states in full (e.g. `VERIFY_GOAL_TOOL`'s `met`/`blocker`
+  descriptions duplicated `VERIFY_GOAL_PROMPT`'s own "When met=false" rules), so they were cut to
+  short mechanical tags, following the pattern `OVERSEE_TOOL` already used. Measured with
+  `tiktoken` cl100k on the rendered schema (compact separators, unchanged):
+  `VERIFY_GOAL_TOOL` 489 -> 270 tokens, `CARD_UPDATE_TOOL` 383 -> 309, `EXPLAIN_TOOL`
+  (`core/answer_explanation.py`) 304 -> 262. `CARD_UPDATE_PROMPT`'s trailing worked EXAMPLE
+  (520 chars) was dropped too: the rules immediately above it already give the identical JSON
+  shapes inline (`{"type": "collection", ...}` / `{"type": "file", ...}`), so the EXAMPLE was a
+  second rendering of the same thing. `OVERSEER_PROMPT` (`core/overseer.py`) was rewritten for
+  density, not substance: every pinned rule (`action verb` vs an `interrogative` question,
+  `escalate_human` reserved for an `identity`/`irreversible` fork, "a REFUSAL IS AN ANSWER",
+  `never about them`) survives, with the DIGEST-field explanations, the five signals, and the
+  Rules section each tightened to one pass instead of restating the same point twice; static
+  prompt tokens (excl. the digest) 1,936 -> 1,337. Nothing semantic changed: `VERIFY_GOAL_PROMPT`,
+  `CARD_UPDATE_PROMPT`'s own rules/body, `EXPLAIN_PROMPT`, and `REACH_JUDGE_PROMPT` (already
+  measured at ~400 tokens total per call, 2026-10-05, and left alone) are untouched. Already
+  conditional and verified unchanged this round: the card updater structurally skips its one LLM
+  call when a turn teaches nothing new AND has no current card to correct
+  (`_update_cards_after_deep`); the answer-explanation call is off by default
+  (`QAR_EXPLAIN_ANSWER`) and gated by the model-free `is_eligible(trace)`; the overseer is capped
+  by `cfg.overseer_max_signals` and only consulted at specific checkpoints. Projected on the
+  round-2 probe log (10 real turns, `probe_l10b.jsonl`): these five calls' combined per-turn
+  total (schema + prompt, excluding the per-turn goal/output/context/evidence data they need and
+  must keep) drops by roughly 1.1K tokens per turn. Tests: `tests/test_verify_*.py`,
+  `tests/test_answer_explanation.py`, `tests/test_card_learning_gate.py`, `tests/test_overseer.py`,
+  `tests/test_overseer_answer_checkpoint_context_preamble.py`,
+  `tests/test_deep_before_giving_up.py`, `tests/test_planner_prompt_profiles.py`,
+  `tests/test_context_assembler.py`, `tests/test_turn_start_cost.py` (316 passed).
+
 - **A fan-out splits only the person's own ask, and a parked subgoal stops its siblings from
   piling up more asks (round-2 trace: "add that as a goal" with a Friday-launch conflict got two
   parked asks, two goal proposals, and an unrequested note in one reply).** Three parts: (1) the
