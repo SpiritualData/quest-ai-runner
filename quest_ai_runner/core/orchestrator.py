@@ -3226,6 +3226,33 @@ _POLITE_COMMAND_RE = re.compile(
 )
 
 
+# The speaker announcing THEIR OWN next step ("I'll lean on that claim and move on", "I'm going to
+# buy the paint tomorrow", "I plan to rewrite the intro tonight"). The change verb belongs to the
+# person, not to the assistant: it is news, often context the assistant should weigh in on, never
+# an order to go and do it. Read only when nothing in the message addresses the assistant ("you"),
+# so "I'll need you to update the sheet" keeps its command reading. Such a message is sent to the
+# one-shot LLM judgment band rather than escalated by regex (found 2026-10-07: "I'll lean on the
+# claim ... and move on to the next section" queued a background task to "apply" it).
+_SPEAKER_OWN_PLAN_RE = re.compile(
+    r"^\s*(?:i['’]?ll|i\s+will|i\s+shall|i['’]?m\s+(?:going\s+to|gonna|planning\s+to|about\s+to)|"
+    r"i\s+am\s+(?:going\s+to|planning\s+to|about\s+to)|i\s+plan\s+to|i\s+intend\s+to|"
+    r"i\s+think\s+i['’]?ll|i['’]?ve\s+decided\s+to|i\s+decided\s+to)\b",
+    re.IGNORECASE,
+)
+_ADDRESSES_ASSISTANT_RE = re.compile(r"\b(?:you|your)\b", re.IGNORECASE)
+
+
+def message_announces_own_plan(message: Optional[str]) -> bool:
+    """True when the user is telling the assistant what THEY are going to do, without asking the
+    assistant to do anything ("I'll lean on that claim and move on"). Reads the USER's words only.
+    Never raises."""
+    try:
+        m = _strip_question_preamble((message or "").strip())
+        return bool(_SPEAKER_OWN_PLAN_RE.search(m)) and not _ADDRESSES_ASSISTANT_RE.search(m)
+    except Exception:  # noqa: BLE001
+        return False
+
+
 # Words that turn a change verb into a NOUN: "give me an update", "the latest change", "a quick
 # fix", "any improvements". Without this, every status request read as an order to go change
 # something, because "update"/"fix"/"change"/"report" are the same string as verb or noun.
@@ -3392,6 +3419,11 @@ def _message_requests_change(message: Optional[str], *, honor_hold_off: bool = T
         # refactor Y?", "what would it take to fix Z?"). This is the fix for questions being
         # mishandled as tasks.
         if _INFO_QUESTION_RE.search(_strip_question_preamble(m)):
+            return False
+        # The speaker announcing their own next step is news, not an order (see
+        # message_announces_own_plan). It still reaches the LLM judgment band, which reads the
+        # whole message and the answer, via message_change_signal_ambiguous.
+        if message_announces_own_plan(m):
             return False
         # A message ending in "?" reads as a question by default, not a command, unless it was
         # already caught above as a polite command directed at the assistant ("can you fix...?").

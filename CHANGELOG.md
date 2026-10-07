@@ -7,6 +7,11 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **A user announcing their own next step is not an order.** `_message_requests_change` no longer
+  escalates "I'll lean on that claim and move on", "I'm going to move the launch myself" and similar
+  first-person plans that do not address the assistant (`message_announces_own_plan`); they go to the
+  one-shot LLM judgment band instead of opening a task by regex. "I'll need you to update the sheet"
+  still escalates.
 - **The orchestrator's own escalations never start background work.** The answer verifier's
   "need more context" run and the last-resort deep run before giving up are the assistant's own
   initiative, so a goal that resolves to a runner declaring the new

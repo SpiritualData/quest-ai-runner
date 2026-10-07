@@ -29,6 +29,10 @@ NOT_DIRECTIVES = [
     "catch me up on the email campaign",
     # A statement of context or plan, with no instruction in it.
     "i have shared the feedback when he replies i will let you know",
+    # The speaker announcing their OWN next step (2026-10-07, Quest chat): news, not an order.
+    "I'll lean on the claim that effect sizes are stable across sites and move on to the next section.",
+    "I'm going to move the launch to Friday and update the team myself",
+    "so i plan to rewrite the intro tonight",
 ]
 
 # Messages that must STILL become work.
@@ -41,6 +45,9 @@ DIRECTIVES = [
     "can you fix the date bug?",
     "the system incorrectly assigns dates to actions",
     "send me the report and update the sheet",
+    # First person, but addressed to the assistant: still an order.
+    "I'll need you to update the sheet",
+    "I want you to rename the goal",
 ]
 
 
@@ -88,3 +95,10 @@ def test_a_question_behind_a_discourse_marker_is_still_a_question():
 def test_a_bug_report_is_not_muted_by_any_of_this():
     assert _message_requests_change("the export is broken on mobile") is True
     assert message_holds_off_work("the export is broken on mobile") is False
+
+
+def test_an_own_plan_still_gets_the_llm_judgment():
+    # Not escalated by regex, but a change verb is present, so the one-shot judgment can still
+    # read it (a genuine "I'll ... so please add it" is caught there).
+    msg = "I'll lean on the claim that effect sizes are stable across sites and move on to the next section."
+    assert message_change_signal_ambiguous(msg) is True
