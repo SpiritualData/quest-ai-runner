@@ -60,12 +60,12 @@ WHAT "NO EXTERNAL ENVIRONMENT" IS MODELLED AS (QAR-library arm only)
   * ``QAR_CORPUS_ROOT`` = empty dir   -- no corpus to grep.
   * ``QAR_CONVERSATION_SEARCH=false`` -- no local Claude Code session history.
   * no ``QAR_TOOLS_FILE``             -- only QAR's STANDARD tools, i.e. what any Quest customer
-                                         gets, not Spiritual Data's own extra lane tools.
+                                         gets, not one deployment's own extra lane tools.
 
 DEV ONLY, AND PATH-AGNOSTIC (public-repo hard rule #1)
 ---------------------------------------------------------
 Quest credentials are read from the file named by the required env var ``QAR_EVAL_DEV_ENV_FILE``
-(for this deployment, export it as ``<product>/setup/sd-dev-runner/.env`` in your shell -- never
+(export it in your shell as the path of your dev lane's env file -- never
 hardcode that path into this file). The URL in that file must be exactly on the host named by the
 required env var ``QAR_EVAL_DEV_HOST`` (an allowlist; anything else refuses to run). The fixture's quest category comes from ``QAR_EVAL_CATEGORY_ID`` if
 set, else this harness looks one up live via ``GET /api/categories/all`` (a category whose name
@@ -98,7 +98,7 @@ REST. Neither factory env var is read unless quest creation actually hits the 20
 
 USAGE
 -----
-    export QAR_EVAL_DEV_ENV_FILE=/path/to/sd-dev-runner/.env   # once, in your shell
+    export QAR_EVAL_DEV_ENV_FILE=/path/to/dev-lane/.env   # once, in your shell
     .venv/bin/python3 evaluation/chat_quest_ops_routing_eval.py setup
     .venv/bin/python3 evaluation/chat_quest_ops_routing_eval.py selftest
     .venv/bin/python3 evaluation/chat_quest_ops_routing_eval.py run [--only ID,ID]
@@ -147,7 +147,7 @@ if not os.environ.get(DEV_ENV_FILE_VAR):
     raise SystemExit(
         f"{DEV_ENV_FILE_VAR} is not set. Export it to the dev lane's .env path before running "
         f"this eval, e.g.:\n"
-        f"    export {DEV_ENV_FILE_VAR}=/path/to/sd-dev-runner/.env\n"
+        f"    export {DEV_ENV_FILE_VAR}=/path/to/dev-lane/.env\n"
         f"This harness never hardcodes a real machine path (public-repo hard rule #1)."
     )
 DEV_ENV_FILE = Path(os.environ[DEV_ENV_FILE_VAR]).expanduser()
@@ -808,7 +808,7 @@ def build():
     for drop in ("QAR_TOOLS_FILE", "QAR_CONFIG_FILE", "QAR_CONTEXT_PREAMBLE_FILE",
                  "QAR_LINK_POLICY_FILE"):
         os.environ.pop(drop, None)
-    # The deployed SD lanes plan and answer through the stock `claude` CLI, so use that backend:
+    # The deployed lanes plan and answer through the stock `claude` CLI, so use that backend:
     # routing accuracy is a property of the model that actually makes the decision in production.
     os.environ["QAR_MODEL_BACKEND"] = DEV_ENV.get("QAR_MODEL_BACKEND", "claude_cli")
     os.environ["QAR_PLANNER_TIER"] = DEV_ENV.get("QAR_PLANNER_TIER", "sonnet")
