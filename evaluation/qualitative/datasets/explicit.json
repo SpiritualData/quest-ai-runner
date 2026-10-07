@@ -1248,7 +1248,7 @@
       "forbid_writes": true,
       "precheck": {
         "reply_regex": [
-          "50 ?(%|percent)"
+          "50(\\.0+)? ?(%|percent)"
         ]
       },
       "evidence_notes": "Source: quest-docs docs/guide/quests-and-plans.md."
