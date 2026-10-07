@@ -377,8 +377,16 @@ class ClaudeCliProvider(ModelProviderBase):
         timeout_seconds: float = 180.0,
         extra_path_dirs: Optional[List[str]] = None,
         disallowed_tools: Optional[List[str]] = None,
+        plan_thinking_tokens: Optional[int] = None,
     ):
         super().__init__()
+        # Cap on extended thinking for plan() calls only, passed to the CLI as MAX_THINKING_TOKENS.
+        # Every plan() call on this provider gets it: routing decisions and the reach judge, and
+        # also the overseer and cascade reviews when those run here (measured only on routing).
+        # None leaves the CLI's default alone. Answers and deep runs are never affected. Measured 2026-10-06 with haiku as the planner on 100
+        # labelled routing decisions: thinking on, 94% at 36.9s p50 and ~4,000 output tokens a
+        # decision; thinking capped at 0, 93% at 3.3s p50 and ~160 (7 discordant, 4 against 3).
+        self.plan_thinking_tokens = plan_thinking_tokens
         self.claude_path = claude_path
         self.timeout_seconds = timeout_seconds
         self.extra_path_dirs = extra_path_dirs
@@ -400,8 +408,10 @@ class ClaudeCliProvider(ModelProviderBase):
 
     # --- subprocess plumbing -------------------------------------------------
 
-    def _build_env(self) -> dict:
+    def _build_env(self, thinking_tokens: Optional[int] = None) -> dict:
         env = os.environ.copy()
+        if thinking_tokens is not None:
+            env["MAX_THINKING_TOKENS"] = str(max(0, int(thinking_tokens)))
         env["PYTHONUNBUFFERED"] = "1"
         # Force the SUBSCRIPTION login path: never let the headless run reuse our session or fall
         # back to API-key billing (mirrors SubprocessGoalRunner._build_env).
@@ -451,7 +461,8 @@ class ClaudeCliProvider(ModelProviderBase):
         return self.claude_path
 
     @retry_transient(max_retries=3, base_delay=1.0)
-    def _invoke(self, prompt: str, *, model: Optional[str], system: Optional[str] = None) -> str:
+    def _invoke(self, prompt: str, *, model: Optional[str], system: Optional[str] = None,
+                thinking_tokens: Optional[int] = None) -> str:
         """Run one headless ``claude -p`` completion and return the model's text.
 
         Uses ``--output-format json`` and returns the envelope's ``result`` field. Raises
@@ -498,7 +509,7 @@ class ClaudeCliProvider(ModelProviderBase):
         proc = subprocess.run(
             cmd,
             input=prompt.encode("utf-8"),
-            env=self._build_env(),
+            env=self._build_env(thinking_tokens),
             cwd=_neutral_cwd(),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -605,11 +616,17 @@ class ClaudeCliProvider(ModelProviderBase):
             "Respond with ONLY a single JSON object recording your decision — no prose, no "
             "explanation, no markdown code fence around it. The object must conform to this JSON "
             "schema (include at least the required fields):\n"
-            f"{json.dumps(schema, ensure_ascii=False)}\n"
+            # Compact separators: this schema rides the prompt on EVERY planner call on this
+            # backend (the CLI has no native tool-use surface to pass it out of band), so its own
+            # formatting whitespace is paid for every time.
+            f"{json.dumps(schema, ensure_ascii=False, separators=(',', ':'))}\n"
             "Output the JSON object and nothing else."
         )
         try:
-            text = self._invoke(prompt + instruction, model=model)
+            # Only passed when set, so an _invoke override without the keyword keeps working.
+            extra = ({} if self.plan_thinking_tokens is None
+                     else {"thinking_tokens": self.plan_thinking_tokens})
+            text = self._invoke(prompt + instruction, model=model, **extra)
         except usage_limit.UsageLimitError:
             # Not a hiccup: nothing further in this turn can run, so let the caller stop and wait
             # rather than planning on an empty default decision.

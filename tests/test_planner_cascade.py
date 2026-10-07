@@ -35,6 +35,7 @@ from quest_ai_runner.core.orchestrator import (
     provider_call_accepts_tier,
 )
 from quest_ai_runner.core.planner_cascade import (
+    WEB_REVIEW_NOTE,
     apply_review,
     build_review_digest,
     describe_decision,
@@ -160,6 +161,37 @@ def test_build_review_digest_includes_the_message():
     digest = build_review_digest("restart the deploy pipeline please", decision,
                                  PLANNER_DECISION_RUBRIC)
     assert "restart the deploy pipeline please" in digest
+
+
+# Captured by running quest-ai-runner's core/planner_cascade.py AT ITS COMMIT PARENT TO bf609a8
+# (`git show bf609a8^:quest_ai_runner/core/planner_cascade.py`), where build_review_digest() had
+# no web_configured parameter at all, calling it with the exact same request/decision/rubric this
+# test uses. This is the real pin: comparing the default call against an explicit
+# web_configured=False call, both through the NEW code (what this test used to do), proves
+# nothing about whether either one matches what the digest actually said before web_configured
+# existed.
+_PRE_CHANGE_REVIEW_DIGEST_NO_WEB = (
+    'You are the OVERSEER of a cheaper model\'s routing decision. It has already decided; your job is to\nconfirm that decision or correct it, and nothing else. You do not answer the request and you do not\ndo the work.\n\nDECIDE IN THIS ORDER. Stop at the FIRST rule that applies; the doctrine below only refines it.\n  1. CURRENT FACTS ABOUT THE WORLD. A question about news, prices, weather, a score, a public\n     fact or anything else happening in the world right now is NOT work for a machine and NOT a\n     read of your own sources. Answer it: say what you reliably know, and say plainly that you\n     cannot check a live source for the current value if you cannot. Never hand such a question\n     to an execution environment, and never grep your sources for it.\n  2. OUT OF REACH. Does this need a place your reads cannot go: a machine and its files, folders,\n     processes, jobs or logs; a code repository; a spreadsheet, document or service held\n     elsewhere? Then do NOT read and do NOT run discovery first, and do not invent a `scope` or\n     `rel_path` for it: a server, repository, folder or spreadsheet NAME is never a source, not\n     even when the CONTEXT names it. If the CONTEXT names somewhere that covers that kind of\n     work, hand it off (answer + deferred_deep). If NOTHING there covers it, say so plainly and\n     hand nothing off. A read that already came back empty for such a request is this same\n     signal, not a reason to read again.\n  3. ALREADY RUNNING. Is this asking about work already in flight? Answer with that work\'s real\n     status from the records in CONTEXT. Never open a second run of the same thing.\n  4. QUESTION OR STATEMENT. Is this a question, or someone describing a plan, a preference or a\n     piece of context rather than instructing you to act now? Answer it, after reading real\n     content when it is about substance. An action word inside a question does not make it an\n     instruction.\n  5. INSTRUCTION TO ACT. It is a current instruction to produce or change something your deep\n     runner can reach: choose "deep" now, with no read first.\n  6. OTHERWISE. Read what you need, then answer.\n\n--- THE REQUEST ---\nrestart the deploy pipeline please\n\n--- THE GROUNDING THE DECIDER HAD (abridged) ---\n(none)\n\n--- WHAT IT OBSERVED SO FAR (empty means it has read nothing yet) ---\n[]\n\n--- ITS DECISION ---\naction: answer\nits reasoning: ok\n\nApply the rules above to the request. If the decision already follows them, return the SAME action\nand say so in one sentence. If it does not, return the action the rules require, and fill the few\nfields that action needs. The most common error to look for: work that lives outside what a read\ncan reach, sent to a read anyway, often with an invented path or scope. Correct that to a hand off\n("answer" with hand_off true) when the grounding names somewhere that covers the work, or to a\nplain "answer" that says nothing attached can reach it when it does not.\n'
+)
+
+
+def test_build_review_digest_is_byte_for_byte_unchanged_when_web_is_not_configured():
+    decision = PlanDecision(action="answer", rationale="ok")
+    default = build_review_digest("restart the deploy pipeline please", decision,
+                                  PLANNER_DECISION_RUBRIC)
+    assert default == _PRE_CHANGE_REVIEW_DIGEST_NO_WEB
+    explicit_false = build_review_digest("restart the deploy pipeline please", decision,
+                                         PLANNER_DECISION_RUBRIC, web_configured=False)
+    assert explicit_false == _PRE_CHANGE_REVIEW_DIGEST_NO_WEB
+    assert WEB_REVIEW_NOTE not in default
+
+
+def test_build_review_digest_adds_the_web_note_when_web_is_configured():
+    decision = PlanDecision(action="answer", rationale="ok")
+    digest = build_review_digest("restart the deploy pipeline please", decision,
+                                 PLANNER_DECISION_RUBRIC, web_configured=True)
+    assert WEB_REVIEW_NOTE in digest
+    assert "{\"web\":" in digest
 
 
 # ---------------------------------------------------------------------------
@@ -320,9 +352,10 @@ class RecordingProvider:
         return ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"]
 
 
-def build(provider: Any, **cfg: Any) -> Orchestrator:
+def build(provider: Any, *, web: Any = None, **cfg: Any) -> Orchestrator:
     return Orchestrator(retrieval=StubRetrieval({}), provider=provider,
-                        registry=ModelRegistry(provider), config=OrchestratorConfig(**cfg))
+                        registry=ModelRegistry(provider), config=OrchestratorConfig(**cfg),
+                        web=web)
 
 
 # ---------------------------------------------------------------------------
@@ -382,3 +415,18 @@ def test_cascade_review_tier_is_only_sent_to_a_provider_whose_plan_accepts_one()
     cheap = PlanDecision(action="read", reads=[{"grep": "x"}])
     orch.cascade_review(cheap, "restart the service", "some context", [])
     assert provider.calls[0]["tier"] == orch.cfg.planner_cascade_tier
+
+
+def test_cascade_review_passes_web_configured_through_to_the_review_digest():
+    """``self.web is not None`` must reach ``build_review_digest``, the same way it already
+    reaches the reach judge and ``verdict_block``."""
+    provider_no_web = RecordingProvider(response={"action": "answer", "rationale": "ok"})
+    orch_no_web = build(provider_no_web, planner_cascade=True)
+    cheap = PlanDecision(action="read", reads=[{"grep": "x"}], confidence="low")
+    orch_no_web.cascade_review(cheap, "restart the service", "some context", [])
+    assert WEB_REVIEW_NOTE not in provider_no_web.calls[0]["prompt"]
+
+    provider_with_web = RecordingProvider(response={"action": "answer", "rationale": "ok"})
+    orch_with_web = build(provider_with_web, web=object(), planner_cascade=True)
+    orch_with_web.cascade_review(cheap, "restart the service", "some context", [])
+    assert WEB_REVIEW_NOTE in provider_with_web.calls[0]["prompt"]

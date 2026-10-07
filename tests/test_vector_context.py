@@ -493,6 +493,23 @@ class TestScopeTagsFence:
         ac = asm.assemble("billing", meta={"scope_tags": ["quest:q1"]})
         assert ac.card_ids == ["tagged"]
 
+    def test_card_metadata_passes_through_each_hits_own_scope_tags(self):
+        """A caller that persists ``AssembledContext`` across turns (e.g. the anticipation
+        engine's precompute, see ``core/anticipation.py``'s ``bundle_scope_tags``) must be able to
+        read back which quest(s) a surfaced hit actually belongs to even when THIS call ran with
+        no ``meta["scope_tags"]`` at all (an unscoped call does not drop the tagged hit -- see
+        ``test_no_meta_scope_tags_keeps_both_hits`` above -- so its origin must still be visible)."""
+        hits = [
+            VectorHit(id="tagged", score=0.9, text="billing", payload={"scope_tags": ["quest:q1"]}),
+            VectorHit(id="untagged", score=0.9, text="billing", payload={}),
+        ]
+        asm = VectorContextAssembler(_FixedHitsStore(hits), confidence_min_score=0.0)
+
+        ac = asm.assemble("billing")
+        by_id = {m["id"]: m for m in ac.card_metadata}
+        assert by_id["tagged"]["scope_tags"] == ["quest:q1"]
+        assert by_id["untagged"]["scope_tags"] == []
+
 
 # ---------------------------------------------------------------------------
 # VectorContextAssembler: with provider (query-gen + LLM review)
@@ -2939,3 +2956,153 @@ class TestSeededCardsRemainRetrievableUnderAnyScope:
                 "exact scope filter for scope=None must require an empty _scope field, so "
                 "association eviction with scope=None can never reach seeded card points"
             )
+
+
+# ---------------------------------------------------------------------------
+# Token-usage pass (2026-10-06): the two agentic LLM steps (query-gen, relevance review) must not
+# be paid for twice within one turn for the SAME task text, and the review must be skipped
+# outright when the confidence gate will drop every candidate regardless of its verdict.
+# ---------------------------------------------------------------------------
+
+class TestVectorArmSelectionMemoReusePerTurn:
+    def test_query_gen_and_review_run_once_for_repeated_identical_task_text(self):
+        """An exact-repeat ``assemble()`` for the SAME task text within one turn (a widening
+        retry, the post-deep card-updater re-selecting current cards, ...) must not pay for
+        query-generation or the relevance review twice. The provider's ``side_effect`` holds
+        exactly ONE response per LLM step across BOTH calls; a cache MISS on the repeat would
+        exhaust the list and raise ``StopIteration``, failing the test immediately."""
+        store = FakeVectorStore()
+        store.upsert([{"id": "doc", "text": "billing payment pipeline"}])
+        provider = MagicMock()
+        provider.answer.side_effect = [
+            "payment pipeline",  # query-gen -- paid for ONCE across both assemble() calls
+            "0",                 # review -- paid for ONCE across both assemble() calls
+        ]
+        asm = VectorContextAssembler(
+            store, provider=provider, num_queries=1, confidence_min_score=0.0,
+        )
+        ac1 = asm.assemble("billing payment task")
+        assert "doc" in ac1.card_ids
+        ac2 = asm.assemble("billing payment task")  # identical task text -> both steps are hits
+        assert "doc" in ac2.card_ids
+        assert provider.answer.call_count == 2
+
+    def test_different_task_text_still_pays_for_both_steps(self):
+        """Regression guard: the memo must not over-share. A genuinely different task text is a
+        cache MISS and pays for both LLM steps normally, same as before this change."""
+        store = FakeVectorStore()
+        store.upsert([{"id": "doc", "text": "billing payment pipeline"}])
+        provider = MagicMock()
+        provider.answer.side_effect = ["", "0", "", "0"]  # two independent query-gen+review pairs
+        asm = VectorContextAssembler(
+            store, provider=provider, num_queries=0, confidence_min_score=0.0,
+        )
+        asm.assemble("billing payment task one")
+        asm.assemble("billing payment task two")
+        assert provider.answer.call_count == 4
+
+
+class TestVectorArmReviewFloorSkip:
+    def test_review_skipped_when_every_candidate_is_below_its_own_floor(self):
+        """PROVABLY-safe skip: when nothing could survive the confidence gate regardless of the
+        review's verdict, the review call is skipped outright (it cannot change an empty
+        result). The provider's ``side_effect`` holds only ONE response (query-gen); a review
+        call would raise ``StopIteration`` and fail the test."""
+        store = FakeVectorStore()
+        # "billing" alone out of 4 query words -> raw score 0.25, well under a 0.6 floor.
+        store.upsert([{"id": "weak", "text": "billing", "payload": {}}])
+        provider = MagicMock()
+        provider.answer.side_effect = [""]  # query-gen only
+        asm = VectorContextAssembler(
+            store, provider=provider, num_queries=0, confidence_min_score=0.6,
+        )
+        ac = asm.assemble("billing two three four")
+        assert ac.card_ids == []
+        assert ac.context_view == ""
+        assert provider.answer.call_count == 1
+
+    def test_review_still_runs_when_some_candidates_clear_the_floor(self):
+        """Regression guard against over-firing the skip: a mix of above/below-floor candidates
+        still reaches the review. Measured live (2026-10-06 probe log): the review has rejected
+        the single HIGHEST raw-score candidate in a batch, so a score-only heuristic cannot
+        stand in for it whenever at least one candidate could plausibly survive."""
+        store = FakeVectorStore()
+        store.upsert([
+            {"id": "strong", "text": "billing payment", "payload": {}},
+            {"id": "weak", "text": "billing", "payload": {}},
+        ])
+        provider = MagicMock()
+        provider.answer.side_effect = ["", "0"]  # query-gen, then review keeps one candidate
+        asm = VectorContextAssembler(
+            store, provider=provider, num_queries=0, confidence_min_score=0.6,
+        )
+        asm.assemble("billing payment")
+        assert provider.answer.call_count == 2
+
+
+class TestVectorArmSnippetHardCap:
+    def test_snippet_caps_a_single_unbroken_line(self):
+        """ROOT CAUSE pin (2026-10-06 probe): an embedded association/card's own ``.text`` field
+        is typically ONE long line with no newlines (the flattened string that was actually
+        embedded), so "first 3 non-empty lines" used to degenerate to "the whole text, verbatim,
+        every time" -- measured at nearly 5k tokens for a single quest card. ``_snippet`` must
+        cap its output regardless of line count."""
+        long_unbroken_text = "word " * 2000  # ~10,000 chars, zero newlines
+        out = vca._snippet(long_unbroken_text)
+        assert len(out) <= vca.SNIPPET_MAX_CHARS
+
+    def test_snippet_still_prefers_the_first_few_lines_when_present(self):
+        """Regression guard: normal multi-line text is unaffected by the new cap."""
+        text = "line one\nline two\nline three\nline four\nline five"
+        out = vca._snippet(text)
+        assert out == "line one | line two | line three"
+
+    def test_vector_hit_text_line_is_capped_for_an_unbroken_embedded_string(self):
+        """End-to-end: a hit whose ``text`` is one long unbroken line (as an embedded
+        association/card's text typically is) no longer renders it in full in the context view."""
+        store = FakeVectorStore()
+        long_unbroken_text = "quest tracking launch " + ("detail " * 1500)  # ~10,500 chars
+        store.upsert([{"id": "card:huge-text", "text": long_unbroken_text}])
+        asm = VectorContextAssembler(store, provider=None, confidence_min_score=0.0)
+        ac = asm.assemble("quest tracking launch")
+        assert "card:huge-text" in ac.card_ids
+        assert len(ac.context_view) < len(long_unbroken_text)
+
+
+class TestVectorArmCompactCardRendering:
+    def test_vector_hit_card_content_is_capped_not_rendered_in_full(self):
+        """A vector hit on a card renders at most ``VECTOR_HIT_MAX_CARD_REFS`` content items,
+        never every item on the card in full (2026-10-06 probe: a quest-sized card with many
+        content items rendered whole measured close to 5k tokens on its own). The card's own
+        summary line is unaffected, and dropped items are simply the lower-relevance tail --
+        nothing here claims a reader cannot still fetch them with a follow-up read."""
+        content = [
+            {
+                "id": f"n{i}", "type": "note", "ts": float(i + 1),
+                "why": f"note-marker-{i}",
+                "locator": {"text": "x" * 500},
+            }
+            for i in range(10)
+        ]
+        store = FakeVectorStore()
+        store.upsert([{
+            "id": "card:big-quest",
+            "text": "launch quest tracking",
+            "payload": {"summary": "Launch quest tracking", "content": content},
+        }])
+        asm = VectorContextAssembler(store, provider=None, confidence_min_score=0.0)
+        ac = asm.assemble("launch quest tracking")
+        assert "card:big-quest" in ac.card_ids
+        # The card's summary line always renders, regardless of the content cap.
+        assert "Launch quest tracking" in ac.context_view
+        # Only a bounded number of this card's content items reach the rendered view ...
+        rendered_markers = sum(
+            1 for i in range(10) if f"note-marker-{i}" in ac.context_view
+        )
+        assert 0 < rendered_markers <= vca.VECTOR_HIT_MAX_CARD_REFS, rendered_markers
+        # ... and the structured item blocks fed to the (optional) consolidator are capped too.
+        meta = ac.card_metadata[0]
+        assert len(meta["items"]) <= vca.VECTOR_HIT_MAX_CARD_REFS
+        # The whole card section is nowhere near 10 full 500-char item bodies (~5000+ chars).
+        card_section_len = len(ac.context_view)
+        assert card_section_len < 10 * 500, card_section_len

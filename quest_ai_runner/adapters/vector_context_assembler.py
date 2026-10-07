@@ -71,12 +71,19 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
 
-from ..core.adapters import AssembledContext, ContextAssemblerBase, VectorHit, VectorStore
+from ..core.adapters import (
+    AssembledContext,
+    ContextAssemblerBase,
+    STEP_SELECT,
+    STEP_SUMMARIZE,
+    VectorHit,
+    VectorStore,
+    answer_with_reasoning,
+)
+from ..core.card_filter import _memo_get, _memo_put, _selection_key
 from ..core.scope_tags import scope_tags_allow
 from ..core.vector_scopes import CARD_SEED_SCOPE
 from .card_content_render import (
-    MAX_CARD_REF_CHARS,
-    MAX_CARD_REFS,
     render_card_content,
     render_card_content_blocks,
     tokenize as _tokenize,
@@ -119,11 +126,38 @@ _MAX_WORKERS = 8
 # Number of lines to show as a text snippet in the context view.
 _SNIPPET_LINES = 3
 
+# Hard character cap for ``_snippet``'s output, independent of how many lines it found. ROOT CAUSE
+# of the "a vector hit on a card renders its content in full, close to 5k tokens for one quest
+# card" measurement (2026-10-06 probe): an embedded association/card's own ``text`` field is the
+# flattened string that was actually embedded, typically ONE long line with no newlines at all, so
+# "first 3 non-empty LINES" degenerated to "the whole text, verbatim, every time" -- a single
+# quest's card measured ~5k tokens under the OLD (uncapped) ``_snippet``, almost entirely from this
+# one "text: ..." line. Capping here fixes it at the source for every caller (the context_view's
+# "text:" line AND the review prompt's candidate listing below).
+SNIPPET_MAX_CHARS = 400
+
+# Per-hit card-content budget for a VECTOR hit, tighter than the shared ``MAX_CARD_REFS`` /
+# ``MAX_CARD_REF_CHARS`` defaults ``FileContextStore`` uses for its own card selections (see the
+# ``VectorContextAssembler`` docstring's ``reference_resolvers`` entry for why): a vector hit is
+# one rendered section among several in the same turn, not the whole view. A SEPARATE, complementary
+# cap to the ``_snippet`` fix above: this one bounds the card's structured ``content`` items (the
+# ``- (type) ...`` lines), not its own ``.text`` preview. The card's ``summary`` line is unaffected
+# (always rendered by ``_render_hit_sections`` regardless of this budget); only the lower-relevance
+# tail of content items is cut, and every cut/unresolved item still carries its "read the source"
+# locator.
+VECTOR_HIT_MAX_CARD_REFS = 4
+VECTOR_HIT_MAX_CARD_REF_CHARS = 1600
+
 
 def _snippet(text: str, lines: int = _SNIPPET_LINES) -> str:
-    """Return the first ``lines`` non-empty lines of ``text``."""
+    """Return the first ``lines`` non-empty lines of ``text``, hard-capped at
+    ``SNIPPET_MAX_CHARS`` regardless of line count (see that constant for why: text with no
+    newlines used to render here with NO truncation at all)."""
     parts = [l for l in text.splitlines() if l.strip()][:lines]
-    return " | ".join(parts) if parts else text[:120]
+    out = " | ".join(parts) if parts else text[:120]
+    if len(out) > SNIPPET_MAX_CHARS:
+        out = out[: SNIPPET_MAX_CHARS - 1].rstrip() + "…"
+    return out
 
 
 def _hit_searchable_text(hit: VectorHit) -> str:
@@ -203,6 +237,21 @@ class VectorContextAssembler(ContextAssemblerBase):
         arm does.  Without this the vector arm would render only a card's
         description and silently drop the live data it points at.  ``None`` (the
         default) keeps the prior behavior (no card-reference resolution).
+
+        A VECTOR hit is typically ONE card among several rendered sections in the
+        same turn (the keyword arm already rendered its own cards, other hits
+        follow), so this arm's own per-hit budget (``max_card_refs``/
+        ``max_card_ref_chars`` below) is deliberately TIGHTER than the shared
+        ``MAX_CARD_REFS``/``MAX_CARD_REF_CHARS`` defaults ``FileContextStore`` uses
+        for a card it selected directly: a quest-sized card rendered here in full
+        (every content item, each up to the shared per-item cap) measured close to
+        5k tokens on its own. The card's own ``summary`` line always renders
+        regardless (see ``_render_hit_sections``), so a tighter item budget loses
+        the TOP few most relevant items, never the card's identity -- and every
+        truncated/unresolved item still carries a "read the source" locator
+        (``render_card_content``'s unresolved-pointer line / the writer's own
+        "Read the source first with this read spec" notes), so nothing here is
+        lost that a follow-up read cannot fetch.
     max_in_view:
         Maximum number of hits to include in the rendered context view.
     max_seed_items:
@@ -244,8 +293,8 @@ class VectorContextAssembler(ContextAssemblerBase):
         seed_source: Optional[_SeedSource] = None,
         seed_in_background: bool = False,
         reference_resolvers: Optional[Dict[str, Any]] = None,
-        max_card_refs: int = MAX_CARD_REFS,
-        max_card_ref_chars: int = MAX_CARD_REF_CHARS,
+        max_card_refs: int = VECTOR_HIT_MAX_CARD_REFS,
+        max_card_ref_chars: int = VECTOR_HIT_MAX_CARD_REF_CHARS,
         _clock: Optional[Callable[[], float]] = None,
     ) -> None:
         self._store = vector_store
@@ -444,9 +493,11 @@ class VectorContextAssembler(ContextAssemblerBase):
                     f"and which code region it touches.  No lists.\n\n"
                     f"Task: {task_text}\nRegion: {region_desc}"
                 )
-                llm_summary = self._provider.answer(
+                llm_summary = answer_with_reasoning(
+                    self._provider,
                     [{"role": "user", "content": prompt}],
                     model=self._query_model,
+                    step=STEP_SUMMARIZE,
                 )
                 llm_summary = llm_summary.strip()
                 if llm_summary:
@@ -510,9 +561,27 @@ class VectorContextAssembler(ContextAssemblerBase):
         """Use the LLM to generate diverse search queries.
 
         Returns a list of query strings (may be empty on failure).  Never raises.
+
+        SELECTION MEMO: an EXACT repeat of this task text (same model, same ``num_queries``) within
+        this provider's bounded per-provider LRU (``core.card_filter``'s selection memo, tag
+        ``"vector_queries"``) skips the LLM call and returns the prior query list. One turn can
+        assemble several times for the SAME task text (a goal re-assembled by a widening retry, the
+        post-deep card-updater re-selecting the just-used query, ...); without this every such
+        repeat paid for a fresh query-generation call. A genuinely different task text (a different
+        goal) is unaffected -- it is a cache MISS, same as before this change. Only a real verdict is
+        memoized, never a failure, so a transient error is retried next time rather than pinned.
         """
+        # The gist of the task is what query generation needs, never a whole composed brief.
+        from ..core.prompt_budget import decision_excerpt
+        task_text = decision_excerpt(task_text)
         if self._provider is None:
             return []
+        memo_key = _selection_key(
+            "vector_queries", task_text, [], model=self._query_model, extra=str(self._num_queries),
+        )
+        cached = _memo_get(self._provider, memo_key)
+        if cached is not None:
+            return list(cached)
         try:
             prompt = (
                 f"Generate {self._num_queries} short, diverse search queries that "
@@ -520,16 +589,20 @@ class VectorContextAssembler(ContextAssemblerBase):
                 f"Output one query per line, no numbering, no extra text.\n\n"
                 f"Task: {task_text}"
             )
-            raw = self._provider.answer(
+            raw = answer_with_reasoning(
+                self._provider,
                 [{"role": "user", "content": prompt}],
                 model=self._query_model,
+                step=STEP_SELECT,
             )
             queries = [
                 line.strip()
                 for line in raw.splitlines()
                 if line.strip() and not line.strip().startswith("#")
             ]
-            return queries[: self._num_queries]
+            queries = queries[: self._num_queries]
+            _memo_put(self._provider, memo_key, list(queries))
+            return queries
         except Exception:
             logger.debug("VectorContextAssembler._generate_queries failed", exc_info=True)
             return []
@@ -582,9 +655,26 @@ class VectorContextAssembler(ContextAssemblerBase):
 
         Returns the filtered list (same objects, different subset).  If the
         provider is unavailable or the call fails, returns all candidates.
+
+        SELECTION MEMO: an EXACT repeat of this task text against the SAME candidate set (same
+        ids + scores + snippets, same model) within this provider's bounded per-provider LRU
+        (``core.card_filter``'s selection memo, tag ``"vector_review"``) skips the LLM call and
+        reuses the prior kept-id set. Measured live (2026-10-06 probe): a widening retry and the
+        post-deep card-updater's current-card re-selection can both review the identical task text
+        against the identical candidates within one turn, paying for the review twice; this makes
+        the second one free. Only a real verdict ("none" included) is memoized, never a failure.
         """
         if self._provider is None or not candidates:
             return candidates
+        signatures = [
+            f"{h.id}|{h.score:.3f}|{_snippet(h.text or str(h.payload))[:80]}"
+            for h in candidates
+        ]
+        memo_key = _selection_key("vector_review", task_text, signatures, model=self._query_model)
+        cached = _memo_get(self._provider, memo_key)
+        if cached is not None:
+            kept_ids = set(cached)
+            return [h for h in candidates if h.id in kept_ids]
         try:
             items_text = "\n".join(
                 f"[{i}] id={h.id} | score={h.score:.3f} | {_snippet(h.text or str(h.payload))}"
@@ -597,12 +687,15 @@ class VectorContextAssembler(ContextAssemblerBase):
                 f"Output ONLY the indices (comma-separated) of the items that are genuinely "
                 f"relevant to the task. If none are relevant, output 'none'."
             )
-            raw = self._provider.answer(
+            raw = answer_with_reasoning(
+                self._provider,
                 [{"role": "user", "content": prompt}],
                 model=self._query_model,
+                step=STEP_SELECT,
             )
             raw = raw.strip().lower()
             if raw == "none" or not raw:
+                _memo_put(self._provider, memo_key, [])
                 return []
             # Parse indices; ignore anything that doesn't parse as int.
             kept_indices = set()
@@ -615,8 +708,11 @@ class VectorContextAssembler(ContextAssemblerBase):
                 except ValueError:
                     pass
             if not kept_indices:
+                _memo_put(self._provider, memo_key, [])
                 return []
-            return [candidates[i] for i in sorted(kept_indices)]
+            kept = [candidates[i] for i in sorted(kept_indices)]
+            _memo_put(self._provider, memo_key, [h.id for h in kept])
+            return kept
         except Exception:
             logger.debug("VectorContextAssembler._llm_review failed", exc_info=True)
             return candidates  # on failure keep all (best-effort)
@@ -780,6 +876,23 @@ class VectorContextAssembler(ContextAssemblerBase):
         ]
 
         if not candidates:
+            return AssembledContext()
+
+        # Step b.6: PROVABLY-safe skip of the review call -- not a relevance guess, a fact about
+        # what happens next. The confidence gate below (step d/e) drops any hit whose RAW score is
+        # under its own floor (``_hit_min_score``) NO MATTER what the review says about it; the
+        # review's verdict can only matter for a hit that could actually survive that gate. When
+        # EVERY candidate is already under its own floor, the final kept set is empty either way,
+        # so the review call changes nothing and is skipped outright (measured on the logged
+        # review calls, 2026-10-06 probe: one gets its result CONFIRMED unused in the eval but not
+        # auto-removed elsewhere, see the roundup -- we checked the general case here rather than
+        # relying on logged-call floors we don't have). This is distinct from (and much narrower
+        # than) "skip whenever few candidates" or "skip when scores look separated": those were
+        # measured on the same probe log and declined -- the review changed the kept set against
+        # a simple score/floor heuristic in most sampled calls (it once rejected the single
+        # HIGHEST-scoring candidate in a batch), so guessing the verdict from scores alone is not
+        # safe. Only the "nothing could survive anyway" case is a fact, not a guess.
+        if all(h.score < self._hit_min_score(h) for h in candidates):
             return AssembledContext()
 
         # Step c: LLM review when provider is available and the judgment is not delegated to a
@@ -952,6 +1065,13 @@ class VectorContextAssembler(ContextAssemblerBase):
                 # Empty for a card that does not use them.
                 "card_type": payload.get("card_type") or "",
                 "lifecycle": payload.get("lifecycle") or "",
+                # The hit's OWN scope_tags (see core/scope_tags.py), passed through verbatim so a
+                # caller that persists this bundle across turns (the anticipation engine's
+                # precompute) can UNION them onto whatever it stores, even when THIS call's own
+                # ``meta["scope_tags"]`` was empty (an unscoped precompute can still surface a
+                # quest-tagged card; without this the resulting bundle would be cached untagged and
+                # served to every other quest's turn forever). Empty when the card is untagged.
+                "scope_tags": list(payload.get("scope_tags") or []),
                 # The VERBATIM rendered block this hit contributed to context_view, so the hybrid
                 # consolidator rebuilds from it (a hit's payload fields + resolved content, not just
                 # its content items) instead of dropping them when consolidation engages.

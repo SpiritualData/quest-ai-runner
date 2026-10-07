@@ -7,9 +7,10 @@ second reply ("yes please fix both") started a deep run. Three generic causes, e
   * the planner had already said it was reading to ground a brief BEFORE escalating, and the
     wrap-up ignored that structured intent;
   * the brief is machine-composed and QUOTES earlier runs' output ("not yet released to
-    production"), and the escalation nets' hold-off check read that as the human saying "not yet";
-  * the ambiguous band (a change signal, but the message ends in a question) got no intent
-    judgment on this path, unlike the answer path.
+    production"), and the escalation nets' hold-off check read that as the human saying "not yet"
+    (today: a planner "hold_off" verdict counts only for a typed message);
+  * a turn with no usable intent verdict got no intent judgment on this path, unlike the answer
+    path.
 """
 from typing import Any, Dict, List
 
@@ -17,9 +18,7 @@ from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import (
     Orchestrator,
     OrchestratorConfig,
-    _message_requests_change,
     clip_head_and_tail,
-    message_change_signal_ambiguous,
 )
 
 from .conftest import StubDeepRunner, StubProvider, StubRetrieval
@@ -64,13 +63,36 @@ READ = {"action": "read", "reads": [{"rel_path": "src/grid.tsx"}],
         "rationale": "read the handler to ground a precise brief before escalating"}
 
 
-def test_quoted_prior_output_does_not_hold_off_a_queued_brief():
-    # A typed "not yet" is still a hold-off...
-    assert message_change_signal_ambiguous(FOLLOW_UP_BRIEF) is False
-    # ...but on a machine-composed brief it is quoted output, not the person speaking.
-    assert message_change_signal_ambiguous(FOLLOW_UP_BRIEF, honor_hold_off=False) is True
-    assert _message_requests_change("fix the login bug, not yet deployed",
-                                    honor_hold_off=False) is True
+def test_a_hold_off_verdict_on_a_queued_brief_is_not_the_person_speaking():
+    # On a machine-composed brief a "hold_off" verdict may come from quoted output ("not yet
+    # released"), so it counts as no verdict: the intent judge decides instead of the nets
+    # being switched off.
+    provider = JudgeProvider([dict(READ, user_intent="hold_off"), {"met": True, "reason": "done"}],
+                             directive=True)
+    runner = StubDeepRunner(met=True, output="fixed and verified")
+    res = orch(provider, runner).run(FOLLOW_UP_BRIEF, message_is_user_turn=False)
+    assert provider.judge_calls, "a brief's hold_off verdict must fall back to the judge"
+    assert runner.calls
+    assert res.exit_reason != "read_budget"
+
+
+def test_an_act_verdict_escalates_without_a_judge_call():
+    provider = JudgeProvider([dict(READ, user_intent="act"), {"met": True, "reason": "done"}],
+                             directive=False)
+    runner = StubDeepRunner(met=True, output="fixed and verified")
+    res = orch(provider, runner).run("the export drops the last row, fix it")
+    assert runner.calls, "the planner said the user ordered work"
+    assert provider.judge_calls == []
+    assert res.exit_reason != "read_budget"
+
+
+def test_an_ask_verdict_wraps_up_without_a_judge_call():
+    provider = JudgeProvider([dict(READ, user_intent="ask")], directive=True)
+    runner = StubDeepRunner(met=True, output="should not run")
+    res = orch(provider, runner).run("why does the export drop the last row?")
+    assert runner.calls == []
+    assert provider.judge_calls == []
+    assert res.exit_reason == "read_budget"
 
 
 def test_planner_prepared_deep_work_escalates_when_the_budget_runs_out():
@@ -105,7 +127,7 @@ def test_a_genuine_question_still_wraps_up_with_an_answer():
 
 
 def test_a_typed_hold_off_still_keeps_the_turn_an_answer():
-    provider = JudgeProvider([READ], directive=True)
+    provider = JudgeProvider([dict(READ, user_intent="hold_off")], directive=True)
     runner = StubDeepRunner(met=True, output="should not run")
     res = orch(provider, runner).run(
         "The grid bug is back, but hold off on fixing it, not yet. What is causing it?")

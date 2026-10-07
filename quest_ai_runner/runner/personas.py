@@ -466,7 +466,9 @@ def llm_explicit_ask(registry: PersonaRegistry, provider: Any, text: str,
         linked = ""
         if linked_names:
             linked = "Linked goal/quest name(s): " + "; ".join(linked_names) + "\n"
-        prompt = JUDGE_PROMPT.format(roster=roster, text=(text or "").strip(), linked=linked)
+        # The gist of the task, never a whole composed brief (``prompt_budget.decision_excerpt``).
+        from ..core.prompt_budget import decision_excerpt
+        prompt = JUDGE_PROMPT.format(roster=roster, text=decision_excerpt(text), linked=linked)
         raw = provider.answer([{"role": "user", "content": prompt}],
                               model=_judge_model(provider, tier))
         verdict = json.loads(_extract_json(raw or "") or "{}")

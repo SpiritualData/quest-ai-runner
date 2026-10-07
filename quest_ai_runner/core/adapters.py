@@ -306,10 +306,13 @@ class Observation:
     scope: Optional[str] = None
     hits: List[Dict[str, Any]] = field(default_factory=list)  # for grep
     error: Optional[str] = None
+    # A remark for the PLANNER only, never answer content (e.g. a composite's "not answered by"
+    # refusals beside another adapter's results). The run loop turns it into a planner_only note.
+    planner_note: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         d = {"kind": self.kind}
-        for k in ("rel_path", "locator", "text", "pattern", "scope", "error"):
+        for k in ("rel_path", "locator", "text", "pattern", "scope", "error", "planner_note"):
             v = getattr(self, k)
             if v is not None:
                 d[k] = v
@@ -384,6 +387,13 @@ class PlanDecision:
     # (see CLAUDE.md hard rule #3). None = not assessed, and the cascade then leaves the decision
     # alone rather than escalating everything.
     confidence: Optional[str] = None
+    # WHAT THE USER'S CURRENT MESSAGE ASKS OF THE ASSISTANT, judged on the same planning call (zero
+    # extra LLM calls): "act" (do, produce or change something now) | "ask" (a question, or asking
+    # to be told something) | "inform" (news, context, or the user's own plan) | "hold_off" (do
+    # not open work, answer here, stop or cancel runs). The orchestrator's escalation nets honor
+    # this structured verdict instead of reading the message with a keyword list. None = not given
+    # (the nets then fall back to the one-shot intent judge, never to a regex).
+    user_intent: Optional[str] = None
 
 
 @dataclass
@@ -454,6 +464,55 @@ class DeepResult:
     # The full model id the worker's CLI resolved ``model`` to (``sonnet`` -> ``claude-sonnet-...``),
     # read from the run's own session record. None when the runner cannot tell.
     resolved_model: Optional[str] = None
+    # The orchestrator did NOT start this goal: the run was its OWN escalation (not something the
+    # user or the planner asked for) and the runner the goal resolved to starts work that outlives
+    # the turn (``DeepRunnerBase.starts_background_work``). Set by the orchestrator, never by a
+    # runner; the escalation site then keeps the answer it already has.
+    declined_background: bool = False
+    # WHY a not-met run stopped, from the verifier's own verdict (one call, no extra LLM call):
+    # ``verdict_reason`` / ``verdict_next_action`` are its last not-met reason and next step, so the
+    # report can say what is left instead of only that the goal was not met. ``needs_person`` is the
+    # specific question only a human can answer (the run stopped retrying because another attempt
+    # could not help). ``unconfirmed_note`` is set on a run accepted as met whose only gap was proof
+    # beyond what the request asked for: it names what was not independently confirmed.
+    verdict_reason: str = ""
+    verdict_next_action: str = ""
+    needs_person: str = ""
+    unconfirmed_note: str = ""
+    # NOTHING CHANGED: the runner's own receipts of what it wrote show that this attempt changed
+    # nothing in the system it acts on (no write completed, or every write matched nothing). It is
+    # a structural fact the runner reports from its own bookkeeping, never inferred from the wording
+    # of its output. Together with a not-met (or unverified) verdict it means the turn has no change
+    # to report, so the goal loop must not let the result read as completed work; see
+    # ``core/orchestrator.py``'s ``finish``. A runner that cannot tell leaves it False.
+    changed_nothing: bool = False
+    # THE OUTPUT ALREADY SAYS NOTHING CHANGED: the runner's own text carries a code-written sentence
+    # stating that no change was made (set by the runner from its own bookkeeping, never inferred
+    # from the wording). ``unconfirmed_no_change_text`` then adds no second lead line of its own, so
+    # the person reads the no-change fact once. A runner that cannot tell leaves it False.
+    states_no_change: bool = False
+    # WHAT THIS RUN OBSERVED, one plain line each, built by the runner from its OWN records and
+    # never from the wording of its output: a receipt for each change its write log proves landed,
+    # and each source it really read back. This is the material the async card updater may draw a
+    # new card fact from (see ``core/card_learning.py``); the run's reply text is not, because a
+    # card is durable and a claim recorded as a fact grounds every later turn.
+    observations: List[str] = field(default_factory=list)
+    # THIS RUNNER RECORDS ITS OBSERVATIONS, so an EMPTY ``observations`` list means the run observed
+    # nothing, rather than that the runner has no way to tell. Only with this set may the card
+    # updater drop an edit for lack of support. A runner that cannot tell leaves it False and its
+    # turns behave exactly as they did before.
+    observations_reported: bool = False
+    # AT LEAST ONE of ``observations`` above is a WRITE RECEIPT: a real change the runner's own
+    # write log proves landed, not a read, a declined-write note, or an approval-parked marker.
+    # Structural, set by the runner from its own write log, never inferred from the wording of its
+    # output or of ``observations`` itself. This is what lets ``core/orchestrator.py``'s
+    # ``result_landed_work`` tell a genuine PARTIAL write (the run is ``exhausted`` and not ``met``
+    # because something else failed afterward, but part of the change already landed) apart from an
+    # honest terminal ask that landed nothing (a clarifying question, a spent budget): both are
+    # ``exhausted`` and not ``met``, and only the receipt flag tells them apart. A runner that
+    # cannot tell leaves it False, which keeps today's "exhausted and not met -> not landed" rule
+    # exactly as it was for every runner that does not set it.
+    has_write_receipt: bool = False
 
 
 # The two ways a deep runner can hand its future-context bullets back. Declared per runner as
@@ -621,6 +680,50 @@ class RetrievalAdapter(Protocol):
         ``ReferenceResolver`` for ``reference_type``. Default (unsupported): ``None``."""
 
 
+@runtime_checkable
+class WebResearch(Protocol):
+    """Fast, token-efficient LIVE WEB access: the generic interface a consumer wires once (see
+    hard rule #2) so the brain can read the public web the SAME way it reads any other source,
+    without a special case inside ``core``.
+
+    This is deliberately NOT folded into ``RetrievalAdapter``/``CompositeRetrievalAdapter``: that
+    composite BROADCASTS every grep/query to every member adapter, which would fire a paid, slow
+    web search on every ordinary corpus grep or DB query. ``Orchestrator.web`` is wired
+    separately, and the planner reaches it only through its own two read keys (``{"web": ...}``,
+    ``{"web_page": ...}``), dispatched by ``Orchestrator._exec_one_read`` before the retrieval
+    adapter is even consulted.
+
+    A reference implementation lives in ``adapters/web_research.py``
+    (``build_web_research_from_env`` builds one from env: backend auto-selection, a snippet-first
+    search, bounded page-extract fetch, and a cache). Never raises; a failure degrades to an
+    ``Observation(kind="error", ...)``.
+    """
+
+    @property
+    def backend_name(self) -> str:
+        """Short id of the backend actually in use (e.g. "serper", "brave", "tavily",
+        "searxng", "gemini", "provider"), for logging/status -- never user-facing prose."""
+
+    def search(self, queries: Any, *, max_results: Optional[int] = None,
+               fresh: bool = False) -> Observation:
+        """Live web search for one query (``str``) or several (``List[str]``, run in parallel).
+
+        Returns ``Observation(kind="query", rel_path="web_search:<q>", text=<compact results with
+        a "cite as [title](url)" note>, hits=[{"title","url","snippet","query","source"}, ...])``.
+        ``fresh`` bypasses any cache (facts that change by the hour). Never raises."""
+
+    def fetch(self, url: str, *, focus: Optional[str] = None, fresh: bool = False) -> Observation:
+        """Fetch ONE web page and extract the passages relevant to ``focus`` (or the page's own
+        gist with no focus), bounded to roughly 800 tokens.
+
+        Returns ``Observation(kind="read", rel_path=url, locator="web extract: <url>",
+        text=<the relevant passages>)``. ``fresh`` bypasses the page cache. Never raises."""
+
+    def describe(self) -> str:
+        """One short line naming the backend/capability, for the planner prompt's WEB block
+        (e.g. "web search (serper)"). Never raises."""
+
+
 def accepts_reasoning_hint(provider: Any) -> bool:
     """Whether ``provider.answer`` declares a ``reasoning`` keyword (or ``**kwargs``). Never raises."""
     import inspect
@@ -631,16 +734,65 @@ def accepts_reasoning_hint(provider: Any) -> bool:
     return any(p.name == "reasoning" or p.kind is p.VAR_KEYWORD for p in params)
 
 
-def answer_with_reasoning(provider: Any, messages: List[Dict[str, Any]], *, model: Optional[str],
-                          reasoning: Optional[str] = None, **kwargs: Any) -> str:
-    """``provider.answer(...)``, passing the ``reasoning`` hint only when the provider takes it.
+# --- step hints: which ROLE this one LLM call plays in a turn --------------
+#
+# Mirrors ``reasoning`` above: an OPTIONAL keyword a provider MAY declare on ``plan``/``answer`` so
+# the CONSUMER's own provider implementation can choose a model and/or sampling profile per call
+# role (e.g. a stronger model on REPLY/VERIFY, low/deterministic temperature on JUDGE/SELECT).
+# This library never bakes a model name or temperature to a step; it only plumbs the role name
+# through. Keep this vocabulary SMALL -- do not add a constant without a real new role.
+STEP_PLAN = "plan"              # the planner's own decision of what to do next this turn.
+STEP_VERIFY = "verify"          # goal verification: did the work meet the goal.
+STEP_REPLY = "reply"            # the user-facing reply/answer text.
+STEP_SELECT = "select"          # relevance filters, query generation, selection among candidates.
+STEP_JUDGE = "judge"            # reach/intent/directive/quest-for-turn/mode-release judges, overseer.
+STEP_UNDERSTAND = "understand"  # understanding/interpreting input.
+STEP_SUMMARIZE = "summarize"    # concise summaries, explanations, card/content updates.
 
-    The one place that decides whether the hint is forwarded, so a provider (or test fake, or
-    wrapper) that predates it keeps working unchanged. See ``ModelProvider.answer``.
+
+def accepts_step_hint(fn: Any) -> bool:
+    """Whether a provider callable (``provider.plan`` or ``provider.answer``) declares a ``step``
+    keyword (or ``**kwargs``). Never raises.
+
+    Takes the callable itself, not the provider, since the step hint applies to BOTH ``plan`` and
+    ``answer`` (unlike ``accepts_reasoning_hint`` above, which only ever checks ``answer``).
     """
+    import inspect
+    try:
+        params = inspect.signature(fn).parameters.values()
+    except (TypeError, ValueError, AttributeError):
+        return False
+    return any(p.name == "step" or p.kind is p.VAR_KEYWORD for p in params)
+
+
+def answer_with_reasoning(provider: Any, messages: List[Dict[str, Any]], *, model: Optional[str],
+                          reasoning: Optional[str] = None, step: Optional[str] = None,
+                          **kwargs: Any) -> str:
+    """``provider.answer(...)``, passing the ``reasoning`` and/or ``step`` hints only when the
+    provider takes them.
+
+    The one place that decides whether either hint is forwarded, so a provider (or test fake, or
+    wrapper) that predates one or both keeps working unchanged. See ``ModelProvider.answer``.
+    """
+    call_kwargs: Dict[str, Any] = dict(kwargs)
     if reasoning and accepts_reasoning_hint(provider):
-        return provider.answer(messages, model=model, reasoning=reasoning, **kwargs)
-    return provider.answer(messages, model=model, **kwargs)
+        call_kwargs["reasoning"] = reasoning
+    if step and accepts_step_hint(provider.answer):
+        call_kwargs["step"] = step
+    return provider.answer(messages, model=model, **call_kwargs)
+
+
+def plan_with_step(provider: Any, prompt: str, *, step: Optional[str] = None,
+                   **kwargs: Any) -> Dict[str, Any]:
+    """``provider.plan(...)``, passing the ``step`` hint only when the provider takes it.
+
+    Sibling of ``answer_with_reasoning`` for ``plan`` (which has no ``reasoning`` hint to carry):
+    the same accepts-check, so a provider (or test fake, or wrapper) that predates ``step`` keeps
+    working unchanged. See ``ModelProvider.plan``.
+    """
+    if step and accepts_step_hint(provider.plan):
+        return provider.plan(prompt, step=step, **kwargs)
+    return provider.plan(prompt, **kwargs)
 
 
 @runtime_checkable
@@ -659,6 +811,12 @@ class ModelProvider(Protocol):
         prefix instead of re-sending it. A provider that supports no caching (or is given no
         ``layers``) MUST behave exactly as before, using ``prompt``; callers always pass a faithful
         flattened ``prompt`` as well, so ignoring ``layers`` is a safe, no-behavior-change fallback.
+
+        A provider MAY also accept an optional ``step`` keyword (one of the ``STEP_*`` constants
+        above, e.g. ``STEP_PLAN``/``STEP_JUDGE``/``STEP_VERIFY``): never required, it names the ROLE
+        this call plays so the provider can pick its own model/sampling for that role. It is never
+        passed to a provider whose ``plan`` does not declare it; callers go through
+        ``plan_with_step`` below, which checks.
         """
 
     def answer(self, messages: List[Dict[str, str]], *, model: str, system: Optional[str] = None,
@@ -676,6 +834,10 @@ class ModelProvider(Protocol):
         reasoning, so a model with a configurable thinking budget should spend as little as it
         allows. It is never passed to a provider whose ``answer`` does not declare it; callers go
         through ``answer_with_reasoning`` below, which checks.
+
+        A provider MAY also accept an optional ``step`` keyword, the same ``STEP_*`` role hint
+        ``plan`` above takes: never required, and never passed to a provider whose ``answer`` does
+        not declare it (``answer_with_reasoning`` checks this too, alongside ``reasoning``).
         """
 
     def list_models(self) -> List[str]:
@@ -1429,9 +1591,23 @@ class DeepRunnerBase(abc.ABC):
     # work "ran on sonnet" or is "retrying with opus", because neither would be true.
     uses_deep_model: bool = True
 
+    # Whether THIS runner's work OUTLIVES the turn: it queues a task, schedules a job or otherwise
+    # starts something that runs and leaves a trace after the reply (see ``runner_starts_background
+    # _work``). False by default. The orchestrator never sends its OWN escalations (the verifier's
+    # "need more context" and the last-resort deep run before giving up) to such a runner: those
+    # runs are the assistant's initiative, and a durable job the person never asked for is a side
+    # effect, not a better answer. A planner or user hand-off to the same runner is unaffected.
+    starts_background_work: bool = False
+
     @abc.abstractmethod
     def run_goal(self, *, goal, brief, model=None, max_turns=None, emit=None,
                  context_preamble=None, run_id=None) -> DeepResult: ...
+
+
+def runner_starts_background_work(runner: Any) -> bool:
+    """Whether ``runner`` starts work that outlives the turn (``starts_background_work``). Read
+    with ``getattr(..., False)`` so a duck-typed runner keeps today's behaviour."""
+    return bool(getattr(runner, "starts_background_work", False)) if runner is not None else False
 
 
 def runner_uses_deep_model(runner: Any) -> bool:

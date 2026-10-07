@@ -1,14 +1,38 @@
-"""build_orchestrator wires provider-native web search by default (no extra key needed).
+"""build_orchestrator's LEGACY provider-native web search fold-in (no extra key needed).
 
-Verifies the key-free default: when the model provider reports supports_web_search(), a
-ProviderWebSearchAdapter is added to the retrieval stack automatically, unless
-WEB_SEARCH_ENABLED=false opts out. Also checks derive_capabilities reports web=True.
+Historically this was THE default: when the model provider reported supports_web_search(), a
+ProviderWebSearchAdapter was folded into the retrieval stack automatically. Since the fast
+WebResearch path landed (``cfg.web_research``, ``adapters/web_research.py``), that composite
+fold-in is only a FALLBACK, reached only when ``build_web_research_from_env`` could not build an
+adapter (no backend key/config present at all). These tests isolate every backend-selection env
+var (search-provider keys, Gemini keys, QAR_WEB_SEARCH_BACKEND/_PROVIDER_MODEL) so the fast path
+deterministically finds nothing and the legacy fold-in this file is actually about gets exercised
+-- without this isolation, a host environment carrying a real Gemini/OpenAI key (common on this
+org's dev boxes) makes ``cfg.web_research`` build successfully via the "gemini" backend and the
+legacy path never runs, which is a host-environment leak, not a real failure. See
+tests/test_web_reads.py for the NEW cfg.web_research wiring/dispatch behavior.
 """
 from __future__ import annotations
 
 from tests.conftest import StubProvider, StubRetrieval, StubEscalation
 from quest_ai_runner.config import RunnerConfig, build_orchestrator, derive_capabilities
 from quest_ai_runner.adapters import ProviderWebSearchAdapter, CompositeRetrievalAdapter
+
+#: Every env var ``select_search_backend``/``build_web_research_from_env`` reads to decide a
+#: backend is available. Cleared in every test here so an ambient host key (e.g. a real
+#: GOOGLE_API_KEY set for this org's own Gemini usage) can never make the FAST path succeed and
+#: shadow the LEGACY fold-in this file tests.
+_WEB_BACKEND_ENV_VARS = (
+    "QAR_WEB_SEARCH_BACKEND", "QAR_WEB_SEARCH_PROVIDER_MODEL", "QAR_WEB_SEARCH_MODEL",
+    "SERPER_API_KEY", "BRAVE_SEARCH_API_KEY", "BRAVE_API_KEY",
+    "TAVILY_API_KEY", "WEB_SEARCH_API_KEY", "SEARXNG_URL",
+    "GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_AI_API_KEY",
+)
+
+
+def _isolate_web_backend_env(monkeypatch) -> None:
+    for name in _WEB_BACKEND_ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
 
 
 class WebStubProvider(StubProvider):
@@ -48,6 +72,7 @@ def _cfg(provider):
 
 
 def test_native_web_search_wired_by_default(monkeypatch):
+    _isolate_web_backend_env(monkeypatch)
     monkeypatch.delenv("WEB_SEARCH_ENABLED", raising=False)
     cfg = _cfg(WebStubProvider([]))
     orch = build_orchestrator(cfg)
@@ -56,13 +81,16 @@ def test_native_web_search_wired_by_default(monkeypatch):
 
 
 def test_web_search_enabled_false_opts_out(monkeypatch):
+    _isolate_web_backend_env(monkeypatch)
     monkeypatch.setenv("WEB_SEARCH_ENABLED", "false")
     cfg = _cfg(WebStubProvider([]))
     orch = build_orchestrator(cfg)
     assert not _has_native(orch.retrieval)
+    assert cfg.web_research is None
 
 
 def test_provider_without_web_search_is_not_wired(monkeypatch):
+    _isolate_web_backend_env(monkeypatch)
     monkeypatch.delenv("WEB_SEARCH_ENABLED", raising=False)
     cfg = _cfg(NoWebStubProvider([]))
     orch = build_orchestrator(cfg)

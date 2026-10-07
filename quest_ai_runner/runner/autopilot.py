@@ -83,6 +83,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+from ..core import prompt_budget
 from .context_updates import ContextUpdates, UpdateEngine
 from .insights import InsightsContext, collect_unacted_insights
 from .local_time import now_in_zone
@@ -180,6 +181,15 @@ _MAX_PREVIOUS_TASKS = 8
 # a status line: it is the work itself, and a run that can only see a headline of what it produced
 # yesterday will redo it or contradict it.
 LAST_RUN_OUTPUT_MAX_CHARS = 2000
+LAST_RUN_CUT_MARKER = "[... cut here at this brief's last-run budget; this is not all of it]"
+
+# The token budget for one composed batch brief, spent by priority through the same mechanism as
+# the deep prompt it becomes part of (``core.prompt_budget``): the request (persona, outcome,
+# scope, standing instructions, adopted tasks, the done rule) is kept; then the person's own fresh
+# material and the context updates; then the goal frame; then the plan of record; and the last run
+# and previous period are cut first. Half the default deep prompt budget, so the brief always
+# leaves room for the context the deep run selects beside it.
+AUTOPILOT_BRIEF_TOKEN_BUDGET = prompt_budget.DEFAULT_DEEP_PROMPT_TOKEN_BUDGET // 2
 
 # A quest's standing ``autopilot.instructions``, in characters. Mirrors the backend's own
 # ``AutopilotSettings.instructions`` cap (``max_length=8000``) so a value written before either
@@ -1135,10 +1145,12 @@ def render_last_run_output(task: Dict[str, Any]) -> str:
     elif status == "failed":
         status_note = (" -- it ended in failure, so treat it as an attempt rather than a settled "
                        "answer")
-    result = str(task.get("result") or "").strip()
+    # The RESULT only, never anything it quotes: a context-updates block inside an earlier output
+    # is that run's material, and carried forward it would nest inside every later brief.
+    result = prompt_budget.strip_blocks(str(task.get("result") or "").strip()).strip()
     if len(result) > LAST_RUN_OUTPUT_MAX_CHARS:
         result = (result[:LAST_RUN_OUTPUT_MAX_CHARS].rstrip()
-                  + "\n\n[... cut here at this brief's last-run budget; this is not all of it]")
+                  + "\n\n" + LAST_RUN_CUT_MARKER)
     return (f"What the last run on this quest actually produced ({date_str}, ended {status}"
            f"{status_note}). Build on it rather than starting over: if it was wrong or has been "
            f"overtaken, say so plainly in this run's own result instead of silently contradicting "
@@ -1414,11 +1426,25 @@ def compose_batch_text(quest_outcome: str,
     ``assignee_rep_id`` at creation. The structured field is authoritative; the prose is kept
     because some consumers resolve the persona from the request text.
     """
-    parts: List[str] = []
+    # Every part goes in as a prompt-budget Section with its priority (see
+    # ``AUTOPILOT_BRIEF_TOKEN_BUDGET``): ``require`` adds the request tier, which is never dropped,
+    # and ``add`` the optional tiers. Under budget the text is byte-identical to a plain join.
+    sections: List[prompt_budget.Section] = []
+
+    def require(text: str) -> None:
+        sections.append(prompt_budget.Section("request", text, prompt_budget.PRIORITY_REQUEST,
+                                              required=True))
+
+    def add(name: str, text: str, priority: int, *, whole: bool = False) -> None:
+        # ``whole``: never shortened, only dropped (a context-updates block cut mid-way would lose
+        # its end marker and its receipt gate).
+        sections.append(prompt_budget.Section(name, text, priority,
+                                              floor_chars=len(text) if whole else None))
+
     if persona:
-        parts.append(f"Act as {persona}.")
+        require(f"Act as {persona}.")
     if quest_outcome:
-        parts.append(f"Quest outcome: {quest_outcome}")
+        require(f"Quest outcome: {quest_outcome}")
     if scope_label:
         # Naming the period still matters, and for the reason it always did: a week's or a month's
         # worth of plan, read by a single run, reads as "do all of this today", which is both
@@ -1426,11 +1452,11 @@ def compose_batch_text(quest_outcome: str,
         # and never this run's assignment, so this line says which horizon the run is standing in
         # and stops there. Telling the run to advance the goals below would contradict the ladder
         # a few blocks down, which says in as many words that the run does not own them.
-        parts.append(f"Scope: this quest's {scope_label}. That is the period this run sits inside, "
-                     f"and it is longer than one session: it says which horizon everything here "
-                     f"belongs to, and it does not make the period's contents this run's workload. "
-                     f"What to produce is for the standing instructions to say. Where the period "
-                     f"itself has slipped or moved on, say so plainly.")
+        require(f"Scope: this quest's {scope_label}. That is the period this run sits inside, "
+                f"and it is longer than one session: it says which horizon everything here "
+                f"belongs to, and it does not make the period's contents this run's workload. "
+                f"What to produce is for the standing instructions to say. Where the period "
+                f"itself has slipped or moved on, say so plainly.")
     # THE LAYERING RULE, and it is two rules that never look at each other. Each slot takes what
     # the person wrote for THAT slot, or its own built-in brief, and the framing is the only thing
     # that changes with the answer. A written brief at one level says nothing about the other
@@ -1438,62 +1464,68 @@ def compose_batch_text(quest_outcome: str,
     quest_brief = instructions or default_quest_instructions
     if quest_brief:
         preamble = _INSTRUCTIONS_PREAMBLE if instructions else _DEFAULT_INSTRUCTIONS_PREAMBLE
-        parts.append(preamble + "\n\n" + quest_brief)
+        require(preamble + "\n\n" + quest_brief)
     persona_brief = persona_instructions or default_persona_instructions
     if persona_brief:
         who = f"for {persona} specifically" if persona else "for this character specifically"
         template = (_PERSONA_INSTRUCTIONS_PREAMBLE if persona_instructions
                     else _DEFAULT_PERSONA_INSTRUCTIONS_PREAMBLE)
-        parts.append(template.format(who=who) + "\n\n" + persona_brief)
+        require(template.format(who=who) + "\n\n" + persona_brief)
     if goal_ladder:
         # After the brief, deliberately: the run reads what it is asked to produce, then the goals
         # that output has to add up to. The reverse order reads as "here is a list of work, and
         # here is some more work", which is the misreading the framing above spends its words
         # preventing.
-        parts.append(_render_goal_ladder(goal_ladder))
+        add("goal frame", _render_goal_ladder(goal_ladder), prompt_budget.PRIORITY_GOALS)
     if adopted_tasks:
         block = ["Recurring AI tasks for this period, adopted into this run. Carry out each one "
                  "as part of this run; the original occurrences are closed and will NOT run "
                  "separately, so anything you skip here simply does not happen:"]
         for t in adopted_tasks:
-            text = str(t.get("text") or "").strip()
+            text = prompt_budget.strip_blocks(str(t.get("text") or "").strip())
             block.append(f"\n--- adopted task {t.get('id') or t.get('task_id')} ---\n{text}")
-        parts.append("\n".join(block))
+        require("\n".join(block))
     if next_steps:
         # The quest folder's canonical next-steps artifact, which an attended session may have
         # refreshed more recently than any pass. Naming it as the standing answer is the point: two
         # sources for "what is next" is how a background run and the person working the quest end up
         # pulling in different directions without either noticing.
-        parts.append("The quest folder's standing next-steps artifact (QUEST_SYNC.md), which an "
-                     "attended session may have refreshed since the last pass. Treat it as the "
-                     "current plan of record, and if the work has moved past it, say so:\n"
-                     + next_steps)
+        add("plan of record",
+            "The quest folder's standing next-steps artifact (QUEST_SYNC.md), which an "
+            "attended session may have refreshed since the last pass. Treat it as the "
+            "current plan of record, and if the work has moved past it, say so:\n"
+            + next_steps, prompt_budget.PRIORITY_PLAN)
     if reflection:
         # Placed after the goals and the plan of record, and before the previous-period rows,
         # because it is the lens to read them through rather than another item on the list. It is
         # quoted as-is: paraphrasing a person's own words back at a model turns the one
         # first-hand input in this brief into a second-hand one.
-        parts.append(reflection + "\n\nLet that steer which of the above matters most in this run, "
-                     "and what tone to take. If it contradicts the plan above, say so plainly in "
-                     "your result rather than quietly following one or the other.")
+        add("reflection",
+            reflection + "\n\nLet that steer which of the above matters most in this run, "
+            "and what tone to take. If it contradicts the plan above, say so plainly in "
+            "your result rather than quietly following one or the other.",
+            prompt_budget.PRIORITY_UPDATES)
     if insights:
         # Alongside the reflection, for the same reason and with the same framing: it is the
         # person's own material, and it is here to be judged rather than obeyed. The block already
         # carries the "decide which of these apply" instruction, since that judgment belongs to the
         # reader and never to a tag match in this code.
-        parts.append(insights)
+        add("insights", insights, prompt_budget.PRIORITY_UPDATES)
     if context_updates:
-        parts.append(context_updates)
+        add("context updates", context_updates, prompt_budget.PRIORITY_UPDATES, whole=True)
     if last_run:
         # BEFORE the previous-period block, not after: this is one specific run's actual output,
         # already rendered and already more recent than anything the coarser period-level view
         # below can offer, so it is the more useful thing to read first. See the docstring
         # paragraph on ``last_run`` for why this exists as its own channel at all.
-        parts.append(last_run)
+        add("last run", last_run, prompt_budget.PRIORITY_HISTORY)
     if previous:
-        parts.append(_summarize_previous(previous))
-    parts.append(_CONFIRMATION_RULE)
-    return "\n\n".join(parts)
+        add("previous period", _summarize_previous(previous), prompt_budget.PRIORITY_HISTORY)
+    require(_CONFIRMATION_RULE)
+    fit = prompt_budget.fit_sections(sections, AUTOPILOT_BRIEF_TOKEN_BUDGET)
+    if fit.cuts:
+        log.info("autopilot brief fitted to its budget: %s", fit.summary())
+    return "\n\n".join(sec.text for sec in fit.sections if sec.text)
 
 
 def _batch_title(adopted_tasks: Optional[List[Dict[str, Any]]] = None,
@@ -2289,6 +2321,10 @@ class AutopilotPass:
                     })
                     budget_used += 1
                     produced = True
+                    if context_bundle is not None:
+                        # So the run's receipt can close what it accounts for (see
+                        # ``ContextUpdates.remember_offer``).
+                        context_bundle.remember_offer(task_id)
                     if context_updates_text:
                         context_delivered = True
                     self._close_adopted(tasks, task_id, quest_id, result)

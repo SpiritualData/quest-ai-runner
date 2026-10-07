@@ -157,9 +157,9 @@ def test_brainstorm_degrades_confirm_to_answer():
 
 
 def test_brainstorm_skips_message_intent_escalation_net():
-    # "fix the login bug" trips _message_requests_change, so in NORMAL mode an answer turn
-    # escalates to a deferred deep run. In brainstorm the net must not add the action.
-    decisions = [{"action": "answer", "rationale": "talking it through"}]
+    # The planner says "fix the login bug" ordered work (user_intent "act"), so in NORMAL mode an
+    # answer turn escalates to a deferred deep run. In brainstorm the net must not add the action.
+    decisions = [{"action": "answer", "rationale": "talking it through", "user_intent": "act"}]
     runner_normal = StubDeepRunner(met=True)
     _orch(StubProvider(decisions=list(decisions)), StubRetrieval(),
           deep_runner=runner_normal).run("fix the login bug")
@@ -705,7 +705,8 @@ def test_read_budget_change_request_escalates_to_deep_in_normal_mode():
     reported done with nothing executed (caught live by the 2026-07-19 reliability battery, a
     write-a-file probe). With escalation available, the work escalates to deep instead."""
     provider = StubProvider(decisions=[
-        {"action": "read", "reads": [{"rel_path": "README.md"}], "rationale": "grounding"},
+        {"action": "read", "reads": [{"rel_path": "README.md"}], "rationale": "grounding",
+         "user_intent": "act"},
         {"met": True, "reason": "done"},
     ])
     runner = StubDeepRunner(met=True, output="did it")

@@ -11,7 +11,47 @@ out half per recommended configuration. The harness lives in the consumer that o
 (quest-backend's `scripts/checks/check_deep_run_routing.py`), because the labels are facts about a
 product, not about this library.
 
-## The result
+## The result (settled 2026-10-06)
+
+Re-measured after three fixes found by closing the first round's open items (the reach summary,
+the compact hand-off field, and the judge's latency; all below). Every configuration was run once
+on the held-out half, after all iteration on the dev half was finished. "Cheapest" is
+gemini-2.5-flash-lite on the planner tiers and "stronger" is gemini-3.1-flash-lite; the reach judge
+runs on the stronger model in both.
+
+| configuration | TEST accuracy (Wilson 95%) | input tokens / request | cost / 1,000 requests | per-decision p50 / p95 |
+|---|---|---|---|---|
+| cheapest, old prompt | 85.6% [81.7, 88.8] | 12,349 | $1.270 | 0.6s / 1.4s |
+| **cheapest, compact + judge** | **91.2% [87.9, 93.7]** | **7,495** | **$0.975** | 1.3s / 2.1s * |
+| cheapest, full + judge | 91.2% [87.9, 93.7] | 13,483 | $1.573 | 1.3s / 2.3s * |
+| stronger, old prompt | 90.4% [87.0, 93.0] | 12,588 | $3.309 | 1.0s / 2.1s |
+| **stronger, compact + judge** | **98.1% [96.2, 99.1]** | **7,561** | **$2.036** | 1.5s / 2.4s * |
+
+\* The harness calls the planner directly, so its per-decision time still includes the judge
+serially. In a real turn the judge now overlaps context assembly (see below).
+
+Paired on the same 375 cases: the cheapest model gains 5.6 points (bootstrap 95% CI +1.9 to +9.3,
+McNemar p=0.004, 35 fixed and 14 broken), the stronger one 7.7 points (+5.1 to +10.7, p<0.001, 30
+fixed and 1 broken). On the cheap model, compact and full score the same on TEST (32 discordant,
+16 each way) at 56 percent of the input. The noise floor was measured on the same day: the dev
+half run twice per configuration moved by 1.1 to 1.9 points between the two runs of the same
+configuration, against a 6.1 point gain for compact + judge over the old prompt on dev (bootstrap
++2.1 to +10.1, McNemar p=0.003). Prices are list prices from secondary sources (gemini-3.1-flash-lite
+$0.25 in / $1.50 out, gemini-2.5-flash-lite $0.10 / $0.40 per million), not verified with the
+vendor, so read ratios.
+
+**Routing accuracy is not end-to-end quality, and this is the result that matters most.** Six live
+turns per configuration through Quest's real chat function on dev showed that the cheapest model
+routes well and then does the REST of the turn badly: it re-issued the same read up to five times,
+its code-generation path gave up after eight attempts on two ordinary questions ("what should I
+focus on today", "what goals do I have this week"), and two replies stated the wrong date. That
+happened with the full profile too, so it is the model, not the compact prompt. The stronger model
+with compact + judge answered all six cleanly. So: compact + judge is ready on the stronger model,
+and the cheapest model is ready for the ROUTING DECISION only. Putting the cheapest model on a
+whole turn needs a multi-step eval (reads after the first step, the answer, code generation) that
+this harness does not have.
+
+### The first round (2026-10-05), kept for the record
 
 One run on the held-out half per recommended configuration, after all iteration was finished.
 
@@ -108,20 +148,156 @@ kept, off by default, documented here as measured-not-working on the models trie
 stronger model the reach question on its own, with no decision to defend, is 94.7 percent accurate on
 the same material.
 
-## What is still unverified
+## Closed on 2026-10-06
 
-- **Nothing has run a real turn.** Every number here comes from scoring two real decisions in a
-  harness. The compact profile and the judge have never driven a live conversation end to end, so
-  what the shorter actions block does to the QUALITY of the reads a planner emits, and to the reply
-  that follows, is unmeasured.
-- **Latency roughly doubles for the cheap model.** The judge is a serial call before planning, and
-  per-decision p50 goes from 0.7s to 1.4s (the stronger model, 1.4s to 2.0s). For a voice-first
-  deployment that is the real cost of the judge, not the tokens. It could plausibly run
-  concurrently with context assembly, which already happens before planning. Not built.
-- **One group regressed for BOTH models**, by the same two cases out of fifteen, in two otherwise
-  independent runs. Each alone is statistically inconclusive and inside the noise floor, but the
-  same group moving the same way twice is a signal rather than noise, and it has not been chased.
-- Prices come from an unverified table, so read every cost figure as a ratio.
+- **The regressed group was the judge, not noise.** Both TEST runs lost two of fifteen AI-task
+  questions. The cases were "did the weekly summary task run on schedule?", "cancel all my queued
+  tasks" and "abort the overnight task": the judge read an AI task as a job on a machine and
+  handed it off. The consumer's `read_reach_summary` had said only "tasks". It now names
+  everything the product holds or runs for the person, says its AI tasks are records there
+  wherever they execute, and carves out the product's own code and bugs. Judge alone, on 1,162
+  labelled judgments: 94.4% to 99.2%, with the AI-task group 43/58 to 58/58 and scheduling 39/60 to
+  58/60. On TEST the AI-task group no longer moves at all (0 discordant cases against the old
+  prompt). The lesson is general: **the judge is only as good as the reach summary, and an
+  incomplete list of what IS readable reads as "outside" for everything it leaves out.**
+- **The compact schema had lost the hand-off.** Stripping every field description also stripped
+  the one on `deferred_deep`, and a cheap planner then wrote "this needs the dev server" as its
+  answer with the field empty, so nothing ran: 14 of 38 such decisions on dev. The compact schema
+  now keeps that one description (`COMPACT_SCHEMA_KEPT_DESCRIPTIONS`) and the compact actions block
+  says a hand-off is the field, not the words. Hand-off groups on dev: 24/38 to 32/38 with the
+  environment attached, 14/38 to 36/38 after an empty read. A firmer sentence in the judge's
+  verdict line was also tried and measured neutral (153 against 154 of 172), so it was reverted.
+- **The judge no longer costs wall clock.** `run()` starts it at the top of the turn
+  (`prefetch_reach_verdict`) so it overlaps request understanding, context assembly and guidance,
+  and the first plan only collects it, bounded by `planner_reach_judge_timeout_seconds`. Live turns
+  on dev (stronger model, compact + judge): the first planning step fell from 1.63s to 0.96s p50
+  and 1.70s to 1.35s p95, which is the judge's ~0.7s leaving the critical path, and turn start to
+  first decision fell from 4.74s to 4.19s p50.
+- **Live turns ran**, six per configuration through the consumer's real chat function: see "Routing
+  accuracy is not end-to-end quality" above.
+
+## Haiku through the Claude subscription (claude_cli)
+
+The same harness, with every planner and judge call answered by haiku through `ClaudeCliProvider`
+(the way a subscription lane runs it), on a stratified sample of 100 dev cases (4 per group and
+scenario). Haiku's input count is the planner prompt itself; the subscription bills no money, so
+the cost is usage-limit headroom and wall clock.
+
+| haiku configuration | accuracy (Wilson 95%) | input tokens / request | output tokens / decision | p50 / p95 per call |
+|---|---|---|---|---|
+| full, no judge, thinking on (CLI default) | 94.0% [87.5, 97.2] | 12,581 | ~4,040 | 36.9s / 94.6s |
+| full, no judge, thinking off | 93.0% [86.3, 96.6] | 12,551 | ~164 | 3.3s / 5.7s |
+| compact + judge (haiku), thinking off | 97.0% [91.5, 99.0] | 8,033 | ~91 | 2.4s / 5.2s |
+| same, second run | 96.0% [90.2, 98.4] | 8,069 | ~90 | 2.4s / 5.0s |
+| same, third run | 96.0% [90.2, 98.4] | 8,179 | ~90 | 2.6s / 5.2s |
+| **compact, NO judge, thinking off** | **91.0% [83.8, 95.2]** | **6,432** | ~161 | 3.3s / 5.9s |
+
+Thinking is where nearly all of a haiku routing decision goes, and it buys nothing measurable
+(7 discordant cases, 4 against 3). `QAR_CLI_PLAN_THINKING_TOKENS=0` removes it from routing
+decisions only. Compact + judge on haiku is +4 points over the full prompt (4 fixed, 0 broken,
+McNemar p=0.125 at this sample size), so it is consistent with the Gemini result but not proven on
+haiku alone. Haiku clears 90 percent on routing in every configuration measured. The judge here
+was given the consumer's reach summary.
+
+**Compact without the judge does not hold up on haiku** (one run, 2026-10-06, the same 100 cases,
+so paired): 91.0% against 96 to 97% for compact + judge (6 broken, 0 fixed against the first judged
+run, exact McNemar p=0.03), and 91.0% against 93.0% for the full prompt (3 broken, 1 fixed, p=0.63,
+so no measurable difference from full). Every case it broke is a hand-off: "fix the
+bug where the habit reminder fires twice" and "add a column to the spreadsheet" became a
+`list_sources` or search read instead of deep work, which is exactly the decision the judge
+exists for. It saves half the input (6.4k against 12.6k tokens), but the compact prompt leans on
+the judge for reach, so take the two together or neither. A CLI lane stays on the full profile
+until it supplies a reach summary (`QAR_READ_REACH_SUMMARY_FILE`, below) and compact + judge is
+measured on that lane's own tasks.
+
+A measurement trap found on the way: two earlier "no judge" runs had in fact run WITH the judge,
+because a dependency of the consumer reloads its `.env` with override at import time, after the
+shell's override was applied. Check the judge's call count in the run before believing a no-judge
+number.
+
+## Turning it on
+
+For a consumer that embeds the orchestrator, set on `OrchestratorConfig`:
+
+```
+planner_prompt_profile = "compact"
+planner_reach_judge = True
+planner_reach_judge_tier = "<a tier one step above the planner, when you have one>"
+```
+
+plus a `read_reach_summary` that names EVERYTHING a read reaches. For the stock CLI, the same
+switches are `QAR_PLANNER_PROMPT_PROFILE`, `QAR_PLANNER_REACH_JUDGE` and
+`QAR_PLANNER_REACH_JUDGE_TIER`, and the reach summary comes from `QAR_READ_REACH_SUMMARY` (inline)
+or `QAR_READ_REACH_SUMMARY_FILE`; without one the judge stays inert. On the claude_cli backend,
+`QAR_CLI_PLAN_THINKING_TOKENS=0` is the latency lever.
+
+To put the routing decision ALONE on a different model from everything else that shares the
+planner tier (request understanding, card updates, summaries), set
+`OrchestratorConfig.planner_model` (CLI: `QAR_PLANNER_MODEL`) to a model id. It is sent verbatim
+on the decide call only; the reach judge keeps its own tier.
+
+## Whole turns, not just the routing decision (2026-10-06, small sample)
+
+The routing harness scores one decision. A turn is that decision plus every re-plan after a read,
+the reads, any generated code and the answer. Measured on real chat turns, in-process on the dev
+deployment: 10 read-only messages (the six that had failed live, plus one drawn at random from each
+of four strata of the harness's conversation cases), each run under two configurations with
+everything identical except the routing decision's model (`planner_model`): gemini-2.5-flash-lite
+or gemini-3.1-flash-lite, compact + judge, the judge and every other call on 3.1. Replies graded by
+haiku against three properties (answers the question or says plainly why not; no current date that
+contradicts today; no talk of its own machinery). n = 10, so the intervals are wide and honest.
+
+| configuration | replies passing (Wilson 95%) | planning steps, total (worst turn) | turn p50 |
+|---|---|---|---|
+| 2.5 routing, before | 5/10 [24, 76] | 40 (15) | 13.7s |
+| 3.1 routing, before | 7/10 [40, 89] | 39 (15) | 15.2s |
+| 2.5 routing, after the fixes below | 8/10 [49, 94] | 26 (5) | 9.4s |
+| 3.1 routing, after | 8/10 [49, 94] | 41 (6) | 14.4s |
+
+**The read loops were not the cheap model's alone.** Both models re-issued the identical read up
+to fourteen times in one turn (3.1 on "list the tasks on this quest", 2.5 on "what should I focus
+on today"). Two generic causes, both fixed in this library:
+
+- Nothing stopped an identical read spec from running again. The run loop now skips a spec that
+  already ran this turn (same keys and values, any order), tells the planner in a note that never
+  reaches the answer, and ends the read loop through the read-budget wrap-up when a second step asks
+  for nothing new. It is structural, on the planner's own specs, never on words it wrote.
+- `CompositeRetrievalAdapter.query` dropped an adapter's refusal whenever another adapter returned
+  anything. The planners were writing a code-path helper as a read query (`{"kind":
+  "get_my_rundown"}`), the consumer's adapter refused it, a conversation-history adapter returned
+  loose matches, and the planner saw only those and asked again. Refusals now travel with the
+  results; the consumer's refusal now names the query shapes that do run, and after it the planner
+  switched to a valid `{"operation": ...}` read in the live re-run.
+
+**The wrong dates were not a grounding gap in routing.** The planner already receives today's date
+in its prompt head. The one wrong "today" in this sample (September 30 for October 6) came from the
+answer step after fourteen identical reads had filled the turn with old conversation records; it
+did not appear in the after runs, which is one case, not a proof.
+
+Read the "after" rows as one bundle: the read dedup, the composite refusal and the consumer's
+clearer query refusal changed together, so the sample cannot say which one helped. On 3.1 the
+worst turn fell from 15 planning steps to 6 but the total rose (39 to 41), so the gain there is
+the loops, not fewer steps overall.
+
+**Is the cheapest model ready to route a whole turn?** On this sample it ties (8/10 each), with
+a lower turn p50 (9.4s against 14.4s) and about $0.019 of model spend per turn against $0.041 (list prices)
+(3.1's figure includes one turn whose code path ran ten generations), but both of its remaining failures are its own: a general-knowledge
+question it searched for three times and then deflected ("views versus impressions on YouTube"),
+and a turn that ended "I couldn't start this work (empty inline answer)". Neither appeared with
+3.1. So: compact + judge stays on the stronger model by default; the cheapest model on
+`planner_model` is a candidate worth a larger paired sample, not a proven setting.
+
+Not caused by routing and left for the consumer: a code path that is re-run after a correct answer
+appends "I tried N versions of the code" or "I stopped after 8 attempts" to the reply (both models,
+same code model), and one live turn's request-understanding step asked "where is the daily
+reflection stored" instead of reading it.
+
+## Still open
+
+- **The cheapest model routing whole turns** needs a larger paired sample than ten (see "Whole
+  turns" above); the small one ties but shows two failure kinds only it produced.
+- **A CLI lane on compact + judge** needs its own reach summary and a measurement on its own tasks.
+- Prices come from secondary sources, so read every cost figure as a ratio.
 
 ## Measure before you believe a difference
 

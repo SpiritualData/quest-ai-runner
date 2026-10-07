@@ -25,6 +25,9 @@ Env it reads:
   QAR_PLANNER_TIER (optional)                    — model tier for the planner step that picks
                                                    read/answer/deep (default balanced; use fast
                                                    to reduce cost, best for complex routing)
+  QAR_PLANNER_MODEL (optional)                   — a model id for the routing decision ALONE
+                                                   (the decide call); other calls that share
+                                                   QAR_PLANNER_TIER keep that tier's model
   QAR_STATE_PATH (optional)                      — signature store path (default: ./qar_state.json)
   QAR_POLL_INTERVAL (optional, seconds)          — loop cadence (default 900)
   QAR_RUNNER_LABEL (optional)                    — human-readable tag sent on the env heartbeat
@@ -137,6 +140,19 @@ Env it reads:
                                                    since only a consumer knows what its own reads
                                                    reach; with no summary the judge stays inert.
   QAR_PLANNER_REACH_JUDGE_TIER (optional)       : the tier the reach judge runs on (default "best").
+  QAR_READ_REACH_SUMMARY / QAR_READ_REACH_SUMMARY_FILE (optional)
+                                                : the read_reach_summary the reach judge needs,
+                                                   inline or from a file: what this lane's reads
+                                                   reach and which environments take hand-offs.
+                                                   Name EVERYTHING readable; anything left out
+                                                   reads as "outside".
+  QAR_CLI_PLAN_THINKING_TOKENS (optional)       : claude_cli backend only. Caps extended thinking on
+                                                   every plan() call (routing decisions, the reach
+                                                   judge, overseer/cascade reviews) via
+                                                   MAX_THINKING_TOKENS; "0" turns it off. Measured on
+                                                   routing only.
+                                                   Answers and deep runs are never affected. Unset
+                                                   leaves the CLI default.
   QAR_REUSE_NESTED_CARDS (optional)              — "0"/"false"/"no" disables it (default: on). When
                                                    on, ``FileContextStore.bootstrap()`` reuses any
                                                    sub-corpus that already has its own completed
@@ -225,16 +241,38 @@ Env it reads:
   ANTHROPIC_API_KEY (optional)                   — only for the "anthropic" backend (per-token
                                                    billing). NOT needed for the keyless claude_cli
                                                    backend, which runs on Claude Code's subscription.
-  WEB_SEARCH_ENABLED (optional)                 — web search is ON by default and needs NO extra key:
-                                                   it uses the model provider's native tool (Claude's
-                                                   web_search / Gemini's Google Search grounding),
-                                                   reusing the LLM key. Set to "false" to disable.
+  WEB_SEARCH_ENABLED (optional)                 — web search is ON by default and needs NO extra
+                                                   key (falls back to the model provider's native
+                                                   tool). Set to "false" to disable it entirely.
                                                    See docs/web-search.md.
-  WEB_SEARCH_API_KEY (optional)                 — Tavily API key (tvly_...). When set, Tavily is used
-                                                   instead of the native provider search. Get a key at
-                                                   tavily.com (free tier: 500 searches/month).
-  WEB_SEARCH_TIER (optional)                    — model tier for native web search (default balanced).
+  QAR_WEB_SEARCH_BACKEND (optional)             — which search backend to use: "auto" (default;
+                                                   picks the first of serper/brave/tavily/searxng
+                                                   whose key/URL is set, else falls back to the
+                                                   model provider's native search), or an explicit
+                                                   "serper" | "brave" | "tavily" | "searxng" |
+                                                   "gemini" | "provider".
+  SERPER_API_KEY (optional)                     — serper.dev key for the Serper backend.
+  BRAVE_SEARCH_API_KEY (optional)               — Brave Search API key for the Brave backend.
+  TAVILY_API_KEY (optional)                     — Tavily key (tvly_...) for the Tavily backend.
+                                                   WEB_SEARCH_API_KEY is the legacy name for this
+                                                   and still works.
+  SEARXNG_URL (optional)                        — base URL of a self-hosted SearXNG instance for
+                                                   the searxng backend.
+  QAR_WEB_SEARCH_MODEL (optional)               — model id for the Gemini-grounding backend
+                                                   (default gemini-2.5-flash-lite); needs a Gemini
+                                                   key via GEMINI_API_KEY / GOOGLE_API_KEY /
+                                                   GOOGLE_AI_API_KEY. This is also what gives a
+                                                   claude_cli lane (no Anthropic web_search tool)
+                                                   shallow web search.
   WEB_SEARCH_MAX_RESULTS (optional)             — max results per web search call (default 5).
+  QAR_WEB_PAGE_TOKEN_BUDGET (optional)          — token budget for one page-fetch's extracted
+                                                   passages (see ``{"web_page": ...}`` reads).
+  QAR_WEB_CACHE_DIR (optional)                  — directory for the web search/page cache.
+  QAR_WEB_SEARCH_TTL_SECONDS (optional)         — cache TTL for search results.
+  QAR_WEB_PAGE_TTL_SECONDS (optional)           — cache TTL for fetched pages.
+  WEB_SEARCH_TIER (optional, LEGACY)            — model tier for the legacy provider-native
+                                                   fold-in, only reached when no backend above is
+                                                   configured (default balanced).
   QAR_EXPLAIN_ANSWER (optional)                 — "1"/"true" turns on the user-facing "Explain how
                                                    I got this" panel (see core/answer_explanation.py).
                                                    OFF by default. An ELIGIBLE turn (one that read,
@@ -330,7 +368,7 @@ from pathlib import Path
 
 import shutil
 
-from .adapters import AnthropicProvider, ClaudeCliProvider, ClaudeConversationsAdapter, CompositeRetrievalAdapter, FilesAdapter, GeminiProvider, OpenAIProvider, WebSearchAdapter
+from .adapters import AnthropicProvider, ClaudeCliProvider, ClaudeConversationsAdapter, CompositeRetrievalAdapter, FilesAdapter, GeminiProvider, OpenAIProvider
 from .adapters.openclaw_channel import OpenClawChannel, OpenClawChannelConfig
 from .config import (ConfigFileError, RunnerConfig, apply_config_environment, apply_file_defaults,
                      load_quest_client, parse_decision_assignees, resolve_config_objects)
@@ -380,37 +418,16 @@ def _model_provider_from_env() -> ModelProvider:
         # per-call wall-clock cap above the conservative default rather than failing the run.
         if os.getenv("QAR_ANSWER_TIMEOUT"):
             kwargs["timeout_seconds"] = float(os.environ["QAR_ANSWER_TIMEOUT"])
+        # Cap extended thinking on routing decisions only (see ClaudeCliProvider and
+        # docs/cheap-model-routing.md): "0" turns it off, which measured 11x faster on haiku at the
+        # same accuracy. Unset leaves the CLI default.
+        if (os.getenv("QAR_CLI_PLAN_THINKING_TOKENS") or "").strip().isdigit():
+            kwargs["plan_thinking_tokens"] = int(os.environ["QAR_CLI_PLAN_THINKING_TOKENS"].strip())
         return ClaudeCliProvider(**kwargs)
     elif backend == "anthropic":
         return AnthropicProvider()
     else:
         raise ValueError(f"Unknown QAR_MODEL_BACKEND: {backend}. Use: openai, gemini, anthropic, or claude_cli")
-
-
-def _web_search_adapter_from_env():
-    """Build a WebSearchAdapter from env if WEB_SEARCH_ENABLED=true and a key is set.
-
-    Env vars read:
-      WEB_SEARCH_ENABLED    -- must be "true" (case-insensitive) to enable
-      WEB_SEARCH_API_KEY    -- Tavily API key (tvly_...). Required when enabled.
-      WEB_SEARCH_MAX_RESULTS -- max results per search (default 5)
-    """
-    enabled = (os.getenv("WEB_SEARCH_ENABLED") or "").strip().lower() == "true"
-    if not enabled:
-        return None
-    api_key = (os.getenv("WEB_SEARCH_API_KEY") or "").strip()
-    if not api_key:
-        import logging
-        logging.getLogger("quest-ai-runner").warning(
-            "WEB_SEARCH_ENABLED=true but WEB_SEARCH_API_KEY is not set; web search disabled"
-        )
-        return None
-    max_results = 5
-    try:
-        max_results = int(os.getenv("WEB_SEARCH_MAX_RESULTS", "5"))
-    except ValueError:
-        pass
-    return WebSearchAdapter(api_key=api_key, max_results=max_results)
 
 
 def _channel_transport_from_env():
@@ -516,14 +533,10 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     corpus = os.getenv("QAR_CORPUS_ROOT") or (file_cfg.corpus_root if file_cfg else None)
     retrieval = FilesAdapter(corpus) if corpus else None
 
-    # Optionally add live web search to the retrieval stack.
-    # WEB_SEARCH_ENABLED=true + WEB_SEARCH_API_KEY=tvly_... enables it.
-    web_adapter = _web_search_adapter_from_env()
-    if web_adapter is not None:
-        if retrieval is not None:
-            retrieval = CompositeRetrievalAdapter([retrieval, web_adapter])
-        else:
-            retrieval = web_adapter
+    # Live web search is NOT folded in here: broadcasting it through CompositeRetrievalAdapter
+    # would fire a paid, slow web search on every ordinary corpus grep/query. ``build_orchestrator``
+    # wires ``cfg.web_research`` separately (see ``adapters/web_research.build_web_research_from_env``),
+    # reached only by the planner's own {"web": ...}/{"web_page": ...} read keys.
 
     # Add conversation search unless explicitly disabled. Two separate adapters:
     # 1. Claude Code sessions (~/.claude/sessions) — read-only; written by Claude Code, not QAR.
@@ -619,6 +632,26 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     if os.getenv("QAR_PLANNER_REACH_JUDGE_TIER"):
         cfg.orchestrator.planner_reach_judge_tier = (
             os.environ["QAR_PLANNER_REACH_JUDGE_TIER"].strip().lower())
+    # What THIS lane's reads reach, for the reach judge: inline, or a file (the usual form, since
+    # it is a paragraph about the lane's own corpus and the environments it hands work to). A file
+    # that cannot be read is logged and ignored, which leaves the judge inert, never guessing.
+    reach_summary = (os.getenv("QAR_READ_REACH_SUMMARY") or "").strip()
+    reach_file = (os.getenv("QAR_READ_REACH_SUMMARY_FILE") or "").strip()
+    if reach_file:
+        try:
+            from_file = Path(reach_file).expanduser().read_text(encoding="utf-8").strip()
+        except OSError as e:
+            from_file = ""
+            logging.getLogger("quest-ai-runner.cli").warning(
+                "QAR_READ_REACH_SUMMARY_FILE could not be read (%s)", e)
+        if from_file:
+            reach_summary = from_file
+        else:
+            logging.getLogger("quest-ai-runner.cli").warning(
+                "QAR_READ_REACH_SUMMARY_FILE gave no summary; %s", "using QAR_READ_REACH_SUMMARY"
+                if reach_summary else "the reach judge stays inert")
+    if reach_summary:
+        cfg.orchestrator.read_reach_summary = reach_summary
     # QAR_DEEP_MAX_TURNS: hard per-attempt turn cap for the deep goal loop (lives on
     # OrchestratorConfig, not RunnerConfig directly, same as QAR_GOAL_TOKEN_BUDGET/
     # QAR_GOAL_MAX_ATTEMPTS below). The library default (30) is tight for a lane whose tasks
@@ -722,6 +755,11 @@ def _config_from_env(config_path: Optional[str] = None) -> RunnerConfig:
     planner_tier = (os.getenv("QAR_PLANNER_TIER") or "").strip().lower()
     if planner_tier:
         cfg.orchestrator.planner_tier = planner_tier
+    # QAR_PLANNER_MODEL pins the ROUTING DECISION alone to one model id, leaving everything else
+    # on QAR_PLANNER_TIER's model (docs/cheap-model-routing.md).
+    planner_model = (os.getenv("QAR_PLANNER_MODEL") or "").strip()
+    if planner_model:
+        cfg.orchestrator.planner_model = planner_model
 
     # --- Deep goal loop tuning (our own /goal replacement) -------------------------------------
     # The deep worker is Claude Code, so it can ONLY run Claude models. QAR_DEEP_MODELS is the
@@ -1871,6 +1909,36 @@ def main(argv=None) -> int:
             print(f"Cost (modelled estimate, provider reported none): ${cost:.4f}")
         print(f"Time: {elapsed_time:.0f}s (~{int(elapsed_time // 60)}m)")
         print()
+
+        # Send monthly email report after bootstrap completion
+        try:
+            from .adapters.bootstrap_reporter import (
+                mark_bootstrap_completed,
+                send_bootstrap_report_via_quest,
+            )
+            from .runner.quest_client import quest_client_from_env
+
+            mark_bootstrap_completed(cards_dir)
+
+            try:
+                quest_client = quest_client_from_env(os.environ)
+                user_id = os.getenv("QAR_BOOTSTRAP_EMAIL_USER")
+                if user_id:
+                    if send_bootstrap_report_via_quest(
+                        cards_dir=cards_dir,
+                        corpus_root=corpus_abs,
+                        user_id=user_id,
+                        quest_client_factory=lambda: quest_client,
+                    ):
+                        log.info("monthly bootstrap report email sent")
+                    else:
+                        log.debug("monthly bootstrap report email not sent (not configured or recently sent)")
+            except ImportError:
+                log.debug("Quest client not available, skipping monthly bootstrap email")
+            except Exception as e:
+                log.debug("failed to send monthly bootstrap email: %s", e)
+        except Exception as e:
+            log.debug("bootstrap reporter setup failed: %s", e)
 
         return 0
 

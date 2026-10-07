@@ -16,6 +16,7 @@ from quest_ai_runner.core.adapters import AssembledContext
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import (
     DECIDE_TOOL,
+    MODEL_TIER_BLOCK,
     Orchestrator,
     PLANNER_PROMPT,
     TurnCardCache,
@@ -212,7 +213,7 @@ def test_planner_prompt_and_schema_mention_card_ops():
     # Prompt (formatted with the same slots _plan uses) advertises both ops.
     rendered = PLANNER_PROMPT.format(
         max_reads=6, max_subq=3, max_deep=3, mode_signal_block="", card_thread_block="",
-        deferred_deep_semantics="", rationale_instruction="x",
+        deferred_deep_semantics="", model_tier_block=MODEL_TIER_BLOCK, rationale_instruction="x",
         user_message="m", transcript="", context_view="", gathered="[]")
     assert '{"cards":' in rendered or '"cards"' in rendered
     assert '{"card":' in rendered or '"card"' in rendered

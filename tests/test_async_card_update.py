@@ -56,9 +56,13 @@ class RecordingCardStore:
     def add_content(self, card_id: str, item: Dict[str, Any]) -> bool:
         return True
 
-    def update_card(self, card_id: str, *, add=None, replace=None, remove=None, fields=None) -> bool:
+    def update_card(self, card_id: str, *, add=None, replace=None, remove=None, fields=None,
+                    scope_tags=None) -> bool:
+        # ``scope_tags`` is part of the real card-update API (the per-quest context fence): a double
+        # that refuses it fails every edit with a TypeError the updater swallows, which reads in the
+        # test as "no card was written" rather than as a stale double.
         self.update_calls.append({"card_id": card_id, "add": add, "replace": replace,
-                                  "remove": remove, "fields": fields})
+                                  "remove": remove, "fields": fields, "scope_tags": scope_tags})
         return True
 
 

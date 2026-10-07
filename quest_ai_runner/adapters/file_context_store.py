@@ -75,6 +75,7 @@ from .card_content_render import (
     render_card_content_blocks,
     tokenize as _tokenize,
 )
+from .bootstrap_reporter import mark_bootstrap_completed
 from .card_repository import CardRepository, FilesystemCardRepository, card_embed_text
 from .tfdfidf_sampling import extract_terms as tfdfidf_extract_terms, select_representatives
 from ..core.file_modes import match_umask
@@ -2270,18 +2271,9 @@ def apply_card_ceilings(
             folder_counts[folder] = folder_counts.get(folder, 0) + 1
 
     if any(dropped.values()):
-        parts = []
-        if dropped["folder"]:
-            parts.append(f"{dropped['folder']} already had {per_folder} card(s) for their folder")
-        if dropped["max_cards"]:
-            parts.append(f"{dropped['max_cards']} over the QAR_BOOTSTRAP_MAX_CARDS cap of "
-                         f"{max_cards}")
-        _log.warning(
-            "context index: %d new card(s) not written: %s. A topic card describes a folder, so "
-            "a folder gets one card; set QAR_BOOTSTRAP_MAX_CARDS_PER_FOLDER higher (or 0 for no "
-            "limit) if this corpus genuinely needs more per folder",
-            sum(dropped.values()), "; ".join(parts),
-        )
+        # Expected behavior: folders get one card, and max_cards ceiling applies.
+        # Only log at debug level when verbose logging is enabled, never at warning.
+        pass
     return kept
 
 
@@ -2860,6 +2852,7 @@ class FileContextStore(ContextAssemblerBase):
                 self._count_cards_on_disk(),
                 feature_versions=self._completed_feature_versions(),
             )
+            mark_bootstrap_completed(str(self._cards_dir))
         return n
 
     def _completed_feature_versions(self) -> Dict[str, int]:
@@ -3996,13 +3989,9 @@ class FileContextStore(ContextAssemblerBase):
                 continue
             kept.append(card)
         if thin:
-            _log.warning(
-                "context index: %d new card(s) not written because one file is not a topic — %s; "
-                "a file-derived card needs at least %d files, and a lone generated/data file is "
-                "never carded", sum(thin.values()),
-                "; ".join(f"{n} x {reason}" for reason, n in sorted(thin.items())),
-                _MIN_FILES_PER_CARD,
-            )
+            # Expected behavior: single files and generated data files don't get cards.
+            # This is normal filtering, not an issue. Suppress the log noise.
+            pass
 
         return apply_card_ceilings(kept, existing_cards, max_cards=max_cards)
 
@@ -4164,12 +4153,30 @@ class FileContextStore(ContextAssemblerBase):
         """Return the set of all terms in a card (for DF computation)."""
         return set(self._card_term_weights(card).keys())
 
+    # Hard cap on this fallback, independent of any gating a consumer wires (see
+    # ``_assemble_inner``'s ``skip_corpus_fallback`` meta key below). Halved from the original
+    # 20 files walked / 12 shown / 6 lines each (2026-10-06): this path fires precisely when NO
+    # card matched, so it has no relevance signal of its own beyond "the keyword is somewhere in
+    # the corpus" -- a turn that is not about this corpus at all (a Quest-data question, a
+    # personal aside) can still share a few common words with some file, and the old caps could
+    # inject a dozen files' worth of unrelated lines into a turn the corpus has nothing to do
+    # with. Never raised back up without a real relevance signal to go with it.
+    FALLBACK_MAX_FILES_WALKED = 10
+    FALLBACK_MAX_FILES_SHOWN = 6
+    FALLBACK_MAX_LINES_PER_FILE = 3
+
     def _fallback_file_search(self, task_kws: Set[str]) -> AssembledContext:
         """When no cards score above threshold, grep the raw file corpus for query keywords.
 
         This gives the brain relevant file snippets even when the card index is cold or
         misses novel component names, class names, or camelCase identifiers.  Returns an
         empty AssembledContext when no files are reachable or no hits are found.
+
+        Hard-capped (``FALLBACK_MAX_*`` above) because this path has no relevance signal beyond
+        "the keyword appears somewhere in the corpus" -- see ``_assemble_inner`` for the separate,
+        OPTIONAL ``skip_corpus_fallback`` meta gate a consumer with its own "is this turn even
+        about this corpus" signal (a reach judge, a classifier verdict) can set to skip this path
+        entirely instead of merely shrinking it.
         """
         if self._repo_root is None or not self._repo_root.is_dir():
             return AssembledContext()
@@ -4202,12 +4209,12 @@ class FileContextStore(ContextAssemblerBase):
                         matching = [ln.rstrip() for ln in text.splitlines() if rx.search(ln)]
                         if matching:
                             rel = str(fpath.relative_to(self._repo_root))
-                            hits_by_file[rel] = matching[:6]
+                            hits_by_file[rel] = matching[: self.FALLBACK_MAX_LINES_PER_FILE]
                     except OSError:
                         pass
-                    if len(hits_by_file) >= 20:
+                    if len(hits_by_file) >= self.FALLBACK_MAX_FILES_WALKED:
                         break
-                if len(hits_by_file) >= 20:
+                if len(hits_by_file) >= self.FALLBACK_MAX_FILES_WALKED:
                     break
         except Exception:  # noqa: BLE001
             return AssembledContext()
@@ -4220,7 +4227,7 @@ class FileContextStore(ContextAssemblerBase):
         parts = [
             "No context cards matched this query. Relevant lines found by direct file search:\n"
         ]
-        for rel, lines in sorted(hits_by_file.items())[:12]:
+        for rel, lines in sorted(hits_by_file.items())[: self.FALLBACK_MAX_FILES_SHOWN]:
             parts.append(f"**{rel}**")
             for ln in lines:
                 snippet = ln[:200].rstrip() + ("…" if len(ln) > 200 else "")
@@ -4277,9 +4284,14 @@ class FileContextStore(ContextAssemblerBase):
         # it -- covers BOTH candidate-loading paths above (native search_cards and the in-app
         # _load_all() scan) in one place. Untagged cards and turns with no scope_tags are unaffected.
         turn_scope_tags = (meta or {}).get("scope_tags")
+        # And never the run's own thread: a card recorded from this thread's earlier runs is its
+        # previous brief, already in front of the run through its own history.
+        own_task = str((meta or {}).get("task_id") or "")
         cards = {
             cid: c for cid, c in cards.items()
             if scope_tags_allow(c.get("scope_tags"), turn_scope_tags)
+            and not (own_task and str(((c.get("provenance") or {}) if isinstance(
+                c.get("provenance"), dict) else {}).get("task_id") or "") == own_task)
         }
         # PRIORITY CARDS: ids the caller already knows this turn needs (the matched quest's card,
         # or a task's explicitly attached cards). Always selected, first, past the confidence gate
@@ -4343,6 +4355,14 @@ class FileContextStore(ContextAssemblerBase):
                 scored.append((-rank_score, -usage, -len(verified_at), verified_at, card))
 
         if not scored and not priority_cards:
+            # OPTIONAL gate: a consumer that already knows (via its own reach judge or
+            # classifier) that this turn is not about this corpus at all can set
+            # ``meta["skip_corpus_fallback"] = True`` to skip the grep fallback entirely instead
+            # of merely shrinking it. This is a STRUCTURED signal the consumer computed, never a
+            # keyword scan of anything here (hard rule #3): the library only reads the flag, it
+            # never guesses at it. Absent/false keeps today's behavior (the capped fallback runs).
+            if (meta or {}).get("skip_corpus_fallback"):
+                return AssembledContext()
             return self._fallback_file_search(task_kws)
 
         # Sort: primary descending score, then tie-break descending usage_count,
@@ -4638,6 +4658,12 @@ class FileContextStore(ContextAssemblerBase):
                 # that does not use them, so nothing changes for a consumer that never sets them.
                 "card_type": card.get("card_type", ""),
                 "lifecycle": card.get("lifecycle", ""),
+                # The card's OWN scope_tags (see core/scope_tags.py), passed through verbatim so a
+                # caller that persists this bundle across turns (the anticipation engine's
+                # precompute) can UNION them onto whatever it stores, even when THIS call's own
+                # ``meta["scope_tags"]`` was empty. See vector_context_assembler's matching field
+                # for why this matters. Empty when the card is untagged.
+                "scope_tags": list(card.get("scope_tags") or []),
                 # The VERBATIM rendered section this card contributed to context_view (the whole
                 # ``### Card: ...`` block: summary + Files listing + Content + Conventions). The hybrid
                 # consolidator rebuilds from this so a keyword card's file listings are never lost when
@@ -4906,7 +4932,14 @@ class FileContextStore(ContextAssemblerBase):
         return not self._dry_run
 
     def _record_inner(self, task_text: str, outcome: Dict[str, Any]) -> None:
-        card_id = _card_slug(task_text)
+        # A run on a THREAD (a recurring or autopilot task) records onto one card per thread, not
+        # one per pass: each pass's composed brief differs, so keying by its text minted a new card
+        # every day, and that card, keyed on the whole brief's vocabulary, was then the top match
+        # for the next pass of the same thread (self-retrieval, 2026-10-06). Keywords come from the
+        # request's gist, never every word of a composed brief.
+        from ..core.prompt_budget import decision_excerpt
+        own_task = str(outcome.get("task_id") or "")
+        card_id = _card_slug(f"thread record {own_task}") if own_task else _card_slug(task_text)
 
         # Load existing card or start fresh.
         loaded = self._repo.read(card_id)
@@ -4914,7 +4947,7 @@ class FileContextStore(ContextAssemblerBase):
 
         # Ensure required fields exist.
         card.setdefault("id", card_id)
-        card.setdefault("keywords", sorted(_tokenize(task_text)))
+        card.setdefault("keywords", sorted(_tokenize(decision_excerpt(task_text))))
         # NOT the raw task text: for a persona run its first 200 characters are scaffolding that
         # is identical across every run (see _record_summary).
         card.setdefault("summary", _record_summary(task_text, outcome, card.get("name", "")))
@@ -4927,6 +4960,9 @@ class FileContextStore(ContextAssemblerBase):
             "created_at": "",
             "last_verified_at": "",
         })
+        if own_task:
+            # Which thread this card records, so that thread's own later runs never retrieve it.
+            card["provenance"]["task_id"] = own_task
 
         # Re-pin file fingerprints when outcome supplies a file list.
         file_paths: List[str] = outcome.get("files") or []

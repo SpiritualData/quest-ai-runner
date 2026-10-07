@@ -113,8 +113,17 @@ and say so in one sentence. If it does not, return the action the rules require,
 fields that action needs. The most common error to look for: work that lives outside what a read
 can reach, sent to a read anyway, often with an invented path or scope. Correct that to a hand off
 ("answer" with hand_off true) when the grounding names somewhere that covers the work, or to a
-plain "answer" that says nothing attached can reach it when it does not.
+plain "answer" that says nothing attached can reach it when it does not.{web_note}
 """
+
+#: Appended to ``REVIEW_PROMPT`` when a live web adapter is wired (``Orchestrator.web``), so the
+#: reviewer corrects a genuinely public case to a web read instead of a hand off. Default ""
+#: leaves the prompt byte-for-byte unchanged (the cascade ships OFF, this only matters if an
+#: operator turns it on with web also configured).
+WEB_REVIEW_NOTE = (
+    " A public web page or document is reachable too: correct such a case to a read with a "
+    "{\"web\": ...} or {\"web_page\": ...} spec instead of a hand off."
+)
 
 
 #: The actions an operator may name in ``planner_cascade_escalate_on`` as ``action:<name>``.
@@ -203,7 +212,7 @@ def describe_decision(decision: PlanDecision) -> str:
 
 def build_review_digest(user_message: str, decision: PlanDecision, rubric: str,
                         context_view: str = "", gathered: Optional[List[Dict[str, Any]]] = None,
-                        max_chars: int = 6000) -> str:
+                        max_chars: int = 6000, *, web_configured: bool = False) -> str:
     """The whole second call's prompt, held under ``max_chars``.
 
     The cap is spent in priority order: the rubric and the decision are what the reviewer judges
@@ -217,17 +226,23 @@ def build_review_digest(user_message: str, decision: PlanDecision, rubric: str,
     5 of 18 on cases where nothing attached could reach the work, against 16 of 18 with no
     cascade at all. This repo has made the same mistake once before, in deep-run activity
     truncation, where cutting from the start hid the filename behind a long shared path.
+
+    ``web_configured`` (default False, byte-for-byte unchanged, matching every other reach-aware
+    flag in this repo) appends ``WEB_REVIEW_NOTE`` so a reviewer that corrects a hand off also
+    knows a public web page or document is reachable via a read, not just a hand off.
     """
     decision_text = describe_decision(decision)
     gathered_text = json.dumps(gathered or [])[:800]
+    web_note = WEB_REVIEW_NOTE if web_configured else ""
     fixed = REVIEW_PROMPT.format(rubric=rubric, user_message=user_message[:2000],
-                                 context="", gathered=gathered_text, decision=decision_text)
+                                 context="", gathered=gathered_text, decision=decision_text,
+                                 web_note=web_note)
     room = max(0, max_chars - len(fixed))
     context = truncate_keep_both_ends(
         (context_view or "").strip(), room, "\n(middle of the grounding omitted)\n")
     return REVIEW_PROMPT.format(rubric=rubric, user_message=user_message[:2000],
                                 context=context or "(none)", gathered=gathered_text,
-                                decision=decision_text)
+                                decision=decision_text, web_note=web_note)
 
 
 def truncate_keep_both_ends(text: str, limit: int, marker: str = "\n...\n") -> str:

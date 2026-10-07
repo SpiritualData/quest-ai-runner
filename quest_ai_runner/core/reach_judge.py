@@ -77,7 +77,7 @@ THE REQUEST:
 "world": it asks for a current public fact about the world (news, a price, the weather, a result,
   what is happening now). General knowledge the assistant simply knows is NOT this.
 "inside": everything it needs is in the readable sources above.
-
+{web_note}
 JUDGE WHERE THE ANSWER LIVES, NOT WHERE THE WORK HAPPENED. A request about someone's own or their
 team's work, plans, goals, tasks, records or progress is "inside" even when the work it describes
 is carried out elsewhere: the answer is in the records above. "How is that piece of work going",
@@ -102,15 +102,42 @@ OUTSIDE_UNCOVERED_LINE = (
     "run discovery for it, do not invent a scope or a path, and do not hand it off to anything. "
     "Answer, and say plainly that you cannot reach it from here."
 )
-#: What the planner is told when the request is about the world right now.
+#: Same verdict, but a live web adapter IS wired: a private place nothing attached can reach is
+#: still unreachable, but if the thing is actually public on the web, a web read can fetch it.
+OUTSIDE_UNCOVERED_LINE_WEB = (
+    "What this request needs does NOT live in any source you can read, and nothing attached can "
+    "reach it either. This was judged separately and is settled, so do not invent a scope or a "
+    "path, and do not hand it off to anything. If it is a private place, say plainly that you "
+    "cannot reach it. If the thing is actually public on the web, issue a {\"web\": ...} or "
+    "{\"web_page\": ...} read for it instead."
+)
+#: What the planner is told when the request is about the world right now, and no live web
+#: adapter is wired: the old behaviour, answer from what you know and say so plainly.
 WORLD_LINE = (
     "This request asks for a current public fact about the world. That is not work for a machine "
     "and not in any source you can read. This was judged separately and is settled: answer it. "
     "Say what you reliably know, and say plainly that you cannot check a live source for the "
     "current value. Do not hand it off and do not search your own sources for it."
 )
+#: Same verdict, but a live web adapter IS wired (``Orchestrator.web``): the fact is reachable,
+#: so the planner is told to read it rather than answer from memory or hand it off.
+WORLD_LINE_WEB = (
+    "This request asks for a current public fact about the world. That is not work for a machine "
+    "and not in any source you can read, but it IS reachable: this was judged separately and is "
+    "settled, so issue a {\"web\": \"<query>\"} read for it instead of answering from memory or "
+    "handing it off."
+)
 
 VERDICT_HEADING = "--- WHERE WHAT THIS REQUEST NEEDS ACTUALLY LIVES (already settled) ---\n"
+
+#: Appended to ``REACH_JUDGE_PROMPT`` when a live web adapter is wired (``Orchestrator.web``), so
+#: the judge itself knows a public web page or document is reachable, not just the verdict text
+#: stamped into the planner afterwards. Default "" leaves the prompt byte-for-byte unchanged.
+WEB_REACH_NOTE = (
+    "A LIVE WEB READ IS AVAILABLE: a current public fact or a public web page or document "
+    "counts as \"world\". Private data, local files, machines, private repositories and "
+    "logged-in services stay \"inside\" or \"outside\"."
+)
 
 
 def normalize_verdict(raw: Any) -> Optional[Dict[str, Any]]:
@@ -133,29 +160,49 @@ def normalize_verdict(raw: Any) -> Optional[Dict[str, Any]]:
     return {"reach": reach.strip().lower(), "covered_by": covered}
 
 
-def judge_prompt(message: str, reach_summary: str, max_message_chars: int = 2000) -> str:
-    return REACH_JUDGE_PROMPT.format(reach_summary=reach_summary.strip(),
-                                     message=(message or "")[:max_message_chars])
+def judge_prompt(message: str, reach_summary: str, max_message_chars: int = 2000, *,
+                 web_configured: bool = False) -> str:
+    """The judge's own prompt. ``web_configured=False`` (the default) is byte-for-byte unchanged
+    from before a web adapter existed; ``True`` adds ``WEB_REACH_NOTE`` so the judge itself, not
+    only the verdict text stamped into the planner afterwards, knows a live web read exists.
+
+    The note gets the same blank-line paragraph framing as every other section of this prompt
+    (a leading and trailing blank line); with no note the template collapses back to the single
+    blank line the unchanged, web-off rendering has always had.
+    """
+    return REACH_JUDGE_PROMPT.format(
+        reach_summary=reach_summary.strip(), message=(message or "")[:max_message_chars],
+        web_note=("\n" + WEB_REACH_NOTE + "\n") if web_configured else "")
 
 
-def verdict_block(verdict: Optional[Dict[str, Any]]) -> str:
+def verdict_block(verdict: Optional[Dict[str, Any]], *, web_configured: bool = False) -> str:
     """The block appended to the planner prompt, or "" when nothing should change.
 
     An "inside" verdict deliberately adds NOTHING. It is the common case, so saying "this is
     reachable" on every ordinary request would spend tokens to tell the planner what it already
     assumes, and would give it a sentence to over-read on the requests that are genuinely mixed.
+
+    ``web_configured`` (default False, so an existing caller is byte-for-byte unchanged) is
+    whether a live web adapter is wired (``Orchestrator.web``). It changes the "world" wording
+    (with no web adapter the planner is told to answer from what it knows, ``WORLD_LINE``,
+    unchanged; with one wired, a current public fact is reachable through a read, not a hand-off
+    or a guess, ``WORLD_LINE_WEB``) and the uncovered "outside" wording (``OUTSIDE_UNCOVERED_LINE``
+    unchanged versus ``OUTSIDE_UNCOVERED_LINE_WEB``, which still says a private place stays
+    unreachable but points a genuinely public one at a web read instead of a hand-off). A
+    structural flag, never a keyword check on model output.
     """
     if not verdict:
         return ""
     reach = verdict.get("reach")
     if reach == "world":
-        return VERDICT_HEADING + WORLD_LINE + "\n"
+        return VERDICT_HEADING + (WORLD_LINE_WEB if web_configured else WORLD_LINE) + "\n"
     if reach != "outside":
         return ""
     covered = verdict.get("covered_by")
     if covered:
         return VERDICT_HEADING + OUTSIDE_COVERED_LINE.format(covered_by=covered[:120]) + "\n"
-    return VERDICT_HEADING + OUTSIDE_UNCOVERED_LINE + "\n"
+    return VERDICT_HEADING + (OUTSIDE_UNCOVERED_LINE_WEB if web_configured
+                              else OUTSIDE_UNCOVERED_LINE) + "\n"
 
 
 def parse_judge_text(text: Any) -> Optional[Dict[str, Any]]:

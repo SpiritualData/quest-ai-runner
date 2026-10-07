@@ -1,0 +1,121 @@
+[
+ {
+  "id": "WEB-001",
+  "dataset": "explicit",
+  "area": "web search",
+  "quest_key": "fitness",
+  "message": "Is there a Portland Marathon in 2026, and what date is it?",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply gives a specific date for the 2026 Portland Marathon, or states plainly that a source says it is not being held, rather than saying it cannot check",
+   "The reply cites at least one source as an inline markdown link to a web page",
+   "The reply does not queue a task or hand the question off to a background run",
+   "The reply does not claim it has no access to the internet or to current information"
+  ],
+  "precheck": {
+   "reply_regex": [
+    "\\]\\(https?://"
+   ],
+   "web_read": true
+  },
+  "evidence_notes": "A current public fact: the live web read should answer it in the chat, with a citation."
+ },
+ {
+  "id": "WEB-002",
+  "dataset": "explicit",
+  "area": "web search",
+  "quest_key": "research",
+  "message": "Can you give me the three biggest changes on this page? https://docs.python.org/3/whatsnew/3.13.html",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply summarizes the actual page content (Python 3.13 changes such as the new interactive interpreter, the experimental free-threaded build, or the experimental JIT), not generic Python advice",
+   "The reply does not ask the user to paste or upload the page content",
+   "The reply does not queue a task or hand the request off to a background run"
+  ],
+  "evidence_notes": "A pasted PUBLIC URL is reachable by a web_page read; it must not be treated as an unreachable document.",
+  "precheck": {
+   "web_read": true
+  }
+ },
+ {
+  "id": "WEB-003",
+  "dataset": "explicit",
+  "area": "web search",
+  "quest_key": "language",
+  "message": "How much does a Duolingo Super subscription cost in the US right now?",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply states a concrete current price or price range in US dollars",
+   "The reply cites at least one source as an inline markdown link",
+   "The reply does not queue a task or claim it cannot check current prices"
+  ],
+  "precheck": {
+   "reply_regex": [
+    "\\]\\(https?://"
+   ],
+   "web_read": true
+  }
+ },
+ {
+  "id": "WEB-C01",
+  "dataset": "explicit",
+  "area": "web search control",
+  "quest_key": "fitness",
+  "message": "Where am I on this quest right now? Just a quick summary.",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply summarizes the fitness quest from the person's own quest data",
+   "The reply does not search the web or cite web pages for the person's own quest status"
+  ],
+  "precheck": {
+   "reply_regex_forbidden": [
+    "\\]\\(https?://(?!localhost)"
+   ],
+   "web_read": false
+  },
+  "evidence_notes": "Control: the person's own data. A web read here is a token and latency regression. If the run evidence exposes status events, 'Searching the web' must not appear."
+ },
+ {
+  "id": "WEB-C02",
+  "dataset": "explicit",
+  "area": "web search control",
+  "quest_key": "fitness",
+  "message": "Thanks, that's really helpful!",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply is a short, natural acknowledgement",
+   "The reply does not search the web, cite sources, or start any work"
+  ],
+  "precheck": {
+   "reply_regex_forbidden": [
+    "\\]\\(https?://"
+   ],
+   "web_read": false
+  }
+ },
+ {
+  "id": "WEB-C03",
+  "dataset": "implicit",
+  "area": "web search control",
+  "quest_key": "fitness",
+  "conversation_scope": "none",
+  "message": "How many workouts did I log this week?",
+  "expected_routing": "inline",
+  "forbid_writes": true,
+  "rubric": [
+   "The reply answers from the person's own logged entries, not from the web",
+   "The reply does not cite any web page"
+  ],
+  "precheck": {
+   "reply_regex_forbidden": [
+    "\\]\\(https?://"
+   ],
+   "web_read": false
+  }
+ }
+]

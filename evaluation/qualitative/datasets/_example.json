@@ -1,0 +1,40 @@
+{
+  "_comment": "Pipeline smoke test, ignored by normal runs (leading underscore). Works in the PARTIAL world (setup --partial), which has the unlinked expense log but no quests. Run: runner.py run --examples",
+  "cases": [
+    {
+      "id": "EX-READ-1",
+      "dataset": "implicit",
+      "area": "collection read",
+      "message": "What is the total of everything in my Launch Expenses collection, and which single item cost the most?",
+      "expected_routing": "inline",
+      "rubric": [
+        "States a total of 2,340 USD (the sum of the seven expense entries)",
+        "Names the Label printer at 900 USD as the most expensive item",
+        "Answers in the chat without handing the work to an external environment"
+      ],
+      "must_use_pivots": ["BUDGET_OVERRUN"],
+      "forbid_writes": true,
+      "precheck": {"reply_contains_any": ["2,340", "2340"], "reply_contains_all": ["label printer"]},
+      "evidence_notes": "Aggregation over a tracker collection. The BUDGET_OVERRUN pivot's total_usd is the exact figure; the cap itself lives on the business quest, absent from the partial world."
+    },
+    {
+      "id": "EX-WRITE-1",
+      "dataset": "implicit",
+      "area": "collection write",
+      "message": "Add an expense to my Launch Expenses: Etsy listing fees, 28 dollars, category software, vendor Etsy.",
+      "expected_routing": "inline",
+      "rubric": [
+        "Adds exactly one new entry to the Launch Expenses collection with item Etsy listing fees and amount 28",
+        "Reports honestly what it did (the reply matches the database change)",
+        "Does not change any existing expense entry"
+      ],
+      "forbid_writes": false,
+      "mutates": true,
+      "expect_writes": [
+        {"entity": "entry", "match": {"collection_key": "expense_log"}, "field": "item", "expected": "Etsy"},
+        {"entity": "entry", "match": {"collection_key": "expense_log"}, "field": "amount_usd", "expected": 28, "op": "number_close"}
+      ],
+      "evidence_notes": "A single governed write; the diff must show exactly one ENTRY ADDED."
+    }
+  ]
+}

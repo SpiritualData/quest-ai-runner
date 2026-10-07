@@ -35,7 +35,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, List, Optional, Set
+from typing import Any, Callable, List, Optional, Set, Tuple
 
 from . import usage_limit
 from .adapters import DeepResult, DeepRunner, EVENT_EXEC, ProgressEvent
@@ -372,9 +372,26 @@ def envelope_reports_no_work(raw: str) -> bool:
     return used == 0
 
 
-def compose_goal_prompt(goal: str, brief: str, *, preamble: str = "") -> str:
+def compose_goal_prompt(goal: str, brief: str, *, preamble: str = "",
+                        budget_tokens: Optional[int] = None,
+                        model: Optional[str] = None) -> str:
+    """The headless worker prompt, fitted to the deep prompt budget (see ``compose_goal_prompt_fitted``)."""
+    return compose_goal_prompt_fitted(goal, brief, preamble=preamble, budget_tokens=budget_tokens,
+                                      model=model)[0]
+
+
+def compose_goal_prompt_fitted(goal: str, brief: str, *, preamble: str = "",
+                               budget_tokens: Optional[int] = None,
+                               model: Optional[str] = None) -> Tuple[str, Any]:
     """Compose the headless worker prompt: an optional preamble + the TASK brief + the GOAL stated
-    as a plain-text done-standard.
+    as a plain-text done-standard. Returns ``(prompt, fit)``, ``fit`` being the
+    ``prompt_budget.FitResult`` that says what, if anything, was cut.
+
+    THE PROMPT IS BUDGETED HERE, the one place every piece meets (``core.prompt_budget``). The
+    preamble's blocks (doctrine, persona, retrieved conversations, cards) are cut by priority when
+    the whole would exceed ``budget_tokens`` (None resolves the configured budget, capped at what
+    ``model``'s window can hold), and exactly one context-updates block survives. Under budget the
+    prompt is byte-identical to the unbudgeted composition.
 
     We deliberately do NOT use Claude Code's ``/goal`` directive. ``/goal`` runs its OWN internal
     verify-the-condition-every-turn loop (token-heavy) and caps the condition at 4000 chars
@@ -383,10 +400,9 @@ def compose_goal_prompt(goal: str, brief: str, *, preamble: str = "") -> str:
     re-runs with targeted guidance if it is not yet met. So here the worker just attempts the task
     once and reports concretely what it changed; the done-standard is given as context, not as a
     self-policed directive."""
+    from . import prompt_budget
     goal_text = " ".join((goal or "").split())
     body_parts: List[str] = []
-    if preamble.strip():
-        body_parts.append(preamble.strip())
     body_parts.append(f"TASK:\n{brief.strip()}")
     if goal_text:
         body_parts.append("GOAL (the done-standard your work must satisfy):\n" + goal_text)
@@ -411,7 +427,11 @@ def compose_goal_prompt(goal: str, brief: str, *, preamble: str = "") -> str:
         "When done, summarize CONCRETELY what you changed (the files and the actual edits/actions). "
         "If you could not fully meet the goal, say exactly what remains and why."
     )
-    return "\n\n".join(body_parts)
+    budget = prompt_budget.resolve_deep_prompt_budget(budget_tokens, model=model)
+    fitted_preamble, fitted_parts, fit = prompt_budget.fit_deep_prompt(
+        (preamble or "").strip(), body_parts, budget_tokens=budget)
+    head = [fitted_preamble] if fitted_preamble.strip() else []
+    return "\n\n".join(head + [p for p in fitted_parts if p]), fit
 
 
 class GoalRunner:
@@ -505,6 +525,10 @@ class SubprocessConfig:
     # (which restricts the worker to ONLY these servers, ignoring its ambient config) -- that is a
     # separate, stricter policy left for a consumer to opt into explicitly if a later phase wires it.
     mcp_config_path: Optional[str] = None
+    # The token budget for the composed deep prompt (``core.prompt_budget``). None reads
+    # QAR_DEEP_PROMPT_TOKEN_BUDGET, else the library default; any value is capped at what the
+    # run's model window can hold beside the worker's own system prompt and working room.
+    prompt_token_budget: Optional[int] = None
 
     def web_enabled(self) -> bool:
         """Whether the spawned worker can BROWSE the live web (WebSearch/WebFetch reachable).
@@ -970,6 +994,39 @@ def resolve_session_file(working_dir: Optional[str], session_id: Optional[str]) 
         return None
 
 
+def session_replay_tokens(working_dir: Optional[str], session_id: Optional[str]) -> Optional[int]:
+    """About how many tokens resuming ``session_id`` would replay ahead of the next prompt.
+
+    Sums the message content of every user and assistant record after the session's last compact
+    boundary (Claude Code replays only what follows one), measured with the prompt budget's own
+    estimate. None when the file cannot be found or read, which callers treat as "unknown, resume
+    as before" rather than as a reason to refuse. Never raises.
+    """
+    from . import prompt_budget
+    path = resolve_session_file(working_dir, session_id)
+    if path is None:
+        return None
+    chars = 0
+    try:
+        with open(path, "r", encoding="utf-8", errors="replace") as fh:
+            for line in fh:
+                try:
+                    rec = json.loads(line)
+                except ValueError:
+                    continue
+                kind = rec.get("type")
+                if kind == "system" and rec.get("subtype") == "compact_boundary":
+                    chars = 0
+                    continue
+                if kind not in ("user", "assistant"):
+                    continue
+                content = (rec.get("message") or {}).get("content")
+                chars += len(content) if isinstance(content, str) else len(json.dumps(content or ""))
+    except OSError:
+        return None
+    return int(chars / prompt_budget.CHARS_PER_TOKEN)
+
+
 def resolved_model_from_session(working_dir: Optional[str], session_id: Optional[str],
                                 *, max_bytes: int = 400_000) -> Optional[str]:
     """The full model id Claude Code actually ran this session with (e.g. ``claude-sonnet-4-5-...``).
@@ -1003,6 +1060,50 @@ def resolved_model_from_session(working_dir: Optional[str], session_id: Optional
         if isinstance(model, str) and model.strip() and not model.startswith("<"):
             found = model.strip()
     return found
+
+
+def subagent_work_in_flight(path: Optional[Path], *, fresh_seconds: float = 300.0) -> Optional[str]:
+    """Why a quiet parent session is NOT idle: a subagent is doing the work, or None.
+
+    A foreground ``Agent``/``Task`` call blocks the parent, whose log then stays unchanged for the
+    whole subagent run while the subagent writes its own file under ``<session>/subagents/``. Two
+    signals, either one is enough: a subagent file touched within ``fresh_seconds``, or an
+    ``Agent``/``Task`` tool_use in the parent's tail with no matching tool_result yet. Never raises.
+    """
+    if path is None:
+        return None
+    try:
+        sub_dir = path.with_suffix("") / "subagents"
+        if sub_dir.is_dir():
+            now = time.time()
+            for f in sub_dir.glob("*.jsonl"):
+                if now - f.stat().st_mtime < fresh_seconds:
+                    return f"subagent {f.stem} wrote to its log {int(now - f.stat().st_mtime)}s ago"
+        size = path.stat().st_size
+        with open(path, "rb") as fh:
+            fh.seek(max(0, size - 400_000))
+            blob = fh.read()
+        pending: dict = {}
+        for line in blob.decode("utf-8", errors="replace").splitlines():
+            try:
+                rec = json.loads(line)
+            except Exception:  # noqa: BLE001 — partial first line or a record mid-write
+                continue
+            content = (rec.get("message") or {}).get("content") if isinstance(rec, dict) else None
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") == "tool_use" and block.get("name") in ("Agent", "Task"):
+                    pending[block.get("id")] = block.get("name")
+                elif block.get("type") == "tool_result":
+                    pending.pop(block.get("tool_use_id"), None)
+        if pending:
+            return f"a {next(iter(pending.values()))} tool call is still running"
+    except Exception as e:  # noqa: BLE001 — a failed check falls back to the normal review
+        _log.debug("subagent in-flight check failed for %s: %s", path, e)
+    return None
 
 
 def read_session_activity_tail(
@@ -1146,6 +1247,13 @@ class SubprocessGoalRunner(DeepRunner):
                 idle = max(0.0, time.time() - path.stat().st_mtime)
         except OSError:
             pass
+        # A quiet parent log while a subagent works is real work, never idleness: skip the LLM.
+        busy = subagent_work_in_flight(path)
+        if busy is not None:
+            reason = f"The worker is waiting on a subagent ({busy})."
+            _log.info("deep run %s liveness review after %ds: keep running (%s)",
+                      session_id, int(elapsed), reason)
+            return False, reason, None
         tail = read_session_activity_tail(working_dir, session_id) or "(the session log is empty or unreadable)"
         prompt = DEEP_REVIEW_PROMPT.format(
             elapsed=int(elapsed), idle=("unknown" if idle < 0 else int(idle)), tail=tail)
@@ -1212,7 +1320,10 @@ class SubprocessGoalRunner(DeepRunner):
                       context_preamble: Optional[str] = None,
                       run_id: Optional[str] = None,
                       working_dir: Optional[str] = None,
-                      resume_session_id: Optional[str] = None) -> DeepResult:
+                      resume_session_id: Optional[str] = None,
+                      prompt_budget_tokens: Optional[int] = None) -> DeepResult:
+        # ``prompt_budget_tokens`` overrides the configured prompt budget for this call only; it is
+        # how a launch refused with "Prompt is too long" retries with a tighter fit (see below).
         # ``context_preamble`` is an OPTIONAL PER-CALL override of ``self.cfg.context_preamble``.
         # When the orchestrator forwards a per-task preamble (e.g. an AI rep's pulled persona), it
         # is used for THIS run only; otherwise the runner's configured base preamble applies, so
@@ -1224,7 +1335,47 @@ class SubprocessGoalRunner(DeepRunner):
         if paused_on is not None:
             return DeepResult(met=False, error=f"Claude Code usage limit: {paused_on.message}",
                               session_id=resume_session_id, usage_limited=True)
-        prompt = compose_goal_prompt(goal, brief, preamble=preamble)
+        # THE PROMPT BUDGET. One explicit budget for everything this worker is handed, spent by
+        # priority (``core.prompt_budget``): the request is kept, retrieved history is cut first,
+        # and the budget can never exceed what this model's window holds.
+        from . import prompt_budget
+        window_model = cli_safe_model(model) or model
+        budget = prompt_budget.resolve_deep_prompt_budget(
+            prompt_budget_tokens or self.cfg.prompt_token_budget, model=window_model)
+        prompt, fit = compose_goal_prompt_fitted(goal, brief, preamble=preamble,
+                                                 budget_tokens=budget, model=window_model)
+        prompt_tokens = prompt_budget.estimate_tokens(prompt)
+        if fit.cuts and emit is not None:
+            emit(ProgressEvent(
+                type=EVENT_EXEC,
+                text=("Some background context was left out to fit this run's prompt budget: "
+                      + prompt_budget.describe_cuts(fit.cuts) + "."),
+                data={"run_id": run_id, "phase": "prompt_budget",
+                      "budget_tokens": budget, "tokens_before": fit.tokens_before,
+                      "tokens_after": fit.tokens_after,
+                      "cuts": [c.describe() for c in fit.cuts]}))
+        # RESUME ONLY WHAT FITS. Resuming a session replays its whole transcript ahead of this
+        # prompt, and a thread resumed pass after pass grows without bound until the model refuses
+        # it outright ("Prompt is too long", 2026-10-06: a 5 MB transcript holding every earlier
+        # pass). When the transcript plus this prompt would not fit the window, the run starts
+        # fresh: its brief already carries the compact carry-over (the last results), so a cold
+        # start loses nothing a resume could still have given it.
+        if resume_session_id:
+            replay = session_replay_tokens(
+                self.cfg.working_dir if working_dir is None else working_dir, resume_session_id)
+            room = prompt_budget.max_prompt_tokens_for(window_model)
+            if replay is not None and replay + prompt_tokens > room:
+                _log.info("not resuming session %s: its transcript (~%d tokens) plus this prompt "
+                          "(~%d tokens) would exceed the ~%d tokens the model can take; starting "
+                          "fresh", resume_session_id, replay, prompt_tokens, room)
+                if emit is not None:
+                    emit(ProgressEvent(
+                        type=EVENT_EXEC,
+                        text=("The earlier session is too long to pick up again, so this run "
+                              "starts fresh from its brief."),
+                        data={"run_id": run_id, "phase": "resume_too_large",
+                              "replay_tokens": replay, "prompt_tokens": prompt_tokens}))
+                resume_session_id = None
         # ``working_dir`` is an OPTIONAL PER-CALL override of ``self.cfg.working_dir`` (e.g. a
         # quest's synced folder, see quest_autopilot_design.md's execution-environment section).
         # Used for THIS run's subprocess cwd AND the session monitor's search root; the consumer's
@@ -1487,6 +1638,32 @@ class SubprocessGoalRunner(DeepRunner):
         # a deep run that ran and fell short. It is a launch failure, and it says so.
         if envelope_reports_no_work(raw):
             reason = (out or "").strip() or (err or "").strip() or f"exit {proc.returncode}"
+            if prompt_budget.is_prompt_too_long(reason):
+                # The model refused the prompt as too long for its window. Never launch the same
+                # thing again: drop the resumed transcript first (the usual culprit), then halve
+                # the budget, and only report a failure when neither fits.
+                if resume_session_id:
+                    _log.info("prompt too long while resuming %s; running fresh instead",
+                              resume_session_id)
+                    return self.run_goal_once(
+                        goal=goal, brief=brief, model=model, max_turns=max_turns, emit=emit,
+                        context_preamble=context_preamble, run_id=run_id,
+                        working_dir=working_dir, resume_session_id=None,
+                        prompt_budget_tokens=budget)
+                tighter = budget // 2
+                if tighter >= prompt_budget.MIN_DEEP_PROMPT_TOKEN_BUDGET:
+                    _log.info("prompt too long at a %d-token budget (~%d tokens sent); retrying "
+                              "at %d", budget, prompt_tokens, tighter)
+                    return self.run_goal_once(
+                        goal=goal, brief=brief, model=model, max_turns=max_turns, emit=emit,
+                        context_preamble=context_preamble, run_id=run_id,
+                        working_dir=working_dir, resume_session_id=None,
+                        prompt_budget_tokens=tighter)
+                return DeepResult(
+                    met=False, output="", session_id=session_id, launch_failed=True,
+                    error=(f"The deep worker could not start: the model refused the prompt as too "
+                           f"long for its context window, even after it was cut down to about "
+                           f"{prompt_tokens} tokens. Nothing was done in this run. ({reason[:200]})"))
             return DeepResult(
                 met=False, output="", session_id=session_id, launch_failed=True,
                 error=f"The deep worker could not start: {reason[:600]}")

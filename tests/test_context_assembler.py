@@ -22,7 +22,12 @@ from quest_ai_runner.core.context_doctrine import (
     SUFFICIENCY_GATE,
     compose_deep_preamble,
 )
-from quest_ai_runner.core.orchestrator import PLANNER_PROMPT, Orchestrator, OrchestratorConfig
+from quest_ai_runner.core.orchestrator import (
+    MODEL_TIER_BLOCK,
+    PLANNER_PROMPT,
+    Orchestrator,
+    OrchestratorConfig,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -52,7 +57,8 @@ def _write_card(cards_dir: Path, card: Dict[str, Any]) -> Path:
 
 def _card_files(cards_dir: Path) -> List[Path]:
     """Card JSON files, excluding the ``bootstrap_meta.json`` sidecar bootstrap() writes."""
-    return [p for p in cards_dir.glob("*.json") if p.name != "bootstrap_meta.json"]
+    return [p for p in cards_dir.glob("*.json")
+            if p.name not in ("bootstrap_meta.json", "bootstrap_report_state.json")]
 
 
 def _topic_provider(topics: List[Dict[str, Any]]):
@@ -178,6 +184,7 @@ class TestPlannerPromptGates:
             max_deep=4,
             mode_signal_block="", card_thread_block="",
             deferred_deep_semantics="",
+            model_tier_block=MODEL_TIER_BLOCK,
             rationale_instruction="Always fill `rationale`.",
         )
         assert len(result) > 100
@@ -185,28 +192,38 @@ class TestPlannerPromptGates:
     def test_planner_prompt_contains_sufficiency_gate(self):
         result = PLANNER_PROMPT.format(
             user_message="x", transcript="", context_view="", gathered="[]",
-            max_reads=8, max_subq=4, max_deep=4, mode_signal_block="", card_thread_block="", deferred_deep_semantics="", rationale_instruction="rat",
+            max_reads=8, max_subq=4, max_deep=4, mode_signal_block="", card_thread_block="", deferred_deep_semantics="", model_tier_block=MODEL_TIER_BLOCK, rationale_instruction="rat",
         )
         assert "read enough before acting" in result.lower()
 
     def test_planner_prompt_contains_model_tier_discipline(self):
         result = PLANNER_PROMPT.format(
             user_message="x", transcript="", context_view="", gathered="[]",
-            max_reads=8, max_subq=4, max_deep=4, mode_signal_block="", card_thread_block="", deferred_deep_semantics="", rationale_instruction="rat",
+            max_reads=8, max_subq=4, max_deep=4, mode_signal_block="", card_thread_block="", deferred_deep_semantics="", model_tier_block=MODEL_TIER_BLOCK, rationale_instruction="rat",
         )
         assert "MODEL TIER DISCIPLINE" in result
+
+    def test_planner_prompt_omits_model_tier_discipline_when_block_is_empty(self):
+        """The block is a format SLOT precisely so a turn where it does not apply can render it
+        empty (see ``Orchestrator.model_tier_doctrine_applies``); this pins that the raw template
+        has no OTHER copy of the doctrine baked in statically."""
+        result = PLANNER_PROMPT.format(
+            user_message="x", transcript="", context_view="", gathered="[]",
+            max_reads=8, max_subq=4, max_deep=4, mode_signal_block="", card_thread_block="", deferred_deep_semantics="", model_tier_block="", rationale_instruction="rat",
+        )
+        assert "MODEL TIER DISCIPLINE" not in result
 
     def test_planner_prompt_substitutes_max_reads(self):
         result = PLANNER_PROMPT.format(
             user_message="x", transcript="", context_view="", gathered="[]",
-            max_reads=42, max_subq=4, max_deep=4, mode_signal_block="", card_thread_block="", deferred_deep_semantics="", rationale_instruction="rat",
+            max_reads=42, max_subq=4, max_deep=4, mode_signal_block="", card_thread_block="", deferred_deep_semantics="", model_tier_block=MODEL_TIER_BLOCK, rationale_instruction="rat",
         )
         assert "42" in result
 
     def test_planner_prompt_substitutes_max_subq_and_max_deep(self):
         result = PLANNER_PROMPT.format(
             user_message="x", transcript="", context_view="", gathered="[]",
-            max_reads=8, max_subq=7, max_deep=9, mode_signal_block="", card_thread_block="", deferred_deep_semantics="", rationale_instruction="rat",
+            max_reads=8, max_subq=7, max_deep=9, mode_signal_block="", card_thread_block="", deferred_deep_semantics="", model_tier_block=MODEL_TIER_BLOCK, rationale_instruction="rat",
         )
         assert "7" in result
         assert "9" in result
@@ -411,6 +428,23 @@ class TestFileContextStoreScopeTagsSelection:
 
         ac = store.assemble("who is the contractor?")
         assert "scoped-card" in ac.card_ids
+
+    def test_card_metadata_passes_through_the_cards_own_scope_tags(self, tmp_path):
+        """A caller persisting this bundle across turns (e.g. the anticipation engine's
+        precompute, ``core/anticipation.py``'s ``bundle_scope_tags``) must be able to read back
+        which quest a selected card belongs to even on an UNSCOPED call (see the test above: the
+        card is selected either way, so its origin must still be visible)."""
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        card = _make_card("scoped-card", ["contractor", "orlando", "vasquez"],
+                          summary="The contractor is Orlando Vasquez.")
+        card["scope_tags"] = ["quest:q1"]
+        _write_card(cards_dir, card)
+        store = FileContextStore(str(cards_dir), confidence_threshold=0.0)
+
+        ac = store.assemble("who is the contractor?")
+        by_id = {m["id"]: m for m in ac.card_metadata}
+        assert by_id["scoped-card"]["scope_tags"] == ["quest:q1"]
 
 
 # ---------------------------------------------------------------------------
@@ -2182,3 +2216,65 @@ class TestStaleRegenKeepsOneCard:
         store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
         assert store.bootstrap(root=str(repo), provider=_topic_provider(one)) == 0
         assert _card_files(cards_dir) == []
+
+
+# ---------------------------------------------------------------------------
+# Docs-fallback gating + hard cap (2026-10-06 token-usage pass). The ``_fallback_file_search``
+# grep-the-corpus path fires precisely when NO card matched, so it carries no relevance signal
+# beyond "the keyword appears somewhere in this corpus" -- a turn with nothing to do with this
+# corpus can still share a word with some unrelated file.
+# ---------------------------------------------------------------------------
+
+class TestFileContextStoreDocsFallbackGating:
+    # NB: ``_assemble_inner`` returns empty BEFORE the fallback whenever there are literally NO
+    # cards at all (``if not cards: return AssembledContext()``) -- the fallback only engages when
+    # cards EXIST but none of them score above threshold for this task, so every test here seeds
+    # one deliberately non-matching card.
+
+    def test_fallback_file_search_fires_when_no_cards_match(self, tmp_path):
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "notes.py").write_text("# zorblatt marker line\nother text\n", encoding="utf-8")
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        _write_card(cards_dir, _make_card("irrelevant-card", ["database", "schema"]))
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        ac = store.assemble("zorblatt")
+        assert "zorblatt" in ac.context_view.lower()
+        assert ac.sources and ac.sources[0]["adapter"] == "fallback_grep"
+
+    def test_skip_corpus_fallback_meta_flag_suppresses_it(self, tmp_path):
+        """A consumer with its OWN structured signal that this turn is not about this corpus at
+        all (a reach judge, a classifier verdict) sets ``meta["skip_corpus_fallback"]`` and the
+        grep-the-corpus path is skipped entirely, instead of injecting unrelated lines."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        (repo / "notes.py").write_text("# zorblatt marker line\nother text\n", encoding="utf-8")
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        _write_card(cards_dir, _make_card("irrelevant-card", ["database", "schema"]))
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        ac = store.assemble("zorblatt", meta={"skip_corpus_fallback": True})
+        assert ac.context_view == ""
+        assert ac.sources == []
+
+    def test_fallback_file_search_is_hard_capped(self, tmp_path):
+        """Even when the gate above is NOT set (the default, unchanged behavior), the fallback
+        can only inject a bounded number of files and lines, never a dozen files of unrelated
+        content for one weak keyword match."""
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        for i in range(10):
+            (repo / f"f{i}.py").write_text("zorblatt\n" * 10, encoding="utf-8")
+        cards_dir = tmp_path / "cards"
+        cards_dir.mkdir()
+        _write_card(cards_dir, _make_card("irrelevant-card", ["database", "schema"]))
+        store = FileContextStore(str(cards_dir), repo_root=str(repo), auto_bootstrap=False)
+        ac = store.assemble("zorblatt")
+        assert len(ac.sources[0]["items"]) <= FileContextStore.FALLBACK_MAX_FILES_WALKED
+        shown_files = ac.context_view.count("**f")
+        assert 0 < shown_files <= FileContextStore.FALLBACK_MAX_FILES_SHOWN
+        # Each shown file contributes at most the capped number of lines.
+        for block in ac.context_view.split("**")[1:]:
+            line_count = sum(1 for ln in block.splitlines() if ln.startswith("  zorblatt"))
+            assert line_count <= FileContextStore.FALLBACK_MAX_LINES_PER_FILE

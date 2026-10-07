@@ -27,6 +27,12 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from ..adapters.bootstrap_reporter import (
+    check_should_send_monthly_report,
+    generate_bootstrap_report,
+    mark_report_sent,
+    get_corpus_stats,
+)
 from ..config import RunnerConfig, build_orchestrator, derive_capabilities, resolve_rep_sync_resolver
 from ..core import usage_limit
 from ..resources import ResourceGuard, ResourceLimits
@@ -52,7 +58,7 @@ def _guidance_manager_of(cfg: Any) -> Any:
         if found is not None:
             return found
     return None
-from .executor import TaskExecutor
+from .executor import TaskExecutor, task_scope_tags
 from .local_time import now_in_zone, scheduled_moment, today_in_zone
 from .quest_client import QuestApiError, QuestClient, QuestDecisionSink, QuestNotConfigured
 # StateStore lives in its own module (runner/state_store.py) so the channel-runner lane can reuse
@@ -63,6 +69,9 @@ from .state_store import StateStore
 __all__ = ["Poller", "StateStore"]
 
 log = logging.getLogger("quest-ai-runner.poller")
+
+# How long dispatch leaves a task alone after its claim fails (see ``_submit_to_pool``).
+CLAIM_RETRY_COOLDOWN_SECONDS = 600.0
 
 _DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
@@ -361,6 +370,9 @@ class Poller:
         # a race WITHIN this one process.
         self._inflight_lock = threading.Lock()
         self._inflight: set = set()
+        # task_id -> monotonic time before which dispatch skips it: a task whose claim failed
+        # (another account owns it, so the PATCH 404s) must not keep taking a worker slot.
+        self._claim_cooldown: Dict[str, float] = {}
 
     def _orch(self):
         if self._orchestrator is None:
@@ -398,6 +410,10 @@ class Poller:
         # opted in. Like the folder sync above, this is light bookkeeping rather than agentic work,
         # so it runs before the resource/token gates that hold back task PICKUP.
         self._ensure_autopilot_pass()
+        # Monthly bootstrap report (opt-in): send a report if the corpus is ready and a month
+        # has passed since the last report, or if this is the first report. Like folder sync,
+        # this is light bookkeeping not gated by resource/token limits.
+        self._send_bootstrap_report_if_due()
         return True
 
     def _dispatch_due(self, pool: Optional[ThreadPoolExecutor] = None) -> List[str]:
@@ -479,8 +495,14 @@ class Poller:
         as slots free up. The slot is claimed here, at submit time, so the next tick's own
         discovery cannot hand the same task out twice and the free-slot count stays honest."""
         submitted: List[str] = []
+        now = time.monotonic()
         for task in fresh:
             task_id = str(task.get("id") or task.get("task_id") or "")
+            # Oldest-first order means an unclaimable old task (404 on claim, owned by another
+            # account) would take a slot every tick and starve everything behind it: that is how
+            # the 2026-10-06 autopilot passes never ran. Skip it until its cooldown lapses.
+            if self._claim_cooldown.get(task_id, 0.0) > now:
+                continue
             with self._inflight_lock:
                 if len(self._inflight) >= max(1, self.cfg.max_concurrent_tasks):
                     break
@@ -702,7 +724,9 @@ class Poller:
         # re-fire loop — the backend claim (in_progress) is the second guard either way.
         if self.client.claim(task_id, handler=handler) is None:
             log.info("could not claim task %s — skipping (will be re-offered later)", task_id)
+            self._claim_cooldown[task_id] = time.monotonic() + CLAIM_RETRY_COOLDOWN_SECONDS
             return None
+        self._claim_cooldown.pop(task_id, None)
         self.state.mark(sig)
         # Persist WHAT WE ARE HOLDING before running it. The claim above has already PATCHed the
         # row to in_progress, so from here until a terminal report the backend believes this
@@ -923,12 +947,23 @@ class Poller:
             task_text = task.get("text") or task.get("title") or ""
             note_ctx = note_store.assemble(task_text)
             rep_turn_store = TurnContextStore(turns_dir=rep_turns_dir)
-            turn_ctx = rep_turn_store.assemble(task_text)
+            # ONE history per prompt. When the lane's own context assembler already renders past
+            # turns (the org-wide store, fenced and relevance-filtered per goal), the rep's copy of
+            # the same turns is not rendered again. Otherwise it is, fenced to this task's quest:
+            # a rep works many quests, and its turns on one must not ride into a run on another.
+            from ..core.turn_context_store import assembler_renders_turns
+            lane_assembler = getattr(self._orch(), "context_assembler", None)
+            turn_view = ""
+            if not assembler_renders_turns(lane_assembler):
+                turn_view = rep_turn_store.assemble(
+                    task_text, meta={"scope_tags": task_scope_tags(task),
+                                     "task_id": task.get("task_id") or task.get("id")}
+                ).context_view
 
             return self._build_rep_preamble(
                 skill_text, compose_deep_preamble, parse_skill_file,
                 note_ctx_view=note_ctx.context_view,
-                turn_ctx_view=turn_ctx.context_view,
+                turn_ctx_view=turn_view,
             )
         except Exception as e:  # noqa: BLE001 — best-effort, like progress posting/heartbeat
             log.info("rep pull for %s failed (%s) — running with existing skill file", user_id, e)
@@ -1001,7 +1036,9 @@ class Poller:
             task_text = task.get("text") or task.get("title") or ""
             result_text = (getattr(outcome, "result", None) or "").strip()
             rep_turn_store = TurnContextStore(turns_dir=rep_turns_dir)
-            rep_turn_store.record(task_text, {"response": result_text})
+            rep_turn_store.record(task_text, {"response": result_text,
+                                              "scope_tags": task_scope_tags(task),
+                                              "task_id": task.get("task_id") or task.get("id")})
         except Exception as e:  # noqa: BLE001 — best-effort; never fails the task
             log.info("rep turn record for %s failed (%s) — continuing", user_id, e)
 
@@ -1771,6 +1808,47 @@ class Poller:
             except Exception as e:  # noqa: BLE001 -- one quest's retire failure never blocks another
                 log.warning("autopilot: could not retire quest %s's pass %s (%s) — will retry "
                             "next scan", quest_id, task_id, e)
+
+    def _send_bootstrap_report_if_due(self) -> None:
+        """Send monthly bootstrap reports for the corpus, if configured.
+
+        This is a light, best-effort housekeeping task that runs once per scan. It tracks when
+        bootstrap completes and sends a monthly email report with corpus statistics, changes,
+        warnings, and remediation suggestions. Reports are opt-in via
+        QUEST_BOOTSTRAP_REPORTS=1 and require a cards_dir and quest id to send to.
+        """
+        if not self.client.configured or not self.cfg.quest_api_key:
+            return
+
+        cards_dir = getattr(self.cfg, "cards_dir", None)
+        if not cards_dir:
+            return
+
+        try:
+            if not check_should_send_monthly_report(cards_dir):
+                return
+
+            quest_id = getattr(self.cfg, "team_quest_id", None) or self.cfg.team_id
+            if not quest_id:
+                return
+
+            report = generate_bootstrap_report(cards_dir, str(Path(cards_dir).parent.parent))
+            stats = get_corpus_stats(cards_dir)
+
+            try:
+                self.client.send_quest_email(
+                    quest_id,
+                    subject=report["subject"],
+                    body=report["body"],
+                    rep_id="qar",
+                )
+                mark_report_sent(cards_dir, stats["card_count"], stats["file_count"])
+                log.info("bootstrap report sent for quest %s (cards: %d, files: %d)",
+                         quest_id, stats["card_count"], stats["file_count"])
+            except Exception as e:  # noqa: BLE001 -- email failure never blocks the lane
+                log.debug("bootstrap report not sent: %s", e)
+        except Exception as e:  # noqa: BLE001 -- never block housekeeping on report errors
+            log.debug("bootstrap report check failed: %s", e)
 
     def _sync_all_quest_folders(self) -> None:
         """Best-effort: sync EVERY entry in ``cfg.quest_folder_map``, independent of whether a

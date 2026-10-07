@@ -20,8 +20,11 @@ real LLM call is made anywhere in this file.
 """
 from __future__ import annotations
 
+import threading
+import time
 from typing import Any, Dict, List, Optional
 
+from quest_ai_runner.core.adapters import AssembledContext
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import (
     Orchestrator,
@@ -29,8 +32,11 @@ from quest_ai_runner.core.orchestrator import (
     provider_call_accepts_tier,
 )
 from quest_ai_runner.core.reach_judge import (
+    OUTSIDE_UNCOVERED_LINE,
+    OUTSIDE_UNCOVERED_LINE_WEB,
     REACH_VERDICTS,
     VERDICT_HEADING,
+    WEB_REACH_NOTE,
     judge_prompt,
     normalize_verdict,
     parse_judge_text,
@@ -116,9 +122,10 @@ class DispatchingProvider:
         return ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5"]
 
 
-def build(provider: Any, **cfg: Any) -> Orchestrator:
+def build(provider: Any, *, web: Any = None, **cfg: Any) -> Orchestrator:
     return Orchestrator(retrieval=StubRetrieval({}), provider=provider,
-                        registry=ModelRegistry(provider), config=OrchestratorConfig(**cfg))
+                        registry=ModelRegistry(provider), config=OrchestratorConfig(**cfg),
+                        web=web)
 
 
 # ---------------------------------------------------------------------------
@@ -228,6 +235,17 @@ def test_verdict_block_world_tells_the_planner_to_answer():
     assert "Do not hand it off" in block
 
 
+def test_verdict_block_outside_uncovered_text_depends_on_web_configured_flag():
+    verdict = {"reach": "outside", "covered_by": None}
+    assert verdict_block(verdict) == verdict_block(verdict, web_configured=False)
+    assert OUTSIDE_UNCOVERED_LINE in verdict_block(verdict, web_configured=False)
+    assert OUTSIDE_UNCOVERED_LINE_WEB in verdict_block(verdict, web_configured=True)
+    assert "{\"web\":" in verdict_block(verdict, web_configured=True)
+    # the COVERED case (an environment handles it) is untouched by the flag either way
+    covered = {"reach": "outside", "covered_by": "a-local-service"}
+    assert verdict_block(covered, web_configured=True) == verdict_block(covered, web_configured=False)
+
+
 # ---------------------------------------------------------------------------
 # judge_prompt
 # ---------------------------------------------------------------------------
@@ -243,6 +261,41 @@ def test_judge_prompt_truncates_an_over_long_message():
     prompt = judge_prompt(message, "a short summary", max_message_chars=20)
     assert "a" * 20 in prompt
     assert "TAIL_THAT_SHOULD_BE_CUT" not in prompt
+
+
+# Captured by running quest-ai-runner's core/reach_judge.py AT ITS COMMIT PARENT TO bf609a8
+# (`git show bf609a8^:quest_ai_runner/core/reach_judge.py`), where judge_prompt() had no
+# web_configured parameter at all, calling it with the exact same arguments this test uses. This
+# is the real pin: comparing the default call against an explicit web_configured=False call, both
+# through the NEW code (what this test used to do), proves nothing about whether either one
+# matches what the judge actually said before web_configured existed.
+_PRE_CHANGE_JUDGE_PROMPT_NO_WEB = (
+    'Decide ONE thing about the request below, and nothing else. Do not answer it and do not plan it.\n\nWHAT THIS ASSISTANT CAN REACH:\na short summary\n\nTHE REQUEST:\ncheck the latest score\n\n"outside": doing or answering this needs a machine or server and its files, folders, processes,\n  jobs, logs or quotas; a code repository; or a document, spreadsheet, drive or service held\n  somewhere other than the readable sources above. Set "covered_by" to the environment whose\n  description covers that kind of work on that place, or null when none of them does.\n"world": it asks for a current public fact about the world (news, a price, the weather, a result,\n  what is happening now). General knowledge the assistant simply knows is NOT this.\n"inside": everything it needs is in the readable sources above.\n\nJUDGE WHERE THE ANSWER LIVES, NOT WHERE THE WORK HAPPENED. A request about someone\'s own or their\nteam\'s work, plans, goals, tasks, records or progress is "inside" even when the work it describes\nis carried out elsewhere: the answer is in the records above. "How is that piece of work going",\n"what is the team on this week", "what is still open", "remind me to do X" are all "inside". It is\n"outside" only when the request needs you to INSPECT OR CHANGE the other place itself. A request\nthat merely RECORDS a fact about another place into these records is also "inside".\n'
+)
+
+
+def test_judge_prompt_is_byte_for_byte_unchanged_when_web_is_not_configured():
+    prompt_default = judge_prompt("check the latest score", "a short summary")
+    assert prompt_default == _PRE_CHANGE_JUDGE_PROMPT_NO_WEB
+    prompt_explicit_false = judge_prompt("check the latest score", "a short summary",
+                                         web_configured=False)
+    assert prompt_explicit_false == _PRE_CHANGE_JUDGE_PROMPT_NO_WEB
+    assert WEB_REACH_NOTE not in prompt_default
+
+
+def test_judge_prompt_adds_the_web_sentence_when_web_is_configured():
+    prompt = judge_prompt("check the latest score", "a short summary", web_configured=True)
+    assert WEB_REACH_NOTE in prompt
+    assert "a short summary" in prompt
+    assert "check the latest score" in prompt
+
+
+def test_judge_prompt_web_note_has_blank_line_framing():
+    """Cosmetic fix: with web on, WEB_REACH_NOTE used to sit flush against its neighbors (no
+    blank line before or after it), unlike every other section of this prompt. It now gets the
+    same blank-line paragraph framing; the web-off rendering is untouched, pinned above."""
+    prompt = judge_prompt("check the latest score", "a short summary", web_configured=True)
+    assert "above.\n\n" + WEB_REACH_NOTE + "\n\nJUDGE WHERE" in prompt
 
 
 # ---------------------------------------------------------------------------
@@ -333,3 +386,212 @@ def test_plan_sends_no_verdict_heading_at_all_for_an_inside_verdict():
     orch._plan("what is still open on my list", "", "", [])
     main_prompt = provider.prompts[-1]
     assert VERDICT_HEADING not in main_prompt
+
+
+# ---------------------------------------------------------------------------
+# The judge overlaps the turn instead of sitting in front of the first plan
+# ---------------------------------------------------------------------------
+
+class SlowJudgeProvider(DispatchingProvider):
+    """Sleeps on the judge's call only, and records when the judge started."""
+
+    def __init__(self, delay: float, **kwargs: Any):
+        super().__init__(**kwargs)
+        self.delay = delay
+        self.judge_started = threading.Event()
+        self.judge_calls = 0
+
+    def plan(self, prompt: str, *, model: str, tool_schema: Dict[str, Any],
+             tier: Optional[str] = None) -> Any:
+        if tool_schema.get("name") == "reach":
+            self.judge_calls += 1
+            self.judge_started.set()
+            time.sleep(self.delay)
+        return super().plan(prompt, model=model, tool_schema=tool_schema, tier=tier)
+
+
+def test_prefetch_returns_the_same_future_for_the_same_request_and_judges_once():
+    provider = SlowJudgeProvider(0.0, reach_response={"reach": "world"},
+                                 decide_response={"action": "answer"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    first = orch.prefetch_reach_verdict("what is the weather today")
+    assert first is orch.prefetch_reach_verdict("what is the weather today")
+    assert orch.reach_verdict("what is the weather today") == {"reach": "world", "covered_by": None}
+    assert provider.judge_calls == 1
+
+
+def test_prefetch_is_a_no_op_when_the_judge_is_off():
+    provider = SlowJudgeProvider(0.0, reach_response={"reach": "world"},
+                                 decide_response={"action": "answer"})
+    orch = build(provider, planner_reach_judge=False, read_reach_summary="Can read local notes.")
+    assert orch.prefetch_reach_verdict("anything") is None
+    assert provider.judge_calls == 0
+
+
+def test_a_prefetched_verdict_costs_the_first_plan_no_wait():
+    provider = SlowJudgeProvider(0.3, reach_response={"reach": "world"},
+                                 decide_response={"action": "answer"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    orch.prefetch_reach_verdict("who won last night")
+    time.sleep(0.4)  # stands in for request understanding and context assembly
+    started = time.monotonic()
+    orch._plan("who won last night", "", "", [])
+    assert time.monotonic() - started < 0.2
+    assert provider.judge_calls == 1
+
+
+def test_a_judge_that_overruns_its_timeout_leaves_the_plan_without_a_verdict():
+    provider = SlowJudgeProvider(1.0, reach_response={"reach": "outside", "covered_by": "x"},
+                                 decide_response={"action": "answer"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.",
+                 planner_reach_judge_timeout_seconds=0.05)
+    started = time.monotonic()
+    assert orch.reach_verdict("restart the service") is None
+    assert time.monotonic() - started < 0.5
+
+
+def test_judge_reach_passes_web_configured_through_to_the_judge_prompt():
+    """The orchestrator knows whether a web adapter is wired (``self.web``); that fact must reach
+    the judge's own prompt, not only the verdict text stamped into the planner afterwards."""
+    provider = RecordingProvider(response={"reach": "inside"})
+    orch_no_web = build(provider, planner_reach_judge=True,
+                        read_reach_summary="Can read local notes.")
+    orch_no_web.judge_reach("what is the weather today")
+    assert WEB_REACH_NOTE not in provider.calls[0]["prompt"]
+
+    provider2 = RecordingProvider(response={"reach": "inside"})
+    orch_with_web = build(provider2, web=object(), planner_reach_judge=True,
+                          read_reach_summary="Can read local notes.")
+    orch_with_web.judge_reach("what is the weather today")
+    assert WEB_REACH_NOTE in provider2.calls[0]["prompt"]
+
+
+def test_the_verdict_cache_is_bounded():
+    provider = SlowJudgeProvider(0.0, reach_response={"reach": "inside"},
+                                 decide_response={"action": "answer"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    orch.REACH_VERDICT_CACHE_SIZE = 3
+    for i in range(10):
+        orch.reach_verdict(f"request number {i}")
+    assert len(orch.reach_verdict_cache) == 3
+    assert list(orch.reach_verdict_cache) == [f"request number {i}"[:500] for i in (7, 8, 9)]
+
+
+class WaitingAssembler:
+    """A context assembler that records whether the judge had already started while it ran."""
+
+    def __init__(self, provider: SlowJudgeProvider):
+        self.provider = provider
+        self.judge_running_during_assembly: Optional[bool] = None
+
+    def assemble(self, message: str, meta: Optional[Dict[str, Any]] = None) -> AssembledContext:
+        self.judge_running_during_assembly = self.provider.judge_started.wait(timeout=2.0)
+        return AssembledContext(context_view="")
+
+
+def test_run_starts_the_judge_before_context_assembly_finishes():
+    provider = SlowJudgeProvider(0.0, reach_response={"reach": "inside"},
+                                 decide_response={"action": "answer", "rationale": "ok"})
+    assembler = WaitingAssembler(provider)
+    orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider,
+                        registry=ModelRegistry(provider), context_assembler=assembler,
+                        config=OrchestratorConfig(planner_reach_judge=True,
+                                                  read_reach_summary="Can read local notes."))
+    orch.run("what is still open on my list")
+    # Serial (the old shape), the judge could only start at the first plan, after assembly.
+    assert assembler.judge_running_during_assembly is True
+    assert provider.judge_calls == 1
+
+
+def test_a_timed_out_judge_is_waited_on_once_per_turn_not_once_per_step():
+    provider = SlowJudgeProvider(1.0, reach_response={"reach": "outside", "covered_by": "x"},
+                                 decide_response={"action": "answer"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.",
+                 planner_reach_judge_timeout_seconds=0.2)
+    assert orch.reach_verdict("restart the service") is None
+    started = time.monotonic()
+    assert orch.reach_verdict("restart the service") is None   # a re-plan step: no second wait
+    assert time.monotonic() - started < 0.1
+    assert provider.judge_calls == 1
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator.peek_reach_verdict + gate_docs_fallback (2026-10-06 token-usage pass): a
+# NON-BLOCKING reuse of an already-resolved reach verdict to gate the context assembler's
+# keyword-grep corpus fallback for a turn that is not about this corpus at all.
+# ---------------------------------------------------------------------------
+
+def test_peek_reach_verdict_is_a_miss_before_the_judge_resolves():
+    provider = RecordingProvider(response={"reach": "outside"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    # Nothing has started the judge yet: a peek is a miss, not a wait, and makes no call.
+    assert orch.peek_reach_verdict("restart the service") is None
+    assert provider.calls == []
+
+
+def test_peek_reach_verdict_reuses_an_already_resolved_verdict_for_free():
+    provider = RecordingProvider(response={"reach": "outside", "covered_by": "x"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    first = orch.reach_verdict("restart the service")  # the normal, blocking read
+    assert first == {"reach": "outside", "covered_by": "x"}
+    assert len(provider.calls) == 1
+    # A LATER non-blocking peek for the SAME message reuses it without another call.
+    assert orch.peek_reach_verdict("restart the service") == first
+    assert len(provider.calls) == 1
+
+
+def test_peek_reach_verdict_is_per_message_and_never_raises():
+    provider = RecordingProvider(response={"reach": "outside"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    orch.reach_verdict("restart the service")
+    # A DIFFERENT message was never asked about: still a clean miss, no call, no exception.
+    assert orch.peek_reach_verdict("a completely different request") is None
+    # An orchestrator with the judge off entirely: no cache exists at all; still no exception.
+    off = build(RecordingProvider(response={"reach": "outside"}), planner_reach_judge=False,
+                read_reach_summary="Can read local notes.")
+    assert off.peek_reach_verdict("restart the service") is None
+
+
+def test_gate_docs_fallback_sets_the_flag_only_for_a_resolved_non_inside_verdict():
+    provider = RecordingProvider(response={"reach": "outside"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    orch.reach_verdict("restart the service")  # resolve it first, same as the planner would
+    meta: Dict[str, Any] = {}
+    orch.gate_docs_fallback(meta, "restart the service")
+    assert meta.get("skip_corpus_fallback") is True
+
+
+def test_gate_docs_fallback_does_nothing_for_an_inside_verdict():
+    provider = RecordingProvider(response={"reach": "inside"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    orch.reach_verdict("what's on my list")
+    meta: Dict[str, Any] = {}
+    orch.gate_docs_fallback(meta, "what's on my list")
+    assert "skip_corpus_fallback" not in meta
+
+
+def test_gate_docs_fallback_does_nothing_when_no_verdict_is_resolved_yet():
+    provider = RecordingProvider(response={"reach": "outside"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    meta: Dict[str, Any] = {}
+    # No reach_verdict()/prefetch call happened first: the peek is a miss, so the gate is a no-op
+    # (today's unchanged fallback behavior), never a guess and never a wait.
+    orch.gate_docs_fallback(meta, "restart the service")
+    assert "skip_corpus_fallback" not in meta
+    assert provider.calls == []
+
+
+def test_gate_docs_fallback_never_overrides_an_explicit_caller_value():
+    provider = RecordingProvider(response={"reach": "outside"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    orch.reach_verdict("restart the service")
+    meta: Dict[str, Any] = {"skip_corpus_fallback": False}
+    orch.gate_docs_fallback(meta, "restart the service")
+    assert meta["skip_corpus_fallback"] is False
+
+
+def test_gate_docs_fallback_is_a_no_op_on_none_meta():
+    provider = RecordingProvider(response={"reach": "outside"})
+    orch = build(provider, planner_reach_judge=True, read_reach_summary="Can read local notes.")
+    orch.reach_verdict("restart the service")
+    orch.gate_docs_fallback(None, "restart the service")  # must not raise

@@ -38,6 +38,15 @@ These satisfy the core interfaces; a consumer wires the ones it needs into a Run
                                 NATIVE tool (Anthropic web_search / Gemini Google Search grounding),
                                 reusing the LLM key (no separate web-search key). The key-free default;
                                 wired automatically by build_orchestrator unless WEB_SEARCH_ENABLED=false.
+  * WebResearchAdapter        — fast, snippet-first web search + focused page fetch (see
+                                docs/web-search.md). search() runs one or more queries IN PARALLEL,
+                                dedupes hits by URL, and returns ONE compact Observation (title+url+
+                                trimmed snippet per hit); fetch(url, focus) extracts a page's main
+                                text and keeps only the passages relevant to ``focus`` within a token
+                                budget. Backed by a pluggable SearchBackend (Serper/Brave/Tavily/
+                                SearXNG/Gemini grounding/provider-native, with automatic fallback
+                                chaining) and a WebCache (memory + optional on-disk). stdlib + httpx
+                                only. build_web_research_from_env() wires one from env config.
   * CompositeRetrievalAdapter — RetrievalAdapter that runs multiple adapters IN PARALLEL, merging
                                 results. Query files, databases, conversations, Quest, task memory together.
   * AnthropicProvider         — ModelProvider (plan / answer / live models.list bucketing). Needs an
@@ -115,6 +124,23 @@ from .quest_context_adapter import QuestContextAdapter, build_quest_resolvers
 from .cached_db_adapter import CachedDbAdapter
 from .web_search_adapter import WebSearchAdapter
 from .provider_web_search_adapter import ProviderWebSearchAdapter
+from .web_cache import WebCache, normalize_query
+from .web_page_extract import check_url_is_safe, extract_main_text, select_passages, split_passages
+from .web_search_backends import (
+    BraveBackend,
+    FallbackSearchBackend,
+    GeminiGroundingBackend,
+    ProviderNativeBackend,
+    SearchBackend,
+    SearchBackendError,
+    SearchHit,
+    SearchResponse,
+    SearxngBackend,
+    SerperBackend,
+    TavilyBackend,
+    select_search_backend,
+)
+from .web_research import WebResearchAdapter, build_web_research_from_env
 from .card_metadata_generator import CardMetadataGenerator
 from .claude_cli_provider import ClaudeCliProvider
 from .claude_conversations_adapter import ClaudeConversationsAdapter
@@ -274,6 +300,26 @@ __all__ = [
     "QuestRetrievalAdapter",
     "WebSearchAdapter",
     "ProviderWebSearchAdapter",
+    "WebCache",
+    "normalize_query",
+    "check_url_is_safe",
+    "extract_main_text",
+    "select_passages",
+    "split_passages",
+    "SearchBackend",
+    "SearchBackendError",
+    "SearchHit",
+    "SearchResponse",
+    "SerperBackend",
+    "BraveBackend",
+    "TavilyBackend",
+    "SearxngBackend",
+    "GeminiGroundingBackend",
+    "ProviderNativeBackend",
+    "FallbackSearchBackend",
+    "select_search_backend",
+    "WebResearchAdapter",
+    "build_web_research_from_env",
     "CompositeRetrievalAdapter",
     "ConversationCardBuilder",
     "CardMetadataGenerator",

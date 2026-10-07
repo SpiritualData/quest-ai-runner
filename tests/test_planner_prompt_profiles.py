@@ -183,7 +183,9 @@ def test_strip_schema_descriptions_keeps_the_contract_and_drops_the_prose():
     assert descriptions_in(stripped) == 0
     props = stripped["input_schema"]["properties"]
     assert props["action"]["enum"] == ["read", "answer", "deep", "confirm", "clarify"]
-    assert stripped["input_schema"]["required"] == ["action", "rationale"]
+    # user_intent joined the required set when the escalation nets stopped reading the user's
+    # words with a regex and started honoring the planner's own verdict.
+    assert stripped["input_schema"]["required"] == ["action", "rationale", "user_intent"]
     assert props["model_tier"]["enum"] == ["haiku", "sonnet", "opus", None]
     assert "reads" in props and "deferred_deep" in props
 
@@ -198,7 +200,9 @@ def test_decide_tool_for_compact_strips_on_every_variant():
     for queued in (False, True):
         for threaded in (False, True):
             tool = decide_tool_for(False, queued, threaded, tools=False, compact=True)
-            assert descriptions_in(tool) == 0, (queued, threaded)
+            # Only the hand-off field keeps its description (COMPACT_SCHEMA_KEPT_DESCRIPTIONS).
+            assert descriptions_in(tool) == 1, (queued, threaded)
+            assert tool["input_schema"]["properties"]["deferred_deep"].get("description")
             assert descriptions_in(
                 decide_tool_for(False, queued, threaded, tools=False, compact=False)) > 0
 
@@ -223,7 +227,7 @@ def test_a_compact_run_sends_the_compact_prompt_and_the_compact_schema():
     assert "THE ACTIONS:" in prompt
     assert "SPECIFICITY (answer about the SPECIFIC subject" not in prompt
     assert PLANNER_DECISION_RUBRIC in prompt
-    assert descriptions_in(provider.schemas[0]) == 0
+    assert descriptions_in(provider.schemas[0]) == 1
 
 
 def test_a_compact_run_is_smaller_than_a_default_run_on_the_same_message():
@@ -234,3 +238,156 @@ def test_a_compact_run_is_smaller_than_a_default_run_on_the_same_message():
         build(provider, planner_prompt_profile=profile)._plan(message, "", "some context", [])
         sizes[profile] = token_estimate(provider.prompts[0])
     assert sizes["compact"] < sizes["full"] * 0.5, sizes
+
+
+def test_the_compact_schema_keeps_the_hand_off_fields_description_and_the_prompt_says_why():
+    """Measured 2026-10-06: with no description on `deferred_deep`, a cheap planner wrote "I will
+    hand this off" as its answer and left the field empty on 14 of 38 hand-off decisions."""
+    tool = decide_tool_for(False, True, False, tools=False, compact=True)
+    props = tool["input_schema"]["properties"]
+    assert "background task queue" in props["deferred_deep"]["description"]
+    assert "description" not in props["action"]
+    assert "A HAND-OFF IS THE `deferred_deep` FIELD, NOT THE WORDS" in PLANNER_PROFILES["compact"]
+
+
+# ---------------------------------------------------------------------------
+# Read-before-write: a "deep" hand-off whose write depends on a value from the
+# person's data must gather it first, or name it in deep_brief -- never let the
+# worker invent or hardcode a value nobody actually read. See round-2 trace: a
+# QuestCommandRunner write hardcoded a value never read because the planner's own
+# gathered facts never reached the worker (fixed by threading context_preamble;
+# this is the planner-side half of the same fix).
+# ---------------------------------------------------------------------------
+
+def test_both_profiles_tell_the_planner_to_gather_data_dependent_write_values_first():
+    for profile_prompt in (PLANNER_PROMPT, PLANNER_PROMPT_COMPACT):
+        assert "gather it" in profile_prompt
+        assert "deep_brief" in profile_prompt
+
+
+# ---------------------------------------------------------------------------
+# Deep fan-out splits only what the person asked for (round 2 trace): a planner
+# that fanned "add that goal" into one subtask for the goal and a second,
+# self-initiated subtask (a note recording the Friday-launch conflict) made the
+# reply carry the same parked conflict question twice, two different goal
+# proposals, and a note nobody asked for. Pinned cheaply in the shared
+# _PLANNER_TAIL, so both profiles get it from one edit.
+# ---------------------------------------------------------------------------
+
+def test_deep_fan_out_tells_the_planner_to_split_only_the_ask():
+    for profile_prompt in (PLANNER_PROMPT, PLANNER_PROMPT_COMPACT):
+        assert "DEEP FAN-OUT" in profile_prompt
+        fan_out = profile_prompt[profile_prompt.index("DEEP FAN-OUT"):]
+        fan_out = fan_out[:fan_out.index("\n\n")]
+        assert "never add your own subtask" in fan_out
+
+
+def test_deep_fan_out_guidance_stays_small():
+    """The added sentence is one short line (~35 tokens or fewer); use the file's own
+    character-count proxy (see ``token_estimate`` above) rather than a hard tiktoken
+    dependency this repo does not declare."""
+    base = ('DEEP FAN-OUT (optional, for "deep"): if the work splits into INDEPENDENT subtasks, set\n'
+            '  `deep_subtasks` to 2-{max_deep} of {"goal": "...", "brief": "..."} -- each a '
+            'concurrent run.')
+    fan_out = PLANNER_PROMPT[PLANNER_PROMPT.index("DEEP FAN-OUT"):]
+    fan_out = fan_out[:fan_out.index("\n\n")]
+    delta_chars = token_estimate(fan_out) - token_estimate(base)
+    assert 0 < delta_chars <= 160, delta_chars  # ~35 tokens at ~4.5 chars/token
+
+
+# ---------------------------------------------------------------------------
+# Token-usage pass (2026-10-06): a discovery menu renders in full at most once per turn,
+# MODEL TIER DISCIPLINE is omitted when it cannot apply, and narration echo-back is bounded.
+# ---------------------------------------------------------------------------
+
+DISCOVERY_MENU_TEXT = "- add_goal(...) creates a goal\n- get_insights(...) reads insights"
+
+
+def discovery_observation(discovery_step: int) -> Dict[str, Any]:
+    return {
+        "kind": "query",
+        "locator": "list_operations",
+        "discovery": True,
+        "discovery_step": discovery_step,
+        "text": DISCOVERY_MENU_TEXT,
+    }
+
+
+def test_discovery_menu_renders_full_only_on_the_step_right_after_it_was_read():
+    provider = CapturingProvider()
+    orch = build(provider)
+    gathered = [discovery_observation(discovery_step=0)]
+
+    orch._plan("what can you do here?", "", "", gathered, step=0)
+    assert DISCOVERY_MENU_TEXT in provider.prompts[-1]
+
+    orch._plan("and then?", "", "", gathered, step=1)
+    later = provider.prompts[-1]
+    assert DISCOVERY_MENU_TEXT not in later
+    assert "list_operations" in later  # a reminder naming the menu, not the menu itself
+    assert "already" in later.lower()
+
+    orch._plan("one more", "", "", gathered, step=2)
+    assert DISCOVERY_MENU_TEXT not in provider.prompts[-1]
+
+
+def test_a_second_genuine_read_of_the_same_discovery_spec_renders_full_again():
+    """``discovery_step`` names the step that the read happened to be visible from, not a one-time
+    flag -- if the SAME discovery spec is legitimately read again later in the turn (its own
+    repeated-read observation aside), the planner call right after THAT read sees it in full too."""
+    provider = CapturingProvider()
+    orch = build(provider)
+    gathered = [discovery_observation(discovery_step=0), discovery_observation(discovery_step=2)]
+    orch._plan("re-read", "", "", gathered, step=2)
+    assert DISCOVERY_MENU_TEXT in provider.prompts[-1]
+
+
+class FixedModelTierRunner:
+    """A duck-typed deep runner: only the one attribute ``model_tier_doctrine_applies`` reads."""
+
+    def __init__(self, uses_deep_model: bool):
+        self.uses_deep_model = uses_deep_model
+
+
+def test_model_tier_discipline_present_with_no_runner_known():
+    provider = CapturingProvider()
+    orch = build(provider)  # no deep_runner wired at all
+    orch._plan("tell me about my plan", "", "", [])
+    assert "MODEL TIER DISCIPLINE" in provider.prompts[-1]
+
+
+def test_model_tier_discipline_omitted_when_the_only_runner_ignores_the_ladder():
+    provider = CapturingProvider()
+    orch = Orchestrator(retrieval=StubRetrieval({}), provider=provider,
+                        registry=ModelRegistry(provider), config=OrchestratorConfig(),
+                        deep_runner=FixedModelTierRunner(uses_deep_model=False))
+    orch._plan("tell me about my plan", "", "", [])
+    assert "MODEL TIER DISCIPLINE" not in provider.prompts[-1]
+
+
+def test_model_tier_discipline_present_when_any_named_runner_uses_the_ladder():
+    provider = CapturingProvider()
+    orch = Orchestrator(
+        retrieval=StubRetrieval({}), provider=provider, registry=ModelRegistry(provider),
+        config=OrchestratorConfig(),
+        deep_runners={
+            "code": FixedModelTierRunner(uses_deep_model=False),
+            "delegate": FixedModelTierRunner(uses_deep_model=True),
+        },
+        deep_runner_classifier=lambda *a, **kw: "code",
+    )
+    orch._plan("tell me about my plan", "", "", [])
+    assert "MODEL TIER DISCIPLINE" in provider.prompts[-1]
+
+
+def test_already_said_echo_back_is_bounded_to_the_most_recent_lines():
+    provider = CapturingProvider()
+    orch = build(provider)
+    said = [f"narration line {i}" for i in range(10)]
+    orch._plan("continue", "", "", [], step=1, narrate=True, persona="Rep",
+              already_said=said)
+    prompt = provider.prompts[-1]
+    for line in said[:-3]:
+        assert line not in prompt
+    for line in said[-3:]:
+        assert line in prompt

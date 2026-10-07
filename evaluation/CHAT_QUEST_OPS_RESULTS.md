@@ -1,4 +1,158 @@
-# Quest AI chat: quest-operation routing + execution eval (2026-10-02)
+# Quest AI chat: quest-operation routing + execution eval
+
+## Re-run and fixes, 2026-10-06
+
+Same in-app surface (`POST /api/quest-ai/conversations/{id}/messages/stream` on the dev backend,
+which uses a cheap Gemini flash-lite tier), with the harness fixed first so the numbers are
+honest:
+
+- **Delegation detector.** The backend's frame is `{"event": "delegated", "task_id": ...}` (the id
+  sometimes only on the done frame's `pending_undo`); both are read now, so short-circuit hand-offs
+  count as deep.
+- **Routes, not planner actions.** A planner `deep` in Quest's chat usually runs IN-PROCESS
+  (generated code over Quest data). Each turn is classified `delegated` / `inline_write` /
+  `inline_code` / `answer`; only `delegated` left the process.
+- **Verifiers read what the app shows**: Today's Actions for habits, the timer route, the
+  daily-reflection collection (local or UTC date), parked approvals by their executable kind.
+  `selftest` proves every write verifier with a negative and a positive control through the app's
+  own routes.
+- **Hygiene.** One conversation per case, deleted at teardown (left behind, they outlive the
+  fixture quest and become context for later runs); delegated tasks cancelled at once; a dev-host
+  allowlist (`QAR_EVAL_DEV_HOST`); 429 retries. Since 2026-10-06 an API key cannot create a quest,
+  so the fixture quest comes from an operator factory command named in env (quest-backend
+  `scripts/checks/eval_fixture_quest.py`).
+- **Dataset**: 50 cases (the original 22 ids unchanged plus 28), tagged read / list / write /
+  inform / contrast, and an approval-card arm (`--auto-run off`): a write must be held before
+  "Yes, go ahead." and applied after it.
+
+Per Joshua's rule of the same day (no full eval runs without his approval), the baseline is ONE
+pass of the 50 cases (it was stopped before its second pass), and the after-run is ONE pass on a
+paired, stratified 24-case subset plus a 4-case approval arm, then a 6-case re-run after the last
+fixes. All on dev, fixture data verified gone after every pass. Single passes are noisy: a case
+that flips once is a signal, not proof.
+
+### Baseline (one pass, 50 cases, before today's fixes)
+
+| Metric | Result |
+|---|---|
+| Routing correct | 47/50 (LA1 and G7 handed off, X5 answered instead of handed off) |
+| Plain operations kept in-process | 44/45 non-contrast cases (G7 queued a background task); LA1's hand-off was an extra "check" task after a full answer |
+| Writes that really landed (verified in the app's own reads) | **7/23** |
+| Reads / listings correct | 15/22 |
+| Turn latency | median 16.1s, p90 52.0s, max 497.3s (G5 rename) and 387.5s (G6 complete) |
+| Turns hitting the 15-step read cap | 2 |
+
+What failed, by root cause (each traced to code, not guessed):
+
+1. **Habit "done" landed where the app does not look.** `log_habit` wrote a legacy
+   `HabitCompletion` row; the app's Done button writes the period entry through
+   `POST /api/data/entries`. H1-H4 replied "done" while Today's Actions showed not done.
+2. **No helper for notes or timers**, so code wrote a note into `preferences`, or said it could not
+   start a timer.
+3. **Habit and collection lookups were not scoped to the quest.** The quest's
+   `habit_collection_ids` mirror is empty for habits made in the app, so generated code fell back to
+   the first account-wide name match and logged ANOTHER quest's habit. "Which habits am I tracking"
+   answered "none" with four linked.
+4. **Unknown entry fields were accepted** (`distance` for `distance_km`), and the reply said saved.
+5. **Raw writes hung to the 120s timeout.** pymongo's write result is not JSON serializable, so the
+   sandbox RPC reply was dropped; the critic then re-ran an already applied write. This is the
+   whole of the 497s and 387s turns.
+6. **A read forced into a write**: "how many km did I **log**" matched a substring guess.
+7. **Field writes on an autopilot-off quest** ran, were refused by the AI field-write gate, and
+   replied "I tried, but it did not work" (or "I'm not sure what you'd like me to do").
+8. **Creating a reflection was blocked** by the guard meant for changes to existing documents.
+9. **Context bleed**: a deleted quest's conversations became "general" and grounded other quests'
+   answers; an Oct 2 eval turn had left a rep learned note ("set the goal to a sub-48-minute 10K")
+   that still rewrote answers about other quests.
+
+### Fixes (quest-backend unless noted; all on `october`)
+
+| Fix | Commit |
+|---|---|
+| `log_habit` writes through the app's own entry path and re-reads it; `start_habit_timer` / `stop_habit_timer` / `add_quest_note` helpers over the routes' shared code | 36550a77 (swept into a concurrent commit), 860ca623 |
+| Daily reflection save clears the entry-list cache | 860ca623 |
+| A deleted quest's conversations stay fenced out of other quests | a4151f7d |
+| Quest-scoped habit/collection lookup (`get_quest_collections`), unknown entry fields refused, quick recordings stay inline, listings read fresh, YOUR RESPONSIBILITIES is not the goal list, raw writes return counts instead of hanging | fbe91cc7 |
+| No "I tried N versions of the code" machinery in replies | 15077aaa |
+| Raw writes clear the caches the app reads | 3a3715e2 |
+| Structured read/write verdict from the classifier (`CODE_WRITE`), field writes on autopilot-off quests ask first, creations pass the document guard, quest collections readable by the planner | c834e6da |
+| Code generation sees the quest's own collections and field ids | 87dda628 |
+| `entry_date` accepted on any collection | 48dc5ca8 |
+| Read answers see the whole result (was the first 1000 chars of a repr) | f8543ba7 |
+| Planner grounding names the quest-collections read | 675631a6 |
+| QAR: a short message that names its own subject is never a clarifying question ("Summarize my latest daily reflection.") | 6ef8e6b |
+| Critic-pass fixes: exact re-read by id, minutes under target marked started, undo scoped to the named habit (was the whole entries collection), upsert reported as created, guard exemption narrowed | 85d10a83 |
+
+The classifier's write verdict was checked on 30 labelled messages with the real fast-tier model
+(`scripts/checks/check_classifier_write_verdict.py`): 30/30 intent, 30/30 read/write.
+
+### Paired before/after, same 24 cases, one pass each
+
+| id | kind | before route | before | before s | after route | after | after s | after the last fixes |
+|---|---|---|---|---|---|---|---|---|
+| R1 | read | answer | Y | 12.0 | answer | N | 9.8 | N (stale rep note, removed after) |
+| R4 | read | answer | N | 27.4 | answer | Y | 8.6 | |
+| L1 | list | answer | Y | 34.4 | answer | N | 9.3 | Y 23.3s |
+| L2 | list | inline_code | N | 32.5 | answer | N | 10.5 | Y 10.8s |
+| L3 | list | answer | N | 26.4 | inline_code | N* | 20.1 | |
+| LA2 | list | answer | N | 30.9 | inline_code | Y | 19.6 | |
+| LA5 | read | answer | N | 13.7 | inline_code | N* | 19.4 | |
+| SC1 | list | answer | N | 34.0 | answer | Y | 34.2 | |
+| C1 | inform | answer | Y | 9.4 | answer | Y | 10.5 | |
+| D1 | write | inline_code | N | 13.0 | inline_write | N* | 13.6 | Y 17.0s |
+| D2 | read | inline_code | Y | 49.8 | inline_code | Y | 22.9 | |
+| D3 | write | inline_code | N | 16.1 | inline_write | N* | 15.2 | N, handed off as a task |
+| H1 | write | inline_write | N | 22.6 | inline_write | Y | 15.2 | |
+| H2 | write | inline_write | N | 52.0 | inline_write | Y | 17.1 | |
+| T1 | write | answer | N | 11.3 | inline_write | Y | 12.1 | |
+| T2 | write | answer | N | 9.5 | inline_write | Y | 11.1 | |
+| E3 | write | inline_write | N | 12.0 | inline_write | N | 15.7 | Y 13.0s |
+| G3 | write | inline_write | N | 12.6 | inline_write | Y | 13.6 | |
+| G5 | write | inline_write | Y | 497.3 | inline_write | Y | 13.6 | |
+| G7 | write | delegated | N | 16.0 | inline_write | Y | 11.4 | |
+| F1 | write | inline_write | N | 10.7 | inline_code | Y | 16.4 | |
+| F3 | write | inline_write | N | 17.6 | inline_code | Y | 12.6 | |
+| X1 | contrast | delegated | Y | 2.1 | delegated | Y | 2.0 | |
+| X3 | contrast | delegated | Y | 2.1 | delegated | Y | 1.7 | |
+
+`*` verifier artefacts, read with the reply: L3 summed Oct 4 to 7 for "the last few days" (13.2 km,
+correct for that window; the verifier wanted the Oct 2 entry too); LA5's fixture habit rows are all
+dated today by the entries route (a backdated habit entry needs `entry_date`), so "0 in the last
+three days" is what the data says; D1/D3 saved the reflection under the account's UTC date, which
+the verifier did not accept until 3c07ad0. F1/F3 pass as "held for approval, reply honest": the
+quest's autopilot is off, so the change is on an approval card.
+
+| Metric (24 paired cases) | Before | After |
+|---|---|---|
+| Correct | 7/24 | 16/24 in one pass; 20/24 after the last fixes and verifier corrections |
+| Routing correct | 23/24 | 24/24 (D3 handed off once in the last re-run) |
+| Writes correct | 1/12 | 9/12 in one pass; 11/12 after the last fixes (D1 and E3 passed, D3 did not) |
+| Median / max turn | 16.1s / 497.3s | 13.6s / 34.2s |
+| Step-cap hits | 2 (of 50) | 0 |
+
+Approval-card arm (`auto_run=false`, the app's default), 4 write cases: H1, G3 (note) and F1
+(current state on an autopilot-off quest) were each held before "Yes, go ahead." and applied after
+it. E1 (journal entry) was held but did not land after the yes until 48dc5ca8; re-run, it was held
+and then applied.
+
+### Still open
+
+- **D3 hand-off.** "Here's today's reflection: ... heading into the weekend taper. Save it." was
+  once queued as a background task by the pre-brain task detector (probably reading "weekend" as a
+  deferral) despite the new inline rule. One flip in two runs.
+- **Rep learned notes are account-wide.** Since 2026-10-05 the feedback judge declines facts, but a
+  style note learned in one quest's chat still applies in every quest's chat. The eval account's
+  rep also carries older notes from other testing (marathon, knee) that colour unrelated replies.
+- **Pre-existing deleted-quest conversations stay general.** Nothing left in the data ties them to
+  the quest they were about (checked on dev: 0 of 225 quest-less conversations recoverable), so no
+  backfill was possible.
+- **Retry after a partial write.** When generated code writes, then fails later in the same
+  program, the critic re-runs the whole program. The write helpers are now idempotent-ish (period
+  upserts, re-reads), but a raw `insert` is not.
+
+---
+
+# Original run (2026-10-02)
 
 Harness: `evaluation/chat_quest_ops_routing_eval.py`
 (`setup` / `run` / `run-inapp` / `teardown`). Measured on **dev**

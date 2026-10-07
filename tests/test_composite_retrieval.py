@@ -376,3 +376,35 @@ def test_conversation_query_empty_no_conversations():
         obs = adapter.query({})
         assert obs.kind == "error"
         assert "no conversations" in obs.error.lower()
+
+
+def test_composite_query_reports_an_adapter_refusal_beside_other_results():
+    """Found live 2026-10-06: one adapter refused a malformed query with a correcting message,
+    another returned loose search hits, and only the hits reached the planner, which then sent
+    the same query fourteen times. The refusal must travel with the results."""
+    from quest_ai_runner.core.adapters import Observation
+
+    class Refuses:
+        def query(self, spec):
+            return Observation(kind="error", error="this query names no operation; use {...}")
+
+    class Finds:
+        def query(self, spec):
+            return Observation(kind="query", text="some loosely matching history")
+
+    obs = CompositeRetrievalAdapter([Refuses(), Finds()]).query({"kind": "x"})
+    assert obs.kind == "query"
+    assert obs.text == "[Finds]\nsome loosely matching history"   # results untouched
+    assert "this query names no operation" in obs.planner_note       # refusal for the planner
+    assert obs.to_dict()["planner_note"] == obs.planner_note
+
+
+def test_composite_query_all_refusals_is_still_an_error():
+    from quest_ai_runner.core.adapters import Observation
+
+    class Refuses:
+        def query(self, spec):
+            return Observation(kind="error", error="nope")
+
+    obs = CompositeRetrievalAdapter([Refuses(), Refuses()]).query({"kind": "x"})
+    assert obs.kind == "error" and "nope" in obs.error

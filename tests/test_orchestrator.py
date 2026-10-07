@@ -97,6 +97,205 @@ def test_deep_fanout_runs_subtasks_in_parallel():
     assert res.kind == "deep"
     assert len(res.deep_results) == 2
     assert {c["goal"] for c in runner.calls} == {"A", "B"}
+    from quest_ai_runner.core.orchestrator import CONTINUE_AFTER_DECISION_NOTE
+    assert not any(CONTINUE_AFTER_DECISION_NOTE in (d.output or "") for d in res.deep_results), \
+        "a fan-out where nothing parks must stay byte-for-byte unaffected"
+
+
+class PerGoalDeepRunner:
+    """A deep runner that returns a DIFFERENT, pre-scripted ``DeepResult`` per goal name, and
+    records every goal it was actually invoked for -- used to prove a sibling subtask was (or
+    was not) run at all once another subtask of the same fan-out parked on a human decision."""
+
+    def __init__(self, results: Dict[str, Any]):
+        self.results = results
+        self.calls: List[str] = []
+
+    def run_goal(self, *, goal, brief, model=None, max_turns=None):
+        self.calls.append(goal)
+        return self.results[goal]
+
+
+def test_fan_out_reply_carries_only_one_ask_when_two_subgoals_both_park():
+    # Round-2 trace: a planner fanned "add that goal" into a goal-creation subtask and a second,
+    # self-initiated "record the conflict" subtask; EACH subtask's own write review independently
+    # parked on the same working-agreement conflict, so the reply concatenated the conflict
+    # question twice plus an extra, unrequested goal proposal. However the two subtasks happen to
+    # race, the AGGREGATED reply must carry exactly ONE ask (the first subtask, by order), never
+    # both -- this is checked at aggregation, not by timing.
+    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.orchestrator import CONTINUE_AFTER_DECISION_NOTE
+    provider = StubProvider(decisions=[
+        {"action": "deep", "deep_subtasks": [
+            {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}],
+         "rationale": "split"},
+    ])
+    runner = PerGoalDeepRunner({
+        "A": DeepResult(met=False, output="A's conflict question", decision_id="dec_a"),
+        "B": DeepResult(met=False, output="B's conflict question", decision_id="dec_b"),
+    })
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run("do A and B")
+    assert res.kind == "deep"
+    assert len(res.deep_results) == 1, "only one ask may reach the reply"
+    kept = res.deep_results[0]
+    assert kept.decision_id == "dec_a", "the FIRST subtask by order, not whichever finished first"
+    assert "A's conflict question" in kept.output
+    assert "B's conflict question" not in kept.output
+    assert CONTINUE_AFTER_DECISION_NOTE in kept.output
+
+
+def test_fan_out_stops_a_sibling_before_it_ever_starts_once_one_parks():
+    # With a single worker the thread pool runs subtasks strictly one at a time, so this proves
+    # the STRUCTURAL stop (fanout_parked), not just the aggregation filter above: sibling "B" is
+    # never even handed to the runner once "A" has parked.
+    from quest_ai_runner.core.adapters import DeepResult
+    provider = StubProvider(decisions=[
+        {"action": "deep", "deep_subtasks": [
+            {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}],
+         "rationale": "split"},
+    ])
+    runner = PerGoalDeepRunner({
+        "A": DeepResult(met=False, output="A's conflict question", decision_id="dec_a"),
+        "B": DeepResult(met=True, output="B finished"),
+    })
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(max_parallel=1)).run("do A and B")
+    assert runner.calls == ["A"], "B must never be dispatched once A has parked"
+    assert len(res.deep_results) == 1
+    assert res.deep_results[0].decision_id == "dec_a"
+
+
+def test_fan_out_names_a_sibling_stopped_before_it_ran_as_not_done_yet():
+    # Review finding (2026-10-07): a sibling stopped before its first attempt (because another
+    # subgoal parked first) left an empty result that the aggregation silently filtered out, so the
+    # reply read as if that part were handled. It must be NAMED as not done yet, by its own goal.
+    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.orchestrator import (CONTINUE_AFTER_DECISION_NOTE,
+                                                   NOT_STARTED_AFTER_DECISION_NOTE)
+    provider = StubProvider(decisions=[
+        {"action": "deep", "deep_subtasks": [
+            {"goal": "Add the venue goal", "brief": "a"},
+            {"goal": "Email the caterer.", "brief": "b"}],
+         "rationale": "split"},
+    ])
+    runner = PerGoalDeepRunner({
+        "Add the venue goal": DeepResult(met=False, output="Venue question?", decision_id="dec_a"),
+        "Email the caterer.": DeepResult(met=True, output="Emailed."),
+    })
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(max_parallel=1)).run("do both")
+    assert runner.calls == ["Add the venue goal"]
+    assert len(res.deep_results) == 1
+    out = res.deep_results[0].output
+    assert NOT_STARTED_AFTER_DECISION_NOTE.format(goals="Email the caterer") in out
+    assert out.index("Venue question?") < out.index("Not done yet") < out.index(
+        CONTINUE_AFTER_DECISION_NOTE)
+    assert "—" not in out
+
+
+def test_fan_out_reports_what_landed_as_well_as_the_one_ask():
+    # Round-2 regression: keeping ONLY the parked result threw away the siblings that had already
+    # written. Live trace: all three requested goals actually landed, and the reply the person read
+    # was a bare "please approve these changes to proceed", with no mention of any of them. The
+    # reply must carry what happened FIRST, then the single ask, then the continuation sentence.
+    # ``max_parallel=1`` makes the order deterministic: the landed subtask runs and finishes before
+    # the parking one is dispatched at all.
+    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.orchestrator import (CONTINUE_AFTER_DECISION_NOTE,
+                                                   unconfirmed_no_change_text)
+    provider = StubProvider(decisions=[
+        {"action": "deep", "deep_subtasks": [
+            {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}],
+         "rationale": "split"},
+    ])
+    runner = PerGoalDeepRunner({
+        "A": DeepResult(met=True, output="Added the goal for A."),
+        "B": DeepResult(met=False, output="B needs your call first.", decision_id="dec_b"),
+    })
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(max_parallel=1)).run("do A and B")
+    assert res.kind == "deep"
+    assert [getattr(d, "decision_id", None) for d in res.deep_results] == [None, "dec_b"], \
+        "the landed sibling is kept, and the one ask comes last"
+    reply = "\n\n".join(s for s in (unconfirmed_no_change_text(d) for d in res.deep_results) if s)
+    assert reply.index("Added the goal for A.") < reply.index("B needs your call first."), \
+        "what landed is read before the ask, never after it"
+    assert reply.count(CONTINUE_AFTER_DECISION_NOTE) == 1
+    assert reply.endswith(CONTINUE_AFTER_DECISION_NOTE)
+
+
+def test_fan_out_drops_only_the_extra_asks_not_the_finished_work():
+    # Three subtasks: one landed, two parked. Exactly one ask survives (the first parked, by
+    # subtask order) and the landed one is still reported.
+    from quest_ai_runner.core.adapters import DeepResult
+    provider = StubProvider(decisions=[
+        {"action": "deep", "deep_subtasks": [
+            {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}, {"goal": "C", "brief": "c"}],
+         "rationale": "split"},
+    ])
+    runner = PerGoalDeepRunner({
+        "A": DeepResult(met=True, output="A landed."),
+        "B": DeepResult(met=False, output="B's question", decision_id="dec_b"),
+        "C": DeepResult(met=False, output="C's question", decision_id="dec_c"),
+    })
+    res = _orch(provider, StubRetrieval(), deep_runner=runner,
+                config=OrchestratorConfig(max_parallel=1)).run("do A, B and C")
+    outputs = [d.output for d in res.deep_results]
+    assert any("A landed." in o for o in outputs)
+    assert sum(1 for d in res.deep_results if getattr(d, "decision_id", None)) == 1
+    assert not any("C's question" in o for o in outputs)
+
+
+def test_a_single_goal_turn_that_parks_is_unaffected():
+    # The aggregation filter and the stop-event are both gated on ``multi``: a plain single-goal
+    # deep run that parks must come back exactly as before, with no continuation sentence added.
+    from quest_ai_runner.core.orchestrator import CONTINUE_AFTER_DECISION_NOTE
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
+    ])
+    runner = StubDeepRunner(decision_id="dec_single", output="needs a decision")
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run("do it")
+    assert res.kind == "deep"
+    assert len(res.deep_results) == 1
+    assert res.deep_results[0].decision_id == "dec_single"
+    assert res.deep_results[0].output == "needs a decision"
+    assert CONTINUE_AFTER_DECISION_NOTE not in res.deep_results[0].output
+
+
+class IsSubgoalCapturingDeepRunner:
+    """A deep runner whose ``run_goal`` accepts ``is_subgoal`` and records it per call -- used to
+    prove a consumer (e.g. quest-backend's QuestCommandRunner) can tell a fan-out subtask apart
+    from a single-goal run without reading any model-generated text (hard rule #3)."""
+
+    def __init__(self):
+        self.calls: List[Dict[str, Any]] = []
+
+    def run_goal(self, *, goal, brief, model=None, max_turns=None, is_subgoal=None):
+        from quest_ai_runner.core.adapters import DeepResult
+        self.calls.append({"goal": goal, "is_subgoal": is_subgoal})
+        return DeepResult(met=True, output=f"did {goal}")
+
+
+def test_fan_out_tells_an_opted_in_runner_it_is_one_of_several_subtasks():
+    provider = StubProvider(decisions=[
+        {"action": "deep", "deep_subtasks": [
+            {"goal": "A", "brief": "a"}, {"goal": "B", "brief": "b"}],
+         "rationale": "split"},
+    ])
+    runner = IsSubgoalCapturingDeepRunner()
+    _orch(provider, StubRetrieval(), deep_runner=runner).run("do A and B")
+    assert {c["goal"]: c["is_subgoal"] for c in runner.calls} == {"A": True, "B": True}
+
+
+def test_single_goal_turn_does_not_set_is_subgoal():
+    provider = StubProvider(decisions=[
+        {"action": "deep", "goal": "G", "deep_brief": "B", "rationale": "work"},
+    ])
+    runner = IsSubgoalCapturingDeepRunner()
+    _orch(provider, StubRetrieval(), deep_runner=runner).run("do it")
+    assert len(runner.calls) == 1
+    assert runner.calls[0]["is_subgoal"] is None, \
+        "a single-goal run must not claim to be one of several subtasks"
 
 
 def test_confirm_raises_escalation_and_returns_decision_id():
@@ -209,7 +408,8 @@ class _EmptyRetrieval:
 def test_cap_with_nothing_gathered_escalates_to_deep():
     # Planner keeps asking to read, but nothing comes back -> nothing gathered -> escalate to deep.
     provider = StubProvider(decisions=[
-        {"action": "read", "reads": [{"rel_path": "x.md"}], "rationale": "again"}
+        {"action": "read", "reads": [{"rel_path": "x.md"}], "rationale": "again",
+         "user_intent": "act"}
         for _ in range(2)  # matches max_steps below; escalation to deep is auto-derived, not planned
     ] + [{"met": True, "reason": "did it"}])  # goal verification for the escalated deep run
     runner = StubDeepRunner(met=True, output="did it")
@@ -228,7 +428,8 @@ def test_answer_describing_unexecuted_work_escalates_to_deep():
     # talked about the change instead of doing it. The orchestrator must auto-escalate to a deep
     # run that actually applies the work.
     provider = StubProvider(
-        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "describe"}],
+        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "describe",
+                    "user_intent": "act"}],
         answer_text="To fix this, I need to update the date-assignment logic in the code.",
     )
     runner = StubDeepRunner(met=True, output="applied the date fix")
@@ -264,7 +465,8 @@ def test_deferred_deep_output_is_folded_into_final_answer():
     # consumers). The final answer must be RE-SYNTHESIZED grounded in the deep run's output, so the
     # user sees the real deliverable, not a stale proposal.
     provider = StubProvider(
-        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "describe"}],
+        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "describe",
+                    "user_intent": "act"}],
         answer_text="I need to update the architecture; let me know if you want me to proceed.",
     )
     deliverable = "MULTILANG_PLAN_DELIVERABLE: phase 1 extract strings, phase 2 Spanish locale."
@@ -758,11 +960,12 @@ def test_actionable_message_with_proposal_answer_escalates_to_deep():
     # The real-world failure the user hit: the planner answers (PROPOSES) a code change in one step
     # and forgets the explicit flag. The proposal phrasing ("Aligning these to use the same
     # created_at field will guarantee ...") matches NONE of the answer-text regex nets, so the turn
-    # used to end as a proposal that never ran. The message-intent fallback (keyed off the stable
-    # user message "the system incorrectly assigns dates ...") must still escalate to a deep run,
+    # used to end as a proposal that never ran. The message-intent fallback (the planner's
+    # user_intent "act" verdict on "the system incorrectly assigns dates ...") must still escalate,
     # and the brief must carry the proposed approach so the deep run APPLIES it.
     provider = StubProvider(
-        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "propose"}],
+        decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "propose",
+                    "user_intent": "act"}],
         answer_text=("Aligning these to use the same created_at field will guarantee that editing "
                      "an entry's time to yesterday immediately moves it out of today's actions."),
     )
@@ -788,11 +991,19 @@ def test_plain_informational_answer_does_not_escalate():
     assert not runner.calls, "informational answer must not escalate to a deep run"
 
 
-def test_message_requests_change_distinguishes_questions_from_commands():
+def test_escalation_nets_follow_the_planner_intent_verdict_not_the_words():
     # Regression: a QUESTION that merely mentions an action verb ("how would I add X?") was being
-    # auto-escalated into a task instead of answered. _message_requests_change must read INTENT:
-    # questions -> False (answer), commands -> True (execute).
-    from quest_ai_runner.core.orchestrator import _message_requests_change
+    # auto-escalated into a task instead of answered. The nets used to read the message with a
+    # regex; they now honor the planner's structured ``user_intent``: "ask" -> answer, "act" ->
+    # execute, whatever verbs the message contains.
+    def escalates(message, intent):
+        provider = StubProvider(
+            decisions=[{"action": "answer", "model_tier": "sonnet", "rationale": "r",
+                        "user_intent": intent}],
+            answer_text="Here is how that would work.")
+        runner = StubDeepRunner(met=True)
+        _orch(provider, StubRetrieval(), deep_runner=runner).run(message)
+        return bool(runner.calls)
 
     # COMMANDS (the user is directing the work) -> should execute.
     for cmd in [
@@ -805,7 +1016,7 @@ def test_message_requests_change_distinguishes_questions_from_commands():
         "please update the endpoint",
         "the system incorrectly assigns dates to actions",  # bug report = implicit command
     ]:
-        assert _message_requests_change(cmd) is True, f"command should escalate: {cmd!r}"
+        assert escalates(cmd, "act") is True, f"command should escalate: {cmd!r}"
 
     # QUESTIONS (the user is asking ABOUT something, even with an action verb) -> should answer.
     for q in [
@@ -817,11 +1028,8 @@ def test_message_requests_change_distinguishes_questions_from_commands():
         "is it possible to add SSO?",
         "what's the best way to update a goal?",
         "do you think we should change this?",
-        # Casual/uncertain openers with NO trailing "?" -- these read as questions in speech
-        # (people drop the question mark when talking or typing fast) but were previously missed
-        # by both the interrogative-opener check and the "?"-ending check, so they fell through to
-        # the unconditional True at the end of the function and force-escalated to a task despite
-        # being genuine questions. _INFO_QUESTION_RE now recognizes these openers.
+        # Casual/uncertain openers with NO trailing "?" read as questions in speech; the old
+        # regex net needed a new pattern for each of them.
         "Not sure why the export looks broken",
         "No idea why this is failing",
         "Any idea why the metrics look off",
@@ -829,7 +1037,7 @@ def test_message_requests_change_distinguishes_questions_from_commands():
         "Wondering if the sync job is broken",
         "I'm curious why the build is slow",
     ]:
-        assert _message_requests_change(q) is False, f"question should NOT escalate: {q!r}"
+        assert escalates(q, "ask") is False, f"question should NOT escalate: {q!r}"
 
 
 def test_question_with_change_verb_is_answered_not_executed():
@@ -930,11 +1138,14 @@ def _read_then_answer_provider():
 
 
 def test_repeat_context_off_resends_full_on_replan():
-    # Default (knob off): every plan prompt — step 1 AND re-plan — carries the full transcript
-    # + context_view, byte-for-byte the prior behavior.
+    # Knob explicitly OFF: every plan prompt — step 1 AND re-plan — carries the full transcript
+    # + context_view, the pre-2026-10-06 behavior. The library default flipped to ON that day (a
+    # turn's context_view does not change within the turn, so re-sending it on every re-plan step
+    # was pure cost); this test pins what happens when a consumer still wants it off.
     provider = _read_then_answer_provider()
     retrieval = StubRetrieval({"f.md": "GROUNDING body"})
-    res = _orch(provider, retrieval).run(
+    cfg = OrchestratorConfig(planner_abbreviate_repeat_context=False)
+    res = _orch(provider, retrieval, config=cfg).run(
         "q", transcript=_TRANSCRIPT, context_view=_CONTEXT)
     assert res.kind == "answer"
     # plan_prompts[0..1] are the 2 loop steps; plan_prompts[2..3] are the post-answer verification
@@ -1825,6 +2036,39 @@ def test_deferred_handoff_pins_the_registered_deferred_runner():
     assert inline_runner.calls == [], "classifier must not re-route deferred work inline"
 
 
+def test_net_inferred_work_is_routed_not_pinned_to_the_queue():
+    """The queue pin is for the planner's OWN deferred_deep. When the planner only answered and an
+    escalation net infers the user asked for a change, that work is routed like any deep action:
+    here the classifier picks the inline runner, so the change happens now instead of becoming a
+    background task (found 2026-10-07: "... then add a goal" queued a task for a one-line add)."""
+    queue_runner = StubDeepRunner(met=True, output="Queued as task #5.", deferred=True)
+    inline_runner = StubDeepRunner(met=True, output="Added the goal 'Order lavender wax'.")
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "explained it",
+                                        "user_intent": "act"}],
+                            answer_text="You should add a goal to order lavender wax.")
+    _orch(provider, StubRetrieval(),
+          deep_runners={"deferred": queue_runner, "inline": inline_runner},
+          deep_runner_classifier=lambda msg, goal, brief: "inline",
+          config=OrchestratorConfig(deferred_deep_queued=True)).run(
+        "add a goal to order lavender wax")
+    assert queue_runner.calls == [], "net-inferred work must not be forced into the queue"
+    assert len(inline_runner.calls) >= 1
+
+
+def test_queue_only_wiring_still_queues_net_inferred_work():
+    """With no inline runner, the queue is the only place net-inferred work can go, so it keeps
+    the pin (the classifier can never select the reserved queue key)."""
+    queue_runner = StubDeepRunner(met=True, output="Queued as task #9.", deferred=True)
+    provider = StubProvider(decisions=[{"action": "answer", "rationale": "explained it",
+                                        "user_intent": "act"}],
+                            answer_text="You should add a goal to order lavender wax.")
+    res = _orch(provider, StubRetrieval(), deep_runners={"deferred": queue_runner},
+                config=OrchestratorConfig(deferred_deep_queued=True)).run(
+        "add a goal to order lavender wax")
+    assert len(queue_runner.calls) == 1
+    assert res.exit_reason == "deferred"
+
+
 def test_deferred_handoff_failure_reply_does_not_claim_queued():
     """HONEST-ENQUEUE: in a queued deployment, when the hand-off is NOT confirmed (the enqueue
     failed), the reply must be regenerated with a steer saying the work was NOT queued; it must
@@ -1868,6 +2112,174 @@ def test_inline_default_never_uses_queued_synthesis():
         (m["content"] if isinstance(m["content"], str) else str(m["content"]))
         for m in provider.last_answer_messages)
     assert "CONFIRMED HAND-OFF RECORD" not in joined
+
+
+def test_deferred_deep_park_is_reported_as_proposal_not_a_done_claim():
+    """Round-2 regression (MS-046): a deferred_deep that resolves to a PARKED approval decision
+    (DeepResult.decision_id set, nothing landed) must reach the user as that card's own
+    code-written "awaiting your answer" wording, verbatim -- never re-synthesized through the
+    "you already DID the work" prompt, and never handed to the goal-verification loop, whose
+    "improve it" regeneration asked a plain text-completion step (no tool access) to "execute
+    the create_goal operation", which it cannot do, so it fabricated a false "I have added this
+    goal" reply with a made-up date and pace. Default config (verify_claims on,
+    answer_goal_max_iterations=2) is used deliberately: the loop would normally run here, so
+    its absence proves the gate, not a config that happens to skip it."""
+    ask_text = ("Approve this change to your Quest data?\n\nI will add a new goal named "
+                "\"Tempo run at 5.21 min/km\" to your quest. Do you approve this change?")
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then make the change",
+                    "deferred_deep": {"goal": "Add the tempo-run goal"}}],
+        answer_text="I'll work out the pace and add the goal.",
+    )
+    runner = StubDeepRunner(met=False, decision_id="dec_tempo", output=ask_text)
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run(
+        "find my pace and add a tempo-run goal")
+    assert res.kind == "answer"
+    assert res.exit_reason == "parked"
+    assert res.decision_id == "dec_tempo"
+    assert res.text == ask_text, "the reply must BE the parked card's own wording, verbatim"
+    assert "I have added this as a goal" not in (res.text or "")
+    # No resynthesis: the misleading "already did the work" framing was never sent to the model.
+    all_prompts = "\n".join(
+        (m["content"] if isinstance(m["content"], str) else str(m["content"]))
+        for msgs in provider.all_answer_messages for m in msgs)
+    assert "ACTUAL RESULT OF THE WORK YOU JUST DID" not in all_prompts
+    # No goal-verification regeneration either: no "fell short ... improving it" steer was ever
+    # sent, and no extra plan() call beyond the one planning decision (the verifier calls
+    # provider.plan(), same as the planner, so a second call would mean it ran anyway).
+    assert "YOUR PREVIOUS ANSWER" not in all_prompts
+    assert "fell short" not in all_prompts
+    assert provider.plan_calls == 1
+
+
+class FixedResultDeepRunner:
+    """A deep runner that returns one pre-built ``DeepResult`` (any fields) for every goal."""
+
+    def __init__(self, result):
+        self.result = result
+        self.calls: List[str] = []
+
+    def run_goal(self, *, goal, brief, model=None, max_turns=None):
+        self.calls.append(goal)
+        return self.result
+
+
+def test_deferred_deep_that_failed_and_changed_nothing_is_never_written_up_as_done():
+    """Review finding (2026-10-07): "not parked" was treated as "landed", so a deferred run that
+    FAILED (verified not met, its receipts saying it changed nothing) still went through the "you
+    already DID the work" synthesis and could read as done. Only a result whose structured fields
+    say its work landed may feed that synthesis; this one is reported in its own words through
+    ``unconfirmed_no_change_text``, and no regeneration rewrites it."""
+    from quest_ai_runner.core.adapters import DeepResult
+    from quest_ai_runner.core.orchestrator import UNCONFIRMED_NO_CHANGE_LEAD
+    failed_text = "The goal could not be added: the quest was not found."
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then make the change",
+                    "deferred_deep": {"goal": "Add the goal"}}],
+        answer_text="I'll add the goal.",
+    )
+    runner = FixedResultDeepRunner(DeepResult(met=False, output=failed_text, exhausted=True,
+                                               changed_nothing=True))
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run("add the goal")
+    assert res.kind == "answer"
+    assert runner.calls
+    assert res.text == f"{UNCONFIRMED_NO_CHANGE_LEAD}\n\n{failed_text}"
+    prompts = _all_answer_prompts(provider)
+    assert "ACTUAL RESULT OF THE WORK YOU JUST DID" not in prompts
+    assert "YOUR PREVIOUS ANSWER" not in prompts
+
+
+def test_deferred_deep_unverified_with_no_observed_effect_is_reported_in_its_own_words():
+    """A run that records its observations, was not verified met, and observed nothing has no
+    receipt of any effect: it is reported verbatim, never written up as done."""
+    from quest_ai_runner.core.adapters import DeepResult
+    text = "I looked for the goal but found nothing to change."
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then make the change",
+                    "deferred_deep": {"goal": "Change the goal"}}],
+        answer_text="I'll change it.",
+    )
+    runner = FixedResultDeepRunner(DeepResult(met=False, output=text, exhausted=True,
+                                               observations_reported=True))
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run("change the goal")
+    assert res.text == text
+    assert "ACTUAL RESULT OF THE WORK YOU JUST DID" not in _all_answer_prompts(provider)
+
+
+def test_deferred_deep_exhausted_ask_with_real_observations_is_reported_verbatim():
+    """Round-2 regression (MS-046 L10c): a deferred_deep that ends in the RUNNER'S OWN terminal
+    ask (met=False, exhausted=True, no decision_id -- a clarifying question, not an approval-card
+    park) must reach the user as that ask's own wording, verbatim -- never through the "you
+    already DID the work" synthesis, even when the run genuinely observed real data before giving
+    up (``observations`` non-empty), which is exactly what let the earlier, narrower
+    ``observations_reported``-only check miss this case. Live trace: a tempo-run pace was computed
+    correctly, the goal's QUEST was ambiguous, the runner asked "which quest should this go on?",
+    and the old code folded that into the synthesis prompt, which fabricated "I have queued the
+    creation of a tempo-run goal for that day" -- nothing was queued, parked, or written."""
+    from quest_ai_runner.core.adapters import DeepResult
+    ask_text = ("Your tempo pace is 5:12/km. Which quest should this go on?\n\n"
+                "1. Run a sub-50-minute 10K\n2. Run a marathon barefoot")
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then make the change",
+                    "deferred_deep": {"goal": "Add the tempo-run goal"}}],
+        answer_text="Shall I proceed with adding this goal?",
+    )
+    runner = FixedResultDeepRunner(DeepResult(
+        met=False, output=ask_text, exhausted=True, error="quest_ambiguous",
+        observations_reported=True, observations=["Computed a tempo pace of 5:12/km from logged entries."],
+    ))
+    res = _orch(provider, StubRetrieval(), deep_runner=runner).run(
+        "find my pace and add a tempo-run goal")
+    assert res.text == ask_text, "the reply must be the runner's own honest ask, verbatim"
+    assert "queued" not in (res.text or "").lower()
+    prompts = _all_answer_prompts(provider)
+    assert "ACTUAL RESULT OF THE WORK YOU JUST DID" not in prompts
+
+
+def test_deferred_deep_exhausted_partial_write_with_receipt_is_still_landed_work():
+    """BLOCKER fix 2026-10-07: the previous fix (the test right above) made EVERY exhausted,
+    not-met, receipt-tracking result count as "not landed" -- but a runner can end a turn
+    ``exhausted`` and not ``met`` while a GENUINE PARTIAL WRITE already happened (quest-backend's
+    ``QuestCommandRunner`` hits this exact shape: one write call in a multi-call program succeeds,
+    a LATER call in the same program raises, and the runner stops rather than retry -- retrying
+    would repeat the write that already landed -- and reports ``PARTIAL_WRITE_MESSAGE``, met=False,
+    exhausted=True, with the write log's own receipt in ``observations``). Dropping that receipt
+    (the regression this test pins) reports real, landed work as not done at all. The ONLY
+    structural difference from the test above is ``has_write_receipt=True``: this must restore the
+    normal "landed work" handling (folded into the synthesis), exactly as a plain ``met=True``
+    result gets below."""
+    from quest_ai_runner.core.adapters import DeepResult
+    partial_text = (
+        "Part of this change went through before the rest ran into a problem: added the goal "
+        "'Hold the open day on Sunday 8 Nov'. The rest did not run, and I am not trying it again "
+        "automatically, since that risks doing the first part twice. What went wrong: the "
+        "quest's budget field could not be updated. Let me know if you would like me to finish "
+        "the rest.")
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then make the change",
+                    "deferred_deep": {"goal": "Add the open day goal and update the budget"}}],
+    )
+    runner = FixedResultDeepRunner(DeepResult(
+        met=False, output=partial_text, exhausted=True, error="partial write",
+        observations_reported=True, has_write_receipt=True,
+        observations=["Created goal 'Hold the open day on Sunday 8 Nov'."],
+    ))
+    _orch(provider, StubRetrieval(), deep_runner=runner).run(
+        "add the open day goal and update the budget")
+    assert "ACTUAL RESULT OF THE WORK YOU JUST DID" in _all_answer_prompts(provider), (
+        "a genuine partial write (has_write_receipt=True) must be reported as landed work, not "
+        "silently dropped")
+
+
+def test_deferred_deep_that_landed_is_still_written_up_as_before():
+    from quest_ai_runner.core.adapters import DeepResult
+    provider = StubProvider(
+        decisions=[{"action": "answer", "rationale": "answer then make the change",
+                    "deferred_deep": {"goal": "Add the goal"}}],
+    )
+    runner = FixedResultDeepRunner(DeepResult(met=True, output="Added the goal.", exhausted=True))
+    _orch(provider, StubRetrieval(), deep_runner=runner).run("add the goal")
+    assert "ACTUAL RESULT OF THE WORK YOU JUST DID" in _all_answer_prompts(provider)
 
 
 # ---------------------------------------------------------------------------

@@ -289,7 +289,10 @@ class MCPRetrievalAdapter(RetrievalAdapterBase):
             allowed = tool_name in self._allowed_tools
             text = (
                 f"{self._alias}:{tool_name}: {match.get('description') or ''}\n"
-                f"input_schema: {json.dumps(schema, indent=2, default=str)}\n"
+                # Compact, not indent=2: this reaches the planner prompt as a discovery
+                # observation, and the whitespace of a pretty-printed schema is billed on every
+                # read of it for no readability gain a model needs.
+                f"input_schema: {json.dumps(schema, separators=(',', ':'), default=str)}\n"
                 f"callable via query(): {'yes' if allowed else 'no (not in allowed_tools)'}"
             )
             return Observation(kind="query", locator=f"describe_operation({name})", text=text)

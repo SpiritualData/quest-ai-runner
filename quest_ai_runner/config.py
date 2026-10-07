@@ -194,6 +194,17 @@ class RunnerConfig:
     # search adapter uses, not a parallel one. Needs the optional [mcp] extra only if this list is
     # non-empty; an empty list (the default) touches nothing MCP-related.
     mcp_servers: List[MCPServerSpec] = field(default_factory=list)
+    # Fast, token-efficient LIVE WEB access (the ``WebResearch`` interface, ``core/adapters.py``):
+    # snippet-first search plus a bounded single-page fetch, reached by the planner through its
+    # own two read keys (``{"web": ...}``, ``{"web_page": ...}``) -- NEVER folded into
+    # ``retrieval``/``CompositeRetrievalAdapter``, because that composite broadcasts every
+    # grep/query to every member adapter, which would fire a paid, slow web search on an ordinary
+    # corpus grep. Leave unset (the default) and ``build_orchestrator`` auto-builds one from env
+    # via ``adapters.web_research.build_web_research_from_env`` (unless ``WEB_SEARCH_ENABLED=false``
+    # or no backend is configured, both of which leave this ``None``). Set it explicitly to supply
+    # a custom ``WebResearch`` (or a test fake); ``build_orchestrator`` never overwrites an
+    # already-set value.
+    web_research: Optional[Any] = None
     model_provider: Optional[ModelProvider] = None   # AnthropicProvider or another
     model_fallback: Optional[dict] = None            # override tier->model mapping (e.g. {"haiku": "gpt-4o", "sonnet": "claude-4"})
     model_providers: Optional[dict] = None           # multi-provider support: dict of name -> ModelProvider (e.g. {"anthropic": AnthropicProvider(), "gemini": GeminiProvider()})
@@ -1388,11 +1399,13 @@ def derive_capabilities(cfg: RunnerConfig) -> Dict[str, bool]:
         bound to a ``corpus_root``). The runner can ground on the org's files/corpus.
       * ``code``   — a SubprocessGoalRunner (or any DeepRunner) is configured. The runner can do
         deep, code/goal-driven execution.
-      * ``web``    — the deep-runner can BROWSE the live web. Our reference deep-runner spawns
-        Claude Code, which ships WebSearch/WebFetch, so a configured SubprocessGoalRunner with the
-        web tools allowed CAN web-research. We read this off the SubprocessConfig's actual tool
-        gating (``web_enabled()``) — NOT a hardcode — so a consumer that pins tools without web
-        honestly reports web:false, while the default (web-capable) state reports web:true.
+      * ``web``    — a ``WebResearch`` adapter is wired (``cfg.web_research``, the planner's own
+        ``{"web": ...}``/``{"web_page": ...}`` reads), OR the deep-runner can BROWSE the live web.
+        Our reference deep-runner spawns Claude Code, which ships WebSearch/WebFetch, so a
+        configured SubprocessGoalRunner with the web tools allowed CAN web-research. We read this
+        off the SubprocessConfig's actual tool gating (``web_enabled()``) — NOT a hardcode — so a
+        consumer that pins tools without web honestly reports web:false, while the default
+        (web-capable) state reports web:true.
     """
     # corpus: a FilesAdapter (or an adapter constructed over the consumer's corpus_root).
     retrieval = cfg.retrieval
@@ -1415,11 +1428,12 @@ def derive_capabilities(cfg: RunnerConfig) -> Dict[str, bool]:
     deep = resolve_deep_runner(cfg, warn=False)
     code = bool(resolve_deep_runner_ladder(cfg, warn=False))
 
-    # web: the deep-runner browses via Claude Code's WebSearch/WebFetch (reads off the actual
-    # tool gating), OR a WebSearchAdapter is wired into the retrieval stack (shallow web search
-    # via Tavily). Both are honest: we detect what the config actually provides.
-    web = False
-    if deep is not None:
+    # web: a WebResearch adapter is wired directly (cfg.web_research, the fast/cheap path), OR
+    # the deep-runner browses via Claude Code's WebSearch/WebFetch (reads off the actual tool
+    # gating), OR a legacy WebSearchAdapter/ProviderWebSearchAdapter is wired into the retrieval
+    # stack. All honest: we detect what the config actually provides.
+    web = cfg.web_research is not None
+    if not web and deep is not None:
         sub_cfg = getattr(deep, "cfg", None)
         web_enabled = getattr(sub_cfg, "web_enabled", None)
         if callable(web_enabled):
@@ -2643,15 +2657,35 @@ def build_orchestrator(
         cfg.vision_provider = MultiProvider(original_vision_provider, all_providers)
         _log.debug("Wrapped vision provider with MultiProvider for intelligent routing")
 
-    # Web search as a STANDARD, key-free capability. If a Tavily WebSearchAdapter is already in
-    # the retrieval stack (WEB_SEARCH_API_KEY set), keep it. Otherwise, unless web search is
-    # explicitly disabled (WEB_SEARCH_ENABLED=false), wire a ProviderWebSearchAdapter when the
-    # model provider supports NATIVE web search (Anthropic web_search tool / Gemini Google Search
-    # grounding) — reusing the LLM key, so no separate web-search key is needed. This is what lets
-    # ordinary AI tasks ("find marathons near Portland", "suggest a product") ground on the live web
-    # without spawning Claude Code or requiring an external environment.
+    # Fast, token-efficient LIVE WEB access (``core.adapters.WebResearch``): built once here from
+    # env (backend auto-selection, snippet-first search, bounded page fetch, cache; see
+    # ``adapters/web_research.py``), reached by the planner through its OWN read keys
+    # (``{"web": ...}``, ``{"web_page": ...}``) — never folded into ``cfg.retrieval``/
+    # ``CompositeRetrievalAdapter``, because that composite BROADCASTS every grep/query to every
+    # member adapter, which would fire a paid, slow web search on an ordinary corpus grep or DB
+    # query. A consumer that already set ``cfg.web_research`` (its own adapter, or a test fake) is
+    # never overwritten.
     _web_disabled = (os.getenv("WEB_SEARCH_ENABLED") or "").strip().lower() in ("false", "0", "off", "no")
-    if not _web_disabled and not _retrieval_has_web_search(cfg.retrieval):
+    if cfg.web_research is None and not _web_disabled:
+        try:
+            from .adapters.web_research import build_web_research_from_env
+            cfg.web_research = build_web_research_from_env(os.environ, provider=cfg.model_provider)
+            if cfg.web_research is not None:
+                _log.info("Web research adapter wired: %s", cfg.web_research.describe())
+        except ImportError as e:
+            _log.debug("web_research adapter not available (not installed/importable): %s", e)
+        except Exception as e:  # noqa: BLE001 — web research is optional; never break the build
+            _log.debug("web_research not wired: %s", e)
+
+    # LEGACY fold-in, reached ONLY when the fast path above left ``cfg.web_research`` unset (the
+    # ``adapters.web_research`` module is missing, or it found no usable backend) — so a
+    # deployment without the newer module never regresses to no web capability at all. If a
+    # Tavily WebSearchAdapter is already in the retrieval stack (WEB_SEARCH_API_KEY set), keep it.
+    # Otherwise, unless web search is explicitly disabled (WEB_SEARCH_ENABLED=false), wire a
+    # ProviderWebSearchAdapter when the model provider supports NATIVE web search (Anthropic
+    # web_search tool / Gemini Google Search grounding) — reusing the LLM key, so no separate
+    # web-search key is needed.
+    if cfg.web_research is None and not _web_disabled and not _retrieval_has_web_search(cfg.retrieval):
         try:
             provider = cfg.model_provider
             supports = getattr(provider, "supports_web_search", None)
@@ -2677,7 +2711,8 @@ def build_orchestrator(
                         )
                     else:
                         cfg.retrieval = _CRA([cfg.retrieval, native_web])
-                    _log.info("Native web search enabled (%s, model=%s)", type(provider).__name__, web_model)
+                    _log.info("Native web search enabled (legacy fold-in; %s, model=%s)",
+                              type(provider).__name__, web_model)
         except Exception as e:  # noqa: BLE001 — web search is optional; never break the build
             _log.debug("native web search not wired: %s", e)
 
@@ -2783,4 +2818,5 @@ def build_orchestrator(
         recent_context=resolve_recent_context_store(cfg),
         anticipator=resolve_anticipator(cfg, context_assembler),
         tools=resolve_tool_registry(cfg),
+        web=cfg.web_research,
     )

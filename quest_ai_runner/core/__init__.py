@@ -47,6 +47,7 @@ from .adapters import (
     RetrievalAdapter,
     RetrievalAdapterBase,
     StreamSink,
+    WebResearch,
 )
 from .goal_runner import (
     ESCALATION_MARKER,
@@ -128,7 +129,7 @@ from .composite_assembler import CompositeContextAssembler
 
 __all__ = [
     # adapters / value objects
-    "RetrievalAdapter", "ModelProvider", "DeepRunner", "EscalationSink",
+    "RetrievalAdapter", "ModelProvider", "DeepRunner", "EscalationSink", "WebResearch",
     "RetrievalAdapterBase", "ModelProviderBase", "DeepRunnerBase", "EscalationSinkBase",
     "Observation", "PlanDecision", "DeepResult", "Escalation",
     "FUTURE_CONTEXT_VIA_OUTPUT", "FUTURE_CONTEXT_VIA_FIELD",

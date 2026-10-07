@@ -59,39 +59,33 @@ EXPLAIN_TOOL: Dict[str, Any] = {
         "properties": {
             "understood": {
                 "type": "string",
-                "description": "One or two sentences, addressed to the person as 'you': what their "
-                               "question was taken to be. Plain language, no ids, no file names, "
-                               "no internal vocabulary.",
+                "description": "1-2 sentences to 'you': what their question was taken to be. Plain "
+                               "language, no ids, file names, or internal vocabulary.",
             },
             "approach": {
                 "type": "string",
-                "description": "One or two sentences naming HOW the answer was worked out (for "
-                               "example: compared two options, calculated from figures found, "
-                               "ruled out alternatives, summarized what the documents said). "
-                               "Describe the shape of the reasoning, not the tools.",
+                "description": "1-2 sentences naming HOW the answer was worked out (e.g. compared "
+                               "options, calculated from figures found, ruled out alternatives). "
+                               "The shape of the reasoning, not the tools.",
             },
             "assumptions": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Up to 4 assumptions the answer rests on that the person did not "
-                               "state. Empty when the answer rests on nothing unstated.",
+                "description": "Up to 4 unstated assumptions the answer rests on. Empty if none.",
             },
             "confidence": {
                 "type": "string",
-                "description": "One sentence on how confident this answer is and why, grounded in "
-                               "what was actually available.",
+                "description": "One sentence: how confident, and why, grounded in what was available.",
             },
             "limitations": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Up to 4 concrete limits: what was not checked, what was missing, "
-                               "where the answer is thin. Empty when there are none worth naming.",
+                "description": "Up to 4 concrete limits (not checked, missing, thin). Empty if none.",
             },
             "what_would_change": {
                 "type": "array",
                 "items": {"type": "string"},
-                "description": "Up to 4 specific things that would change this answer if they "
-                               "turned out differently.",
+                "description": "Up to 4 specific things that would change this answer if different.",
             },
         },
         "required": ["understood", "approach", "confidence"],

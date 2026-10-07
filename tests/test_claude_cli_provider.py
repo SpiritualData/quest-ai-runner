@@ -431,3 +431,43 @@ def test_a_genuinely_wrong_path_still_fails_with_the_filename():
     with pytest.raises(FileNotFoundError) as err:
         always_missing()
     assert "/nope/claude" in str(err.value.filename)
+
+
+# --- plan-only thinking cap (QAR_CLI_PLAN_THINKING_TOKENS) ------------------------------------
+
+
+def _envs_for_plan_and_answer(monkeypatch, **provider_kwargs):
+    """The env each of plan() and answer() would spawn the CLI with."""
+    class _Proc:
+        returncode = 0
+        stdout = b'{"result": "{\\"action\\": \\"answer\\"}"}'
+        stderr = b""
+
+    seen = []
+
+    def fake_run(cmd, **kwargs):
+        if len(cmd) == 2 and cmd[1] == "--help":
+            return type("P", (), {"stdout": FULL_HELP.encode(), "returncode": 0})()
+        seen.append(kwargs.get("env") or {})
+        return _Proc()
+
+    ccp._supported_flags.cache_clear()
+    monkeypatch.delenv("MAX_THINKING_TOKENS", raising=False)
+    monkeypatch.setattr(ccp.subprocess, "run", fake_run)
+    provider = ClaudeCliProvider(claude_path="/nonexistent/claude", **provider_kwargs)
+    provider.plan("decide", model="haiku", tool_schema={"input_schema": {"type": "object"}})
+    provider.answer([{"role": "user", "content": "hi"}], model="haiku")
+    ccp._supported_flags.cache_clear()
+    return seen
+
+
+def test_plan_thinking_cap_reaches_plan_calls_only(monkeypatch):
+    plan_env, answer_env = _envs_for_plan_and_answer(monkeypatch, plan_thinking_tokens=0)
+    assert plan_env.get("MAX_THINKING_TOKENS") == "0"
+    assert "MAX_THINKING_TOKENS" not in answer_env
+
+
+def test_no_plan_thinking_cap_leaves_the_cli_default(monkeypatch):
+    plan_env, answer_env = _envs_for_plan_and_answer(monkeypatch)
+    assert "MAX_THINKING_TOKENS" not in plan_env
+    assert "MAX_THINKING_TOKENS" not in answer_env

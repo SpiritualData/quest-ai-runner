@@ -81,3 +81,27 @@ def test_run_forever_dispatches_on_its_own_short_loop_not_the_long_scan():
     t.join(5)
 
     assert client.claimed == ["ctx-1"]   # picked up within seconds, with a one-hour scan interval
+
+
+def test_unclaimable_old_tasks_do_not_starve_newer_ones():
+    """2026-10-06: two old tasks owned by another account 404'd on claim every tick, took both
+    slots (oldest first) and the autopilot passes behind them never ran."""
+    client = MockQuestClient([
+        _ctx(1, created_at="2026-09-18T00:00:00Z"),
+        _ctx(2, created_at="2026-09-20T00:00:00Z"),
+        _ctx(3, created_at="2026-10-04T00:00:00Z"),
+    ])
+    poller, _ = _poller_with_assembler(client, max_concurrent_tasks=2)
+    client.claim = lambda task_id, **kw: None if task_id in ("ctx-1", "ctx-2") else {"id": task_id}
+    poller._handle_one = lambda t: poller.client.claim(str(t["id"])) and None
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        poller._dispatch_due(pool)
+        for _ in range(3):
+            if not poller._inflight:
+                break
+            threading.Event().wait(0.05)
+        poller._claim_cooldown.update({"ctx-1": 1e12, "ctx-2": 1e12})
+        again = poller._dispatch_due(pool)
+
+    assert again == ["ctx-3"]

@@ -101,6 +101,17 @@ class QuestApiError(RuntimeError):
         self.status = status
 
 
+class QuestPendingApproval(QuestApiError):
+    """Quest did NOT create the quest: it filed an ask and is waiting for a person to approve it.
+
+    A 2xx answer to ``POST /api/quests/start`` is not proof a quest exists. Callers must not report
+    "created" or attach anything: there is no quest id yet. ``decision_id`` names the ask."""
+
+    def __init__(self, message: str, *, decision_id: Optional[str] = None, status: Optional[int] = 202):
+        super().__init__(message, status=status)
+        self.decision_id = decision_id
+
+
 # Quest's own validation for a decision's ``kind``: 1-64 chars, lowercase alnum/underscore/colon/
 # hyphen (e.g. "approve", "explicit:spend", "notice:prod-ops"). Checked client-side so a bad kind
 # degrades to "approve" instead of losing the whole escalation to a 422.
@@ -1076,7 +1087,8 @@ class QuestClient:
         The created quest is account-wide (no team), not yet on any team's board -- pair with
         ``attach_quest_to_team`` to put it on one. Raises ``QuestApiError``/``QuestNotConfigured``
         on failure rather than swallowing it: a caller that reports "quest created" must know it
-        was.
+        was. When Quest holds the creation for a person's approval (an AI account's request),
+        ``QuestPendingApproval`` is raised with the ask's ``decision_id``: the quest does not exist yet.
         """
         self._require()
         body: Dict[str, Any] = {"category_id": category_id, "creation_mode": creation_mode}
@@ -1100,7 +1112,15 @@ class QuestClient:
             body["start_date"] = start_date
         if category_ids is not None:
             body["category_ids"] = category_ids
-        return self._request("POST", "/api/quests/start", body=body) or {}
+        result = self._request("POST", "/api/quests/start", body=body) or {}
+        if result.get("pending_approval"):
+            decision_id = result.get("decision_id")
+            raise QuestPendingApproval(
+                f"The quest was NOT created. Quest filed ask {decision_id} and is waiting for a "
+                "person to approve it. There is no quest id yet, so nothing can be attached to it. "
+                "Tell the person that ask is waiting; do not report a quest as created.",
+                decision_id=decision_id)
+        return result
 
     def attach_quest_to_team(self, team_id: str, quest_id: str) -> Dict[str, Any]:
         """POST /api/teams/{team_id}/quest — attach an account-wide quest to a team's board.

@@ -7,6 +7,659 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **`run_goal(gathered_observations=...)`: this turn's gather as STRUCTURED dicts, not just
+  flattened text.** `context_preamble` hands a deep runner this turn's real gather content
+  already rendered to prose (`_render_gathered`), which mixes genuine data reads with
+  conversation-history hits, card content, and anything else the gather step touched -- fine for
+  grounding a code generator, but a consumer that needs to tell "a real read over the person's
+  own records" apart from everything else cannot do that once it is one string. A runner whose
+  `run_goal` declares `gathered_observations` (detected the same opt-in way as every other
+  per-call kwarg here: signature inspection, never a try/except) now also receives the SAME
+  filtered `_brain_content` list (discovery/menu observations excluded, main-flow only, not a
+  fanned-out subgoal's share) as plain `{"kind", "locator", "rel_path", "text", ...}` dicts
+  (`Observation.to_dict()`'s own shape), so it can apply its own structural filter over the real
+  objects. First consumer: quest-backend's pre-run write review, which needs exactly this
+  distinction (see its own CHANGELOG/playbook for the MS-001 regression this fixes). Tests:
+  `tests/test_deep_gathered.py`.
+
+### Fixed
+- **A deferred-deep run's own TERMINAL ASK, with real observations attached, was folded into the
+  "you already DID the work" synthesis and reported as done (round-2 regression, MS-046 L10c).**
+  `result_landed_work` treated "not parked on a decision_id" plus "reported non-empty
+  observations" as landed, so a runner that ended its turn with an honest clarifying question
+  ("which quest should this go on?" -- met=False, exhausted=True, no decision_id, because a
+  decision_id is only for an approval-card park) still counted as landed work whenever its
+  reconnaissance genuinely found something before it gave up (e.g. a correctly computed pace).
+  The deferred-deep reply then ran that ask through `_synthesize_after_deep`, which produced "I
+  have queued the creation of a tempo-run goal for that day" -- nothing was queued, parked, or
+  written anywhere. Fix: `result_landed_work` now also excludes a receipt-tracking result
+  (`observations_reported`) that is both `exhausted` and not `met`, alongside the existing "no
+  observations at all" case; a result whose verification simply could not run (no receipts
+  tracked at all, `observations_reported=False`) is unaffected and still folds into the synthesis
+  as before. Tests: `tests/test_orchestrator.py::test_deferred_deep_exhausted_ask_with_real_observations_is_reported_verbatim`.
+- **A genuine PARTIAL write, reported `exhausted` and not `met`, was dropped by the fix right
+  above it (round-3 regression on the same code).** The exhausted-and-not-met exclusion added
+  for the terminal-ask case (immediately above) is correct for an honest "nothing landed" ask,
+  but it also caught a DIFFERENT shape: a runner whose write log proves part of a multi-write
+  change already landed before a later call failed, which reports `exhausted=True`/`met=False`
+  with that receipt in `observations` (never retried, since retrying would repeat the write that
+  already happened -- see quest-backend's `QuestCommandRunner`/`PARTIAL_WRITE_MESSAGE`). Dropping
+  that receipt reported real, landed work as not done. Fix: new `DeepResult.has_write_receipt`
+  field (structural, set by the runner from its own write log, never inferred from text);
+  `result_landed_work` now excludes the exhausted-and-not-met shape only when
+  `has_write_receipt` is also False, so the ordinary terminal-ask case is unaffected (it never
+  sets the flag) and a genuine partial write is folded into the synthesis as landed work. Tests:
+  `tests/test_orchestrator.py::test_deferred_deep_exhausted_partial_write_with_receipt_is_still_landed_work`.
+
+### Fixed
+- **The fourth cross-quest leak: an UNSCOPED anticipation precompute could cache another quest's
+  card content as an untagged, forever-visible bundle.** `scope_tags_allow` correctly treats "the
+  turn has no tags" as "hide nothing" for the precompute CALL itself (a conversation with no quest
+  attached must still be able to search), but that call's own per-arm fence being inert for exactly
+  that reason meant its vector/card search was free to surface a hit genuinely tagged for one of
+  the user's OTHER quests. `Anticipator.plan_next` then stamped the resulting prediction with the
+  call's own (empty) `scope_tags`, so the bundle was stored UNTAGGED and served to every later
+  turn regardless of quest, including one scoped to a quest that never produced the card. Fix:
+  `AssembledContext.card_metadata` entries from `VectorContextAssembler` and `FileContextStore` now
+  pass through the surfaced card's own `scope_tags` (previously dropped on the floor, unlike the
+  existing `card_type`/`lifecycle` pass-through fields), and the new `bundle_scope_tags(assembled)`
+  helper unions them; `plan_next` now stamps each prediction with `union_scope_tags(turn_tags,
+  bundle_scope_tags(assembled))` instead of `turn_tags` alone, so a bundle that incidentally pulled
+  in quest X's card is fenced from quest Y's turns even though the precompute itself ran unscoped.
+  A consumer's own chip-precompute path (quest-backend's `precompute_chip_bundles`) must apply the
+  same union. Tests: `tests/test_anticipation.py` (`bundle_scope_tags` unit tests plus
+  `test_plan_next_unscoped_call_still_fences_a_bundle_that_leaked_another_quests_card` and its
+  same-quest companion), `tests/test_vector_context.py::TestScopeTagsFence`,
+  `tests/test_context_assembler.py::TestFileContextStoreScopeTagsSelection` (card_metadata
+  scope_tags pass-through).
+
+### Fixed
+- **The fifth cross-quest leak: the fourth-leak fix's union was itself unsafe for a MIXED bundle.**
+  Review of the fourth-leak fix above found that unioning `bundle_scope_tags(assembled)` onto a
+  prediction's `scope_tags` only fences correctly when the bundle names at most one quest. An
+  unscoped precompute whose search happened to surface cards from BOTH quest A and quest B in the
+  SAME bundle got stored as `scope_tags=["quest:a", "quest:b"]`, and `scope_tags_allow` serves a
+  two-tag item to EITHER quest's turn whole (the two sets intersect on both sides), so quest A's
+  turns would see quest B's content mixed into the bundle and vice versa. Fix: the new
+  `bundle_is_cross_quest_mixed(tags)` helper in `core/anticipation.py` flags a bundle naming more
+  than one distinct quest tag; `Anticipator.plan_next` now checks it before unioning and, on a
+  mixed bundle, drops it for that prediction entirely (no `context_view`, no `card_ids`, and
+  `scope_tags` stays exactly the call's own `turn_tags`) rather than store a leaking union -- there
+  is no way to retroactively split already-rendered context prose back into "the part from quest
+  A's card" vs "quest B's card". A bundle naming zero or one quest (the overwhelming common case,
+  including every genuinely single-quest conversation) is completely unaffected; a mixed bundle
+  simply falls back to a fresh, correctly-scoped assembly at serve time, exactly the existing "a
+  served bundle is a discardable hint" contract every consumer already honors. A consumer's own
+  chip-precompute path (quest-backend's `precompute_chip_bundles`) must apply the same check before
+  unioning; it also had a second, independent leak where a cached view warmed for one quest was
+  reused unchanged for a different quest's precompute (same stable chip id, different quest) --
+  fixed there by checking `scope_tags_allow` against the previously stored prediction's own tags
+  before reusing its view (see quest-backend's own CHANGELOG/commit). Tests:
+  `tests/test_anticipation.py::test_bundle_is_cross_quest_mixed_true_for_two_distinct_quest_tags`
+  and its false-case companions,
+  `test_plan_next_drops_a_bundle_whose_cards_mix_two_different_quests`,
+  `test_plan_next_dropped_mixed_bundle_serves_no_content_to_either_quest`.
+
+### Fixed
+- **A planner read written as a structured lookup without its `query` wrapper now runs instead of
+  being silently dropped.** `normalize_decision` kept only reads carrying a known surface key, so
+  `{"operation": "<name>", "args": {...}}` (the shape a consumer's discovery text may show) was
+  discarded: the "read" step ran nothing and the turn answered from no data. Measured on one
+  10-case eval run: every read dropped on 7 of 10 turns. Such a read is now passed whole to the
+  query reader as `{"query": {...}}`; a read naming a surface the turn lacks (tools, web) is still
+  dropped. Tests: `tests/test_read_spec_normalization.py`.
+
+### Added
+- **An optional ``step`` hint, mirroring the existing ``reasoning`` hint, so a consumer's own
+  provider can choose a model and/or sampling profile per call ROLE.** `core/adapters.py` adds
+  seven small constants (`STEP_PLAN`, `STEP_VERIFY`, `STEP_REPLY`, `STEP_SELECT`, `STEP_JUDGE`,
+  `STEP_UNDERSTAND`, `STEP_SUMMARIZE`) naming the role a given `plan`/`answer` call plays this turn,
+  plus `accepts_step_hint(fn)` (does this callable declare a `step` keyword or `**kwargs`),
+  `plan_with_step(provider, prompt, step=..., **kwargs)` (the `plan` sibling of the existing
+  `answer_with_reasoning`), and `answer_with_reasoning` itself now also takes an optional `step=`
+  alongside `reasoning=`. Every planner/verify/reply/judge/select/understand/summarize call site in
+  `core/orchestrator.py`, `core/overseer.py`, `core/card_filter.py`, and
+  `adapters/vector_context_assembler.py` now threads the matching `STEP_*` constant through one of
+  these two helpers, and `adapters/multi_provider.py`'s `MultiProvider.plan`/`.answer` forward a
+  given `step` to the wrapped provider under the same accepts-check. Fully backward compatible: the
+  hint is NEVER sent to a provider (real or test fake) whose `plan`/`answer` does not declare a
+  `step` parameter, so an unmodified provider is called exactly as before. This library never bakes
+  a model name or temperature to a step; it only plumbs the role name through for the CONSUMER's own
+  provider to act on. Tests: `tests/test_step_hint.py`.
+
+### Fixed
+- **A deferred run that failed is never written up as done, and a fan-out sibling that never ran
+  is named as not done yet.** The parked-decision fix below kept every non-parked result in the
+  "you already DID the work" synthesis, so "not parked" was read as "landed": a sibling that failed
+  (its receipts saying it changed nothing) or could not be verified with no observed effect could
+  still read as done. `result_landed_work` now decides from the run's own structured fields
+  (`decision_id`, `changed_nothing`, `observations_reported`/`observations` with `met`); a result
+  that did not land is reported in its own words through `unconfirmed_no_change_text`, after any
+  landed work and before a parked ask, and when nothing landed or parked that text is the reply and
+  the goal-verification loop and last-resort deep run are skipped (so no regeneration rewrites a
+  failure toward "done"). Separately, a fan-out sibling stopped before its first attempt because
+  another subgoal parked first used to be filtered out silently; it is now named in a code-written
+  line (`NOT_STARTED_AFTER_DECISION_NOTE`, the plan's own goal text) ahead of the continuation
+  sentence. Tests: `tests/test_orchestrator.py` (the two new deferred cases, the not-started
+  sibling case, and every existing fan-out/park case).
+- **A run whose own text already says nothing changed no longer gets a second "nothing was
+  changed" lead.** `DeepResult` gains `states_no_change`, a structured field a runner sets when its
+  output already carries a code-written no-change sentence; `unconfirmed_no_change_text` then adds
+  no `UNCONFIRMED_NO_CHANGE_LEAD` of its own. A consumer's chat stacked three no-change lines in one
+  reply (its interpreter's, its own code-written line, and this lead). Decided only on structured
+  fields, never on wording (hard rule #3). Tests: `tests/test_deep_not_met_no_change_honesty.py`.
+- **A parked approval decision is no longer resynthesized into a false "done" claim.** A deferred
+  deep run that resolved to a PARKED approval (`DeepResult.decision_id` set, nothing landed) had
+  its honest, code-written ask folded into `deep_output` and run through the "you already DID the
+  work" synthesis prompt; the goal-verification loop then judged the honest ask "not met" and told
+  a plain text-completion step (no tool access) to "execute the create_goal operation", which it
+  cannot do, so it fabricated a false completion with a made-up pace and date that did not even
+  match the parked card. A parked result is now kept out of `deep_output` entirely; when nothing
+  landed this turn the reply becomes the parked card's own wording, verbatim, `exit_reason` becomes
+  `"parked"`, `decision_id` is carried onto the `OrchestratorResult`, and the goal-verification
+  loop and the last-resort deep run are both gated off for a parked turn (same reasoning as a
+  confirmed queued hand-off). A mixed turn (something landed, something else parked) still reports
+  the landed work through the normal synthesis and appends the parked ask verbatim.
+  Tests: `tests/test_orchestrator.py`
+  (`test_deferred_deep_park_is_reported_as_proposal_not_a_done_claim`).
+- **A fan-out that parks one subgoal no longer throws away the siblings that already did their
+  work.** The one-ask filter added in the entry below kept ONLY the parked result, so in a live
+  run where all three requested items had actually landed, the single thing the person read was a
+  bare "please approve these changes to proceed": every landed subgoal's own text and receipts
+  were dropped, and the ask was all that was left. `Orchestrator._run_deep`'s aggregation now
+  drops only the EXTRA asks (every parked result after the first, by subtask order) and keeps
+  every sibling that reported something of its own, ordering them before the single ask so the
+  reply reads: what happened, then the one ask, then the short code-written continuation sentence
+  (`CONTINUE_AFTER_DECISION_NOTE`). A sibling that was stopped before it ever ran leaves an empty
+  placeholder result; `result_reports_something` keeps that out of the reply, judged on
+  structure and emptiness only (output text, a verified outcome, a usage-limit wait), never on
+  what any wording says. A single-goal turn and a fan-out where nothing parks remain unaffected.
+  Tests: `tests/test_orchestrator.py`
+  (`test_fan_out_reports_what_landed_as_well_as_the_one_ask`,
+  `test_fan_out_drops_only_the_extra_asks_not_the_finished_work`).
+
+### Changed
+- **Hygiene pass: drop the leading underscore from identifiers introduced in tonight's commits
+  (no behavior change).** A round of module-level helpers, constants and test fixture
+  classes/attributes added across the evening's work read as "private by convention" even though
+  nothing here uses that convention deliberately; renamed each to its bare form (e.g.
+  `result_reports_something`, `already_said_tail`, `collapse_shown_discovery`,
+  `discovery_reminder_line`, `run_goal_accepts_is_subgoal`, `Orchestrator.model_tier_doctrine_applies`,
+  `SNIPPET_MAX_CHARS`/`VECTOR_HIT_MAX_CARD_REFS`/`VECTOR_HIT_MAX_CARD_REF_CHARS` in
+  `vector_context_assembler.py`, `FileContextStore.FALLBACK_MAX_FILES_WALKED`/`FALLBACK_MAX_FILES_SHOWN`/
+  `FALLBACK_MAX_LINES_PER_FILE`, `evaluation/qualitative/judge.py`'s `OTHER_ACCOUNT_DATA`, and a
+  matching set of test-only helper functions/classes) and updated every reference, including
+  docstring/comment mentions and the CHANGELOG entries above that named them. Left untouched: any
+  identically-named identifier that already existed before tonight (e.g. `web_research.py`'s own
+  `_SNIPPET_MAX_CHARS`, `tests/test_overseer.py`'s `_OVERSEER_MARK`/`_overseer_signals`,
+  `tests/test_deep_gathered.py`'s `_PreambleCapturingRunner`) and idiomatic unused-parameter
+  placeholders. Pure rename; no test assertions changed.
+
+- **Round-2 token cut on the five schema-driven "planning function" calls (goal verifier, card
+  updater, answer-explanation, overseer, reach judge) and nothing else in that family.** Every one
+  of these goes through `provider.plan()`, which renders its `tool_schema` as the system prompt
+  (`QuestModelProvider.plan`, quest-backend); the schema's own field `description`s were restating
+  rules the matching prompt BODY already states in full (e.g. `VERIFY_GOAL_TOOL`'s `met`/`blocker`
+  descriptions duplicated `VERIFY_GOAL_PROMPT`'s own "When met=false" rules), so they were cut to
+  short mechanical tags, following the pattern `OVERSEE_TOOL` already used. Measured with
+  `tiktoken` cl100k on the rendered schema (compact separators, unchanged):
+  `VERIFY_GOAL_TOOL` 489 -> 270 tokens, `CARD_UPDATE_TOOL` 383 -> 309, `EXPLAIN_TOOL`
+  (`core/answer_explanation.py`) 304 -> 262. `CARD_UPDATE_PROMPT`'s trailing worked EXAMPLE
+  (520 chars) was dropped too: the rules immediately above it already give the identical JSON
+  shapes inline (`{"type": "collection", ...}` / `{"type": "file", ...}`), so the EXAMPLE was a
+  second rendering of the same thing. `OVERSEER_PROMPT` (`core/overseer.py`) was rewritten for
+  density, not substance: every pinned rule (`action verb` vs an `interrogative` question,
+  `escalate_human` reserved for an `identity`/`irreversible` fork, "a REFUSAL IS AN ANSWER",
+  `never about them`) survives, with the DIGEST-field explanations, the five signals, and the
+  Rules section each tightened to one pass instead of restating the same point twice; static
+  prompt tokens (excl. the digest) 1,936 -> 1,337. Nothing semantic changed: `VERIFY_GOAL_PROMPT`,
+  `CARD_UPDATE_PROMPT`'s own rules/body, `EXPLAIN_PROMPT`, and `REACH_JUDGE_PROMPT` (already
+  measured at ~400 tokens total per call, 2026-10-05, and left alone) are untouched. Already
+  conditional and verified unchanged this round: the card updater structurally skips its one LLM
+  call when a turn teaches nothing new AND has no current card to correct
+  (`_update_cards_after_deep`); the answer-explanation call is off by default
+  (`QAR_EXPLAIN_ANSWER`) and gated by the model-free `is_eligible(trace)`; the overseer is capped
+  by `cfg.overseer_max_signals` and only consulted at specific checkpoints. Projected on the
+  round-2 probe log (10 real turns, `probe_l10b.jsonl`): these five calls' combined per-turn
+  total (schema + prompt, excluding the per-turn goal/output/context/evidence data they need and
+  must keep) drops by roughly 1.1K tokens per turn. Tests: `tests/test_verify_*.py`,
+  `tests/test_answer_explanation.py`, `tests/test_card_learning_gate.py`, `tests/test_overseer.py`,
+  `tests/test_overseer_answer_checkpoint_context_preamble.py`,
+  `tests/test_deep_before_giving_up.py`, `tests/test_planner_prompt_profiles.py`,
+  `tests/test_context_assembler.py`, `tests/test_turn_start_cost.py` (316 passed).
+
+- **A fan-out splits only the person's own ask, and a parked subgoal stops its siblings from
+  piling up more asks (round-2 trace: "add that as a goal" with a Friday-launch conflict got two
+  parked asks, two goal proposals, and an unrequested note in one reply).** Three parts: (1) the
+  PLANNER prompt's `deep_subtasks` guidance (`_PLANNER_TAIL`, shared by both the full and compact
+  profiles) now says plainly to split only what the person's message asks for and never add a
+  subtask of its own (a note, a reminder, a decision record) -- one short line, +26 tokens
+  measured via `tiktoken` cl100k. (2) `Orchestrator._run_deep`'s fan-out sets a per-call
+  `fanout_parked` event the moment any subgoal's `DeepResult.decision_id` is set; every OTHER
+  subgoal's attempt loop checks it before starting a new attempt, so a sibling not yet underway
+  stops rather than running further. (3) Regardless of how the concurrent runs happened to race,
+  the aggregation step keeps only the FIRST parked result (by subtask order) and drops every
+  other result from the turn, appending one short, code-written sentence
+  (`CONTINUE_AFTER_DECISION_NOTE`, never derived from any result's own text) that the rest will
+  continue once the person answers. A single-goal turn and a fan-out where nothing parks are both
+  byte-for-byte unaffected. Also added `run_goal`'s optional `is_subgoal` keyword
+  (`run_goal_accepts_is_subgoal`), set True only on a fan-out, so an opted-in runner (e.g.
+  quest-backend's `QuestCommandRunner`) can scope itself to just its own subgoal instead of
+  re-deriving a sibling's work from the fuller "USER'S REQUEST" header every subgoal's brief also
+  carries; a runner that ignores the kwarg is unaffected. Tests: `tests/test_orchestrator.py`
+  (fan-out/park/subgoal cases), `tests/test_planner_prompt_profiles.py`.
+- **Token-usage pass on the context assembly path (measured against a real probe log of a chat
+  turn's actual LLM calls, no live calls made to decide any of this).** Four changes:
+  (1) `VectorContextAssembler`'s query-generation and relevance-review LLM calls are now memoized
+  per provider (same selection-memo pattern as `core/card_filter.py`), so an exact-repeat
+  `assemble()` for the SAME task text within one turn (a widening retry, the post-deep
+  card-updater's own re-selection) pays for both steps only once.
+  (2) The relevance review is skipped outright when every candidate's raw score is already under
+  its own confidence floor -- the gate drops them all regardless of the review's verdict, so the
+  call is a fact-based no-op, not a guess; a broader "skip when scores look separated" heuristic
+  was tried against the probe log and declined (the review changed the outcome against a
+  score-only heuristic in most sampled calls, once rejecting the single highest-scoring
+  candidate).
+  (3) Root-caused the actual "a vector hit renders a quest card's content in full" bug:
+  `_snippet()` capped to the first 3 non-empty *lines*, but an embedded card/association's own
+  `.text` is typically one unbroken line, so the cap never engaged -- one real logged hit's text
+  alone was 11,773 tokens. `_snippet` now hard-caps its OUTPUT regardless of line count; this one
+  fix alone cut a real logged planner call from 18,749 to ~7,079 input tokens and every sampled
+  review call by 62-83%. A complementary, tighter cap (4 refs / 1600 chars vs. the shared 8/4000
+  default) also bounds a vector hit's structured `content` items specifically.
+  (4) `FileContextStore._fallback_file_search` (the grep-the-corpus path when no card matches) is
+  now hard-capped at half its old file/line limits, and gated by an optional
+  `meta["skip_corpus_fallback"]` flag; `Orchestrator.gate_docs_fallback` sets it from a
+  NON-BLOCKING peek at the reach judge's already-resolved verdict (`peek_reach_verdict`), wired at
+  the top of `_run_deep` (covers every per-goal/widening assembly of a deep run) and in the
+  turn-start context prefetch. Projected on the 3-turn probe log: 183,363 -> 145,054 input tokens
+  (-20.9%) from the vector-arm fixes alone. Tests: `tests/test_vector_context.py`
+  (`TestVectorArmSelectionMemoReusePerTurn`, `TestVectorArmReviewFloorSkip`,
+  `TestVectorArmSnippetHardCap`, `TestVectorArmCompactCardRendering`),
+  `tests/test_context_assembler.py` (`TestFileContextStoreDocsFallbackGating`),
+  `tests/test_reach_judge.py` (`peek_reach_verdict`/`gate_docs_fallback` cases).
+- **Qualitative-eval harness: card content is snapshotted and restored per case, not just ids.**
+  `cards_created_since`/`sweep_new_cards` only ever caught a card a case CREATED outright; the card
+  learner also APPENDS learned items onto a card that already existed, in particular each world
+  quest's own auto-maintained card (managed fields are protected, but learned content items are not
+  by design), which an id-only diff against the baseline can never see since the id was already
+  there. Found after a day of runs: the five world quest cards had each accrued 3-23 learned items,
+  some false ("Goals added: ..." for a write that never landed) and some prescriptive ("reschedule
+  this goal rather than ..."), and a later case read one of those as ground truth. `world.py` gains
+  `card_snapshot` (full card dicts, not just ids), `cards_to_restore` (pure diff: what to delete,
+  what to write back) and `restore_cards` (settle, then delete anything new and PUT back the literal
+  pre-case dict for anything changed), called in the case's own `finally` so it still runs if the
+  case raised. `reset_world_quest_cards` does the equivalent for `reset()`: `teardown(keep_quests)`
+  never deletes a quest's own card, so a learned item on one used to survive every reset; reset now
+  strips each world quest card back to managed-only content. The per-case report (`cards_restored`)
+  says how many cards were deleted/restored, a useful signal of which case taught the card learner
+  something. Tests: `evaluation/qualitative/test_card_restore.py`.
+- **A context card may record what a turn OBSERVED, never what it CLAIMED.** The end-of-turn card
+  updater learned from the reply text, so an assistant's own false claims became durable facts that
+  then grounded later turns (two live cards: one said a goal had been added although the turn's
+  generated write matched no document, one recorded a "definitive summary" of a project the turn's
+  reads had never found). New `core/card_learning.py` decides what a turn may teach from structured
+  facts only: `DeepResult.met` (the goal loop's own verdict, false for a verified not-met AND for a
+  run that could not be verified), `DeepResult.changed_nothing` (write receipts show nothing
+  landed), the new `DeepResult.observations` / `observations_reported` (a runner's own receipt lines,
+  the flag making an EMPTY list mean "observed nothing" rather than "cannot tell"), and this turn's
+  `gathered` reads that actually returned content. Those observations are handed to the updater as
+  the material a new fact may come from, and when the facts do not support learning the returned
+  edit plan is NARROWED to its removals (dropping a wrong statement needs no evidence), so nothing
+  depends on a model policing itself in prose and no model output is keyword-scanned. A runner that
+  reports no observations behaves exactly as before. Tests:
+  `tests/test_card_learning_gate.py`.
+- **Qualitative-eval harness: the per-case card sweep now waits for a turn's card writes to settle,
+  and runs twice.** The brain's card updater finishes in a background thread AFTER the response a
+  case has already read, so the old sweep (fired the instant a case returned) could miss the write
+  and let the next case be answered from it. `evaluation/qualitative/world.py` gains
+  `cards_created_since`, `settle_card_set` (poll until the card set is quiet, bounded) and
+  `sweep_new_cards`; the runner sweeps inside the case after judging and again right before the next
+  case starts. The sweep still identifies a run's cards only by id against the baseline captured at
+  setup, and deletes nothing at all when no baseline was recorded, which is now stated in the
+  README's known limits rather than worked around by deleting broadly. Tests:
+  `evaluation/qualitative/test_card_sweep.py`.
+- **Compact JSON formatting for the two schemas rendered as TEXT into a prompt.**
+  `adapters/claude_cli_provider.py`'s `plan()` appends the decide-tool schema to every planner
+  prompt on that backend (the CLI has no native tool-use surface to pass it out of band) and
+  `adapters/mcp_retrieval_adapter.py`'s `describe_operation()` embeds an MCP tool's input schema in
+  its discovery observation; both used to pretty-print with default/`indent=2` whitespace that is
+  billed on every read for no readability gain a model needs. Both now use
+  `separators=(",", ":")`. No behavior change: JSON validity and the parsed decision are unaffected.
+- **Planner input tokens cut by not re-sending content a turn already saw.** Measured on a real
+  30-turn eval pass: a discovery/capability menu (`list_operations`, `describe_operation`,
+  `tools`, ...) now renders IN FULL only on the planner call for the step right after it was
+  gathered; every later re-plan call of the same turn gets a one-line reminder instead
+  (`discovery_reminder_line`, `collapse_shown_discovery`), tagged via a new `discovery_step` on
+  the observation. `MODEL TIER DISCIPLINE` is now a conditional `{model_tier_block}` slot, omitted
+  when every wired deep runner declares `uses_deep_model = False` (true of Quest's in-process chat
+  runners, which never touch the `QAR_MODEL_*` ladder the doctrine is about), via
+  `Orchestrator.model_tier_doctrine_applies()`; it fails open (keeps the doctrine) when no runner
+  is known. The "ALREADY SAID OUT LOUD" narration echo-back is capped to its last 3 lines
+  (`NARRATION_SAID_PLANNER_MAX`), since its only job is stopping an immediate echo, not holding an
+  audit trail. `DEFAULT_PLANNER_ABBREVIATE_REPEAT_CONTEXT` flips off -> on: the static
+  `context_view` (vector hits, cards, earlier conversations) does not change within a turn, so the
+  existing, already-tested abbreviation now applies by default on re-plan steps; the final answer
+  always gets the full context regardless. Projected: ~20,700 -> ~11,500 input tokens per planner
+  call (-45%) on the measured probe log. Tests: `tests/test_planner_prompt_profiles.py` (discovery
+  menu, model-tier conditional, and said-echo-bound cases), `tests/test_context_assembler.py`,
+  `tests/test_unified_card_context.py`, `tests/test_orchestrator.py`.
+- **A not-met goal verdict now says why another attempt would or would not help, and the run acts on it.** The verifier returns a `blocker` in the call it already makes (no extra LLM call): `more_work` retries as before, `evidence_only` (the work is reported complete and the only gap is proof beyond what the request asked for) is accepted as done with one line naming what was not independently confirmed, and `needs_person` (only a person can supply the missing input) stops retrying and reports needs-you with the one question. When the attempts run out, the report now leads with what is still open, the next step, and that a reply continues the same session, then keeps the unchanged `WHAT THE RUN DID BEFORE IT STOPPED` heading the quest-backend mailer matches. Task-modal and chat tasks share this path. Tests: `tests/test_goal_not_met_decides_next.py`.
+
+### Fixed
+- **The goal verifier now sees a deep run's OWN structured evidence, not only the worker's output
+  text.** Live finding: a Quest chat turn's code runner really added a goal (the database diff
+  showed it, and the run's own `DeepResult.observations` carried the receipt line "Added the goal
+  ..."), yet `Orchestrator._verify_goal` judged the worker's output text and brief alone, saw no
+  evidence, and returned `met=False` with "the worker claimed to add a goal ... but ... no
+  evidence" -- so "Goal not met: ..." reached the chat right next to the correct reply. `_verify_goal`
+  gains `observations`/`observations_reported` (the SAME shape `DeepResult.observations` already
+  carries): when `observations_reported` is true, the run's write receipts and read confirmations
+  render in the verify prompt's volatile tail, capped like the existing web-evidence section
+  (reuses `VERIFY_WEB_EVIDENCE_MAX_CHARS`), framed as the system's own record rather than the
+  worker's claim, with a new `VERIFY_RUN_OBSERVATIONS_NOTE` telling the verifier a receipt there is
+  proof the write happened and an empty list (on a run that DOES report observations) is proof it
+  did not. Wired at the deep-goal loop's own verify call site (`_run_deep`), from the SAME attempt's
+  `res.observations`/`res.observations_reported`. "Verifier failure is never success" is untouched:
+  an unparseable verdict is still UNVERIFIED regardless of this evidence. A runner that does not
+  report observations (`observations_reported=False`, the default) leaves the verify prompt
+  byte-for-byte unchanged. Tests: `tests/test_verify_run_observations.py`.
+- **A deep run that was not verified and changed nothing no longer reads as completed work.** A
+  consumer's chat eval produced the worst pairing twice in one pass: the runner's own output
+  announced a change, the verifier returned not met for exactly that reason (no execution record
+  behind the claim), and the turn surfaced that text verbatim as its result, because `finish()`
+  concatenated every `DeepResult.output` without looking at `met`. `DeepResult` gains
+  `changed_nothing`, a structural fact a runner sets from its OWN receipts of what it wrote (never
+  inferred from the wording of its output), and `unconfirmed_no_change_text` puts a code-written
+  lead line ("Not confirmed as done, and nothing was changed.") in front of a result that is both
+  not met (which includes a run that could not be verified) and reports changing nothing. The
+  runner's own text is still shown, never hidden, and a met result or one that really changed
+  something is passed through untouched. Both inputs are structured, so nothing here reads words
+  out of model output (hard rule #3). Tests: `tests/test_deep_not_met_no_change_honesty.py`.
+- **The planner now tells the "deep" hand-off to gather a data-dependent write value FIRST, instead
+  of leaving the worker to invent or hardcode it.** Round-2 trace: a multistep request ("add up my
+  launch expenses against the cap; if over, add a goal ...") had the planner do several reads and
+  find the right facts, then hand off to a deep worker that could not see them (a separate,
+  already-fixed gap: `context_preamble` was not threaded to every deep-runner `run_goal`) and
+  re-derived everything from scratch -- sometimes with a hardcoded, never-read value in the
+  generated code or task. Both planner prompt profiles (`_PLANNER_ACTIONS`, `_PLANNER_COMPACT_ACTIONS`)
+  now say, next to the `goal`/`deep_brief` guidance: gather a value the write depends on (an id,
+  amount, total, date, time, pace, or count) with a "read" first, or name exactly what to read in
+  `deep_brief`. One short sentence per profile; the compact profile's added sentence is 46 cl100k
+  tokens (measured directly with `tiktoken`'s `cl100k_base`, the same encoding
+  quest-backend's `scripts/checks/planner_token_anatomy.py` uses), under the 60-token budget. Tests:
+  `tests/test_planner_prompt_profiles.py::test_both_profiles_tell_the_planner_to_gather_data_dependent_write_values_first`.
+- **Qualitative-eval judge: a short rubric response now retries and reports unjudged, instead of
+  padding the gap in as fails.** `evaluation/qualitative/judge.py`'s `normalise_verdict` used to
+  pad any rubric item the judge model did not return in as a silent FAIL, which could score a case
+  confidently from an incomplete judge response. It now raises `RubricCountMismatch`, which flows
+  into `judge()`'s existing 2-attempt retry; if both attempts come back short, the case is reported
+  unjudged (`{"error": ...}`) rather than scored.
+- **Qualitative-eval judge: ground truth now lists the dev account's other quest outcomes and
+  collection/habit names that sit outside the eval's seeded world,** so citing real-but-off-topic
+  account data is no longer scored as an invented fact under the judge's "never invent a fact,
+  number, source or entity" rule. Fetched once per run, cached, and never crashes a judge call on a
+  lookup failure. `judge()` takes a new `world` parameter to build this section.
+- **The honesty-floor claim check now catches "recorded/noted/logged" claims, not only
+  "saved/edited/sent" ones.** `VERIFY_CLAIMS_RULES` (the `claims_unexecuted` check run when
+  `verify_claims` is on) named only "edited or wrote a file, saved data, sent something, applied
+  configuration" as the completed-change claims a reply must back with the turn's execution
+  record. A consumer's live case had a reply say "I have recorded your intent to ..." on a turn
+  that made no write; the list now also names "saved, recorded, logged, or noted data" so the same
+  structural check (never a keyword scan of the model's own output, hard rule #3) flags that class
+  of unbacked claim too.
+
+### Changed
+- **The escalation nets honor the planner's structured `user_intent`, and the regex net over the
+  user's words is retired.** Whether an answer turn should become work (the decisive message-intent
+  fallback, the described-work net, the read-budget wrap-up, the hold-off gate on all of them, and
+  whether a self-initiated escalation may start background work) used to be decided by keyword lists
+  over the message (`_message_requests_change`, `message_change_signal_ambiguous`,
+  `message_holds_off_work`, `message_announces_own_plan` and their patterns). Each misroute added a
+  pattern and each pattern leaked the next phrasing. The planner now states, on the call it already
+  makes, a REQUIRED `user_intent` field: `act` | `ask` | `inform` | `hold_off` (defined in one rubric
+  line in both prompt profiles; about 150 input tokens a planner call). `act` escalates an answered
+  order; `hold_off` turns the nets off for a typed message (on a queued task's brief it counts as no
+  verdict); a missing or unknown verdict falls back to the one-shot `judge_execution_directive`,
+  never to a regex. The pre-planner veto `message_forbids_new_task` stays: it runs before any verdict
+  exists, shapes the planner's own prompt, and can only remove execution. Measured live (80 paired
+  cases: 54 sampled routing-harness messages plus the escalation test messages,
+  gemini-3.1-flash-lite, compact profile): 73/80 old vs 74/80 new, 5 vs 6 discordant, exact McNemar
+  p=1.0; orders that should become work 24/30 -> 30/30, messages that should stay conversation
+  49/50 -> 44/50. Of those five, two are the planner's own answer-plus-hand-off on a status ask
+  (not the net; old arm read first on the same messages), one is vetoed before planning in a real
+  turn by `message_forbids_new_task` (the harness does not model the veto), and two are real
+  verdict misreads ("draft X here in chat" and a first-person "I'll do it myself" plan read as
+  `act`). The harness scores the planner decision plus the net, not a full turn.
+
+### Fixed
+- **A named person or thing is not a missing referent.** The request resolver asked "which
+  conversation involving <name>?" for "What did <name> want again?" before any read, though the
+  name is exactly what a read of the user's records finds. `RESOLVE_REQUEST_PROMPT` now says a
+  name (person, place, event, project) is a subject to look up, never a reason to CLARIFY; only a
+  pronoun or pointer word can be a missing referent.
+- **Review fixes for the escalation changes above.** A queue-only wiring keeps the queue pin for
+  net-inferred work (it has nowhere else to go). The self-initiated decline applies only when the
+  user's own words did not ask for work, and happens before any "Working on" status line; when an
+  own escalation is declined or comes back empty the turn says it is keeping its answer. "Came back
+  empty" now excludes a run that filed a decision, hit the usage limit or succeeded at an
+  operation. `CARD_UPDATE_PROMPT` no longer asks the updater to copy read specs it cannot see.
+- **The card updater no longer teaches an invented read shape.** `CARD_UPDATE_PROMPT`'s
+  `full_ref` example was `{"query": {"kind": ..., "id": ...}}`, which no read adapter accepts;
+  cards stored it and planners copied it. A `full_ref` is now copied from a read the work really used.
+- **An own escalation that produces nothing keeps the answer.** When the verifier's, the
+  last-resort or the overseer's deep run comes back with no output, the turn keeps the answer it
+  already had instead of ending with an empty result (which a consumer had to replace with a
+  generic "could you tell me more?").
+- **The overseer leaves an honest decline alone, and its own deep escalation stays in the turn.**
+  `escalate_human` is no longer for requests nothing here can carry out when the draft already
+  says so, and its `reason` (shown to the user as the question) is written to the user. The
+  overseer's `escalate_deep` is a self-initiated escalation like the verifier's (never starts
+  background work).
+- **Only the planner's own `deferred_deep` is pinned to the background queue.** In a queued
+  deployment (`deferred_deep_queued`), work that an escalation net inferred (the planner answered,
+  but the user's message asked for a change) is now routed like any deep action by the runner
+  classifier, so an in-chat change runs inline instead of becoming a background task. Queue
+  receipts are still recognised and reported as queued.
+- **A user announcing their own next step is not an order.** `_message_requests_change` no longer
+  escalates "I'll lean on that claim and move on", "I'm going to move the launch myself" and similar
+  first-person plans that do not address the assistant (`message_announces_own_plan`); they go to the
+  one-shot LLM judgment band instead of opening a task by regex. "I'll need you to update the sheet"
+  still escalates.
+- **The orchestrator's own escalations never start background work.** The answer verifier's
+  "need more context" run and the last-resort deep run before giving up are the assistant's own
+  initiative, so a goal that resolves to a runner declaring the new
+  `DeepRunnerBase.starts_background_work` (a consumer's task-queue runner, for example) is not
+  started: its `DeepResult` comes back `declined_background` and the turn keeps its answer. Before
+  this, a chat remark ("I'm buying the yellow paint tomorrow") got a not-met verdict and the
+  last-resort run queued a background task to buy the paint. Planner and user hand-offs to the same
+  runner are unchanged.
+- **`_DailyLimiter`'s web-search daily cap is now enforced across processes, not just within
+  one.** When persisted (`QAR_WEB_CACHE_DIR` set), `record()` takes a cross-process file lock,
+  re-reads the shared count, and writes atomically, and `exhausted()` re-reads the file, so
+  multiple processes sharing one cache dir (two runner lanes, a terminal session, a web backend)
+  add up to one real spend instead of each undercounting against its own stale in-memory copy.
+- **Verifier web evidence is scoped to web reads, capped, and framed as untrusted.** The EVIDENCE
+  section `_verify_goal` gained (entry below) rendered EVERY gathered read, so ordinary
+  corpus/grep/query turns paid up to the full verify-context cap (24000 chars) of uncached tokens
+  on every verify retry, an unmeasured behaviour change. It now renders only LIVE WEB observations,
+  capped at `VERIFY_WEB_EVIDENCE_MAX_CHARS` (8000); a turn with no web read is byte-identical to the
+  old prompt (now asserted as true byte identity). Web text is also framed as untrusted third-party
+  data whose instructions are ignored, in `PLANNER_WEB_HEAD`, the answer tail's citation carve-out,
+  and the verifier's evidence heading and `VERIFY_WEB_EVIDENCE_NOTE` (which now also says to weigh a
+  fact by its source). Tests: `tests/test_verify_web_evidence.py`.
+- **The answer-verification pass can now see the web evidence it is judging, and trusts it over its
+  own training knowledge.** `Orchestrator._verify_goal` judged a web-grounded answer with only the
+  stable L2 `context_layer` (cards/corpus) -- never the turn's `gathered` web search/page results,
+  which rode only in the answer call's own volatile tail (`grounding_answer_tail`). Live bug: asked
+  "What is the latest stable Python release right now?", the planner correctly searched the web and
+  the answer was correctly grounded in the results, but the verifier (with no evidence to check
+  against) judged it "incorrect version information" against its own stale prior and steered a
+  regeneration to a wrong, older version. `_verify_goal` now takes a `gathered` parameter, renders
+  it as an EVIDENCE section in its own volatile tail (never the cached L2, so
+  `tests/test_verify_context_layer.py`'s byte-identity contract is untouched), and appends
+  `VERIFY_WEB_EVIDENCE_NOTE` (telling the judge to trust this turn's live web results over its own
+  training knowledge, which has a cutoff) whenever `_gathered_has_web_evidence` finds a LIVE WEB
+  observation. `None`/`[]` (the default) is byte-for-byte the old prompt. Tests:
+  `tests/test_verify_web_evidence.py`.
+- **A live web citation no longer gets silently dropped by the "no retrieval hits" voice rule.**
+  `REPLY_VOICE_SYSTEM` tells the answer step never to present "a list of retrieval hits" or "source
+  counts" (correctly, for the assistant's OWN internal retrieval), but nothing distinguished that
+  from a `[title](url)` citation to a live web result, which the LIVE WEB block and the web
+  adapter's own observation text both ask for -- so the one system-level instruction every answer
+  call actually sees could read as "never cite," while the citation instruction sat only inside
+  retrieved data (easy to follow past) or the planner-only `PLANNER_WEB_HEAD` block (never reaches
+  the answer step at all). `grounding_answer_tail` now appends a short carve-out, conditioned on
+  `_gathered_has_web_evidence`, saying a live web citation is not retrieval metadata and must be
+  kept. Tests: `tests/test_verify_web_evidence.py`.
+
+### Added
+- **Fast, token-efficient live web search (`WebResearch`, `core/adapters.py`).** Web search was
+  previously a `RetrievalAdapter` folded INTO `CompositeRetrievalAdapter`, which broadcasts every
+  grep/query to every member adapter -- so an ordinary corpus grep also fired a paid, slow web
+  search, the planner had no web read shape (it had to discover "web" via `list_sources` first),
+  and a `claude_cli` lane's provider had no `supports_web_search`, so it got no web search at all.
+  Now:
+  - `adapters/web_research.py`'s `WebResearchAdapter` (`build_web_research_from_env`) is a
+    snippet-first search (`search(queries, fresh=)`, one or several queries run in parallel, ~5
+    results with title/url/snippet plus a short summary and a "cite as [title](url)" note) and a
+    bounded single-page fetch (`fetch(url, focus=, fresh=)`, passage selection to roughly 800
+    tokens) over backends auto-selected from whichever key/config is present: Serper, Brave,
+    Tavily, SearXNG, or Gemini grounding (`QAR_WEB_SEARCH_MODEL`, default
+    `gemini-2.5-flash-lite`) -- the last of these is what gives a `claude_cli` lane (no Anthropic
+    `web_search` tool) shallow web search for the first time. A disk/memory cache
+    (`adapters/web_cache.py`) and a daily call cap keep repeat queries and page fetches free.
+    `QAR_WEB_SEARCH_BACKEND` pins one explicitly; `WEB_SEARCH_ENABLED=false` disables the whole
+    feature. See `docs/web-search.md`.
+  - `Orchestrator.web` (new constructor kwarg, `core/adapters.WebResearch` Protocol) is wired by
+    `build_orchestrator` from `RunnerConfig.web_research` (auto-built from env when unset) and
+    reached ONLY through the planner's own `{"web": "<query>"}` / `{"web_page": "<url>", "focus":
+    "<...>"}` read keys, dispatched directly in `Orchestrator._exec_one_read` -- NEVER folded into
+    `CompositeRetrievalAdapter`, which fixes the broadcast problem. The planner gets a short WEB
+    block (placed, like the tools block, AFTER the planner body) and the matching
+    `web`/`web_page`/`focus`/`fresh` decide-schema fields ONLY when a web adapter is actually
+    wired, so an unconfigured deployment pays zero extra prompt tokens. The reach judge's "world"
+    verdict now tells the planner a current public fact is reachable through a `{"web": ...}` read
+    instead of a hand-off or a guess, when a web adapter is configured. An unconfigured `{"web":
+    ...}` read degrades to a named "not configured" error, never a crash or a silent drop. The
+    legacy `ProviderWebSearchAdapter` fold-in (Anthropic/Gemini native search, folded into
+    retrieval) is kept as a fallback for the rare case `WebResearchAdapter` could not be built, so
+    no deployment regresses to no web capability.
+  - Review pass (2026-10-06): the SSRF guard is re-run on EVERY redirect hop (the default
+    fetcher follows redirects by hand, max 5) -- `follow_redirects=True` meant the guard only
+    ever saw the URL the planner asked for, so a public URL that 302'd to `127.0.0.1` or a cloud
+    metadata endpoint was fetched anyway. Page bytes are decoded with the charset the header or
+    the document's `<meta>` declares instead of assumed UTF-8 (a windows-1252 page used to arrive
+    as U+FFFD soup). An unclosed chrome element (`<aside>`, `<div class="banner">`, or any
+    document truncated at the 2 MB cap) no longer blanks the whole page: a salvage pass runs when
+    the structured extractor returns almost nothing. A hit snippet that is just a span of the
+    backend's own summary is dropped instead of billed twice (Gemini grounding does exactly that;
+    measured live, ~40% of a 406-token observation). A fetch failure names its cause. The WEB
+    block states its precedence over the decision rubric's "answer a current public fact from
+    memory" rule, which otherwise wins by being first. The disk cache prunes only its own files,
+    never the daily-limit counter beside them.
+  - Costs: a search call is a few hundred input tokens (cached per query/TTL); a page fetch is
+    bounded to roughly 800 tokens of extracted passages; the Gemini-grounding backend bills to
+    that key, every other backend is billed by the search provider itself (several offer a free
+    tier).
+  - Second review pass (2026-10-06): the reach judge's own prompt (`core/reach_judge.py`), not
+    only the verdict text stamped into the planner afterwards, now says a live web read is
+    available when one is configured, and the cascade's review digest (`core/planner_cascade.py`,
+    shipped off) gets the same treatment; both are byte-for-byte unchanged without a web adapter.
+    A HEAD redirect-resolution request that TIMES OUT (`adapters/web_search_backends.py`) keeps
+    the original URL instead of doubling the worst-case latency with a GET retry; a GET retry
+    still runs when HEAD answers with no usable Location. The paid `url_fetch_fallback` (Gemini
+    `url_context`) call is now counted against `QAR_WEB_SEARCH_DAILY_LIMIT`
+    (`adapters/web_research.py`); once reached, the fallback is skipped and `fetch()` keeps the
+    thin direct result or names the limit as the cause, never raises; direct HTML fetches and
+    cache hits stay free and uncounted.
+- **`OrchestratorConfig.planner_model` / `QAR_PLANNER_MODEL`: the routing decision's own model.**
+  Empty (default) keeps resolving `planner_tier`. A model id there is sent verbatim on the decide
+  call alone, so routing can run on a cheaper model than the calls that share `planner_tier`
+  (request understanding, card updates, summaries); the reach judge keeps its own tier.
+- **`QAR_READ_REACH_SUMMARY` / `QAR_READ_REACH_SUMMARY_FILE`**: a CLI lane can now supply the
+  `read_reach_summary` the reach judge needs (inline or from a file); an unreadable file leaves the
+  judge inert. Measured on haiku, compact WITHOUT the judge does not hold up (91% against 93% for
+  the full prompt and 96 to 97% for compact + judge), so a lane needs this before compact.
+
+### Fixed
+- **A read the turn already ran is not run again.** Live whole turns showed planners on two
+  models re-issuing the identical read spec up to fourteen times. The run loop now skips a spec
+  (same keys and values, any order) that already ran this turn and tells the planner so in a
+  `planner_only` note that never reaches the answer or a deep brief; a second step that asks for
+  nothing new ends the read loop through the read-budget wrap-up. A tool step clears the record.
+  Review follow-ups: a failed read stays retryable, a read the planner now sees only as a
+  one-line summary may run again, the repeat count is consecutive, notes take no full-view slot,
+  and `OrchestratorResult.gathered` never contains them.
+- **`CompositeRetrievalAdapter.query` no longer hides a refusal.** When one adapter returned an
+  error and another returned text, the error was dropped, so the planner never learned its query
+  shape was wrong. Refusals now ride on the new `Observation.planner_note`, which the run loop turns
+  into a planner-only note: the planner sees it, an answer never grounds on it.
+- **A pinned `planner_model` that returns no decision** (a mistyped id, an outage) is retried once
+  on `planner_tier` instead of every step silently taking the fail-safe.
+
+### Changed
+- **One explicit token budget for the deep prompt, spent by priority (`core/prompt_budget.py`).**
+  Incident 2026-10-06: an autopilot work thread's prompt grew 367K -> 548K -> 838K characters over
+  three passes and the worker refused it ("Prompt is too long"). `compose_goal_prompt` now fits the
+  preamble's blocks to `SubprocessConfig.prompt_token_budget` / `QAR_DEEP_PROMPT_TOKEN_BUDGET`
+  (default 60K tokens, always capped at the model window minus the worker's reserve): request
+  first, then doctrine/persona, fresh updates, goals, plan of record, history, retrieval cards;
+  lowest tier compressed then dropped first, every cut logged and announced. `compose_batch_text`
+  fits its own parts through the same mechanism (`AUTOPILOT_BRIEF_TOKEN_BUDGET`). Exactly one
+  context-updates block survives per prompt (the newest), and `parse_manifest` reads the newest.
+- **Autopilot work threads start each pass fresh** (`executor.across_pass_resume`); a usage-limit
+  pause still resumes its own session. Any other resume is skipped when the session's transcript
+  plus the new prompt would not fit the window (`goal_runner.session_replay_tokens`). A launch
+  refused as "Prompt is too long" retries without the transcript, then at half the budget, and
+  only then fails with a plain cause.
+- **Past turns are pointers, fenced, and rendered once.** `TurnContextStore` shows a past turn's
+  opening (600 chars, context-updates blocks removed), records its quest `scope_tags` and task id,
+  never returns a turn from another quest or from the same thread, and the poller no longer renders
+  the rep turn store when the lane's assembler already renders turns
+  (`turn_context_store.assembler_renders_turns`, on the shared `composite_assembler.find_assembler`).
+  Quest tasks (quest id in `goal_id`) now carry quest scope tags (`executor.task_scope_tags`).
+- **The request reaches the deep worker once**, not as both `USER'S REQUEST` and the TASK brief.
+- **Autopilot receipts close what they account for.** The pass leaves the ref-to-item map with the
+  feedback ledger (`ContextUpdates.remember_offer`), and the executor records the run's
+  dispositions against it, so finished items stop coming back "still owed" every pass.
+- **Judges and selectors get the gist of the request, not the whole brief**
+  (`prompt_budget.decision_excerpt`): card relevance, file ranking and consolidation, the
+  turn-history filter (candidates named by their opening), goal-condition derivation (whose
+  fallback is the gist, not the raw brief), the persona explicit-ask judge, and vector query
+  generation. The deep verifier already clipped its inputs.
+- **A thread's run record is one card, never retrieved by that thread.** `FileContextStore.record`
+  keys a run on a thread by its task id (not each pass's whole brief), takes keywords from the
+  request's gist, and `assemble` skips cards recorded from the asking thread.
+- **A deep request for a model family ("opus") is no longer run on a different family** when the
+  lane's tier for that alias resolves elsewhere (e.g. `QAR_MODEL_QUALITY=haiku`).
+- **The reach judge no longer adds wall clock.** `run()` starts it at the top of the turn
+  (`Orchestrator.prefetch_reach_verdict`), concurrently with request understanding, context
+  assembly and guidance, and the first plan only collects it, bounded by the new
+  `OrchestratorConfig.planner_reach_judge_timeout_seconds` (default 20s; a judge still running
+  plans without a verdict, and that settles it for the rest of the turn). Live: first planning step
+  p50 1.63s to 0.96s. The verdict cache is now bounded (256 entries). A turn that ends before
+  planning still pays for the one judge call.
+- **claude_cli: optional thinking cap on routing decisions.** `ClaudeCliProvider(plan_thinking_tokens=N)`
+  / `QAR_CLI_PLAN_THINKING_TOKENS` sets `MAX_THINKING_TOKENS` on `plan()` calls only (routing, the
+  reach judge, and overseer or cascade reviews when they run on this provider). Haiku as the
+  planner: 94% at 36.9s p50 with thinking, 93% at 3.3s with it off, on 100 labelled decisions.
+
+### Fixed
+- **The compact planner profile no longer drops hand-offs.** Its schema had stripped every field
+  description, including `deferred_deep`'s, and a cheap planner then wrote "this needs the dev
+  server" as its answer with the field empty. That description is kept
+  (`COMPACT_SCHEMA_KEPT_DESCRIPTIONS`) and the compact actions block says a hand-off is the field.
+  Hand-off groups on the dev half: 24/38 to 32/38, and 14/38 to 36/38 after an empty read.
+- **The shared prompts no longer carry any release or deploy rule; they judge the user's ask.**
+  The goal verifier (`VERIFY_GOAL_PROMPT`) has one generic SCOPE AND EVIDENCE clause: judge only
+  what the goal and request asked for, accept the evidence the task naturally produces (a report
+  naming the commit, file, or record changed counts for a change), and ask for extra proof only
+  when the goal, request, or quality standards explicitly require it. Both planners say a goal
+  covers only what the user's own message asked for. Per-org rules belong in a deployment's own
+  preamble. Covered by `tests/test_verifier_judges_the_ask.py`.
+
+### Added
 - **Routing can run reliably on a cheap model, and costs about half as much input to do it.**
   A planner call is almost entirely input tokens (thousands in, about a hundred out), so accuracy
   and cost are one problem. Measured on a consumer's fixed set of 765 labelled messages, split
