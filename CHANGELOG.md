@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **A planner read written as a structured lookup without its `query` wrapper now runs instead of
+  being silently dropped.** `normalize_decision` kept only reads carrying a known surface key, so
+  `{"operation": "<name>", "args": {...}}` (the shape a consumer's discovery text may show) was
+  discarded: the "read" step ran nothing and the turn answered from no data. Measured on one
+  10-case eval run: every read dropped on 7 of 10 turns. Such a read is now passed whole to the
+  query reader as `{"query": {...}}`; a read naming a surface the turn lacks (tools, web) is still
+  dropped. Tests: `tests/test_read_spec_normalization.py`.
+
 ### Added
 - **An optional ``step`` hint, mirroring the existing ``reasoning`` hint, so a consumer's own
   provider can choose a model and/or sampling profile per call ROLE.** `core/adapters.py` adds

@@ -1968,6 +1968,14 @@ class OrchestratorResult:
 # Decision normalization (coerce a raw planner dict into a safe PlanDecision).
 # ---------------------------------------------------------------------------
 
+# Every key that names a read SURFACE in the planner's read vocabulary. A read dict carrying none of
+# them is a structured lookup missing its "query" wrapper (see ``normalize_decision``).
+READ_VOCABULARY_KEYS = frozenset({
+    "grep", "rel_path", "query", "list_sources", "describe_source", "list_operations",
+    "describe_operation", "list_guidance", "read_guidance", "cards", "card", "tools", "web",
+    "web_page",
+})
+
 def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
                        tools_enabled: bool = False, web_enabled: bool = False) -> PlanDecision:
     # A provider's structured output is not guaranteed to be a dict: some models/SDKs return a LIST
@@ -2008,6 +2016,15 @@ def normalize_decision(raw: Dict[str, Any], cfg: OrchestratorConfig, *,
                 or (web_enabled and (r.get("web") is not None or r.get("web_page")))
             ):
                 clean_reads.append(r)
+            elif isinstance(r, dict) and r and not (READ_VOCABULARY_KEYS & r.keys()):
+                # A structured lookup written without the "query" wrapper (e.g. a named read
+                # operation with its args, which a consumer's own discovery text may show
+                # top-level) used to be DROPPED here, so a "read" step ran nothing and the turn
+                # answered from no data (measured 2026-10-07: every read dropped on 7 of 10 eval
+                # turns). It is the query adapter's job to run it or name what is wrong with it,
+                # so it goes there whole. A spec using a surface this turn does not have (tools,
+                # web) is still dropped above, never re-routed.
+                clean_reads.append({"query": dict(r)})
 
     tier = raw.get("model_tier")
     if isinstance(tier, str):
