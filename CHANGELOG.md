@@ -159,6 +159,14 @@ All notable changes to this project are documented here. The format is based on
   account data is no longer scored as an invented fact under the judge's "never invent a fact,
   number, source or entity" rule. Fetched once per run, cached, and never crashes a judge call on a
   lookup failure. `judge()` takes a new `world` parameter to build this section.
+- **The honesty-floor claim check now catches "recorded/noted/logged" claims, not only
+  "saved/edited/sent" ones.** `VERIFY_CLAIMS_RULES` (the `claims_unexecuted` check run when
+  `verify_claims` is on) named only "edited or wrote a file, saved data, sent something, applied
+  configuration" as the completed-change claims a reply must back with the turn's execution
+  record. A consumer's live case had a reply say "I have recorded your intent to ..." on a turn
+  that made no write; the list now also names "saved, recorded, logged, or noted data" so the same
+  structural check (never a keyword scan of the model's own output, hard rule #3) flags that class
+  of unbacked claim too.
 
 ### Changed
 - **The escalation nets honor the planner's structured `user_intent`, and the regex net over the
