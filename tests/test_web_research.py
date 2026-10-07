@@ -1,6 +1,9 @@
 """Tests for WebResearchAdapter -- offline (fake backend / fake page_fetcher), no network."""
 from __future__ import annotations
 
+import json
+import multiprocessing
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Dict, List, Optional
 
@@ -10,6 +13,7 @@ from quest_ai_runner.adapters.web_cache import WebCache
 from quest_ai_runner.adapters.web_research import (
     UnsupportedContentTypeError,
     WebResearchAdapter,
+    _DailyLimiter,
     build_web_research_from_env,
     canonicalize_url,
     estimate_tokens,
@@ -643,3 +647,121 @@ def test_fetch_error_names_a_failing_fallback_fetcher():
     obs = adapter.fetch("https://example.com/blocked")
     assert obs.kind == "error"
     assert "connect timeout" in obs.error
+
+
+# ---------------------------------------------------------------------------
+# _DailyLimiter: cross-process persisted counter
+# ---------------------------------------------------------------------------
+#
+# The persisted file is shared by every process that points at the same QAR_WEB_CACHE_DIR
+# (two runner lanes, a terminal session and a web backend, all sharing one search API quota).
+# Each `_DailyLimiter` instance below stands in for a separate process's own in-memory object,
+# all talking to the same on-disk state.
+
+
+def test_two_limiters_sharing_a_dir_see_one_combined_count(tmp_path):
+    a = _DailyLimiter(3, state_dir=tmp_path)
+    b = _DailyLimiter(3, state_dir=tmp_path)
+
+    a.record()
+    a.record()
+    b.record()
+
+    # Each process's own object sees the COMBINED count, not just its own calls.
+    assert a.exhausted() is True
+    assert b.exhausted() is True
+
+    data = json.loads((tmp_path / "web_search_daily_count.json").read_text())
+    assert data["count"] == 3
+
+
+def test_two_limiters_sharing_a_dir_do_not_undercount_below_the_true_total(tmp_path):
+    # The bug this replaces: each process persisted its OWN in-memory count, so two processes
+    # recording concurrently could clobber each other and the guard never reached the real limit.
+    a = _DailyLimiter(10, state_dir=tmp_path)
+    b = _DailyLimiter(10, state_dir=tmp_path)
+
+    for _ in range(4):
+        a.record()
+    for _ in range(3):
+        b.record()
+
+    data = json.loads((tmp_path / "web_search_daily_count.json").read_text())
+    assert data["count"] == 7
+    assert a.exhausted() is False
+    assert b.exhausted() is False
+
+    for _ in range(3):
+        a.record()
+    assert data_count(tmp_path) == 10
+    assert a.exhausted() is True
+    assert b.exhausted() is True
+
+
+def data_count(tmp_path) -> int:
+    return json.loads((tmp_path / "web_search_daily_count.json").read_text())["count"]
+
+
+def test_day_rollover_resets_the_shared_count(tmp_path, monkeypatch):
+    limiter = _DailyLimiter(2, state_dir=tmp_path)
+    monkeypatch.setattr(_DailyLimiter, "_today", staticmethod(lambda: "2026-01-01"))
+    limiter.record()
+    limiter.record()
+    assert limiter.exhausted() is True
+
+    # A new day arrives; a second process (or the same one, later) sharing the directory
+    # should see the count rolled back to zero rather than carrying yesterday's total.
+    monkeypatch.setattr(_DailyLimiter, "_today", staticmethod(lambda: "2026-01-02"))
+    other = _DailyLimiter(2, state_dir=tmp_path)
+    assert other.exhausted() is False
+
+    other.record()
+    assert data_count(tmp_path) == 1
+    assert other.exhausted() is False
+    other.record()
+    assert other.exhausted() is True
+
+
+def test_corrupt_file_reads_as_zero_and_is_repaired_on_next_record(tmp_path):
+    state_path = tmp_path / "web_search_daily_count.json"
+    state_path.write_text("{not valid json")
+
+    limiter = _DailyLimiter(2, state_dir=tmp_path)
+    assert limiter.exhausted() is False  # corrupt file -> reads as 0, not exhausted
+
+    limiter.record()
+    # The corrupt file is now repaired with a valid, atomically-written count.
+    assert data_count(tmp_path) == 1
+    assert json.loads(state_path.read_text())["day"] == _DailyLimiter._today()
+
+
+def test_memory_only_limiter_is_unaffected_by_other_instances(tmp_path):
+    # No state_dir: behavior must stay exactly the old per-process, in-memory counter.
+    a = _DailyLimiter(1, state_dir=None)
+    b = _DailyLimiter(1, state_dir=None)
+
+    a.record()
+    assert a.exhausted() is True
+    assert b.exhausted() is False  # b never recorded; it has no idea about a
+
+
+def _record_many(state_dir: str, n: int) -> None:
+    """Module-level so it can be pickled as a ``multiprocessing`` target (spawn-safe)."""
+    limiter = _DailyLimiter(10_000, state_dir=Path(state_dir))
+    for _ in range(n):
+        limiter.record()
+
+
+def test_multiprocessing_two_real_processes_land_exactly_fifty_records(tmp_path):
+    ctx = multiprocessing.get_context("fork" if "fork" in multiprocessing.get_all_start_methods() else "spawn")
+    procs = [
+        ctx.Process(target=_record_many, args=(str(tmp_path), 25)),
+        ctx.Process(target=_record_many, args=(str(tmp_path), 25)),
+    ]
+    for p in procs:
+        p.start()
+    for p in procs:
+        p.join(timeout=30)
+        assert p.exitcode == 0
+
+    assert data_count(tmp_path) == 50

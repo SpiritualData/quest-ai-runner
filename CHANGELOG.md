@@ -7,6 +7,11 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **`_DailyLimiter`'s web-search daily cap is now enforced across processes, not just within
+  one.** When persisted (`QAR_WEB_CACHE_DIR` set), `record()` takes a cross-process file lock,
+  re-reads the shared count, and writes atomically, and `exhausted()` re-reads the file, so
+  multiple processes sharing one cache dir (two runner lanes, a terminal session, a web backend)
+  add up to one real spend instead of each undercounting against its own stale in-memory copy.
 - **Verifier web evidence is scoped to web reads, capped, and framed as untrusted.** The EVIDENCE
   section `_verify_goal` gained (entry below) rendered EVERY gathered read, so ordinary
   corpus/grep/query turns paid up to the full verify-context cap (24000 chars) of uncached tokens

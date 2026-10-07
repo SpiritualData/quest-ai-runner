@@ -144,10 +144,18 @@ a rendering fetch, but the web daily limit is reached for this deployment.") -- 
 The count is in-memory by default, or persisted as one small JSON file under `QAR_WEB_CACHE_DIR`
 (when that's configured) so a process restart doesn't reset it mid-day.
 
-The counter is per PROCESS: the file is read once at construction and written after each real
-call, so two lanes sharing one `QAR_WEB_CACHE_DIR` each keep their own count and the effective
-cap is per lane, not per deployment. Size the limit accordingly (or give each lane its own cache
-dir); it is a cost guard, not a quota enforcer.
+The counter is shared by every process that points at the same `QAR_WEB_CACHE_DIR`: `record()`
+takes a cross-process advisory file lock, re-reads the persisted count, rolls the day if it's
+stale, increments, and writes back atomically, so two runner lanes, a terminal session, and a
+web backend all sharing one directory add up to one real spend instead of each keeping (and
+undercounting against) its own in-memory copy. `exhausted()` re-reads the file too, so one
+process sees another's spend without needing its own call to trip the limit. **Set ONE cache
+dir per API key/quota** -- the limit is enforced per `QAR_WEB_CACHE_DIR`, not per process, so
+giving two independent quotas the same directory would wrongly cap them together, and giving one
+quota two directories would let it spend twice. Without `QAR_WEB_CACHE_DIR` (memory-only cache),
+the counter is back to per-process, same as before. On a platform without `fcntl` (Windows), or
+if the lock can't be acquired within ~2s, the guard degrades to per-process counting for that
+call rather than blocking the turn; it is a cost guard, not a quota enforcer.
 
 For a deployment on Gemini 2.5 Flash-Lite grounding (1,500 free grounded prompts/day), a sensible
 value is something like **1400**, leaving headroom below the free quota for non-web-search
