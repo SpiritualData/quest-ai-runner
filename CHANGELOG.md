@@ -7,6 +7,36 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- **Token-usage pass on the context assembly path (measured against a real probe log of a chat
+  turn's actual LLM calls, no live calls made to decide any of this).** Four changes:
+  (1) `VectorContextAssembler`'s query-generation and relevance-review LLM calls are now memoized
+  per provider (same selection-memo pattern as `core/card_filter.py`), so an exact-repeat
+  `assemble()` for the SAME task text within one turn (a widening retry, the post-deep
+  card-updater's own re-selection) pays for both steps only once.
+  (2) The relevance review is skipped outright when every candidate's raw score is already under
+  its own confidence floor -- the gate drops them all regardless of the review's verdict, so the
+  call is a fact-based no-op, not a guess; a broader "skip when scores look separated" heuristic
+  was tried against the probe log and declined (the review changed the outcome against a
+  score-only heuristic in most sampled calls, once rejecting the single highest-scoring
+  candidate).
+  (3) Root-caused the actual "a vector hit renders a quest card's content in full" bug:
+  `_snippet()` capped to the first 3 non-empty *lines*, but an embedded card/association's own
+  `.text` is typically one unbroken line, so the cap never engaged -- one real logged hit's text
+  alone was 11,773 tokens. `_snippet` now hard-caps its OUTPUT regardless of line count; this one
+  fix alone cut a real logged planner call from 18,749 to ~7,079 input tokens and every sampled
+  review call by 62-83%. A complementary, tighter cap (4 refs / 1600 chars vs. the shared 8/4000
+  default) also bounds a vector hit's structured `content` items specifically.
+  (4) `FileContextStore._fallback_file_search` (the grep-the-corpus path when no card matches) is
+  now hard-capped at half its old file/line limits, and gated by an optional
+  `meta["skip_corpus_fallback"]` flag; `Orchestrator.gate_docs_fallback` sets it from a
+  NON-BLOCKING peek at the reach judge's already-resolved verdict (`peek_reach_verdict`), wired at
+  the top of `_run_deep` (covers every per-goal/widening assembly of a deep run) and in the
+  turn-start context prefetch. Projected on the 3-turn probe log: 183,363 -> 145,054 input tokens
+  (-20.9%) from the vector-arm fixes alone. Tests: `tests/test_vector_context.py`
+  (`TestVectorArmSelectionMemoReusePerTurn`, `TestVectorArmReviewFloorSkip`,
+  `TestVectorArmSnippetHardCap`, `TestVectorArmCompactCardRendering`),
+  `tests/test_context_assembler.py` (`TestFileContextStoreDocsFallbackGating`),
+  `tests/test_reach_judge.py` (`peek_reach_verdict`/`gate_docs_fallback` cases).
 - **Qualitative-eval harness: card content is snapshotted and restored per case, not just ids.**
   `cards_created_since`/`sweep_new_cards` only ever caught a card a case CREATED outright; the card
   learner also APPENDS learned items onto a card that already existed, in particular each world
