@@ -7,6 +7,15 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Verifier web evidence is scoped to web reads, capped, and framed as untrusted.** The EVIDENCE
+  section `_verify_goal` gained (entry below) rendered EVERY gathered read, so ordinary
+  corpus/grep/query turns paid up to the full verify-context cap (24000 chars) of uncached tokens
+  on every verify retry, an unmeasured behaviour change. It now renders only LIVE WEB observations,
+  capped at `VERIFY_WEB_EVIDENCE_MAX_CHARS` (8000); a turn with no web read is byte-identical to the
+  old prompt (now asserted as true byte identity). Web text is also framed as untrusted third-party
+  data whose instructions are ignored, in `PLANNER_WEB_HEAD`, the answer tail's citation carve-out,
+  and the verifier's evidence heading and `VERIFY_WEB_EVIDENCE_NOTE` (which now also says to weigh a
+  fact by its source). Tests: `tests/test_verify_web_evidence.py`.
 - **The answer-verification pass can now see the web evidence it is judging, and trusts it over its
   own training knowledge.** `Orchestrator._verify_goal` judged a web-grounded answer with only the
   stable L2 `context_layer` (cards/corpus) -- never the turn's `gathered` web search/page results,

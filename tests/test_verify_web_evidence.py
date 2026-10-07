@@ -10,9 +10,9 @@ Covers:
 (a) ``_gathered_has_web_evidence``: true only for a LIVE WEB observation (``rel_path`` starting
     "web_search:" or ``locator`` starting "web extract: "), false for an ordinary read/grep/query
     and for None/empty -- so the fix below never fires for a deployment or a turn with no web.
-(b) ``_verify_goal``'s new ``gathered`` parameter: absent/empty is byte-for-byte the old prompt (no
-    EVIDENCE section); a non-web gathered item adds an EVIDENCE section but NOT the web-precedence
-    note; a web-origin item adds BOTH, placed before the WORKER OUTPUT section, and the note text
+(b) ``_verify_goal``'s new ``gathered`` parameter: absent/empty, or holding only non-web reads, is
+    byte-for-byte the old prompt (no EVIDENCE section); only web-origin items are rendered (capped),
+    with the web-precedence note, placed before the WORKER OUTPUT section, and the note text
     itself (never the evidence content) rides in BOTH the flattened prompt and the layered tail,
     while the cached L1/L2 blocks (persona/standards/context) are UNCHANGED by gathered content
     (``test_verify_context_layer.py``'s L2 byte-identity contract still holds).
@@ -27,6 +27,7 @@ from typing import Any, Dict, List, Optional
 from quest_ai_runner.core.model_registry import ModelRegistry
 from quest_ai_runner.core.orchestrator import (
     Orchestrator,
+    VERIFY_WEB_EVIDENCE_MAX_CHARS,
     VERIFY_WEB_EVIDENCE_NOTE,
     _gathered_has_web_evidence,
     grounding_answer_tail,
@@ -94,17 +95,48 @@ def test_verify_goal_with_empty_gathered_list_is_unchanged():
     assert "EVIDENCE GATHERED THIS TURN" not in provider.last_plan_prompt
 
 
-def test_verify_goal_with_non_web_gathered_adds_evidence_but_not_web_note():
+def verify_prompt(gathered, context_layer: Optional[str] = None) -> str:
     provider = StubProvider(decisions=[{"met": True, "reason": "done"}])
     orch = make_orch(provider)
-    gathered = [{"kind": "read", "rel_path": "notes.md", "locator": "notes.md",
-                "text": "UNIQUE_CORPUS_FACT_123"}]
-    verdict, error = orch._verify_goal("the goal", "the brief", "the output", gathered=gathered)
+    verdict, error = orch._verify_goal("the goal", "the brief", "the output",
+                                       context_layer=context_layer, gathered=gathered)
     assert verdict is not None and error is None
-    prompt = provider.last_plan_prompt
-    assert "EVIDENCE GATHERED THIS TURN" in prompt
-    assert "UNIQUE_CORPUS_FACT_123" in prompt
-    assert "WEB EVIDENCE PRECEDENCE" not in prompt
+    return provider.last_plan_prompt
+
+
+def test_verify_goal_with_non_web_gathered_is_byte_identical_to_no_gathered():
+    # An ordinary corpus/grep/query turn must not pay for, or be judged differently by, the web
+    # fix: the evidence section is scoped to LIVE WEB reads only. Asserted as true byte identity
+    # against the gathered=None prompt, not a substring check.
+    gathered = [
+        {"kind": "read", "rel_path": "notes.md", "locator": "notes.md",
+         "text": "UNIQUE_CORPUS_FACT_123"},
+        {"kind": "grep", "pattern": "foo", "hits": [{"rel_path": "a.md", "line_no": 1,
+                                                     "line": "foo"}]},
+    ]
+    assert verify_prompt(gathered, "CTX") == verify_prompt(None, "CTX")
+
+
+def test_verify_goal_mixed_gathered_renders_only_the_web_observations():
+    gathered = [
+        {"kind": "read", "rel_path": "notes.md", "locator": "notes.md",
+         "text": "UNIQUE_CORPUS_FACT_123"},
+        {"kind": "query", "rel_path": "web_search:q", "text": "WEB RESULTS: LIVE_FACT_456."},
+    ]
+    prompt = verify_prompt(gathered)
+    assert "LIVE_FACT_456" in prompt
+    assert "UNIQUE_CORPUS_FACT_123" not in prompt
+    assert "untrusted third-party text" in prompt
+
+
+def test_verify_goal_web_evidence_is_capped():
+    gathered = [{"kind": "query", "rel_path": f"web_search:q{i}", "text": "x" * 5000}
+                for i in range(10)]
+    prompt = verify_prompt(gathered)
+    start = prompt.index("EVIDENCE GATHERED THIS TURN")
+    end = prompt.index("WEB EVIDENCE PRECEDENCE")
+    assert end - start < VERIFY_WEB_EVIDENCE_MAX_CHARS + 600
+    assert "context truncated for verification" in prompt
 
 
 def test_verify_goal_with_web_gathered_adds_evidence_and_web_precedence_note():
