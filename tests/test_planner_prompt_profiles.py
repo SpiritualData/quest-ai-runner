@@ -246,3 +246,18 @@ def test_the_compact_schema_keeps_the_hand_off_fields_description_and_the_prompt
     assert "background task queue" in props["deferred_deep"]["description"]
     assert "description" not in props["action"]
     assert "A HAND-OFF IS THE `deferred_deep` FIELD, NOT THE WORDS" in PLANNER_PROFILES["compact"]
+
+
+# ---------------------------------------------------------------------------
+# Read-before-write: a "deep" hand-off whose write depends on a value from the
+# person's data must gather it first, or name it in deep_brief -- never let the
+# worker invent or hardcode a value nobody actually read. See round-2 trace: a
+# QuestCommandRunner write hardcoded a value never read because the planner's own
+# gathered facts never reached the worker (fixed by threading context_preamble;
+# this is the planner-side half of the same fix).
+# ---------------------------------------------------------------------------
+
+def test_both_profiles_tell_the_planner_to_gather_data_dependent_write_values_first():
+    for profile_prompt in (PLANNER_PROMPT, PLANNER_PROMPT_COMPACT):
+        assert "gather it" in profile_prompt
+        assert "deep_brief" in profile_prompt

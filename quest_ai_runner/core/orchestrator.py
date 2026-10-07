@@ -573,6 +573,9 @@ The four actions:
       * `deep_brief` = the clear self-contained brief with the details, which PRESERVES the user's
         action verb (say "add/update ...", not "look up/review ..."). All the context goes HERE,
         never in `goal`.
+    When the write depends on a value from the person's own data (an id, amount, total, date,
+    time, pace, or count), gather it with a "read" first, or say in `deep_brief` exactly what to
+    read before writing it.
     BE A
     GROUNDED FIRST RESPONDER: if the request is actionable but UNDER-SPECIFIED (e.g. "add a goal"
     with no details), do NOT bounce it back as a question -- GROUND in the CONTEXT/GATHERED above and
@@ -933,6 +936,8 @@ THE ACTIONS:
         own message explicitly asked for one; asking to fix or improve something does not.
       `deep_brief` = the self-contained brief with all the detail, preserving the user's own
         action verb (say "add ...", not "review ...").
+    When a write depends on a value from the person's data (an id, amount, total, date, or count),
+    gather it first, or name in `deep_brief` what to read before writing it.
     If the request is actionable but under-specified, do NOT bounce it back: ground in the CONTEXT
     and author a concrete proposal yourself. A mutating proposal is reviewed before it takes
     effect, so proposing beats asking. If you are unsure which operation a change targets, make

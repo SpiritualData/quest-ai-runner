@@ -7,6 +7,19 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **The planner now tells the "deep" hand-off to gather a data-dependent write value FIRST, instead
+  of leaving the worker to invent or hardcode it.** Round-2 trace: a multistep request ("add up my
+  launch expenses against the cap; if over, add a goal ...") had the planner do several reads and
+  find the right facts, then hand off to a deep worker that could not see them (a separate,
+  already-fixed gap: `context_preamble` was not threaded to every deep-runner `run_goal`) and
+  re-derived everything from scratch -- sometimes with a hardcoded, never-read value in the
+  generated code or task. Both planner prompt profiles (`_PLANNER_ACTIONS`, `_PLANNER_COMPACT_ACTIONS`)
+  now say, next to the `goal`/`deep_brief` guidance: gather a value the write depends on (an id,
+  amount, total, date, time, pace, or count) with a "read" first, or name exactly what to read in
+  `deep_brief`. One short sentence per profile; the compact profile's added sentence is 46 cl100k
+  tokens (measured directly with `tiktoken`'s `cl100k_base`, the same encoding
+  quest-backend's `scripts/checks/planner_token_anatomy.py` uses), under the 60-token budget. Tests:
+  `tests/test_planner_prompt_profiles.py::test_both_profiles_tell_the_planner_to_gather_data_dependent_write_values_first`.
 - **Qualitative-eval judge: a short rubric response now retries and reports unjudged, instead of
   padding the gap in as fails.** `evaluation/qualitative/judge.py`'s `normalise_verdict` used to
   pad any rubric item the judge model did not return in as a silent FAIL, which could score a case
