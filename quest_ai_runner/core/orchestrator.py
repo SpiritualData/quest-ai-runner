@@ -2669,8 +2669,10 @@ Rules:
     durable fact with nothing external to point at.
   - A note that only SUMMARIZES something still fetchable MUST carry the fetch alongside it:
     {{"type": "note", "locator": {{"text": "<the summary>", "full_ref": <the read spec that returns
-    the FULL source>}}}}. The read spec is the same shape a read step uses (e.g.
-    {{"query": {{"kind": "...", "id": "..."}}}} or {{"rel_path": "..."}}). Without it a later turn
+    the FULL source>}}}}. The read spec is one a read step in the work ACTUALLY USED and that
+    returned the source: copy it verbatim from the gathered reads (e.g. {{"rel_path": "..."}}), and
+    never invent a shape of your own (a made-up spec is refused when a later turn runs it, and
+    planners copy what they see on cards). Without it a later turn
     cannot tell your summary from the whole source and will answer out of the summary; with it, the
     full text is pulled first. Never write a summary of a fetchable source with no full_ref.
   - Group related references onto ONE topical card. Set its "name"/"description" so it is easy to

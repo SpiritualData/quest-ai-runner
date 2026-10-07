@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **The card updater no longer teaches an invented read shape.** `CARD_UPDATE_PROMPT`'s
+  `full_ref` example was `{"query": {"kind": ..., "id": ...}}`, which no read adapter accepts;
+  cards stored it and planners copied it. A `full_ref` is now copied from a read the work really used.
 - **An own escalation that produces nothing keeps the answer.** When the verifier's, the
   last-resort or the overseer's deep run comes back with no output, the turn keeps the answer it
   already had instead of ending with an empty result (which a consumer had to replace with a
